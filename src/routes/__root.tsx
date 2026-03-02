@@ -1,4 +1,4 @@
-import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
+import { createRootRoute, Link, Outlet, useRouterState } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { useState } from 'react'
 import { Layout } from 'antd'
@@ -25,6 +25,10 @@ const { Content } = Layout
 const RootLayout = () => {
   const { isDark, toggle } = useTheme()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const pathname = useRouterState({
+    select: (s) => s.location.pathname,
+  })
+  const isRoot = pathname === "/"
 
   const navLinks = [
     { to: '/', label: 'Home', icon: Home },
@@ -127,6 +131,7 @@ const RootLayout = () => {
                 <Link
                   key={link.to}
                   to={link.to}
+                  replace={!isRoot}
                   onClick={() => setMobileMenuOpen(false)}
                   className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   activeProps={{
