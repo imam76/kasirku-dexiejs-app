@@ -57,3 +57,19 @@ export interface ShoppingNoteItem {
   subtotal: number;
 }
 
+export interface ProfitLog {
+  id: string;
+  transaction_id?: string; // Optional, link to transaction if source is transaction
+  amount: number;
+  type: 'IN' | 'OUT';
+  description: string;
+  created_at: string;
+  balance_after: number;
+}
+
+export interface ProfitBalance {
+  id: string; // 'current'
+  amount: number;
+  updated_at: string;
+}
+

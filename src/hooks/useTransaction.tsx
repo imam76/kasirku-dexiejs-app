@@ -88,7 +88,7 @@ export const useTransaction = () => {
     const transactionId = crypto.randomUUID();
 
     try {
-      await db.transaction('rw', db.transactions, db.transactionItems, db.products, async () => {
+      await db.transaction('rw', db.transactions, db.transactionItems, db.products, db.profitLogs, db.profitBalance, async () => {
         const newTransaction: Transaction = {
           id: transactionId,
           transaction_number: transactionNumber,
@@ -114,6 +114,27 @@ export const useTransaction = () => {
         }));
 
         await db.transactionItems.bulkAdd(transactionItems);
+
+        // Update Profit System
+        const totalProfit = transactionItems.reduce((sum, item) => sum + item.profit, 0);
+        const currentBalance = await db.profitBalance.get('current');
+        const newBalance = (currentBalance?.amount || 0) + totalProfit;
+
+        await db.profitBalance.put({
+          id: 'current',
+          amount: newBalance,
+          updated_at: now,
+        });
+
+        await db.profitLogs.add({
+          id: crypto.randomUUID(),
+          transaction_id: transactionId,
+          amount: totalProfit,
+          type: 'IN',
+          description: `Keuntungan dari transaksi ${transactionNumber}`,
+          created_at: now,
+          balance_after: newBalance,
+        });
 
         for (const item of cart) {
           const product = await db.products.get(item.product.id);

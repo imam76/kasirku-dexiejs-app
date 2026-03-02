@@ -1,7 +1,7 @@
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { Layout, Menu, Switch, Drawer, Button, Grid } from 'antd'
-import { ShoppingCartOutlined, AppstoreOutlined, HistoryOutlined, FileTextOutlined, MoonOutlined, SunOutlined, MenuOutlined, CloseOutlined, FormOutlined } from '@ant-design/icons'
+import { ShoppingCartOutlined, AppstoreOutlined, HistoryOutlined, FileTextOutlined, MoonOutlined, SunOutlined, MenuOutlined, CloseOutlined, FormOutlined, DollarOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
@@ -77,6 +77,15 @@ const RootLayout = () => {
       label: 'Laporan Pembelian',
       onClick: () => {
         navigate({ to: '/purchase-report' })
+        setMobileMenuOpen(false)
+      },
+    },
+    {
+      key: '/profit',
+      icon: <DollarOutlined />,
+      label: 'Keuntungan',
+      onClick: () => {
+        navigate({ to: '/profit' })
         setMobileMenuOpen(false)
       },
     },

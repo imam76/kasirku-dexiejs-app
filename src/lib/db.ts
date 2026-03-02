@@ -1,11 +1,13 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance } from '@/types';
 
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
   transactions!: Table<Transaction>;
   transactionItems!: Table<TransactionItem>;
   stockPurchases!: Table<StockPurchase>;
+  profitLogs!: Table<ProfitLog>;
+  profitBalance!: Table<ProfitBalance>;
 
   constructor() {
     super('KasirkuDB');
@@ -17,6 +19,13 @@ export class KasirkuDB extends Dexie {
     });
     this.version(2).stores({
       transactionItems: 'id, transaction_id, product_id, created_at'
+    });
+    this.version(3).stores({
+      profitLogs: 'id, transaction_id, created_at',
+      profitBalance: 'id'
+    });
+    this.version(4).stores({
+      profitLogs: 'id, transaction_id, type, created_at'
     });
   }
 }
