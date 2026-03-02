@@ -1,6 +1,8 @@
-import { Form, Modal, Input, InputNumber } from 'antd';
+import { Form, Modal, Input, InputNumber, Grid } from 'antd';
 import { Controller, type Control, type FieldErrors } from 'react-hook-form';
 import type { StockFormData } from '@/hooks/useStockManagement';
+
+const { useBreakpoint } = Grid;
 
 type Props = {
   open: boolean;
@@ -12,6 +14,8 @@ type Props = {
 };
 
 export default function StockProductModal({ open, editingId, control, errors, onCancel, onSave }: Props) {
+  const screens = useBreakpoint();
+  
   return (
     <Modal
       title={editingId ? 'Edit Produk' : 'Tambah Produk Baru'}
@@ -19,6 +23,10 @@ export default function StockProductModal({ open, editingId, control, errors, on
       onCancel={onCancel}
       footer={null}
       destroyOnHidden={true}
+      width={!screens.sm ? '100%' : undefined}
+      style={!screens.sm ? { top: 0, margin: 0, padding: 0, maxWidth: '100vw', height: '100vh' } : undefined}
+      styles={!screens.sm ? { body: { height: 'calc(100vh - 55px)', overflowY: 'auto' } } : undefined}
+      centered={!!screens.sm}
     >
       <Form layout="vertical" onFinish={onSave} className="mt-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">

@@ -1,5 +1,6 @@
 import { Controller } from 'react-hook-form';
 import { Table, Button, Input, InputNumber, Select, Card, Typography, Form, Row, Col } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { Plus, Trash2 } from 'lucide-react';
 import { useShoppingNote } from '@/hooks/useShoppingNote';
 import { ShoppingNoteItem } from '@/types';
@@ -20,7 +21,7 @@ export default function ShoppingNote() {
     errors,
   } = useShoppingNote();
 
-  const columns = [
+  const columns: ColumnsType<ShoppingNoteItem> = [
     {
       title: 'Nama Barang',
       dataIndex: 'name',
@@ -31,7 +32,7 @@ export default function ShoppingNote() {
       dataIndex: 'unit_price',
       key: 'unit_price',
       render: (val: number) => `Rp ${val.toLocaleString()}`,
-      responsive: ['md'] as const,
+      responsive: ['md'],
     },
     {
       title: 'Jumlah',
@@ -45,7 +46,7 @@ export default function ShoppingNote() {
       title: 'Unit',
       dataIndex: 'unit',
       key: 'unit',
-      responsive: ['md'] as const,
+      responsive: ['md'],
     },
     {
       title: 'Subtotal',

@@ -398,7 +398,7 @@ export default function Transaction() {
             </div>
 
             {cart.length > 0 && (
-              <div className="px-5 py-4 border-t border-gray-100">
+              <div className="px-5 pt-4 pb-8 border-t border-gray-100">
                 <div className="flex justify-between text-xl font-bold text-gray-800 mb-4">
                   <span>Total:</span>
                   <span>Rp {formatCurrency(calculateTotal())}</span>
@@ -454,8 +454,8 @@ export default function Transaction() {
       {scannerOpen && (
         <div className="fixed inset-0 z-[60]">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setScannerOpen(false)} />
-          <div className="absolute inset-x-0 top-10 sm:top-16 mx-auto w-[92vw] max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="absolute inset-x-0 top-0 sm:top-16 mx-auto w-full h-full sm:h-auto sm:w-[92vw] sm:max-w-xl bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Scan Barcode</h3>
                 <p className="text-xs text-gray-500">Arahkan kamera ke barcode/SKU produk</p>
@@ -469,8 +469,8 @@ export default function Transaction() {
               </button>
             </div>
 
-            <div className="p-5 space-y-3">
-              <div className="bg-black rounded-xl overflow-hidden aspect-video">
+            <div className="p-5 space-y-3 flex-1 overflow-y-auto">
+              <div className="bg-black rounded-xl overflow-hidden aspect-video w-full">
                 <video ref={videoRef} className="w-full h-full object-cover" muted autoPlay playsInline />
               </div>
 
