@@ -1,7 +1,7 @@
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
 import { useTheme } from '@/hooks/useTheme'
-import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
+import { createRootRoute, Link, Outlet, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { Layout } from 'antd'
 import {
@@ -20,7 +20,18 @@ import {
 const { Content } = Layout
 
 const RootLayout = () => {
+  const router = useRouter()
+  const navigate = useNavigate()
   const { isDark, toggle } = useTheme()
+
+  const handleLogoClick = () => {
+    // Check if desktop (xl breakpoint - 1280px)
+    if (window.matchMedia('(min-width: 1280px)').matches) {
+      navigate({ to: '/' })
+    } else {
+      router.history.back()
+    }
+  }
 
   const navLinks = [
     { to: '/', label: 'Home', icon: Home },
@@ -41,9 +52,9 @@ const RootLayout = () => {
           <div className="flex justify-between items-center h-full">
             {/* Logo */}
             <div className="flex-shrink-0 flex items-center gap-6">
-              <Link to="/" replace={true} className="text-xl font-bold text-blue-600 dark:text-blue-400">
+              <div onClick={handleLogoClick} className="text-xl font-bold text-blue-600 dark:text-blue-400 cursor-pointer">
                 Kasirku
-              </Link>
+              </div>
 
               {/* Desktop Menu - Scrollable */}
               <div className="hidden xl:flex xl:items-center xl:space-x-1 overflow-x-auto no-scrollbar mask-linear-fade">
