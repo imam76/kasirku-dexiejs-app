@@ -1,184 +1,150 @@
-import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
+import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { Layout, Menu, Switch, Drawer, Button, Grid } from 'antd'
-import { ShoppingCartOutlined, AppstoreOutlined, HistoryOutlined, FileTextOutlined, MoonOutlined, SunOutlined, MenuOutlined, CloseOutlined, FormOutlined, DollarOutlined } from '@ant-design/icons'
 import { useState } from 'react'
+import { Layout } from 'antd'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
 import { useTheme } from '@/hooks/useTheme'
+import {
+  Home,
+  Box,
+  ClipboardList,
+  ShoppingCart,
+  History,
+  FileText,
+  FileSpreadsheet,
+  DollarSign,
+  Menu,
+  X,
+  Moon,
+  Sun
+} from 'lucide-react'
 
-const { Header, Content } = Layout
-const { useBreakpoint } = Grid
+const { Content } = Layout
 
 const RootLayout = () => {
-  const location = useLocation()
-  const navigate = useNavigate()
   const { isDark, toggle } = useTheme()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const breakpoints = useBreakpoint()
 
-  const menuItems = [
-    {
-      key: '/',
-      label: 'Home',
-      onClick: () => {
-        navigate({ to: '/' })
-        setMobileMenuOpen(false)
-      },
-    },
-    {
-      key: '/stock',
-      icon: <AppstoreOutlined />,
-      label: 'Stok',
-      onClick: () => {
-        navigate({ to: '/stock' })
-        setMobileMenuOpen(false)
-      },
-    },
-    {
-      key: '/shopping-note',
-      icon: <FormOutlined />,
-      label: 'Catatan Belanja',
-      onClick: () => {
-        navigate({ to: '/shopping-note' })
-        setMobileMenuOpen(false)
-      },
-    },
-    {
-      key: '/transaction',
-      icon: <ShoppingCartOutlined />,
-      label: 'Transaksi',
-      onClick: () => {
-        navigate({ to: '/transaction' })
-        setMobileMenuOpen(false)
-      },
-    },
-    {
-      key: '/history',
-      icon: <HistoryOutlined />,
-      label: 'Riwayat',
-      onClick: () => {
-        navigate({ to: '/history' })
-        setMobileMenuOpen(false)
-      },
-    },
-    {
-      key: '/sales-report',
-      icon: <FileTextOutlined />,
-      label: 'Laporan Penjualan',
-      onClick: () => {
-        navigate({ to: '/sales-report' })
-        setMobileMenuOpen(false)
-      },
-    },
-    {
-      key: '/purchase-report',
-      icon: <FileTextOutlined />,
-      label: 'Laporan Pembelian',
-      onClick: () => {
-        navigate({ to: '/purchase-report' })
-        setMobileMenuOpen(false)
-      },
-    },
-    {
-      key: '/profit',
-      icon: <DollarOutlined />,
-      label: 'Keuntungan',
-      onClick: () => {
-        navigate({ to: '/profit' })
-        setMobileMenuOpen(false)
-      },
-    },
+  const navLinks = [
+    { to: '/', label: 'Home', icon: Home },
+    { to: '/stock', label: 'Stok', icon: Box },
+    { to: '/shopping-note', label: 'Catatan Belanja', icon: ClipboardList },
+    { to: '/transaction', label: 'Transaksi', icon: ShoppingCart },
+    { to: '/history', label: 'Riwayat', icon: History },
+    { to: '/sales-report', label: 'Laporan Penjualan', icon: FileText },
+    { to: '/purchase-report', label: 'Laporan Pembelian', icon: FileSpreadsheet },
+    { to: '/profit', label: 'Keuntungan', icon: DollarSign },
   ]
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header
-        style={{
-          position: 'fixed',
-          zIndex: 10,
-          width: '100%',
-          height: '75px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#001529',
-          padding: '20px 16px 0',
-          gap: '16px',
-        }}
-      >
-        <Link to="/">
-          <div
-            style={{
-              color: 'white',
-              fontSize: '20px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Kasirku
-          </div>
-        </Link>
+      {/* Navbar */}
+      <nav className="fixed top-0 z-50 w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200 pt-8 xl:pt-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            {/* Logo & Desktop Nav */}
+            <div className="flex items-center flex-1 overflow-hidden">
+              <div className="flex-shrink-0 flex items-center mr-6">
+                <Link to="/" className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                  Kasirku
+                </Link>
+              </div>
 
-        {/* Desktop & Tablet Menu */}
-        {breakpoints.md && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flex: 1 }}>
-            <Menu
-              theme="dark"
-              mode="horizontal"
-              selectedKeys={[location.pathname]}
-              items={menuItems}
-              style={{ flex: 1, minWidth: 0, border: 'none' }}
-            />
-            <Switch
-              checked={isDark}
-              onChange={toggle}
-              checkedChildren={<MoonOutlined />}
-              unCheckedChildren={<SunOutlined />}
-            />
-          </div>
-        )}
+              {/* Desktop Menu - Scrollable */}
+              <div className="hidden xl:flex xl:items-center xl:space-x-1 overflow-x-auto no-scrollbar flex-1 mask-linear-fade">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap flex-shrink-0"
+                    activeProps={{
+                      className: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <link.icon size={16} />
+                      <span>{link.label}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
 
-        {/* Mobile Menu */}
-        {!breakpoints.md && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto' }}>
-            <Switch
-              checked={isDark}
-              onChange={toggle}
-              checkedChildren={<MoonOutlined />}
-              unCheckedChildren={<SunOutlined />}
-            />
-            <Button
-              type="text"
-              icon={mobileMenuOpen ? <CloseOutlined /> : <MenuOutlined />}
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              style={{ color: 'white', fontSize: '18px' }}
-            />
-          </div>
-        )}
-      </Header>
+            {/* Right Side: Theme Toggle & Mobile Button */}
+            <div className="flex items-center gap-4 flex-shrink-0 bg-white dark:bg-gray-800 pl-4">
+              <button
+                onClick={toggle}
+                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+                aria-label="Toggle theme"
+              >
+                {isDark ? <Moon size={20} /> : <Sun size={20} />}
+              </button>
 
-      {/* Mobile Drawer Menu */}
-      {!breakpoints.md && (
-        <Drawer
-          title="Menu"
-          placement="left"
-          onClose={() => setMobileMenuOpen(false)}
-          open={mobileMenuOpen}
-          styles={{ body: { padding: '0' } }}
+              {/* Mobile Menu Button */}
+              <div className="flex xl:hidden">
+                <button
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                >
+                  <span className="sr-only">Open main menu</span>
+                  <Menu className="block h-6 w-6" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Drawer */}
+        <div
+          className={`fixed inset-0 z-50 xl:hidden transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
         >
-          <Menu
-            theme="light"
-            mode="vertical"
-            selectedKeys={[location.pathname]}
-            items={menuItems}
-            style={{ border: 'none' }}
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-gray-600 bg-opacity-75 transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
           />
-        </Drawer>
-      )}
 
-      <Content style={{ padding: '16px', paddingTop: '95px', maxWidth: '100%' }}>
+          {/* Drawer Panel */}
+          <div
+            className={`fixed inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl transform transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+              }`}
+          >
+            <div className="flex items-center justify-between px-4 h-16 border-b border-gray-200 dark:border-gray-700">
+              <span className="text-xl font-bold text-blue-600 dark:text-blue-400">Menu</span>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="px-2 pt-2 pb-3 space-y-1 overflow-y-auto h-[calc(100%-4rem)]">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  activeProps={{
+                    className: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <link.icon size={18} />
+                    <span>{link.label}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <Content className="p-4 pt-[112px] xl:pt-[80px] w-full max-w-full">
         <Outlet />
       </Content>
 
