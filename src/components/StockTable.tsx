@@ -1,4 +1,4 @@
-import { Edit2, Search, Trash2 } from 'lucide-react';
+import { Edit2, Search, Trash2, MoreVertical } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import type { Product } from '@/types';
 import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
@@ -18,6 +18,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Filter products berdasarkan search query
   const filteredProducts = useMemo(() => {
@@ -231,7 +232,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             : '0';
 
           return (
-            <div key={product.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
+            <div key={product.id} onClick={() => setSelectedProduct(product)} className="bg-white rounded-lg shadow-md border border-gray-200 p-4 cursor-pointer">
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-sm font-bold text-gray-900">{product.name}</p>
@@ -241,22 +242,13 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                   <span className={`px-2 py-1 rounded text-xs font-medium ${getStockStatusClass(product.stock)}`}>
                     Stok: {product.stock}
                   </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onEdit(product)}
-                      className="text-blue-600 hover:text-blue-800 transition-colors"
-                      title="Edit produk"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      onClick={() => onDelete(product.id)}
-                      className="text-red-600 hover:text-red-800 transition-colors"
-                      title="Hapus produk"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                  {/* <button
+                    onClick={() => setSelectedProduct(product)}
+                    className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+                    title="Menu aksi"
+                  >
+                    <MoreVertical size={20} />
+                  </button> */}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs">
@@ -279,6 +271,67 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
           );
         })}
       </div>
+
+      {/* Mobile Action Drawer */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-40 transition-opacity"
+            onClick={() => setSelectedProduct(null)}
+          />
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl p-5 animate-slide-up flex flex-col max-h-[85vh]">
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-lg font-bold text-gray-900 line-clamp-2">{selectedProduct.name}</h3>
+              <p className="text-sm text-gray-500 mt-1">SKU: {selectedProduct.sku}</p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  onEdit(selectedProduct);
+                  setSelectedProduct(null);
+                }}
+                className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
+              >
+                <div className="p-2.5 bg-blue-100 rounded-lg text-blue-600">
+                  <Edit2 size={22} />
+                </div>
+                <div>
+                  <span className="block font-bold text-gray-900">Edit Produk</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">Ubah detail informasi produk</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  onDelete(selectedProduct.id);
+                  setSelectedProduct(null);
+                }}
+                className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
+              >
+                <div className="p-2.5 bg-red-100 rounded-lg text-red-600">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <span className="block font-bold text-gray-900">Hapus Produk</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">Hapus produk ini secara permanen</span>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setSelectedProduct(null)}
+              className="w-full mt-6 py-3 text-gray-500 font-semibold hover:text-gray-700 border-t border-gray-100"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Pagination Controls — Responsive */}
       {totalPages > 1 && (
