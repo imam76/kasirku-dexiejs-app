@@ -1,5 +1,5 @@
 import { App, Form, Modal, Input, InputNumber } from 'antd';
-import { Plus, Upload } from 'lucide-react';
+import { Plus, Upload, Download } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
 import type { Product } from '@/types';
@@ -213,6 +213,39 @@ export default function StockManagement() {
     return { items, errors };
   };
 
+  const handleExportCsv = () => {
+    if (products.length === 0) {
+      message.info('Tidak ada data produk untuk diexport.');
+      return;
+    }
+
+    const headers = ['id', 'sku', 'name', 'purchase_price', 'selling_price', 'stock', 'created_at', 'updated_at'];
+    const csvContent = [
+      headers.join(','),
+      ...products.map((product) => {
+        return [
+          `"${product.id}"`,
+          `"${(product.sku || '').replace(/"/g, '""')}"`,
+          `"${(product.name || '').replace(/"/g, '""')}"`,
+          product.purchase_price,
+          product.selling_price,
+          product.stock,
+          `"${product.created_at}"`,
+          `"${product.updated_at}"`,
+        ].join(',');
+      }),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `products_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
@@ -291,6 +324,15 @@ export default function StockManagement() {
             className="hidden"
             onChange={handleImportSelected}
           />
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg flex items-center gap-1 sm:gap-2 transition-colors text-sm sm:text-base"
+          >
+            <Download size={18} />
+            <span className="hidden xs:inline sm:inline">Export CSV</span>
+            <span className="xs:hidden sm:hidden">Export</span>
+          </button>
           <button
             type="button"
             onClick={handleImportClick}
