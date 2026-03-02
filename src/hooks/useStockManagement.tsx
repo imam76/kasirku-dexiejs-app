@@ -4,8 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { Product, StockPurchase } from '@/types';
+import type { ProductCsvImportItem } from '@/utils/productsCsv';
 
-interface FormData {
+export interface StockFormData {
   name: string;
   purchase_price: number | undefined;
   selling_price: number | undefined;
@@ -25,7 +26,7 @@ export const useStockManagement = () => {
     setValue,
     control,
     formState: { errors },
-  } = useForm<FormData>({
+  } = useForm<StockFormData>({
     defaultValues: {
       name: '',
       purchase_price: undefined,
@@ -129,17 +130,7 @@ export const useStockManagement = () => {
   });
 
   const importCsvMutation = useMutation({
-    mutationFn: async (
-      items: Array<{
-        id?: string;
-        name: string;
-        sku: string;
-        purchase_price: number;
-        selling_price: number;
-        stock: number;
-        purchase_quantity?: number;
-      }>
-    ) => {
+    mutationFn: async (items: ProductCsvImportItem[]) => {
       const now = new Date().toISOString();
 
       await db.transaction('rw', db.products, db.stockPurchases, async () => {
@@ -211,7 +202,7 @@ export const useStockManagement = () => {
     },
   });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: StockFormData) => {
     await upsertMutation.mutateAsync({
       name: data.name,
       purchase_price: data.purchase_price ?? 0,
