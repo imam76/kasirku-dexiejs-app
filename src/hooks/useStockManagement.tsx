@@ -131,6 +131,7 @@ export const useStockManagement = () => {
   const importCsvMutation = useMutation({
     mutationFn: async (
       items: Array<{
+        id?: string;
         name: string;
         sku: string;
         purchase_price: number;
@@ -175,7 +176,7 @@ export const useStockManagement = () => {
               await db.stockPurchases.add(purchase);
             }
           } else {
-            const newId = crypto.randomUUID();
+            const newId = item.id && item.id.length > 0 ? item.id : crypto.randomUUID();
             const newProduct: Product = {
               id: newId,
               ...cleanData,

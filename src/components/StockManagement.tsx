@@ -148,6 +148,7 @@ export default function StockManagement() {
       return undefined;
     };
 
+    const idxId = pickIndex(['id', 'product_id', 'uuid']);
     const idxName = pickIndex(['name', 'nama', 'product_name', 'nama_produk']);
     const idxSku = pickIndex(['sku', 'kode', 'kode_produk', 'product_sku']);
     const idxPurchase = pickIndex(['purchase_price', 'harga_beli', 'buy_price', 'modal']);
@@ -161,6 +162,7 @@ export default function StockManagement() {
     if (errors.length > 0) return { items: [], errors };
 
     const items: Array<{
+      id?: string;
       name: string;
       sku: string;
       purchase_price: number;
@@ -190,6 +192,7 @@ export default function StockManagement() {
       }
       seenSku.add(sku);
 
+      const id = idxId !== undefined ? (row[idxId] ?? '').trim() : undefined;
       const purchase_price = parseNumberFlexible(idxPurchase !== undefined ? row[idxPurchase] : undefined) ?? 0;
       const selling_price = parseNumberFlexible(idxSelling !== undefined ? row[idxSelling] : undefined) ?? 0;
       const stock = parseNumberFlexible(idxStock !== undefined ? row[idxStock] : undefined) ?? 0;
@@ -197,6 +200,7 @@ export default function StockManagement() {
         parseNumberFlexible(idxPurchaseQty !== undefined ? row[idxPurchaseQty] : undefined) ?? undefined;
 
       items.push({
+        id: id || undefined,
         sku,
         name,
         purchase_price,
