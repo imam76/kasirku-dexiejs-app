@@ -88,7 +88,7 @@ export const useTransaction = () => {
     const transactionId = crypto.randomUUID();
 
     try {
-      await db.transaction('rw', db.transactions, db.transactionItems, db.products, db.profitLogs, db.profitBalance, async () => {
+      await db.transaction('rw', [db.transactions, db.transactionItems, db.products, db.profitLogs, db.profitBalance], async () => {
         const newTransaction: Transaction = {
           id: transactionId,
           transaction_number: transactionNumber,
@@ -149,50 +149,50 @@ export const useTransaction = () => {
       modal.success({
         title: 'Transaksi Berhasil',
         content: (
-          <div className= "text-left space-y-2 mt-4" >
-          <p className="text-gray-700">
-            <span className="font-semibold"> Nomor Transaksi: </span> {transactionNumber}
-              </p>
-              < p className="text-gray-700" >
+          <div className="text-left space-y-2 mt-4" >
+            <p className="text-gray-700">
+              <span className="font-semibold"> Nomor Transaksi: </span> {transactionNumber}
+            </p>
+            < p className="text-gray-700" >
               <span className="font-semibold"> Total:</span> Rp {formatCurrency(total)}
-        </p>
-        < p className = "text-gray-700" >
-        <span className="font-semibold" > Dibayar: </span> Rp {formatCurrency(payment)}
-        </p>
-      < p className = "text-green-600 font-semibold" >
-      <span>Kembalian: </span> Rp {formatCurrency(change)}
-      </p>
-      </div>
-      ),
+            </p>
+            < p className="text-gray-700" >
+              <span className="font-semibold" > Dibayar: </span> Rp {formatCurrency(payment)}
+            </p>
+            < p className="text-green-600 font-semibold" >
+              <span>Kembalian: </span> Rp {formatCurrency(change)}
+            </p>
+          </div>
+        ),
       });
 
-    queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
-    reset();
-    loadProducts();
-  } catch (error) {
-    console.error('Checkout failed:', error);
-    modal.error({
-      title: 'Gagal Membuat Transaksi',
-      content: 'Terjadi kesalahan saat membuat transaksi. Silakan coba lagi.',
-    });
-  }
-};
+      queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
+      reset();
+      loadProducts();
+    } catch (error) {
+      console.error('Checkout failed:', error);
+      modal.error({
+        title: 'Gagal Membuat Transaksi',
+        content: 'Terjadi kesalahan saat membuat transaksi. Silakan coba lagi.',
+      });
+    }
+  };
 
-return {
-  products,
-  cart,
-  searchTerm,
-  paymentAmount,
-  showPayment,
-  filteredProducts,
-  addToCart,
-  updateQuantity,
-  removeFromCart,
-  calculateTotal,
-  handleCheckout,
-  clearCart: reset,
-  setSearchTerm,
-  setPaymentAmount,
-  setShowPayment,
-};
+  return {
+    products,
+    cart,
+    searchTerm,
+    paymentAmount,
+    showPayment,
+    filteredProducts,
+    addToCart,
+    updateQuantity,
+    removeFromCart,
+    calculateTotal,
+    handleCheckout,
+    clearCart: reset,
+    setSearchTerm,
+    setPaymentAmount,
+    setShowPayment,
+  };
 };
