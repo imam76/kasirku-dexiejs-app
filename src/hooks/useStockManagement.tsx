@@ -16,7 +16,7 @@ interface FormData {
 
 export const useStockManagement = () => {
   const queryClient = useQueryClient();
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const [editingId, setEditingId] = useState<string | null>(null);
   const {
     handleSubmit,
@@ -128,6 +128,88 @@ export const useStockManagement = () => {
     },
   });
 
+  const importCsvMutation = useMutation({
+    mutationFn: async (
+      items: Array<{
+        name: string;
+        sku: string;
+        purchase_price: number;
+        selling_price: number;
+        stock: number;
+        purchase_quantity?: number;
+      }>
+    ) => {
+      const now = new Date().toISOString();
+
+      await db.transaction('rw', db.products, db.stockPurchases, async () => {
+        for (const item of items) {
+          const cleanData = {
+            name: item.name,
+            purchase_price: item.purchase_price ?? 0,
+            selling_price: item.selling_price ?? 0,
+            stock: item.stock ?? 0,
+            sku: item.sku,
+          };
+
+          const purchase_quantity = item.purchase_quantity || 0;
+          const existing = await db.products.where('sku').equals(cleanData.sku).first();
+
+          if (existing) {
+            await db.products.update(existing.id, {
+              ...cleanData,
+              updated_at: now,
+            });
+
+            if (purchase_quantity > 0) {
+              const purchase: StockPurchase = {
+                id: crypto.randomUUID(),
+                product_id: existing.id,
+                product_name: cleanData.name,
+                sku: cleanData.sku,
+                quantity: purchase_quantity,
+                cost_per_unit: cleanData.purchase_price,
+                total_cost: cleanData.purchase_price * purchase_quantity,
+                created_at: now,
+                updated_at: now,
+              };
+              await db.stockPurchases.add(purchase);
+            }
+          } else {
+            const newId = crypto.randomUUID();
+            const newProduct: Product = {
+              id: newId,
+              ...cleanData,
+              created_at: now,
+              updated_at: now,
+            };
+
+            await db.products.add(newProduct);
+
+            if (purchase_quantity > 0) {
+              const purchase: StockPurchase = {
+                id: crypto.randomUUID(),
+                product_id: newId,
+                product_name: cleanData.name,
+                sku: cleanData.sku,
+                quantity: purchase_quantity,
+                cost_per_unit: cleanData.purchase_price,
+                total_cost: cleanData.purchase_price * purchase_quantity,
+                created_at: now,
+                updated_at: now,
+              };
+              await db.stockPurchases.add(purchase);
+            }
+          }
+        }
+      });
+    },
+    onSuccess: (_data, items) => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
+      message.success(`Import CSV selesai (${items.length} baris).`);
+    },
+  });
+
   const onSubmit = async (data: FormData) => {
     await upsertMutation.mutateAsync({
       name: data.name,
@@ -179,5 +261,8 @@ export const useStockManagement = () => {
     errors,
     watch,
     isSubmitting: upsertMutation.isPending,
+    importProductsFromCsv: (items: Parameters<typeof importCsvMutation.mutateAsync>[0]) =>
+      importCsvMutation.mutateAsync(items),
+    isImporting: importCsvMutation.isPending,
   };
 };
