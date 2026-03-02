@@ -1,10 +1,13 @@
-import { useState } from 'react';
-import { ShoppingCart, Plus, Minus, Trash2, DollarSign, X } from 'lucide-react';
+import { App } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ShoppingCart, Plus, Minus, Trash2, DollarSign, X, ScanLine } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { formatCurrency } from '@/utils/formatters';
 
 export default function Transaction() {
+  const { message } = App.useApp();
   const {
+    products,
     cart,
     searchTerm,
     paymentAmount,
@@ -25,6 +28,115 @@ export default function Transaction() {
   const [cartOpen, setCartOpen] = useState(false);
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
 
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerStarting, setScannerStarting] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const lastScannedRef = useRef<{ text: string; at: number } | null>(null);
+  const productsRef = useRef(products);
+  const addToCartRef = useRef(addToCart);
+  const beepAudioRef = useRef<HTMLAudioElement | null>(null);
+  const beepUrl = new URL('../assets/beep.mp3', import.meta.url).href;
+
+  useEffect(() => {
+    productsRef.current = products;
+  }, [products]);
+
+  useEffect(() => {
+    addToCartRef.current = addToCart;
+  }, [addToCart]);
+
+  useEffect(() => {
+    beepAudioRef.current = new Audio(beepUrl);
+  }, [beepUrl]);
+
+  const stopScanner = useCallback(() => {
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+
+    const video = videoRef.current;
+    const stream = (video?.srcObject ?? null) as MediaStream | null;
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop();
+    }
+    if (video) video.srcObject = null;
+  }, []);
+
+  useEffect(() => {
+    if (!scannerOpen) {
+      stopScanner();
+      setScannerError(null);
+      setScannerStarting(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    setScannerStarting(true);
+    setScannerError(null);
+
+    (async () => {
+      try {
+        const ZXingBrowser = await import('@zxing/browser');
+        const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+        const video = videoRef.current;
+        if (!video) throw new Error('Video element not available');
+
+        const controls = await codeReader.decodeFromConstraints(
+          {
+            audio: false,
+            video: { facingMode: { ideal: 'environment' } },
+          },
+          video,
+          (result, error) => {
+            if (cancelled) return;
+
+            if (result) {
+              const text = result.getText().trim();
+              const now = Date.now();
+              const last = lastScannedRef.current;
+              if (last && last.text === text && now - last.at < 1500) return;
+
+              lastScannedRef.current = { text, at: now };
+              const match = productsRef.current.find((p) => p.sku.trim().toLowerCase() === text.toLowerCase());
+
+              if (match) {
+                addToCartRef.current(match);
+                // play beep
+                void beepAudioRef.current?.play().catch(() => { });
+                message.success(`Ditambahkan: ${match.name}`);
+              } else {
+                message.error(`Produk dengan SKU/barcode "${text}" tidak ditemukan.`);
+              }
+              return;
+            }
+
+            if (error && typeof error === 'object' && 'name' in error && (error as { name: string }).name === 'NotFoundException') {
+              return;
+            }
+          }
+        );
+
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+
+        controlsRef.current = controls;
+      } catch {
+        if (!cancelled) setScannerError('Gagal mengakses kamera. Pastikan izin kamera diaktifkan.');
+      } finally {
+        if (!cancelled) setScannerStarting(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stopScanner();
+    };
+  }, [message, scannerOpen, stopScanner]);
+
   return (
     <div className="p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Transaksi</h2>
@@ -32,23 +144,33 @@ export default function Transaction() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-md p-4 mb-4 border border-gray-200">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Cari produk (nama atau SKU)..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  aria-label="Hapus pencarian"
-                >
-                  <X size={18} />
-                </button>
-              )}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Cari produk (nama atau SKU)..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label="Hapus pencarian"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
+              >
+                <ScanLine size={18} />
+                <span className="hidden sm:inline">Scan</span>
+              </button>
             </div>
           </div>
 
@@ -325,6 +447,50 @@ export default function Transaction() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {scannerOpen && (
+        <div className="fixed inset-0 z-[60]">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setScannerOpen(false)} />
+          <div className="absolute inset-x-0 top-10 sm:top-16 mx-auto w-[92vw] max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">Scan Barcode</h3>
+                <p className="text-xs text-gray-500">Arahkan kamera ke barcode/SKU produk</p>
+              </div>
+              <button
+                onClick={() => setScannerOpen(false)}
+                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
+                aria-label="Tutup scanner"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <div className="bg-black rounded-xl overflow-hidden aspect-video">
+                <video ref={videoRef} className="w-full h-full object-cover" muted autoPlay playsInline />
+              </div>
+
+              {scannerStarting && (
+                <div className="text-sm text-gray-600">Menyalakan kamera...</div>
+              )}
+              {scannerError && (
+                <div className="text-sm text-red-600">{scannerError}</div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(false)}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
