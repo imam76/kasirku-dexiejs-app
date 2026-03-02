@@ -1,0 +1,6 @@
+/src/main/java/com/asepimamnawawi_imam76/kasirku_erp_app/generated
+/src/main/jniLibs/**/*.so
+/src/main/assets/tauri.conf.json
+/tauri.build.gradle.kts
+/proguard-tauri.pro
+/tauri.properties
