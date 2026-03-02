@@ -1,7 +1,7 @@
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { Layout, Menu, Switch, Drawer, Button, Grid } from 'antd'
-import { ShoppingCartOutlined, AppstoreOutlined, HistoryOutlined, FileTextOutlined, MoonOutlined, SunOutlined, MenuOutlined, CloseOutlined } from '@ant-design/icons'
+import { ShoppingCartOutlined, AppstoreOutlined, HistoryOutlined, FileTextOutlined, MoonOutlined, SunOutlined, MenuOutlined, CloseOutlined, FormOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
@@ -32,6 +32,15 @@ const RootLayout = () => {
       label: 'Stok',
       onClick: () => {
         navigate({ to: '/stock' })
+        setMobileMenuOpen(false)
+      },
+    },
+    {
+      key: '/shopping-note',
+      icon: <FormOutlined />,
+      label: 'Catatan Belanja',
+      onClick: () => {
+        navigate({ to: '/shopping-note' })
         setMobileMenuOpen(false)
       },
     },
@@ -80,11 +89,12 @@ const RootLayout = () => {
           position: 'fixed',
           zIndex: 10,
           width: '100%',
+          height: '75px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           background: '#001529',
-          padding: '0 16px',
+          padding: '20px 16px 0',
           gap: '16px',
         }}
       >
@@ -159,7 +169,7 @@ const RootLayout = () => {
         </Drawer>
       )}
 
-      <Content style={{ padding: '16px', paddingTop: '80px', maxWidth: '100%' }}>
+      <Content style={{ padding: '16px', paddingTop: '95px', maxWidth: '100%' }}>
         <Outlet />
       </Content>
 

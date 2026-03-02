@@ -48,3 +48,12 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface ShoppingNoteItem {
+  id: string;
+  name: string;
+  unit_price: number;
+  quantity: number;
+  unit: string;
+  subtotal: number;
+}
+

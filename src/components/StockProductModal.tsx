@@ -18,7 +18,7 @@ export default function StockProductModal({ open, editingId, control, errors, on
       open={open}
       onCancel={onCancel}
       footer={null}
-      destroyOnClose
+      destroyOnHidden={true}
     >
       <Form layout="vertical" onFinish={onSave} className="mt-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
