@@ -46,7 +46,7 @@ const RootLayout = () => {
             {/* Logo & Desktop Nav */}
             <div className="flex items-center flex-1 overflow-hidden">
               <div className="flex-shrink-0 flex items-center mr-6">
-                <Link to="/" className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                <Link to="/" replace={true} className="text-xl font-bold text-blue-600 dark:text-blue-400">
                   Kasirku
                 </Link>
               </div>
@@ -57,6 +57,7 @@ const RootLayout = () => {
                   <Link
                     key={link.to}
                     to={link.to}
+                    replace={link.to === '/'}
                     className="px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap flex-shrink-0"
                     activeProps={{
                       className: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
