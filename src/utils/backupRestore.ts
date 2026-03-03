@@ -1,5 +1,19 @@
 import { db } from '@/lib/db';
 import dayjs from 'dayjs';
+import { BaseDirectory, cacheDir, join } from '@tauri-apps/api/path';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { type as getOsType } from '@tauri-apps/plugin-os';
+import { shareFile } from 'tauri-plugin-share';
+
+const isTauriMobile = () => {
+  if (!(window as any).__TAURI__) return false;
+  try {
+    const osType = getOsType();
+    return osType === 'android' || osType === 'ios';
+  } catch (e) {
+    return false;
+  }
+};
 
 export const backupDatabase = async () => {
   try {
@@ -14,11 +28,27 @@ export const backupDatabase = async () => {
       timestamp: new Date().toISOString(),
     };
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const fileName = `kasirku-backup-${dayjs().format('YYYY-MM-DD-HH-mm')}.json`;
+    const content = JSON.stringify(data, null, 2);
+
+    if (isTauriMobile()) {
+      try {
+        const cache = await cacheDir();
+        const filePath = await join(cache, fileName);
+        await writeTextFile(fileName, content, { baseDir: BaseDirectory.Cache });
+        await shareFile(filePath, 'application/json');
+        return true;
+      } catch (error) {
+        console.error('Share failed, falling back to download:', error);
+        // Fallback to normal download if share fails
+      }
+    }
+
+    const blob = new Blob([content], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `kasirku-backup-${dayjs().format('YYYY-MM-DD-HH-mm')}.json`;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

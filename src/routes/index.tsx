@@ -38,12 +38,12 @@ function Index() {
           </p>
         </div>
 
-        <div className="grid grid-cols-5 sm:grid-cols-4 md:flex md:flex-wrap md:justify-center gap-3 md:gap-8">
+        <div className='grid grid-cols-3 gap-3 justify-items-center md:flex md:flex-wrap md:justify-center md:gap-6'>
           {menuItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
-              className="flex flex-col items-center justify-center bg-white rounded-lg shadow-sm md:shadow-lg p-2 md:p-6 hover:shadow-md md:hover:shadow-xl transition-all md:w-[200px] md:h-[200px] border border-gray-100 md:border-none"
+              className="w-full aspect-square flex flex-col items-center justify-center bg-white rounded-lg shadow-sm md:shadow-lg p-2 md:p-6 hover:shadow-md md:hover:shadow-xl transition-all md:w-[200px] md:h-[200px] border border-gray-100 md:border-none"
             >
               <div className="flex justify-center mb-1 md:mb-4">
                 <item.icon className={`w-8 h-8 md:w-12 md:h-12 ${item.color}`} />

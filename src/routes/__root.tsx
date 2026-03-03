@@ -14,6 +14,7 @@ import {
   Home,
   Moon,
   Settings,
+  SettingsIcon,
   ShoppingCart,
   Sun
 } from 'lucide-react'
@@ -86,6 +87,12 @@ const RootLayout = () => {
                 aria-label="Toggle theme"
               >
                 {isDark ? <Moon size={20} /> : <Sun size={20} />}
+              </button>
+              <button
+                onClick={() => navigate({ to: '/settings' })}
+                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+              >
+                <SettingsIcon size={20} />
               </button>
             </div>
           </div>
