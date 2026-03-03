@@ -1,11 +1,11 @@
 import { createLazyFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
-import { App, Card, Button, Upload, Modal, Typography, Space, Alert } from 'antd'
+import { App, Card, Button, Upload, Typography, Alert } from 'antd'
 import { Download, Upload as UploadIcon, Database, AlertTriangle } from 'lucide-react'
 import { backupDatabase, restoreDatabase } from '@/utils/backupRestore'
 import { useNavigate } from '@tanstack/react-router'
 
-const { Title, Text, Paragraph } = Typography
+const { Paragraph } = Typography
 
 export const Route = createLazyFileRoute('/settings')({
   component: Settings,

@@ -68,7 +68,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
             video: { facingMode: { ideal: 'environment' } },
           },
           video,
-          (result, error) => {
+          (result) => {
             if (cancelled) return;
 
             if (result) {
@@ -364,4 +364,3 @@ export default function StockProductModal({ open, editingId, control, errors, se
     </>
   );
 }
-
