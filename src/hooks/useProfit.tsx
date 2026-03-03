@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { App } from 'antd';
+import { Transaction, ProfitLog } from '@/types';
 
 export const useProfit = () => {
   const queryClient = useQueryClient();
@@ -55,7 +56,7 @@ export const useProfit = () => {
       queryClient.invalidateQueries({ queryKey: ['profitLogs'] });
       message.success('Penarikan berhasil');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       modal.error({
         title: 'Gagal Menarik Saldo',
         content: error.message || 'Terjadi kesalahan saat menarik saldo.',
@@ -90,11 +91,11 @@ export const useProfit = () => {
 
         // 4. Replay events to calculate balance
         let runningBalance = 0;
-        const newLogs: any[] = [];
+        const newLogs: ProfitLog[] = [];
 
         for (const event of events) {
           if (event.type === 'TRANSACTION') {
-            const t = event.data as any;
+            const t = event.data as Transaction;
             const tItems = itemsByTransaction[t.id] || [];
 
             // Calculate profit for this transaction
@@ -125,7 +126,7 @@ export const useProfit = () => {
               });
             }
           } else if (event.type === 'WITHDRAW') {
-            const w = event.data as any;
+            const w = event.data as ProfitLog;
             runningBalance -= w.amount;
             newLogs.push({
               ...w, // Keep original ID and other fields
@@ -150,7 +151,7 @@ export const useProfit = () => {
       queryClient.invalidateQueries({ queryKey: ['profitLogs'] });
       message.success('Saldo berhasil dihitung ulang');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       console.error('Recalculate error:', error);
       modal.error({
         title: 'Gagal Menghitung Ulang',

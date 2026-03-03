@@ -1,9 +1,12 @@
 import { App } from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ShoppingCart, Plus, Minus, Trash2, DollarSign, X, ScanLine } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { ScanLine, X } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { formatCurrency } from '@/utils/formatters';
-import { getPrice } from '@/utils/pricing';
+import ProductList from './transaction/ProductList';
+import CartSidebar from './transaction/CartSidebar';
+import MobileCartDrawer from './transaction/MobileCartDrawer';
+import ScannerModal from './transaction/ScannerModal';
 
 export default function Transaction() {
   const { message } = App.useApp();
@@ -25,118 +28,24 @@ export default function Transaction() {
     setShowPayment,
   } = useTransaction();
 
-  // Mobile cart drawer state (new UI only, no logic change)
+  // Mobile cart drawer state
   const [cartOpen, setCartOpen] = useState(false);
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
+  const total = calculateTotal();
 
+  // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerStarting, setScannerStarting] = useState(false);
-  const [scannerError, setScannerError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
-  const lastScannedRef = useRef<{ text: string; at: number } | null>(null);
-  const productsRef = useRef(products);
-  const addToCartRef = useRef(addToCart);
-  const beepAudioRef = useRef<HTMLAudioElement | null>(null);
-  const beepUrl = new URL('../assets/beep.mp3', import.meta.url).href;
 
-  useEffect(() => {
-    productsRef.current = products;
-  }, [products]);
+  const handleScan = useCallback((text: string) => {
+    const match = products.find((p) => p.sku.trim().toLowerCase() === text.toLowerCase());
 
-  useEffect(() => {
-    addToCartRef.current = addToCart;
-  }, [addToCart]);
-
-  useEffect(() => {
-    beepAudioRef.current = new Audio(beepUrl);
-  }, [beepUrl]);
-
-  const stopScanner = useCallback(() => {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-
-    const video = videoRef.current;
-    const stream = (video?.srcObject ?? null) as MediaStream | null;
-    if (stream) {
-      for (const track of stream.getTracks()) track.stop();
+    if (match) {
+      addToCart(match);
+      message.success(`Ditambahkan: ${match.name}`);
+    } else {
+      message.error(`Produk dengan SKU/barcode "${text}" tidak ditemukan.`);
     }
-    if (video) video.srcObject = null;
-  }, []);
-
-  useEffect(() => {
-    if (!scannerOpen) {
-      stopScanner();
-      setScannerError(null);
-      setScannerStarting(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    setScannerStarting(true);
-    setScannerError(null);
-
-    (async () => {
-      try {
-        const ZXingBrowser = await import('@zxing/browser');
-        const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
-        const video = videoRef.current;
-        if (!video) throw new Error('Video element not available');
-
-        const controls = await codeReader.decodeFromConstraints(
-          {
-            audio: false,
-            video: { facingMode: { ideal: 'environment' } },
-          },
-          video,
-          (result, error) => {
-            if (cancelled) return;
-
-            if (result) {
-              const text = result.getText().trim();
-              const now = Date.now();
-              const last = lastScannedRef.current;
-              if (last && last.text === text && now - last.at < 1500) return;
-
-              lastScannedRef.current = { text, at: now };
-              const match = productsRef.current.find((p) => p.sku.trim().toLowerCase() === text.toLowerCase());
-
-              if (match) {
-                addToCartRef.current(match);
-                // play beep
-                void beepAudioRef.current?.play().catch(() => { });
-                message.success(`Ditambahkan: ${match.name}`);
-              } else {
-                message.error(`Produk dengan SKU/barcode "${text}" tidak ditemukan.`);
-              }
-              return;
-            }
-
-            if (error && typeof error === 'object' && 'name' in error && (error as { name: string }).name === 'NotFoundException') {
-              return;
-            }
-          }
-        );
-
-        if (cancelled) {
-          controls.stop();
-          return;
-        }
-
-        controlsRef.current = controls;
-      } catch {
-        if (!cancelled) setScannerError('Gagal mengakses kamera. Pastikan izin kamera diaktifkan.');
-      } finally {
-        if (!cancelled) setScannerStarting(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      stopScanner();
-    };
-  }, [message, scannerOpen, stopScanner]);
+  }, [products, addToCart, message]);
 
   return (
     <div className="p-4 sm:p-6">
@@ -175,154 +84,24 @@ export default function Transaction() {
             </div>
           </div>
 
-          {/* Responsive: 2 cols on mobile, 3 on tablet+ */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 pb-24 lg:pb-0">
-            {filteredProducts.map((product) => (
-              <div
-                key={product.id}
-                onClick={() => addToCart(product)}
-                className="bg-white p-3 sm:p-4 rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow border border-gray-200"
-              >
-                <div className="flex items-center justify-center h-16 sm:h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg mb-3">
-                  <ShoppingCart size={32} className="text-blue-600 sm:w-10 sm:h-10" />
-                </div>
-                <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base line-clamp-2">{product.name}</h3>
-                <p className="text-xs sm:text-sm text-gray-600 mb-2">{product.sku}</p>
-                <div className="flex flex-wrap items-center gap-1">
-                  <p className="text-sm sm:text-lg font-bold text-blue-600">
-                    Rp {formatCurrency(product.selling_price)}
-                  </p>
-                  {product.wholesale_prices && product.wholesale_prices.length > 0 && (
-                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Grosir</span>
-                  )}
-                </div>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                  Stok: {product.stock}
-                </p>
-              </div>
-            ))}
-          </div>
+          <ProductList
+            products={filteredProducts}
+            addToCart={addToCart}
+          />
         </div>
 
-        {/* Desktop Cart Sidebar — hidden on mobile/tablet */}
-        <div className="hidden lg:block lg:col-span-1">
-          <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200 sticky top-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">Keranjang</h3>
-              {cart.length > 0 && (
-                <button
-                  onClick={clearCart}
-                  className="text-red-500 hover:text-red-700 text-sm font-medium transition-colors flex items-center gap-1"
-                >
-                  <Trash2 size={14} />
-                  Bersihkan
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
-              {cart.map((item) => {
-                const currentPrice = getPrice(item.product, item.quantity);
-                const isWholesale = currentPrice < item.product.selling_price;
-                return (
-                  <div
-                    key={item.product.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-800">{item.product.name}</p>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm text-gray-600">
-                          Rp {formatCurrency(currentPrice)}
-                        </p>
-                        {isWholesale && (
-                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Grosir</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                        className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
-                      >
-                        <Minus size={16} />
-                      </button>
-                      <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                      <button
-                        onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                        className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
-                      >
-                        <Plus size={16} />
-                      </button>
-                      <button
-                        onClick={() => removeFromCart(item.product.id)}
-                        className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors ml-2"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-              {cart.length === 0 && (
-                <p className="text-center text-gray-500 py-8">Keranjang kosong</p>
-              )}
-            </div>
-
-            {cart.length > 0 && (
-              <>
-                <div className="border-t pt-4 mb-4">
-                  <div className="flex justify-between text-xl font-bold text-gray-800">
-                    <span>Total:</span>
-                    <span>Rp {formatCurrency(calculateTotal())}</span>
-                  </div>
-                </div>
-
-                {!showPayment ? (
-                  <button
-                    onClick={() => setShowPayment(true)}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                  >
-                    <DollarSign size={20} />
-                    Bayar
-                  </button>
-                ) : (
-                  <div className="space-y-3">
-                    <input
-                      type="number"
-                      placeholder="Jumlah pembayaran"
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                    {paymentAmount && parseFloat(paymentAmount) >= calculateTotal() && (
-                      <p className="text-sm text-gray-700">
-                        Kembalian: <span className="font-bold">Rp {formatCurrency(parseFloat(paymentAmount) - calculateTotal())}</span>
-                      </p>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleCheckout}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition-colors"
-                      >
-                        Konfirmasi
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowPayment(false);
-                          setPaymentAmount('');
-                        }}
-                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-semibold transition-colors"
-                      >
-                        Batal
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <CartSidebar
+          cart={cart}
+          updateQuantity={updateQuantity}
+          removeFromCart={removeFromCart}
+          clearCart={clearCart}
+          total={total}
+          showPayment={showPayment}
+          paymentAmount={paymentAmount}
+          setShowPayment={setShowPayment}
+          setPaymentAmount={setPaymentAmount}
+          handleCheckout={handleCheckout}
+        />
       </div>
 
       {/* Mobile/Tablet: Floating Cart Button */}
@@ -338,185 +117,31 @@ export default function Transaction() {
               </span>
               <span>Lihat Keranjang</span>
             </div>
-            <span className="font-bold">Rp {formatCurrency(calculateTotal())}</span>
+            <span className="font-bold">Rp {formatCurrency(total)}</span>
           </button>
         </div>
       )}
 
-      {/* Mobile/Tablet: Cart Bottom Drawer */}
-      {cartOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 bg-black bg-opacity-40"
-            onClick={() => setCartOpen(false)}
-          />
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-semibold text-gray-800">Keranjang</h3>
-                {cart.length > 0 && (
-                  <button
-                    onClick={clearCart}
-                    className="text-red-500 hover:text-red-700 text-xs font-medium transition-colors flex items-center gap-1 bg-red-50 px-2 py-1 rounded"
-                  >
-                    <Trash2 size={12} />
-                    Bersihkan
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => setCartOpen(false)}
-                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
-              {cart.map((item) => {
-                const currentPrice = getPrice(item.product, item.quantity);
-                const isWholesale = currentPrice < item.product.selling_price;
-                return (
-                  <div
-                    key={item.product.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-800">{item.product.name}</p>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm text-gray-600">
-                          Rp {formatCurrency(currentPrice)}
-                        </p>
-                        {isWholesale && (
-                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Grosir</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                        className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
-                      >
-                        <Minus size={16} />
-                      </button>
-                      <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                      <button
-                        onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                        className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
-                      >
-                        <Plus size={16} />
-                      </button>
-                      <button
-                        onClick={() => removeFromCart(item.product.id)}
-                        className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors ml-2"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-              {cart.length === 0 && (
-                <p className="text-center text-gray-500 py-8">Keranjang kosong</p>
-              )}
-            </div>
-
-            {cart.length > 0 && (
-              <div className="px-5 pt-4 pb-8 border-t border-gray-100">
-                <div className="flex justify-between text-xl font-bold text-gray-800 mb-4">
-                  <span>Total:</span>
-                  <span>Rp {formatCurrency(calculateTotal())}</span>
-                </div>
-
-                {!showPayment ? (
-                  <button
-                    onClick={() => setShowPayment(true)}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                  >
-                    <DollarSign size={20} />
-                    Bayar
-                  </button>
-                ) : (
-                  <div className="space-y-3">
-                    <input
-                      type="number"
-                      placeholder="Jumlah pembayaran"
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                    {paymentAmount && parseFloat(paymentAmount) >= calculateTotal() && (
-                      <p className="text-sm text-gray-700">
-                        Kembalian: <span className="font-bold">Rp {formatCurrency(parseFloat(paymentAmount) - calculateTotal())}</span>
-                      </p>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { handleCheckout(); setCartOpen(false); }}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition-colors"
-                      >
-                        Konfirmasi
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowPayment(false);
-                          setPaymentAmount('');
-                        }}
-                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-semibold transition-colors"
-                      >
-                        Batal
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <MobileCartDrawer
+        isOpen={cartOpen}
+        onClose={() => setCartOpen(false)}
+        cart={cart}
+        updateQuantity={updateQuantity}
+        removeFromCart={removeFromCart}
+        clearCart={clearCart}
+        total={total}
+        showPayment={showPayment}
+        paymentAmount={paymentAmount}
+        setShowPayment={setShowPayment}
+        setPaymentAmount={setPaymentAmount}
+        handleCheckout={handleCheckout}
+      />
 
       {scannerOpen && (
-        <div className="fixed inset-0 z-[60]">
-          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setScannerOpen(false)} />
-          <div className="absolute inset-x-0 top-0 sm:top-16 mx-auto w-full h-full sm:h-auto sm:w-[92vw] sm:max-w-xl bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800">Scan Barcode</h3>
-                <p className="text-xs text-gray-500">Arahkan kamera ke barcode/SKU produk</p>
-              </div>
-              <button
-                onClick={() => setScannerOpen(false)}
-                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
-                aria-label="Tutup scanner"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-3 flex-1 overflow-y-auto">
-              <div className="bg-black rounded-xl overflow-hidden aspect-video w-full">
-                <video ref={videoRef} className="w-full h-full object-cover" muted autoPlay playsInline />
-              </div>
-
-              {scannerStarting && (
-                <div className="text-sm text-gray-600">Menyalakan kamera...</div>
-              )}
-              {scannerError && (
-                <div className="text-sm text-red-600">{scannerError}</div>
-              )}
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setScannerOpen(false)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ScannerModal
+          onClose={() => setScannerOpen(false)}
+          onScan={handleScan}
+        />
       )}
     </div>
   );

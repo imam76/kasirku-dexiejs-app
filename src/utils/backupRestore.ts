@@ -6,11 +6,12 @@ import { type as getOsType } from '@tauri-apps/plugin-os';
 import { shareFile } from 'tauri-plugin-share';
 
 const isTauriMobile = () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (!(window as any).__TAURI__) return false;
   try {
     const osType = getOsType();
     return osType === 'android' || osType === 'ios';
-  } catch (e) {
+  } catch {
     return false;
   }
 };

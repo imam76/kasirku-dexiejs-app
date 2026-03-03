@@ -16,7 +16,7 @@ export default function ProfitManagement() {
       await withdraw(values);
       setIsModalOpen(false);
       form.resetFields();
-    } catch (error) {
+    } catch {
       // Error handled in hook
     }
   };
@@ -50,6 +50,7 @@ export default function ProfitManagement() {
       title: 'Jumlah',
       dataIndex: 'amount',
       key: 'amount',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       render: (amount: number, record: any) => (
         <span className={record.type === 'IN' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
           {record.type === 'IN' ? '+' : '-'} Rp {formatCurrency(amount)}
@@ -152,7 +153,7 @@ export default function ProfitManagement() {
             <InputNumber
               style={{ width: '100%' }}
               formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={(value) => value?.replace(/\Rp\s?|(\.*)/g, '') as unknown as number}
+              parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
               placeholder="0"
               size="large"
             />
