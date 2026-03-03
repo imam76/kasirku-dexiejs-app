@@ -261,6 +261,7 @@ export const useStockManagement = () => {
     resetForm: resetFormData,
     errors,
     watch,
+    setValue,
     isSubmitting: upsertMutation.isPending,
     importProductsFromCsv: (items: Parameters<typeof importCsvMutation.mutateAsync>[0]) =>
       importCsvMutation.mutateAsync(items),

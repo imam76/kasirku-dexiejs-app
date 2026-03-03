@@ -23,6 +23,7 @@ export default function StockManagement() {
     handleDelete,
     resetForm,
     errors,
+    setValue,
     importProductsFromCsv,
     isImporting,
   } = useStockManagement();
@@ -199,6 +200,7 @@ export default function StockManagement() {
         editingId={editingId}
         control={control}
         errors={errors}
+        setValue={setValue}
         onCancel={handleModalCancel}
         onSave={async () => {
           try {
