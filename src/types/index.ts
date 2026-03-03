@@ -1,6 +1,7 @@
 export interface WholesalePrice {
   min_quantity: number;
   price: number;
+  price_type?: 'unit' | 'bundle'; // 'unit' = price per item, 'bundle' = price for min_quantity items
 }
 
 export interface Product {

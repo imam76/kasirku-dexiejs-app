@@ -62,6 +62,7 @@ export const useStockManagement = () => {
         wholesale_prices: (productData.wholesale_prices || []).map((p) => ({
           min_quantity: Number(p.min_quantity),
           price: Number(p.price),
+          price_type: p.price_type || 'unit',
         })),
       };
 

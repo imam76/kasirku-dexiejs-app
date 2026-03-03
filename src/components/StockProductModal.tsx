@@ -1,4 +1,4 @@
-import { Form, Modal, Input, InputNumber, Grid, Button } from 'antd';
+import { Form, Modal, Input, InputNumber, Grid, Button, Select } from 'antd';
 import { Controller, type Control, type FieldErrors, useFieldArray } from 'react-hook-form';
 import { Trash2, Plus } from 'lucide-react';
 import type { StockFormData } from '@/hooks/useStockManagement';
@@ -139,7 +139,7 @@ export default function StockProductModal({ open, editingId, control, errors, on
             <h3 className="font-medium text-gray-700">Harga Grosir (Multi Price)</h3>
             <Button
               type="dashed"
-              onClick={() => append({ min_quantity: 2, price: 0 })}
+              onClick={() => append({ min_quantity: 2, price: 0, price_type: 'unit' })}
               icon={<Plus size={16} />}
               className="flex items-center gap-1"
             >
@@ -150,42 +150,64 @@ export default function StockProductModal({ open, editingId, control, errors, on
           <div className="space-y-3">
             {fields.map((field, index) => (
               <div key={field.id} className="flex gap-2 items-start bg-gray-50 p-3 rounded-lg border border-gray-200">
-                <div className="flex-1 grid grid-cols-2 gap-2">
+                <div className="flex-1 grid grid-cols-12 gap-2">
                   <Form.Item
                     label="Min. Qty"
-                    className="mb-0"
+                    className="mb-0 col-span-3"
                     validateStatus={errors.wholesale_prices?.[index]?.min_quantity ? 'error' : ''}
                     help={errors.wholesale_prices?.[index]?.min_quantity?.message}
                   >
                     <Controller
                       name={`wholesale_prices.${index}.min_quantity`}
                       control={control}
-                      rules={{ required: 'Wajib diisi', min: { value: 1, message: '> 0' } }}
+                      rules={{ required: 'Wajib', min: { value: 1, message: '> 0' } }}
                       render={({ field }) => (
                         <InputNumber
                           {...field}
                           className="w-full"
-                          placeholder="Min Qty"
+                          placeholder="Qty"
                           min={1}
                         />
                       )}
                     />
                   </Form.Item>
+
                   <Form.Item
-                    label="Harga Satuan"
-                    className="mb-0"
+                    label="Tipe"
+                    className="mb-0 col-span-4"
+                  >
+                    <Controller
+                      name={`wholesale_prices.${index}.price_type`}
+                      control={control}
+                      defaultValue="unit"
+                      render={({ field }) => (
+                        <Select
+                          {...field}
+                          className="w-full"
+                          options={[
+                            { value: 'unit', label: 'Per Pcs' },
+                            { value: 'bundle', label: 'Paket' },
+                          ]}
+                        />
+                      )}
+                    />
+                  </Form.Item>
+
+                  <Form.Item
+                    label="Harga"
+                    className="mb-0 col-span-5"
                     validateStatus={errors.wholesale_prices?.[index]?.price ? 'error' : ''}
                     help={errors.wholesale_prices?.[index]?.price?.message}
                   >
                     <Controller
                       name={`wholesale_prices.${index}.price`}
                       control={control}
-                      rules={{ required: 'Wajib diisi', min: { value: 0, message: '>= 0' } }}
+                      rules={{ required: 'Wajib', min: { value: 0, message: '>= 0' } }}
                       render={({ field }) => (
                         <InputNumber
                           {...field}
                           className="w-full"
-                          placeholder="Harga"
+                          placeholder="Nominal"
                           min={0}
                           formatter={(value) => value !== undefined && value !== null ? `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
                           parser={(value) => value?.replace(/Rp\s?|(,*)/g, '') as unknown as number}
