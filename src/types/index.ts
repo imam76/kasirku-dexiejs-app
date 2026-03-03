@@ -1,3 +1,8 @@
+export interface WholesalePrice {
+  min_quantity: number;
+  price: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -5,6 +10,7 @@ export interface Product {
   selling_price: number;
   stock: number;
   sku: string;
+  wholesale_prices?: WholesalePrice[];
   created_at: string;
   updated_at: string;
 }

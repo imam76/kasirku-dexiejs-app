@@ -1,5 +1,6 @@
-import { Form, Modal, Input, InputNumber, Grid } from 'antd';
-import { Controller, type Control, type FieldErrors } from 'react-hook-form';
+import { Form, Modal, Input, InputNumber, Grid, Button } from 'antd';
+import { Controller, type Control, type FieldErrors, useFieldArray } from 'react-hook-form';
+import { Trash2, Plus } from 'lucide-react';
 import type { StockFormData } from '@/hooks/useStockManagement';
 
 const { useBreakpoint } = Grid;
@@ -15,7 +16,11 @@ type Props = {
 
 export default function StockProductModal({ open, editingId, control, errors, onCancel, onSave }: Props) {
   const screens = useBreakpoint();
-  
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'wholesale_prices',
+  });
+
   return (
     <Modal
       title={editingId ? 'Edit Produk' : 'Tambah Produk Baru'}
@@ -126,6 +131,82 @@ export default function StockProductModal({ open, editingId, control, errors, on
               )}
             />
           </Form.Item>
+        </div>
+
+        {/* Wholesale Prices Section */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-medium text-gray-700">Harga Grosir (Multi Price)</h3>
+            <Button
+              type="dashed"
+              onClick={() => append({ min_quantity: 2, price: 0 })}
+              icon={<Plus size={16} />}
+              className="flex items-center gap-1"
+            >
+              Tambah Harga
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {fields.map((field, index) => (
+              <div key={field.id} className="flex gap-2 items-start bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <div className="flex-1 grid grid-cols-2 gap-2">
+                  <Form.Item
+                    label="Min. Qty"
+                    className="mb-0"
+                    validateStatus={errors.wholesale_prices?.[index]?.min_quantity ? 'error' : ''}
+                    help={errors.wholesale_prices?.[index]?.min_quantity?.message}
+                  >
+                    <Controller
+                      name={`wholesale_prices.${index}.min_quantity`}
+                      control={control}
+                      rules={{ required: 'Wajib diisi', min: { value: 1, message: '> 0' } }}
+                      render={({ field }) => (
+                        <InputNumber
+                          {...field}
+                          className="w-full"
+                          placeholder="Min Qty"
+                          min={1}
+                        />
+                      )}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="Harga Satuan"
+                    className="mb-0"
+                    validateStatus={errors.wholesale_prices?.[index]?.price ? 'error' : ''}
+                    help={errors.wholesale_prices?.[index]?.price?.message}
+                  >
+                    <Controller
+                      name={`wholesale_prices.${index}.price`}
+                      control={control}
+                      rules={{ required: 'Wajib diisi', min: { value: 0, message: '>= 0' } }}
+                      render={({ field }) => (
+                        <InputNumber
+                          {...field}
+                          className="w-full"
+                          placeholder="Harga"
+                          min={0}
+                          formatter={(value) => value !== undefined && value !== null ? `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                          parser={(value) => value?.replace(/Rp\s?|(,*)/g, '') as unknown as number}
+                        />
+                      )}
+                    />
+                  </Form.Item>
+                </div>
+                <Button
+                  danger
+                  type="text"
+                  icon={<Trash2 size={16} />}
+                  onClick={() => remove(index)}
+                  className="mt-8"
+                />
+              </div>
+            ))}
+            {fields.length === 0 && (
+              <p className="text-gray-500 text-sm italic">Belum ada harga grosir diatur.</p>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 justify-end pt-2">

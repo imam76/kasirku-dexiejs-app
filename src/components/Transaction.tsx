@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ShoppingCart, Plus, Minus, Trash2, DollarSign, X, ScanLine } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { formatCurrency } from '@/utils/formatters';
+import { getPrice } from '@/utils/pricing';
 
 export default function Transaction() {
   const { message } = App.useApp();
@@ -187,9 +188,14 @@ export default function Transaction() {
                 </div>
                 <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base line-clamp-2">{product.name}</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-2">{product.sku}</p>
-                <p className="text-sm sm:text-lg font-bold text-blue-600">
-                  Rp {formatCurrency(product.selling_price)}
-                </p>
+                <div className="flex flex-wrap items-center gap-1">
+                  <p className="text-sm sm:text-lg font-bold text-blue-600">
+                    Rp {formatCurrency(product.selling_price)}
+                  </p>
+                  {product.wholesale_prices && product.wholesale_prices.length > 0 && (
+                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Grosir</span>
+                  )}
+                </div>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1">
                   Stok: {product.stock}
                 </p>
@@ -215,40 +221,49 @@ export default function Transaction() {
             </div>
 
             <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
-              {cart.map((item) => (
-                <div
-                  key={item.product.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800">{item.product.name}</p>
-                    <p className="text-sm text-gray-600">
-                      Rp {formatCurrency(item.product.selling_price)}
-                    </p>
+              {cart.map((item) => {
+                const currentPrice = getPrice(item.product, item.quantity);
+                const isWholesale = currentPrice < item.product.selling_price;
+                return (
+                  <div
+                    key={item.product.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-800">{item.product.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-gray-600">
+                          Rp {formatCurrency(currentPrice)}
+                        </p>
+                        {isWholesale && (
+                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Grosir</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                        className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <span className="w-8 text-center font-semibold">{item.quantity}</span>
+                      <button
+                        onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                        className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
+                      >
+                        <Plus size={16} />
+                      </button>
+                      <button
+                        onClick={() => removeFromCart(item.product.id)}
+                        className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors ml-2"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                      className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                      className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
-                    >
-                      <Plus size={16} />
-                    </button>
-                    <button
-                      onClick={() => removeFromCart(item.product.id)}
-                      className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors ml-2"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {cart.length === 0 && (
                 <p className="text-center text-gray-500 py-8">Keranjang kosong</p>
               )}
@@ -358,40 +373,49 @@ export default function Transaction() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
-              {cart.map((item) => (
-                <div
-                  key={item.product.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800">{item.product.name}</p>
-                    <p className="text-sm text-gray-600">
-                      Rp {formatCurrency(item.product.selling_price)}
-                    </p>
+              {cart.map((item) => {
+                const currentPrice = getPrice(item.product, item.quantity);
+                const isWholesale = currentPrice < item.product.selling_price;
+                return (
+                  <div
+                    key={item.product.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-800">{item.product.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-gray-600">
+                          Rp {formatCurrency(currentPrice)}
+                        </p>
+                        {isWholesale && (
+                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Grosir</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                        className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <span className="w-8 text-center font-semibold">{item.quantity}</span>
+                      <button
+                        onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                        className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
+                      >
+                        <Plus size={16} />
+                      </button>
+                      <button
+                        onClick={() => removeFromCart(item.product.id)}
+                        className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors ml-2"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                      className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                      className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
-                    >
-                      <Plus size={16} />
-                    </button>
-                    <button
-                      onClick={() => removeFromCart(item.product.id)}
-                      className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors ml-2"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {cart.length === 0 && (
                 <p className="text-center text-gray-500 py-8">Keranjang kosong</p>
               )}

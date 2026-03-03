@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { useTransactionStore } from '@/store/transactionStore';
 import { Transaction, TransactionItem, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
+import { getPrice } from '@/utils/pricing';
 
 export const useTransaction = () => {
   const queryClient = useQueryClient();
@@ -47,7 +48,7 @@ export const useTransaction = () => {
   }, [products, searchTerm]);
 
   const calculateTotal = useCallback(() => {
-    return cart.reduce((sum, item) => sum + item.product.selling_price * item.quantity, 0);
+    return cart.reduce((sum, item) => sum + getPrice(item.product, item.quantity) * item.quantity, 0);
   }, [cart]);
 
   const addToCart = (product: Product) => {
@@ -100,18 +101,21 @@ export const useTransaction = () => {
 
         await db.transactions.add(newTransaction);
 
-        const transactionItems: TransactionItem[] = cart.map((item) => ({
-          id: crypto.randomUUID(),
-          transaction_id: transactionId,
-          product_id: item.product.id,
-          product_name: item.product.name,
-          price: item.product.selling_price,
-          purchase_price: item.product.purchase_price,
-          quantity: item.quantity,
-          subtotal: item.product.selling_price * item.quantity,
-          profit: (item.product.selling_price - item.product.purchase_price) * item.quantity,
-          created_at: now,
-        }));
+        const transactionItems: TransactionItem[] = cart.map((item) => {
+          const sellingPrice = getPrice(item.product, item.quantity);
+          return {
+            id: crypto.randomUUID(),
+            transaction_id: transactionId,
+            product_id: item.product.id,
+            product_name: item.product.name,
+            price: sellingPrice,
+            purchase_price: item.product.purchase_price,
+            quantity: item.quantity,
+            subtotal: sellingPrice * item.quantity,
+            profit: (sellingPrice - item.product.purchase_price) * item.quantity,
+            created_at: now,
+          };
+        });
 
         await db.transactionItems.bulkAdd(transactionItems);
 

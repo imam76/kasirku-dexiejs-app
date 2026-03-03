@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
-import { Product, StockPurchase } from '@/types';
+import { Product, StockPurchase, WholesalePrice } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 
 export interface StockFormData {
@@ -13,6 +13,7 @@ export interface StockFormData {
   stock: number | undefined;
   sku: string;
   purchase_quantity?: number | undefined;
+  wholesale_prices?: WholesalePrice[];
 }
 
 export const useStockManagement = () => {
@@ -34,6 +35,7 @@ export const useStockManagement = () => {
       stock: undefined,
       sku: '',
       purchase_quantity: undefined,
+      wholesale_prices: [],
     },
   });
 
@@ -57,6 +59,10 @@ export const useStockManagement = () => {
         selling_price: productData.selling_price ?? 0,
         stock: productData.stock ?? 0,
         sku: productData.sku,
+        wholesale_prices: (productData.wholesale_prices || []).map((p) => ({
+          min_quantity: Number(p.min_quantity),
+          price: Number(p.price),
+        })),
       };
 
       await db.transaction('rw', db.products, db.stockPurchases, async () => {
@@ -210,6 +216,7 @@ export const useStockManagement = () => {
       stock: data.stock ?? 0,
       sku: data.sku,
       purchase_quantity: data.purchase_quantity || 0,
+      wholesale_prices: data.wholesale_prices,
     });
   };
 
@@ -221,6 +228,7 @@ export const useStockManagement = () => {
     setValue('stock', product.stock);
     setValue('sku', product.sku);
     setValue('purchase_quantity', 0);
+    setValue('wholesale_prices', product.wholesale_prices || []);
   };
 
   const handleDelete = (id: string) => {
