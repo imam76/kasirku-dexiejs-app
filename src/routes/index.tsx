@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   FileText,
   History,
+  Settings,
   ShoppingCart
 } from 'lucide-react'
 
@@ -22,6 +23,7 @@ function Index() {
     { to: '/sales-report', label: 'Lap. Jual', icon: FileText, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
     { to: '/purchase-report', label: 'Lap. Beli', icon: FileSpreadsheet, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
     { to: '/profit', label: 'Keuntungan', icon: DollarSign, color: 'text-emerald-600', desc: 'Analisis keuntungan penjualan' },
+    { to: '/settings', label: 'Pengaturan', icon: Settings, color: 'text-gray-600', desc: 'Backup dan restore database aplikasi' },
   ]
 
   return (
@@ -36,7 +38,7 @@ function Index() {
           </p>
         </div>
 
-        <div className="grid grid-cols-4 sm:grid-cols-4 md:flex md:flex-wrap md:justify-center gap-3 md:gap-8">
+        <div className="grid grid-cols-5 sm:grid-cols-4 md:flex md:flex-wrap md:justify-center gap-3 md:gap-8">
           {menuItems.map((item) => (
             <Link
               key={item.to}

@@ -13,6 +13,7 @@ import {
   History,
   Home,
   Moon,
+  Settings,
   ShoppingCart,
   Sun
 } from 'lucide-react'
@@ -42,6 +43,7 @@ const RootLayout = () => {
     { to: '/sales-report', label: 'Laporan Penjualan', icon: FileText },
     { to: '/purchase-report', label: 'Laporan Pembelian', icon: FileSpreadsheet },
     { to: '/profit', label: 'Keuntungan', icon: DollarSign },
+    { to: '/settings', label: 'Pengaturan', icon: Settings },
   ]
 
   return (

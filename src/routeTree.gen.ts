@@ -16,6 +16,7 @@ import { Route as IndexRouteImport } from './routes/index'
 const TransactionLazyRouteImport = createFileRoute('/transaction')()
 const StockLazyRouteImport = createFileRoute('/stock')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
+const SettingsLazyRouteImport = createFileRoute('/settings')()
 const SalesReportLazyRouteImport = createFileRoute('/sales-report')()
 const PurchaseReportLazyRouteImport = createFileRoute('/purchase-report')()
 const ProfitLazyRouteImport = createFileRoute('/profit')()
@@ -37,6 +38,11 @@ const ShoppingNoteLazyRoute = ShoppingNoteLazyRouteImport.update({
   path: '/shopping-note',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/shopping-note.lazy').then((d) => d.Route))
+const SettingsLazyRoute = SettingsLazyRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/settings.lazy').then((d) => d.Route))
 const SalesReportLazyRoute = SalesReportLazyRouteImport.update({
   id: '/sales-report',
   path: '/sales-report',
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/profit': typeof ProfitLazyRoute
   '/purchase-report': typeof PurchaseReportLazyRoute
   '/sales-report': typeof SalesReportLazyRoute
+  '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/stock': typeof StockLazyRoute
   '/transaction': typeof TransactionLazyRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/profit': typeof ProfitLazyRoute
   '/purchase-report': typeof PurchaseReportLazyRoute
   '/sales-report': typeof SalesReportLazyRoute
+  '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/stock': typeof StockLazyRoute
   '/transaction': typeof TransactionLazyRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/profit': typeof ProfitLazyRoute
   '/purchase-report': typeof PurchaseReportLazyRoute
   '/sales-report': typeof SalesReportLazyRoute
+  '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/stock': typeof StockLazyRoute
   '/transaction': typeof TransactionLazyRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
     | '/profit'
     | '/purchase-report'
     | '/sales-report'
+    | '/settings'
     | '/shopping-note'
     | '/stock'
     | '/transaction'
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
     | '/profit'
     | '/purchase-report'
     | '/sales-report'
+    | '/settings'
     | '/shopping-note'
     | '/stock'
     | '/transaction'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/profit'
     | '/purchase-report'
     | '/sales-report'
+    | '/settings'
     | '/shopping-note'
     | '/stock'
     | '/transaction'
@@ -147,6 +159,7 @@ export interface RootRouteChildren {
   ProfitLazyRoute: typeof ProfitLazyRoute
   PurchaseReportLazyRoute: typeof PurchaseReportLazyRoute
   SalesReportLazyRoute: typeof SalesReportLazyRoute
+  SettingsLazyRoute: typeof SettingsLazyRoute
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
   StockLazyRoute: typeof StockLazyRoute
   TransactionLazyRoute: typeof TransactionLazyRoute
@@ -173,6 +186,13 @@ declare module '@tanstack/react-router' {
       path: '/shopping-note'
       fullPath: '/shopping-note'
       preLoaderRoute: typeof ShoppingNoteLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sales-report': {
@@ -227,6 +247,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfitLazyRoute: ProfitLazyRoute,
   PurchaseReportLazyRoute: PurchaseReportLazyRoute,
   SalesReportLazyRoute: SalesReportLazyRoute,
+  SettingsLazyRoute: SettingsLazyRoute,
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
   StockLazyRoute: StockLazyRoute,
   TransactionLazyRoute: TransactionLazyRoute,
