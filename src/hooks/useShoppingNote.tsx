@@ -1,8 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { useQueryClient } from '@tanstack/react-query';
+import { App } from 'antd';
+import { db } from '@/lib/db';
 import { ShoppingNoteItem } from '@/types';
 
 export const useShoppingNote = () => {
+  const { message } = App.useApp();
+  const queryClient = useQueryClient();
   const [items, setItems] = useState<ShoppingNoteItem[]>([]);
   const [moneyCarried, setMoneyCarried] = useState<number>(0);
 
@@ -55,6 +60,36 @@ export const useShoppingNote = () => {
     return moneyCarried - totalShopping;
   }, [moneyCarried, totalShopping]);
 
+  const saveNote = async () => {
+    if (items.length === 0) {
+      message.warning('Daftar belanja masih kosong');
+      return;
+    }
+
+    try {
+      await db.shoppingNotes.add({
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        items,
+        money_carried: moneyCarried,
+        total_shopping: totalShopping,
+        remaining_money: remainingMoney,
+      });
+      message.success('Nota belanja berhasil disimpan');
+      setItems([]);
+      setMoneyCarried(0);
+      queryClient.invalidateQueries({ queryKey: ['shoppingNotesHistory'] });
+    } catch (error) {
+      console.error('Failed to save note:', error);
+      message.error('Gagal menyimpan nota belanja');
+    }
+  };
+
+  const loadNote = (note: { items: ShoppingNoteItem[], money_carried: number }) => {
+    setItems(note.items);
+    setMoneyCarried(note.money_carried);
+  };
+
   return {
     items,
     moneyCarried,
@@ -65,5 +100,7 @@ export const useShoppingNote = () => {
     control,
     handleSubmit: handleSubmit(addItem),
     errors,
+    saveNote,
+    loadNote,
   };
 };

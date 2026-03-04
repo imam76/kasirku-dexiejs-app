@@ -64,6 +64,15 @@ export interface ShoppingNoteItem {
   subtotal: number;
 }
 
+export interface ShoppingNote {
+  id: string;
+  created_at: string;
+  items: ShoppingNoteItem[];
+  money_carried: number;
+  total_shopping: number;
+  remaining_money: number;
+}
+
 export interface ProfitLog {
   id: string;
   transaction_id?: string; // Optional, link to transaction if source is transaction

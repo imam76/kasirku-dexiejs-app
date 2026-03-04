@@ -1,14 +1,17 @@
+import { useState } from 'react';
 import { Controller } from 'react-hook-form';
-import { Table, Button, Input, InputNumber, Select, Card, Typography, Form, Row, Col } from 'antd';
+import { Table, Button, Input, InputNumber, Select, Card, Typography, Form, Row, Col, Modal } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Save, History } from 'lucide-react';
 import { useShoppingNote } from '@/hooks/useShoppingNote';
 import { ShoppingNoteItem } from '@/types';
+import ShoppingNoteHistory from './ShoppingNoteHistory';
 
 const { Text } = Typography;
 const { Option } = Select;
 
 export default function ShoppingNote() {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const {
     items,
     moneyCarried,
@@ -19,6 +22,8 @@ export default function ShoppingNote() {
     control,
     handleSubmit,
     errors,
+    saveNote,
+    loadNote,
   } = useShoppingNote();
 
   const columns: ColumnsType<ShoppingNoteItem> = [
@@ -64,14 +69,32 @@ export default function ShoppingNote() {
   ];
 
   return (
-    <div className="p-3 sm:p-4 md:p-6">
+    <div className="p-3 sm:p-4 md:p-6 pb-24 sm:pb-6">
       <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="min-w-0 text-lg font-bold text-gray-800 sm:text-xl md:text-2xl">Catatan Belanja</h2>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button 
+            className="flex-1 sm:flex-none"
+            icon={<History size={16} />} 
+            onClick={() => setHistoryOpen(true)}
+          >
+            Riwayat
+          </Button>
+          <Button 
+            className="flex-1 sm:flex-none"
+            type="primary" 
+            icon={<Save size={16} />} 
+            onClick={saveNote} 
+            disabled={items.length === 0}
+          >
+            Simpan
+          </Button>
+        </div>
       </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card title="Input Barang" bordered={false}>
+          <Card title="Input Barang" bordered={false} className="shadow-sm">
             <div className="mb-4">
               <Text strong className="mb-1 block">Uang Dibawa:</Text>
               <InputNumber
@@ -81,6 +104,7 @@ export default function ShoppingNote() {
                 formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                 parser={(value) => value?.replace(/Rp\s?|(,*)/g, '') as unknown as number}
                 placeholder="Masukkan jumlah uang"
+                size="large"
               />
             </div>
 
@@ -94,7 +118,7 @@ export default function ShoppingNote() {
                     rules={{ required: 'Nama barang wajib diisi' }}
                     render={({ field }) => (
                       <Form.Item validateStatus={errors.name ? 'error' : ''} help={errors.name?.message} style={{ marginBottom: 0 }}>
-                        <Input {...field} placeholder="Nama Barang" />
+                        <Input {...field} placeholder="Nama Barang" size="large" />
                       </Form.Item>
                     )}
                   />
@@ -114,6 +138,7 @@ export default function ShoppingNote() {
                           placeholder="Harga Satuan"
                           formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                           parser={(value) => value?.replace(/Rp\s?|(,*)/g, '') as unknown as number}
+                          size="large"
                         />
                       </Form.Item>
                     )}
@@ -129,13 +154,13 @@ export default function ShoppingNote() {
                       rules={{ required: 'Jumlah wajib diisi', min: { value: 1, message: 'Minimal 1' } }}
                       render={({ field }) => (
                         <Form.Item validateStatus={errors.quantity ? 'error' : ''} help={errors.quantity?.message} style={{ marginBottom: 0 }}>
-                          <InputNumber {...field} style={{ width: '100%' }} placeholder="Qty" min={1} />
+                          <InputNumber {...field} style={{ width: '100%' }} placeholder="Qty" min={1} size="large" />
                         </Form.Item>
                       )}
                     />
                   </div>
 
-                  <div style={{ width: 100 }}>
+                  <div style={{ width: 120 }}>
                     <div className="mb-1"><Text strong>Unit</Text></div>
                     <Controller
                       name="unit"
@@ -143,7 +168,7 @@ export default function ShoppingNote() {
                       rules={{ required: true }}
                       render={({ field }) => (
                         <Form.Item style={{ marginBottom: 0 }}>
-                          <Select {...field}>
+                          <Select {...field} size="large">
                             {['pcs', 'kg', 'box', 'dus', 'lusin', 'liter', 'meter', 'pack', 'roll'].map(u => (
                               <Option key={u} value={u}>{u}</Option>
                             ))}
@@ -154,8 +179,8 @@ export default function ShoppingNote() {
                   </div>
                 </div>
 
-                <Button type="primary" htmlType="submit" icon={<Plus size={16} />} className="mt-2 bg-blue-600 hover:bg-blue-700">
-                  Tambah
+                <Button type="primary" htmlType="submit" icon={<Plus size={16} />} size="large" className="mt-2 w-full bg-blue-600 hover:bg-blue-700">
+                  Tambah Barang
                 </Button>
               </div>
             </form>
@@ -163,25 +188,26 @@ export default function ShoppingNote() {
         </Col>
 
         <Col xs={24} md={16}>
-          <Card title="Daftar Belanja" bordered={false}>
+          <Card title="Daftar Belanja" bordered={false} className="shadow-sm" bodyStyle={{ padding: '12px' }}>
             <Table
               dataSource={items}
               columns={columns}
               rowKey="id"
               pagination={false}
-              scroll={{ x: 'max-content' }}
+              scroll={{ x: 600 }}
+              size="middle"
               summary={() => (
                 <Table.Summary fixed>
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={2}><Text strong>Total Belanja</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} colSpan={2}>
-                      <Text strong>Rp {totalShopping.toLocaleString()}</Text>
+                  <Table.Summary.Row className="bg-gray-50">
+                    <Table.Summary.Cell index={0} colSpan={2}><Text strong className="text-base">Total Belanja</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={1} colSpan={2} align="right">
+                      <Text strong className="text-base">Rp {totalShopping.toLocaleString()}</Text>
                     </Table.Summary.Cell>
                   </Table.Summary.Row>
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={2}><Text strong>Sisa Uang</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} colSpan={2}>
-                      <Text strong type={remainingMoney < 0 ? 'danger' : 'success'}>
+                  <Table.Summary.Row className="bg-gray-50">
+                    <Table.Summary.Cell index={0} colSpan={2}><Text strong className="text-base">Sisa Uang</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={1} colSpan={2} align="right">
+                      <Text strong className="text-base" type={remainingMoney < 0 ? 'danger' : 'success'}>
                         Rp {remainingMoney.toLocaleString()}
                       </Text>
                     </Table.Summary.Cell>
@@ -192,6 +218,20 @@ export default function ShoppingNote() {
           </Card>
         </Col>
       </Row>
+
+      <Modal
+        title="Riwayat Belanja"
+        open={historyOpen}
+        onCancel={() => setHistoryOpen(false)}
+        width={1000}
+        footer={null}
+        destroyOnHidden
+        style={{ top: 20 }}
+        styles={{ body: { padding: 0 } }}
+        className="full-screen-modal-mobile"
+      >
+        <ShoppingNoteHistory onLoadNote={loadNote} onClose={() => setHistoryOpen(false)} />
+      </Modal>
     </div>
   );
 }

@@ -8,6 +8,43 @@
   }
 }
 
+.full-screen-modal-mobile .ant-modal {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  top: 0 !important;
+  height: 100vh;
+}
+
+.full-screen-modal-mobile .ant-modal-content {
+  height: 100vh;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.full-screen-modal-mobile .ant-modal-body {
+  flex: 1;
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+@media (min-width: 768px) {
+  .full-screen-modal-mobile .ant-modal {
+    width: 1000px !important;
+    height: auto;
+    top: 20px !important;
+    margin: 0 auto;
+    padding-bottom: 24px;
+  }
+  
+  .full-screen-modal-mobile .ant-modal-content {
+    height: auto;
+    border-radius: 8px;
+    max-height: 85vh;
+  }
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(100%);
