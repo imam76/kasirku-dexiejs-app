@@ -5,7 +5,7 @@ import { useRef, useState, type ChangeEvent } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
 import type { Product } from '@/types';
 import StockTable from '@/components/StockTable';
-import StockProductModal from '@/components/StockProductModal';
+import StockProductModal from '@/view/stock-management/StockProductModal';
 import {
   buildProductCsvImportItems,
   createProductCsvExportContent,

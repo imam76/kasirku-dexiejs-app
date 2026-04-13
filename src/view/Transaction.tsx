@@ -3,10 +3,10 @@ import { useState, useCallback } from 'react';
 import { ScanLine, X } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { formatCurrency } from '@/utils/formatters';
-import ProductList from './transaction/ProductList';
-import CartSidebar from './transaction/CartSidebar';
-import MobileCartDrawer from './transaction/MobileCartDrawer';
-import ScannerModal from './transaction/ScannerModal';
+import ProductList from '../components/ProductList';
+import CartSidebar from '../components/CartSidebar';
+import MobileCartDrawer from '../components/MobileCartDrawer';
+import ScannerModal from '../components/ScannerModal';
 
 export default function Transaction() {
   const { message } = App.useApp();

@@ -1,5 +1,5 @@
 import { createLazyFileRoute } from '@tanstack/react-router'
-import PurchaseReport from '@/components/PurchaseReport'
+import PurchaseReport from '@/view/PurchaseReport'
 
 export const Route = createLazyFileRoute('/purchase-report')({
   component: PurchaseReport,
