@@ -4,7 +4,8 @@ import { DownloadOutlined, FilterOutlined } from '@ant-design/icons';
 import dayjs from '@/lib/dayjs';
 import { usePurchaseReport } from '@/hooks/useReports';
 import { formatCurrency } from '@/utils/formatters';
-import { Loading } from './Loading';
+import { Loading } from '@/components/Loading';
+// import { Loading } from './Loading';
 
 export default function PurchaseReport() {
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
