@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic } from 'antd';
 import { useProfit } from '@/hooks/useProfit';
+import { ProfitLog } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { Download, ArrowUp, ArrowDown, Wallet, RefreshCw } from 'lucide-react';
 
@@ -32,6 +33,24 @@ export default function ProfitManagement() {
       title: 'Keterangan',
       dataIndex: 'description',
       key: 'description',
+      render: (text: string, record: ProfitLog) => (
+        <div className="flex flex-col gap-1">
+          <span>{text}</span>
+          {record.category && (
+            <div>
+              <Tag color={
+                record.category === 'SALES' ? 'blue' : 
+                record.category === 'WITHDRAW' ? 'purple' : 
+                'orange'
+              } style={{ fontSize: '10px' }}>
+                {record.category === 'SALES' ? 'PENJUALAN' : 
+                 record.category === 'WITHDRAW' ? 'PENARIKAN' : 
+                 'OPERASIONAL'}
+              </Tag>
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Tipe',

@@ -34,13 +34,19 @@ export const useProfit = () => {
       const now = new Date().toISOString();
       const newBalance = currentAmount - amount;
 
-      await db.transaction('rw', db.profitBalance, db.profitLogs, async () => {
+      const currentFinanceBalance = await db.financeBalance.get('current');
+      const currentFinanceAmount = currentFinanceBalance?.amount || 0;
+      const newFinanceBalance = currentFinanceAmount - amount;
+
+      await db.transaction('rw', [db.profitBalance, db.profitLogs, db.financeBalance, db.financeTransactions], async () => {
+        // Update Profit Balance
         await db.profitBalance.put({
           id: 'current',
           amount: newBalance,
           updated_at: now,
         });
 
+        // Add Profit Log
         await db.profitLogs.add({
           id: crypto.randomUUID(),
           amount: amount,
@@ -50,11 +56,30 @@ export const useProfit = () => {
           created_at: now,
           balance_after: newBalance,
         });
+
+        // Update Finance Balance (Uang di Tangan)
+        await db.financeBalance.put({
+          id: 'current',
+          amount: newFinanceBalance,
+          updated_at: now,
+        });
+
+        // Add Finance Transaction
+        await db.financeTransactions.add({
+          id: crypto.randomUUID(),
+          type: 'EXPENSE',
+          category: 'PENARIKAN_SALDO',
+          amount: amount,
+          description: `Penarikan Saldo: ${description}`,
+          created_at: now,
+        });
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profitBalance'] });
       queryClient.invalidateQueries({ queryKey: ['profitLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
       message.success('Penarikan berhasil');
     },
     onError: (error: Error) => {
@@ -83,10 +108,10 @@ export const useProfit = () => {
         const transactions = await db.transactions.orderBy('created_at').toArray();
         const items = await db.transactionItems.toArray();
 
-        // 4. Get manual finance transactions (non-sales, non-auto-HPP, and non-opening-balance)
+        // 4. Get manual finance transactions (non-sales, non-auto-HPP, non-withdrawals, and non-opening-balance)
         const manualFinanceTransactions = await db.financeTransactions
           .where('category')
-          .noneOf(['PENJUALAN', 'HPP_OTOMATIS'])
+          .noneOf(['PENJUALAN', 'HPP_OTOMATIS', 'PENARIKAN_SALDO'])
           .and(f => f.type !== 'OPENING_BALANCE')
           .toArray();
 

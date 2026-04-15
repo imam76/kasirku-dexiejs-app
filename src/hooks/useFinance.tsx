@@ -74,8 +74,13 @@ export const useFinance = () => {
           created_at: now,
         });
 
-        // Sync with profit if it's manual finance transaction
-        if (category !== 'PENJUALAN' && category !== 'HPP_OTOMATIS' && type !== 'OPENING_BALANCE') {
+        // Sync with profit if it's manual finance transaction (and not a withdrawal, which is handled in useProfit)
+        if (
+          category !== 'PENJUALAN' && 
+          category !== 'HPP_OTOMATIS' && 
+          category !== 'PENARIKAN_SALDO' &&
+          type !== 'OPENING_BALANCE'
+        ) {
           await db.profitBalance.put({
             id: 'current',
             amount: newProfitBalance,
