@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { App } from 'antd';
-import { Transaction, ProfitLog } from '@/types';
+import { Transaction, ProfitLog, FinanceTransaction } from '@/types';
 
 export const useProfit = () => {
   const queryClient = useQueryClient();
@@ -45,6 +45,7 @@ export const useProfit = () => {
           id: crypto.randomUUID(),
           amount: amount,
           type: 'OUT',
+          category: 'WITHDRAW',
           description,
           created_at: now,
           balance_after: newBalance,
@@ -66,15 +67,28 @@ export const useProfit = () => {
 
   const recalculateMutation = useMutation({
     mutationFn: async () => {
-      await db.transaction('rw', db.transactions, db.transactionItems, db.profitLogs, db.profitBalance, async () => {
-        // 1. Clear existing profit logs (IN only) and balance
-        // We need to keep OUT logs but will update their balance_after
-        const withdrawLogs = await db.profitLogs.where('type').equals('OUT').toArray();
-        await db.profitLogs.clear(); // Clear all logs to rebuild correctly
+      await db.transaction('rw', [db.transactions, db.transactionItems, db.profitLogs, db.profitBalance, db.financeTransactions], async () => {
+        // 1. Get all existing withdrawals before clearing
+        // We identify withdrawals as logs with type 'OUT' that are NOT operational expenses
+        const existingLogs = await db.profitLogs.toArray();
+        const withdrawLogs = existingLogs.filter(log => 
+          log.type === 'OUT' && 
+          (log.category === 'WITHDRAW' || !log.description.startsWith('Operasional: '))
+        );
+        
+        // 2. Clear all logs to rebuild correctly
+        await db.profitLogs.clear();
 
-        // 2. Get all transactions and items
+        // 3. Get all POS transactions and items
         const transactions = await db.transactions.orderBy('created_at').toArray();
         const items = await db.transactionItems.toArray();
+
+        // 4. Get manual finance transactions (non-sales, non-auto-HPP, and non-opening-balance)
+        const manualFinanceTransactions = await db.financeTransactions
+          .where('category')
+          .noneOf(['PENJUALAN', 'HPP_OTOMATIS'])
+          .and(f => f.type !== 'OPENING_BALANCE')
+          .toArray();
 
         // Group items by transaction_id
         const itemsByTransaction = items.reduce((acc, item) => {
@@ -83,13 +97,14 @@ export const useProfit = () => {
           return acc;
         }, {} as Record<string, typeof items>);
 
-        // 3. Combine transactions and withdraws into a single timeline
+        // 5. Combine transactions, withdraws, and manual finance transactions into a single timeline
         const events = [
           ...transactions.map(t => ({ type: 'TRANSACTION', data: t, date: new Date(t.created_at).getTime() })),
-          ...withdrawLogs.map(w => ({ type: 'WITHDRAW', data: w, date: new Date(w.created_at).getTime() }))
+          ...withdrawLogs.map(w => ({ type: 'WITHDRAW', data: w, date: new Date(w.created_at).getTime() })),
+          ...manualFinanceTransactions.map(f => ({ type: 'FINANCE_MANUAL', data: f, date: new Date(f.created_at).getTime() }))
         ].sort((a, b) => a.date - b.date);
 
-        // 4. Replay events to calculate balance
+        // 6. Replay events to calculate balance
         let runningBalance = 0;
         const newLogs: ProfitLog[] = [];
 
@@ -101,14 +116,11 @@ export const useProfit = () => {
             // Calculate profit for this transaction
             let profit = 0;
             for (const item of tItems) {
-              // If profit is recorded, use it. If not, calculate it.
               if (typeof item.profit === 'number') {
                 profit += item.profit;
               } else {
-                // Fallback for old data: selling_price - purchase_price
-                // Assuming purchase_price exists, otherwise 0
                 const buyPrice = item.purchase_price || 0;
-                const sellPrice = item.price || 0; // item.price is selling_price in TransactionItem
+                const sellPrice = item.price || 0;
                 profit += (sellPrice - buyPrice) * item.quantity;
               }
             }
@@ -120,6 +132,7 @@ export const useProfit = () => {
                 transaction_id: t.id,
                 amount: profit,
                 type: 'IN',
+                category: 'SALES',
                 description: `Keuntungan dari transaksi ${t.transaction_number}`,
                 created_at: t.created_at,
                 balance_after: runningBalance,
@@ -130,12 +143,28 @@ export const useProfit = () => {
             runningBalance -= w.amount;
             newLogs.push({
               ...w, // Keep original ID and other fields
+              category: 'WITHDRAW',
               balance_after: runningBalance, // Update balance_after
+            });
+          } else if (event.type === 'FINANCE_MANUAL') {
+            const f = event.data as FinanceTransaction;
+            const isExpense = f.type === 'EXPENSE';
+            const amount = isExpense ? -f.amount : f.amount;
+            
+            runningBalance += amount;
+            newLogs.push({
+              id: crypto.randomUUID(),
+              amount: f.amount,
+              type: isExpense ? 'OUT' : 'IN',
+              category: 'OPERATIONAL',
+              description: `Operasional: ${f.description || f.category}`,
+              created_at: f.created_at,
+              balance_after: runningBalance,
             });
           }
         }
 
-        // 5. Save new logs and update balance
+        // 6. Save new logs and update balance
         if (newLogs.length > 0) {
           await db.profitLogs.bulkAdd(newLogs);
         }

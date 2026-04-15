@@ -21,6 +21,7 @@ const SalesReportLazyRouteImport = createFileRoute('/sales-report')()
 const PurchaseReportLazyRouteImport = createFileRoute('/purchase-report')()
 const ProfitLazyRouteImport = createFileRoute('/profit')()
 const HistoryLazyRouteImport = createFileRoute('/history')()
+const FinanceLazyRouteImport = createFileRoute('/finance')()
 const SplatLazyRouteImport = createFileRoute('/$')()
 
 const TransactionLazyRoute = TransactionLazyRouteImport.update({
@@ -65,6 +66,11 @@ const HistoryLazyRoute = HistoryLazyRouteImport.update({
   path: '/history',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/history.lazy').then((d) => d.Route))
+const FinanceLazyRoute = FinanceLazyRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/finance.lazy').then((d) => d.Route))
 const SplatLazyRoute = SplatLazyRouteImport.update({
   id: '/$',
   path: '/$',
@@ -79,6 +85,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
+  '/finance': typeof FinanceLazyRoute
   '/history': typeof HistoryLazyRoute
   '/profit': typeof ProfitLazyRoute
   '/purchase-report': typeof PurchaseReportLazyRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
+  '/finance': typeof FinanceLazyRoute
   '/history': typeof HistoryLazyRoute
   '/profit': typeof ProfitLazyRoute
   '/purchase-report': typeof PurchaseReportLazyRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
+  '/finance': typeof FinanceLazyRoute
   '/history': typeof HistoryLazyRoute
   '/profit': typeof ProfitLazyRoute
   '/purchase-report': typeof PurchaseReportLazyRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$'
+    | '/finance'
     | '/history'
     | '/profit'
     | '/purchase-report'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$'
+    | '/finance'
     | '/history'
     | '/profit'
     | '/purchase-report'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$'
+    | '/finance'
     | '/history'
     | '/profit'
     | '/purchase-report'
@@ -155,6 +167,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatLazyRoute: typeof SplatLazyRoute
+  FinanceLazyRoute: typeof FinanceLazyRoute
   HistoryLazyRoute: typeof HistoryLazyRoute
   ProfitLazyRoute: typeof ProfitLazyRoute
   PurchaseReportLazyRoute: typeof PurchaseReportLazyRoute
@@ -223,6 +236,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HistoryLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance': {
+      id: '/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof FinanceLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$': {
       id: '/$'
       path: '/$'
@@ -243,6 +263,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatLazyRoute: SplatLazyRoute,
+  FinanceLazyRoute: FinanceLazyRoute,
   HistoryLazyRoute: HistoryLazyRoute,
   ProfitLazyRoute: ProfitLazyRoute,
   PurchaseReportLazyRoute: PurchaseReportLazyRoute,

@@ -89,7 +89,7 @@ export const useTransaction = () => {
     const transactionId = crypto.randomUUID();
 
     try {
-      await db.transaction('rw', [db.transactions, db.transactionItems, db.products, db.profitLogs, db.profitBalance], async () => {
+      await db.transaction('rw', [db.transactions, db.transactionItems, db.products, db.profitLogs, db.profitBalance, db.financeTransactions, db.financeBalance], async () => {
         const newTransaction: Transaction = {
           id: transactionId,
           transaction_number: transactionNumber,
@@ -135,10 +135,43 @@ export const useTransaction = () => {
           transaction_id: transactionId,
           amount: totalProfit,
           type: 'IN',
+          category: 'SALES',
           description: `Keuntungan dari transaksi ${transactionNumber}`,
           created_at: now,
           balance_after: newBalance,
         });
+
+        // Update Finance System (Finance Bridge)
+        const currentFinanceBalance = await db.financeBalance.get('current');
+        const totalHpp = transactionItems.reduce((sum, item) => sum + (item.purchase_price * item.quantity), 0);
+        const newFinanceBalance = (currentFinanceBalance?.amount || 0) + total - totalHpp;
+
+        await db.financeBalance.put({
+          id: 'current',
+          amount: newFinanceBalance,
+          updated_at: now,
+        });
+
+        await db.financeTransactions.bulkAdd([
+          {
+            id: crypto.randomUUID(),
+            type: 'INCOME',
+            category: 'PENJUALAN',
+            amount: total,
+            description: `Penjualan dari transaksi ${transactionNumber}`,
+            created_at: now,
+            reference_id: transactionId,
+          },
+          {
+            id: crypto.randomUUID(),
+            type: 'EXPENSE',
+            category: 'HPP_OTOMATIS',
+            amount: totalHpp,
+            description: `HPP dari transaksi ${transactionNumber}`,
+            created_at: now,
+            reference_id: transactionId,
+          }
+        ]);
 
         for (const item of cart) {
           const product = await db.products.get(item.product.id);

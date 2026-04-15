@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance } from '@/types';
 
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
@@ -9,6 +9,8 @@ export class KasirkuDB extends Dexie {
   profitLogs!: Table<ProfitLog>;
   profitBalance!: Table<ProfitBalance>;
   shoppingNotes!: Table<ShoppingNote>;
+  financeTransactions!: Table<FinanceTransaction>;
+  financeBalance!: Table<FinanceBalance>;
 
   constructor() {
     super('KasirkuDB');
@@ -30,6 +32,10 @@ export class KasirkuDB extends Dexie {
     });
     this.version(5).stores({
       shoppingNotes: 'id, created_at'
+    });
+    this.version(6).stores({
+      financeTransactions: 'id, type, category, created_at, reference_id',
+      financeBalance: 'id'
     });
   }
 }

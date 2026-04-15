@@ -78,12 +78,31 @@ export interface ProfitLog {
   transaction_id?: string; // Optional, link to transaction if source is transaction
   amount: number;
   type: 'IN' | 'OUT';
+  category?: 'WITHDRAW' | 'OPERATIONAL' | 'SALES'; // New field to categorize profit log
   description: string;
   created_at: string;
   balance_after: number;
 }
 
 export interface ProfitBalance {
+  id: string; // 'current'
+  amount: number;
+  updated_at: string;
+}
+
+export type FinanceTransactionType = 'INCOME' | 'EXPENSE' | 'OPENING_BALANCE';
+
+export interface FinanceTransaction {
+  id: string;
+  type: FinanceTransactionType;
+  category: string;
+  amount: number;
+  description: string;
+  created_at: string;
+  reference_id?: string; // Link to transaction_id or other IDs
+}
+
+export interface FinanceBalance {
   id: string; // 'current'
   amount: number;
   updated_at: string;

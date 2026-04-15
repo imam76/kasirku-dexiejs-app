@@ -5,6 +5,7 @@ import { createRootRoute, Link, Outlet, useNavigate, useRouter } from '@tanstack
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { Layout } from 'antd'
 import {
+  Banknote,
   Box,
   ClipboardList,
   DollarSign,
@@ -43,6 +44,7 @@ const RootLayout = () => {
     { to: '/history', label: 'Riwayat', icon: History },
     { to: '/sales-report', label: 'Laporan Penjualan', icon: FileText },
     { to: '/purchase-report', label: 'Laporan Pembelian', icon: FileSpreadsheet },
+    { to: '/finance', label: 'Keuangan', icon: Banknote },
     { to: '/profit', label: 'Keuntungan', icon: DollarSign },
     { to: '/settings', label: 'Pengaturan', icon: Settings },
   ]
