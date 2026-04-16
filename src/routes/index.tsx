@@ -1,15 +1,15 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
 import {
-  BankOutlined,
-  BoxPlotOutlined,
   AccountBookOutlined,
+  BankOutlined,
   DollarOutlined,
   FileExcelOutlined,
   FileTextOutlined,
   HistoryOutlined,
+  ProductOutlined,
   SettingOutlined,
   ShoppingCartOutlined
 } from '@ant-design/icons'
+import { Link, createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -17,9 +17,9 @@ export const Route = createFileRoute('/')({
 
 function Index() {
   const menuItems = [
+    { to: '/transaction', label: 'Kasir', icon: ShoppingCartOutlined, color: 'text-blue-600', desc: 'Buat dan kelola transaksi penjualan baru' },
     { to: '/finance', label: 'Keuangan', icon: BankOutlined, color: 'text-red-600', desc: 'Lihat ringkasan keuangan bisnis Anda secara real-time' },
-    { to: '/transaction', label: 'Transaksi', icon: ShoppingCartOutlined, color: 'text-blue-600', desc: 'Buat dan kelola transaksi penjualan baru' },
-    { to: '/stock', label: 'Stok', icon: BoxPlotOutlined, color: 'text-green-600', desc: 'Tambah, edit, dan kelola inventori produk' },
+    { to: '/stock', label: 'Stok', icon: ProductOutlined, color: 'text-green-600', desc: 'Tambah, edit, dan kelola inventori produk' },
     { to: '/shopping-note', label: 'Catatan', icon: AccountBookOutlined, color: 'text-yellow-600', desc: 'Kelola catatan belanja harian' },
     { to: '/history', label: 'Riwayat', icon: HistoryOutlined, color: 'text-purple-600', desc: 'Lihat dan analisis semua transaksi sebelumnya' },
     { to: '/sales-report', label: 'Lap. Jual', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
