@@ -1,14 +1,15 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import {
-  Box,
-  ClipboardList,
-  DollarSign,
-  FileSpreadsheet,
-  FileText,
-  History,
-  Settings,
-  ShoppingCart
-} from 'lucide-react'
+  BankOutlined,
+  BoxPlotOutlined,
+  AccountBookOutlined,
+  DollarOutlined,
+  FileExcelOutlined,
+  FileTextOutlined,
+  HistoryOutlined,
+  SettingOutlined,
+  ShoppingCartOutlined
+} from '@ant-design/icons'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -16,47 +17,120 @@ export const Route = createFileRoute('/')({
 
 function Index() {
   const menuItems = [
-    { to: '/transaction', label: 'Transaksi', icon: ShoppingCart, color: 'text-blue-600', desc: 'Buat dan kelola transaksi penjualan baru' },
-    { to: '/stock', label: 'Stok', icon: Box, color: 'text-green-600', desc: 'Tambah, edit, dan kelola inventori produk' },
-    { to: '/shopping-note', label: 'Catatan', icon: ClipboardList, color: 'text-yellow-600', desc: 'Kelola catatan belanja harian' },
-    { to: '/history', label: 'Riwayat', icon: History, color: 'text-purple-600', desc: 'Lihat dan analisis semua transaksi sebelumnya' },
-    { to: '/sales-report', label: 'Lap. Jual', icon: FileText, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
-    { to: '/purchase-report', label: 'Lap. Beli', icon: FileSpreadsheet, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
-    { to: '/profit', label: 'Keuntungan', icon: DollarSign, color: 'text-emerald-600', desc: 'Analisis keuntungan penjualan' },
-    { to: '/settings', label: 'Pengaturan', icon: Settings, color: 'text-gray-600', desc: 'Backup dan restore database aplikasi' },
+    { to: '/finance', label: 'Keuangan', icon: BankOutlined, color: 'text-red-600', desc: 'Lihat ringkasan keuangan bisnis Anda secara real-time' },
+    { to: '/transaction', label: 'Transaksi', icon: ShoppingCartOutlined, color: 'text-blue-600', desc: 'Buat dan kelola transaksi penjualan baru' },
+    { to: '/stock', label: 'Stok', icon: BoxPlotOutlined, color: 'text-green-600', desc: 'Tambah, edit, dan kelola inventori produk' },
+    { to: '/shopping-note', label: 'Catatan', icon: AccountBookOutlined, color: 'text-yellow-600', desc: 'Kelola catatan belanja harian' },
+    { to: '/history', label: 'Riwayat', icon: HistoryOutlined, color: 'text-purple-600', desc: 'Lihat dan analisis semua transaksi sebelumnya' },
+    { to: '/sales-report', label: 'Lap. Jual', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
+    { to: '/purchase-report', label: 'Lap. Beli', icon: FileExcelOutlined, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
+    { to: '/profit', label: 'Keuntungan', icon: DollarOutlined, color: 'text-emerald-600', desc: 'Analisis keuntungan penjualan' },
+    { to: '/settings', label: 'Pengaturan', icon: SettingOutlined, color: 'text-gray-600', desc: 'Backup dan restore database aplikasi' },
   ]
 
   return (
-    <div className="py-6 px-4 md:py-12">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-8 md:mb-12">
-          <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2 md:mb-4">
+    <div
+      className="
+  py-4 px-3
+  sm:py-6 sm:px-5
+  lg:py-[38px] lg:px-8
+"
+    >
+      <div className="max-w-[974px] mx-auto">
+
+        {/* Header */}
+        <div className="text-center mb-7 sm:mb-9 lg:mb-12">
+          <h1
+            className="
+        text-[20px] font-medium tracking-tight leading-[1.3] text-gray-900 mb-2
+        sm:text-[26px] sm:mb-[10px]
+        lg:text-[34px] lg:tracking-[-0.02em] lg:leading-[1.2] lg:mb-[14px]
+      "
+          >
             Selamat Datang di Kasirku
           </h1>
-          <p className="text-sm md:text-lg text-gray-600">
-            Kelola transaksi, stok produk, dan lihat riwayat penjualan Anda dengan mudah
+
+          <p
+            className="
+        text-[12px] text-gray-400 leading-[1.618] px-2
+        sm:text-sm sm:max-w-[420px] sm:mx-auto sm:px-0
+        lg:text-base lg:max-w-[560px] lg:font-light
+      "
+          >
+            Kelola transaksi, stok produk, dan lihat riwayat penjualan Anda dengan
+            mudah
           </p>
         </div>
 
-        <div className='grid grid-cols-3 gap-3 justify-items-center md:flex md:flex-wrap md:justify-center md:gap-6'>
+        {/* Grid */}
+        <div
+          className="
+      grid grid-cols-3 gap-[10px]
+      sm:grid-cols-3 sm:gap-[14px]
+      lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]
+    "
+        >
           {menuItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
-              className="w-full aspect-square flex flex-col items-center justify-center bg-white rounded-lg shadow-sm md:shadow-lg p-2 md:p-6 hover:shadow-md md:hover:shadow-xl transition-all md:w-[200px] md:h-[200px] border border-gray-100 md:border-none"
+              className="
+            flex flex-col items-center justify-center
+            bg-white border border-gray-100 rounded-[10px]
+            transition-all duration-200 ease-out
+
+            aspect-square p-2
+            sm:aspect-auto sm:rounded-[12px] sm:p-[18px]
+            lg:aspect-auto lg:w-[192px] lg:h-[192px] lg:rounded-[14px] lg:p-[24px]
+
+            hover:border-gray-200
+            hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
+            hover:-translate-y-[1px]
+          "
             >
-              <div className="flex justify-center mb-1 md:mb-4">
-                <item.icon className={`w-8 h-8 md:w-12 md:h-12 ${item.color}`} />
+              {/* Icon */}
+              <div
+                className="
+            mb-[6px]
+            sm:mb-[10px]
+            lg:mb-[12px]
+          "
+              >
+                <item.icon
+                  className={`
+                ${item.color}
+                text-[24px]
+                sm:text-[30px]
+                lg:text-[34px]
+              `}
+                />
               </div>
-              <h2 className="text-xs md:text-xl font-medium md:font-bold text-gray-900 text-center">
+
+              {/* Label */}
+              <h2
+                className="
+            text-[12px] font-medium text-gray-800 text-center leading-[1.3]
+            sm:text-[14px] sm:mb-[6px]
+            lg:text-[15px] lg:mb-[6px]
+          "
+              >
                 {item.label}
               </h2>
-              <p className="hidden md:block text-xs text-gray-500 text-center mt-2 line-clamp-2">
+
+              {/* Desc */}
+              <p
+                className="
+            hidden
+            sm:block sm:text-[11px] sm:text-gray-400 sm:text-center sm:leading-[1.618] sm:line-clamp-2
+            lg:text-[12px]
+          "
+              >
                 {item.desc}
               </p>
             </Link>
           ))}
         </div>
+
       </div>
     </div>
   )
