@@ -180,14 +180,25 @@ export default function StockProductModal({ open, editingId, control, errors, se
         centered={!!screens.sm}
       >
         <Form layout="vertical" onFinish={onSave} className="mt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+          <div className="grid grid-cols-1 gap-x-4">
             <Form.Item label="Nama Produk" validateStatus={errors.name ? 'error' : ''} help={errors.name?.message}>
               <Controller
                 name="name"
                 control={control}
                 rules={{ required: 'Nama produk harus diisi' }}
-                render={({ field }) => <Input {...field} />}
+                render={({ field }) => <Input {...field} className="w-full" />}
               />
+            </Form.Item>
+
+            <Form.Item label="SKU" validateStatus={errors.sku ? 'error' : ''} help={errors.sku?.message}>
+              <div className="flex gap-2">
+                <Controller
+                  name="sku"
+                  control={control}
+                  render={({ field }) => <Input {...field} className="flex-1" />}
+                />
+                <Button icon={<ScanLine size={16} />} onClick={() => setScannerOpen(true)} />
+              </div>
             </Form.Item>
 
             <Form.Item label="Kategori" validateStatus={errors.category ? 'error' : ''}>
@@ -204,7 +215,30 @@ export default function StockProductModal({ open, editingId, control, errors, se
               />
             </Form.Item>
 
-            <Form.Item label="Satuan Beli" validateStatus={errors.purchase_unit ? 'error' : ''}>
+          </div>
+
+          {!hasConversion && (
+            <Alert
+              title="Konversi Tidak Ditemukan"
+              description={
+                <div className="flex flex-col gap-2">
+                  <p>Aplikasi tidak tahu cara mengonversi dari <strong>{purchaseUnit}</strong> ke <strong>{sellingUnit}</strong>. Harga jual mungkin tidak akurat.</p>
+                  <Link to="/units">
+                    <Button size="small" type="primary" ghost icon={<ExternalLink size={14} />} className="flex items-center gap-1 w-fit">
+                      Atur Konversi Baru
+                    </Button>
+                  </Link>
+                </div>
+              }
+              type="warning"
+              showIcon
+              icon={<AlertTriangle size={20} />}
+              className="mb-6"
+            />
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+             <Form.Item label="Satuan Beli" validateStatus={errors.purchase_unit ? 'error' : ''}>
               <Controller
                 name="purchase_unit"
                 control={control}
@@ -231,41 +265,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 )}
               />
             </Form.Item>
-          </div>
-
-          {!hasConversion && (
-            <Alert
-              title="Konversi Tidak Ditemukan"
-              description={
-                <div className="flex flex-col gap-2">
-                  <p>Aplikasi tidak tahu cara mengonversi dari <strong>{purchaseUnit}</strong> ke <strong>{sellingUnit}</strong>. Harga jual mungkin tidak akurat.</p>
-                  <Link to="/units">
-                    <Button size="small" type="primary" ghost icon={<ExternalLink size={14} />} className="flex items-center gap-1 w-fit">
-                      Atur Konversi Baru
-                    </Button>
-                  </Link>
-                </div>
-              }
-              type="warning"
-              showIcon
-              icon={<AlertTriangle size={20} />}
-              className="mb-6"
-            />
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-            <Form.Item label="SKU" validateStatus={errors.sku ? 'error' : ''} help={errors.sku?.message}>
-              <div className="flex gap-2">
-                <Controller
-                  name="sku"
-                  control={control}
-                  rules={{ required: 'SKU harus diisi' }}
-                  render={({ field }) => <Input {...field} className="flex-1" />}
-                />
-                <Button icon={<ScanLine size={16} />} onClick={() => setScannerOpen(true)} />
-              </div>
-            </Form.Item>
-
+            
             <Form.Item
               label={`Harga Beli (per ${purchaseUnit})`}
               validateStatus={errors.purchase_price ? 'error' : ''}

@@ -3,7 +3,7 @@ import type { Product } from '@/types';
 export type ProductCsvImportItem = {
   id?: string;
   name: string;
-  sku: string;
+  sku?: string;
   purchase_price: number;
   selling_price: number;
   stock: number;
@@ -128,7 +128,6 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
   const idxPurchaseQty = pickIndex(['purchase_quantity', 'qty_pembelian', 'purchase_qty', 'qty_beli', 'jumlah_pembelian']);
 
   const errors: string[] = [];
-  if (idxSku === undefined) errors.push('Kolom "sku" tidak ditemukan.');
   if (idxName === undefined) errors.push('Kolom "name" (atau "nama") tidak ditemukan.');
   if (errors.length > 0) return { items: [], errors };
 
@@ -138,22 +137,18 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const rowNumber = r + 1;
-    const sku = (row[idxSku!] ?? '').trim();
+    const sku = idxSku !== undefined ? (row[idxSku] ?? '').trim() : '';
     const name = (row[idxName!] ?? '').trim();
 
-    if (!sku) {
-      errors.push(`Baris ${rowNumber}: sku kosong.`);
-      continue;
-    }
     if (!name) {
-      errors.push(`Baris ${rowNumber}: name/nama kosong (sku: ${sku}).`);
+      errors.push(`Baris ${rowNumber}: name/nama kosong.`);
       continue;
     }
-    if (seenSku.has(sku)) {
+    if (sku && seenSku.has(sku)) {
       errors.push(`Baris ${rowNumber}: sku duplikat di file (sku: ${sku}).`);
       continue;
     }
-    seenSku.add(sku);
+    if (sku) seenSku.add(sku);
 
     const id = idxId !== undefined ? (row[idxId] ?? '').trim() : undefined;
     const purchase_price = parseNumberFlexible(idxPurchase !== undefined ? row[idxPurchase] : undefined) ?? 0;

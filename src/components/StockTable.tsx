@@ -25,7 +25,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
   const filteredProducts = useMemo(() => {
     return products.filter((product) =>
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase())
+      (product.sku?.toLowerCase() || '').includes(searchQuery.toLowerCase())
     );
   }, [products, searchQuery]);
 
@@ -135,6 +135,9 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                     )}
                   </div>
                 </th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Margin
+                </th>
                 <th
                   onClick={() => handleSort('stock')}
                   className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
@@ -161,7 +164,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                 return (
                   <tr key={product.id} className="hover:bg-gray-50">
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.sku}
+                      {product.sku || '-'}
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {product.name}
@@ -176,6 +179,9 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                           (≈ Rp {formatCurrency(getPrice(product, 1))} / {product.selling_unit})
                         </div>
                       )}
+                    </td>
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {marginPercent}%
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <span className={`px-2 py-1 rounded ${getStockStatusClass(product.stock)}`}>
@@ -231,7 +237,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-sm font-bold text-gray-900">{product.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">SKU: {product.sku}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">SKU: {product.sku || '-'}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`px-2 py-1 rounded text-xs font-medium ${getStockStatusClass(product.stock)}`}>
@@ -281,7 +287,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
 
             <div className="mb-6">
               <h3 className="text-lg font-bold text-gray-900 line-clamp-2">{selectedProduct.name}</h3>
-              <p className="text-sm text-gray-500 mt-1">SKU: {selectedProduct.sku}</p>
+              <p className="text-sm text-gray-500 mt-1">SKU: {selectedProduct.sku || '-'}</p>
             </div>
 
             <div className="space-y-3">

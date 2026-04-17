@@ -25,7 +25,7 @@ export interface Product {
   purchase_price: number; // Harga per purchase_unit
   selling_price: number;  // Harga per selling_unit (bisa disimpan per kg tapi nanti dikonversi)
   stock: number;          // Stok selalu disimpan dalam base unit (biasanya purchase_unit)
-  sku: string;
+  sku?: string;
   wholesale_prices?: WholesalePrice[];
   created_at: string;
   updated_at: string;
@@ -58,7 +58,7 @@ export interface StockPurchase {
   id: string;
   product_id: string;
   product_name: string;
-  sku: string;
+  sku?: string;
   quantity: number;
   cost_per_unit: number;
   total_cost: number;

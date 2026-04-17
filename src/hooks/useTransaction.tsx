@@ -43,7 +43,7 @@ export const useTransaction = () => {
     return products.filter(
       (p) =>
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+        (p.sku?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     );
   }, [products, searchTerm]);
 

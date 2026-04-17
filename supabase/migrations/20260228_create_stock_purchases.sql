@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS stock_purchases (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   product_name text NOT NULL,
-  sku text NOT NULL,
+  sku text,
   quantity integer NOT NULL,
   cost_per_unit numeric(10, 2) NOT NULL,
   total_cost numeric(10, 2) NOT NULL,

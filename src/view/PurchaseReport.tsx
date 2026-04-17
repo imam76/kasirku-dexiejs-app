@@ -124,7 +124,7 @@ export default function PurchaseReport() {
       dataIndex: 'sku',
       key: 'sku',
       width: 120,
-      render: (sku: string) => <Tag>{sku}</Tag>,
+      render: (sku: string) => <Tag>{sku || '-'}</Tag>,
     },
     {
       title: 'Tanggal',

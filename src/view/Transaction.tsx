@@ -37,7 +37,7 @@ export default function Transaction() {
   const [scannerOpen, setScannerOpen] = useState(false);
 
   const handleScan = useCallback((text: string) => {
-    const match = products.find((p) => p.sku.trim().toLowerCase() === text.toLowerCase());
+    const match = products.find((p) => (p.sku || '').trim().toLowerCase() === text.toLowerCase());
 
     if (match) {
       addToCart(match);

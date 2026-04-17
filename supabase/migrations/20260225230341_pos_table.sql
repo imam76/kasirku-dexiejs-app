@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS products (
   name text NOT NULL,
   price numeric(10, 2) NOT NULL DEFAULT 0,
   stock integer NOT NULL DEFAULT 0,
-  sku text UNIQUE NOT NULL,
+  sku text UNIQUE,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );

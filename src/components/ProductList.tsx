@@ -24,7 +24,7 @@ export default function ProductList({ products, addToCart }: ProductListProps) {
               <ShoppingCart size={32} className="text-blue-600 sm:w-10 sm:h-10" />
             </div>
             <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base line-clamp-2">{product.name}</h3>
-            <p className="text-xs sm:text-sm text-gray-600 mb-2">{product.sku}</p>
+            <p className="text-xs sm:text-sm text-gray-600 mb-2">{product.sku || '-'}</p>
             <div className="flex flex-wrap items-center gap-1">
               <p className="text-sm sm:text-lg font-bold text-blue-600">
                 Rp {formatCurrency(pricePerSellingUnit)}

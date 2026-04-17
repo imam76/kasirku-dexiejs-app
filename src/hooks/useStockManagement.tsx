@@ -14,7 +14,7 @@ export interface StockFormData {
   purchase_price: number | undefined;
   selling_price: number | undefined;
   stock: number | undefined;
-  sku: string;
+  sku?: string;
   purchase_quantity?: number | undefined;
   wholesale_prices?: WholesalePrice[];
 }
@@ -208,7 +208,10 @@ export const useStockManagement = () => {
           };
 
           const purchase_quantity = item.purchase_quantity || 0;
-          const existing = await db.products.where('sku').equals(cleanData.sku).first();
+          let existing = null;
+          if (cleanData.sku) {
+            existing = await db.products.where('sku').equals(cleanData.sku).first();
+          }
 
           if (existing) {
             await db.products.update(existing.id, {
