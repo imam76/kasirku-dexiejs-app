@@ -1,5 +1,6 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion } from '@/types';
+import { DEFAULT_CONVERSIONS } from '@/constants/units';
 
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
@@ -11,6 +12,7 @@ export class KasirkuDB extends Dexie {
   shoppingNotes!: Table<ShoppingNote>;
   financeTransactions!: Table<FinanceTransaction>;
   financeBalance!: Table<FinanceBalance>;
+  unitConversions!: Table<UnitConversion>;
 
   constructor() {
     super('KasirkuDB');
@@ -36,6 +38,13 @@ export class KasirkuDB extends Dexie {
     this.version(6).stores({
       financeTransactions: 'id, type, category, created_at, reference_id',
       financeBalance: 'id'
+    });
+    this.version(7).stores({
+      unitConversions: 'id, fromUnit, toUnit'
+    });
+
+    this.on('populate', async () => {
+      await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
     });
   }
 }

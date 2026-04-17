@@ -1,22 +1,43 @@
-import { Product, ProductUnit } from '@/types';
+import { Product, ProductUnit, UnitConversion } from '@/types';
+
+// Global registry for unit conversions
+let conversionRegistry: UnitConversion[] = [
+  { id: 'kg-gram', fromUnit: 'kg', toUnit: 'gram', ratio: 1000, isPreset: true, label: '1 kg = 1000 gram' },
+  { id: 'gram-kg', fromUnit: 'gram', toUnit: 'kg', ratio: 0.001, isPreset: true, label: '1 gram = 0.001 kg' },
+  { id: 'ons-gram', fromUnit: 'ons', toUnit: 'gram', ratio: 100, isPreset: true, label: '1 ons = 100 gram' },
+  { id: 'kg-ons', fromUnit: 'kg', toUnit: 'ons', ratio: 10, isPreset: true, label: '1 kg = 10 ons' },
+];
 
 /**
- * Konversi nilai antar satuan berat (gram, kg, ons)
+ * Update the global conversion registry
+ */
+export const setConversionRegistry = (conversions: UnitConversion[]) => {
+  conversionRegistry = conversions;
+};
+
+/**
+ * Get conversion ratio between two units
+ */
+export const getConversionRatio = (from: ProductUnit, ke: ProductUnit): number => {
+  if (from === ke) return 1;
+  
+  const conversion = conversionRegistry.find(c => c.fromUnit === from && c.toUnit === ke);
+  if (conversion) return conversion.ratio;
+
+  // Try reverse conversion
+  const reverseConversion = conversionRegistry.find(c => c.fromUnit === ke && c.toUnit === from);
+  if (reverseConversion) return 1 / reverseConversion.ratio;
+
+  return 1; // Fallback to 1 if not found
+};
+
+/**
+ * Konversi nilai antar satuan dinamis
  */
 export const konversiSatuan = (nilai: number, dari: ProductUnit, ke: ProductUnit): number => {
   if (dari === ke) return nilai;
-
-  // Konversi semuanya ke gram dulu sebagai base
-  let nilaiGram = nilai;
-  if (dari === 'kg') nilaiGram = nilai * 1000;
-  else if (dari === 'ons') nilaiGram = nilai * 100;
-  
-  // Konversi dari gram ke unit target
-  if (ke === 'kg') return nilaiGram / 1000;
-  if (ke === 'ons') return nilaiGram / 100;
-  if (ke === 'gram') return nilaiGram;
-
-  return nilai; // Jika satuan bukan berat (pcs, ikat, dll)
+  const ratio = getConversionRatio(dari, ke);
+  return nilai * ratio;
 };
 
 /**
@@ -25,18 +46,11 @@ export const konversiSatuan = (nilai: number, dari: ProductUnit, ke: ProductUnit
  */
 export const normalisasiHarga = (harga: number, dariSatuan: ProductUnit, keSatuan: ProductUnit): number => {
   if (dariSatuan === keSatuan) return harga;
-
-  // Jika konversi antar satuan berat
-  const beratUnits: ProductUnit[] = ['gram', 'kg', 'ons'];
-  if (beratUnits.includes(dariSatuan) && beratUnits.includes(keSatuan)) {
-    // Kita ingin tahu harga per 1 unit target.
-    // Jika harga per 1000g (1kg) adalah 36000, maka harga per 1g adalah 36000/1000.
-    // Rasio konversi: 1 unit 'dari' = X unit 'ke'
-    const satuUnitDariDalamKe = konversiSatuan(1, dariSatuan, keSatuan);
-    return harga / satuUnitDariDalamKe;
-  }
-
-  return harga;
+  
+  // Kita ingin tahu harga per 1 unit target.
+  // Jika harga per 1 unit 'dari' adalah X, maka harga per 1 unit 'ke' adalah X / (1 unit 'dari' dalam 'ke')
+  const satuUnitDariDalamKe = getConversionRatio(dariSatuan, keSatuan);
+  return harga / satuUnitDariDalamKe;
 };
 
 /**

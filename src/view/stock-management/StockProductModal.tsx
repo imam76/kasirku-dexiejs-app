@@ -1,8 +1,12 @@
-import { Form, Modal, Input, InputNumber, Grid, Button, Select } from 'antd';
+import { Form, Modal, Input, InputNumber, Grid, Button, Select, Alert } from 'antd';
 import { Controller, type Control, type FieldErrors, useFieldArray, type UseFormSetValue, useWatch } from 'react-hook-form';
-import { Trash2, Plus, ScanLine, X } from 'lucide-react';
+import { Trash2, Plus, ScanLine, X, AlertTriangle, ExternalLink } from 'lucide-react';
 import type { StockFormData } from '@/hooks/useStockManagement';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { db } from '@/lib/db';
+import { getConversionRatio } from '@/utils/pricing';
+import { Link } from '@tanstack/react-router';
 
 const { useBreakpoint } = Grid;
 
@@ -25,6 +29,36 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
   const purchaseUnit = useWatch({ control, name: 'purchase_unit' }) || 'pcs';
   const sellingUnit = useWatch({ control, name: 'selling_unit' }) || 'pcs';
+
+  // Fetch unit conversions for dropdowns and validation
+  const { data: conversions = [] } = useQuery({
+    queryKey: ['unitConversions'],
+    queryFn: () => db.unitConversions.toArray(),
+  });
+
+  // Extract unique units for dropdowns
+  const availableUnits = useMemo(() => {
+    const units = new Set<string>(['pcs', 'kg', 'gram', 'ons', 'ikat', 'bundle']);
+    conversions.forEach(c => {
+      units.add(c.fromUnit);
+      units.add(c.toUnit);
+    });
+    return Array.from(units).sort();
+  }, [conversions]);
+
+  // Check if conversion exists between purchase and selling unit
+  const hasConversion = useMemo(() => {
+    if (purchaseUnit === sellingUnit) return true;
+    const ratio = getConversionRatio(purchaseUnit, sellingUnit);
+    // If ratio is 1 but units are different, it's likely a fallback (missing conversion)
+    // unless someone explicitly set a 1:1 conversion for different units.
+    // We check if the conversion exists in the registry.
+    const exists = conversions.some(c => 
+      (c.fromUnit === purchaseUnit && c.toUnit === sellingUnit) || 
+      (c.fromUnit === sellingUnit && c.toUnit === purchaseUnit)
+    );
+    return exists;
+  }, [purchaseUnit, sellingUnit, conversions]);
 
   // Scanner logic
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -177,10 +211,9 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 control={control}
                 render={({ field }) => (
                   <Select {...field} className="w-full">
-                    <Select.Option value="kg">Kilogram (kg)</Select.Option>
-                    <Select.Option value="pcs">Pcs</Select.Option>
-                    <Select.Option value="ikat">Ikat</Select.Option>
-                    <Select.Option value="bundle">Bundle</Select.Option>
+                    {availableUnits.map(unit => (
+                      <Select.Option key={unit} value={unit}>{unit}</Select.Option>
+                    ))}
                   </Select>
                 )}
               />
@@ -192,17 +225,36 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 control={control}
                 render={({ field }) => (
                   <Select {...field} className="w-full">
-                    <Select.Option value="gram">Gram</Select.Option>
-                    <Select.Option value="ons">Ons (100g)</Select.Option>
-                    <Select.Option value="kg">Kilogram (kg)</Select.Option>
-                    <Select.Option value="pcs">Pcs</Select.Option>
-                    <Select.Option value="ikat">Ikat</Select.Option>
-                    <Select.Option value="bundle">Bundle</Select.Option>
+                    {availableUnits.map(unit => (
+                      <Select.Option key={unit} value={unit}>{unit}</Select.Option>
+                    ))}
                   </Select>
                 )}
               />
             </Form.Item>
+          </div>
 
+          {!hasConversion && (
+            <Alert
+              message="Konversi Tidak Ditemukan"
+              description={
+                <div className="flex flex-col gap-2">
+                  <p>Aplikasi tidak tahu cara mengonversi dari <strong>{purchaseUnit}</strong> ke <strong>{sellingUnit}</strong>. Harga jual mungkin tidak akurat.</p>
+                  <Link to="/units">
+                    <Button size="small" type="primary" ghost icon={<ExternalLink size={14} />} className="flex items-center gap-1 w-fit">
+                      Atur Konversi Baru
+                    </Button>
+                  </Link>
+                </div>
+              }
+              type="warning"
+              showIcon
+              icon={<AlertTriangle size={20} />}
+              className="mb-6"
+            />
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
             <Form.Item label="SKU" validateStatus={errors.sku ? 'error' : ''} help={errors.sku?.message}>
               <div className="flex gap-2">
                 <Controller

@@ -14,11 +14,16 @@ import {
   History,
   Home,
   Moon,
+  Scale,
   Settings,
   SettingsIcon,
   ShoppingCart,
   Sun
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { db } from '@/lib/db'
+import { setConversionRegistry } from '@/utils/pricing'
+import { useEffect } from 'react'
 
 const { Content } = Layout
 
@@ -26,6 +31,22 @@ const RootLayout = () => {
   const router = useRouter()
   const navigate = useNavigate()
   const { isDark, toggle } = useTheme()
+
+  // Load unit conversions globally
+  const { data: conversions } = useQuery({
+    queryKey: ['unitConversions'],
+    queryFn: async () => {
+      const data = await db.unitConversions.toArray()
+      setConversionRegistry(data)
+      return data
+    },
+  })
+
+  useEffect(() => {
+    if (conversions) {
+      setConversionRegistry(conversions)
+    }
+  }, [conversions])
 
   const handleLogoClick = () => {
     // Check if desktop (xl breakpoint - 1280px)
@@ -46,6 +67,7 @@ const RootLayout = () => {
     { to: '/purchase-report', label: 'Laporan Pembelian', icon: FileSpreadsheet },
     { to: '/finance', label: 'Keuangan', icon: Banknote },
     { to: '/profit', label: 'Keuntungan', icon: DollarSign },
+    { to: '/units', label: 'Satuan & Konversi', icon: Scale },
     { to: '/settings', label: 'Pengaturan', icon: Settings },
   ]
 

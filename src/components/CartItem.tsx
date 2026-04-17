@@ -48,7 +48,7 @@ export default function CartItem({ item, updateQuantity, removeFromCart }: CartI
         </p>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => updateQuantity(item.product.id, item.quantity - (item.unit === 'gram' ? 10 : 1))}
+            onClick={() => updateQuantity(item.product.id, item.quantity - (['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1))}
             className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
           >
             <Minus size={16} />
@@ -65,7 +65,7 @@ export default function CartItem({ item, updateQuantity, removeFromCart }: CartI
           <span className="text-xs text-gray-500">{item.unit}</span>
 
           <button
-            onClick={() => updateQuantity(item.product.id, item.quantity + (item.unit === 'gram' ? 10 : 1))}
+            onClick={() => updateQuantity(item.product.id, item.quantity + (['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1))}
             className="p-1 bg-gray-300 hover:bg-gray-400 rounded transition-colors"
           >
             <Plus size={16} />

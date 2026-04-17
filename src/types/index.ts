@@ -4,8 +4,17 @@ export interface WholesalePrice {
   price_type?: 'unit' | 'bundle'; // 'unit' = price per item, 'bundle' = price for min_quantity items
 }
 
-export type ProductUnit = 'gram' | 'kg' | 'ons' | 'pcs' | 'ikat' | 'bundle' | 'unit';
+export type ProductUnit = string;
 export type ProductCategory = 'bumbu' | 'sembako' | 'lainnya' | string;
+
+export interface UnitConversion {
+  id: string;
+  fromUnit: string;
+  toUnit: string;
+  ratio: number;
+  isPreset: boolean;
+  label: string;
+}
 
 export interface Product {
   id: string;

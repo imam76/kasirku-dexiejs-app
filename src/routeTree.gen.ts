@@ -13,6 +13,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UnitsLazyRouteImport = createFileRoute('/units')()
 const TransactionLazyRouteImport = createFileRoute('/transaction')()
 const StockLazyRouteImport = createFileRoute('/stock')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
@@ -24,6 +25,11 @@ const HistoryLazyRouteImport = createFileRoute('/history')()
 const FinanceLazyRouteImport = createFileRoute('/finance')()
 const SplatLazyRouteImport = createFileRoute('/$')()
 
+const UnitsLazyRoute = UnitsLazyRouteImport.update({
+  id: '/units',
+  path: '/units',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/units.lazy').then((d) => d.Route))
 const TransactionLazyRoute = TransactionLazyRouteImport.update({
   id: '/transaction',
   path: '/transaction',
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/stock': typeof StockLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/units': typeof UnitsLazyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/stock': typeof StockLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/units': typeof UnitsLazyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/stock': typeof StockLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/units': typeof UnitsLazyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/stock'
     | '/transaction'
+    | '/units'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/stock'
     | '/transaction'
+    | '/units'
   id:
     | '__root__'
     | '/'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/stock'
     | '/transaction'
+    | '/units'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -176,10 +188,18 @@ export interface RootRouteChildren {
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
   StockLazyRoute: typeof StockLazyRoute
   TransactionLazyRoute: typeof TransactionLazyRoute
+  UnitsLazyRoute: typeof UnitsLazyRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/units': {
+      id: '/units'
+      path: '/units'
+      fullPath: '/units'
+      preLoaderRoute: typeof UnitsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/transaction': {
       id: '/transaction'
       path: '/transaction'
@@ -272,6 +292,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
   StockLazyRoute: StockLazyRoute,
   TransactionLazyRoute: TransactionLazyRoute,
+  UnitsLazyRoute: UnitsLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
