@@ -67,26 +67,59 @@ const RootLayout = () => {
     { to: '/shopping-note', label: 'Catatan Belanja', icon: ClipboardList },
     { to: '/transaction', label: 'Transaksi', icon: ShoppingCart },
     { to: '/history', label: 'Riwayat', icon: History },
-    { to: '/sales-report', label: 'Laporan Penjualan', icon: FileText },
-    { to: '/purchase-report', label: 'Laporan Pembelian', icon: FileSpreadsheet },
-    { to: '/expense-report', label: 'Laporan Pengeluaran', icon: FileDown },
+    {
+      label: 'Laporan',
+      icon: FileText,
+      key: 'reports-group',
+      children: [
+        { to: '/sales-report', label: 'Penjualan', icon: FileText },
+        { to: '/purchase-report', label: 'Pembelian', icon: FileSpreadsheet },
+        { to: '/expense-report', label: 'Pengeluaran', icon: FileDown },
+        { to: '/profit', label: 'Keuntungan', icon: DollarSign },
+      ],
+    },
     { to: '/finance', label: 'Keuangan', icon: Banknote },
-    { to: '/profit', label: 'Keuntungan', icon: DollarSign },
     { to: '/units', label: 'Satuan & Konversi', icon: Scale },
     { to: '/settings', label: 'Pengaturan', icon: Settings },
   ]
 
-  const menuItems = navLinks.map((link) => ({
-    key: link.to,
-    icon: <link.icon size={16} />,
-    label: <Link to={link.to}>{link.label}</Link>,
-  }))
+  const menuItems = navLinks.map((link) => {
+    if ('children' in link && link.children) {
+      return {
+        key: link.key,
+        icon: <link.icon size={16} />,
+        label: link.label,
+        children: link.children.map((child) => ({
+          key: child.to,
+          icon: <child.icon size={16} />,
+          label: <Link to={child.to}>{child.label}</Link>,
+        })),
+      }
+    }
+    return {
+      key: link.to,
+      icon: <link.icon size={16} />,
+      label: <Link to={link.to}>{link.label}</Link>,
+    }
+  })
 
   // Determine active menu key from current path
-  const selectedKey = navLinks
-    .slice()
-    .reverse()
-    .find((link) => location.pathname.startsWith(link.to === '/' ? '/' : link.to))?.to ?? '/'
+  const allLinks = navLinks.reduce((acc: any[], link) => {
+    if ('children' in link && link.children) {
+      return [...acc, ...link.children]
+    }
+    return [...acc, link]
+  }, [])
+
+  const selectedKey =
+    allLinks
+      .slice()
+      .reverse()
+      .find((link) => location.pathname.startsWith(link.to === '/' ? '/' : link.to))?.to ?? '/'
+
+  const openKeys = navLinks
+    .filter((link) => 'children' in link && link.children?.some((child) => child.to === selectedKey))
+    .map((link: any) => link.key)
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -142,6 +175,7 @@ const RootLayout = () => {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
+            defaultOpenKeys={openKeys}
             items={menuItems}
             theme={isDark ? 'dark' : 'light'}
             style={{ height: '100%', borderRight: 0 }}

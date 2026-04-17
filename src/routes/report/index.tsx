@@ -1,31 +1,18 @@
 import {
-  AccountBookOutlined,
-  BankOutlined,
-  DollarOutlined,
-  FileTextOutlined,
-  HistoryOutlined,
-  ProductOutlined,
-  SettingOutlined,
-  ShoppingCartOutlined
+  FileExcelOutlined,
+  FileTextOutlined
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 
-export const Route = createFileRoute('/')({
-  component: Index,
+export const Route = createFileRoute('/report/')({
+  component: Laporan,
 })
 
-function Index() {
+function Laporan() {
   const menuItems = [
-    { to: '/transaction', label: 'Kasir', icon: ShoppingCartOutlined, color: 'text-blue-600', desc: 'Buat dan kelola transaksi penjualan baru' },
-    { to: '/finance', label: 'Keuangan', icon: BankOutlined, color: 'text-red-600', desc: 'Lihat ringkasan keuangan bisnis Anda secara real-time' },
-    { to: '/stock', label: 'Stok', icon: ProductOutlined, color: 'text-green-600', desc: 'Tambah, edit, dan kelola inventori produk' },
-    { to: '/shopping-note', label: 'Catatan', icon: AccountBookOutlined, color: 'text-yellow-600', desc: 'Kelola catatan belanja harian' },
-    { to: '/history', label: 'Riwayat', icon: HistoryOutlined, color: 'text-purple-600', desc: 'Lihat dan analisis semua transaksi sebelumnya' },
-    { to: '/report', label: 'Laporan', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dan pembelian' },
-    // { to: '/sales-report', label: 'Lap. Jual', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
-    // { to: '/purchase-report', label: 'Lap. Beli', icon: FileExcelOutlined, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
-    { to: '/profit', label: 'Keuntungan', icon: DollarOutlined, color: 'text-emerald-600', desc: 'Analisis keuntungan penjualan' },
-    { to: '/settings', label: 'Pengaturan', icon: SettingOutlined, color: 'text-gray-600', desc: 'Backup dan restore database aplikasi' },
+    { to: '/report/sales-report', label: 'Lap. Jual', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
+    { to: '/report/purchase-report', label: 'Lap. Beli', icon: FileExcelOutlined, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
+    { to: '/report/expense-report', label: 'Lap. Pengeeluaran', icon: FileExcelOutlined, color: 'text-red-600', desc: 'Lihat laporan biaya' },
   ]
 
   return (
