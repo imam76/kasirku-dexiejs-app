@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Product, CartItem } from '@/types';
+import { Product, CartItem, PaymentMethod } from '@/types';
 import { konversiSatuan } from '@/utils/pricing';
 
 interface TransactionState {
@@ -7,6 +7,7 @@ interface TransactionState {
   cart: CartItem[];
   searchTerm: string;
   paymentAmount: string;
+  paymentMethod: PaymentMethod;
   showPayment: boolean;
 
   // Actions
@@ -14,6 +15,7 @@ interface TransactionState {
   setCart: (cart: CartItem[] | ((prev: CartItem[]) => CartItem[])) => void;
   setSearchTerm: (term: string) => void;
   setPaymentAmount: (amount: string) => void;
+  setPaymentMethod: (method: PaymentMethod) => void;
   setShowPayment: (show: boolean) => void;
 
   // Logical State Actions (Non-DB)
@@ -28,6 +30,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   cart: [],
   searchTerm: '',
   paymentAmount: '',
+  paymentMethod: 'TUNAI',
   showPayment: false,
 
   setProducts: (products) => set({ products }),
@@ -36,6 +39,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   })),
   setSearchTerm: (searchTerm) => set({ searchTerm }),
   setPaymentAmount: (paymentAmount) => set({ paymentAmount }),
+  setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
   setShowPayment: (showPayment) => set({ showPayment }),
 
   addToCart: (product) => {
@@ -127,6 +131,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({
       cart: [],
       paymentAmount: '',
+      paymentMethod: 'TUNAI',
       showPayment: false,
     });
   }

@@ -1,5 +1,5 @@
 import { Trash2 } from 'lucide-react';
-import { CartItem as CartItemType } from '@/types';
+import { CartItem as CartItemType, PaymentMethod } from '@/types';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
 
@@ -11,8 +11,10 @@ interface CartSidebarProps {
   total: number;
   showPayment: boolean;
   paymentAmount: string;
+  paymentMethod: PaymentMethod;
   setShowPayment: (show: boolean) => void;
   setPaymentAmount: (amount: string) => void;
+  setPaymentMethod: (method: PaymentMethod) => void;
   handleCheckout: () => void;
 }
 
@@ -24,8 +26,10 @@ export default function CartSidebar({
   total,
   showPayment,
   paymentAmount,
+  paymentMethod,
   setShowPayment,
   setPaymentAmount,
+  setPaymentMethod,
   handleCheckout,
 }: CartSidebarProps) {
   return (
@@ -63,8 +67,10 @@ export default function CartSidebar({
             total={total}
             showPayment={showPayment}
             paymentAmount={paymentAmount}
+            paymentMethod={paymentMethod}
             setShowPayment={setShowPayment}
             setPaymentAmount={setPaymentAmount}
+            setPaymentMethod={setPaymentMethod}
             handleCheckout={handleCheckout}
           />
         )}

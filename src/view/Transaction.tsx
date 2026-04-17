@@ -15,6 +15,7 @@ export default function Transaction() {
     cart,
     searchTerm,
     paymentAmount,
+    paymentMethod,
     showPayment,
     filteredProducts,
     addToCart,
@@ -25,6 +26,7 @@ export default function Transaction() {
     clearCart,
     setSearchTerm,
     setPaymentAmount,
+    setPaymentMethod,
     setShowPayment,
   } = useTransaction();
 
@@ -98,8 +100,10 @@ export default function Transaction() {
           total={total}
           showPayment={showPayment}
           paymentAmount={paymentAmount}
+          paymentMethod={paymentMethod}
           setShowPayment={setShowPayment}
           setPaymentAmount={setPaymentAmount}
+          setPaymentMethod={setPaymentMethod}
           handleCheckout={handleCheckout}
         />
       </div>
@@ -132,8 +136,10 @@ export default function Transaction() {
         total={total}
         showPayment={showPayment}
         paymentAmount={paymentAmount}
+        paymentMethod={paymentMethod}
         setShowPayment={setShowPayment}
         setPaymentAmount={setPaymentAmount}
+        setPaymentMethod={setPaymentMethod}
         handleCheckout={handleCheckout}
       />
 

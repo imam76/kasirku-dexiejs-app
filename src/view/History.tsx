@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useLayoutEffect } from 'react';
-import { Receipt, ChevronDown, ChevronUp } from 'lucide-react';
+import { Receipt, ChevronDown, ChevronUp, Wallet, DollarSign } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
 import { formatDate, formatCurrency } from '@/utils/formatters';
@@ -111,6 +111,23 @@ export default function History() {
                             <div className="flex items-center gap-3 mb-2">
                               <span className="font-mono text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded">
                                 {transaction.transaction_number}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold ${
+                                transaction.payment_method === 'NON_TUNAI'
+                                  ? 'bg-indigo-100 text-indigo-700'
+                                  : 'bg-green-100 text-green-700'
+                              }`}>
+                                {transaction.payment_method === 'NON_TUNAI' ? (
+                                  <>
+                                    <Wallet size={12} />
+                                    NON-TUNAI
+                                  </>
+                                ) : (
+                                  <>
+                                    <DollarSign size={12} />
+                                    TUNAI
+                                  </>
+                                )}
                               </span>
                               <span className="text-sm text-gray-600">
                                 {formatDate(transaction.created_at)}

@@ -83,10 +83,11 @@ export default function SalesReport() {
       ['Laporan Penjualan', dayjs().tz().format('YYYY-MM-DD HH:mm:ss')],
       [`Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`],
       [],
-      ['No. Transaksi', 'Tanggal', 'Total Penjualan', 'Pembayaran', 'Kembalian'],
+      ['No. Transaksi', 'Tanggal', 'Metode Pembayaran', 'Total Penjualan', 'Pembayaran', 'Kembalian'],
       ...data.transactions.map((t) => [
         t.transaction_number,
         dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
+        t.payment_method || 'TUNAI',
         t.total_amount,
         t.payment_amount,
         t.change_amount,
@@ -124,6 +125,21 @@ export default function SalesReport() {
       key: 'created_at',
       width: 180,
       render: (date: string) => dayjs(date).tz().format('YYYY-MM-DD HH:mm:ss'),
+    },
+    {
+      title: 'Metode',
+      dataIndex: 'payment_method',
+      key: 'payment_method',
+      width: 120,
+      render: (method: string) => (
+        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+          method === 'NON_TUNAI' 
+            ? 'bg-indigo-100 text-indigo-700' 
+            : 'bg-green-100 text-green-700'
+        }`}>
+          {method || 'TUNAI'}
+        </span>
+      ),
     },
     {
       title: 'Total Penjualan',

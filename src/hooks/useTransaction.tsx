@@ -15,10 +15,12 @@ export const useTransaction = () => {
     cart,
     searchTerm,
     paymentAmount,
+    paymentMethod,
     showPayment,
     setProducts,
     setSearchTerm,
     setPaymentAmount,
+    setPaymentMethod,
     setShowPayment,
     addToCart: storeAddToCart,
     updateQuantity: storeUpdateQuantity,
@@ -96,6 +98,7 @@ export const useTransaction = () => {
           total_amount: total,
           payment_amount: payment,
           change_amount: change,
+          payment_method: paymentMethod,
           created_at: now,
         };
 
@@ -184,6 +187,9 @@ export const useTransaction = () => {
             <p className="text-gray-700">
               <span className="font-semibold"> Nomor Transaksi: </span> {transactionNumber}
             </p>
+            <p className="text-gray-700">
+              <span className="font-semibold"> Metode: </span> {paymentMethod}
+            </p>
             < p className="text-gray-700" >
               <span className="font-semibold"> Total:</span> Rp {formatCurrency(total)}
             </p>
@@ -214,6 +220,7 @@ export const useTransaction = () => {
     cart,
     searchTerm,
     paymentAmount,
+    paymentMethod,
     showPayment,
     filteredProducts,
     addToCart,
@@ -224,6 +231,7 @@ export const useTransaction = () => {
     clearCart: reset,
     setSearchTerm,
     setPaymentAmount,
+    setPaymentMethod,
     setShowPayment,
   };
 };

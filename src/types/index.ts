@@ -31,12 +31,15 @@ export interface Product {
   updated_at: string;
 }
 
+export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
+
 export interface Transaction {
   id: string;
   transaction_number: string;
   total_amount: number;
   payment_amount: number;
   change_amount: number;
+  payment_method: PaymentMethod;
   created_at: string;
 }
 
