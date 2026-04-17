@@ -3,13 +3,16 @@ import { useExpenseReport } from '@/hooks/useReports';
 import dayjs from '@/lib/dayjs';
 import { formatCurrency } from '@/utils/formatters';
 import { FileExcelOutlined, FilePdfOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, DatePicker, Select, Space, Typography } from 'antd';
+import { Button, DatePicker, Grid, Select, Typography } from 'antd';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
+import DesktopExpenseTable from './expense-report/DesktopExpenseTable';
+import MobileExpenseList from './expense-report/MobileExpenseList';
 
 const { Title } = Typography;
+const { useBreakpoint } = Grid;
 
 const EXPENSE_CATEGORIES = [
   { value: 'PEMBELIAN_STOK', label: 'Pembelian Stok (Modal Barang)' },
@@ -156,131 +159,154 @@ export default function ExpenseReport() {
     XLSX.writeFile(workbook, `laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}.xlsx`);
   };
 
+  const screens = useBreakpoint();
+
   if (isLoading) return <Loading />;
 
   return (
-    <div className="p-4 sm:p-6 bg-white min-h-screen">
-      <div className="flex justify-between items-center mb-8">
-        <Title level={4} className="!mb-0 !font-normal text-gray-800">Laporan pengeluaran</Title>
-        <Space>
+    <div className="p-4 sm:p-6 bg-[#FDFDFD] min-h-screen">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div>
+          <Title level={4} className="!mb-1 !font-bold text-gray-900">Laporan Pengeluaran</Title>
+          <p className="text-gray-500 text-xs sm:text-sm">Pantau semua pengeluaran operasional dan pembelian stok</p>
+        </div>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
-            icon={<ReloadOutlined />}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5"
+            icon={<ReloadOutlined className="text-[12px]" />}
             onClick={() => refetch()}
             loading={isLoading}
           >
             Refresh
           </Button>
-          <Button icon={<FilePdfOutlined />} onClick={handleExportPDF} disabled={!data || data.transactions.length === 0}>PDF</Button>
-          <Button type="primary" icon={<FileExcelOutlined />} onClick={handleExportExcel} disabled={!data || data.transactions.length === 0}>Excel</Button>
-        </Space>
+          <Button 
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5"
+            icon={<FilePdfOutlined className="text-[12px]" />} 
+            onClick={handleExportPDF} 
+            disabled={!data || data.transactions.length === 0}
+          >
+            PDF
+          </Button>
+          <Button 
+            type="primary" 
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
+            icon={<FileExcelOutlined className="text-[12px]" />} 
+            onClick={handleExportExcel} 
+            disabled={!data || data.transactions.length === 0}
+          >
+            Excel
+          </Button>
+        </div>
       </div>
 
       {/* FILTER SECTION */}
-      <div className="mb-8">
-        <div className="text-[11px] font-bold text-gray-500 tracking-wider mb-3 uppercase">FILTER</div>
-        <div className="space-y-4">
-          <Select
-            mode="multiple"
-            placeholder="Semua kategori"
-            className="w-full"
-            value={selectedCategories}
-            onChange={setSelectedCategories}
-            allowClear
-            options={EXPENSE_CATEGORIES}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button className={selectedHelper === 'today' ? 'bg-white border-gray-400' : ''} onClick={() => handleHelperChange('today')}>Hari ini</Button>
-            <Button className={selectedHelper === 'yesterday' ? 'bg-white border-gray-400' : ''} onClick={() => handleHelperChange('yesterday')}>Kemarin</Button>
-            <Button className={selectedHelper === 'this-week' ? 'bg-white border-gray-400' : ''} onClick={() => handleHelperChange('this-week')}>Minggu ini</Button>
-            <Button className={selectedHelper === 'this-month' ? 'bg-white border-gray-400' : ''} onClick={() => handleHelperChange('this-month')}>Bulan ini</Button>
-            <Button className={selectedHelper === 'last-month' ? 'bg-white border-gray-400' : ''} onClick={() => handleHelperChange('last-month')}>Bulan lalu</Button>
-            <Button className={selectedHelper === 'custom' ? 'bg-white border-gray-400' : ''} onClick={() => setSelectedHelper('custom')}>Custom</Button>
+      <div className="mb-8 bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">PARAMETER LAPORAN</div>
+        <div className="space-y-5">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium text-gray-700 ml-0.5">Kategori Pengeluaran</span>
+            <Select
+              mode="multiple"
+              placeholder="Semua kategori"
+              className="w-full"
+              value={selectedCategories}
+              onChange={setSelectedCategories}
+              allowClear
+              options={EXPENSE_CATEGORIES}
+              size="large"
+            />
+          </div>
+          
+          <div className="flex flex-col gap-2.5">
+            <span className="text-[13px] font-medium text-gray-700 ml-0.5">Rentang Waktu</span>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                size={screens.md ? 'middle' : 'small'}
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'today' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                onClick={() => handleHelperChange('today')}
+              >
+                Hari ini
+              </Button>
+              <Button 
+                size={screens.md ? 'middle' : 'small'}
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'yesterday' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                onClick={() => handleHelperChange('yesterday')}
+              >
+                Kemarin
+              </Button>
+              <Button 
+                size={screens.md ? 'middle' : 'small'}
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-week' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                onClick={() => handleHelperChange('this-week')}
+              >
+                Minggu ini
+              </Button>
+              <Button 
+                size={screens.md ? 'middle' : 'small'}
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-month' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                onClick={() => handleHelperChange('this-month')}
+              >
+                Bulan ini
+              </Button>
+              <Button 
+                size={screens.md ? 'middle' : 'small'}
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'last-month' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                onClick={() => handleHelperChange('last-month')}
+              >
+                Bulan lalu
+              </Button>
+              <Button 
+                size={screens.md ? 'middle' : 'small'}
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'custom' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                onClick={() => setSelectedHelper('custom')}
+              >
+                Custom
+              </Button>
+
+              {(selectedCategories.length > 0 || selectedHelper !== 'today') && (
+                <Button type="link" onClick={handleReset} className="text-gray-400 hover:text-red-500 flex items-center gap-1">
+                  <ReloadOutlined className="text-[10px]" /> Reset
+                </Button>
+              )}
+            </div>
 
             {selectedHelper === 'custom' && (
-              <DatePicker.RangePicker
-                value={dateRange}
-                onChange={handleDateRangeChange}
-                format="YYYY-MM-DD"
-                placeholder={['Mulai', 'Hingga']}
-              />
-            )}
-
-            {(selectedCategories.length > 0 || selectedHelper !== 'today') && (
-              <Button type="link" onClick={handleReset} className="text-gray-500">Reset</Button>
+              <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                <DatePicker.RangePicker
+                  value={dateRange}
+                  onChange={handleDateRangeChange}
+                  format="YYYY-MM-DD"
+                  placeholder={['Mulai', 'Hingga']}
+                  className="w-full sm:w-[320px] rounded-lg"
+                  size="large"
+                />
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* RINGKASAN SECTION */}
-      {/* <div className="mb-10">
-        <div className="text-[11px] font-bold text-gray-500 tracking-wider mb-3 uppercase">RINGKASAN</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {data && Object.entries(data.breakdown).length > 0 ? (
-            Object.entries(data.breakdown).map(([category, amount]) => {
-              const categoryLabel = EXPENSE_CATEGORIES.find(c => c.value === category)?.label || category;
-              return (
-                <div key={category} className="bg-[#F8F7F2] p-4 rounded-lg border border-transparent">
-                  <div className="text-gray-500 text-xs mb-1">{categoryLabel}</div>
-                  <div className="text-lg font-medium text-gray-900">{formatCurrency(amount)}</div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="bg-[#F8F7F2] p-4 rounded-lg text-gray-400 text-sm">Belum ada ringkasan</div>
-          )}
+      {/* DATA SECTION */}
+      <div>
+        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">RINCIAN TRANSAKSI</div>
+        
+        {/* Desktop View (Visible on MD and larger) */}
+        <div className="hidden md:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <DesktopExpenseTable 
+            transactions={data?.transactions || []} 
+            totalExpense={data?.totalExpense || 0}
+            expenseCategories={EXPENSE_CATEGORIES}
+          />
         </div>
-      </div> */}
 
-      {/* TABLE SECTION */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left border-collapse">
-          <thead>
-            <tr className="text-gray-500 font-normal">
-              <th className="py-3 px-2 font-normal border-b border-gray-100 w-[180px]">Tanggal & jam</th>
-              <th className="py-3 px-2 font-normal border-b border-gray-100">Keterangan</th>
-              <th className="py-3 px-2 font-normal border-b border-gray-100 w-[250px]">Kategori</th>
-              <th className="py-3 px-2 font-normal border-b border-gray-100 text-right w-[150px]">Nominal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data && data.transactions.length > 0 ? (
-              <>
-                {data.transactions.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-2 border-b border-gray-50 text-gray-600">
-                      {dayjs(t.created_at).tz().format('DD MMM YYYY, HH:mm')}
-                    </td>
-                    <td className="py-4 px-2 border-b border-gray-50 text-gray-800">
-                      {t.description || '-'}
-                    </td>
-                    <td className="py-4 px-2 border-b border-gray-50">
-                      <span className={`px-3 py-1 rounded-full text-[11px] font-medium ${t.category === 'Pembelian stok' || t.category === 'PEMBELIAN_STOK'
-                          ? 'bg-[#EBF5FF] text-[#2563EB]'
-                          : 'bg-[#FEF3E7] text-[#D97706]'
-                        }`}>
-                        {EXPENSE_CATEGORIES.find(c => c.value === t.category)?.label || t.category}
-                      </span>
-                    </td>
-                    <td className="py-4 px-2 border-b border-gray-50 text-right text-gray-900 font-medium">
-                      {formatCurrency(t.amount)}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="font-bold text-gray-900">
-                  <td colSpan={3} className="py-6 px-2 text-base">Total pengeluaran</td>
-                  <td className="py-6 px-2 text-right text-base">{formatCurrency(data.totalExpense)}</td>
-                </tr>
-              </>
-            ) : (
-              <tr>
-                <td colSpan={4} className="py-12 text-center text-gray-400 italic">
-                  Tidak ada data pengeluaran untuk periode ini
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {/* Mobile View (Visible on screens smaller than MD) */}
+        <div className="md:hidden">
+          <MobileExpenseList 
+            transactions={data?.transactions || []} 
+            totalExpense={data?.totalExpense || 0}
+            expenseCategories={EXPENSE_CATEGORIES}
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,23 +1,105 @@
-import { useState } from 'react';
-import { Card, Button, DatePicker, Space, Table, Statistic, Empty, Select } from 'antd';
-import { DownloadOutlined, FilterOutlined } from '@ant-design/icons';
+import { useProductCategories, useSalesReport } from '@/hooks/useReports';
 import dayjs from '@/lib/dayjs';
-import { useSalesReport } from '@/hooks/useReports';
-import { formatCurrency } from '@/utils/formatters';
+import { db } from '@/lib/db';
+import { BarChartOutlined, DownloadOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
+import { Button, Card, DatePicker, Empty, Grid, Select, Statistic, Typography } from 'antd';
+import { useState } from 'react';
 import { Loading } from '../components/Loading';
+import DesktopSalesTable from './sales-report/DesktopSalesTable';
+import MobileSalesList from './sales-report/MobileSalesList';
+import TopProductsTable from './sales-report/TopProductsTable';
+
+const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
 export default function SalesReport() {
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>([
+    dayjs.tz().startOf('day'),
+    dayjs.tz().endOf('day'),
+  ]);
   const [selectedHelper, setSelectedHelper] = useState<string | undefined>('today');
 
-  const { data, isLoading, error } = useSalesReport(startDate, endDate);
+  // New Filter States
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | undefined>('SEMUA');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  const { data: categoriesData } = useProductCategories();
+  const { data, isLoading, error, refetch } = useSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
+
+  const screens = useBreakpoint();
+
+  const handleDownload = async () => {
+    if (!data) return;
+
+    // Fetch detail per item for all filtered transactions
+    const transactionIds = data.transactions.map(t => t.id);
+    const allItems = await db.transactionItems
+      .where('transaction_id')
+      .anyOf(transactionIds)
+      .toArray();
+
+    // Fetch products to get categories
+    const products = await db.products.toArray();
+    const productMap = new Map(products.map(p => [p.id, p]));
+
+    const csvRows = [
+      ['SECTION 1: RINGKASAN TRANSAKSI'],
+      ['No. Transaksi', 'Tanggal', 'Metode Pembayaran', 'Total Penjualan', 'Pembayaran', 'Kembalian'],
+      ...data.transactions.map((t) => [
+        t.transaction_number,
+        dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
+        t.payment_method || 'TUNAI',
+        t.total_amount,
+        t.payment_amount,
+        t.change_amount,
+      ]),
+      [],
+      ['SECTION 2: DETAIL ITEM PER TRANSAKSI'],
+      ['No. Transaksi', 'Tanggal', 'Nama Produk', 'Kategori', 'Jumlah', 'Satuan', 'Harga Satuan', 'Subtotal', 'HPP', 'Profit'],
+      ...allItems.map((item) => {
+        const trans = data.transactions.find(t => t.id === item.transaction_id);
+        const product = productMap.get(item.product_id);
+        return [
+          trans?.transaction_number || '-',
+          dayjs(item.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
+          item.product_name,
+          product?.category || 'Lainnya',
+          item.quantity,
+          item.unit,
+          item.price,
+          item.subtotal,
+          item.purchase_price,
+          item.profit,
+        ];
+      }),
+      [],
+      ['RINGKASAN LAPORAN'],
+      ['Total Transaksi', data.transactions.length],
+      ['Total Penjualan', data.totalRevenue],
+      ['Total Keuntungan', data.totalProfit],
+      ['Total Item Terjual', data.totalItems],
+      ['Rata-rata Transaksi', data.averageTransaction],
+    ];
+
+    const csvContent = csvRows
+      .map((row) => row.join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `laporan-penjualan-${dayjs().tz().format('YYYY-MM-DD')}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
     setDateRange(dates);
     if (selectedHelper !== 'custom') {
-      setSelectedHelper(undefined);
+      setSelectedHelper('custom');
     }
     if (dates && dates[0] && dates[1]) {
       setStartDate(dates[0].format('YYYY-MM-DD'));
@@ -40,19 +122,15 @@ export default function SalesReport() {
         range = [dayjs.tz().subtract(1, 'day').startOf('day'), dayjs.tz().subtract(1, 'day').endOf('day')];
         break;
       case 'this-week':
-        range = [dayjs.tz().startOf('week'), dayjs.tz().endOf('week')];
-        break;
-      case 'last-week':
-        range = [dayjs.tz().subtract(1, 'week').startOf('week'), dayjs.tz().subtract(1, 'week').endOf('week')];
+        range = [dayjs.tz().startOf('week').add(1, 'day'), dayjs.tz().endOf('day')];
         break;
       case 'this-month':
-        range = [dayjs.tz().startOf('month'), dayjs.tz().endOf('month')];
+        range = [dayjs.tz().startOf('month'), dayjs.tz().endOf('day')];
         break;
       case 'last-month':
         range = [dayjs.tz().subtract(1, 'month').startOf('month'), dayjs.tz().subtract(1, 'month').endOf('month')];
         break;
       case 'custom':
-        // Don't set range, let the user pick from DatePicker
         return;
       default:
         range = null;
@@ -70,99 +148,14 @@ export default function SalesReport() {
   };
 
   const handleReset = () => {
-    setDateRange(null);
-    setStartDate(undefined);
-    setEndDate(undefined);
-    setSelectedHelper(undefined);
+    const todayRange: [dayjs.Dayjs, dayjs.Dayjs] = [dayjs.tz().startOf('day'), dayjs.tz().endOf('day')];
+    setDateRange(todayRange);
+    setStartDate(todayRange[0].format('YYYY-MM-DD'));
+    setEndDate(todayRange[1].format('YYYY-MM-DD'));
+    setSelectedHelper('today');
+    setSelectedPaymentMethod('SEMUA');
+    setSelectedCategories([]);
   };
-
-  const handleDownload = () => {
-    if (!data) return;
-
-    const csv = [
-      ['Laporan Penjualan', dayjs().tz().format('YYYY-MM-DD HH:mm:ss')],
-      [`Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`],
-      [],
-      ['No. Transaksi', 'Tanggal', 'Metode Pembayaran', 'Total Penjualan', 'Pembayaran', 'Kembalian'],
-      ...data.transactions.map((t) => [
-        t.transaction_number,
-        dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
-        t.payment_method || 'TUNAI',
-        t.total_amount,
-        t.payment_amount,
-        t.change_amount,
-      ]),
-      [],
-      ['Ringkasan'],
-      ['Total Transaksi', data.transactions.length],
-      ['Total Penjualan', data.totalRevenue],
-      ['Total Keuntungan', data.totalProfit],
-      ['Total Item Terjual', data.totalItems],
-      ['Rata-rata Transaksi', data.averageTransaction],
-    ]
-      .map((row) => row.join(','))
-      .join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `laporan-penjualan-${dayjs().tz().format('YYYY-MM-DD')}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
-
-  const columns = [
-    {
-      title: 'No. Transaksi',
-      dataIndex: 'transaction_number',
-      key: 'transaction_number',
-      width: 150,
-    },
-    {
-      title: 'Tanggal',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      render: (date: string) => dayjs(date).tz().format('YYYY-MM-DD HH:mm:ss'),
-    },
-    {
-      title: 'Metode',
-      dataIndex: 'payment_method',
-      key: 'payment_method',
-      width: 120,
-      render: (method: string) => (
-        <span className={`px-2 py-1 rounded text-xs font-semibold ${
-          method === 'NON_TUNAI' 
-            ? 'bg-indigo-100 text-indigo-700' 
-            : 'bg-green-100 text-green-700'
-        }`}>
-          {method || 'TUNAI'}
-        </span>
-      ),
-    },
-    {
-      title: 'Total Penjualan',
-      dataIndex: 'total_amount',
-      key: 'total_amount',
-      width: 150,
-      render: (amount: number) => <span className="text-green-600 font-semibold">{formatCurrency(amount)}</span>,
-    },
-    {
-      title: 'Pembayaran',
-      dataIndex: 'payment_amount',
-      key: 'payment_amount',
-      width: 150,
-      render: (amount: number) => formatCurrency(amount),
-    },
-    {
-      title: 'Kembalian',
-      dataIndex: 'change_amount',
-      key: 'change_amount',
-      width: 150,
-      render: (amount: number) => formatCurrency(amount),
-    },
-  ];
 
   if (isLoading) {
     return <Loading />;
@@ -179,120 +172,178 @@ export default function SalesReport() {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Laporan Penjualan</h2>
+    <div className="p-4 sm:p-6 bg-[#FDFDFD] min-h-screen">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div>
+          <Title level={4} className="!mb-1 !font-bold text-gray-900">Laporan Penjualan</Title>
+          <p className="text-gray-500 text-xs sm:text-sm">Analisis performa penjualan dan produk terlaris Anda</p>
+        </div>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <Button
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5"
+            icon={<ReloadOutlined className="text-[12px]" />}
+            onClick={() => refetch()}
+            loading={isLoading}
+          >
+            Refresh
+          </Button>
+          <Button
+            type="primary"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
+            icon={<DownloadOutlined className="text-[12px]" />}
+            onClick={handleDownload}
+            disabled={!data || data.transactions.length === 0}
+          >
+            Download CSV
+          </Button>
+        </div>
+      </div>
 
-      {/* Filter Section */}
-      <Card className="mb-6">
-        <Space orientation="vertical" className="w-full" size="large">
-          <Space wrap>
-            <FilterOutlined className="text-gray-600" />
-            <span className="font-semibold">Filter Tanggal:</span>
-            <Select
-              placeholder="Pilih Periode"
-              style={{ width: 150 }}
-              value={selectedHelper}
-              onChange={handleHelperChange}
-              allowClear
-              options={[
-                { value: 'today', label: 'Hari Ini' },
-                { value: 'yesterday', label: 'Kemarin' },
-                { value: 'this-week', label: 'Minggu Ini' },
-                { value: 'last-week', label: 'Minggu Lalu' },
-                { value: 'this-month', label: 'Bulan Ini' },
-                { value: 'last-month', label: 'Bulan Lalu' },
-                { value: 'custom', label: 'Custom Range' },
-              ]}
-            />
-            {selectedHelper === 'custom' && (
-              <DatePicker.RangePicker
-                value={dateRange}
-                onChange={handleDateRangeChange}
-                format="YYYY-MM-DD"
-                placeholder={['Mulai', 'Hingga']}
+      {/* FILTER SECTION */}
+      <div className="mb-8 bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">PARAMETER LAPORAN</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-5">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-medium text-gray-700 ml-0.5">Kategori Produk (Filter Breakdown)</span>
+              <Select
+                mode="multiple"
+                placeholder="Semua kategori"
+                className="w-full"
+                value={selectedCategories}
+                onChange={setSelectedCategories}
+                allowClear
+                options={categoriesData?.map(cat => ({ value: cat, label: cat }))}
+                size="large"
               />
-            )}
-            <Button onClick={handleReset}>Reset</Button>
-            <Button
-              type="primary"
-              icon={<DownloadOutlined />}
-              onClick={handleDownload}
-              disabled={!data || data.transactions.length === 0}
-            >
-              Download CSV
-            </Button>
-          </Space>
-        </Space>
-      </Card>
+            </div>
 
-      {/* Summary Statistics */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-medium text-gray-700 ml-0.5">Metode Pembayaran</span>
+              <Select
+                placeholder="Semua metode"
+                className="w-full"
+                value={selectedPaymentMethod}
+                onChange={setSelectedPaymentMethod}
+                options={[
+                  { value: 'SEMUA', label: 'Semua Metode' },
+                  { value: 'TUNAI', label: 'Tunai' },
+                  { value: 'NON_TUNAI', label: 'Non-Tunai' },
+                ]}
+                size="large"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <span className="text-[13px] font-medium text-gray-700 ml-0.5">Rentang Waktu</span>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'today', label: 'Hari ini' },
+                { key: 'yesterday', label: 'Kemarin' },
+                { key: 'this-week', label: 'Minggu ini' },
+                { key: 'this-month', label: 'Bulan ini' },
+                { key: 'last-month', label: 'Bulan lalu' },
+                { key: 'custom', label: 'Custom' },
+              ].map((helper) => (
+                <Button
+                  key={helper.key}
+                  size={screens.md ? 'middle' : 'small'}
+                  className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === helper.key ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`}
+                  onClick={() => handleHelperChange(helper.key)}
+                >
+                  {helper.label}
+                </Button>
+              ))}
+
+              {(selectedCategories.length > 0 || selectedHelper !== 'today' || selectedPaymentMethod !== 'SEMUA') && (
+                <Button type="link" onClick={handleReset} className="text-gray-400 hover:text-red-500 flex items-center gap-1">
+                  <ReloadOutlined className="text-[10px]" /> Reset Semua
+                </Button>
+              )}
+            </div>
+
+            {selectedHelper === 'custom' && (
+              <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                <DatePicker.RangePicker
+                  value={dateRange}
+                  onChange={handleDateRangeChange}
+                  format="YYYY-MM-DD"
+                  placeholder={['Mulai', 'Hingga']}
+                  className="w-full sm:w-[320px] rounded-lg"
+                  size="large"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* SUMMARY STATISTICS */}
       {data && data.transactions.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          <Card>
-            <Statistic
-              title="Total Transaksi"
-              value={data.transactions.length}
-              suffix="transaksi"
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-          <Card>
-            <Statistic
-              title="Total Penjualan"
-              value={data.totalRevenue}
-              prefix="Rp "
-              precision={2}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-          <Card>
-            <Statistic
-              title="Total Keuntungan"
-              value={data.totalProfit}
-              prefix="Rp "
-              precision={2}
-              valueStyle={{ color: '#faad14' }}
-            />
-          </Card>
-          <Card>
-            <Statistic
-              title="Total Item"
-              value={data.totalItems}
-              suffix="item"
-              valueStyle={{ color: '#722ed1' }}
-            />
-          </Card>
-          <Card>
-            <Statistic
-              title="Rata-rata Transaksi"
-              value={data.averageTransaction}
-              prefix="Rp "
-              precision={2}
-              valueStyle={{ color: '#eb2f96' }}
-            />
-          </Card>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          {[
+            { title: 'Total Transaksi', value: data.transactions.length, suffix: 'transaksi', color: '#1890ff', border: 'border-l-blue-500' },
+            { title: 'Total Penjualan', value: data.totalRevenue, prefix: 'Rp ', color: '#52c41a', border: 'border-l-green-500', isCurrency: true },
+            { title: 'Total Keuntungan', value: data.totalProfit, prefix: 'Rp ', color: '#faad14', border: 'border-l-orange-500', isCurrency: true },
+            { title: 'Total Item', value: data.totalItems, suffix: 'item', color: '#722ed1', border: 'border-l-purple-500' },
+            { title: 'Rata-rata Transaksi', value: data.averageTransaction, prefix: 'Rp ', color: '#eb2f96', border: 'border-l-pink-500', isCurrency: true },
+          ].map((stat, idx) => (
+            <Card key={idx} className={`shadow-sm border-none border-l-4 ${stat.border} rounded-xl overflow-hidden`}>
+              <Statistic
+                title={<Text type="secondary" className="text-[11px] uppercase font-bold tracking-wider">{stat.title}</Text>}
+                value={stat.value}
+                prefix={stat.prefix}
+                suffix={stat.suffix}
+                precision={stat.isCurrency ? 2 : 0}
+                valueStyle={{ color: stat.color, fontWeight: 'bold', fontSize: screens.md ? '20px' : '16px' }}
+              />
+            </Card>
+          ))}
         </div>
       )}
 
-      {/* Transactions Table */}
-      {data && data.transactions.length > 0 ? (
-        <Card>
-          <Table
-            columns={columns}
-            dataSource={data.transactions.map((t) => ({
-              ...t,
-              key: t.id,
-            }))}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `Total ${total} transaksi`,
-            }}
-            scroll={{ x: 768 }}
+      {/* TOP PRODUCTS SECTION */}
+      {data && data.topProducts.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4 ml-1">
+            <BarChartOutlined className="text-orange-500" />
+            <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] uppercase">BREAKDOWN PRODUK TERLARIS (TOP 10)</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <TopProductsTable products={data.topProducts} />
+          </div>
+        </div>
+      )}
+
+      {/* DATA SECTION */}
+      <div>
+        <div className="flex items-center gap-2 mb-4 ml-1">
+          <ShoppingCartOutlined className="text-blue-500" />
+          <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] uppercase">DAFTAR TRANSAKSI</div>
+        </div>
+
+        {/* Desktop View */}
+        <div className="hidden md:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <DesktopSalesTable
+            transactions={data?.transactions || []}
+            totalRevenue={data?.totalRevenue || 0}
           />
-        </Card>
-      ) : (
-        <Empty description="Tidak ada data transaksi untuk periode ini" />
+        </div>
+
+        {/* Mobile View */}
+        <div className="md:hidden">
+          <MobileSalesList
+            transactions={data?.transactions || []}
+            totalRevenue={data?.totalRevenue || 0}
+          />
+        </div>
+      </div>
+
+      {data && data.transactions.length === 0 && !isLoading && (
+        <div className="bg-white py-16 rounded-xl border border-gray-100 shadow-sm text-center">
+          <p className="text-gray-400 italic">Tidak ada data transaksi untuk filter ini</p>
+        </div>
       )}
     </div>
   );

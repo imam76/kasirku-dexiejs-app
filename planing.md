@@ -80,3 +80,48 @@ Halaman laporan baru untuk memantau semua pengeluaran (EXPENSE) dari tabel `fina
 
 ---
 *Status: Perencanaan Laporan Pengeluaran Selesai. Siap untuk implementasi.*
+
+# Rencana Implementasi: Peningkatan Halaman Laporan Penjualan (SalesReport Enhancement)
+
+Tujuan: Menambahkan breakdown produk terlaris, filter yang lebih lengkap (metode pembayaran & kategori produk), serta detail item pada export CSV.
+
+## 1. Persiapan Data & Hook (useSalesReport)
+- [ ] **Update `src/hooks/useReports.tsx`**:
+    - Tambahkan parameter `paymentMethod` (string) dan `categories` (string[]) pada hook `useSalesReport`.
+    - Modifikasi logika query transaksi: filter berdasarkan `payment_method` jika dipilih.
+    - Implementasi agregasi `topProducts`:
+        - Ambil semua `transactionItems` dalam periode yang dipilih.
+        - Fetch data produk dari DB untuk mendapatkan `category` tiap produk.
+        - Kelompokkan item berdasarkan `product_id`.
+        - Hitung: Total Terjual (agregasi quantity per unit), Total Pendapatan, Total Keuntungan.
+        - Hitung Margin: `(Total Keuntungan / Total Pendapatan) * 100`.
+        - Filter hasil agregasi berdasarkan `categories` jika dipilih.
+        - Urutkan berdasarkan total pendapatan descending dan ambil Top 10.
+    - Pastikan summary statistics (`totalRevenue`, `totalProfit`, dll) ikut terpengaruh oleh filter `paymentMethod`.
+- [ ] **Tambah Hook `useProductCategories`**:
+    - Ambil daftar kategori unik dari tabel `products`.
+
+## 2. UI Laporan Penjualan (SalesReport.tsx)
+- [ ] **Tambah State Filter Baru**:
+    - `selectedPaymentMethod`: 'TUNAI' | 'NON_TUNAI' | undefined.
+    - `selectedCategories`: string[].
+- [ ] **UI Filter Section**:
+    - Tambahkan Dropdown untuk "Metode Pembayaran".
+    - Tambahkan Multi-select Dropdown untuk "Kategori Produk" (opsi diambil dinamis dari `useProductCategories`).
+    - Update tombol "Reset" agar mengosongkan semua filter (tanggal, metode, kategori).
+- [ ] **Section Breakdown Produk Terlaris**:
+    - Buat komponen tabel "Produk Terlaris" di bawah Summary Statistics.
+    - Kolom: Nama Produk, Kategori, Total Terjual (misal: "2.500 gram"), Total Pendapatan, Total Keuntungan, Margin (%).
+- [ ] **Responsivitas**:
+    - Pastikan layout filter dan tabel rapi di mobile, tablet, dan desktop (Mobile first).
+
+## 3. Peningkatan Fitur Export CSV
+- [ ] **Update `handleDownload` di `SalesReport.tsx`**:
+    - Tambahkan Section 1: Ringkasan Transaksi (sudah ada).
+    - Tambahkan Section 2: Detail Item Per Transaksi.
+        - Kolom: No. Transaksi, Tanggal, Nama Produk, Kategori, Jumlah, Satuan, Harga Satuan, Subtotal, HPP (Purchase Price), Profit.
+    - Format: Pisahkan kedua section dengan baris kosong dan header section.
+    - Nama file: `laporan-penjualan-[tanggal].csv`.
+
+---
+*Status: Perencanaan SalesReport Enhancement Selesai. Siap untuk implementasi.*
