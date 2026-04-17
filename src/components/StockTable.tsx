@@ -1,5 +1,6 @@
 import type { Product } from '@/types';
 import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
+import { getPrice } from '@/utils/pricing';
 import { Edit2, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -134,9 +135,6 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                     )}
                   </div>
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Margin
-                </th>
                 <th
                   onClick={() => handleSort('stock')}
                   className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
@@ -169,22 +167,19 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                       {product.name}
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      Rp {formatCurrency(product.purchase_price)}
+                      Rp {formatCurrency(product.purchase_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      Rp {formatCurrency(product.selling_price)}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`px-2 py-1 rounded font-semibold ${margin > 0
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                        }`}>
-                        Rp {formatCurrency(margin)} ({marginPercent}%)
-                      </span>
+                      Rp {formatCurrency(product.selling_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
+                      {product.selling_unit !== product.purchase_unit && (
+                        <div className="text-[10px] text-gray-400">
+                          (≈ Rp {formatCurrency(getPrice(product, 1))} / {product.selling_unit})
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <span className={`px-2 py-1 rounded ${getStockStatusClass(product.stock)}`}>
-                        {product.stock}
+                        {product.stock} {product.purchase_unit}
                       </span>
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">

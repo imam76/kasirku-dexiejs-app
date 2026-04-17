@@ -4,12 +4,18 @@ export interface WholesalePrice {
   price_type?: 'unit' | 'bundle'; // 'unit' = price per item, 'bundle' = price for min_quantity items
 }
 
+export type ProductUnit = 'gram' | 'kg' | 'ons' | 'pcs' | 'ikat' | 'bundle' | 'unit';
+export type ProductCategory = 'bumbu' | 'sembako' | 'lainnya' | string;
+
 export interface Product {
   id: string;
   name: string;
-  purchase_price: number;
-  selling_price: number;
-  stock: number;
+  category?: ProductCategory;
+  purchase_unit: ProductUnit;
+  selling_unit: ProductUnit;
+  purchase_price: number; // Harga per purchase_unit
+  selling_price: number;  // Harga per selling_unit (bisa disimpan per kg tapi nanti dikonversi)
+  stock: number;          // Stok selalu disimpan dalam base unit (biasanya purchase_unit)
   sku: string;
   wholesale_prices?: WholesalePrice[];
   created_at: string;
@@ -33,6 +39,7 @@ export interface TransactionItem {
   price: number;
   purchase_price: number;
   quantity: number;
+  unit: ProductUnit; // Satuan yang digunakan (misal: gram)
   subtotal: number;
   profit: number;
   created_at: string;
@@ -53,6 +60,7 @@ export interface StockPurchase {
 export interface CartItem {
   product: Product;
   quantity: number;
+  unit: ProductUnit; // Satuan yang dipilih (default product.selling_unit)
 }
 
 export interface ShoppingNoteItem {

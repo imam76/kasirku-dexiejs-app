@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Product, CartItem } from '@/types';
+import { konversiSatuan } from '@/utils/pricing';
 
 interface TransactionState {
   products: Product[];
@@ -39,7 +40,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   addToCart: (product) => {
     const { cart } = get();
-    if (product.stock < 1) {
+    // Untuk produk curah (gram/ons), stok mungkin kecil tapi bisa dijual. 
+    // Kita cek stok dalam base unit.
+    if (product.stock <= 0) {
       return { 
         success: false, 
         error: { 
@@ -52,7 +55,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const existingItem = cart.find((item) => item.product.id === product.id);
 
     if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
+      // Untuk produk dengan satuan, tambah 1 unit default.
+      // Nanti di UI bisa diubah jumlahnya (misal gram).
+      const increment = 1; 
+      if (existingItem.quantity + increment > product.stock) {
         return { 
           success: false, 
           error: { 
@@ -64,12 +70,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({
         cart: cart.map((item) =>
           item.product.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: item.quantity + increment }
             : item
         )
       });
     } else {
-      set({ cart: [...cart, { product, quantity: 1 }] });
+      set({ 
+        cart: [...cart, { 
+          product, 
+          quantity: 1, 
+          unit: product.selling_unit || 'pcs' 
+        }] 
+      });
     }
     return { success: true };
   },
@@ -79,12 +91,15 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const item = cart.find((i) => i.product.id === productId);
     if (!item) return { success: false };
 
-    if (newQuantity > item.product.stock) {
+    // Konversi quantity dari unit jual ke unit stok (base unit)
+    const quantityInStokUnit = konversiSatuan(newQuantity, item.unit, item.product.purchase_unit);
+
+    if (quantityInStokUnit > item.product.stock) {
       return { 
         success: false, 
-        error: { 
+        error: {
           title: 'Stok Tidak Mencukupi', 
-          message: `Stok hanya tersedia ${item.product.stock} unit.` 
+          message: `Stok hanya tersedia ${item.product.stock} ${item.product.purchase_unit}.` 
         } 
       };
     }

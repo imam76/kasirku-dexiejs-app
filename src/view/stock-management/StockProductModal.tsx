@@ -1,5 +1,5 @@
 import { Form, Modal, Input, InputNumber, Grid, Button, Select } from 'antd';
-import { Controller, type Control, type FieldErrors, useFieldArray, type UseFormSetValue } from 'react-hook-form';
+import { Controller, type Control, type FieldErrors, useFieldArray, type UseFormSetValue, useWatch } from 'react-hook-form';
 import { Trash2, Plus, ScanLine, X } from 'lucide-react';
 import type { StockFormData } from '@/hooks/useStockManagement';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,6 +22,9 @@ export default function StockProductModal({ open, editingId, control, errors, se
     control,
     name: 'wholesale_prices',
   });
+
+  const purchaseUnit = useWatch({ control, name: 'purchase_unit' }) || 'pcs';
+  const sellingUnit = useWatch({ control, name: 'selling_unit' }) || 'pcs';
 
   // Scanner logic
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -154,6 +157,52 @@ export default function StockProductModal({ open, editingId, control, errors, se
               />
             </Form.Item>
 
+            <Form.Item label="Kategori" validateStatus={errors.category ? 'error' : ''}>
+              <Controller
+                name="category"
+                control={control}
+                render={({ field }) => (
+                  <Select {...field} className="w-full">
+                    <Select.Option value="bumbu">Bumbu Dapur</Select.Option>
+                    <Select.Option value="sembako">Sembako</Select.Option>
+                    <Select.Option value="lainnya">Lain-lain</Select.Option>
+                  </Select>
+                )}
+              />
+            </Form.Item>
+
+            <Form.Item label="Satuan Beli" validateStatus={errors.purchase_unit ? 'error' : ''}>
+              <Controller
+                name="purchase_unit"
+                control={control}
+                render={({ field }) => (
+                  <Select {...field} className="w-full">
+                    <Select.Option value="kg">Kilogram (kg)</Select.Option>
+                    <Select.Option value="pcs">Pcs</Select.Option>
+                    <Select.Option value="ikat">Ikat</Select.Option>
+                    <Select.Option value="bundle">Bundle</Select.Option>
+                  </Select>
+                )}
+              />
+            </Form.Item>
+
+            <Form.Item label="Satuan Jual" validateStatus={errors.selling_unit ? 'error' : ''}>
+              <Controller
+                name="selling_unit"
+                control={control}
+                render={({ field }) => (
+                  <Select {...field} className="w-full">
+                    <Select.Option value="gram">Gram</Select.Option>
+                    <Select.Option value="ons">Ons (100g)</Select.Option>
+                    <Select.Option value="kg">Kilogram (kg)</Select.Option>
+                    <Select.Option value="pcs">Pcs</Select.Option>
+                    <Select.Option value="ikat">Ikat</Select.Option>
+                    <Select.Option value="bundle">Bundle</Select.Option>
+                  </Select>
+                )}
+              />
+            </Form.Item>
+
             <Form.Item label="SKU" validateStatus={errors.sku ? 'error' : ''} help={errors.sku?.message}>
               <div className="flex gap-2">
                 <Controller
@@ -167,7 +216,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
             </Form.Item>
 
             <Form.Item
-              label="Harga Beli"
+              label={`Harga Beli (per ${purchaseUnit})`}
               validateStatus={errors.purchase_price ? 'error' : ''}
               help={errors.purchase_price?.message}
             >
@@ -182,7 +231,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                   <InputNumber
                     {...field}
                     className="w-full"
-                    placeholder="Masukkan harga beli"
+                    placeholder={`Masukkan harga beli per ${purchaseUnit}`}
                     step={0.01}
                     min={0}
                   />
@@ -191,7 +240,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
             </Form.Item>
 
             <Form.Item
-              label="Harga Jual"
+              label={`Harga Jual (per ${purchaseUnit})`}
               validateStatus={errors.selling_price ? 'error' : ''}
               help={errors.selling_price?.message}
             >
@@ -206,7 +255,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                   <InputNumber
                     {...field}
                     className="w-full"
-                    placeholder="Masukkan harga jual"
+                    placeholder={`Masukkan harga jual per ${purchaseUnit}`}
                     step={0.01}
                     min={0}
                   />
@@ -265,7 +314,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 <div key={field.id} className="flex gap-2 items-start bg-gray-50 p-3 rounded-lg border border-gray-200">
                   <div className="flex-1 grid grid-cols-12 gap-2">
                     <Form.Item
-                      label="Min. Qty"
+                      label={`Min. Qty (${sellingUnit})`}
                       className="mb-0 col-span-3"
                       validateStatus={errors.wholesale_prices?.[index]?.min_quantity ? 'error' : ''}
                       help={errors.wholesale_prices?.[index]?.min_quantity?.message}
@@ -292,13 +341,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
                       <Controller
                         name={`wholesale_prices.${index}.price_type`}
                         control={control}
-                        defaultValue="unit"
                         render={({ field }) => (
                           <Select
                             {...field}
                             className="w-full"
                             options={[
-                              { value: 'unit', label: 'Per Pcs' },
+                              { value: 'unit', label: `Per ${purchaseUnit}` },
                               { value: 'bundle', label: 'Paket' },
                             ]}
                           />

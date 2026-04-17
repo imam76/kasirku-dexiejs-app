@@ -3,11 +3,14 @@ import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
-import { Product, StockPurchase, WholesalePrice } from '@/types';
+import { Product, ProductUnit, StockPurchase, WholesalePrice, ProductCategory } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 
 export interface StockFormData {
   name: string;
+  category: ProductCategory;
+  purchase_unit: ProductUnit;
+  selling_unit: ProductUnit;
   purchase_price: number | undefined;
   selling_price: number | undefined;
   stock: number | undefined;
@@ -30,6 +33,9 @@ export const useStockManagement = () => {
   } = useForm<StockFormData>({
     defaultValues: {
       name: '',
+      category: 'lainnya',
+      purchase_unit: 'pcs',
+      selling_unit: 'pcs',
       purchase_price: undefined,
       selling_price: undefined,
       stock: undefined,
@@ -53,11 +59,13 @@ export const useStockManagement = () => {
       const purchase_quantity = productData.purchase_quantity || 0;
       const now = new Date().toISOString();
 
-      const cleanData = {
+      const cleanData: any = {
         name: productData.name,
+        category: productData.category || 'lainnya',
+        purchase_unit: productData.purchase_unit || 'pcs',
+        selling_unit: productData.selling_unit || 'pcs',
         purchase_price: productData.purchase_price ?? 0,
         selling_price: productData.selling_price ?? 0,
-        stock: productData.stock ?? 0,
         sku: productData.sku,
         wholesale_prices: (productData.wholesale_prices || []).map((p) => ({
           min_quantity: Number(p.min_quantity),
@@ -65,6 +73,11 @@ export const useStockManagement = () => {
           price_type: p.price_type || 'unit',
         })),
       };
+
+      // Only include stock if it's explicitly provided
+      if (productData.stock !== undefined) {
+        cleanData.stock = productData.stock;
+      }
 
       await db.transaction('rw', db.products, db.stockPurchases, async () => {
         if (editingId) {
@@ -95,6 +108,7 @@ export const useStockManagement = () => {
           const newProduct: Product = {
             id: newId,
             ...cleanData,
+            stock: cleanData.stock ?? 0, // Ensure stock is set for new product
             created_at: now,
             updated_at: now,
           };
@@ -144,6 +158,9 @@ export const useStockManagement = () => {
         for (const item of items) {
           const cleanData = {
             name: item.name,
+            category: 'lainnya',
+            purchase_unit: 'pcs' as ProductUnit,
+            selling_unit: 'pcs' as ProductUnit,
             purchase_price: item.purchase_price ?? 0,
             selling_price: item.selling_price ?? 0,
             stock: item.stock ?? 0,
@@ -212,6 +229,9 @@ export const useStockManagement = () => {
   const onSubmit = async (data: StockFormData) => {
     await upsertMutation.mutateAsync({
       name: data.name,
+      category: data.category,
+      purchase_unit: data.purchase_unit,
+      selling_unit: data.selling_unit,
       purchase_price: data.purchase_price ?? 0,
       selling_price: data.selling_price ?? 0,
       stock: data.stock ?? 0,
@@ -224,6 +244,9 @@ export const useStockManagement = () => {
   const handleEdit = (product: Product) => {
     setEditingId(product.id);
     setValue('name', product.name);
+    setValue('category', product.category || 'lainnya');
+    setValue('purchase_unit', product.purchase_unit);
+    setValue('selling_unit', product.selling_unit);
     setValue('purchase_price', product.purchase_price);
     setValue('selling_price', product.selling_price);
     setValue('stock', product.stock);
