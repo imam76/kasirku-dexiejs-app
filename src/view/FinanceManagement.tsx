@@ -436,7 +436,7 @@ export default function FinanceManagement() {
                   </>
                 ) : (
                   <>
-                    <Option value="HPP">HPP (Modal Barang)</Option>
+                    <Option value="PEMBELIAN_STOK">Pembelian Stok (Modal Barang)</Option>
                     <Option value="OPERASIONAL">Operasional (Listrik, Sewa, dll)</Option>
                     <Option value="GAJI">Gaji Karyawan</Option>
                     <Option value="PERLENGKAPAN">Perlengkapan Toko</Option>

@@ -79,7 +79,7 @@ export const useStockManagement = () => {
         cleanData.stock = productData.stock;
       }
 
-      await db.transaction('rw', db.products, db.stockPurchases, async () => {
+      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
         if (editingId) {
           // Update product
           await db.products.update(editingId, {
@@ -89,18 +89,38 @@ export const useStockManagement = () => {
 
           // Record purchase if stock was added
           if (purchase_quantity > 0) {
+            const totalCost = cleanData.purchase_price * purchase_quantity;
+            const purchaseId = crypto.randomUUID();
             const purchase: StockPurchase = {
-              id: crypto.randomUUID(),
+              id: purchaseId,
               product_id: editingId,
               product_name: cleanData.name,
               sku: cleanData.sku,
               quantity: purchase_quantity,
               cost_per_unit: cleanData.purchase_price,
-              total_cost: cleanData.purchase_price * purchase_quantity,
+              total_cost: totalCost,
               created_at: now,
               updated_at: now,
             };
             await db.stockPurchases.add(purchase);
+
+            // Update Finance
+            const currentFinanceBalance = await db.financeBalance.get('current');
+            await db.financeBalance.put({
+              id: 'current',
+              amount: (currentFinanceBalance?.amount || 0) - totalCost,
+              updated_at: now,
+            });
+
+            await db.financeTransactions.add({
+              id: crypto.randomUUID(),
+              type: 'EXPENSE',
+              category: 'PEMBELIAN_STOK',
+              amount: totalCost,
+              description: `Beli Stok: ${cleanData.name} (${purchase_quantity} pcs)`,
+              created_at: now,
+              reference_id: purchaseId,
+            });
           }
         } else {
           // Create new product
@@ -117,18 +137,38 @@ export const useStockManagement = () => {
 
           // Record initial purchase if stock was added
           if (purchase_quantity > 0) {
+            const totalCost = cleanData.purchase_price * purchase_quantity;
+            const purchaseId = crypto.randomUUID();
             const purchase: StockPurchase = {
-              id: crypto.randomUUID(),
+              id: purchaseId,
               product_id: newId,
               product_name: cleanData.name,
               sku: cleanData.sku,
               quantity: purchase_quantity,
               cost_per_unit: cleanData.purchase_price,
-              total_cost: cleanData.purchase_price * purchase_quantity,
+              total_cost: totalCost,
               created_at: now,
               updated_at: now,
             };
             await db.stockPurchases.add(purchase);
+
+            // Update Finance
+            const currentFinanceBalance = await db.financeBalance.get('current');
+            await db.financeBalance.put({
+              id: 'current',
+              amount: (currentFinanceBalance?.amount || 0) - totalCost,
+              updated_at: now,
+            });
+
+            await db.financeTransactions.add({
+              id: crypto.randomUUID(),
+              type: 'EXPENSE',
+              category: 'PEMBELIAN_STOK',
+              amount: totalCost,
+              description: `Beli Stok Awal: ${cleanData.name} (${purchase_quantity} pcs)`,
+              created_at: now,
+              reference_id: purchaseId,
+            });
           }
         }
       });
@@ -154,7 +194,7 @@ export const useStockManagement = () => {
     mutationFn: async (items: ProductCsvImportItem[]) => {
       const now = new Date().toISOString();
 
-      await db.transaction('rw', db.products, db.stockPurchases, async () => {
+      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
         for (const item of items) {
           const cleanData = {
             name: item.name,
@@ -177,18 +217,38 @@ export const useStockManagement = () => {
             });
 
             if (purchase_quantity > 0) {
+              const totalCost = cleanData.purchase_price * purchase_quantity;
+              const purchaseId = crypto.randomUUID();
               const purchase: StockPurchase = {
-                id: crypto.randomUUID(),
+                id: purchaseId,
                 product_id: existing.id,
                 product_name: cleanData.name,
                 sku: cleanData.sku,
                 quantity: purchase_quantity,
                 cost_per_unit: cleanData.purchase_price,
-                total_cost: cleanData.purchase_price * purchase_quantity,
+                total_cost: totalCost,
                 created_at: now,
                 updated_at: now,
               };
               await db.stockPurchases.add(purchase);
+
+              // Update Finance
+              const currentFinanceBalance = await db.financeBalance.get('current');
+              await db.financeBalance.put({
+                id: 'current',
+                amount: (currentFinanceBalance?.amount || 0) - totalCost,
+                updated_at: now,
+              });
+
+              await db.financeTransactions.add({
+                id: crypto.randomUUID(),
+                type: 'EXPENSE',
+                category: 'PEMBELIAN_STOK',
+                amount: totalCost,
+                description: `Beli Stok (Import): ${cleanData.name} (${purchase_quantity} pcs)`,
+                created_at: now,
+                reference_id: purchaseId,
+              });
             }
           } else {
             const newId = item.id && item.id.length > 0 ? item.id : crypto.randomUUID();
@@ -202,18 +262,38 @@ export const useStockManagement = () => {
             await db.products.add(newProduct);
 
             if (purchase_quantity > 0) {
+              const totalCost = cleanData.purchase_price * purchase_quantity;
+              const purchaseId = crypto.randomUUID();
               const purchase: StockPurchase = {
-                id: crypto.randomUUID(),
+                id: purchaseId,
                 product_id: newId,
                 product_name: cleanData.name,
                 sku: cleanData.sku,
                 quantity: purchase_quantity,
                 cost_per_unit: cleanData.purchase_price,
-                total_cost: cleanData.purchase_price * purchase_quantity,
+                total_cost: totalCost,
                 created_at: now,
                 updated_at: now,
               };
               await db.stockPurchases.add(purchase);
+
+              // Update Finance
+              const currentFinanceBalance = await db.financeBalance.get('current');
+              await db.financeBalance.put({
+                id: 'current',
+                amount: (currentFinanceBalance?.amount || 0) - totalCost,
+                updated_at: now,
+              });
+
+              await db.financeTransactions.add({
+                id: crypto.randomUUID(),
+                type: 'EXPENSE',
+                category: 'PEMBELIAN_STOK',
+                amount: totalCost,
+                description: `Beli Stok Awal (Import): ${cleanData.name} (${purchase_quantity} pcs)`,
+                created_at: now,
+                reference_id: purchaseId,
+              });
             }
           }
         }

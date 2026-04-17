@@ -52,10 +52,8 @@ export const useFinance = () => {
         }
       } else if (type === 'EXPENSE') {
         newBalance -= amount;
-        // Pengeluaran manual (selain HPP yang ditangani useTransaction) juga mengurangi profit
-        if (category !== 'HPP_OTOMATIS') {
-          newProfitBalance -= amount;
-        }
+        // Pengeluaran manual juga mengurangi profit
+        newProfitBalance -= amount;
       }
 
       await db.transaction('rw', [db.financeBalance, db.financeTransactions, db.profitBalance, db.profitLogs], async () => {
@@ -77,7 +75,7 @@ export const useFinance = () => {
         // Sync with profit if it's manual finance transaction (and not a withdrawal, which is handled in useProfit)
         if (
           category !== 'PENJUALAN' && 
-          category !== 'HPP_OTOMATIS' && 
+          category !== 'PEMBELIAN_STOK' && 
           category !== 'PENARIKAN_SALDO' &&
           type !== 'OPENING_BALANCE'
         ) {
@@ -116,68 +114,58 @@ export const useFinance = () => {
 
   const recalculateFinanceMutation = useMutation({
     mutationFn: async () => {
-      await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance], async () => {
-        // 1. Get all POS transactions and items to re-sync income and HPP
-        const posTransactions = await db.transactions.toArray();
-        const posItems = await db.transactionItems.toArray();
-        
-        // Group items by transaction_id to calculate HPP per transaction
-        const hppByTransaction = posItems.reduce((acc, item) => {
-          const hpp = (item.purchase_price || 0) * item.quantity;
-          acc[item.transaction_id] = (acc[item.transaction_id] || 0) + hpp;
-          return acc;
-        }, {} as Record<string, number>);
-
-        // 2. Get manual finance transactions (non-sales and non-auto-HPP)
-        const manualTransactions = await db.financeTransactions
+      await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases], async () => {
+        // 1. Delete only auto-generated entries (those with reference_id)
+        const autoCategories = ['PENJUALAN', 'HPP_OTOMATIS', 'PEMBELIAN_STOK'];
+        await db.financeTransactions
           .where('category')
-          .noneOf(['PENJUALAN', 'HPP_OTOMATIS'])
-          .toArray();
+          .anyOf(autoCategories)
+          .filter(t => !!t.reference_id)
+          .delete();
 
-        // 3. Rebuild finance transactions
-        await db.financeTransactions.clear();
+        // 2. Get source data for auto-regeneration
+        const posTransactions = await db.transactions.toArray();
+        const stockPurchases = await db.stockPurchases.toArray();
 
-        // 4. Create entries for Sales and HPP
-        const autoTransactions: FinanceTransaction[] = [];
+        // 3. Create new auto-generated entries
+        const newAutoTransactions: FinanceTransaction[] = [];
         
+        // Sales entries
         for (const t of posTransactions) {
-          const now = t.created_at;
-          
-          // Add Sales Income
-          autoTransactions.push({
+          newAutoTransactions.push({
             id: crypto.randomUUID(),
             type: 'INCOME',
             category: 'PENJUALAN',
             amount: t.total_amount,
             description: `Penjualan dari transaksi ${t.transaction_number}`,
-            created_at: now,
+            created_at: t.created_at,
             reference_id: t.id,
           });
-
-          // Add HPP Expense
-          const hppAmount = hppByTransaction[t.id] || 0;
-          if (hppAmount > 0) {
-            autoTransactions.push({
-              id: crypto.randomUUID(),
-              type: 'EXPENSE',
-              category: 'HPP_OTOMATIS',
-              amount: hppAmount,
-              description: `HPP dari transaksi ${t.transaction_number}`,
-              created_at: now,
-              reference_id: t.id,
-            });
-          }
         }
 
-        // 5. Combine and sort
-        const newFinanceTransactions: FinanceTransaction[] = [
-          ...autoTransactions,
-          ...manualTransactions
-        ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        // Stock Purchase entries
+        for (const sp of stockPurchases) {
+          newAutoTransactions.push({
+            id: crypto.randomUUID(),
+            type: 'EXPENSE',
+            category: 'PEMBELIAN_STOK',
+            amount: sp.total_cost,
+            description: `Beli Stok: ${sp.product_name} (${sp.quantity} pcs)`,
+            created_at: sp.created_at,
+            reference_id: sp.id,
+          });
+        }
 
-        // 6. Calculate balance
+        // 4. Save new auto-generated entries
+        if (newAutoTransactions.length > 0) {
+          await db.financeTransactions.bulkAdd(newAutoTransactions);
+        }
+
+        // 5. Calculate final balance from ALL transactions (manual + new auto)
+        const allTransactions = await db.financeTransactions.toArray();
         let runningBalance = 0;
-        for (const ft of newFinanceTransactions) {
+        
+        for (const ft of allTransactions) {
           if (ft.type === 'INCOME' || ft.type === 'OPENING_BALANCE') {
             runningBalance += ft.amount;
           } else if (ft.type === 'EXPENSE') {
@@ -185,10 +173,7 @@ export const useFinance = () => {
           }
         }
 
-        // 7. Save
-        if (newFinanceTransactions.length > 0) {
-          await db.financeTransactions.bulkAdd(newFinanceTransactions);
-        }
+        // 6. Update final balance
         await db.financeBalance.put({
           id: 'current',
           amount: runningBalance,

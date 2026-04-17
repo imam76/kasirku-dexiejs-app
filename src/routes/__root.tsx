@@ -3,7 +3,7 @@ import { NotFound } from '@/components/NotFound'
 import { useTheme } from '@/hooks/useTheme'
 import { createRootRoute, Link, Outlet, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { Layout } from 'antd'
+import { Layout, Menu } from 'antd'
 import {
   Banknote,
   Box,
@@ -11,6 +11,7 @@ import {
   DollarSign,
   FileSpreadsheet,
   FileText,
+  FileDown,
   History,
   Home,
   Moon,
@@ -23,14 +24,17 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { db } from '@/lib/db'
 import { setConversionRegistry } from '@/utils/pricing'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from '@tanstack/react-router'
 
-const { Content } = Layout
+const { Content, Sider } = Layout
 
 const RootLayout = () => {
   const router = useRouter()
   const navigate = useNavigate()
+  const location = useLocation()
   const { isDark, toggle } = useTheme()
+  const [collapsed, setCollapsed] = useState(false)
 
   // Load unit conversions globally
   const { data: conversions } = useQuery({
@@ -65,70 +69,99 @@ const RootLayout = () => {
     { to: '/history', label: 'Riwayat', icon: History },
     { to: '/sales-report', label: 'Laporan Penjualan', icon: FileText },
     { to: '/purchase-report', label: 'Laporan Pembelian', icon: FileSpreadsheet },
+    { to: '/expense-report', label: 'Laporan Pengeluaran', icon: FileDown },
     { to: '/finance', label: 'Keuangan', icon: Banknote },
     { to: '/profit', label: 'Keuntungan', icon: DollarSign },
     { to: '/units', label: 'Satuan & Konversi', icon: Scale },
     { to: '/settings', label: 'Pengaturan', icon: Settings },
   ]
 
+  const menuItems = navLinks.map((link) => ({
+    key: link.to,
+    icon: <link.icon size={16} />,
+    label: <Link to={link.to}>{link.label}</Link>,
+  }))
+
+  // Determine active menu key from current path
+  const selectedKey = navLinks
+    .slice()
+    .reverse()
+    .find((link) => location.pathname.startsWith(link.to === '/' ? '/' : link.to))?.to ?? '/'
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      {/* Navbar (Top Bar) - Always visible for Logo & Theme Toggle */}
+      {/* Top Navbar - Logo & Theme Toggle */}
       <nav className="fixed top-0 z-40 w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm h-16 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
-          <div className="flex justify-between items-center h-full">
-            {/* Logo */}
-            <div className="flex-shrink-0 flex items-center gap-6">
-              <div onClick={handleLogoClick} className="text-xl font-bold text-blue-600 dark:text-blue-400 cursor-pointer">
-                Kasirku
-              </div>
+        <div className="h-full px-4 flex justify-between items-center">
+          {/* Logo */}
+          <div
+            onClick={handleLogoClick}
+            className="text-xl font-bold text-blue-600 dark:text-blue-400 cursor-pointer"
+          >
+            Kasirku
+          </div>
 
-              {/* Desktop Menu - Scrollable */}
-              <div className="hidden xl:flex xl:items-center xl:space-x-1 overflow-x-auto no-scrollbar mask-linear-fade">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.to}
-                    to={link.to}
-                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap flex-shrink-0"
-                    activeProps={{
-                      className: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-gray-700'
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <link.icon size={16} />
-                      <span>{link.label}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            {/* Theme Toggle */}
-            <div className="flex items-center">
-              <button
-                onClick={toggle}
-                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
-                aria-label="Toggle theme"
-              >
-                {isDark ? <Moon size={20} /> : <Sun size={20} />}
-              </button>
-              <button
-                onClick={() => navigate({ to: '/settings' })}
-                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
-              >
-                <SettingsIcon size={20} />
-              </button>
-            </div>
+          {/* Theme Toggle & Settings */}
+          <div className="flex items-center">
+            <button
+              onClick={toggle}
+              className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+              aria-label="Toggle theme"
+            >
+              {isDark ? <Moon size={20} /> : <Sun size={20} />}
+            </button>
+            <button
+              onClick={() => navigate({ to: '/settings' })}
+              className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+            >
+              <SettingsIcon size={20} />
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* Main Content */}
-      <Content className="pt-16 pb-4 w-full max-w-full min-h-screen transition-all duration-200">
-        <div className="p-4">
-          <Outlet />
-        </div>
-      </Content>
+      {/* Body: Sider + Content */}
+      <Layout style={{ marginTop: 64 }}>
+        {/* Side Navigation */}
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          theme={isDark ? 'dark' : 'light'}
+          style={{
+            position: 'fixed',
+            left: 0,
+            top: 64,
+            bottom: 0,
+            overflow: 'auto',
+            zIndex: 30,
+          }}
+          breakpoint="lg"
+          collapsedWidth={0}
+        >
+          <Menu
+            mode="inline"
+            selectedKeys={[selectedKey]}
+            items={menuItems}
+            theme={isDark ? 'dark' : 'light'}
+            style={{ height: '100%', borderRight: 0 }}
+          />
+        </Sider>
+
+        {/* Main Content */}
+        <Layout
+          style={{
+            marginLeft: collapsed ? 0 : 200,
+            transition: 'margin-left 0.2s',
+          }}
+        >
+          <Content className="min-h-screen transition-all duration-200">
+            <div className="p-4">
+              <Outlet />
+            </div>
+          </Content>
+        </Layout>
+      </Layout>
 
       <TanStackRouterDevtools />
     </Layout>

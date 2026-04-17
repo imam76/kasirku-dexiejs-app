@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import { Transaction, StockPurchase } from '@/types';
+import { Transaction, StockPurchase, FinanceTransaction } from '@/types';
 
 interface SalesReportData {
   transactions: Transaction[];
@@ -17,6 +17,12 @@ interface PurchaseReportData {
   totalQuantity: number;
   uniqueProducts: number;
   averageCostPerUnit: number;
+}
+
+interface ExpenseReportData {
+  transactions: FinanceTransaction[];
+  totalExpense: number;
+  breakdown: Record<string, number>;
 }
 
 export const useSalesReport = (startDate?: string, endDate?: string) => {
@@ -118,6 +124,70 @@ export const usePurchaseReport = (startDate?: string, endDate?: string) => {
         uniqueProducts,
         averageCostPerUnit,
       };
+    },
+  });
+};
+
+export const useExpenseReport = (startDate?: string, endDate?: string, categories?: string[]) => {
+  return useQuery({
+    queryKey: ['expenseReport', startDate, endDate, categories],
+    queryFn: async (): Promise<ExpenseReportData> => {
+      let collection = db.financeTransactions.where('type').equals('EXPENSE').reverse();
+
+      if (startDate && endDate) {
+        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
+        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
+        collection = db.financeTransactions
+          .where('created_at')
+          .between(startISO, endISO, true, true)
+          .filter((t) => t.type === 'EXPENSE')
+          .reverse();
+      } else if (startDate) {
+        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
+        collection = db.financeTransactions
+          .where('created_at')
+          .aboveOrEqual(startISO)
+          .filter((t) => t.type === 'EXPENSE')
+          .reverse();
+      } else if (endDate) {
+        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
+        collection = db.financeTransactions
+          .where('created_at')
+          .belowOrEqual(endISO)
+          .filter((t) => t.type === 'EXPENSE')
+          .reverse();
+      }
+
+      let transactions = await collection.toArray();
+
+      // Filter by category if provided
+      if (categories && categories.length > 0) {
+        transactions = transactions.filter((t) => categories.includes(t.category));
+      }
+
+      const totalExpense = transactions.reduce((sum, t) => sum + t.amount, 0);
+
+      const breakdown = transactions.reduce((acc, t) => {
+        acc[t.category] = (acc[t.category] || 0) + t.amount;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return {
+        transactions,
+        totalExpense,
+        breakdown,
+      };
+    },
+  });
+};
+
+export const useExpenseCategories = () => {
+  return useQuery({
+    queryKey: ['expenseCategories'],
+    queryFn: async () => {
+      const transactions = await db.financeTransactions.where('type').equals('EXPENSE').toArray();
+      const categories = [...new Set(transactions.map((t) => t.category))];
+      return categories.sort();
     },
   });
 };

@@ -147,8 +147,7 @@ export const useTransaction = () => {
 
         // Update Finance System (Finance Bridge)
         const currentFinanceBalance = await db.financeBalance.get('current');
-        const totalHpp = transactionItems.reduce((sum, item) => sum + (item.purchase_price * item.quantity), 0);
-        const newFinanceBalance = (currentFinanceBalance?.amount || 0) + total - totalHpp;
+        const newFinanceBalance = (currentFinanceBalance?.amount || 0) + total;
 
         await db.financeBalance.put({
           id: 'current',
@@ -156,26 +155,15 @@ export const useTransaction = () => {
           updated_at: now,
         });
 
-        await db.financeTransactions.bulkAdd([
-          {
-            id: crypto.randomUUID(),
-            type: 'INCOME',
-            category: 'PENJUALAN',
-            amount: total,
-            description: `Penjualan dari transaksi ${transactionNumber}`,
-            created_at: now,
-            reference_id: transactionId,
-          },
-          {
-            id: crypto.randomUUID(),
-            type: 'EXPENSE',
-            category: 'HPP_OTOMATIS',
-            amount: totalHpp,
-            description: `HPP dari transaksi ${transactionNumber}`,
-            created_at: now,
-            reference_id: transactionId,
-          }
-        ]);
+        await db.financeTransactions.add({
+          id: crypto.randomUUID(),
+          type: 'INCOME',
+          category: 'PENJUALAN',
+          amount: total,
+          description: `Penjualan dari transaksi ${transactionNumber}`,
+          created_at: now,
+          reference_id: transactionId,
+        });
 
         for (const item of cart) {
           const product = await db.products.get(item.product.id);

@@ -108,10 +108,10 @@ export const useProfit = () => {
         const transactions = await db.transactions.orderBy('created_at').toArray();
         const items = await db.transactionItems.toArray();
 
-        // 4. Get manual finance transactions (non-sales, non-auto-HPP, non-withdrawals, and non-opening-balance)
+        // 4. Get manual finance transactions (non-sales, non-withdrawals, non-stock-purchases, and non-opening-balance)
         const manualFinanceTransactions = await db.financeTransactions
           .where('category')
-          .noneOf(['PENJUALAN', 'HPP_OTOMATIS', 'PENARIKAN_SALDO'])
+          .noneOf(['PENJUALAN', 'HPP_OTOMATIS', 'PEMBELIAN_STOK', 'PENARIKAN_SALDO']) // HPP_OTOMATIS and PEMBELIAN_STOK excluded
           .and(f => f.type !== 'OPENING_BALANCE')
           .toArray();
 

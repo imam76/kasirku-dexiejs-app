@@ -38,3 +38,45 @@ Sistem konversi satuan akan diubah dari hardcoded menjadi berbasis registry yang
 
 ---
 *Status: Perencanaan Selesai. Siap untuk implementasi.*
+
+# Rencana Implementasi: Laporan Pengeluaran (Expense Report)
+
+Halaman laporan baru untuk memantau semua pengeluaran (EXPENSE) dari tabel `financeTransactions`.
+
+## 1. Persiapan Data & Hook
+- [ ] **Update `src/hooks/useReports.tsx`**:
+    - Tambahkan `useExpenseReport` untuk mengambil data dari `db.financeTransactions`.
+    - Filter berdasarkan `type === 'EXPENSE'`, range tanggal, dan kategori.
+    - Urutkan berdasarkan `created_at` descending.
+    - Ambil daftar kategori unik dari `db.financeTransactions` bertipe `EXPENSE` secara dinamis.
+
+## 2. UI Laporan Pengeluaran
+- [ ] **Buat `src/view/ExpenseReport.tsx`**:
+    - Filter Section:
+        - Multi-select dropdown untuk Kategori (dinamis dari DB).
+        - Date Range Picker dengan shortcuts (Today, Yesterday, This Week, This Month, Last Month, Custom).
+        - Default: Hari ini.
+    - Breakdown Section:
+        - Ringkasan pengeluaran per kategori (misal: Pembelian Stok: Rp X | Operasional: Rp Y).
+    - Table Section:
+        - Kolom: Tanggal & Jam, Keterangan/Deskripsi, Kategori (Badge), Nominal (IDR).
+        - Footer: Total keseluruhan.
+    - Empty State: Tampilkan pesan informatif jika tidak ada data.
+
+## 3. Fitur Export
+- [ ] **Install Dependencies**: `jspdf`, `jspdf-autotable`, `xlsx`.
+- [ ] **Implementasi Export PDF**:
+    - Header: Judul, Periode, Tanggal Cetak.
+    - Tabel: Data transaksi sesuai filter (tanpa elemen UI).
+    - Footer: Total nominal.
+- [ ] **Implementasi Export Excel**:
+    - Header: Judul, Periode, Tanggal Cetak.
+    - Tabel: Data transaksi sesuai filter.
+    - Total di baris terakhir.
+
+## 4. Routing & Navigasi
+- [ ] **Daftarkan Route**: Tambahkan route `expense-report` di `src/routes/expense-report.lazy.tsx`.
+- [ ] **Update Navigation**: Tambahkan menu "Laporan Pengeluaran" di sidebar/menu utama.
+
+---
+*Status: Perencanaan Laporan Pengeluaran Selesai. Siap untuk implementasi.*

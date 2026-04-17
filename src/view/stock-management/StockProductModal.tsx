@@ -1,12 +1,11 @@
-import { Form, Modal, Input, InputNumber, Grid, Button, Select, Alert } from 'antd';
-import { Controller, type Control, type FieldErrors, useFieldArray, type UseFormSetValue, useWatch } from 'react-hook-form';
-import { Trash2, Plus, ScanLine, X, AlertTriangle, ExternalLink } from 'lucide-react';
 import type { StockFormData } from '@/hooks/useStockManagement';
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
-import { getConversionRatio } from '@/utils/pricing';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { Alert, Button, Form, Grid, Input, InputNumber, Modal, Select } from 'antd';
+import { AlertTriangle, ExternalLink, Plus, ScanLine, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type Control, Controller, type FieldErrors, useFieldArray, type UseFormSetValue, useWatch } from 'react-hook-form';
 
 const { useBreakpoint } = Grid;
 
@@ -49,12 +48,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
   // Check if conversion exists between purchase and selling unit
   const hasConversion = useMemo(() => {
     if (purchaseUnit === sellingUnit) return true;
-    const ratio = getConversionRatio(purchaseUnit, sellingUnit);
+    // const ratio = getConversionRatio(purchaseUnit, sellingUnit);
     // If ratio is 1 but units are different, it's likely a fallback (missing conversion)
     // unless someone explicitly set a 1:1 conversion for different units.
     // We check if the conversion exists in the registry.
-    const exists = conversions.some(c => 
-      (c.fromUnit === purchaseUnit && c.toUnit === sellingUnit) || 
+    const exists = conversions.some(c =>
+      (c.fromUnit === purchaseUnit && c.toUnit === sellingUnit) ||
       (c.fromUnit === sellingUnit && c.toUnit === purchaseUnit)
     );
     return exists;
@@ -236,7 +235,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
           {!hasConversion && (
             <Alert
-              message="Konversi Tidak Ditemukan"
+              title="Konversi Tidak Ditemukan"
               description={
                 <div className="flex flex-col gap-2">
                   <p>Aplikasi tidak tahu cara mengonversi dari <strong>{purchaseUnit}</strong> ke <strong>{sellingUnit}</strong>. Harga jual mungkin tidak akurat.</p>
