@@ -30,3 +30,4 @@ keystore.properties
 kasirku-release.jks
 *.tsbuildinfo
 
+.vercel
