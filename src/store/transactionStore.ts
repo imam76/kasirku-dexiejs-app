@@ -21,6 +21,7 @@ interface TransactionState {
   // Logical State Actions (Non-DB)
   addToCart: (product: Product) => { success: boolean; error?: { title: string; message: string } };
   updateQuantity: (productId: string, newQuantity: number) => { success: boolean; error?: { title: string; message: string } };
+  updateUnit: (productId: string, newUnit: string) => { success: boolean; error?: { title: string; message: string } };
   removeFromCart: (productId: string) => void;
   reset: () => void;
 }
@@ -116,6 +117,32 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({
       cart: cart.map((item) =>
         item.product.id === productId ? { ...item, quantity: newQuantity } : item
+      )
+    });
+    return { success: true };
+  },
+
+  updateUnit: (productId, newUnit) => {
+    const { cart } = get();
+    const item = cart.find((i) => i.product.id === productId);
+    if (!item) return { success: false };
+
+    // Validate that the new unit is in the product's sellable units
+    const sellableUnits = item.product.sellable_units || [item.product.selling_unit || 'pcs'];
+    if (!sellableUnits.includes(newUnit)) {
+      return {
+        success: false,
+        error: {
+          title: 'Unit Tidak Valid',
+          message: `Unit "${newUnit}" tidak tersedia untuk produk ini.`
+        }
+      };
+    }
+
+    // Update the unit
+    set({
+      cart: cart.map((cartItem) =>
+        cartItem.product.id === productId ? { ...cartItem, unit: newUnit } : cartItem
       )
     });
     return { success: true };

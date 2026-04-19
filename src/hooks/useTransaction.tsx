@@ -73,6 +73,17 @@ export const useTransaction = () => {
     }
   };
 
+  const updateUnit = (productId: string, newUnit: string) => {
+    const storeUpdateUnit = useTransactionStore.getState().updateUnit;
+    const result = storeUpdateUnit(productId, newUnit);
+    if (!result.success && result.error) {
+      modal.error({
+        title: result.error.title,
+        content: result.error.message,
+      });
+    }
+  };
+
   const handleCheckout = async () => {
     const total = calculateTotal();
     const payment = parseFloat(paymentAmount);
@@ -225,6 +236,7 @@ export const useTransaction = () => {
     filteredProducts,
     addToCart,
     updateQuantity,
+    updateUnit,
     removeFromCart,
     calculateTotal,
     handleCheckout,

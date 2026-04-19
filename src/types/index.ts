@@ -27,6 +27,7 @@ export interface Product {
   stock: number;          // Stok selalu disimpan dalam base unit (biasanya purchase_unit)
   sku?: string;
   wholesale_prices?: WholesalePrice[];
+  sellable_units?: ProductUnit[]; // Units cashier can select when selling (defaults to [selling_unit])
   created_at: string;
   updated_at: string;
 }

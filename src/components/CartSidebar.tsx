@@ -6,6 +6,7 @@ import CartSummary from './CartSummary';
 interface CartSidebarProps {
   cart: CartItemType[];
   updateQuantity: (id: string, quantity: number) => void;
+  updateUnit: (id: string, unit: string) => void;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
   total: number;
@@ -21,6 +22,7 @@ interface CartSidebarProps {
 export default function CartSidebar({
   cart,
   updateQuantity,
+  updateUnit,
   removeFromCart,
   clearCart,
   total,
@@ -54,6 +56,7 @@ export default function CartSidebar({
               key={item.product.id}
               item={item}
               updateQuantity={updateQuantity}
+              updateUnit={updateUnit}
               removeFromCart={removeFromCart}
             />
           ))}

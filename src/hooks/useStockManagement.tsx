@@ -17,6 +17,7 @@ export interface StockFormData {
   sku?: string;
   purchase_quantity?: number | undefined;
   wholesale_prices?: WholesalePrice[];
+  sellable_units?: ProductUnit[];
 }
 
 export const useStockManagement = () => {
@@ -42,6 +43,7 @@ export const useStockManagement = () => {
       sku: '',
       purchase_quantity: undefined,
       wholesale_prices: [],
+      sellable_units: [],
     },
   });
 
@@ -72,6 +74,7 @@ export const useStockManagement = () => {
           price: Number(p.price),
           price_type: p.price_type || 'unit',
         })),
+        sellable_units: productData.sellable_units && productData.sellable_units.length > 0 ? productData.sellable_units : [productData.selling_unit || 'pcs'],
       };
 
       // Only include stock if it's explicitly provided
@@ -205,6 +208,7 @@ export const useStockManagement = () => {
             selling_price: item.selling_price ?? 0,
             stock: item.stock ?? 0,
             sku: item.sku,
+            sellable_units: ['pcs'],
           };
 
           const purchase_quantity = item.purchase_quantity || 0;
@@ -321,6 +325,7 @@ export const useStockManagement = () => {
       sku: data.sku,
       purchase_quantity: data.purchase_quantity || 0,
       wholesale_prices: data.wholesale_prices,
+      sellable_units: data.sellable_units,
     });
   };
 
@@ -336,6 +341,7 @@ export const useStockManagement = () => {
     setValue('sku', product.sku);
     setValue('purchase_quantity', 0);
     setValue('wholesale_prices', product.wholesale_prices || []);
+    setValue('sellable_units', product.sellable_units || [product.selling_unit]);
   };
 
   const handleDelete = (id: string) => {

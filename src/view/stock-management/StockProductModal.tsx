@@ -265,6 +265,25 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 )}
               />
             </Form.Item>
+
+            <Form.Item label="Satuan Penjualan Tersedia" validateStatus={errors.sellable_units ? 'error' : ''} help="Pilih satuan mana saja yang boleh dijual kasir. Kosongkan untuk gunakan default (satuan jual).">
+              <Controller
+                name="sellable_units"
+                control={control}
+                render={({ field }) => (
+                  <Select 
+                    {...field} 
+                    className="w-full" 
+                    mode="multiple"
+                    placeholder="Pilih satuan yang boleh dijual..."
+                  >
+                    {availableUnits.map(unit => (
+                      <Select.Option key={unit} value={unit}>{unit}</Select.Option>
+                    ))}
+                  </Select>
+                )}
+              />
+            </Form.Item>
             
             <Form.Item
               label={`Harga Beli (per ${purchaseUnit})`}

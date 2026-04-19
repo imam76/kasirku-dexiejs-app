@@ -47,6 +47,10 @@ export class KasirkuDB extends Dexie {
       transactions: 'id, transaction_number, payment_method, created_at'
     });
 
+    this.version(9).stores({
+      products: 'id, name, sku, created_at'
+    });
+
     this.on('populate', async () => {
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
     });

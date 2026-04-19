@@ -20,6 +20,7 @@ export default function Transaction() {
     filteredProducts,
     addToCart,
     updateQuantity,
+    updateUnit,
     removeFromCart,
     calculateTotal,
     handleCheckout,
@@ -95,6 +96,7 @@ export default function Transaction() {
         <CartSidebar
           cart={cart}
           updateQuantity={updateQuantity}
+          updateUnit={updateUnit}
           removeFromCart={removeFromCart}
           clearCart={clearCart}
           total={total}
@@ -131,6 +133,7 @@ export default function Transaction() {
         onClose={() => setCartOpen(false)}
         cart={cart}
         updateQuantity={updateQuantity}
+        updateUnit={updateUnit}
         removeFromCart={removeFromCart}
         clearCart={clearCart}
         total={total}

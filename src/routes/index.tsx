@@ -6,7 +6,8 @@ import {
   HistoryOutlined,
   ProductOutlined,
   SettingOutlined,
-  ShoppingCartOutlined
+  ShoppingCartOutlined,
+  SwapOutlined
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 
@@ -24,6 +25,7 @@ function Index() {
     { to: '/report', label: 'Laporan', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dan pembelian' },
     // { to: '/sales-report', label: 'Lap. Jual', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
     // { to: '/purchase-report', label: 'Lap. Beli', icon: FileExcelOutlined, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
+    { to: '/units', label: 'Satuan Konversi', icon: SwapOutlined, color: 'text-cyan-600', desc: 'Kelola konversi satuan produk' },
     { to: '/profit', label: 'Keuntungan', icon: DollarOutlined, color: 'text-emerald-600', desc: 'Analisis keuntungan penjualan' },
     { to: '/settings', label: 'Pengaturan', icon: SettingOutlined, color: 'text-gray-600', desc: 'Backup dan restore database aplikasi' },
   ]

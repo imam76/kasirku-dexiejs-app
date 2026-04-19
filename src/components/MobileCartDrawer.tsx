@@ -8,6 +8,7 @@ interface MobileCartDrawerProps {
   onClose: () => void;
   cart: CartItemType[];
   updateQuantity: (id: string, quantity: number) => void;
+  updateUnit: (id: string, unit: string) => void;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
   total: number;
@@ -25,6 +26,7 @@ export default function MobileCartDrawer({
   onClose,
   cart,
   updateQuantity,
+  updateUnit,
   removeFromCart,
   clearCart,
   total,
@@ -72,6 +74,7 @@ export default function MobileCartDrawer({
               key={item.product.id}
               item={item}
               updateQuantity={updateQuantity}
+              updateUnit={updateUnit}
               removeFromCart={removeFromCart}
             />
           ))}
