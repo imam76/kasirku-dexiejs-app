@@ -1,17 +1,23 @@
+import FeedbackModal from '@/components/FeedbackModal'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
+import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
 import { useTheme } from '@/hooks/useTheme'
-import { createRootRoute, Link, Outlet, useNavigate, useRouter } from '@tanstack/react-router'
+import dayjs from '@/lib/dayjs'
+import { db } from '@/lib/db'
+import { setConversionRegistry } from '@/utils/pricing'
+import { useQuery } from '@tanstack/react-query'
+import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { Layout, Menu } from 'antd'
+import { Layout, Menu, notification } from 'antd'
 import {
   Banknote,
   Box,
   ClipboardList,
   DollarSign,
+  FileDown,
   FileSpreadsheet,
   FileText,
-  FileDown,
   History,
   Home,
   Moon,
@@ -21,11 +27,7 @@ import {
   ShoppingCart,
   Sun
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { db } from '@/lib/db'
-import { setConversionRegistry } from '@/utils/pricing'
 import { useEffect, useState } from 'react'
-import { useLocation } from '@tanstack/react-router'
 
 const { Content, Sider } = Layout
 
@@ -35,6 +37,71 @@ const RootLayout = () => {
   const location = useLocation()
   const { isDark, toggle } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
+
+  useEffect(() => {
+    const installDate = localStorage.getItem('app_install_date')
+    const feedbackSubmitted = localStorage.getItem('feedback_submitted')
+
+    // Jika sudah pernah submit, jangan lakukan apa-apa
+    if (feedbackSubmitted === 'true') {
+      return
+    }
+
+    if (!installDate) {
+      localStorage.setItem('app_install_date', dayjs().toISOString())
+    } else {
+      const daysSinceInstall = dayjs().diff(dayjs(installDate), 'day')
+      // Muncul jika sudah >= 7 hari dan belum pernah submit
+      if (daysSinceInstall >= 0) {
+        setShowFeedback(true)
+      }
+    }
+  }, [])
+
+  const handleFeedbackSubmit = async (values: any) => {
+    const BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+    const CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
+    
+    const valueLines = FEEDBACK_QUESTIONS
+      .map((q) => {
+        const val = values[`q${q.id}`];
+        if (val === undefined || val === null) return null;
+        return `<b>${q.id}. ${q.question}</b>\nJawaban: ${val}`
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    const message = `📊 <b>Feedback Baru Diterima</b>\n\n${valueLines}\n\n🕒 <i>Dikirim pada ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</i>`
+    localStorage.setItem('feedback_submitted', 'true')
+    localStorage.setItem('feedback_data', JSON.stringify({
+      values,
+      submittedAt: dayjs().toISOString()
+    }))
+
+    console.log('Feedback submitted:', values)
+
+    try {
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: CHAT_ID,
+          text: message,
+          parse_mode: "HTML",
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to send feedback to Telegram:', error);
+    }
+
+    setShowFeedback(false)
+    notification.success({
+      message: 'Terima Kasih!',
+      description: 'Feedback Anda sangat berharga bagi kami.',
+      placement: 'bottomRight',
+    })
+  }
 
   // Load unit conversions globally
   const { data: conversions } = useQuery({
@@ -198,6 +265,7 @@ const RootLayout = () => {
       </Layout>
 
       <TanStackRouterDevtools />
+      <FeedbackModal open={showFeedback} onFinish={handleFeedbackSubmit} />
     </Layout>
   )
 }
