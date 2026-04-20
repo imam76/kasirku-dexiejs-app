@@ -63,8 +63,8 @@ const RootLayout = () => {
   }, [location.pathname]) // Re-check on navigation
 
   const handleFeedbackSubmit = async (values: any) => {
-    const BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
-    const CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
+    const BOT_TOKEN = import.meta.env.TELEGRAM_BOT_TOKEN;
+    const CHAT_ID = import.meta.env.TELEGRAM_CHAT_ID;
     
     const questions = FEEDBACK_QUESTIONS.filter(q => q.wave === feedbackWave)
     const valueLines = questions
@@ -98,7 +98,7 @@ const RootLayout = () => {
         }),
       });
     } catch (error) {
-      console.error('Failed to send feedback to Telegram:', error);
+      console.error('Error submitting feedback:', error)
     }
 
     setShowFeedback(false)
