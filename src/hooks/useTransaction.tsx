@@ -217,6 +217,9 @@ export const useTransaction = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
       reset();
       loadProducts();
+      
+      // Trigger feedback check
+      window.dispatchEvent(new Event('check-feedback'));
     } catch (error) {
       console.error('Checkout failed:', error);
       modal.error({

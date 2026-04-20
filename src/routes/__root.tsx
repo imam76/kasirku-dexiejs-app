@@ -5,6 +5,7 @@ import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
 import { useTheme } from '@/hooks/useTheme'
 import dayjs from '@/lib/dayjs'
 import { db } from '@/lib/db'
+import { incrementSessionCount, markFeedbackSubmitted, shouldTriggerWave1, shouldTriggerWave2 } from '@/utils/feedback'
 import { setConversionRegistry } from '@/utils/pricing'
 import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
@@ -38,32 +39,35 @@ const RootLayout = () => {
   const { isDark, toggle } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
+  const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
 
   useEffect(() => {
-    const installDate = localStorage.getItem('app_install_date')
-    const feedbackSubmitted = localStorage.getItem('feedback_submitted')
+    // Increment session on mount
+    incrementSessionCount()
 
-    // Jika sudah pernah submit, jangan lakukan apa-apa
-    if (feedbackSubmitted === 'true') {
-      return
-    }
-
-    if (!installDate) {
-      localStorage.setItem('app_install_date', dayjs().toISOString())
-    } else {
-      const daysSinceInstall = dayjs().diff(dayjs(installDate), 'day')
-      // Muncul jika sudah >= 7 hari dan belum pernah submit
-      if (daysSinceInstall >= 7) {
+    const checkFeedback = async () => {
+      // Priority: Wave 2 then Wave 1
+      if (await shouldTriggerWave2()) {
+        setFeedbackWave(2)
+        setShowFeedback(true)
+      } else if (await shouldTriggerWave1()) {
+        setFeedbackWave(1)
         setShowFeedback(true)
       }
     }
-  }, [])
+
+    checkFeedback()
+
+    window.addEventListener('check-feedback', checkFeedback)
+    return () => window.removeEventListener('check-feedback', checkFeedback)
+  }, [location.pathname]) // Re-check on navigation
 
   const handleFeedbackSubmit = async (values: any) => {
     const BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
     const CHAT_ID = import.meta.env.VITE_TELEGRAM_CHAT_ID;
     
-    const valueLines = FEEDBACK_QUESTIONS
+    const questions = FEEDBACK_QUESTIONS.filter(q => q.wave === feedbackWave)
+    const valueLines = questions
       .map((q) => {
         const val = values[`q${q.id}`];
         if (val === undefined || val === null) return null;
@@ -72,14 +76,16 @@ const RootLayout = () => {
       .filter(Boolean)
       .join('\n\n');
 
-    const message = `📊 <b>Feedback Baru Diterima</b>\n\n${valueLines}\n\n🕒 <i>Dikirim pada ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</i>`
-    localStorage.setItem('feedback_submitted', 'true')
-    localStorage.setItem('feedback_data', JSON.stringify({
+    const message = `📊 <b>Feedback Wave ${feedbackWave} Baru Diterima</b>\n\n${valueLines}\n\n🕒 <i>Dikirim pada ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</i>`
+    
+    markFeedbackSubmitted(feedbackWave)
+    
+    localStorage.setItem(`feedback_wave${feedbackWave}_data`, JSON.stringify({
       values,
       submittedAt: dayjs().toISOString()
     }))
 
-    console.log('Feedback submitted:', values)
+    console.log(`Feedback Wave ${feedbackWave} submitted:`, values)
 
     try {
       await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -265,7 +271,11 @@ const RootLayout = () => {
       </Layout>
 
       <TanStackRouterDevtools />
-      <FeedbackModal open={showFeedback} onFinish={handleFeedbackSubmit} />
+      <FeedbackModal
+        open={showFeedback}
+        wave={feedbackWave}
+        onFinish={handleFeedbackSubmit}
+      />
     </Layout>
   )
 }

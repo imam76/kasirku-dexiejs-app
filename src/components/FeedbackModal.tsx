@@ -7,16 +7,20 @@ const { TextArea } = Input
 
 interface FeedbackModalProps {
   open: boolean
+  wave: 1 | 2
   onFinish: (values: any) => void
 }
 
-const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, onFinish }) => {
+const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, wave, onFinish }) => {
   const [form] = Form.useForm()
   const q8Value = Form.useWatch('q8', form)
 
   const handleSubmit = (values: any) => {
     onFinish(values)
+    form.resetFields()
   }
+
+  const questions = FEEDBACK_QUESTIONS.filter((q) => q.wave === wave)
 
   return (
     <Modal
@@ -32,10 +36,12 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, onFinish }) => {
     >
       <div className="py-2 md:py-4">
         <Title level={4} className="text-center mb-1 md:mb-2 text-lg md:text-xl">
-          Feedback Penggunaan Aplikasi
+          {wave === 1 ? 'Feedback Cepat' : 'Feedback Penggunaan Aplikasi'}
         </Title>
         <Text type="secondary" className="block text-center mb-4 md:mb-6 text-xs md:text-sm">
-          Bantu kami meningkatkan kualitas aplikasi dengan mengisi kuesioner singkat ini.
+          {wave === 1 
+            ? 'Bantu kami menilai kemudahan transaksi pertama Anda.' 
+            : 'Bantu kami meningkatkan kualitas aplikasi dengan mengisi kuesioner singkat ini.'}
         </Text>
         <Divider className="my-3 md:my-4" />
 
@@ -46,7 +52,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, onFinish }) => {
           requiredMark={false}
           className="max-h-[70vh] overflow-y-auto px-1"
         >
-          {FEEDBACK_QUESTIONS.map((q) => {
+          {questions.map((q) => {
             // Logic to hide q9 if q8 is not 'No'
             if (q.id === 9 && q8Value !== 'No') {
               return null
