@@ -53,7 +53,7 @@ const RootLayout = () => {
     } else {
       const daysSinceInstall = dayjs().diff(dayjs(installDate), 'day')
       // Muncul jika sudah >= 7 hari dan belum pernah submit
-      if (daysSinceInstall >= 0) {
+      if (daysSinceInstall >= 7) {
         setShowFeedback(true)
       }
     }
