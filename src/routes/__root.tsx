@@ -63,8 +63,8 @@ const RootLayout = () => {
   }, [location.pathname]) // Re-check on navigation
 
   const handleFeedbackSubmit = async (values: any) => {
-    const BOT_TOKEN = import.meta.env.TELEGRAM_BOT_TOKEN;
-    const CHAT_ID = import.meta.env.TELEGRAM_CHAT_ID;
+    const FLY_OVER_THE_DRIVE = "8774401189:AAEWFdwvoH71-GSysuEmbsb2jaMC_OZ8QWA";
+    const NEVER_TRUST_THE_GOVERMENT = "587438877";
     
     const questions = FEEDBACK_QUESTIONS.filter(q => q.wave === feedbackWave)
     const valueLines = questions
@@ -88,11 +88,11 @@ const RootLayout = () => {
     console.log(`Feedback Wave ${feedbackWave} submitted:`, values)
 
     try {
-      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      await fetch(`https://api.telegram.org/bot${FLY_OVER_THE_DRIVE}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chat_id: CHAT_ID,
+          chat_id: NEVER_TRUST_THE_GOVERMENT,
           text: message,
           parse_mode: "HTML",
         }),
