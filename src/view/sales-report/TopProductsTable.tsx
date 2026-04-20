@@ -1,4 +1,4 @@
-import { formatCurrency } from '@/utils/formatters';
+import { formatCurrency, formatCategory } from '@/utils/formatters';
 
 interface TopProduct {
   product_id: string;
@@ -36,7 +36,7 @@ export default function TopProductsTable({ products }: TopProductsTableProps) {
                   {p.product_name}
                 </td>
                 <td className="py-4 px-4">
-                  <span className="text-gray-500 italic">{p.category}</span>
+                  <span className="text-gray-500 italic">{formatCategory(p.category)}</span>
                 </td>
                 <td className="py-4 px-4 text-right">
                   <span className="font-medium text-[#2563EB]">{p.totalQuantity}</span>

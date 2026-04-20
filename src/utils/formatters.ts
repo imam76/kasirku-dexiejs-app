@@ -13,3 +13,12 @@ export const getStockStatusClass = (stock: number): string => {
     ? 'bg-red-100 text-red-800'
     : 'bg-green-100 text-green-800';
 };
+
+export const formatCategory = (category: string): string => {
+  const map: Record<string, string> = {
+    'bumbu': 'Bumbu Dapur',
+    'sembako': 'Sembako',
+    'lainnya': 'Lain-lain',
+  };
+  return map[category.toLowerCase()] || category;
+};

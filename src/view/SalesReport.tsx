@@ -1,6 +1,8 @@
-import { useProductCategories, useSalesReport } from '@/hooks/useReports';
+import { PRODUCT_CATEGORIES } from '@/constants/categories';
+import { useSalesReport } from '@/hooks/useReports';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
+import { formatCategory } from '@/utils/formatters';
 import { BarChartOutlined, DownloadOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { Button, Card, DatePicker, Empty, Grid, Select, Statistic, Typography } from 'antd';
 import { useState } from 'react';
@@ -25,7 +27,6 @@ export default function SalesReport() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | undefined>('SEMUA');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
-  const { data: categoriesData } = useProductCategories();
   const { data, isLoading, error, refetch } = useSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
 
   const screens = useBreakpoint();
@@ -65,7 +66,7 @@ export default function SalesReport() {
           trans?.transaction_number || '-',
           dayjs(item.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
           item.product_name,
-          product?.category || 'Lainnya',
+          formatCategory(product?.category || 'lainnya'),
           item.quantity,
           item.unit,
           item.price,
@@ -213,7 +214,7 @@ export default function SalesReport() {
                 value={selectedCategories}
                 onChange={setSelectedCategories}
                 allowClear
-                options={categoriesData?.map(cat => ({ value: cat, label: cat }))}
+                options={PRODUCT_CATEGORIES}
                 size="large"
               />
             </div>

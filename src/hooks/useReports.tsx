@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import { Transaction, StockPurchase, FinanceTransaction } from '@/types';
+import { PRODUCT_CATEGORIES } from '@/constants/categories';
 
 interface SalesReportData {
   transactions: Transaction[];
@@ -114,7 +115,7 @@ export const useSalesReport = (
 
         const aggregation = relevantItems.reduce((acc, item) => {
           const product = productMap.get(item.product_id);
-          const category = product?.category || 'Lainnya';
+          const category = product?.category || 'lainnya';
 
           // Filter by category if provided
           if (categories && categories.length > 0 && !categories.includes(category)) {
@@ -171,9 +172,8 @@ export const useProductCategories = () => {
   return useQuery({
     queryKey: ['productCategories'],
     queryFn: async () => {
-      const products = await db.products.toArray();
-      const categories = [...new Set(products.map((p) => p.category).filter(Boolean))];
-      return categories.sort() as string[];
+      // Return hardcoded categories from constants as the source of truth
+      return PRODUCT_CATEGORIES.map(cat => cat.value);
     },
   });
 };

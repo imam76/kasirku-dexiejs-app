@@ -1,5 +1,6 @@
 import type { StockFormData } from '@/hooks/useStockManagement';
 import { db } from '@/lib/db';
+import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Alert, Button, Form, Grid, Input, InputNumber, Modal, Select } from 'antd';
@@ -207,9 +208,11 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 control={control}
                 render={({ field }) => (
                   <Select {...field} className="w-full">
-                    <Select.Option value="bumbu">Bumbu Dapur</Select.Option>
-                    <Select.Option value="sembako">Sembako</Select.Option>
-                    <Select.Option value="lainnya">Lain-lain</Select.Option>
+                    {PRODUCT_CATEGORIES.map(cat => (
+                      <Select.Option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </Select.Option>
+                    ))}
                   </Select>
                 )}
               />
