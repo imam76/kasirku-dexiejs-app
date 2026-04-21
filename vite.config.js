@@ -34,16 +34,23 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 var host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
-export default defineConfig(function () { return __awaiter(void 0, void 0, void 0, function () {
-    return __generator(this, function (_a) {
-        return [2 /*return*/, ({
+export default defineConfig(function (_a) { return __awaiter(void 0, [_a], void 0, function (_b) {
+    var env;
+    var mode = _b.mode;
+    return __generator(this, function (_c) {
+        env = loadEnv(mode, process.cwd(), '');
+        return [2 /*return*/, {
                 plugins: [tanstackRouter(), react()],
+                define: {
+                    'import.meta.env.TELEGRAM_BOT_TOKEN': JSON.stringify(env.TELEGRAM_BOT_TOKEN),
+                    'import.meta.env.TELEGRAM_CHAT_ID': JSON.stringify(env.TELEGRAM_CHAT_ID),
+                },
                 // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
                 //
                 // 1. prevent Vite from obscuring rust errors
@@ -73,6 +80,6 @@ export default defineConfig(function () { return __awaiter(void 0, void 0, void 
                 optimizeDeps: {
                     exclude: ['lucide-react'],
                 },
-            })];
+            }];
     });
 }); });
