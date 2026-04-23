@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { shoppingItemSchema, type ShoppingItemFormData } from '@/lib/validations/shopping';
 import { useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
@@ -16,12 +18,8 @@ export const useShoppingNote = () => {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<{
-    name: string;
-    unit_price: number;
-    quantity: number;
-    unit: string;
-  }>({
+  } = useForm<ShoppingItemFormData>({
+    resolver: zodResolver(shoppingItemSchema),
     defaultValues: {
       name: '',
       unit_price: undefined,

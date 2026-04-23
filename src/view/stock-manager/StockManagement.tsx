@@ -5,7 +5,7 @@ import { useRef, useState, type ChangeEvent } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
 import type { Product } from '@/types';
 import StockTable from '@/components/StockTable';
-import StockProductModal from '@/view/stock-management/StockProductModal';
+import StockProductModal from './StockProductModal';
 import {
   buildProductCsvImportItems,
   createProductCsvExportContent,
@@ -71,10 +71,10 @@ export default function StockManagement() {
 
     try {
       const text = await file.text();
-      const { items, errors } = buildProductCsvImportItems(text);
+      const { items, errors: parseErrors } = buildProductCsvImportItems(text);
 
       if (items.length === 0) {
-        message.error(errors[0] ?? 'Tidak ada data valid untuk diimport.');
+        message.error(parseErrors[0] ?? 'Tidak ada data valid untuk diimport.');
         return;
       }
 
@@ -87,10 +87,10 @@ export default function StockManagement() {
             </div>
             <div className="text-sm text-gray-700">
               Baris valid: <span className="font-medium">{items.length}</span>
-              {errors.length > 0 ? (
+              {parseErrors.length > 0 ? (
                 <>
                   {' '}
-                  • Error: <span className="font-medium">{errors.length}</span>
+                  • Error: <span className="font-medium">{parseErrors.length}</span>
                 </>
               ) : null}
             </div>
@@ -98,12 +98,12 @@ export default function StockManagement() {
               Kolom yang didukung: sku, name/nama, purchase_price/harga_beli, selling_price/harga_jual, stock/stok,
               purchase_quantity (opsional).
             </div>
-            {errors.length > 0 ? (
+            {parseErrors.length > 0 ? (
               <div className="text-xs text-red-600">
-                {errors.slice(0, 5).map((er) => (
-                  <div key={er}>{er}</div>
+                {parseErrors.slice(0, 5).map((errorText) => (
+                  <div key={errorText}>{errorText}</div>
                 ))}
-                {errors.length > 5 ? <div>...dan {errors.length - 5} error lainnya.</div> : null}
+                {parseErrors.length > 5 ? <div>...dan {parseErrors.length - 5} error lainnya.</div> : null}
               </div>
             ) : null}
           </div>
@@ -186,6 +186,7 @@ export default function StockManagement() {
             <span>Import CSV</span>
           </button>
           <button
+            type="button"
             onClick={handleAddProduct}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-base"
           >
@@ -202,17 +203,19 @@ export default function StockManagement() {
         errors={errors}
         setValue={setValue}
         onCancel={handleModalCancel}
+        setIsModalOpen={setIsModalOpen}
         onSave={async () => {
           try {
-            await handleSubmit();
-            // setIsModalOpen(false);
+            let submit = await handleSubmit();
+            if (submit) {
+              setIsModalOpen(false);
+            }
           } catch (error) {
             console.error('Failed to save product:', error);
           }
         }}
       />
 
-      {/* Desktop & Tablet Table View */}
       <StockTable
         products={products}
         onEdit={handleEditProduct}

@@ -31,6 +31,7 @@ import {
 import { useEffect, useState } from 'react'
 
 const { Content, Sider } = Layout
+const NAVBAR_HEIGHT = 64
 
 const RootLayout = () => {
   const router = useRouter()
@@ -194,10 +195,19 @@ const RootLayout = () => {
     .filter((link) => 'children' in link && link.children?.some((child) => child.to === selectedKey))
     .map((link: any) => link.key)
 
+  const safeAreaTop = 'env(safe-area-inset-top, 0px)'
+  const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {/* Top Navbar - Logo & Theme Toggle */}
-      <nav className="fixed top-0 z-40 w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm h-16 transition-colors duration-200">
+      <nav
+        className="fixed top-0 z-40 w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200"
+        style={{
+          height: topOffset,
+          paddingTop: safeAreaTop,
+        }}
+      >
         <div className="h-full px-4 flex justify-between items-center">
           {/* Logo */}
           <div
@@ -227,7 +237,7 @@ const RootLayout = () => {
       </nav>
 
       {/* Body: Sider + Content */}
-      <Layout style={{ marginTop: 64 }}>
+      <Layout style={{ marginTop: topOffset }}>
         {/* Side Navigation */}
         <Sider
           collapsible
@@ -237,7 +247,7 @@ const RootLayout = () => {
           style={{
             position: 'fixed',
             left: 0,
-            top: 64,
+            top: topOffset,
             bottom: 0,
             overflow: 'auto',
             zIndex: 30,

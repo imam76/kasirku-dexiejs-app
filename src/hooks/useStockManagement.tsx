@@ -1,51 +1,46 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { stockSchema, type StockFormData } from '@/lib/validations/stock';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
-import { Product, ProductUnit, StockPurchase, WholesalePrice, ProductCategory } from '@/types';
+import { Product, ProductUnit, StockPurchase } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 
-export interface StockFormData {
-  name: string;
-  category: ProductCategory;
-  purchase_unit: ProductUnit;
-  selling_unit: ProductUnit;
-  purchase_price: number | undefined;
-  selling_price: number | undefined;
-  stock: number | undefined;
-  sku?: string;
-  purchase_quantity?: number | undefined;
-  wholesale_prices?: WholesalePrice[];
-  sellable_units?: ProductUnit[];
-}
+export type { StockFormData };
 
 export const useStockManagement = () => {
   const queryClient = useQueryClient();
   const { modal, message } = App.useApp();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const {
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    control,
-    formState: { errors },
-  } = useForm<StockFormData>({
+  
+  const form = useForm<StockFormData>({
+    resolver: zodResolver(stockSchema),
     defaultValues: {
       name: '',
       category: 'lainnya',
       purchase_unit: 'pcs',
       selling_unit: 'pcs',
-      purchase_price: undefined,
-      selling_price: undefined,
-      stock: undefined,
+      purchase_price: 0,
+      selling_price: 0,
+      stock: 0,
       sku: '',
-      purchase_quantity: undefined,
+      purchase_quantity: 0,
       wholesale_prices: [],
       sellable_units: [],
     },
   });
+
+  const {
+    reset,
+    watch,
+    setValue,
+    control,
+    trigger,
+    getValues,
+    formState: { errors },
+  } = form;
 
   // Fetch products query
   const { data: products = [], isLoading } = useQuery({
@@ -319,14 +314,25 @@ export const useStockManagement = () => {
       category: data.category,
       purchase_unit: data.purchase_unit,
       selling_unit: data.selling_unit,
-      purchase_price: data.purchase_price ?? 0,
-      selling_price: data.selling_price ?? 0,
-      stock: data.stock ?? 0,
-      sku: data.sku,
+      purchase_price: data.purchase_price,
+      selling_price: data.selling_price,
+      stock: data.stock,
+      sku: data.sku || '',
       purchase_quantity: data.purchase_quantity || 0,
-      wholesale_prices: data.wholesale_prices,
-      sellable_units: data.sellable_units,
+      wholesale_prices: data.wholesale_prices || [],
+      sellable_units: data.sellable_units || [],
     });
+  };
+
+  const submitForm = async () => {
+    const isValid = await trigger();
+    if (!isValid) {
+      console.log('isValid', isValid, errors);
+      return false;
+    }
+    const data = getValues();
+    await onSubmit(data);
+    return true;
   };
 
   const handleEdit = (product: Product) => {
@@ -338,9 +344,13 @@ export const useStockManagement = () => {
     setValue('purchase_price', product.purchase_price);
     setValue('selling_price', product.selling_price);
     setValue('stock', product.stock);
-    setValue('sku', product.sku);
+    setValue('sku', product.sku || '');
     setValue('purchase_quantity', 0);
-    setValue('wholesale_prices', product.wholesale_prices || []);
+    setValue('wholesale_prices', (product.wholesale_prices || []).map(p => ({
+      min_quantity: p.min_quantity,
+      price: p.price,
+      price_type: p.price_type
+    })));
     setValue('sellable_units', product.sellable_units || [product.selling_unit]);
   };
 
@@ -367,7 +377,7 @@ export const useStockManagement = () => {
     isLoading,
     editingId,
     control,
-    handleSubmit: handleSubmit(onSubmit),
+    handleSubmit: submitForm,
     handleEdit,
     handleDelete,
     resetForm: resetFormData,
@@ -375,6 +385,7 @@ export const useStockManagement = () => {
     watch,
     setValue,
     isSubmitting: upsertMutation.isPending,
+    isDeleting: deleteMutation.isPending,
     importProductsFromCsv: (items: Parameters<typeof importCsvMutation.mutateAsync>[0]) =>
       importCsvMutation.mutateAsync(items),
     isImporting: importCsvMutation.isPending,

@@ -1,6 +1,6 @@
-import { DollarSign, Wallet } from 'lucide-react';
-import { formatCurrency } from '@/utils/formatters';
 import { PaymentMethod } from '@/types';
+import { formatCurrency } from '@/utils/formatters';
+import { Delete, DollarSign, Wallet } from 'lucide-react';
 
 interface CartSummaryProps {
   total: number;
@@ -27,6 +27,12 @@ export default function CartSummary({
 }: CartSummaryProps) {
   const payment = parseFloat(paymentAmount);
   const change = payment >= total ? payment - total : 0;
+  const quickAmounts = [5000, 10000, 20000, 50000, 100000];
+
+  const handleQuickAmount = (amount: number) => {
+    const currentAmount = Number.isFinite(payment) ? payment : 0;
+    setPaymentAmount(String(currentAmount + amount));
+  };
 
   return (
     <>
@@ -40,39 +46,37 @@ export default function CartSummary({
       {!showPayment ? (
         <button
           onClick={() => setShowPayment(true)}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 mb-6 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
         >
           <DollarSign size={20} />
           Bayar
         </button>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-6">
           <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
             <button
               onClick={() => setPaymentMethod('TUNAI')}
-              className={`flex-1 py-2 px-3 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                paymentMethod === 'TUNAI'
+              className={`flex-1 py-2 px-3 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${paymentMethod === 'TUNAI'
                   ? 'bg-white text-green-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
-              }`}
+                }`}
             >
               <DollarSign size={16} />
               Tunai
             </button>
             <button
               onClick={() => setPaymentMethod('NON_TUNAI')}
-              className={`flex-1 py-2 px-3 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                paymentMethod === 'NON_TUNAI'
+              className={`flex-1 py-2 px-3 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${paymentMethod === 'NON_TUNAI'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
-              }`}
+                }`}
             >
               <Wallet size={16} />
               Non-Tunai
             </button>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 pb-6">
             <input
               type="number"
               placeholder="Jumlah pembayaran"
@@ -81,19 +85,33 @@ export default function CartSummary({
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               autoFocus
             />
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+              {quickAmounts.map((amount) => (
+                <button
+                  key={amount}
+                  type="button"
+                  onClick={() => handleQuickAmount(amount)}
+                  className="px-3 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  +{formatCurrency(amount)}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPaymentAmount('')}
+                className="px-3 py-2 text-sm font-semibold text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center gap-1"
+              >
+                <Delete size={16} />
+                Bersihkan
+              </button>
+            </div>
             {paymentAmount && payment >= total && (
               <p className="text-sm text-gray-700">
                 Kembalian: <span className="font-bold">Rp {formatCurrency(change)}</span>
               </p>
             )}
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleCheckout}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition-colors"
-            >
-              Konfirmasi
-            </button>
+          <div className="flex gap-2 mb-4">
             <button
               onClick={() => {
                 setShowPayment(false);
@@ -103,6 +121,12 @@ export default function CartSummary({
               className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-semibold transition-colors"
             >
               Batal
+            </button>
+            <button
+              onClick={handleCheckout}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition-colors"
+            >
+              Konfirmasi
             </button>
           </div>
         </div>

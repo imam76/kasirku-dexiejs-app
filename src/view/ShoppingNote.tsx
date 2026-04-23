@@ -115,7 +115,6 @@ export default function ShoppingNote() {
                   <Controller
                     name="name"
                     control={control}
-                    rules={{ required: 'Nama barang wajib diisi' }}
                     render={({ field }) => (
                       <Form.Item validateStatus={errors.name ? 'error' : ''} help={errors.name?.message} style={{ marginBottom: 0 }}>
                         <Input {...field} placeholder="Nama Barang" size="large" />
@@ -129,7 +128,6 @@ export default function ShoppingNote() {
                   <Controller
                     name="unit_price"
                     control={control}
-                    rules={{ required: 'Harga satuan wajib diisi', min: { value: 0, message: 'Harga tidak boleh negatif' } }}
                     render={({ field }) => (
                       <Form.Item validateStatus={errors.unit_price ? 'error' : ''} help={errors.unit_price?.message} style={{ marginBottom: 0 }}>
                         <InputNumber
@@ -151,10 +149,9 @@ export default function ShoppingNote() {
                     <Controller
                       name="quantity"
                       control={control}
-                      rules={{ required: 'Jumlah wajib diisi', min: { value: 1, message: 'Minimal 1' } }}
                       render={({ field }) => (
                         <Form.Item validateStatus={errors.quantity ? 'error' : ''} help={errors.quantity?.message} style={{ marginBottom: 0 }}>
-                          <InputNumber {...field} style={{ width: '100%' }} placeholder="Qty" min={1} size="large" />
+                          <InputNumber {...field} style={{ width: '100%' }} placeholder="Qty" min={0.01} size="large" />
                         </Form.Item>
                       )}
                     />
@@ -165,9 +162,8 @@ export default function ShoppingNote() {
                     <Controller
                       name="unit"
                       control={control}
-                      rules={{ required: true }}
                       render={({ field }) => (
-                        <Form.Item style={{ marginBottom: 0 }}>
+                        <Form.Item validateStatus={errors.unit ? 'error' : ''} help={errors.unit?.message} style={{ marginBottom: 0 }}>
                           <Select {...field} size="large">
                             {['pcs', 'kg', 'box', 'dus', 'lusin', 'liter', 'meter', 'pack', 'roll'].map(u => (
                               <Option key={u} value={u}>{u}</Option>
