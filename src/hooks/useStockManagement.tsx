@@ -194,23 +194,36 @@ export const useStockManagement = () => {
 
       await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
         for (const item of items) {
+          let existing = null;
+          if (item.sku) {
+            existing = await db.products.where('sku').equals(item.sku).first();
+          }
+          if (!existing && item.id) {
+            existing = await db.products.get(item.id);
+          }
+
           const cleanData = {
             name: item.name,
-            category: 'lainnya',
-            purchase_unit: 'pcs' as ProductUnit,
-            selling_unit: 'pcs' as ProductUnit,
+            category: item.category || existing?.category || 'lainnya',
+            purchase_unit: (item.purchase_unit || existing?.purchase_unit || 'pcs') as ProductUnit,
+            selling_unit: (item.selling_unit || existing?.selling_unit || 'pcs') as ProductUnit,
             purchase_price: item.purchase_price ?? 0,
             selling_price: item.selling_price ?? 0,
             stock: item.stock ?? 0,
-            sku: item.sku,
-            sellable_units: ['pcs'],
+            sku: item.sku || existing?.sku || '',
+            wholesale_prices: (item.wholesale_prices || existing?.wholesale_prices || []).map((p) => ({
+              min_quantity: Number(p.min_quantity),
+              price: Number(p.price),
+              price_type: p.price_type || 'unit',
+            })),
+            sellable_units: item.sellable_units && item.sellable_units.length > 0
+              ? item.sellable_units
+              : existing?.sellable_units && existing.sellable_units.length > 0
+                ? existing.sellable_units
+                : [item.selling_unit || existing?.selling_unit || 'pcs'],
           };
 
           const purchase_quantity = item.purchase_quantity || 0;
-          let existing = null;
-          if (cleanData.sku) {
-            existing = await db.products.where('sku').equals(cleanData.sku).first();
-          }
 
           if (existing) {
             await db.products.update(existing.id, {

@@ -149,7 +149,7 @@ const RootLayout = () => {
         { to: '/report/sales-report', label: 'Penjualan', icon: FileText },
         { to: '/report/purchase-report', label: 'Pembelian', icon: FileSpreadsheet },
         { to: '/report/expense-report', label: 'Pengeluaran', icon: FileDown },
-        { to: '/report/profit', label: 'Keuntungan', icon: DollarSign },
+        { to: '/profit', label: 'Keuntungan', icon: DollarSign },
       ],
     },
     { to: '/finance', label: 'Keuangan', icon: Banknote },

@@ -106,8 +106,9 @@ export default function StockManagement() {
               ) : null}
             </div>
             <div className="text-xs text-gray-500">
-              Kolom yang didukung: sku, name/nama, purchase_price/harga_beli, selling_price/harga_jual, stock/stok,
-              purchase_quantity (opsional).
+              Kolom yang didukung: id, sku, name/nama, category/kategori, purchase_unit/satuan_beli,
+              selling_unit/satuan_jual, purchase_price/harga_beli, selling_price/harga_jual, stock/stok,
+              purchase_quantity, wholesale_prices, sellable_units.
             </div>
             {parseErrors.length > 0 ? (
               <div className="text-xs text-red-600">
