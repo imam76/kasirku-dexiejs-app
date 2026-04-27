@@ -273,7 +273,7 @@ export default function UnitManagement() {
             rules={[{ required: true, message: 'Wajib diisi' }, { type: 'number', min: 0.000001, message: 'Harus > 0' }]}
             extra="1 [Dari Satuan] = Berapa [Ke Satuan]?"
           >
-            <InputNumber className="w-full" placeholder="Contoh: 10" />
+            <InputNumber inputMode="decimal" className="w-full" placeholder="Contoh: 10" />
           </Form.Item>
 
           <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">

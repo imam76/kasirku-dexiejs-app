@@ -71,6 +71,11 @@ export default function StockProductModal({ open, editingId, control, errors, se
     return Array.from(units).sort();
   }, [conversions]);
 
+  const availableUnitOptions = useMemo(
+    () => availableUnits.map((unit) => ({ value: unit, label: unit })),
+    [availableUnits],
+  );
+
   const hasConversion = useMemo(() => {
     if (purchaseUnit === sellingUnit) return true;
     return conversions.some(
@@ -221,13 +226,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 name="category"
                 control={control}
                 render={({ field }) => (
-                  <Select {...field} className="w-full">
-                    {PRODUCT_CATEGORIES.map((category) => (
-                      <Select.Option key={category.value} value={category.value}>
-                        {category.label}
-                      </Select.Option>
-                    ))}
-                  </Select>
+                  <Select {...field} className="w-full" options={PRODUCT_CATEGORIES} />
                 )}
               />
             </FieldContainer>
@@ -268,13 +267,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 name="purchase_unit"
                 control={control}
                 render={({ field }) => (
-                  <Select {...field} className="w-full">
-                    {availableUnits.map((unit) => (
-                      <Select.Option key={unit} value={unit}>
-                        {unit}
-                      </Select.Option>
-                    ))}
-                  </Select>
+                  <Select {...field} className="w-full" options={availableUnitOptions} />
                 )}
               />
             </FieldContainer>
@@ -284,13 +277,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 name="selling_unit"
                 control={control}
                 render={({ field }) => (
-                  <Select {...field} className="w-full">
-                    {availableUnits.map((unit) => (
-                      <Select.Option key={unit} value={unit}>
-                        {unit}
-                      </Select.Option>
-                    ))}
-                  </Select>
+                  <Select {...field} className="w-full" options={availableUnitOptions} />
                 )}
               />
             </FieldContainer>
@@ -310,13 +297,8 @@ export default function StockProductModal({ open, editingId, control, errors, se
                     onChange={field.onChange}
                     className="w-full"
                     placeholder="Pilih satuan yang boleh dijual..."
-                  >
-                    {availableUnits.map((unit) => (
-                      <Select.Option key={unit} value={unit}>
-                        {unit}
-                      </Select.Option>
-                    ))}
-                  </Select>
+                    options={availableUnitOptions}
+                  />
                 )}
               />
             </FieldContainer>
@@ -345,6 +327,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 control={control}
                 render={({ field }) => (
                   <InputNumber
+                    inputMode='decimal'
                     value={field.value}
                     onBlur={field.onBlur}
                     onChange={(value) => field.onChange(value ?? 0)}

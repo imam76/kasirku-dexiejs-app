@@ -54,7 +54,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
         <p className="text-sm font-bold text-gray-700">
           Total: Rp {formatCurrency(currentPrice * item.quantity)}
         </p>
-        
+
         {/* Quantity Controls and Unit Selector - Mobile First Layout */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {/* Quantity Controls */}
@@ -66,8 +66,9 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
             >
               <Minus size={16} />
             </button>
-            
+
             <InputNumber
+              inputMode='decimal'
               min={0}
               value={item.quantity}
               onChange={handleQuantityChange}

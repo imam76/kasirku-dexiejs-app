@@ -409,6 +409,7 @@ export default function FinanceManagement() {
             ]}
           >
             <InputNumber
+              inputMode='numeric'
               style={{ width: '100%' }}
               formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}

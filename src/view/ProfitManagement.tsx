@@ -39,13 +39,13 @@ export default function ProfitManagement() {
           {record.category && (
             <div>
               <Tag color={
-                record.category === 'SALES' ? 'blue' : 
-                record.category === 'WITHDRAW' ? 'purple' : 
-                'orange'
+                record.category === 'SALES' ? 'blue' :
+                  record.category === 'WITHDRAW' ? 'purple' :
+                    'orange'
               } style={{ fontSize: '10px' }}>
-                {record.category === 'SALES' ? 'PENJUALAN' : 
-                 record.category === 'WITHDRAW' ? 'PENARIKAN' : 
-                 'OPERASIONAL'}
+                {record.category === 'SALES' ? 'PENJUALAN' :
+                  record.category === 'WITHDRAW' ? 'PENARIKAN' :
+                    'OPERASIONAL'}
               </Tag>
             </div>
           )}
@@ -170,6 +170,7 @@ export default function ProfitManagement() {
             ]}
           >
             <InputNumber
+              inputMode='numeric'
               style={{ width: '100%' }}
               formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}

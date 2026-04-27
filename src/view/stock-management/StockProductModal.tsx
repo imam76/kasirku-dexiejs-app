@@ -303,6 +303,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 render={({ field }) => (
                   <InputNumber
                     {...field}
+                    inputMode='numeric'
                     className="w-full"
                     placeholder={`Masukkan harga beli per ${purchaseUnit}`}
                     step={0.01}
@@ -327,6 +328,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 render={({ field }) => (
                   <InputNumber
                     {...field}
+                    inputMode='numeric'
                     className="w-full"
                     placeholder={`Masukkan harga jual per ${purchaseUnit}`}
                     step={0.01}
@@ -359,6 +361,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 render={({ field }) => (
                   <InputNumber
                     {...field}
+                    inputMode='decimal'
                     className="w-full"
                     placeholder="Jumlah item yang dibeli (untuk laporan)"
                     min={0}
@@ -399,6 +402,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         render={({ field }) => (
                           <InputNumber
                             {...field}
+                            inputMode='decimal'
                             className="w-full"
                             placeholder="Qty"
                             min={1}
@@ -440,6 +444,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         render={({ field }) => (
                           <InputNumber
                             {...field}
+                            inputMode='numeric'
                             className="w-full"
                             placeholder="Nominal"
                             min={0}
