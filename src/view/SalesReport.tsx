@@ -2,12 +2,13 @@ import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { useSalesReport } from '@/hooks/useReports';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
-import { exportCsv, type ExportTarget } from '@/utils/export';
-import { formatCategory } from '@/utils/formatters';
-import { BarChartOutlined, DownloadOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
-import { App, Button, Card, DatePicker, Dropdown, Empty, Grid, Select, Statistic, Typography } from 'antd';
-import type { MenuProps } from 'antd';
+import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
+import { formatCategory, formatCurrency } from '@/utils/formatters';
+import { BarChartOutlined, FilePdfOutlined, FileTextOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
+import { App, Button, Card, DatePicker, Empty, Grid, Select, Statistic, Typography } from 'antd';
+import autoTable from 'jspdf-autotable';
 import { useState } from 'react';
+import ExportActions from '@/components/ExportActions';
 import { Loading } from '../components/Loading';
 import DesktopSalesTable from './sales-report/DesktopSalesTable';
 import MobileSalesList from './sales-report/MobileSalesList';
@@ -33,6 +34,84 @@ export default function SalesReport() {
   const { data, isLoading, error, refetch } = useSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
 
   const screens = useBreakpoint();
+
+  const handleExportPDF = async (target: ExportTarget = 'auto') => {
+    if (!data) return;
+
+    try {
+      const exported = await exportPdf({
+        filename: `laporan-penjualan-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
+        target,
+        build: (doc) => {
+          const period = `Periode ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`;
+          const printDate = `Tanggal Cetak: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`;
+
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Kasirku', 105, 18, { align: 'center' });
+          doc.setFontSize(13);
+          doc.text('Laporan Penjualan', 105, 30, { align: 'center' });
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'normal');
+          doc.text(period, 105, 41, { align: 'center' });
+          doc.setFontSize(9);
+          doc.text(printDate, 105, 49, { align: 'center' });
+
+          const tableData = data.transactions.map((t, index) => {
+            const balance = Math.max(t.total_amount - (t.payment_amount || 0), 0);
+
+            return [
+              dayjs(t.created_at).tz().format('DD/MM/YYYY'),
+              t.transaction_number || String(index + 1),
+              '-',
+              formatCurrency(t.total_amount),
+              formatCurrency(0),
+              formatCurrency(t.total_amount),
+              formatCurrency(t.payment_amount || 0),
+              formatCurrency(balance),
+            ];
+          });
+
+          autoTable(doc, {
+            startY: 58,
+            head: [['Tgl', 'No Order', 'Pembeli', 'Sub Total', 'Diskon', 'Total Penjualan', 'Pembayaran', 'Saldo']],
+            body: tableData,
+            foot: [[
+              '',
+              '',
+              'Total',
+              formatCurrency(data.totalRevenue),
+              formatCurrency(0),
+              formatCurrency(data.totalRevenue),
+              formatCurrency(data.transactions.reduce((sum, t) => sum + (t.payment_amount || 0), 0)),
+              formatCurrency(data.transactions.reduce((sum, t) => sum + Math.max(t.total_amount - (t.payment_amount || 0), 0), 0)),
+            ]],
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+            headStyles: { fillColor: [199, 210, 254], textColor: 33, fontStyle: 'normal' },
+            footStyles: { fillColor: [241, 245, 249], textColor: 15, fontStyle: 'bold' },
+            columnStyles: {
+              0: { cellWidth: 18 },
+              1: { cellWidth: 24 },
+              2: { cellWidth: 24 },
+              3: { halign: 'right', cellWidth: 24 },
+              4: { halign: 'right', cellWidth: 20 },
+              5: { halign: 'right', cellWidth: 28 },
+              6: { halign: 'right', cellWidth: 26 },
+              7: { halign: 'right', cellWidth: 20 },
+            },
+            margin: { left: 8, right: 8 },
+          });
+        },
+      });
+
+      if (!exported) return;
+      message.success('Export PDF penjualan berhasil.');
+    } catch (error) {
+      console.error('Failed to export sales PDF:', error);
+      message.error('Gagal export PDF penjualan.');
+    }
+  };
 
   const handleDownload = async (target: ExportTarget = 'auto') => {
     if (!data) return;
@@ -97,15 +176,6 @@ export default function SalesReport() {
       console.error('Failed to export sales report:', error);
       message.error('Gagal export laporan penjualan.');
     }
-  };
-
-  const exportMenuItems: MenuProps['items'] = [
-    { key: 'share', label: 'Bagikan' },
-    { key: 'save', label: 'Simpan ke File' },
-  ];
-
-  const handleExportMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
-    void handleDownload(key as ExportTarget);
   };
 
   const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
@@ -199,16 +269,24 @@ export default function SalesReport() {
           >
             Refresh
           </Button>
-          <Dropdown menu={{ items: exportMenuItems, onClick: handleExportMenuClick }} trigger={['click']}>
-            <Button
-              type="primary"
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
-              icon={<DownloadOutlined className="text-[12px]" />}
-              disabled={!data || data.transactions.length === 0}
-            >
-              Export CSV
-            </Button>
-          </Dropdown>
+          <ExportActions
+            buttonClassName="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
+            disabled={!data || data.transactions.length === 0}
+            formats={[
+              {
+                key: 'csv',
+                label: 'CSV',
+                icon: <FileTextOutlined className="text-[12px]" />,
+                onExport: handleDownload,
+              },
+              {
+                key: 'pdf',
+                label: 'PDF',
+                icon: <FilePdfOutlined className="text-[12px]" />,
+                onExport: handleExportPDF,
+              },
+            ]}
+          />
         </div>
       </div>
 

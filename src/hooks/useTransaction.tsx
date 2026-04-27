@@ -86,7 +86,7 @@ export const useTransaction = () => {
 
   const handleCheckout = async () => {
     const total = calculateTotal();
-    const payment = parseFloat(paymentAmount);
+    const payment = paymentMethod === 'NON_TUNAI' ? total : parseFloat(paymentAmount);
 
     if (isNaN(payment) || payment < total) {
       modal.error({
@@ -97,7 +97,7 @@ export const useTransaction = () => {
     }
 
     const transactionNumber = `TRX-${Date.now()}`;
-    const change = payment - total;
+    const change = paymentMethod === 'NON_TUNAI' ? 0 : payment - total;
     const now = new Date().toISOString();
     const transactionId = crypto.randomUUID();
 

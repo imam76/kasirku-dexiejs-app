@@ -1,12 +1,13 @@
 import { Loading } from '@/components/Loading';
 import { useExpenseReport } from '@/hooks/useReports';
 import dayjs from '@/lib/dayjs';
-import { exportPdf, exportXlsx } from '@/utils/export';
+import { exportPdf, exportXlsx, type ExportTarget } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
 import { FileExcelOutlined, FilePdfOutlined, ReloadOutlined } from '@ant-design/icons';
 import { App, Button, DatePicker, Grid, Select, Typography } from 'antd';
 import autoTable from 'jspdf-autotable';
 import { useState } from 'react';
+import ExportActions from '@/components/ExportActions';
 import DesktopExpenseTable from './expense-report/DesktopExpenseTable';
 import MobileExpenseList from './expense-report/MobileExpenseList';
 
@@ -95,12 +96,13 @@ export default function ExpenseReport() {
     setSelectedCategories([]);
   };
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (target: ExportTarget = 'auto') => {
     if (!data) return;
 
     try {
       await exportPdf({
         filename: `laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
+        target,
         build: (doc) => {
           const title = 'Laporan Pengeluaran';
           const period = `Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`;
@@ -137,7 +139,7 @@ export default function ExpenseReport() {
     }
   };
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (target: ExportTarget = 'auto') => {
     if (!data) return;
 
     try {
@@ -163,6 +165,7 @@ export default function ExpenseReport() {
 
       await exportXlsx({
         filename: `laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}.xlsx`,
+        target,
         sheets: [
           {
             name: 'Laporan Pengeluaran',
@@ -197,23 +200,24 @@ export default function ExpenseReport() {
           >
             Refresh
           </Button>
-          <Button 
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5"
-            icon={<FilePdfOutlined className="text-[12px]" />} 
-            onClick={handleExportPDF} 
+          <ExportActions
+            buttonClassName="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
             disabled={!data || data.transactions.length === 0}
-          >
-            PDF
-          </Button>
-          <Button 
-            type="primary" 
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
-            icon={<FileExcelOutlined className="text-[12px]" />} 
-            onClick={handleExportExcel} 
-            disabled={!data || data.transactions.length === 0}
-          >
-            Excel
-          </Button>
+            formats={[
+              {
+                key: 'pdf',
+                label: 'PDF',
+                icon: <FilePdfOutlined className="text-[12px]" />,
+                onExport: handleExportPDF,
+              },
+              {
+                key: 'excel',
+                label: 'Excel',
+                icon: <FileExcelOutlined className="text-[12px]" />,
+                onExport: handleExportExcel,
+              },
+            ]}
+          />
         </div>
       </div>
 

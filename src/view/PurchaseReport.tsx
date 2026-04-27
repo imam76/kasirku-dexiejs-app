@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { App, Card, Button, DatePicker, Dropdown, Space, Table, Statistic, Empty, Tag, Select } from 'antd';
-import type { MenuProps } from 'antd';
-import { DownloadOutlined, FilterOutlined } from '@ant-design/icons';
+import { App, Card, Button, DatePicker, Space, Table, Statistic, Empty, Tag, Select } from 'antd';
+import { FileTextOutlined, FilterOutlined } from '@ant-design/icons';
 import dayjs from '@/lib/dayjs';
 import { usePurchaseReport } from '@/hooks/useReports';
 import { formatCurrency } from '@/utils/formatters';
 import { Loading } from '@/components/Loading';
 import { exportCsv, type ExportTarget } from '@/utils/export';
+import ExportActions from '@/components/ExportActions';
 // import { Loading } from './Loading';
 
 export default function PurchaseReport() {
@@ -116,15 +116,6 @@ export default function PurchaseReport() {
     }
   };
 
-  const exportMenuItems: MenuProps['items'] = [
-    { key: 'share', label: 'Bagikan' },
-    { key: 'save', label: 'Simpan ke File' },
-  ];
-
-  const handleExportMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
-    void handleDownload(key as ExportTarget);
-  };
-
   const columns = [
     {
       title: 'Nama Produk',
@@ -218,15 +209,17 @@ export default function PurchaseReport() {
               />
             )}
             <Button onClick={handleReset}>Reset</Button>
-            <Dropdown menu={{ items: exportMenuItems, onClick: handleExportMenuClick }} trigger={['click']}>
-              <Button
-                type="primary"
-                icon={<DownloadOutlined />}
-                disabled={!data || data.purchases.length === 0}
-              >
-                Export CSV
-              </Button>
-            </Dropdown>
+            <ExportActions
+              disabled={!data || data.purchases.length === 0}
+              formats={[
+                {
+                  key: 'csv',
+                  label: 'CSV',
+                  icon: <FileTextOutlined />,
+                  onExport: handleDownload,
+                },
+              ]}
+            />
           </Space>
         </Space>
       </Card>
