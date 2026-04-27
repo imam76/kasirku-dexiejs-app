@@ -7,8 +7,10 @@
   ],
   "permissions": [
     "core:default",
+    "dialog:default",
     "opener:default",
     "fs:default",
+    "fs:allow-appcache-write",
     "os:default",
     "share:default"
   ]

@@ -170,36 +170,21 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
   return { items, errors };
 };
 
-const escapeCsvString = (value: string) => `"${value.replace(/"/g, '""')}"`;
-
-export const createProductCsvExportContent = (products: Product[]) => {
+export const createProductCsvExportRows = (products: Product[]) => {
   const headers = ['id', 'sku', 'name', 'purchase_price', 'selling_price', 'stock', 'created_at', 'updated_at'];
   return [
-    headers.join(','),
+    headers,
     ...products.map((product) => {
       return [
-        escapeCsvString(product.id),
-        escapeCsvString(product.sku || ''),
-        escapeCsvString(product.name || ''),
+        product.id,
+        product.sku || '',
+        product.name || '',
         product.purchase_price,
         product.selling_price,
         product.stock,
-        escapeCsvString(product.created_at),
-        escapeCsvString(product.updated_at),
-      ].join(',');
+        product.created_at,
+        product.updated_at,
+      ];
     }),
-  ].join('\n');
+  ];
 };
-
-export const downloadCsvContent = (csvContent: string, filename: string) => {
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-};
-

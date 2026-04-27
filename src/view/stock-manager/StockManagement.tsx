@@ -8,9 +8,9 @@ import StockTable from '@/components/StockTable';
 import StockProductModal from './StockProductModal';
 import {
   buildProductCsvImportItems,
-  createProductCsvExportContent,
-  downloadCsvContent,
+  createProductCsvExportRows,
 } from '@/utils/productsCsv';
+import { exportCsv, type ExportTarget } from '@/utils/export';
 
 export default function StockManagement() {
   const { modal, message } = App.useApp();
@@ -46,13 +46,24 @@ export default function StockManagement() {
     setIsModalOpen(true);
   };
 
-  const handleExportCsv = () => {
+  const handleExportCsv = async (target: ExportTarget = 'auto') => {
     if (products.length === 0) {
       message.info('Tidak ada data produk untuk diexport.');
       return;
     }
-    const csvContent = createProductCsvExportContent(products);
-    downloadCsvContent(csvContent, `products_export_${new Date().toISOString().split('T')[0]}.csv`);
+
+    try {
+      const exported = await exportCsv({
+        filename: `products_export_${new Date().toISOString().split('T')[0]}.csv`,
+        rows: createProductCsvExportRows(products),
+        target,
+      });
+      if (!exported) return;
+      message.success('Export CSV produk berhasil.');
+    } catch (error) {
+      console.error('Failed to export products CSV:', error);
+      message.error('Gagal export CSV produk.');
+    }
   };
 
   const handleImportClick = () => {
@@ -122,16 +133,35 @@ export default function StockManagement() {
   };
 
   const mobileMenuItems: MenuProps['items'] = [
-    { key: 'export', label: 'Export CSV', icon: <Download size={16} />, disabled: products.length === 0 },
+    {
+      key: 'export',
+      label: 'Export CSV',
+      icon: <Download size={16} />,
+      disabled: products.length === 0,
+      children: [
+        { key: 'export-share', label: 'Bagikan' },
+        { key: 'export-save', label: 'Simpan ke File' },
+      ],
+    },
     { key: 'import', label: 'Import CSV', icon: <Upload size={16} />, disabled: isImporting },
     { type: 'divider' },
     { key: 'add', label: 'Tambah Produk', icon: <Plus size={16} /> },
   ];
 
   const handleMobileMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
-    if (key === 'export') handleExportCsv();
+    if (key === 'export-share') handleExportCsv('share');
+    if (key === 'export-save') handleExportCsv('save');
     if (key === 'import') handleImportClick();
     if (key === 'add') handleAddProduct();
+  };
+
+  const exportMenuItems: MenuProps['items'] = [
+    { key: 'share', label: 'Bagikan' },
+    { key: 'save', label: 'Simpan ke File' },
+  ];
+
+  const handleExportMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
+    void handleExportCsv(key as ExportTarget);
   };
 
   return (
@@ -168,14 +198,16 @@ export default function StockManagement() {
             className="hidden"
             onChange={handleImportSelected}
           />
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm text-white transition-colors hover:bg-green-700 sm:px-4 sm:py-2 sm:text-base"
-          >
-            <Download size={18} />
-            <span>Export CSV</span>
-          </button>
+          <Dropdown trigger={['click']} placement="bottomRight" menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}>
+            <button
+              type="button"
+              disabled={products.length === 0}
+              className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm text-white transition-colors hover:bg-green-700 disabled:bg-green-400 sm:px-4 sm:py-2 sm:text-base"
+            >
+              <Download size={18} />
+              <span>Export CSV</span>
+            </button>
+          </Dropdown>
           <button
             type="button"
             onClick={handleImportClick}
@@ -206,7 +238,7 @@ export default function StockManagement() {
         setIsModalOpen={setIsModalOpen}
         onSave={async () => {
           try {
-            let submit = await handleSubmit();
+            const submit = await handleSubmit();
             if (submit) {
               setIsModalOpen(false);
             }

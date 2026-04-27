@@ -2,9 +2,11 @@ import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { useSalesReport } from '@/hooks/useReports';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
+import { exportCsv, type ExportTarget } from '@/utils/export';
 import { formatCategory } from '@/utils/formatters';
 import { BarChartOutlined, DownloadOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
-import { Button, Card, DatePicker, Empty, Grid, Select, Statistic, Typography } from 'antd';
+import { App, Button, Card, DatePicker, Dropdown, Empty, Grid, Select, Statistic, Typography } from 'antd';
+import type { MenuProps } from 'antd';
 import { useState } from 'react';
 import { Loading } from '../components/Loading';
 import DesktopSalesTable from './sales-report/DesktopSalesTable';
@@ -15,6 +17,7 @@ const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
 
 export default function SalesReport() {
+  const { message } = App.useApp();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>([
@@ -31,70 +34,78 @@ export default function SalesReport() {
 
   const screens = useBreakpoint();
 
-  const handleDownload = async () => {
+  const handleDownload = async (target: ExportTarget = 'auto') => {
     if (!data) return;
 
-    // Fetch detail per item for all filtered transactions
-    const transactionIds = data.transactions.map(t => t.id);
-    const allItems = await db.transactionItems
-      .where('transaction_id')
-      .anyOf(transactionIds)
-      .toArray();
+    try {
+      const transactionIds = data.transactions.map(t => t.id);
+      const allItems = await db.transactionItems
+        .where('transaction_id')
+        .anyOf(transactionIds)
+        .toArray();
 
-    // Fetch products to get categories
-    const products = await db.products.toArray();
-    const productMap = new Map(products.map(p => [p.id, p]));
+      const products = await db.products.toArray();
+      const productMap = new Map(products.map(p => [p.id, p]));
 
-    const csvRows = [
-      ['SECTION 1: RINGKASAN TRANSAKSI'],
-      ['No. Transaksi', 'Tanggal', 'Metode Pembayaran', 'Total Penjualan', 'Pembayaran', 'Kembalian'],
-      ...data.transactions.map((t) => [
-        t.transaction_number,
-        dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
-        t.payment_method || 'TUNAI',
-        t.total_amount,
-        t.payment_amount,
-        t.change_amount,
-      ]),
-      [],
-      ['SECTION 2: DETAIL ITEM PER TRANSAKSI'],
-      ['No. Transaksi', 'Tanggal', 'Nama Produk', 'Kategori', 'Jumlah', 'Satuan', 'Harga Satuan', 'Subtotal', 'HPP', 'Profit'],
-      ...allItems.map((item) => {
-        const trans = data.transactions.find(t => t.id === item.transaction_id);
-        const product = productMap.get(item.product_id);
-        return [
-          trans?.transaction_number || '-',
-          dayjs(item.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
-          item.product_name,
-          formatCategory(product?.category || 'lainnya'),
-          item.quantity,
-          item.unit,
-          item.price,
-          item.subtotal,
-          item.purchase_price,
-          item.profit,
-        ];
-      }),
-      [],
-      ['RINGKASAN LAPORAN'],
-      ['Total Transaksi', data.transactions.length],
-      ['Total Penjualan', data.totalRevenue],
-      ['Total Keuntungan', data.totalProfit],
-      ['Total Item Terjual', data.totalItems],
-      ['Rata-rata Transaksi', data.averageTransaction],
-    ];
+      const csvRows = [
+        ['SECTION 1: RINGKASAN TRANSAKSI'],
+        ['No. Transaksi', 'Tanggal', 'Metode Pembayaran', 'Total Penjualan', 'Pembayaran', 'Kembalian'],
+        ...data.transactions.map((t) => [
+          t.transaction_number,
+          dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
+          t.payment_method || 'TUNAI',
+          t.total_amount,
+          t.payment_amount,
+          t.change_amount,
+        ]),
+        [],
+        ['SECTION 2: DETAIL ITEM PER TRANSAKSI'],
+        ['No. Transaksi', 'Tanggal', 'Nama Produk', 'Kategori', 'Jumlah', 'Satuan', 'Harga Satuan', 'Subtotal', 'HPP', 'Profit'],
+        ...allItems.map((item) => {
+          const trans = data.transactions.find(t => t.id === item.transaction_id);
+          const product = productMap.get(item.product_id);
+          return [
+            trans?.transaction_number || '-',
+            dayjs(item.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
+            item.product_name,
+            formatCategory(product?.category || 'lainnya'),
+            item.quantity,
+            item.unit,
+            item.price,
+            item.subtotal,
+            item.purchase_price,
+            item.profit,
+          ];
+        }),
+        [],
+        ['RINGKASAN LAPORAN'],
+        ['Total Transaksi', data.transactions.length],
+        ['Total Penjualan', data.totalRevenue],
+        ['Total Keuntungan', data.totalProfit],
+        ['Total Item Terjual', data.totalItems],
+        ['Rata-rata Transaksi', data.averageTransaction],
+      ];
 
-    const csvContent = csvRows
-      .map((row) => row.join(','))
-      .join('\n');
+      const exported = await exportCsv({
+        filename: `laporan-penjualan-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
+        rows: csvRows,
+        target,
+      });
+      if (!exported) return;
+      message.success('Export laporan penjualan berhasil.');
+    } catch (error) {
+      console.error('Failed to export sales report:', error);
+      message.error('Gagal export laporan penjualan.');
+    }
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `laporan-penjualan-${dayjs().tz().format('YYYY-MM-DD')}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+  const exportMenuItems: MenuProps['items'] = [
+    { key: 'share', label: 'Bagikan' },
+    { key: 'save', label: 'Simpan ke File' },
+  ];
+
+  const handleExportMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
+    void handleDownload(key as ExportTarget);
   };
 
   const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
@@ -188,15 +199,16 @@ export default function SalesReport() {
           >
             Refresh
           </Button>
-          <Button
-            type="primary"
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
-            icon={<DownloadOutlined className="text-[12px]" />}
-            onClick={handleDownload}
-            disabled={!data || data.transactions.length === 0}
-          >
-            Download CSV
-          </Button>
+          <Dropdown menu={{ items: exportMenuItems, onClick: handleExportMenuClick }} trigger={['click']}>
+            <Button
+              type="primary"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
+              icon={<DownloadOutlined className="text-[12px]" />}
+              disabled={!data || data.transactions.length === 0}
+            >
+              Export CSV
+            </Button>
+          </Dropdown>
         </div>
       </div>
 

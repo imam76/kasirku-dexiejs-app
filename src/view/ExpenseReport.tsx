@@ -1,13 +1,12 @@
 import { Loading } from '@/components/Loading';
 import { useExpenseReport } from '@/hooks/useReports';
 import dayjs from '@/lib/dayjs';
+import { exportPdf, exportXlsx } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
 import { FileExcelOutlined, FilePdfOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, DatePicker, Grid, Select, Typography } from 'antd';
-import jsPDF from 'jspdf';
+import { App, Button, DatePicker, Grid, Select, Typography } from 'antd';
 import autoTable from 'jspdf-autotable';
 import { useState } from 'react';
-import * as XLSX from 'xlsx';
 import DesktopExpenseTable from './expense-report/DesktopExpenseTable';
 import MobileExpenseList from './expense-report/MobileExpenseList';
 
@@ -24,6 +23,7 @@ const EXPENSE_CATEGORIES = [
 ];
 
 export default function ExpenseReport() {
+  const { message } = App.useApp();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>([
@@ -95,68 +95,86 @@ export default function ExpenseReport() {
     setSelectedCategories([]);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!data) return;
 
-    const doc = new jsPDF();
-    const title = 'Laporan Pengeluaran';
-    const period = `Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`;
-    const printDate = `Tanggal Cetak: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`;
+    try {
+      await exportPdf({
+        filename: `laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
+        build: (doc) => {
+          const title = 'Laporan Pengeluaran';
+          const period = `Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`;
+          const printDate = `Tanggal Cetak: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`;
 
-    doc.setFontSize(18);
-    doc.text(title, 14, 22);
-    doc.setFontSize(11);
-    doc.text(period, 14, 30);
-    doc.text(printDate, 14, 38);
+          doc.setFontSize(18);
+          doc.text(title, 14, 22);
+          doc.setFontSize(11);
+          doc.text(period, 14, 30);
+          doc.text(printDate, 14, 38);
 
-    const tableData = data.transactions.map((t) => [
-      dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm'),
-      t.description || '-',
-      EXPENSE_CATEGORIES.find(c => c.value === t.category)?.label || t.category,
-      formatCurrency(t.amount),
-    ]);
+          const tableData = data.transactions.map((t) => [
+            dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm'),
+            t.description || '-',
+            EXPENSE_CATEGORIES.find(c => c.value === t.category)?.label || t.category,
+            formatCurrency(t.amount),
+          ]);
 
-    autoTable(doc, {
-      startY: 45,
-      head: [['Tanggal & Jam', 'Keterangan/Deskripsi', 'Kategori', 'Nominal']],
-      body: tableData,
-      foot: [['', '', 'Total Keseluruhan', formatCurrency(data.totalExpense)]],
-      theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-      footStyles: { fillColor: [241, 241, 241], textColor: 0, fontStyle: 'bold' },
-    });
-
-    doc.save(`laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}.pdf`);
+          autoTable(doc, {
+            startY: 45,
+            head: [['Tanggal & Jam', 'Keterangan/Deskripsi', 'Kategori', 'Nominal']],
+            body: tableData,
+            foot: [['', '', 'Total Keseluruhan', formatCurrency(data.totalExpense)]],
+            theme: 'grid',
+            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+            footStyles: { fillColor: [241, 241, 241], textColor: 0, fontStyle: 'bold' },
+          });
+        },
+      });
+      message.success('Export PDF pengeluaran berhasil.');
+    } catch (error) {
+      console.error('Failed to export expense PDF:', error);
+      message.error('Gagal export PDF pengeluaran.');
+    }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!data) return;
 
-    const header = [
-      ['Laporan Pengeluaran'],
-      [`Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`],
-      [`Tanggal Cetak: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`],
-      [],
-      ['Tanggal & Jam', 'Keterangan/Deskripsi', 'Kategori', 'Nominal'],
-    ];
+    try {
+      const header = [
+        ['Laporan Pengeluaran'],
+        [`Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`],
+        [`Tanggal Cetak: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`],
+        [],
+        ['Tanggal & Jam', 'Keterangan/Deskripsi', 'Kategori', 'Nominal'],
+      ];
 
-    const body = data.transactions.map((t) => [
-      dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm'),
-      t.description || '-',
-      EXPENSE_CATEGORIES.find(c => c.value === t.category)?.label || t.category,
-      t.amount,
-    ]);
+      const body = data.transactions.map((t) => [
+        dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm'),
+        t.description || '-',
+        EXPENSE_CATEGORIES.find(c => c.value === t.category)?.label || t.category,
+        t.amount,
+      ]);
 
-    const footer = [
-      [],
-      ['', '', 'Total Keseluruhan', data.totalExpense],
-    ];
+      const footer = [
+        [],
+        ['', '', 'Total Keseluruhan', data.totalExpense],
+      ];
 
-    const worksheet = XLSX.utils.aoa_to_sheet([...header, ...body, ...footer]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan Pengeluaran');
-
-    XLSX.writeFile(workbook, `laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}.xlsx`);
+      await exportXlsx({
+        filename: `laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}.xlsx`,
+        sheets: [
+          {
+            name: 'Laporan Pengeluaran',
+            rows: [...header, ...body, ...footer],
+          },
+        ],
+      });
+      message.success('Export Excel pengeluaran berhasil.');
+    } catch (error) {
+      console.error('Failed to export expense Excel:', error);
+      message.error('Gagal export Excel pengeluaran.');
+    }
   };
 
   const screens = useBreakpoint();

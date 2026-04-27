@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Card, Button, DatePicker, Space, Table, Statistic, Empty, Tag, Select } from 'antd';
+import { App, Card, Button, DatePicker, Dropdown, Space, Table, Statistic, Empty, Tag, Select } from 'antd';
+import type { MenuProps } from 'antd';
 import { DownloadOutlined, FilterOutlined } from '@ant-design/icons';
 import dayjs from '@/lib/dayjs';
 import { usePurchaseReport } from '@/hooks/useReports';
 import { formatCurrency } from '@/utils/formatters';
 import { Loading } from '@/components/Loading';
+import { exportCsv, type ExportTarget } from '@/utils/export';
 // import { Loading } from './Loading';
 
 export default function PurchaseReport() {
+  const { message } = App.useApp();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
@@ -77,39 +80,49 @@ export default function PurchaseReport() {
     setSelectedHelper(undefined);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async (target: ExportTarget = 'auto') => {
     if (!data) return;
 
-    const csv = [
-      ['Laporan Pembelian Stok', dayjs().tz().format('YYYY-MM-DD HH:mm:ss')],
-      [`Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`],
-      [],
-      ['Nama Produk', 'SKU', 'Tanggal', 'Qty', 'Harga Satuan', 'Total Biaya'],
-      ...data.purchases.map((purchase) => [
-        purchase.product_name,
-        purchase.sku,
-        dayjs(purchase.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
-        purchase.quantity,
-        purchase.cost_per_unit,
-        purchase.total_cost,
-      ]),
-      [],
-      ['Ringkasan'],
-      ['Total Item Dibeli', data.totalQuantity],
-      ['Total Biaya', data.totalCost],
-      ['Rata-rata Harga Satuan', data.averageCostPerUnit],
-      ['Produk Unik', data.uniqueProducts],
-    ]
-      .map((row) => row.join(','))
-      .join('\n');
+    try {
+      const exported = await exportCsv({
+        filename: `laporan-pembelian-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
+        target,
+        rows: [
+          ['Laporan Pembelian Stok', dayjs().tz().format('YYYY-MM-DD HH:mm:ss')],
+          [`Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`],
+          [],
+          ['Nama Produk', 'SKU', 'Tanggal', 'Qty', 'Harga Satuan', 'Total Biaya'],
+          ...data.purchases.map((purchase) => [
+            purchase.product_name,
+            purchase.sku,
+            dayjs(purchase.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
+            purchase.quantity,
+            purchase.cost_per_unit,
+            purchase.total_cost,
+          ]),
+          [],
+          ['Ringkasan'],
+          ['Total Item Dibeli', data.totalQuantity],
+          ['Total Biaya', data.totalCost],
+          ['Rata-rata Harga Satuan', data.averageCostPerUnit],
+          ['Produk Unik', data.uniqueProducts],
+        ],
+      });
+      if (!exported) return;
+      message.success('Export laporan pembelian berhasil.');
+    } catch (error) {
+      console.error('Failed to export purchase report:', error);
+      message.error('Gagal export laporan pembelian.');
+    }
+  };
 
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `laporan-pembelian-${dayjs().tz().format('YYYY-MM-DD')}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+  const exportMenuItems: MenuProps['items'] = [
+    { key: 'share', label: 'Bagikan' },
+    { key: 'save', label: 'Simpan ke File' },
+  ];
+
+  const handleExportMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
+    void handleDownload(key as ExportTarget);
   };
 
   const columns = [
@@ -205,14 +218,15 @@ export default function PurchaseReport() {
               />
             )}
             <Button onClick={handleReset}>Reset</Button>
-            <Button
-              type="primary"
-              icon={<DownloadOutlined />}
-              onClick={handleDownload}
-              disabled={!data || data.purchases.length === 0}
-            >
-              Download CSV
-            </Button>
+            <Dropdown menu={{ items: exportMenuItems, onClick: handleExportMenuClick }} trigger={['click']}>
+              <Button
+                type="primary"
+                icon={<DownloadOutlined />}
+                disabled={!data || data.purchases.length === 0}
+              >
+                Export CSV
+              </Button>
+            </Dropdown>
           </Space>
         </Space>
       </Card>
