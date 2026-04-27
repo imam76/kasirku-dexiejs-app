@@ -89,6 +89,7 @@ export default function Transaction() {
 
           <ProductList
             products={filteredProducts}
+            cart={cart}
             addToCart={addToCart}
           />
         </div>
