@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Controller } from 'react-hook-form';
-import { Table, Button, Input, InputNumber, Select, Card, Typography, Form, Row, Col, Modal } from 'antd';
+import { Table, Button, InputNumber, Select, Card, Typography, Form, Row, Col, Modal, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Plus, Trash2, Save, History } from 'lucide-react';
 import { useShoppingNote } from '@/hooks/useShoppingNote';
@@ -14,26 +14,35 @@ export default function ShoppingNote() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const {
     items,
-    moneyCarried,
-    setMoneyCarried,
+    products,
+    isProductsLoading,
     removeItem,
     totalShopping,
-    remainingMoney,
     control,
     handleSubmit,
+    handleProductChange,
     errors,
     saveNote,
-    loadNote,
   } = useShoppingNote();
+
+  const unitOptions = Array.from(
+    new Set(['pcs', 'kg', 'gram', 'ons', 'box', 'dus', 'lusin', 'liter', 'meter', 'pack', 'roll', ...products.map((product) => product.purchase_unit)])
+  ).filter(Boolean);
 
   const columns: ColumnsType<ShoppingNoteItem> = [
     {
-      title: 'Nama Barang',
-      dataIndex: 'name',
-      key: 'name',
+      title: 'Produk',
+      dataIndex: 'product_name',
+      key: 'product_name',
+      render: (val: string, record: ShoppingNoteItem) => (
+        <div>
+          <div className="font-medium">{val || record.name}</div>
+          {record.sku && <Tag className="mt-1">{record.sku}</Tag>}
+        </div>
+      ),
     },
     {
-      title: 'Harga Satuan',
+      title: 'Harga Modal',
       dataIndex: 'unit_price',
       key: 'unit_price',
       render: (val: number) => `Rp ${val.toLocaleString()}`,
@@ -48,7 +57,7 @@ export default function ShoppingNote() {
       )
     },
     {
-      title: 'Unit',
+      title: 'Satuan',
       dataIndex: 'unit',
       key: 'unit',
       responsive: ['md'],
@@ -71,7 +80,7 @@ export default function ShoppingNote() {
   return (
     <div className="p-3 sm:p-4 md:p-6 pb-24 sm:pb-6">
       <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="min-w-0 text-lg font-bold text-gray-800 sm:text-xl md:text-2xl">Catatan Belanja</h2>
+        <h2 className="min-w-0 text-lg font-bold text-gray-800 sm:text-xl md:text-2xl">Belanja Stok</h2>
         <div className="flex gap-2 w-full sm:w-auto">
           <Button 
             className="flex-1 sm:flex-none"
@@ -87,44 +96,48 @@ export default function ShoppingNote() {
             onClick={saveNote} 
             disabled={items.length === 0}
           >
-            Simpan
+            Selesaikan
           </Button>
         </div>
       </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card title="Input Barang" bordered={false} className="shadow-sm">
-            <div className="mb-4">
-              <Text strong className="mb-1 block">Uang Dibawa:</Text>
-              <InputNumber
-                style={{ width: '100%' }}
-                value={moneyCarried}
-                onChange={(val) => setMoneyCarried(val || 0)}
-                formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={(value) => value?.replace(/Rp\s?|(,*)/g, '') as unknown as number}
-                placeholder="Masukkan jumlah uang"
-                size="large"
-              />
-            </div>
-
+          <Card title="Input Belanja Stok" bordered={false} className="shadow-sm">
             <form onSubmit={handleSubmit}>
               <div className="flex flex-col gap-4">
                 <div>
-                  <div className="mb-1"><Text strong>Nama Barang</Text></div>
+                  <div className="mb-1"><Text strong>Produk</Text></div>
                   <Controller
-                    name="name"
+                    name="product_id"
                     control={control}
                     render={({ field }) => (
-                      <Form.Item validateStatus={errors.name ? 'error' : ''} help={errors.name?.message} style={{ marginBottom: 0 }}>
-                        <Input {...field} placeholder="Nama Barang" size="large" />
+                      <Form.Item validateStatus={errors.product_id ? 'error' : ''} help={errors.product_id?.message} style={{ marginBottom: 0 }}>
+                        <Select
+                          {...field}
+                          showSearch
+                          loading={isProductsLoading}
+                          placeholder="Pilih produk"
+                          size="large"
+                          optionFilterProp="children"
+                          onChange={(value) => {
+                            field.onChange(value);
+                            handleProductChange(value);
+                          }}
+                        >
+                          {products.map((product) => (
+                            <Option key={product.id} value={product.id}>
+                              {product.name}{product.sku ? ` (${product.sku})` : ''}
+                            </Option>
+                          ))}
+                        </Select>
                       </Form.Item>
                     )}
                   />
                 </div>
 
                 <div>
-                  <div className="mb-1"><Text strong>Harga Satuan</Text></div>
+                  <div className="mb-1"><Text strong>Harga Modal</Text></div>
                   <Controller
                     name="unit_price"
                     control={control}
@@ -133,7 +146,7 @@ export default function ShoppingNote() {
                         <InputNumber
                           {...field}
                           style={{ width: '100%' }}
-                          placeholder="Harga Satuan"
+                          placeholder="Harga modal per satuan"
                           formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                           parser={(value) => value?.replace(/Rp\s?|(,*)/g, '') as unknown as number}
                           size="large"
@@ -158,14 +171,14 @@ export default function ShoppingNote() {
                   </div>
 
                   <div style={{ width: 120 }}>
-                    <div className="mb-1"><Text strong>Unit</Text></div>
+                    <div className="mb-1"><Text strong>Satuan</Text></div>
                     <Controller
                       name="unit"
                       control={control}
                       render={({ field }) => (
                         <Form.Item validateStatus={errors.unit ? 'error' : ''} help={errors.unit?.message} style={{ marginBottom: 0 }}>
                           <Select {...field} size="large">
-                            {['pcs', 'kg', 'box', 'dus', 'lusin', 'liter', 'meter', 'pack', 'roll'].map(u => (
+                            {unitOptions.map(u => (
                               <Option key={u} value={u}>{u}</Option>
                             ))}
                           </Select>
@@ -176,7 +189,7 @@ export default function ShoppingNote() {
                 </div>
 
                 <Button type="primary" htmlType="submit" icon={<Plus size={16} />} size="large" className="mt-2 w-full bg-blue-600 hover:bg-blue-700">
-                  Tambah Barang
+                  Tambah ke Draft
                 </Button>
               </div>
             </form>
@@ -184,7 +197,7 @@ export default function ShoppingNote() {
         </Col>
 
         <Col xs={24} md={16}>
-          <Card title="Daftar Belanja" bordered={false} className="shadow-sm" bodyStyle={{ padding: '12px' }}>
+          <Card title="Draft Belanja Stok" bordered={false} className="shadow-sm" bodyStyle={{ padding: '12px' }}>
             <Table
               dataSource={items}
               columns={columns}
@@ -195,17 +208,9 @@ export default function ShoppingNote() {
               summary={() => (
                 <Table.Summary fixed>
                   <Table.Summary.Row className="bg-gray-50">
-                    <Table.Summary.Cell index={0} colSpan={2}><Text strong className="text-base">Total Belanja</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} colSpan={2} align="right">
+                    <Table.Summary.Cell index={0} colSpan={3}><Text strong className="text-base">Total Belanja Stok</Text></Table.Summary.Cell>
+                    <Table.Summary.Cell index={1} colSpan={3} align="right">
                       <Text strong className="text-base">Rp {totalShopping.toLocaleString()}</Text>
-                    </Table.Summary.Cell>
-                  </Table.Summary.Row>
-                  <Table.Summary.Row className="bg-gray-50">
-                    <Table.Summary.Cell index={0} colSpan={2}><Text strong className="text-base">Sisa Uang</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} colSpan={2} align="right">
-                      <Text strong className="text-base" type={remainingMoney < 0 ? 'danger' : 'success'}>
-                        Rp {remainingMoney.toLocaleString()}
-                      </Text>
                     </Table.Summary.Cell>
                   </Table.Summary.Row>
                 </Table.Summary>
@@ -216,7 +221,7 @@ export default function ShoppingNote() {
       </Row>
 
       <Modal
-        title="Riwayat Belanja"
+        title="Riwayat Belanja Stok"
         open={historyOpen}
         onCancel={() => setHistoryOpen(false)}
         width={1000}
@@ -226,7 +231,7 @@ export default function ShoppingNote() {
         styles={{ body: { padding: 0 } }}
         className="full-screen-modal-mobile"
       >
-        <ShoppingNoteHistory onLoadNote={loadNote} onClose={() => setHistoryOpen(false)} />
+        <ShoppingNoteHistory />
       </Modal>
     </div>
   );

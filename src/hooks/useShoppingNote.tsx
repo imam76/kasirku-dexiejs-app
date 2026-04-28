@@ -2,44 +2,74 @@ import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { shoppingItemSchema, type ShoppingItemFormData } from '@/lib/validations/shopping';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
-import { ShoppingNoteItem } from '@/types';
+import { Product, ShoppingNoteItem, StockPurchase } from '@/types';
+import { konversiSatuan, normalisasiHarga } from '@/utils/pricing';
 
 export const useShoppingNote = () => {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [items, setItems] = useState<ShoppingNoteItem[]>([]);
-  const [moneyCarried, setMoneyCarried] = useState<number>(0);
+
+  const { data: products = [], isLoading: isProductsLoading } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      return await db.products.orderBy('name').toArray();
+    },
+  });
 
   const {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<ShoppingItemFormData>({
     resolver: zodResolver(shoppingItemSchema),
     defaultValues: {
-      name: '',
+      product_id: '',
       unit_price: undefined,
       quantity: 1,
       unit: 'pcs',
     },
   });
 
-  const addItem = (data: { name: string; unit_price: number; quantity: number; unit: string }) => {
+  const handleProductChange = (productId: string) => {
+    const product = products.find((item) => item.id === productId);
+    if (!product) return;
+
+    setValue('product_id', product.id);
+    setValue('unit', product.purchase_unit || 'pcs');
+    setValue('unit_price', product.purchase_price ?? 0);
+  };
+
+  const addItem = (data: ShoppingItemFormData) => {
+    const product = products.find((item) => item.id === data.product_id);
+    if (!product) {
+      message.warning('Produk tidak ditemukan');
+      return;
+    }
+
+    const unitPrice = Number(data.unit_price);
+    const quantity = Number(data.quantity);
+    const subtotal = unitPrice * quantity;
     const newItem: ShoppingNoteItem = {
       id: crypto.randomUUID(),
-      name: data.name,
-      unit_price: Number(data.unit_price),
-      quantity: Number(data.quantity),
+      product_id: product.id,
+      product_name: product.name,
+      sku: product.sku,
+      unit_price: unitPrice,
+      cost_per_unit: unitPrice,
+      quantity,
       unit: data.unit,
-      subtotal: Number(data.unit_price) * Number(data.quantity),
+      subtotal,
+      total_cost: subtotal,
     };
     setItems((prev) => [...prev, newItem]);
     reset({
-      name: '',
+      product_id: '',
       unit_price: undefined,
       quantity: 1,
       unit: 'pcs',
@@ -51,54 +81,104 @@ export const useShoppingNote = () => {
   };
 
   const totalShopping = useMemo(() => {
-    return items.reduce((acc, item) => acc + item.subtotal, 0);
+    return items.reduce((acc, item) => acc + (item.total_cost ?? item.subtotal), 0);
   }, [items]);
-
-  const remainingMoney = useMemo(() => {
-    return moneyCarried - totalShopping;
-  }, [moneyCarried, totalShopping]);
 
   const saveNote = async () => {
     if (items.length === 0) {
-      message.warning('Daftar belanja masih kosong');
+      message.warning('Daftar belanja stok masih kosong');
       return;
     }
 
     try {
-      await db.shoppingNotes.add({
-        id: crypto.randomUUID(),
-        created_at: new Date().toISOString(),
-        items,
-        money_carried: moneyCarried,
-        total_shopping: totalShopping,
-        remaining_money: remainingMoney,
-      });
-      message.success('Nota belanja berhasil disimpan');
-      setItems([]);
-      setMoneyCarried(0);
-      queryClient.invalidateQueries({ queryKey: ['shoppingNotesHistory'] });
-    } catch (error) {
-      console.error('Failed to save note:', error);
-      message.error('Gagal menyimpan nota belanja');
-    }
-  };
+      const now = new Date().toISOString();
 
-  const loadNote = (note: { items: ShoppingNoteItem[], money_carried: number }) => {
-    setItems(note.items);
-    setMoneyCarried(note.money_carried);
+      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
+        await db.shoppingNotes.add({
+          id: crypto.randomUUID(),
+          created_at: now,
+          items,
+          total_shopping: totalShopping,
+        });
+
+        for (const item of items) {
+          const product = await db.products.get(item.product_id);
+          if (!product) {
+            throw new Error(`Produk ${item.product_name} tidak ditemukan`);
+          }
+
+          const quantityInStockUnit = konversiSatuan(item.quantity, item.unit, product.purchase_unit);
+          const costPerStockUnit = normalisasiHarga(item.unit_price, item.unit, product.purchase_unit);
+          const totalCost = item.total_cost ?? item.subtotal;
+          const purchaseId = crypto.randomUUID();
+
+          const purchase: StockPurchase = {
+            id: purchaseId,
+            product_id: product.id,
+            product_name: product.name,
+            sku: product.sku,
+            quantity: quantityInStockUnit,
+            cost_per_unit: costPerStockUnit,
+            total_cost: totalCost,
+            created_at: now,
+            updated_at: now,
+          };
+
+          await db.stockPurchases.add(purchase);
+
+          const productUpdate: Partial<Product> = {
+            stock: product.stock + quantityInStockUnit,
+            updated_at: now,
+          };
+
+          if (product.purchase_price !== costPerStockUnit) {
+            productUpdate.purchase_price = costPerStockUnit;
+          }
+
+          await db.products.update(product.id, productUpdate);
+
+          const currentFinanceBalance = await db.financeBalance.get('current');
+          await db.financeBalance.put({
+            id: 'current',
+            amount: (currentFinanceBalance?.amount || 0) - totalCost,
+            updated_at: now,
+          });
+
+          await db.financeTransactions.add({
+            id: crypto.randomUUID(),
+            type: 'EXPENSE',
+            category: 'PEMBELIAN_STOK',
+            amount: totalCost,
+            description: `Belanja Stok: ${product.name} (${item.quantity} ${item.unit})`,
+            created_at: now,
+            reference_id: purchaseId,
+          });
+        }
+      });
+
+      message.success('Belanja stok berhasil disimpan');
+      setItems([]);
+      queryClient.invalidateQueries({ queryKey: ['shoppingNotesHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
+      queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
+    } catch (error) {
+      console.error('Failed to save stock shopping:', error);
+      message.error(error instanceof Error ? error.message : 'Gagal menyimpan belanja stok');
+    }
   };
 
   return {
     items,
-    moneyCarried,
-    setMoneyCarried,
+    products,
+    isProductsLoading,
     removeItem,
     totalShopping,
-    remainingMoney,
     control,
     handleSubmit: handleSubmit(addItem),
+    handleProductChange,
     errors,
     saveNote,
-    loadNote,
   };
 };

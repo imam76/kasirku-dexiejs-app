@@ -138,7 +138,7 @@ const RootLayout = () => {
   const navLinks = [
     { to: '/', label: 'Home', icon: Home },
     { to: '/stock', label: 'Stok', icon: Box },
-    { to: '/shopping-note', label: 'Catatan Belanja', icon: ClipboardList },
+    { to: '/shopping-note', label: 'Belanja Stok', icon: ClipboardList },
     { to: '/transaction', label: 'Transaksi', icon: ShoppingCart },
     { to: '/history', label: 'Riwayat', icon: History },
     {

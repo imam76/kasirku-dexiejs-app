@@ -78,20 +78,25 @@ export interface CartItem {
 
 export interface ShoppingNoteItem {
   id: string;
-  name: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
   unit_price: number;
+  cost_per_unit: number;
   quantity: number;
   unit: string;
   subtotal: number;
+  total_cost: number;
+  name?: string; // Legacy field from older shopping notes
 }
 
 export interface ShoppingNote {
   id: string;
   created_at: string;
   items: ShoppingNoteItem[];
-  money_carried: number;
+  money_carried?: number;
   total_shopping: number;
-  remaining_money: number;
+  remaining_money?: number;
 }
 
 export interface ProfitLog {
@@ -128,4 +133,3 @@ export interface FinanceBalance {
   amount: number;
   updated_at: string;
 }
-

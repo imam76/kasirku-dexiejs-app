@@ -2,21 +2,16 @@ import { useRef, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Button, List, Modal, Typography, Card, Empty, Spin } from 'antd';
-import { History, Calendar, ShoppingCart, Trash2 } from 'lucide-react';
+import { History, Calendar, Trash2 } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { ShoppingNote } from '@/types';
 
 const { Text, Title } = Typography;
 
-interface ShoppingNoteHistoryProps {
-  onLoadNote: (note: ShoppingNote) => void;
-  onClose?: () => void;
-}
-
 const PAGE_SIZE = 20;
 
-export default function ShoppingNoteHistory({ onLoadNote, onClose }: ShoppingNoteHistoryProps) {
+export default function ShoppingNoteHistory() {
   const [selectedNote, setSelectedNote] = useState<ShoppingNote | null>(null);
 
   const {
@@ -59,7 +54,7 @@ export default function ShoppingNoteHistory({ onLoadNote, onClose }: ShoppingNot
     e.stopPropagation();
     Modal.confirm({
       title: 'Hapus Riwayat',
-      content: 'Apakah Anda yakin ingin menghapus riwayat belanja ini?',
+      content: 'Apakah Anda yakin ingin menghapus riwayat belanja stok ini? Stok dan catatan keuangan yang sudah dibuat tidak akan dibatalkan.',
       okText: 'Hapus',
       cancelText: 'Batal',
       okType: 'danger',
@@ -73,20 +68,12 @@ export default function ShoppingNoteHistory({ onLoadNote, onClose }: ShoppingNot
     });
   };
 
-  const handleLoad = () => {
-    if (selectedNote) {
-      onLoadNote(selectedNote);
-      setSelectedNote(null);
-      if (onClose) onClose();
-    }
-  };
-
   if (isLoading) {
     return <div className="flex justify-center p-8"><Spin size="large" /></div>;
   }
 
   if (allNotes.length === 0) {
-    return <Empty description="Belum ada riwayat belanja" />;
+    return <Empty description="Belum ada riwayat belanja stok" />;
   }
 
   return (
@@ -184,10 +171,10 @@ export default function ShoppingNoteHistory({ onLoadNote, onClose }: ShoppingNot
                 <Button icon={<History size={16} />} onClick={() => setSelectedNote(null)}>
                   Kembali
                 </Button>
-                <Title level={5} className="m-0">Detail Belanja</Title>
+                <Title level={5} className="m-0">Detail Belanja Stok</Title>
               </div>
               <div className="hidden md:block mb-2">
-                <Title level={5}>Detail Belanja</Title>
+                <Title level={5}>Detail Belanja Stok</Title>
               </div>
 
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-3">
@@ -196,14 +183,10 @@ export default function ShoppingNoteHistory({ onLoadNote, onClose }: ShoppingNot
                   <Text strong className="text-sm">{dayjs(selectedNote.created_at).format('DD MMM YYYY HH:mm')}</Text>
                 </div>
                 <div className="flex justify-between items-center">
-                  <Text type="secondary" className="text-xs">Total Belanja</Text>
+                  <Text type="secondary" className="text-xs">Total Belanja Stok</Text>
                   <Text strong className="text-lg text-blue-600">Rp {selectedNote.total_shopping.toLocaleString()}</Text>
                 </div>
               </div>
-
-              <Button type="primary" block icon={<ShoppingCart size={16} />} onClick={handleLoad} size="large">
-                Muat Kembali ke Daftar
-              </Button>
             </div>
 
             <div className="flex-1 overflow-auto p-4 bg-gray-50">
@@ -212,11 +195,14 @@ export default function ShoppingNoteHistory({ onLoadNote, onClose }: ShoppingNot
                 renderItem={(item) => (
                   <List.Item className="bg-white mb-2 p-3 rounded-lg shadow-sm border border-gray-100 flex-col items-start gap-1">
                     <div className="w-full flex justify-between items-start">
-                      <Text strong className="text-gray-800 line-clamp-2 flex-1 mr-2">{item.name}</Text>
-                      <Text strong className="whitespace-nowrap">Rp {item.subtotal.toLocaleString()}</Text>
+                      <div className="flex-1 mr-2">
+                        <Text strong className="text-gray-800 line-clamp-2">{item.product_name || item.name}</Text>
+                        {item.sku && <div className="text-xs text-gray-500 mt-0.5">SKU: {item.sku}</div>}
+                      </div>
+                      <Text strong className="whitespace-nowrap">Rp {(item.total_cost ?? item.subtotal).toLocaleString()}</Text>
                     </div>
                     <div className="w-full flex justify-between text-xs text-gray-500 mt-1 pt-1 border-t border-dashed border-gray-100">
-                      <span>{item.quantity} {item.unit} x Rp {item.unit_price.toLocaleString()}</span>
+                      <span>{item.quantity} {item.unit} x Rp {(item.cost_per_unit ?? item.unit_price).toLocaleString()}</span>
                     </div>
                   </List.Item>
                 )}
@@ -226,7 +212,7 @@ export default function ShoppingNoteHistory({ onLoadNote, onClose }: ShoppingNot
         ) : (
           <div className="flex h-full items-center justify-center text-gray-400 flex-col p-8 text-center hidden md:flex">
             <History size={64} className="mb-4 opacity-10" />
-            <Text type="secondary" className="text-base">Pilih riwayat belanja dari daftar di sebelah kiri untuk melihat detail barang.</Text>
+            <Text type="secondary" className="text-base">Pilih riwayat belanja stok dari daftar di sebelah kiri untuk melihat detail barang.</Text>
           </div>
         )}
       </div>
