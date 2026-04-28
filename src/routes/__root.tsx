@@ -137,10 +137,12 @@ const RootLayout = () => {
 
   const navLinks = [
     { to: '/', label: 'Home', icon: Home },
-    { to: '/stock', label: 'Stok', icon: Box },
-    { to: '/shopping-note', label: 'Belanja Stok', icon: ClipboardList },
     { to: '/transaction', label: 'Transaksi', icon: ShoppingCart },
+    { to: '/stock', label: 'Stok', icon: Box },
+    { to: '/units', label: 'Satuan & Konversi', icon: Scale },
+    { to: '/shopping-note', label: 'Belanja Stok', icon: ClipboardList },
     { to: '/history', label: 'Riwayat', icon: History },
+    { to: '/finance', label: 'Keuangan', icon: Banknote },
     {
       label: 'Laporan',
       icon: FileText,
@@ -152,8 +154,6 @@ const RootLayout = () => {
         { to: '/profit', label: 'Keuntungan', icon: DollarSign },
       ],
     },
-    { to: '/finance', label: 'Keuangan', icon: Banknote },
-    { to: '/units', label: 'Satuan & Konversi', icon: Scale },
     { to: '/settings', label: 'Pengaturan', icon: Settings },
   ]
 
