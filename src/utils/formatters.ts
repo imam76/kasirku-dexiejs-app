@@ -1,4 +1,5 @@
 import dayjs from '@/lib/dayjs';
+import { PRODUCT_CATEGORIES } from '@/constants/categories';
 
 export const formatDate = (dateString: string): string => {
   return dayjs(dateString).tz().format('D MMMM YYYY HH:mm');
@@ -15,10 +16,10 @@ export const getStockStatusClass = (stock: number): string => {
 };
 
 export const formatCategory = (category: string): string => {
-  const map: Record<string, string> = {
-    'bumbu': 'Bumbu Dapur',
-    'sembako': 'Sembako',
-    'lainnya': 'Lain-lain',
+  const normalized = category.toLowerCase();
+  const aliasMap: Record<string, string> = {
+    lainnya: 'Non-consumable / General Goods',
   };
-  return map[category.toLowerCase()] || category;
+
+  return PRODUCT_CATEGORIES.find((cat) => cat.value === normalized)?.label || aliasMap[normalized] || category;
 };

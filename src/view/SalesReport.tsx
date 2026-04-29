@@ -147,7 +147,7 @@ export default function SalesReport() {
             trans?.transaction_number || '-',
             dayjs(item.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
             item.product_name,
-            formatCategory(product?.category || 'lainnya'),
+            formatCategory(product?.category || 'non_consumable'),
             item.quantity,
             item.unit,
             item.price,

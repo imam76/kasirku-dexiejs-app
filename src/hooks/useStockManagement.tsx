@@ -19,7 +19,7 @@ export const useStockManagement = () => {
     resolver: zodResolver(stockSchema),
     defaultValues: {
       name: '',
-      category: 'lainnya',
+      category: 'non_consumable',
       purchase_unit: 'pcs',
       selling_unit: 'pcs',
       purchase_price: undefined,
@@ -58,7 +58,7 @@ export const useStockManagement = () => {
 
       const cleanData: any = {
         name: productData.name,
-        category: productData.category || 'lainnya',
+        category: productData.category || 'non_consumable',
         purchase_unit: productData.purchase_unit || 'pcs',
         selling_unit: productData.selling_unit || 'pcs',
         purchase_price: productData.purchase_price ?? undefined,
@@ -204,7 +204,7 @@ export const useStockManagement = () => {
 
           const cleanData = {
             name: item.name,
-            category: item.category || existing?.category || 'lainnya',
+            category: item.category || existing?.category || 'non_consumable',
             purchase_unit: (item.purchase_unit || existing?.purchase_unit || 'pcs') as ProductUnit,
             selling_unit: (item.selling_unit || existing?.selling_unit || 'pcs') as ProductUnit,
             purchase_price: item.purchase_price ?? 0,
@@ -351,7 +351,7 @@ export const useStockManagement = () => {
   const handleEdit = (product: Product) => {
     setEditingId(product.id);
     setValue('name', product.name);
-    setValue('category', product.category || 'lainnya');
+    setValue('category', product.category || 'non_consumable');
     setValue('purchase_unit', product.purchase_unit);
     setValue('selling_unit', product.selling_unit);
     setValue('purchase_price', product.purchase_price);

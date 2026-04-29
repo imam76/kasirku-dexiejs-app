@@ -256,7 +256,7 @@ export const createProductCsvExportRows = (products: Product[]) => {
         product.id,
         product.sku || '',
         product.name || '',
-        product.category || 'lainnya',
+        product.category || 'non_consumable',
         product.purchase_unit || 'pcs',
         product.selling_unit || 'pcs',
         product.purchase_price,

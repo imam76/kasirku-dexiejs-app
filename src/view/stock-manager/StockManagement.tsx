@@ -1,4 +1,4 @@
-import { App, Dropdown } from 'antd';
+import { App, Button, Drawer, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { Plus, Upload, Download, MoreVertical } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
@@ -29,6 +29,7 @@ export default function StockManagement() {
   } = useStockManagement();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isActionDrawerOpen, setIsActionDrawerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleModalCancel = () => {
@@ -133,29 +134,6 @@ export default function StockManagement() {
     }
   };
 
-  const mobileMenuItems: MenuProps['items'] = [
-    {
-      key: 'export',
-      label: 'Export CSV',
-      icon: <Download size={16} />,
-      disabled: products.length === 0,
-      children: [
-        { key: 'export-share', label: 'Bagikan' },
-        { key: 'export-save', label: 'Simpan ke File' },
-      ],
-    },
-    { key: 'import', label: 'Import CSV', icon: <Upload size={16} />, disabled: isImporting },
-    { type: 'divider' },
-    { key: 'add', label: 'Tambah Produk', icon: <Plus size={16} /> },
-  ];
-
-  const handleMobileMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
-    if (key === 'export-share') handleExportCsv('share');
-    if (key === 'export-save') handleExportCsv('save');
-    if (key === 'import') handleImportClick();
-    if (key === 'add') handleAddProduct();
-  };
-
   const exportMenuItems: MenuProps['items'] = [
     { key: 'share', label: 'Bagikan' },
     { key: 'save', label: 'Simpan ke File' },
@@ -165,40 +143,47 @@ export default function StockManagement() {
     void handleExportCsv(key as ExportTarget);
   };
 
+  const handleMobileExport = (target: ExportTarget) => {
+    setIsActionDrawerOpen(false);
+    void handleExportCsv(target);
+  };
+
+  const handleMobileImportClick = () => {
+    setIsActionDrawerOpen(false);
+    handleImportClick();
+  };
+
   return (
     <div className="p-3 sm:p-4 md:p-6">
-      <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="min-w-0 text-lg font-bold text-gray-800 sm:text-xl md:text-2xl">Manajemen Stok</h2>
-        <div className="flex items-center justify-end gap-2 sm:hidden">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={handleImportSelected}
-          />
-          <Dropdown
-            trigger={['click']}
-            placement="bottomRight"
-            menu={{ items: mobileMenuItems, onClick: handleMobileMenuClick }}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="hidden"
+        onChange={handleImportSelected}
+      />
+
+      <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6">
+        <h2 className="min-w-0 flex-1 text-lg font-bold text-gray-800 sm:text-xl md:text-2xl">Manajemen Stok</h2>
+        <div className="flex shrink-0 items-center justify-end gap-2 sm:hidden">
+          <Button
+            type="primary"
+            size="large"
+            icon={<Plus size={18} />}
+            onClick={handleAddProduct}
+            className="h-11 px-3 font-semibold"
           >
-            <button
-              type="button"
-              aria-label="Menu aksi stok"
-              className="rounded-lg bg-gray-100 p-2 text-gray-700 transition-colors hover:bg-gray-200"
-            >
-              <MoreVertical size={20} />
-            </button>
-          </Dropdown>
+            Tambah
+          </Button>
+          <Button
+            size="large"
+            aria-label="Menu export import stok"
+            icon={<MoreVertical size={20} />}
+            onClick={() => setIsActionDrawerOpen(true)}
+            className="h-11 w-11"
+          />
         </div>
         <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={handleImportSelected}
-          />
           <Dropdown trigger={['click']} placement="bottomRight" menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}>
             <button
               type="button"
@@ -228,6 +213,57 @@ export default function StockManagement() {
           </button>
         </div>
       </div>
+
+      <Drawer
+        title="Aksi Stok"
+        placement="bottom"
+        open={isActionDrawerOpen}
+        onClose={() => setIsActionDrawerOpen(false)}
+        height="auto"
+        className="sm:hidden"
+        styles={{
+          body: { padding: 16 },
+          header: { padding: '16px 20px' },
+        }}
+      >
+        <div className="space-y-3 pb-3">
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <Download size={18} />
+              <span>Export CSV</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                size="large"
+                disabled={products.length === 0}
+                onClick={() => handleMobileExport('share')}
+                className="h-12"
+              >
+                Bagikan
+              </Button>
+              <Button
+                size="large"
+                disabled={products.length === 0}
+                onClick={() => handleMobileExport('save')}
+                className="h-12"
+              >
+                Simpan ke File
+              </Button>
+            </div>
+          </div>
+
+          <Button
+            block
+            size="large"
+            icon={<Upload size={20} />}
+            disabled={isImporting}
+            onClick={handleMobileImportClick}
+            className="flex h-14 items-center justify-start font-semibold"
+          >
+            Import CSV
+          </Button>
+        </div>
+      </Drawer>
 
       <StockProductModal
         open={isModalOpen}

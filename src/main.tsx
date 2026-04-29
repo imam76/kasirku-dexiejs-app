@@ -22,7 +22,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryProvider>
       <ThemeProvider defaultMode="light">
-        <RouterProvider router={router} />
+        <RouterProvider router={router} scrollRestoration={true} />
       </ThemeProvider>
     </QueryProvider>
   </StrictMode>

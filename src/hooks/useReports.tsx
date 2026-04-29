@@ -115,7 +115,7 @@ export const useSalesReport = (
 
         const aggregation = relevantItems.reduce((acc, item) => {
           const product = productMap.get(item.product_id);
-          const category = product?.category || 'lainnya';
+          const category = product?.category || 'non_consumable';
 
           // Filter by category if provided
           if (categories && categories.length > 0 && !categories.includes(category)) {

@@ -5,7 +5,17 @@ export interface WholesalePrice {
 }
 
 export type ProductUnit = string;
-export type ProductCategory = 'bumbu' | 'sembako' | 'lainnya' | string;
+export type ProductCategory =
+  | 'bumbu'
+  | 'sembako'
+  | 'makanan_instan'
+  | 'snack'
+  | 'minuman'
+  | 'household_cleaning'
+  | 'laundry'
+  | 'personal_care'
+  | 'non_consumable'
+  | string;
 
 export interface UnitConversion {
   id: string;
