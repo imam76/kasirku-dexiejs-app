@@ -142,7 +142,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
             lastScannedRef.current = { text, at: now };
             setValue('sku', text);
-            void beepAudioRef.current?.play().catch(() => {});
+            void beepAudioRef.current?.play().catch(() => { });
             setScannerOpen(false);
           },
         );
@@ -309,6 +309,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 control={control}
                 render={({ field }) => (
                   <InputNumber
+                    inputMode='decimal'
                     value={field.value}
                     onBlur={field.onBlur}
                     onChange={(value) => field.onChange(value ?? 0)}
@@ -346,6 +347,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 control={control}
                 render={({ field }) => (
                   <InputNumber
+                    inputMode='decimal'
                     value={field.value}
                     onBlur={field.onBlur}
                     onChange={(value) => field.onChange(value ?? 0)}
@@ -363,6 +365,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 control={control}
                 render={({ field }) => (
                   <InputNumber
+                    inputMode='decimal'
                     value={field.value}
                     onBlur={field.onBlur}
                     onChange={(value) => field.onChange(value ?? 0)}
@@ -405,6 +408,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                           control={control}
                           render={({ field: itemField }) => (
                             <InputNumber
+                              inputMode='decimal'
                               value={itemField.value}
                               onBlur={itemField.onBlur}
                               onChange={(value) => itemField.onChange(value ?? 1)}
