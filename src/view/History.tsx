@@ -106,9 +106,10 @@ export default function History() {
                         onClick={() => toggleExpand(transaction.id)}
                         className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            {/* Badge row: wrap supaya tidak overflow di mobile */}
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
                               <span className="font-mono text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded">
                                 {transaction.transaction_number}
                               </span>
@@ -129,11 +130,13 @@ export default function History() {
                                   </>
                                 )}
                               </span>
-                              <span className="text-sm text-gray-600">
-                                {formatDate(transaction.created_at)}
-                              </span>
                             </div>
-                            <div className="grid grid-cols-4 gap-4">
+                            {/* Tanggal di baris sendiri */}
+                            <p className="text-sm text-gray-600 mb-2">
+                              {formatDate(transaction.created_at)}
+                            </p>
+                            {/* Summary: 2 col di mobile, 4 col di sm+ */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
                               <div>
                                 <p className="text-xs text-gray-500">Total</p>
                                 <p className="font-bold text-gray-800">
@@ -165,7 +168,8 @@ export default function History() {
                               </div>
                             </div>
                           </div>
-                          <div>
+                          {/* Chevron tidak ikut terdesak */}
+                          <div className="shrink-0 ml-2 mt-1">
                             {expandedId === transaction.id ? (
                               <ChevronUp className="text-gray-400" />
                             ) : (
@@ -185,13 +189,13 @@ export default function History() {
                                 className="bg-white p-3 rounded border border-gray-200"
                               >
                                 <div className="flex justify-between items-start mb-2">
-                                  <div>
+                                  <div className="min-w-0 flex-1 pr-2">
                                     <p className="font-medium text-gray-800">{item.product_name}</p>
                                     <p className="text-sm text-gray-600">
                                       {item.quantity} x Rp {formatCurrency(item.price)} = Rp {formatCurrency(item.subtotal)}
                                     </p>
                                   </div>
-                                  <p className="font-bold text-gray-800">
+                                  <p className="font-bold text-gray-800 shrink-0">
                                     Rp {formatCurrency(item.subtotal)}
                                   </p>
                                 </div>
