@@ -7,6 +7,7 @@ import { Transaction, TransactionItem, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getPrice, normalisasiHarga, konversiSatuan } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
+import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 
 export const useTransaction = () => {
   const queryClient = useQueryClient();
@@ -122,6 +123,7 @@ export const useTransaction = () => {
           const sellingPrice = getPrice(item.product, item.quantity, item.unit);
           // Normalisasi harga beli ke unit yang digunakan saat transaksi
           const normalizedPurchasePrice = normalisasiHarga(item.product.purchase_price, item.product.purchase_unit, item.unit);
+          const unitSnapshot = createSalesUnitSnapshot(item.unit, item.product);
           
           return {
             id: crypto.randomUUID(),
@@ -129,8 +131,10 @@ export const useTransaction = () => {
             product_id: item.product.id,
             product_name: item.product.name,
             price: sellingPrice,
+            selling_price: sellingPrice,
             purchase_price: normalizedPurchasePrice,
             unit: item.unit,
+            ...unitSnapshot,
             quantity: item.quantity,
             subtotal: sellingPrice * item.quantity,
             profit: (sellingPrice - normalizedPurchasePrice) * item.quantity,

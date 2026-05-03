@@ -4,6 +4,7 @@ import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
 import { formatCategory, formatCurrency } from '@/utils/formatters';
+import { formatWeightTotal, resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { BarChartOutlined, FilePdfOutlined, FileTextOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { App, Button, Card, DatePicker, Empty, Grid, Select, Statistic, Typography } from 'antd';
 import autoTable from 'jspdf-autotable';
@@ -143,13 +144,14 @@ export default function SalesReport() {
         ...allItems.map((item) => {
           const trans = data.transactions.find(t => t.id === item.transaction_id);
           const product = productMap.get(item.product_id);
+          const unit = resolveTransactionItemUnit(item, product);
           return [
             trans?.transaction_number || '-',
             dayjs(item.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
             item.product_name,
             formatCategory(product?.category || 'non_consumable'),
             item.quantity,
-            item.unit,
+            unit,
             item.price,
             item.subtotal,
             item.purchase_price,
@@ -161,7 +163,10 @@ export default function SalesReport() {
         ['Total Transaksi', data.transactions.length],
         ['Total Penjualan', data.totalRevenue],
         ['Total Keuntungan', data.totalProfit],
-        ['Total Item Terjual', data.totalItems],
+        ['Barang Satuan Terjual', data.soldItems.unitItems],
+        ['Barang Timbang Terjual', data.soldItems.weightedLineItems],
+        ['Total Berat Timbang', formatWeightTotal(data.soldItems.totalWeightBase)],
+        ['Total Berat Timbang (gram)', data.soldItems.totalWeightBase],
         ['Rata-rata Transaksi', data.averageTransaction],
       ];
 
@@ -372,12 +377,13 @@ export default function SalesReport() {
 
       {/* SUMMARY STATISTICS */}
       {data && data.transactions.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           {[
             { title: 'Total Transaksi', value: data.transactions.length, suffix: 'transaksi', color: '#1890ff', border: 'border-l-blue-500' },
             { title: 'Total Penjualan', value: data.totalRevenue, prefix: 'Rp ', color: '#52c41a', border: 'border-l-green-500', isCurrency: true },
             { title: 'Total Keuntungan', value: data.totalProfit, prefix: 'Rp ', color: '#faad14', border: 'border-l-orange-500', isCurrency: true },
-            { title: 'Total Item', value: data.totalItems, suffix: 'item', color: '#722ed1', border: 'border-l-purple-500' },
+            { title: 'Barang Satuan Terjual', value: data.soldItems.unitItems, suffix: 'unit', color: '#722ed1', border: 'border-l-purple-500' },
+            { title: 'Barang Timbang Terjual', value: data.soldItems.weightedLineItems, suffix: `item / ${formatWeightTotal(data.soldItems.totalWeightBase)}`, color: '#0f766e', border: 'border-l-teal-500' },
             { title: 'Rata-rata Transaksi', value: data.averageTransaction, prefix: 'Rp ', color: '#eb2f96', border: 'border-l-pink-500', isCurrency: true },
           ].map((stat, idx) => (
             <Card key={idx} className={`shadow-sm border-none border-l-4 ${stat.border} rounded-xl overflow-hidden`}>

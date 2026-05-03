@@ -5,6 +5,7 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
 import { formatDate, formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
+import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { Transaction, TransactionItem, TransactionReceiptInput } from '@/types';
 
 interface TransactionWithItems extends Transaction {
@@ -242,7 +243,7 @@ export default function History() {
                                   <div className="min-w-0 flex-1 pr-2">
                                     <p className="font-medium text-gray-800">{item.product_name}</p>
                                     <p className="text-sm text-gray-600">
-                                      {item.quantity} x Rp {formatCurrency(item.price)} = Rp {formatCurrency(item.subtotal)}
+                                      {item.quantity} {resolveTransactionItemUnit(item)} x Rp {formatCurrency(item.price)} = Rp {formatCurrency(item.subtotal)}
                                     </p>
                                   </div>
                                   <p className="font-bold text-gray-800 shrink-0">

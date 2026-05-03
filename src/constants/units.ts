@@ -1,4 +1,25 @@
-import { UnitConversion } from '@/types';
+import type { ProductUnit, UnitConversion } from '@/types';
+
+export const WEIGHT_BASE_UNIT: ProductUnit = 'gram';
+
+export const WEIGHT_UNIT_ALIASES: Record<string, ProductUnit> = {
+  g: 'gram',
+  gr: 'gram',
+  gram: 'gram',
+  grams: 'gram',
+  kg: 'kg',
+  kgs: 'kg',
+  kilogram: 'kg',
+  kilograms: 'kg',
+  kilo: 'kg',
+  ons: 'ons',
+};
+
+export const normalizeUnitKey = (unit?: string) => (unit || '').trim().toLowerCase();
+
+export const normalizeWeightUnit = (unit?: ProductUnit): ProductUnit | undefined => {
+  return WEIGHT_UNIT_ALIASES[normalizeUnitKey(unit)];
+};
 
 export const DEFAULT_CONVERSIONS: UnitConversion[] = [
   { id: 'kg-gram', fromUnit: 'kg', toUnit: 'gram', ratio: 1000, isPreset: true, label: '1 kg = 1000 gram' },

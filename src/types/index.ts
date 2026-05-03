@@ -5,6 +5,7 @@ export interface WholesalePrice {
 }
 
 export type ProductUnit = string;
+export type SalesUnitCategory = 'discrete' | 'weighted';
 export type ProductCategory =
   | 'bumbu'
   | 'sembako'
@@ -64,9 +65,15 @@ export interface TransactionItem {
   product_id: string;
   product_name: string;
   price: number;
+  selling_price?: number;
   purchase_price: number;
   quantity: number;
   unit: ProductUnit; // Satuan yang digunakan (misal: gram)
+  unit_id?: ProductUnit;
+  unit_label?: string;
+  unit_category?: SalesUnitCategory;
+  conversion_value?: number;
+  base_unit?: ProductUnit;
   subtotal: number;
   profit: number;
   created_at: string;

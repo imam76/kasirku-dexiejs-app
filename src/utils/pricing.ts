@@ -1,12 +1,8 @@
-import { Product, ProductUnit, UnitConversion } from '@/types';
+import { DEFAULT_CONVERSIONS } from '@/constants/units';
+import type { Product, ProductUnit, UnitConversion } from '@/types';
 
 // Global registry for unit conversions
-let conversionRegistry: UnitConversion[] = [
-  { id: 'kg-gram', fromUnit: 'kg', toUnit: 'gram', ratio: 1000, isPreset: true, label: '1 kg = 1000 gram' },
-  { id: 'gram-kg', fromUnit: 'gram', toUnit: 'kg', ratio: 0.001, isPreset: true, label: '1 gram = 0.001 kg' },
-  { id: 'ons-gram', fromUnit: 'ons', toUnit: 'gram', ratio: 100, isPreset: true, label: '1 ons = 100 gram' },
-  { id: 'kg-ons', fromUnit: 'kg', toUnit: 'ons', ratio: 10, isPreset: true, label: '1 kg = 10 ons' },
-];
+let conversionRegistry: UnitConversion[] = DEFAULT_CONVERSIONS;
 
 /**
  * Update the global conversion registry

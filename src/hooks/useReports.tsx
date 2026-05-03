@@ -3,12 +3,18 @@ import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import { Transaction, StockPurchase, FinanceTransaction } from '@/types';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
+import {
+  aggregateSoldItems,
+  createEmptySoldItemSummary,
+  resolveTransactionItemUnit,
+} from '@/utils/salesUnits';
+import type { SoldItemSummary } from '@/utils/salesUnits';
 
 interface SalesReportData {
   transactions: Transaction[];
   totalRevenue: number;
   totalProfit: number;
-  totalItems: number;
+  soldItems: SoldItemSummary;
   averageTransaction: number;
   topProducts: TopProduct[];
 }
@@ -83,7 +89,7 @@ export const useSalesReport = (
 
       // Calculate profit and items from transaction items
       let totalProfit = 0;
-      let totalItems = 0;
+      let soldItems = createEmptySoldItemSummary();
       let topProducts: TopProduct[] = [];
 
       if (transactionIds.length > 0) {
@@ -107,15 +113,16 @@ export const useSalesReport = (
         const relevantItems = items.filter(item => transactionIds.includes(item.transaction_id));
 
         totalProfit = relevantItems.reduce((sum, item) => sum + (item.profit || 0), 0);
-        totalItems = relevantItems.reduce((sum, item) => sum + item.quantity, 0);
 
         // Aggregate Top Products
         const products = await db.products.toArray();
         const productMap = new Map(products.map(p => [p.id, p]));
+        soldItems = aggregateSoldItems(relevantItems, productMap);
 
         const aggregation = relevantItems.reduce((acc, item) => {
           const product = productMap.get(item.product_id);
           const category = product?.category || 'non_consumable';
+          const unit = resolveTransactionItemUnit(item, product);
 
           // Filter by category if provided
           if (categories && categories.length > 0 && !categories.includes(category)) {
@@ -135,7 +142,7 @@ export const useSalesReport = (
 
           acc[item.product_id].totalRevenue += item.subtotal;
           acc[item.product_id].totalProfit += (item.profit || 0);
-          acc[item.product_id].units[item.unit] = (acc[item.product_id].units[item.unit] || 0) + item.quantity;
+          acc[item.product_id].units[unit] = (acc[item.product_id].units[unit] || 0) + item.quantity;
 
           return acc;
         }, {} as Record<string, any>);
@@ -159,7 +166,7 @@ export const useSalesReport = (
         transactions,
         totalRevenue,
         totalProfit,
-        totalItems,
+        soldItems,
         averageTransaction:
           transactions.length > 0 ? totalRevenue / transactions.length : 0,
         topProducts,
