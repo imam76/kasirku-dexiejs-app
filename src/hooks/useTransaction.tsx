@@ -6,10 +6,11 @@ import { useTransactionStore } from '@/store/transactionStore';
 import { Transaction, TransactionItem, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getPrice, normalisasiHarga, konversiSatuan } from '@/utils/pricing';
+import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 
 export const useTransaction = () => {
   const queryClient = useQueryClient();
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const {
     products,
     cart,
@@ -100,6 +101,7 @@ export const useTransaction = () => {
     const change = paymentMethod === 'NON_TUNAI' ? 0 : payment - total;
     const now = new Date().toISOString();
     const transactionId = crypto.randomUUID();
+    let receiptTransaction: (Transaction & { items: TransactionItem[] }) | null = null;
 
     try {
       await db.transaction('rw', [db.transactions, db.transactionItems, db.products, db.profitLogs, db.profitBalance, db.financeTransactions, db.financeBalance], async () => {
@@ -110,6 +112,7 @@ export const useTransaction = () => {
           payment_amount: payment,
           change_amount: change,
           payment_method: paymentMethod,
+          receipt_status: 'pending',
           created_at: now,
         };
 
@@ -189,6 +192,11 @@ export const useTransaction = () => {
             });
           }
         }
+
+        receiptTransaction = {
+          ...newTransaction,
+          items: transactionItems,
+        };
       });
 
       modal.success({
@@ -217,6 +225,24 @@ export const useTransaction = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
       reset();
       loadProducts();
+
+      if (receiptTransaction) {
+        void printReceiptAfterTransaction(receiptTransaction)
+          .then((result) => {
+            queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
+
+            if (result.success) {
+              message.success('Struk berhasil dicetak');
+              return;
+            }
+
+            message.warning(result.error || 'Transaksi sukses, tetapi struk gagal dicetak');
+          })
+          .catch((error) => {
+            console.error('Receipt print process failed:', error);
+            message.warning('Transaksi sukses, tetapi proses print struk gagal');
+          });
+      }
       
       // Trigger feedback check
       window.dispatchEvent(new Event('check-feedback'));

@@ -4,6 +4,7 @@ import { App, Card, Button, Upload, Typography, Alert } from 'antd'
 import { Download, Upload as UploadIcon, Database, AlertTriangle } from 'lucide-react'
 import { backupDatabase, restoreDatabase } from '@/utils/backupRestore'
 import { useNavigate } from '@tanstack/react-router'
+import PrinterSettingsCard from '@/components/PrinterSettingsCard'
 
 const { Paragraph } = Typography
 
@@ -73,11 +74,15 @@ function Settings() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Database className="w-8 h-8 text-blue-600" />
-          Pengaturan Database
+          Pengaturan Aplikasi
         </h1>
         <p className="text-gray-500 mt-2">
-          Kelola backup dan restore data aplikasi Anda
+          Kelola printer, backup, dan restore data aplikasi Anda
         </p>
+      </div>
+
+      <div className="mb-6">
+        <PrinterSettingsCard />
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">

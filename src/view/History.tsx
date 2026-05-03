@@ -1,10 +1,18 @@
 import { useRef, useEffect, useState, useLayoutEffect } from 'react';
-import { Receipt, ChevronDown, ChevronUp, Wallet, DollarSign } from 'lucide-react';
+import { App } from 'antd';
+import { Receipt, ChevronDown, ChevronUp, Wallet, DollarSign, Printer, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
 import { formatDate, formatCurrency } from '@/utils/formatters';
+import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
+import { Transaction, TransactionItem, TransactionReceiptInput } from '@/types';
+
+interface TransactionWithItems extends Transaction {
+  items?: TransactionItem[];
+}
 
 export default function History() {
+  const { message } = App.useApp();
   const {
     transactions,
     expandedId,
@@ -14,10 +22,12 @@ export default function History() {
     isError,
     error,
     toggleExpand,
-    loadMore
+    loadMore,
+    refetch
   } = useHistory();
   const parentRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
+  const [reprintingId, setReprintingId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     if (parentRef.current) {
@@ -57,6 +67,28 @@ export default function History() {
   useEffect(() => {
     rowVirtualizer.measure();
   }, [expandedId, rowVirtualizer]);
+
+  const handleReprint = async (transaction: TransactionWithItems) => {
+    if (!transaction.items) {
+      message.warning('Detail item transaksi belum siap');
+      return;
+    }
+
+    try {
+      setReprintingId(transaction.id);
+      const result = await printReceiptAfterTransaction(transaction as TransactionReceiptInput);
+      await refetch();
+
+      if (result.success) {
+        message.success('Struk berhasil dicetak ulang');
+        return;
+      }
+
+      message.warning(result.error || 'Cetak ulang struk gagal');
+    } finally {
+      setReprintingId(null);
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 min-h-screen bg-gray-50">
@@ -130,6 +162,24 @@ export default function History() {
                                   </>
                                 )}
                               </span>
+                              {transaction.receipt_status === 'printed' && (
+                                <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-emerald-100 text-emerald-700">
+                                  <CheckCircle2 size={12} />
+                                  STRUK TERCETAK
+                                </span>
+                              )}
+                              {transaction.receipt_status === 'print_failed' && (
+                                <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-red-100 text-red-700">
+                                  <AlertCircle size={12} />
+                                  PRINT GAGAL
+                                </span>
+                              )}
+                              {transaction.receipt_status === 'pending' && (
+                                <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-yellow-100 text-yellow-700">
+                                  <Printer size={12} />
+                                  PRINT PENDING
+                                </span>
+                              )}
                             </div>
                             {/* Tanggal di baris sendiri */}
                             <p className="text-sm text-gray-600 mb-2">
@@ -218,6 +268,27 @@ export default function History() {
                               </div>
                             ))}
                           </div>
+                          {transaction.receipt_status === 'print_failed' && (
+                            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                  <p className="font-semibold text-red-700">Struk belum tercetak</p>
+                                  <p className="text-sm text-red-600">
+                                    {transaction.receipt_print_error || 'Periksa printer lalu coba cetak ulang.'}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleReprint(transaction)}
+                                  disabled={reprintingId === transaction.id}
+                                  className="bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                                >
+                                  <Printer size={16} />
+                                  {reprintingId === transaction.id ? 'Mencetak...' : 'Reprint'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

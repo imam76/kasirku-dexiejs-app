@@ -43,6 +43,7 @@ export interface Product {
 }
 
 export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
+export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 
 export interface Transaction {
   id: string;
@@ -51,6 +52,9 @@ export interface Transaction {
   payment_amount: number;
   change_amount: number;
   payment_method: PaymentMethod;
+  receipt_status?: ReceiptPrintStatus;
+  receipt_printed_at?: string;
+  receipt_print_error?: string;
   created_at: string;
 }
 
@@ -84,6 +88,63 @@ export interface CartItem {
   product: Product;
   quantity: number;
   unit: ProductUnit; // Satuan yang dipilih (default product.selling_unit)
+}
+
+export interface BluetoothPrinterDevice {
+  name: string;
+  address: string;
+  isPaired: boolean;
+}
+
+export interface SelectedBluetoothPrinter {
+  name: string;
+  address: string;
+}
+
+export interface ReceiptLineItem {
+  name: string;
+  quantity: number;
+  unit: ProductUnit;
+  price: number;
+  subtotal: number;
+}
+
+export interface ReceiptPayload {
+  transactionId: string;
+  transactionNumber: string;
+  merchantName: string;
+  createdAt: string;
+  paymentMethod: PaymentMethod;
+  items: ReceiptLineItem[];
+  totalAmount: number;
+  paymentAmount: number;
+  changeAmount: number;
+  footer?: string;
+}
+
+export interface ReceiptPrintResult {
+  success: boolean;
+  status: ReceiptPrintStatus;
+  error?: string;
+}
+
+export interface TransactionReceiptInput extends Transaction {
+  items: TransactionItem[];
+}
+
+export type PrinterErrorCode =
+  | 'PRINTER_NOT_SELECTED'
+  | 'BLUETOOTH_OFF'
+  | 'PERMISSION_DENIED'
+  | 'PRINTER_NOT_PAIRED'
+  | 'CONNECTION_FAILED'
+  | 'WRITE_FAILED'
+  | 'UNSUPPORTED_PLATFORM'
+  | 'UNKNOWN';
+
+export interface PrinterError {
+  code: PrinterErrorCode;
+  message: string;
 }
 
 export interface ShoppingNoteItem {
