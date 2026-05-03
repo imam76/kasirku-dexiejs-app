@@ -81,7 +81,11 @@ export default function History() {
       await refetch();
 
       if (result.success) {
-        message.success('Struk berhasil dicetak ulang');
+        message.success(
+          transaction.receipt_status === 'printed'
+            ? 'Struk berhasil dicetak ulang'
+            : 'Struk berhasil dicetak'
+        );
         return;
       }
 
@@ -89,6 +93,22 @@ export default function History() {
     } finally {
       setReprintingId(null);
     }
+  };
+
+  const getPrintActionLabel = (transaction: TransactionWithItems) => {
+    if (reprintingId === transaction.id) {
+      return 'Mencetak...';
+    }
+
+    if (transaction.receipt_status === 'printed') {
+      return 'Cetak Ulang';
+    }
+
+    if (transaction.receipt_status === 'pending') {
+      return 'Cetak Struk';
+    }
+
+    return 'Reprint';
   };
 
   return (
@@ -269,27 +289,49 @@ export default function History() {
                               </div>
                             ))}
                           </div>
-                          {transaction.receipt_status === 'print_failed' && (
-                            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                <div>
-                                  <p className="font-semibold text-red-700">Struk belum tercetak</p>
-                                  <p className="text-sm text-red-600">
-                                    {transaction.receipt_print_error || 'Periksa printer lalu coba cetak ulang.'}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleReprint(transaction)}
-                                  disabled={reprintingId === transaction.id}
-                                  className="bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                                >
-                                  <Printer size={16} />
-                                  {reprintingId === transaction.id ? 'Mencetak...' : 'Reprint'}
-                                </button>
+                          <div className={`mt-4 rounded-lg border p-3 ${
+                            transaction.receipt_status === 'print_failed'
+                              ? 'border-red-200 bg-red-50'
+                              : 'border-gray-200 bg-white'
+                          }`}>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div>
+                                <p className={`font-semibold ${
+                                  transaction.receipt_status === 'print_failed'
+                                    ? 'text-red-700'
+                                    : 'text-gray-700'
+                                }`}>
+                                  {transaction.receipt_status === 'print_failed'
+                                    ? 'Struk belum tercetak'
+                                    : 'Print struk'}
+                                </p>
+                                <p className={`text-sm ${
+                                  transaction.receipt_status === 'print_failed'
+                                    ? 'text-red-600'
+                                    : 'text-gray-500'
+                                }`}>
+                                  {transaction.receipt_status === 'print_failed'
+                                    ? transaction.receipt_print_error || 'Periksa printer lalu coba cetak ulang.'
+                                    : transaction.receipt_status === 'printed'
+                                      ? 'Struk transaksi ini sudah tercetak.'
+                                      : 'Struk transaksi ini belum tercetak.'}
+                                </p>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => handleReprint(transaction)}
+                                disabled={reprintingId === transaction.id}
+                                className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 ${
+                                  transaction.receipt_status === 'print_failed'
+                                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                }`}
+                              >
+                                <Printer size={16} />
+                                {getPrintActionLabel(transaction)}
+                              </button>
                             </div>
-                          )}
+                          </div>
                         </div>
                       )}
                     </div>
