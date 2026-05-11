@@ -16,7 +16,10 @@ import {
   CreditCard
 } from 'lucide-react';
 import { FinanceTransaction, FinanceTransactionType } from '@/types';
-import { FINANCE_CATEGORIES } from '@/constants/finance';
+import {
+  FINANCE_CATEGORIES,
+  getFinanceTransactionBusinessType,
+} from '@/constants/finance';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -31,9 +34,11 @@ export default function FinanceManagement() {
 
   const summary = useMemo(() => {
     return transactions.reduce((acc, t) => {
-      if (t.type === 'OPENING_BALANCE') acc.opening += t.amount;
-      else if (t.type === 'INCOME') acc.income += t.amount;
-      else if (t.type === 'EXPENSE') acc.expense += t.amount;
+      const businessType = getFinanceTransactionBusinessType(t);
+
+      if (businessType === 'OPENING_BALANCE') acc.opening += t.amount;
+      else if (businessType === 'INCOME') acc.income += t.amount;
+      else if (businessType === 'EXPENSE') acc.expense += t.amount;
       return acc;
     }, { opening: 0, income: 0, expense: 0 });
   }, [transactions]);
@@ -57,12 +62,44 @@ export default function FinanceManagement() {
 
     // Set default category based on type
     if (type === 'OPENING_BALANCE') {
-      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPENING_BALANCE, description: 'Saldo awal hari ini' });
+      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPENING_BALANCE, description: 'Saldo awal kas toko' });
     } else if (type === 'INCOME') {
       form.setFieldsValue({ category: FINANCE_CATEGORIES.OTHER, description: '' });
     } else if (type === 'EXPENSE') {
-      form.setFieldsValue({ category: 'OPERASIONAL', description: '' });
+      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPERATIONAL, description: '' });
     }
+  };
+
+  const getFinanceTypeMeta = (transaction: Pick<FinanceTransaction, 'type' | 'category'>) => {
+    const businessType = getFinanceTransactionBusinessType(transaction);
+
+    if (businessType === 'EXPENSE') {
+      return {
+        color: 'red',
+        icon: <ArrowDownCircle size={14} className="text-red-500" />,
+        label: 'Pengeluaran',
+      };
+    }
+
+    if (businessType === 'OPENING_BALANCE') {
+      const label =
+        transaction.category === FINANCE_CATEGORIES.CAPITAL_ADDITION ? 'Tambah Modal' :
+          transaction.category === FINANCE_CATEGORIES.DEPOSIT ? 'Top Up Kas' :
+            transaction.category === FINANCE_CATEGORIES.LOAN ? 'Pinjaman' :
+              'Saldo Awal';
+
+      return {
+        color: 'blue',
+        icon: <Banknote size={14} className="text-blue-500" />,
+        label,
+      };
+    }
+
+    return {
+      color: 'green',
+      icon: <ArrowUpCircle size={14} className="text-green-500" />,
+      label: 'Pemasukan',
+    };
   };
 
   const columns = [
@@ -89,20 +126,8 @@ export default function FinanceManagement() {
       title: 'Tipe',
       dataIndex: 'type',
       key: 'type',
-      render: (type: FinanceTransactionType) => {
-        let color = 'green';
-        let icon = <ArrowUpCircle size={14} />;
-        let label = 'Pemasukan';
-
-        if (type === 'EXPENSE') {
-          color = 'red';
-          icon = <ArrowDownCircle size={14} />;
-          label = 'Pengeluaran';
-        } else if (type === 'OPENING_BALANCE') {
-          color = 'blue';
-          icon = <Banknote size={14} />;
-          label = 'Saldo Awal';
-        }
+      render: (_type: FinanceTransactionType, record: FinanceTransaction) => {
+        const { color, icon, label } = getFinanceTypeMeta(record);
 
         return (
           <Tag color={color}>
@@ -148,7 +173,7 @@ export default function FinanceManagement() {
               icon={<Banknote size={16} />}
               onClick={() => openModal('OPENING_BALANCE')}
             >
-              Saldo Awal
+              Saldo / Modal
             </Button>
             <Button
               type="primary"
@@ -174,7 +199,7 @@ export default function FinanceManagement() {
         <Col xs={0} md={24}>
           <Card className="shadow-sm border-l-4 border-l-blue-500">
             <Statistic
-              title="Saldo Awal"
+              title="Saldo Awal & Modal"
               value={summary.opening}
               formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
               prefix={<Banknote size={20} className="text-blue-500 mr-2" />}
@@ -198,7 +223,7 @@ export default function FinanceManagement() {
             />
 
             <Text style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.5px' }}>
-              SALDO AWAL
+              SALDO & MODAL
             </Text>
             <div style={{ fontSize: 28, fontWeight: 700, color: '#fff', margin: '4px 0 14px' }}>
               {formatCurrency(summary.opening)}
@@ -273,7 +298,7 @@ export default function FinanceManagement() {
               className="h-16 flex flex-col items-center justify-center w-full"
             >
               <Banknote size={18} />
-              <span className="text-[10px] mt-1">Saldo Awal</span>
+              <span className="text-[10px] mt-1">Saldo/Modal</span>
             </Button>
           </Col>
 
@@ -333,43 +358,42 @@ export default function FinanceManagement() {
             </div>
           ) : transactions.length > 0 ? (
             <>
-              {transactions.slice(0, 10).map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="bg-white rounded-lg border border-gray-100 p-3 shadow-sm active:bg-gray-50 transition-colors"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">
-                        {formatDate(transaction.created_at)}
-                      </span>
-                      <Tag color="blue" className="w-fit m-0 text-[10px] px-1.5 py-0">
-                        {transaction.category}
-                      </Tag>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-sm font-bold ${transaction.type === 'EXPENSE' ? 'text-red-600' : 'text-green-600'}`}>
-                        {transaction.type === 'EXPENSE' ? '-' : '+'} Rp {formatCurrency(transaction.amount)}
-                      </div>
-                      <div className="flex items-center justify-end gap-1 mt-1">
-                        {transaction.type === 'EXPENSE' ? (
-                          <ArrowDownCircle size={12} className="text-red-500" />
-                        ) : transaction.type === 'OPENING_BALANCE' ? (
-                          <Banknote size={12} className="text-blue-500" />
-                        ) : (
-                          <ArrowUpCircle size={12} className="text-green-500" />
-                        )}
-                        <span className="text-[10px] text-gray-400">
-                          {transaction.type === 'EXPENSE' ? 'Pengeluaran' : transaction.type === 'OPENING_BALANCE' ? 'Saldo Awal' : 'Pemasukan'}
+              {transactions.slice(0, 10).map((transaction) => {
+                const businessType = getFinanceTransactionBusinessType(transaction);
+                const { icon, label } = getFinanceTypeMeta(transaction);
+
+                return (
+                  <div
+                    key={transaction.id}
+                    className="bg-white rounded-lg border border-gray-100 p-3 shadow-sm active:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">
+                          {formatDate(transaction.created_at)}
                         </span>
+                        <Tag color="blue" className="w-fit m-0 text-[10px] px-1.5 py-0">
+                          {transaction.category}
+                        </Tag>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-sm font-bold ${businessType === 'EXPENSE' ? 'text-red-600' : 'text-green-600'}`}>
+                          {businessType === 'EXPENSE' ? '-' : '+'} Rp {formatCurrency(transaction.amount)}
+                        </div>
+                        <div className="flex items-center justify-end gap-1 mt-1">
+                          {icon}
+                          <span className="text-[10px] text-gray-400">
+                            {label}
+                          </span>
+                        </div>
                       </div>
                     </div>
+                    <div className="mt-2 text-xs text-gray-600 bg-gray-50 p-2 rounded italic">
+                      {transaction.description}
+                    </div>
                   </div>
-                  <div className="mt-2 text-xs text-gray-600 bg-gray-50 p-2 rounded italic">
-                    {transaction.description}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {transactions.length > 10 && (
                 <div className="text-center py-2">
                   <Text type="secondary" className="text-xs">Lihat selengkapnya di desktop</Text>
@@ -386,7 +410,7 @@ export default function FinanceManagement() {
 
       <Modal
         title={
-          modalType === 'OPENING_BALANCE' ? 'Set Saldo Awal' :
+          modalType === 'OPENING_BALANCE' ? 'Tambah Saldo / Modal' :
             modalType === 'INCOME' ? 'Tambah Pemasukan Manual' :
               'Catat Pengeluaran'
         }
@@ -426,22 +450,24 @@ export default function FinanceManagement() {
             rules={[{ required: true, message: 'Harap pilih/isi kategori' }]}
           >
             {modalType === 'OPENING_BALANCE' ? (
-              <Input disabled />
+              <Select showSearch placeholder="Pilih sumber saldo/modal">
+                <Option value={FINANCE_CATEGORIES.OPENING_BALANCE}>Saldo Awal</Option>
+                <Option value={FINANCE_CATEGORIES.CAPITAL_ADDITION}>Tambahan Modal</Option>
+                <Option value={FINANCE_CATEGORIES.DEPOSIT}>Deposit / Top Up Kas</Option>
+                <Option value={FINANCE_CATEGORIES.LOAN}>Pinjaman</Option>
+              </Select>
             ) : (
               <Select showSearch allowClear placeholder="Pilih atau ketik kategori baru">
                 {modalType === 'INCOME' ? (
                   <>
                     <Option value={FINANCE_CATEGORIES.OTHER}>Lainnya</Option>
-                    <Option value={FINANCE_CATEGORIES.DEPOSIT}>Deposit / Top Up Kas</Option>
-                    <Option value={FINANCE_CATEGORIES.CAPITAL_ADDITION}>Tambahan Modal</Option>
-                    <Option value={FINANCE_CATEGORIES.LOAN}>Pinjaman</Option>
-                    <Option value="LAYANAN">Biaya Layanan</Option>
-                    <Option value="BONUS">Bonus/Hibah</Option>
+                    <Option value={FINANCE_CATEGORIES.SERVICE}>Biaya Layanan</Option>
+                    <Option value={FINANCE_CATEGORIES.BONUS_GRANT}>Bonus/Hibah</Option>
                   </>
                 ) : (
                   <>
                     <Option value={FINANCE_CATEGORIES.STOCK_PURCHASE}>Pembelian Stok (Modal Barang)</Option>
-                    <Option value="OPERASIONAL">Operasional (Listrik, Sewa, dll)</Option>
+                    <Option value={FINANCE_CATEGORIES.OPERATIONAL}>Operasional (Listrik, Sewa, dll)</Option>
                     <Option value="GAJI">Gaji Karyawan</Option>
                     <Option value="PERLENGKAPAN">Perlengkapan Toko</Option>
                     <Option value="MAKAN">Makan/Minum</Option>
@@ -457,7 +483,14 @@ export default function FinanceManagement() {
             label="Keterangan"
             rules={[{ required: true, message: 'Harap masukkan keterangan' }]}
           >
-            <Input.TextArea placeholder="Contoh: Pembayaran listrik bulan ini" rows={3} />
+            <Input.TextArea
+              placeholder={
+                modalType === 'OPENING_BALANCE' ? 'Contoh: Tambahan modal dari pemilik' :
+                  modalType === 'INCOME' ? 'Contoh: Biaya layanan pelanggan' :
+                    'Contoh: Pembayaran listrik bulan ini'
+              }
+              rows={3}
+            />
           </Form.Item>
 
           <div className="flex justify-end gap-2 mt-6">

@@ -2,7 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { App } from 'antd';
 import { FinanceTransaction, FinanceTransactionType } from '@/types';
-import { FINANCE_CATEGORIES, isProfitAffectingFinanceTransaction } from '@/constants/finance';
+import {
+  FINANCE_CATEGORIES,
+  getFinanceTransactionBusinessType,
+  isProfitAffectingFinanceTransaction,
+  normalizeFinanceTransactionType,
+} from '@/constants/finance';
 
 export const useFinance = () => {
   const queryClient = useQueryClient();
@@ -35,6 +40,7 @@ export const useFinance = () => {
       amount: number; 
       description: string;
     }) => {
+      const normalizedType = normalizeFinanceTransactionType(type, category);
       const currentBalance = await db.financeBalance.get('current');
       const currentAmount = currentBalance?.amount || 0;
 
@@ -44,14 +50,14 @@ export const useFinance = () => {
       const now = new Date().toISOString();
       let newBalance = currentAmount;
       let newProfitBalance = currentProfitAmount;
-      const affectsProfit = isProfitAffectingFinanceTransaction(type, category);
+      const affectsProfit = isProfitAffectingFinanceTransaction(normalizedType, category);
 
-      if (type === 'INCOME' || type === 'OPENING_BALANCE') {
+      if (normalizedType === 'INCOME' || normalizedType === 'OPENING_BALANCE') {
         newBalance += amount;
         if (affectsProfit) {
           newProfitBalance += amount;
         }
-      } else if (type === 'EXPENSE') {
+      } else if (normalizedType === 'EXPENSE') {
         newBalance -= amount;
         if (affectsProfit) {
           newProfitBalance -= amount;
@@ -67,7 +73,7 @@ export const useFinance = () => {
 
         await db.financeTransactions.add({
           id: crypto.randomUUID(),
-          type,
+          type: normalizedType,
           category,
           amount,
           description,
@@ -84,7 +90,7 @@ export const useFinance = () => {
           await db.profitLogs.add({
             id: crypto.randomUUID(),
             amount: amount,
-            type: type === 'EXPENSE' ? 'OUT' : 'IN',
+            type: normalizedType === 'EXPENSE' ? 'OUT' : 'IN',
             category: 'OPERATIONAL',
             description: `Operasional: ${description || category}`,
             created_at: now,
@@ -166,9 +172,11 @@ export const useFinance = () => {
         let runningBalance = 0;
         
         for (const ft of allTransactions) {
-          if (ft.type === 'INCOME' || ft.type === 'OPENING_BALANCE') {
+          const businessType = getFinanceTransactionBusinessType(ft);
+
+          if (businessType === 'INCOME' || businessType === 'OPENING_BALANCE') {
             runningBalance += ft.amount;
-          } else if (ft.type === 'EXPENSE') {
+          } else if (businessType === 'EXPENSE') {
             runningBalance -= ft.amount;
           }
         }

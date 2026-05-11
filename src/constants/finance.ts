@@ -1,3 +1,5 @@
+import type { FinanceTransactionType } from '@/types';
+
 export const FINANCE_CATEGORIES = {
   SALES: 'PENJUALAN',
   AUTO_COGS: 'HPP_OTOMATIS',
@@ -8,18 +10,46 @@ export const FINANCE_CATEGORIES = {
   DEPOSIT: 'DEPOSIT',
   CAPITAL_ADDITION: 'TAMBAHAN_MODAL',
   LOAN: 'PINJAMAN',
+  SERVICE: 'LAYANAN',
+  BONUS_GRANT: 'BONUS',
+  OPERATIONAL: 'OPERASIONAL',
 } as const;
+
+export const FINANCE_FUNDING_CATEGORIES = [
+  FINANCE_CATEGORIES.OPENING_BALANCE,
+  FINANCE_CATEGORIES.DEPOSIT,
+  FINANCE_CATEGORIES.CAPITAL_ADDITION,
+  FINANCE_CATEGORIES.LOAN,
+] as const;
 
 export const NON_PROFIT_FINANCE_CATEGORIES = [
   FINANCE_CATEGORIES.SALES,
   FINANCE_CATEGORIES.AUTO_COGS,
   FINANCE_CATEGORIES.STOCK_PURCHASE,
   FINANCE_CATEGORIES.WITHDRAWAL,
-  FINANCE_CATEGORIES.OPENING_BALANCE,
-  FINANCE_CATEGORIES.DEPOSIT,
-  FINANCE_CATEGORIES.CAPITAL_ADDITION,
-  FINANCE_CATEGORIES.LOAN,
+  ...FINANCE_FUNDING_CATEGORIES,
 ] as const;
+
+export const isFundingFinanceCategory = (category: string) => {
+  return FINANCE_FUNDING_CATEGORIES.includes(category as typeof FINANCE_FUNDING_CATEGORIES[number]);
+};
+
+export const normalizeFinanceTransactionType = (
+  type: FinanceTransactionType,
+  category: string,
+): FinanceTransactionType => {
+  if (type === 'OPENING_BALANCE' || isFundingFinanceCategory(category)) {
+    return 'OPENING_BALANCE';
+  }
+
+  return type;
+};
+
+export const getFinanceTransactionBusinessType = (
+  transaction: { type: FinanceTransactionType; category: string },
+): FinanceTransactionType => {
+  return normalizeFinanceTransactionType(transaction.type, transaction.category);
+};
 
 export const isProfitAffectingFinanceTransaction = (type: string, category: string) => {
   return (
