@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { Product, ShoppingNoteItem, StockPurchase } from '@/types';
-import { konversiSatuan, normalisasiHarga } from '@/utils/pricing';
+import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 
 export const useShoppingNote = () => {
   const { message } = App.useApp();
@@ -107,8 +107,8 @@ export const useShoppingNote = () => {
             throw new Error(`Produk ${item.product_name} tidak ditemukan`);
           }
 
-          const quantityInStockUnit = konversiSatuan(item.quantity, item.unit, product.purchase_unit);
-          const costPerStockUnit = normalisasiHarga(item.unit_price, item.unit, product.purchase_unit);
+          const quantityInStockUnit = konversiSatuanProduk(item.quantity, product, item.unit, product.purchase_unit);
+          const costPerStockUnit = normalisasiHargaProduk(item.unit_price, product, item.unit, product.purchase_unit);
           const totalCost = item.total_cost ?? item.subtotal;
           const purchaseId = crypto.randomUUID();
 

@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { useTransactionStore } from '@/store/transactionStore';
 import { Transaction, TransactionItem, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
-import { getPrice, normalisasiHarga, konversiSatuan } from '@/utils/pricing';
+import { getPrice, normalisasiHargaProduk, konversiSatuanProduk } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 
@@ -122,7 +122,7 @@ export const useTransaction = () => {
         const transactionItems: TransactionItem[] = cart.map((item) => {
           const sellingPrice = getPrice(item.product, item.quantity, item.unit);
           // Normalisasi harga beli ke unit yang digunakan saat transaksi
-          const normalizedPurchasePrice = normalisasiHarga(item.product.purchase_price, item.product.purchase_unit, item.unit);
+          const normalizedPurchasePrice = normalisasiHargaProduk(item.product.purchase_price, item.product, item.product.purchase_unit, item.unit);
           const unitSnapshot = createSalesUnitSnapshot(item.unit, item.product);
           
           return {
@@ -190,7 +190,7 @@ export const useTransaction = () => {
           const product = await db.products.get(item.product.id);
           if (product) {
             // Konversi quantity dari unit jual ke unit stok (base unit)
-            const quantityInStokUnit = konversiSatuan(item.quantity, item.unit, product.purchase_unit);
+            const quantityInStokUnit = konversiSatuanProduk(item.quantity, product, item.unit, product.purchase_unit);
             await db.products.update(item.product.id, {
               stock: product.stock - quantityInStokUnit,
             });

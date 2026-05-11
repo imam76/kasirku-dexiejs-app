@@ -109,7 +109,7 @@ export default function StockManagement() {
             <div className="text-xs text-gray-500">
               Kolom yang didukung: id, sku, name/nama, category/kategori, purchase_unit/satuan_beli,
               selling_unit/satuan_jual, purchase_price/harga_beli, selling_price/harga_jual, stock/stok,
-              purchase_quantity, wholesale_prices, sellable_units.
+              purchase_quantity, wholesale_prices, sellable_units, unit_mappings.
             </div>
             {parseErrors.length > 0 ? (
               <div className="text-xs text-red-600">
@@ -219,7 +219,7 @@ export default function StockManagement() {
         placement="bottom"
         open={isActionDrawerOpen}
         onClose={() => setIsActionDrawerOpen(false)}
-        height="auto"
+        size="auto"
         className="sm:hidden"
         styles={{
           body: { padding: 16 },

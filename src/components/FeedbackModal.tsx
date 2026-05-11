@@ -5,17 +5,19 @@ import React from 'react'
 const { Text, Title } = Typography
 const { TextArea } = Input
 
+type FeedbackFormValues = Record<string, number | string | undefined>
+
 interface FeedbackModalProps {
   open: boolean
   wave: 1 | 2
-  onFinish: (values: any) => void
+  onFinish: (values: FeedbackFormValues) => void
 }
 
 const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, wave, onFinish }) => {
   const [form] = Form.useForm()
   const q8Value = Form.useWatch('q8', form)
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = (values: FeedbackFormValues) => {
     onFinish(values)
     form.resetFields()
   }
@@ -27,7 +29,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, wave, onFinish }) =
       title={null}
       open={open}
       closable={false}
-      maskClosable={false}
+      mask={{ closable: false }}
       footer={null}
       centered
       className="feedback-modal responsive-modal"

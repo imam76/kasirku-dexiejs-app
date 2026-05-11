@@ -1,30 +1,78 @@
-import { DEFAULT_CONVERSIONS } from '@/constants/units';
+import {
+  DEFAULT_CONVERSIONS,
+  inferConversionUnitType,
+  isLegacyGlobalPackageConversion,
+  normalizeUnitKey,
+} from '@/constants/units';
 import type { Product, ProductUnit, UnitConversion } from '@/types';
+import { getProductUnitRatio } from '@/utils/productUnits';
 
 // Global registry for unit conversions
 let conversionRegistry: UnitConversion[] = DEFAULT_CONVERSIONS;
+
+const normalizeConversion = (conversion: UnitConversion): UnitConversion => {
+  const fromUnit = normalizeUnitKey(conversion.fromUnit);
+  const toUnit = normalizeUnitKey(conversion.toUnit);
+  const unitType = conversion.unitType ?? inferConversionUnitType(fromUnit, toUnit);
+
+  return {
+    ...conversion,
+    fromUnit,
+    toUnit,
+    unitType,
+    scope: conversion.scope ?? 'global',
+    allowPriceFallback: conversion.allowPriceFallback ?? unitType === 'measurement',
+    isDeprecated: conversion.isDeprecated || isLegacyGlobalPackageConversion({ ...conversion, fromUnit, toUnit }),
+  };
+};
 
 /**
  * Update the global conversion registry
  */
 export const setConversionRegistry = (conversions: UnitConversion[]) => {
-  conversionRegistry = conversions;
+  conversionRegistry = conversions.map(normalizeConversion);
+};
+
+const findConversionRatio = (from: ProductUnit, ke: ProductUnit): number | undefined => {
+  const normalizedFrom = normalizeUnitKey(from);
+  const normalizedTo = normalizeUnitKey(ke);
+  if (normalizedFrom === normalizedTo) return 1;
+
+  const conversion = conversionRegistry.find(c => c.fromUnit === normalizedFrom && c.toUnit === normalizedTo);
+  if (conversion) return conversion.ratio;
+
+  const reverseConversion = conversionRegistry.find(c => c.fromUnit === normalizedTo && c.toUnit === normalizedFrom);
+  if (reverseConversion) return 1 / reverseConversion.ratio;
+
+  return undefined;
+};
+
+export const hasConversionRatio = (from: ProductUnit, ke: ProductUnit): boolean => {
+  return findConversionRatio(from, ke) !== undefined;
 };
 
 /**
  * Get conversion ratio between two units
  */
 export const getConversionRatio = (from: ProductUnit, ke: ProductUnit): number => {
-  if (from === ke) return 1;
-  
-  const conversion = conversionRegistry.find(c => c.fromUnit === from && c.toUnit === ke);
-  if (conversion) return conversion.ratio;
+  return findConversionRatio(from, ke) ?? 1; // Fallback to 1 if not found
+};
 
-  // Try reverse conversion
-  const reverseConversion = conversionRegistry.find(c => c.fromUnit === ke && c.toUnit === from);
-  if (reverseConversion) return 1 / reverseConversion.ratio;
+export const getConversionRatioForProduct = (product: Product, from: ProductUnit, ke: ProductUnit): number => {
+  const unitType = inferConversionUnitType(from, ke);
+  const globalRatio = findConversionRatio(from, ke);
 
-  return 1; // Fallback to 1 if not found
+  if (unitType !== 'package' && globalRatio !== undefined) {
+    return globalRatio;
+  }
+
+  return getProductUnitRatio(product, from, ke) ?? (unitType !== 'package' ? globalRatio : undefined) ?? 1;
+};
+
+export const hasConversionRatioForProduct = (product: Product, from: ProductUnit, ke: ProductUnit): boolean => {
+  const unitType = inferConversionUnitType(from, ke);
+  if (unitType !== 'package' && hasConversionRatio(from, ke)) return true;
+  return getProductUnitRatio(product, from, ke) !== undefined;
 };
 
 /**
@@ -33,6 +81,17 @@ export const getConversionRatio = (from: ProductUnit, ke: ProductUnit): number =
 export const konversiSatuan = (nilai: number, dari: ProductUnit, ke: ProductUnit): number => {
   if (dari === ke) return nilai;
   const ratio = getConversionRatio(dari, ke);
+  return nilai * ratio;
+};
+
+export const konversiSatuanProduk = (
+  nilai: number,
+  product: Product,
+  dari: ProductUnit,
+  ke: ProductUnit,
+): number => {
+  if (dari === ke) return nilai;
+  const ratio = getConversionRatioForProduct(product, dari, ke);
   return nilai * ratio;
 };
 
@@ -49,6 +108,18 @@ export const normalisasiHarga = (harga: number, dariSatuan: ProductUnit, keSatua
   return harga / satuUnitDariDalamKe;
 };
 
+export const normalisasiHargaProduk = (
+  harga: number,
+  product: Product,
+  dariSatuan: ProductUnit,
+  keSatuan: ProductUnit,
+): number => {
+  if (dariSatuan === keSatuan) return harga;
+
+  const satuUnitDariDalamKe = getConversionRatioForProduct(product, dariSatuan, keSatuan);
+  return harga / satuUnitDariDalamKe;
+};
+
 /**
  * Hitung total harga jual berdasarkan produk dan jumlah (quantity)
  */
@@ -62,11 +133,11 @@ export const getPrice = (product: Product, quantity: number, unit?: ProductUnit)
   
   // 1. Tentukan harga dasar per SELLING_UNIT
   // Default: ambil dari selling_price (per purchase_unit) lalu normalisasi ke selling_unit
-  let priceInSellingUnit = normalisasiHarga(product.selling_price, product.purchase_unit, product.selling_unit);
+  let priceInSellingUnit = normalisasiHargaProduk(product.selling_price, product, product.purchase_unit, product.selling_unit);
 
   if (product.wholesale_prices && product.wholesale_prices.length > 0) {
     // Untuk cek tier grosir, konversi quantity ke selling_unit
-    const quantityInSellingUnit = konversiSatuan(quantity, targetUnit, product.selling_unit);
+    const quantityInSellingUnit = konversiSatuanProduk(quantity, product, targetUnit, product.selling_unit);
     
     const sortedPrices = [...product.wholesale_prices].sort((a, b) => b.min_quantity - a.min_quantity);
     const match = sortedPrices.find(p => quantityInSellingUnit >= p.min_quantity);
@@ -77,11 +148,11 @@ export const getPrice = (product: Product, quantity: number, unit?: ProductUnit)
         priceInSellingUnit = match.price / match.min_quantity;
       } else {
         // Jika unit, harga di DB adalah per purchase_unit. Normalisasi ke selling_unit
-        priceInSellingUnit = normalisasiHarga(match.price, product.purchase_unit, product.selling_unit);
+        priceInSellingUnit = normalisasiHargaProduk(match.price, product, product.purchase_unit, product.selling_unit);
       }
     }
   }
   
   // 2. Normalisasi dari selling_unit ke target unit (jika berbeda, misal dari gram ke ons)
-  return normalisasiHarga(priceInSellingUnit, product.selling_unit, targetUnit);
+  return normalisasiHargaProduk(priceInSellingUnit, product, product.selling_unit, targetUnit);
 };

@@ -1,5 +1,5 @@
 import { normalizeUnitKey, normalizeWeightUnit, WEIGHT_BASE_UNIT } from '@/constants/units';
-import { getConversionRatio } from '@/utils/pricing';
+import { getConversionRatio, getConversionRatioForProduct } from '@/utils/pricing';
 import type { Product, ProductUnit, SalesUnitCategory, TransactionItem } from '@/types';
 
 export { WEIGHT_BASE_UNIT };
@@ -83,7 +83,9 @@ export const createSalesUnitSnapshot = (
   const selectedUnit = String(unit || product?.selling_unit || product?.purchase_unit || 'pcs').trim() || 'pcs';
   const unitCategory = classifySalesUnit(selectedUnit);
   const baseUnit = unitCategory === 'weighted' ? WEIGHT_BASE_UNIT : product?.purchase_unit || selectedUnit;
-  const conversionValue = getNormalizedConversionRatio(selectedUnit, baseUnit);
+  const conversionValue = product
+    ? getConversionRatioForProduct(product, selectedUnit, baseUnit)
+    : getNormalizedConversionRatio(selectedUnit, baseUnit);
 
   return {
     unit_id: selectedUnit,

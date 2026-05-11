@@ -15,6 +15,7 @@ export type ProductCsvImportItem = {
   purchase_quantity?: number;
   wholesale_prices?: Product['wholesale_prices'];
   sellable_units?: string[];
+  unit_mappings?: Product['unit_mappings'];
 };
 
 const normalizeHeaderName = (value: string) =>
@@ -84,6 +85,21 @@ const normalizeWholesalePrices = (value: string | undefined): Product['wholesale
     .filter((price) => Number.isFinite(price.min_quantity) && price.min_quantity > 0 && Number.isFinite(price.price) && price.price >= 0);
 
   return prices.length > 0 ? prices : undefined;
+};
+
+const normalizeUnitMappings = (value: string | undefined): Product['unit_mappings'] | undefined => {
+  const parsed = parseJsonArray<NonNullable<Product['unit_mappings']>[number]>(value);
+  if (!parsed) return undefined;
+
+  const mappings = parsed
+    .map((mapping) => ({
+      unit: String(mapping?.unit || '').trim(),
+      base_unit: String(mapping?.base_unit || '').trim(),
+      ratio: Number(mapping?.ratio),
+    }))
+    .filter((mapping) => mapping.unit && mapping.base_unit && Number.isFinite(mapping.ratio) && mapping.ratio > 0);
+
+  return mappings.length > 0 ? mappings : undefined;
 };
 
 const parseCsv = (text: string) => {
@@ -178,6 +194,7 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
   const idxPurchaseQty = pickIndex(['purchase_quantity', 'qty_pembelian', 'purchase_qty', 'qty_beli', 'jumlah_pembelian']);
   const idxWholesalePrices = pickIndex(['wholesale_prices', 'harga_grosir']);
   const idxSellableUnits = pickIndex(['sellable_units', 'satuan_bisa_dijual']);
+  const idxUnitMappings = pickIndex(['unit_mappings', 'konversi_satuan_produk', 'product_unit_mappings']);
 
   const errors: string[] = [];
   if (idxName === undefined) errors.push('Kolom "name" (atau "nama") tidak ditemukan.');
@@ -212,6 +229,7 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
     const selling_unit = idxSellingUnit !== undefined ? (row[idxSellingUnit] ?? '').trim() : undefined;
     const wholesale_prices = normalizeWholesalePrices(idxWholesalePrices !== undefined ? row[idxWholesalePrices] : undefined);
     const sellable_units = parseDelimitedList(idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined);
+    const unit_mappings = normalizeUnitMappings(idxUnitMappings !== undefined ? row[idxUnitMappings] : undefined);
 
     items.push({
       id: id || undefined,
@@ -226,6 +244,7 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
       purchase_quantity,
       wholesale_prices,
       sellable_units,
+      unit_mappings,
     });
   }
 
@@ -246,6 +265,7 @@ export const createProductCsvExportRows = (products: Product[]) => {
     'purchase_quantity',
     'wholesale_prices',
     'sellable_units',
+    'unit_mappings',
     'created_at',
     'updated_at',
   ];
@@ -265,6 +285,7 @@ export const createProductCsvExportRows = (products: Product[]) => {
         '',
         product.wholesale_prices && product.wholesale_prices.length > 0 ? JSON.stringify(product.wholesale_prices) : '',
         product.sellable_units && product.sellable_units.length > 0 ? JSON.stringify(product.sellable_units) : '',
+        product.unit_mappings && product.unit_mappings.length > 0 ? JSON.stringify(product.unit_mappings) : '',
         product.created_at,
         product.updated_at,
       ];

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Product, CartItem, PaymentMethod } from '@/types';
-import { konversiSatuan } from '@/utils/pricing';
+import { konversiSatuanProduk } from '@/utils/pricing';
+import { getProductSellableUnits } from '@/utils/productUnits';
 
 interface TransactionState {
   products: Product[];
@@ -63,7 +64,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       // Untuk produk dengan satuan, tambah 1 unit default.
       // Nanti di UI bisa diubah jumlahnya (misal gram).
       const increment = 1; 
-      if (existingItem.quantity + increment > product.stock) {
+      const nextQuantityInStockUnit = konversiSatuanProduk(
+        existingItem.quantity + increment,
+        product,
+        existingItem.unit,
+        product.purchase_unit,
+      );
+      if (nextQuantityInStockUnit > product.stock) {
         return { 
           success: false, 
           error: { 
@@ -97,7 +104,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (!item) return { success: false };
 
     // Konversi quantity dari unit jual ke unit stok (base unit)
-    const quantityInStokUnit = konversiSatuan(newQuantity, item.unit, item.product.purchase_unit);
+    const quantityInStokUnit = konversiSatuanProduk(newQuantity, item.product, item.unit, item.product.purchase_unit);
 
     if (quantityInStokUnit > item.product.stock) {
       return { 
@@ -128,7 +135,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (!item) return { success: false };
 
     // Validate that the new unit is in the product's sellable units
-    const sellableUnits = item.product.sellable_units || [item.product.selling_unit || 'pcs'];
+    const sellableUnits = getProductSellableUnits(item.product);
     if (!sellableUnits.includes(newUnit)) {
       return {
         success: false,

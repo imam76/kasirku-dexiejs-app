@@ -392,7 +392,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         placement="bottom"
         open={isFilterDrawerOpen}
         onClose={() => setIsFilterDrawerOpen(false)}
-        height="auto"
+        size="auto"
         rootClassName="mobile-bottom-drawer"
         className="md:hidden"
         styles={{

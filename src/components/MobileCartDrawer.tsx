@@ -45,7 +45,7 @@ export default function MobileCartDrawer({
       placement="bottom"
       open={isOpen}
       onClose={onClose}
-      height="85vh"
+      size="85vh"
       rootClassName="mobile-bottom-drawer"
       className="lg:hidden"
       extra={

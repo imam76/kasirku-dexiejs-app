@@ -2,6 +2,7 @@ import { Minus, Plus, Trash2 } from 'lucide-react';
 import { CartItem as CartItemType } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
+import { getProductSellableUnits } from '@/utils/productUnits';
 import { InputNumber, Select } from 'antd';
 
 interface CartItemProps {
@@ -16,7 +17,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
   const isWholesale = currentPrice < getPrice(item.product, 1, item.unit);
 
   // Get available sellable units for this product
-  const sellableUnits = item.product.sellable_units || [item.product.selling_unit || 'pcs'];
+  const sellableUnits = getProductSellableUnits(item.product);
 
   const handleQuantityChange = (val: number | null) => {
     if (val !== null) {

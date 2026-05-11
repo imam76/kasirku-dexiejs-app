@@ -1,6 +1,6 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion } from '@/types';
-import { DEFAULT_CONVERSIONS } from '@/constants/units';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition } from '@/types';
+import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
@@ -13,6 +13,7 @@ export class KasirkuDB extends Dexie {
   financeTransactions!: Table<FinanceTransaction>;
   financeBalance!: Table<FinanceBalance>;
   unitConversions!: Table<UnitConversion>;
+  units!: Table<UnitDefinition>;
 
   constructor() {
     super('KasirkuDB');
@@ -51,7 +52,26 @@ export class KasirkuDB extends Dexie {
       products: 'id, name, sku, created_at'
     });
 
+    this.version(10).stores({
+      units: 'id, name, type'
+    }).upgrade(async (tx) => {
+      const conversions = await tx.table<UnitConversion, string>('unitConversions').toArray();
+      const units = new Map(DEFAULT_UNITS.map((unit) => [unit.id, unit]));
+
+      conversions.forEach((conversion) => {
+        if (!units.has(conversion.fromUnit)) {
+          units.set(conversion.fromUnit, createUnitDefinition(conversion.fromUnit));
+        }
+        if (!units.has(conversion.toUnit)) {
+          units.set(conversion.toUnit, createUnitDefinition(conversion.toUnit));
+        }
+      });
+
+      await tx.table<UnitDefinition, string>('units').bulkPut(Array.from(units.values()));
+    });
+
     this.on('populate', async () => {
+      await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
     });
   }

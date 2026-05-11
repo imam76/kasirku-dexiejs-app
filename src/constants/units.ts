@@ -1,4 +1,4 @@
-import type { ProductUnit, UnitConversion } from '@/types';
+import type { ProductUnit, UnitConversion, UnitDefinition, UnitDefinitionType } from '@/types';
 
 export const WEIGHT_BASE_UNIT: ProductUnit = 'gram';
 
@@ -21,18 +21,117 @@ export const normalizeWeightUnit = (unit?: ProductUnit): ProductUnit | undefined
   return WEIGHT_UNIT_ALIASES[normalizeUnitKey(unit)];
 };
 
+export const PACKAGE_UNITS = [
+  'pcs',
+  'pack',
+  'dus',
+  'box',
+  'renteng',
+  'lusin',
+  'kodi',
+  'gros',
+  'ikat',
+  'bundle',
+] as const;
+
+export const TIME_UNITS = ['jam', 'menit', 'detik'] as const;
+
+export const isCountUnit = (unit?: ProductUnit) => {
+  return normalizeUnitKey(unit) === 'pcs';
+};
+
+export const LEGACY_GLOBAL_PACKAGE_CONVERSION_IDS = [
+  'lusin-pcs',
+  'kodi-pcs',
+  'gros-pcs',
+  'dus-pcs',
+  'ikat-pcs',
+] as const;
+
+export const isPackageUnit = (unit?: ProductUnit) => {
+  return PACKAGE_UNITS.includes(normalizeUnitKey(unit) as typeof PACKAGE_UNITS[number]);
+};
+
+export const isTimeUnit = (unit?: ProductUnit) => {
+  return TIME_UNITS.includes(normalizeUnitKey(unit) as typeof TIME_UNITS[number]);
+};
+
+export const inferUnitDefinitionType = (unit?: ProductUnit): UnitDefinitionType => {
+  if (isCountUnit(unit)) return 'count';
+  if (isPackageUnit(unit)) return 'package';
+  if (isTimeUnit(unit)) return 'time';
+  return 'measurement';
+};
+
+export const isGlobalConvertibleUnitType = (type?: UnitDefinitionType) => {
+  return type === 'measurement' || type === 'time';
+};
+
+export const createUnitDefinition = (
+  unit: ProductUnit,
+  overrides: Partial<Omit<UnitDefinition, 'id' | 'name'>> = {},
+): UnitDefinition => {
+  const id = normalizeUnitKey(unit);
+  const type = overrides.type ?? inferUnitDefinitionType(id);
+
+  return {
+    id,
+    name: id,
+    type,
+    canBeBaseUnit: overrides.canBeBaseUnit ?? type !== 'package',
+    canBeConversionUnit: overrides.canBeConversionUnit ?? type !== 'count',
+    isPreset: overrides.isPreset ?? false,
+    created_at: overrides.created_at,
+    updated_at: overrides.updated_at,
+  };
+};
+
+export const inferConversionUnitType = (
+  fromUnit?: ProductUnit,
+  toUnit?: ProductUnit,
+): NonNullable<UnitConversion['unitType']> => {
+  if (isPackageUnit(fromUnit) || isPackageUnit(toUnit)) return 'package';
+  if (isTimeUnit(fromUnit) && isTimeUnit(toUnit)) return 'time';
+  return 'measurement';
+};
+
+export const isLegacyGlobalPackageConversion = (conversion: Pick<UnitConversion, 'id' | 'fromUnit' | 'toUnit'>) => {
+  return (
+    LEGACY_GLOBAL_PACKAGE_CONVERSION_IDS.includes(conversion.id as typeof LEGACY_GLOBAL_PACKAGE_CONVERSION_IDS[number]) ||
+    inferConversionUnitType(conversion.fromUnit, conversion.toUnit) === 'package'
+  );
+};
+
 export const DEFAULT_CONVERSIONS: UnitConversion[] = [
-  { id: 'kg-gram', fromUnit: 'kg', toUnit: 'gram', ratio: 1000, isPreset: true, label: '1 kg = 1000 gram' },
-  { id: 'gram-kg', fromUnit: 'gram', toUnit: 'kg', ratio: 0.001, isPreset: true, label: '1 gram = 0.001 kg' },
-  { id: 'ons-gram', fromUnit: 'ons', toUnit: 'gram', ratio: 100, isPreset: true, label: '1 ons = 100 gram' },
-  { id: 'gram-ons', fromUnit: 'gram', toUnit: 'ons', ratio: 0.01, isPreset: true, label: '1 gram = 0.01 ons' },
-  { id: 'kg-ons', fromUnit: 'kg', toUnit: 'ons', ratio: 10, isPreset: true, label: '1 kg = 10 ons' },
-  { id: 'lusin-pcs', fromUnit: 'lusin', toUnit: 'pcs', ratio: 12, isPreset: true, label: '1 lusin = 12 pcs' },
-  { id: 'kodi-pcs', fromUnit: 'kodi', toUnit: 'pcs', ratio: 20, isPreset: true, label: '1 kodi = 20 pcs' },
-  { id: 'gros-pcs', fromUnit: 'gros', toUnit: 'pcs', ratio: 144, isPreset: true, label: '1 gros = 144 pcs' },
-  { id: 'dus-pcs', fromUnit: 'dus', toUnit: 'pcs', ratio: 24, isPreset: true, label: '1 dus = 24 pcs' },
-  { id: 'ikat-pcs', fromUnit: 'ikat', toUnit: 'pcs', ratio: 10, isPreset: true, label: '1 ikat = 10 pcs' },
-  { id: 'jam-menit', fromUnit: 'jam', toUnit: 'menit', ratio: 60, isPreset: true, label: '1 jam = 60 menit' },
-  { id: 'menit-detik', fromUnit: 'menit', toUnit: 'detik', ratio: 60, isPreset: true, label: '1 menit = 60 detik' },
-  { id: 'jam-detik', fromUnit: 'jam', toUnit: 'detik', ratio: 3600, isPreset: true, label: '1 jam = 3600 detik' },
+  { id: 'kg-gram', fromUnit: 'kg', toUnit: 'gram', ratio: 1000, isPreset: true, label: '1 kg = 1000 gram', unitType: 'measurement', scope: 'global', allowPriceFallback: true },
+  { id: 'gram-kg', fromUnit: 'gram', toUnit: 'kg', ratio: 0.001, isPreset: true, label: '1 gram = 0.001 kg', unitType: 'measurement', scope: 'global', allowPriceFallback: true },
+  { id: 'ons-gram', fromUnit: 'ons', toUnit: 'gram', ratio: 100, isPreset: true, label: '1 ons = 100 gram', unitType: 'measurement', scope: 'global', allowPriceFallback: true },
+  { id: 'gram-ons', fromUnit: 'gram', toUnit: 'ons', ratio: 0.01, isPreset: true, label: '1 gram = 0.01 ons', unitType: 'measurement', scope: 'global', allowPriceFallback: true },
+  { id: 'kg-ons', fromUnit: 'kg', toUnit: 'ons', ratio: 10, isPreset: true, label: '1 kg = 10 ons', unitType: 'measurement', scope: 'global', allowPriceFallback: true },
+  { id: 'jam-menit', fromUnit: 'jam', toUnit: 'menit', ratio: 60, isPreset: true, label: '1 jam = 60 menit', unitType: 'time', scope: 'global', allowPriceFallback: false },
+  { id: 'menit-detik', fromUnit: 'menit', toUnit: 'detik', ratio: 60, isPreset: true, label: '1 menit = 60 detik', unitType: 'time', scope: 'global', allowPriceFallback: false },
+  { id: 'jam-detik', fromUnit: 'jam', toUnit: 'detik', ratio: 3600, isPreset: true, label: '1 jam = 3600 detik', unitType: 'time', scope: 'global', allowPriceFallback: false },
+];
+
+export const DEFAULT_UNITS: UnitDefinition[] = [
+  createUnitDefinition('pcs', { type: 'count', canBeBaseUnit: true, canBeConversionUnit: false, isPreset: true }),
+  createUnitDefinition('gram', { type: 'measurement', isPreset: true }),
+  createUnitDefinition('kg', { type: 'measurement', isPreset: true }),
+  createUnitDefinition('ons', { type: 'measurement', isPreset: true }),
+  createUnitDefinition('liter', { type: 'measurement', isPreset: true }),
+  createUnitDefinition('ml', { type: 'measurement', isPreset: true }),
+  createUnitDefinition('meter', { type: 'measurement', isPreset: true }),
+  createUnitDefinition('jam', { type: 'time', isPreset: true }),
+  createUnitDefinition('menit', { type: 'time', isPreset: true }),
+  createUnitDefinition('detik', { type: 'time', isPreset: true }),
+  createUnitDefinition('pack', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('dus', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('box', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('renteng', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('lusin', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('kodi', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('gros', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('ikat', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('bundle', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('roll', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
 ];

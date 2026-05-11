@@ -7,6 +7,7 @@ import { App } from 'antd';
 import { db } from '@/lib/db';
 import { Product, ProductUnit, StockPurchase } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
+import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 
 export type { StockFormData };
 
@@ -28,7 +29,8 @@ export const useStockManagement = () => {
       sku: '',
       purchase_quantity: 0,
       wholesale_prices: [],
-      sellable_units: [],
+      sellable_units: ['pcs'],
+      unit_mappings: [],
     },
   });
 
@@ -56,6 +58,13 @@ export const useStockManagement = () => {
       const purchase_quantity = productData.purchase_quantity || 0;
       const now = new Date().toISOString();
 
+      const unitMappings = normalizeProductUnitMappings({
+        purchase_unit: productData.purchase_unit || 'pcs',
+        selling_unit: productData.selling_unit || 'pcs',
+        sellable_units: productData.sellable_units || [],
+        unit_mappings: productData.unit_mappings || [],
+      });
+
       const cleanData: any = {
         name: productData.name,
         category: productData.category || 'non_consumable',
@@ -69,7 +78,13 @@ export const useStockManagement = () => {
           price: Number(p.price),
           price_type: p.price_type || 'unit',
         })),
-        sellable_units: productData.sellable_units && productData.sellable_units.length > 0 ? productData.sellable_units : [productData.selling_unit || 'pcs'],
+        unit_mappings: unitMappings,
+        sellable_units: buildSellableUnitsFromMappings({
+          purchase_unit: productData.purchase_unit || 'pcs',
+          selling_unit: productData.selling_unit || 'pcs',
+          sellable_units: productData.sellable_units || [],
+          unit_mappings: unitMappings,
+        }),
       };
 
       // Only include stock if it's explicitly provided
@@ -202,11 +217,20 @@ export const useStockManagement = () => {
             existing = await db.products.get(item.id);
           }
 
+          const purchaseUnit = (item.purchase_unit || existing?.purchase_unit || 'pcs') as ProductUnit;
+          const sellingUnit = (item.selling_unit || existing?.selling_unit || 'pcs') as ProductUnit;
+          const unitMappings = normalizeProductUnitMappings({
+            purchase_unit: purchaseUnit,
+            selling_unit: sellingUnit,
+            sellable_units: item.sellable_units || existing?.sellable_units || [],
+            unit_mappings: item.unit_mappings || existing?.unit_mappings || [],
+          });
+
           const cleanData = {
             name: item.name,
             category: item.category || existing?.category || 'non_consumable',
-            purchase_unit: (item.purchase_unit || existing?.purchase_unit || 'pcs') as ProductUnit,
-            selling_unit: (item.selling_unit || existing?.selling_unit || 'pcs') as ProductUnit,
+            purchase_unit: purchaseUnit,
+            selling_unit: sellingUnit,
             purchase_price: item.purchase_price ?? 0,
             selling_price: item.selling_price ?? 0,
             stock: item.stock ?? 0,
@@ -216,11 +240,15 @@ export const useStockManagement = () => {
               price: Number(p.price),
               price_type: p.price_type || 'unit',
             })),
-            sellable_units: item.sellable_units && item.sellable_units.length > 0
-              ? item.sellable_units
-              : existing?.sellable_units && existing.sellable_units.length > 0
-                ? existing.sellable_units
-                : [item.selling_unit || existing?.selling_unit || 'pcs'],
+            unit_mappings: unitMappings,
+            sellable_units: buildSellableUnitsFromMappings({
+              purchase_unit: purchaseUnit,
+              selling_unit: sellingUnit,
+              sellable_units: item.sellable_units && item.sellable_units.length > 0
+                ? item.sellable_units
+                : existing?.sellable_units || [],
+              unit_mappings: unitMappings,
+            }),
           };
 
           const purchase_quantity = item.purchase_quantity || 0;
@@ -322,18 +350,24 @@ export const useStockManagement = () => {
   });
 
   const onSubmit = async (data: StockFormData) => {
+    const sellableUnits = data.sellable_units && data.sellable_units.length > 0
+      ? data.sellable_units
+      : [data.selling_unit || 'pcs'];
+    const defaultSellingUnit = sellableUnits[0] || data.selling_unit || 'pcs';
+
     await upsertMutation.mutateAsync({
       name: data.name,
       category: data.category,
       purchase_unit: data.purchase_unit,
-      selling_unit: data.selling_unit,
+      selling_unit: defaultSellingUnit,
       purchase_price: data.purchase_price,
       selling_price: data.selling_price,
       stock: data.stock,
       sku: data.sku || '',
       purchase_quantity: data.purchase_quantity || 0,
       wholesale_prices: data.wholesale_prices || [],
-      sellable_units: data.sellable_units || [],
+      sellable_units: sellableUnits,
+      unit_mappings: data.unit_mappings || [],
     });
   };
 
@@ -365,6 +399,7 @@ export const useStockManagement = () => {
       price_type: p.price_type
     })));
     setValue('sellable_units', product.sellable_units || [product.selling_unit]);
+    setValue('unit_mappings', normalizeProductUnitMappings(product));
   };
 
   const handleDelete = (id: string) => {

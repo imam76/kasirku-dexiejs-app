@@ -6,6 +6,7 @@ import { Plus, Trash2, Save, History } from 'lucide-react';
 import { useShoppingNote } from '@/hooks/useShoppingNote';
 import { ShoppingNoteItem } from '@/types';
 import ShoppingNoteHistory from './ShoppingNoteHistory';
+import { getProductSellableUnits } from '@/utils/productUnits';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -26,7 +27,20 @@ export default function ShoppingNote() {
   } = useShoppingNote();
 
   const unitOptions = Array.from(
-    new Set(['pcs', 'kg', 'gram', 'ons', 'box', 'dus', 'lusin', 'liter', 'meter', 'pack', 'roll', ...products.map((product) => product.purchase_unit)])
+    new Set([
+      'pcs',
+      'kg',
+      'gram',
+      'ons',
+      'box',
+      'dus',
+      'lusin',
+      'liter',
+      'meter',
+      'pack',
+      'roll',
+      ...products.flatMap((product) => [product.purchase_unit, ...getProductSellableUnits(product)]),
+    ])
   ).filter(Boolean);
 
   const columns: ColumnsType<ShoppingNoteItem> = [

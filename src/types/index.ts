@@ -6,6 +6,7 @@ export interface WholesalePrice {
 
 export type ProductUnit = string;
 export type SalesUnitCategory = 'discrete' | 'weighted';
+export type UnitDefinitionType = 'measurement' | 'count' | 'package' | 'time';
 export type ProductCategory =
   | 'bumbu'
   | 'sembako'
@@ -18,6 +19,17 @@ export type ProductCategory =
   | 'non_consumable'
   | string;
 
+export interface UnitDefinition {
+  id: ProductUnit;
+  name: string;
+  type: UnitDefinitionType;
+  canBeBaseUnit: boolean;
+  canBeConversionUnit: boolean;
+  isPreset: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface UnitConversion {
   id: string;
   fromUnit: string;
@@ -25,6 +37,16 @@ export interface UnitConversion {
   ratio: number;
   isPreset: boolean;
   label: string;
+  unitType?: 'measurement' | 'package' | 'time';
+  scope?: 'global' | 'product';
+  allowPriceFallback?: boolean;
+  isDeprecated?: boolean;
+}
+
+export interface ProductUnitMapping {
+  unit: ProductUnit;
+  base_unit: ProductUnit;
+  ratio: number; // 1 unit = ratio base_unit
 }
 
 export interface Product {
@@ -39,6 +61,7 @@ export interface Product {
   sku?: string;
   wholesale_prices?: WholesalePrice[];
   sellable_units?: ProductUnit[]; // Units cashier can select when selling (defaults to [selling_unit])
+  unit_mappings?: ProductUnitMapping[]; // Product-specific conversions, e.g. 1 dus = 24 pcs
   created_at: string;
   updated_at: string;
 }
