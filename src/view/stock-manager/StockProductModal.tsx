@@ -8,8 +8,8 @@ import type { StockFormData } from '@/hooks/useStockManagement';
 import { db } from '@/lib/db';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Alert, Button, Grid, Input, InputNumber, Modal, Select, Tabs } from 'antd';
-import { AlertTriangle, ExternalLink, Plus, ScanLine, Trash2, X } from 'lucide-react';
+import { Alert, Button, Grid, Input, InputNumber, Modal, Select, Tabs, Tooltip } from 'antd';
+import { AlertTriangle, ExternalLink, Info, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type Control,
@@ -35,7 +35,7 @@ type Props = {
 };
 
 type FieldContainerProps = {
-  label: string;
+  label: React.ReactNode;
   error?: FieldError;
   help?: string;
   children: React.ReactNode;
@@ -400,11 +400,26 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         />
                       </FieldContainer>
 
-                      <div className="sm:col-span-2">
+                     
                         <FieldContainer
-                          label="Satuan Jual Tersedia"
+                          label={(
+                            <span className="inline-flex items-center gap-1.5">
+                              Satuan Jual Tersedia
+                              <Tooltip
+                                trigger={['hover', 'click']}
+                                title="Unit pertama menjadi default kasir. Unit ukur pakai konversi global; package/custom perlu ratio di tab Konversi Unit."
+                              >
+                                <button
+                                  type="button"
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                                  aria-label="Info satuan jual tersedia"
+                                >
+                                  <Info size={14} />
+                                </button>
+                              </Tooltip>
+                            </span>
+                          )}
                           error={(errors.sellable_units || errors.selling_unit) as FieldError | undefined}
-                          help="Unit pertama menjadi default kasir. Unit ukur pakai konversi global; package/custom perlu ratio di tab Konversi Unit."
                         >
                           <Controller
                             name="sellable_units"
@@ -425,7 +440,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                             )}
                           />
                         </FieldContainer>
-                      </div>
+                      
 
                       <FieldContainer label={`Harga Beli (per ${purchaseUnit})`} error={errors.purchase_price}>
                         <Controller
