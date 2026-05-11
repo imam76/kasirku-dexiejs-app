@@ -1,6 +1,8 @@
-import { App } from 'antd';
-import { useState, useCallback } from 'react';
-import { ScanLine, X } from 'lucide-react';
+import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
+import { App, Button, Input } from 'antd';
+import type { InputRef } from 'antd';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { ScanLine } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { formatCurrency } from '@/utils/formatters';
 import ProductList from '../components/ProductList';
@@ -35,9 +37,47 @@ export default function Transaction() {
   const [cartOpen, setCartOpen] = useState(false);
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
   const total = calculateTotal();
+  const searchInputRef = useRef<InputRef>(null);
 
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
+
+  const clearSearch = useCallback(() => {
+    setSearchTerm('');
+    searchInputRef.current?.focus();
+  }, [setSearchTerm]);
+
+  const focusSearch = useCallback(() => {
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  }, []);
+
+  useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+
+      const tagName = target.tagName.toLowerCase();
+      return target.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+
+      if (event.key === '/' && !isTypingTarget(event.target)) {
+        event.preventDefault();
+        focusSearch();
+        return;
+      }
+
+      if (event.key === 'Escape' && searchTerm) {
+        event.preventDefault();
+        clearSearch();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [clearSearch, focusSearch, searchTerm]);
 
   const handleScan = useCallback((text: string) => {
     const match = products.find((p) => (p.sku || '').trim().toLowerCase() === text.toLowerCase());
@@ -57,33 +97,37 @@ export default function Transaction() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-md p-4 mb-4 border border-gray-200">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  placeholder="Cari produk (nama atau SKU)..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    aria-label="Hapus pencarian"
-                  >
-                    <X size={18} />
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setScannerOpen(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
+              <Input
+                ref={searchInputRef}
+                size="large"
+                allowClear={false}
+                prefix={<SearchOutlined className="text-gray-400" />}
+                placeholder="Cari produk (nama atau SKU)..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="rounded-lg"
+              />
+              <Button
+                size="large"
+                htmlType='button'
+                icon={<CloseCircleOutlined />}
+                onClick={clearSearch}
+                disabled={!searchTerm}
+                className="w-full sm:w-auto"
               >
-                <ScanLine size={18} />
-                <span className="hidden sm:inline">Scan</span>
-              </button>
+                Reset
+              </Button>
+              <Button
+                htmlType="button"
+                size="large"
+                icon={<ScanLine size={18} />}
+                onClick={() => setScannerOpen(true)}
+                className="flex w-full items-center justify-center gap-2 bg-indigo-600 font-semibold text-white hover:!border-indigo-700 hover:!bg-indigo-700 hover:!text-white sm:w-auto"
+              >
+                
+                Scan Barcode
+              </Button>
             </div>
           </div>
 

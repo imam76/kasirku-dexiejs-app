@@ -16,6 +16,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { FinanceTransaction, FinanceTransactionType } from '@/types';
+import { FINANCE_CATEGORIES } from '@/constants/finance';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -56,9 +57,9 @@ export default function FinanceManagement() {
 
     // Set default category based on type
     if (type === 'OPENING_BALANCE') {
-      form.setFieldsValue({ category: 'SALDO_AWAL', description: 'Saldo awal hari ini' });
+      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPENING_BALANCE, description: 'Saldo awal hari ini' });
     } else if (type === 'INCOME') {
-      form.setFieldsValue({ category: 'LAINNYA', description: '' });
+      form.setFieldsValue({ category: FINANCE_CATEGORIES.OTHER, description: '' });
     } else if (type === 'EXPENSE') {
       form.setFieldsValue({ category: 'OPERASIONAL', description: '' });
     }
@@ -430,14 +431,16 @@ export default function FinanceManagement() {
               <Select showSearch allowClear placeholder="Pilih atau ketik kategori baru">
                 {modalType === 'INCOME' ? (
                   <>
-                    <Option value="LAINNYA">Lainnya</Option>
-                    <Option value="DEPOSIT">Deposit</Option>
+                    <Option value={FINANCE_CATEGORIES.OTHER}>Lainnya</Option>
+                    <Option value={FINANCE_CATEGORIES.DEPOSIT}>Deposit / Top Up Kas</Option>
+                    <Option value={FINANCE_CATEGORIES.CAPITAL_ADDITION}>Tambahan Modal</Option>
+                    <Option value={FINANCE_CATEGORIES.LOAN}>Pinjaman</Option>
                     <Option value="LAYANAN">Biaya Layanan</Option>
                     <Option value="BONUS">Bonus/Hibah</Option>
                   </>
                 ) : (
                   <>
-                    <Option value="PEMBELIAN_STOK">Pembelian Stok (Modal Barang)</Option>
+                    <Option value={FINANCE_CATEGORIES.STOCK_PURCHASE}>Pembelian Stok (Modal Barang)</Option>
                     <Option value="OPERASIONAL">Operasional (Listrik, Sewa, dll)</Option>
                     <Option value="GAJI">Gaji Karyawan</Option>
                     <Option value="PERLENGKAPAN">Perlengkapan Toko</Option>

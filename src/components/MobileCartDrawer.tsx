@@ -1,4 +1,5 @@
-import { X, Trash2 } from 'lucide-react';
+import { Button, Drawer } from 'antd';
+import { Trash2 } from 'lucide-react';
 import { CartItem as CartItemType, PaymentMethod } from '@/types';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
@@ -38,37 +39,40 @@ export default function MobileCartDrawer({
   setPaymentMethod,
   handleCheckout,
 }: MobileCartDrawerProps) {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
-      <div
-        className="absolute inset-0 bg-black bg-opacity-40"
-        onClick={onClose}
-      />
-      <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold text-gray-800">Keranjang</h3>
-            {cart.length > 0 && (
-              <button
-                onClick={clearCart}
-                className="text-red-500 hover:text-red-700 text-xs font-medium transition-colors flex items-center gap-1 bg-red-50 px-2 py-1 rounded"
-              >
-                <Trash2 size={12} />
-                Bersihkan
-              </button>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
+    <Drawer
+      title="Keranjang"
+      placement="bottom"
+      open={isOpen}
+      onClose={onClose}
+      height="85vh"
+      rootClassName="mobile-bottom-drawer"
+      className="lg:hidden"
+      extra={
+        cart.length > 0 ? (
+          <Button
+            danger
+            size="small"
+            type="text"
+            icon={<Trash2 size={12} />}
+            onClick={clearCart}
+            className="bg-red-50 text-xs font-medium"
           >
-            <X size={20} />
-          </button>
-        </div>
+            Bersihkan
+          </Button>
+        ) : null
+      }
+      styles={{
+        body: { padding: 0 },
+        header: { padding: '16px 20px' },
+      }}
+    >
+      <div className="flex h-full flex-col">
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-3">
+          {cart.length === 0 ? (
+            <p className="py-8 text-center text-gray-500">Keranjang kosong</p>
+          ) : null}
 
-        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
           {cart.map((item) => (
             <CartItem
               key={item.product.id}
@@ -78,13 +82,10 @@ export default function MobileCartDrawer({
               removeFromCart={removeFromCart}
             />
           ))}
-          {cart.length === 0 && (
-            <p className="text-center text-gray-500 py-8">Keranjang kosong</p>
-          )}
         </div>
 
         {cart.length > 0 && (
-          <div className="px-5 pt-4 pb-8 border-t border-gray-100">
+          <div className="border-t border-gray-100 px-5 pb-8 pt-4">
             <CartSummary
               total={total}
               showPayment={showPayment}
@@ -102,6 +103,6 @@ export default function MobileCartDrawer({
           </div>
         )}
       </div>
-    </div>
+    </Drawer>
   );
 }

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { App } from 'antd';
 import { Transaction, ProfitLog, FinanceTransaction } from '@/types';
+import { FINANCE_CATEGORIES, isProfitAffectingFinanceTransaction } from '@/constants/finance';
 
 export const useProfit = () => {
   const queryClient = useQueryClient();
@@ -68,7 +69,7 @@ export const useProfit = () => {
         await db.financeTransactions.add({
           id: crypto.randomUUID(),
           type: 'EXPENSE',
-          category: 'PENARIKAN_SALDO',
+          category: FINANCE_CATEGORIES.WITHDRAWAL,
           amount: amount,
           description: `Penarikan Saldo: ${description}`,
           created_at: now,
@@ -108,11 +109,9 @@ export const useProfit = () => {
         const transactions = await db.transactions.orderBy('created_at').toArray();
         const items = await db.transactionItems.toArray();
 
-        // 4. Get manual finance transactions (non-sales, non-withdrawals, non-stock-purchases, and non-opening-balance)
+        // 4. Get manual finance transactions that affect profit
         const manualFinanceTransactions = await db.financeTransactions
-          .where('category')
-          .noneOf(['PENJUALAN', 'HPP_OTOMATIS', 'PEMBELIAN_STOK', 'PENARIKAN_SALDO']) // HPP_OTOMATIS and PEMBELIAN_STOK excluded
-          .and(f => f.type !== 'OPENING_BALANCE')
+          .filter(f => isProfitAffectingFinanceTransaction(f.type, f.category))
           .toArray();
 
         // Group items by transaction_id

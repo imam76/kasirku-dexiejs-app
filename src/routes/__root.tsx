@@ -17,6 +17,7 @@ import {
   ClipboardList,
   DollarSign,
   FileDown,
+  FileSearch,
   FileSpreadsheet,
   FileText,
   History,
@@ -149,6 +150,7 @@ const RootLayout = () => {
       key: 'reports-group',
       children: [
         { to: '/report/sales-report', label: 'Penjualan', icon: FileText },
+        { to: '/report/transaction-detail-report', label: 'Detail Transaksi', icon: FileSearch },
         { to: '/report/purchase-report', label: 'Pembelian', icon: FileSpreadsheet },
         { to: '/report/expense-report', label: 'Pengeluaran', icon: FileDown },
         { to: '/profit', label: 'Keuntungan', icon: DollarSign },
@@ -252,7 +254,7 @@ const RootLayout = () => {
             overflow: 'auto',
             zIndex: 30,
           }}
-          breakpoint="lg"
+          breakpoint="xl"
           collapsedWidth={0}
         >
           <Menu

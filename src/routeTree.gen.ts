@@ -23,6 +23,9 @@ const ProfitLazyRouteImport = createFileRoute('/profit')()
 const HistoryLazyRouteImport = createFileRoute('/history')()
 const FinanceLazyRouteImport = createFileRoute('/finance')()
 const SplatLazyRouteImport = createFileRoute('/$')()
+const ReportTransactionDetailReportLazyRouteImport = createFileRoute(
+  '/report/transaction-detail-report',
+)()
 const ReportSalesReportLazyRouteImport = createFileRoute(
   '/report/sales-report',
 )()
@@ -88,6 +91,16 @@ const ReportIndexRoute = ReportIndexRouteImport.update({
   path: '/report/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportTransactionDetailReportLazyRoute =
+  ReportTransactionDetailReportLazyRouteImport.update({
+    id: '/report/transaction-detail-report',
+    path: '/report/transaction-detail-report',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/report/transaction-detail-report.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const ReportSalesReportLazyRoute = ReportSalesReportLazyRouteImport.update({
   id: '/report/sales-report',
   path: '/report/sales-report',
@@ -125,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/report/': typeof ReportIndexRoute
 }
 export interface FileRoutesByTo {
@@ -141,6 +155,7 @@ export interface FileRoutesByTo {
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/report': typeof ReportIndexRoute
 }
 export interface FileRoutesById {
@@ -158,6 +173,7 @@ export interface FileRoutesById {
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/report/': typeof ReportIndexRoute
 }
 export interface FileRouteTypes {
@@ -176,6 +192,7 @@ export interface FileRouteTypes {
     | '/report/expense-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/transaction-detail-report'
     | '/report/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -192,6 +209,7 @@ export interface FileRouteTypes {
     | '/report/expense-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/transaction-detail-report'
     | '/report'
   id:
     | '__root__'
@@ -208,6 +226,7 @@ export interface FileRouteTypes {
     | '/report/expense-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/transaction-detail-report'
     | '/report/'
   fileRoutesById: FileRoutesById
 }
@@ -225,6 +244,7 @@ export interface RootRouteChildren {
   ReportExpenseReportLazyRoute: typeof ReportExpenseReportLazyRoute
   ReportPurchaseReportLazyRoute: typeof ReportPurchaseReportLazyRoute
   ReportSalesReportLazyRoute: typeof ReportSalesReportLazyRoute
+  ReportTransactionDetailReportLazyRoute: typeof ReportTransactionDetailReportLazyRoute
   ReportIndexRoute: typeof ReportIndexRoute
 }
 
@@ -307,6 +327,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/report/transaction-detail-report': {
+      id: '/report/transaction-detail-report'
+      path: '/report/transaction-detail-report'
+      fullPath: '/report/transaction-detail-report'
+      preLoaderRoute: typeof ReportTransactionDetailReportLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/report/sales-report': {
       id: '/report/sales-report'
       path: '/report/sales-report'
@@ -345,6 +372,8 @@ const rootRouteChildren: RootRouteChildren = {
   ReportExpenseReportLazyRoute: ReportExpenseReportLazyRoute,
   ReportPurchaseReportLazyRoute: ReportPurchaseReportLazyRoute,
   ReportSalesReportLazyRoute: ReportSalesReportLazyRoute,
+  ReportTransactionDetailReportLazyRoute:
+    ReportTransactionDetailReportLazyRoute,
   ReportIndexRoute: ReportIndexRoute,
 }
 export const routeTree = rootRouteImport

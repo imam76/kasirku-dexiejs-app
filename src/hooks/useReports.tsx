@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import { Transaction, StockPurchase, FinanceTransaction } from '@/types';
+import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product } from '@/types';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import {
   aggregateSoldItems,
@@ -43,6 +43,40 @@ interface ExpenseReportData {
   transactions: FinanceTransaction[];
   totalExpense: number;
   breakdown: Record<string, number>;
+}
+
+export interface TransactionDetailReportRow {
+  key: string;
+  transaction_id: string;
+  transaction_number: string;
+  transaction_created_at: string;
+  payment_method: Transaction['payment_method'];
+  transaction_total: number;
+  transaction_profit: number;
+  transaction_margin: number;
+  product_id: string;
+  product_name: string;
+  category: string;
+  sku?: string;
+  quantity: number;
+  unit: string;
+  selling_price: number;
+  purchase_price: number;
+  subtotal: number;
+  cost_total: number;
+  profit: number;
+  margin: number;
+}
+
+interface TransactionDetailReportData {
+  rows: TransactionDetailReportRow[];
+  transactions: Transaction[];
+  totalRevenue: number;
+  totalCost: number;
+  totalProfit: number;
+  totalItems: number;
+  uniqueProducts: number;
+  averageMargin: number;
 }
 
 export const useSalesReport = (
@@ -181,6 +215,149 @@ export const useProductCategories = () => {
     queryFn: async () => {
       // Return hardcoded categories from constants as the source of truth
       return PRODUCT_CATEGORIES.map(cat => cat.value);
+    },
+  });
+};
+
+export const useTransactionDetailReport = (
+  startDate?: string,
+  endDate?: string,
+  paymentMethod?: string,
+  categories?: string[],
+  search?: string
+) => {
+  return useQuery({
+    queryKey: ['transactionDetailReport', startDate, endDate, paymentMethod, categories, search],
+    queryFn: async (): Promise<TransactionDetailReportData> => {
+      let collection = db.transactions.orderBy('created_at').reverse();
+
+      if (startDate && endDate) {
+        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
+        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
+        collection = db.transactions
+          .where('created_at')
+          .between(startISO, endISO, true, true)
+          .reverse();
+      } else if (startDate) {
+        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
+        collection = db.transactions
+          .where('created_at')
+          .aboveOrEqual(startISO)
+          .reverse();
+      } else if (endDate) {
+        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
+        collection = db.transactions
+          .where('created_at')
+          .belowOrEqual(endISO)
+          .reverse();
+      }
+
+      let transactions = await collection.toArray();
+
+      if (paymentMethod && paymentMethod !== 'SEMUA') {
+        transactions = transactions.filter((transaction) => transaction.payment_method === paymentMethod);
+      }
+
+      const transactionIds = transactions.map((transaction) => transaction.id);
+      if (transactionIds.length === 0) {
+        return {
+          rows: [],
+          transactions: [],
+          totalRevenue: 0,
+          totalCost: 0,
+          totalProfit: 0,
+          totalItems: 0,
+          uniqueProducts: 0,
+          averageMargin: 0,
+        };
+      }
+
+      const [items, products] = await Promise.all([
+        db.transactionItems.where('transaction_id').anyOf(transactionIds).toArray(),
+        db.products.toArray(),
+      ]);
+
+      const transactionMap = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+      const productMap = new Map(products.map((product) => [product.id, product]));
+      const transactionProfitMap = items.reduce((acc, item) => {
+        acc[item.transaction_id] = (acc[item.transaction_id] || 0) + (item.profit || 0);
+        return acc;
+      }, {} as Record<string, number>);
+
+      const normalizedSearch = search?.trim().toLowerCase();
+
+      let rows = items
+        .map((item: TransactionItem): TransactionDetailReportRow | null => {
+          const transaction = transactionMap.get(item.transaction_id);
+          if (!transaction) return null;
+
+          const product = productMap.get(item.product_id) as Product | undefined;
+          const unit = resolveTransactionItemUnit(item, product);
+          const costTotal = (item.purchase_price || 0) * item.quantity;
+          const profit = item.profit || 0;
+          const transactionProfit = transactionProfitMap[item.transaction_id] || 0;
+
+          return {
+            key: item.id,
+            transaction_id: transaction.id,
+            transaction_number: transaction.transaction_number,
+            transaction_created_at: transaction.created_at,
+            payment_method: transaction.payment_method || 'TUNAI',
+            transaction_total: transaction.total_amount,
+            transaction_profit: transactionProfit,
+            transaction_margin: transaction.total_amount > 0 ? (transactionProfit / transaction.total_amount) * 100 : 0,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            category: product?.category || 'non_consumable',
+            sku: product?.sku,
+            quantity: item.quantity,
+            unit,
+            selling_price: item.selling_price ?? item.price,
+            purchase_price: item.purchase_price || 0,
+            subtotal: item.subtotal,
+            cost_total: costTotal,
+            profit,
+            margin: item.subtotal > 0 ? (profit / item.subtotal) * 100 : 0,
+          };
+        })
+        .filter((row): row is TransactionDetailReportRow => Boolean(row));
+
+      if (categories && categories.length > 0) {
+        rows = rows.filter((row) => categories.includes(row.category));
+      }
+
+      if (normalizedSearch) {
+        rows = rows.filter((row) => {
+          return (
+            row.transaction_number.toLowerCase().includes(normalizedSearch) ||
+            row.product_name.toLowerCase().includes(normalizedSearch) ||
+            row.sku?.toLowerCase().includes(normalizedSearch)
+          );
+        });
+      }
+
+      rows.sort((a, b) => {
+        const dateDiff = dayjs(b.transaction_created_at).valueOf() - dayjs(a.transaction_created_at).valueOf();
+        if (dateDiff !== 0) return dateDiff;
+        return a.product_name.localeCompare(b.product_name);
+      });
+
+      const visibleTransactionIds = new Set(rows.map((row) => row.transaction_id));
+      const visibleTransactions = transactions.filter((transaction) => visibleTransactionIds.has(transaction.id));
+      const totalRevenue = rows.reduce((sum, row) => sum + row.subtotal, 0);
+      const totalCost = rows.reduce((sum, row) => sum + row.cost_total, 0);
+      const totalProfit = rows.reduce((sum, row) => sum + row.profit, 0);
+
+      return {
+        rows,
+        transactions: visibleTransactions,
+        totalRevenue,
+        totalCost,
+        totalProfit,
+        totalItems: rows.reduce((sum, row) => sum + row.quantity, 0),
+        uniqueProducts: new Set(rows.map((row) => row.product_id)).size,
+        averageMargin: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
+      };
     },
   });
 };

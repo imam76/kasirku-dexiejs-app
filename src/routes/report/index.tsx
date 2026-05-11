@@ -1,5 +1,6 @@
 import {
   FileExcelOutlined,
+  FileSearchOutlined,
   FileTextOutlined
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
@@ -11,6 +12,7 @@ export const Route = createFileRoute('/report/')({
 function Laporan() {
   const menuItems = [
     { to: '/report/sales-report', label: 'Lap. Jual', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
+    { to: '/report/transaction-detail-report', label: 'Detail Trx', icon: FileSearchOutlined, color: 'text-blue-600', desc: 'Lihat item, HPP, dan margin per transaksi' },
     { to: '/report/purchase-report', label: 'Lap. Beli', icon: FileExcelOutlined, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
     { to: '/report/expense-report', label: 'Lap. Pengeeluaran', icon: FileExcelOutlined, color: 'text-red-600', desc: 'Lihat laporan biaya' },
   ]
@@ -122,4 +124,3 @@ function Laporan() {
     </div>
   )
 }
-

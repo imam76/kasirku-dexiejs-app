@@ -1,7 +1,10 @@
+import { Button, Drawer, Input, InputNumber, Select } from 'antd';
+import type { ChangeEvent } from 'react';
+import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import type { Product } from '@/types';
-import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
+import { formatCategory, formatCurrency, getStockStatusClass } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
-import { Edit2, Search, Trash2 } from 'lucide-react';
+import { Edit2, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface StockTableProps {
@@ -12,22 +15,166 @@ interface StockTableProps {
 
 type SortField = 'name' | 'sku' | 'purchase_price' | 'selling_price' | 'stock';
 type SortDirection = 'asc' | 'desc';
+type StockStatusFilter = 'all' | 'out' | 'low' | 'safe';
+type SkuStatusFilter = 'all' | 'with' | 'without';
+type WholesaleStatusFilter = 'all' | 'with' | 'without';
+
+const STOCK_STATUS_OPTIONS = [
+  { value: 'all', label: 'Semua Stok' },
+  { value: 'out', label: 'Stok Habis' },
+  { value: 'low', label: 'Stok Menipis' },
+  { value: 'safe', label: 'Stok Aman' },
+];
+
+const SKU_STATUS_OPTIONS = [
+  { value: 'all', label: 'Semua SKU' },
+  { value: 'with', label: 'Punya SKU' },
+  { value: 'without', label: 'Belum Punya SKU' },
+];
+
+const WHOLESALE_STATUS_OPTIONS = [
+  { value: 'all', label: 'Semua Grosir' },
+  { value: 'with', label: 'Ada Harga Grosir' },
+  { value: 'without', label: 'Tanpa Harga Grosir' },
+];
 
 export default function StockTable({ products, onEdit, onDelete }: StockTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [stockStatus, setStockStatus] = useState<StockStatusFilter>('all');
+  const [minStock, setMinStock] = useState<number | null>(null);
+  const [maxStock, setMaxStock] = useState<number | null>(null);
+  const [skuStatus, setSkuStatus] = useState<SkuStatusFilter>('all');
+  const [minSellingPrice, setMinSellingPrice] = useState<number | null>(null);
+  const [maxSellingPrice, setMaxSellingPrice] = useState<number | null>(null);
+  const [minPurchasePrice, setMinPurchasePrice] = useState<number | null>(null);
+  const [maxPurchasePrice, setMaxPurchasePrice] = useState<number | null>(null);
+  const [wholesaleStatus, setWholesaleStatus] = useState<WholesaleStatusFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+
+  const activeFilterCount = [
+    selectedCategories.length > 0,
+    stockStatus !== 'all',
+    minStock !== null || maxStock !== null,
+    skuStatus !== 'all',
+    minSellingPrice !== null || maxSellingPrice !== null,
+    minPurchasePrice !== null || maxPurchasePrice !== null,
+    wholesaleStatus !== 'all',
+  ].filter(Boolean).length;
+
+  const isStockStatusMatch = (product: Product) => {
+    switch (stockStatus) {
+      case 'out':
+        return product.stock <= 0;
+      case 'low':
+        return product.stock > 0 && product.stock < 10;
+      case 'safe':
+        return product.stock >= 10;
+      default:
+        return true;
+    }
+  };
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSelectedCategories([]);
+    setStockStatus('all');
+    setMinStock(null);
+    setMaxStock(null);
+    setSkuStatus('all');
+    setMinSellingPrice(null);
+    setMaxSellingPrice(null);
+    setMinPurchasePrice(null);
+    setMaxPurchasePrice(null);
+    setWholesaleStatus('all');
+    setCurrentPage(1);
+  };
 
   // Filter products berdasarkan search query
   const filteredProducts = useMemo(() => {
-    return products.filter((product) =>
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (product.sku?.toLowerCase() || '').includes(searchQuery.toLowerCase())
-    );
-  }, [products, searchQuery]);
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+
+    return products.filter((product) => {
+      const hasSku = Boolean(product.sku?.trim());
+      const hasWholesalePrice = Boolean(product.wholesale_prices?.length);
+
+      if (
+        normalizedSearch &&
+        !product.name.toLowerCase().includes(normalizedSearch) &&
+        !(product.sku?.toLowerCase() || '').includes(normalizedSearch)
+      ) {
+        return false;
+      }
+
+      if (selectedCategories.length > 0 && !selectedCategories.includes(product.category || 'non_consumable')) {
+        return false;
+      }
+
+      if (!isStockStatusMatch(product)) {
+        return false;
+      }
+
+      if (minStock !== null && product.stock < minStock) {
+        return false;
+      }
+
+      if (maxStock !== null && product.stock > maxStock) {
+        return false;
+      }
+
+      if (skuStatus === 'with' && !hasSku) {
+        return false;
+      }
+
+      if (skuStatus === 'without' && hasSku) {
+        return false;
+      }
+
+      if (minSellingPrice !== null && product.selling_price < minSellingPrice) {
+        return false;
+      }
+
+      if (maxSellingPrice !== null && product.selling_price > maxSellingPrice) {
+        return false;
+      }
+
+      if (minPurchasePrice !== null && product.purchase_price < minPurchasePrice) {
+        return false;
+      }
+
+      if (maxPurchasePrice !== null && product.purchase_price > maxPurchasePrice) {
+        return false;
+      }
+
+      if (wholesaleStatus === 'with' && !hasWholesalePrice) {
+        return false;
+      }
+
+      if (wholesaleStatus === 'without' && hasWholesalePrice) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [
+    products,
+    searchQuery,
+    selectedCategories,
+    stockStatus,
+    minStock,
+    maxStock,
+    skuStatus,
+    minSellingPrice,
+    maxSellingPrice,
+    minPurchasePrice,
+    maxPurchasePrice,
+    wholesaleStatus,
+  ]);
 
   // Sort products
   const sortedProducts = useMemo(() => {
@@ -66,24 +213,222 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
     setCurrentPage(1);
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
     setCurrentPage(1);
   };
 
-  return (
-    <div className="space-y-4">
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-3 text-gray-400" size={18} />
-        <input
-          type="text"
-          placeholder="Cari produk berdasarkan nama atau SKU..."
-          value={searchQuery}
-          onChange={handleSearchChange}
-          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+  const renderFilterControls = () => (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <Select
+        mode="multiple"
+        allowClear
+        maxTagCount="responsive"
+        size="large"
+        placeholder="Kategori produk"
+        value={selectedCategories}
+        onChange={(value) => {
+          setSelectedCategories(value);
+          setCurrentPage(1);
+        }}
+        options={PRODUCT_CATEGORIES}
+      />
+
+      <Select
+        size="large"
+        value={stockStatus}
+        onChange={(value) => {
+          setStockStatus(value);
+          setCurrentPage(1);
+        }}
+        options={STOCK_STATUS_OPTIONS}
+      />
+
+      <div className="grid grid-cols-2 gap-2">
+        <InputNumber
+          size="large"
+          min={0}
+          value={minStock}
+          onChange={(value) => {
+            setMinStock(value);
+            setCurrentPage(1);
+          }}
+          placeholder="Stok min"
+          className="w-full"
+        />
+        <InputNumber
+          size="large"
+          min={0}
+          value={maxStock}
+          onChange={(value) => {
+            setMaxStock(value);
+            setCurrentPage(1);
+          }}
+          placeholder="Stok max"
+          className="w-full"
         />
       </div>
+
+      <Select
+        size="large"
+        value={skuStatus}
+        onChange={(value) => {
+          setSkuStatus(value);
+          setCurrentPage(1);
+        }}
+        options={SKU_STATUS_OPTIONS}
+      />
+
+      <Select
+        size="large"
+        value={wholesaleStatus}
+        onChange={(value) => {
+          setWholesaleStatus(value);
+          setCurrentPage(1);
+        }}
+        options={WHOLESALE_STATUS_OPTIONS}
+      />
+
+      <div className="grid grid-cols-2 gap-2">
+        <InputNumber
+          size="large"
+          min={0}
+          value={minSellingPrice}
+          onChange={(value) => {
+            setMinSellingPrice(value);
+            setCurrentPage(1);
+          }}
+          placeholder="Jual min"
+          className="w-full"
+        />
+        <InputNumber
+          size="large"
+          min={0}
+          value={maxSellingPrice}
+          onChange={(value) => {
+            setMaxSellingPrice(value);
+            setCurrentPage(1);
+          }}
+          placeholder="Jual max"
+          className="w-full"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 md:col-span-2">
+        <InputNumber
+          size="large"
+          min={0}
+          value={minPurchasePrice}
+          onChange={(value) => {
+            setMinPurchasePrice(value);
+            setCurrentPage(1);
+          }}
+          placeholder="Beli min"
+          className="w-full"
+        />
+        <InputNumber
+          size="large"
+          min={0}
+          value={maxPurchasePrice}
+          onChange={(value) => {
+            setMaxPurchasePrice(value);
+            setCurrentPage(1);
+          }}
+          placeholder="Beli max"
+          className="w-full"
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Search and Filters */}
+      <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Filter Produk</div>
+            <p className="mt-1 text-xs text-gray-500">
+              {filteredProducts.length} dari {products.length} produk ditampilkan
+            </p>
+          </div>
+          {(searchQuery || activeFilterCount > 0) && (
+            <Button onClick={resetFilters} className="w-full sm:w-auto">
+              Reset Filter
+            </Button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="grid grid-cols-[1fr_auto] gap-2 md:block">
+            <Input
+              size="large"
+              allowClear
+              prefix={<Search size={18} className="text-gray-400" />}
+              placeholder="Cari produk berdasarkan nama atau SKU..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+            />
+            <Button
+              size="large"
+              icon={<SlidersHorizontal size={18} />}
+              onClick={() => setIsFilterDrawerOpen(true)}
+              className="md:hidden"
+            >
+              <span className="hidden min-[380px]:inline">
+                Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </span>
+            </Button>
+          </div>
+
+          <div className="hidden md:block">
+            {renderFilterControls()}
+          </div>
+        </div>
+      </div>
+
+      <Drawer
+        title="Filter Produk"
+        placement="bottom"
+        open={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        height="auto"
+        rootClassName="mobile-bottom-drawer"
+        className="md:hidden"
+        styles={{
+          body: { padding: 16 },
+          header: { padding: '16px 20px' },
+        }}
+      >
+        <div className="space-y-3 pb-3">
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <SlidersHorizontal size={18} />
+              <span>Parameter Filter</span>
+            </div>
+            {renderFilterControls()}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              size="large"
+              disabled={activeFilterCount === 0 && !searchQuery}
+              onClick={resetFilters}
+              className="h-12"
+            >
+              Reset
+            </Button>
+            <Button
+              size="large"
+              type="primary"
+              onClick={() => setIsFilterDrawerOpen(false)}
+              className="h-12"
+            >
+              Terapkan
+            </Button>
+          </div>
+        </div>
+      </Drawer>
 
       {/* Desktop & Tablet Table View */}
       <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
@@ -112,6 +457,9 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                       <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </div>
+                </th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Kategori
                 </th>
                 <th
                   onClick={() => handleSort('purchase_price')}
@@ -170,6 +518,9 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                       {product.name}
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCategory(product.category || 'non_consumable')}
+                    </td>
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       Rp {formatCurrency(product.purchase_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -214,7 +565,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         </div>
         {paginatedProducts.length === 0 && (
           <div className="text-center py-8 text-gray-500">
-            {searchQuery ? 'Tidak ada produk yang sesuai dengan pencarian.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
+            {searchQuery || activeFilterCount > 0 ? 'Tidak ada produk yang sesuai dengan filter.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
           </div>
         )}
       </div>
@@ -223,7 +574,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
       <div className="md:hidden space-y-3">
         {paginatedProducts.length === 0 && (
           <div className="bg-white rounded-lg shadow-md border border-gray-200 text-center py-8 text-gray-500 text-sm">
-            {searchQuery ? 'Tidak ada produk yang sesuai dengan pencarian.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
+            {searchQuery || activeFilterCount > 0 ? 'Tidak ada produk yang sesuai dengan filter.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
           </div>
         )}
         {paginatedProducts.map((product) => {
@@ -238,6 +589,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                 <div>
                   <p className="text-sm font-bold text-gray-900">{product.name}</p>
                   <p className="text-xs text-gray-500 mt-0.5">SKU: {product.sku || '-'}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{formatCategory(product.category || 'non_consumable')}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`px-2 py-1 rounded text-xs font-medium ${getStockStatusClass(product.stock)}`}>

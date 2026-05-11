@@ -29,6 +29,16 @@
   padding: 0 !important;
 }
 
+.mobile-bottom-drawer .ant-drawer-content-wrapper {
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+}
+
+.mobile-bottom-drawer .ant-drawer-content {
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+}
+
 @media (min-width: 768px) {
   .full-screen-modal-mobile .ant-modal {
     width: 1000px !important;

@@ -55,10 +55,9 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
           Total: Rp {formatCurrency(currentPrice * item.quantity)}
         </p>
 
-        {/* Quantity Controls and Unit Selector - Mobile First Layout */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2">
           {/* Quantity Controls */}
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => updateQuantity(item.product.id, item.quantity - (['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1))}
               className="p-1.5 bg-gray-300 hover:bg-gray-400 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -72,7 +71,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
               min={0}
               value={item.quantity}
               onChange={handleQuantityChange}
-              className="flex-1"
+              className="min-w-0 flex-1"
               size="large"
               controls={false}
             />
@@ -86,8 +85,8 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
             </button>
           </div>
 
-          {/* Unit Selector - Mobile Full Width, then Inline */}
-          <div className="w-full sm:w-auto sm:min-w-[100px]">
+          {/* Unit Selector */}
+          <div className="w-full">
             <Select
               value={item.unit}
               onChange={handleUnitChange}

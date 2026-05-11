@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { App } from 'antd';
 import { FinanceTransaction, FinanceTransactionType } from '@/types';
+import { FINANCE_CATEGORIES, isProfitAffectingFinanceTransaction } from '@/constants/finance';
 
 export const useFinance = () => {
   const queryClient = useQueryClient();
@@ -43,17 +44,18 @@ export const useFinance = () => {
       const now = new Date().toISOString();
       let newBalance = currentAmount;
       let newProfitBalance = currentProfitAmount;
+      const affectsProfit = isProfitAffectingFinanceTransaction(type, category);
 
       if (type === 'INCOME' || type === 'OPENING_BALANCE') {
         newBalance += amount;
-        // Pemasukan manual (selain Penjualan yang ditangani useTransaction) juga masuk ke profit
-        if (category !== 'PENJUALAN') {
+        if (affectsProfit) {
           newProfitBalance += amount;
         }
       } else if (type === 'EXPENSE') {
         newBalance -= amount;
-        // Pengeluaran manual juga mengurangi profit
-        newProfitBalance -= amount;
+        if (affectsProfit) {
+          newProfitBalance -= amount;
+        }
       }
 
       await db.transaction('rw', [db.financeBalance, db.financeTransactions, db.profitBalance, db.profitLogs], async () => {
@@ -72,13 +74,7 @@ export const useFinance = () => {
           created_at: now,
         });
 
-        // Sync with profit if it's manual finance transaction (and not a withdrawal, which is handled in useProfit)
-        if (
-          category !== 'PENJUALAN' && 
-          category !== 'PEMBELIAN_STOK' && 
-          category !== 'PENARIKAN_SALDO' &&
-          type !== 'OPENING_BALANCE'
-        ) {
+        if (affectsProfit) {
           await db.profitBalance.put({
             id: 'current',
             amount: newProfitBalance,
@@ -116,7 +112,11 @@ export const useFinance = () => {
     mutationFn: async () => {
       await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases], async () => {
         // 1. Delete only auto-generated entries (those with reference_id)
-        const autoCategories = ['PENJUALAN', 'HPP_OTOMATIS', 'PEMBELIAN_STOK'];
+        const autoCategories = [
+          FINANCE_CATEGORIES.SALES,
+          FINANCE_CATEGORIES.AUTO_COGS,
+          FINANCE_CATEGORIES.STOCK_PURCHASE,
+        ];
         await db.financeTransactions
           .where('category')
           .anyOf(autoCategories)
@@ -135,7 +135,7 @@ export const useFinance = () => {
           newAutoTransactions.push({
             id: crypto.randomUUID(),
             type: 'INCOME',
-            category: 'PENJUALAN',
+            category: FINANCE_CATEGORIES.SALES,
             amount: t.total_amount,
             description: `Penjualan dari transaksi ${t.transaction_number}`,
             created_at: t.created_at,
@@ -148,7 +148,7 @@ export const useFinance = () => {
           newAutoTransactions.push({
             id: crypto.randomUUID(),
             type: 'EXPENSE',
-            category: 'PEMBELIAN_STOK',
+            category: FINANCE_CATEGORIES.STOCK_PURCHASE,
             amount: sp.total_cost,
             description: `Beli Stok: ${sp.product_name} (${sp.quantity} pcs)`,
             created_at: sp.created_at,
