@@ -16,9 +16,6 @@ import {
   Box,
   ClipboardList,
   DollarSign,
-  FileDown,
-  FileSearch,
-  FileSpreadsheet,
   FileText,
   History,
   Home,
@@ -67,7 +64,7 @@ const RootLayout = () => {
   const handleFeedbackSubmit = async (values: any) => {
     const FLY_OVER_THE_DRIVE = "8774401189:AAEWFdwvoH71-GSysuEmbsb2jaMC_OZ8QWA";
     const NEVER_TRUST_THE_GOVERMENT = "587438877";
-    
+
     const questions = FEEDBACK_QUESTIONS.filter(q => q.wave === feedbackWave)
     const valueLines = questions
       .map((q) => {
@@ -79,9 +76,9 @@ const RootLayout = () => {
       .join('\n\n');
 
     const message = `📊 <b>Feedback Wave ${feedbackWave} Baru Diterima</b>\n\n${valueLines}\n\n🕒 <i>Dikirim pada ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</i>`
-    
+
     markFeedbackSubmitted(feedbackWave)
-    
+
     localStorage.setItem(`feedback_wave${feedbackWave}_data`, JSON.stringify({
       values,
       submittedAt: dayjs().toISOString()
