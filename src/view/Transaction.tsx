@@ -125,7 +125,6 @@ export default function Transaction() {
                 onClick={() => setScannerOpen(true)}
                 className="flex w-full items-center justify-center gap-2 bg-indigo-600 font-semibold text-white hover:!border-indigo-700 hover:!bg-indigo-700 hover:!text-white sm:w-auto"
               >
-                
                 Scan Barcode
               </Button>
             </div>

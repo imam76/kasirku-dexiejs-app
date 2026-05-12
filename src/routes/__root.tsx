@@ -150,9 +150,9 @@ const RootLayout = () => {
       key: 'reports-group',
       children: [
         { to: '/report/sales-report', label: 'Penjualan', icon: FileText },
-        { to: '/report/transaction-detail-report', label: 'Detail Transaksi', icon: FileSearch },
-        { to: '/report/purchase-report', label: 'Pembelian', icon: FileSpreadsheet },
-        { to: '/report/expense-report', label: 'Pengeluaran', icon: FileDown },
+        { to: '/report/transaction-detail-report', label: 'Detail Transaksi', icon: FileText },
+        { to: '/report/purchase-report', label: 'Pembelian', icon: FileText },
+        { to: '/report/expense-report', label: 'Pengeluaran', icon: FileText },
         { to: '/profit', label: 'Keuntungan', icon: DollarSign },
       ],
     },
@@ -246,16 +246,9 @@ const RootLayout = () => {
           collapsed={collapsed}
           onCollapse={setCollapsed}
           theme={isDark ? 'dark' : 'light'}
-          style={{
-            position: 'fixed',
-            left: 0,
-            top: topOffset,
-            bottom: 0,
-            overflow: 'auto',
-            zIndex: 30,
-          }}
           breakpoint="xl"
           collapsedWidth={0}
+          width={250}
         >
           <Menu
             mode="inline"
@@ -270,7 +263,8 @@ const RootLayout = () => {
         {/* Main Content */}
         <Layout
           style={{
-            marginLeft: collapsed ? 0 : 200,
+            // marginLeft: collapsed ? 0 : 64,
+            marginLeft: 40,
             transition: 'margin-left 0.2s',
           }}
         >
