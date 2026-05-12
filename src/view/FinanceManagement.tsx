@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic, Select, Grid, Row, Col, Divider } from 'antd';
+import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic, Select, Row, Col, Divider } from 'antd';
 import { useFinance } from '@/hooks/useFinance';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import {
   ArrowUpCircle,
@@ -23,14 +24,13 @@ import {
 
 const { Title, Text } = Typography;
 const { Option } = Select;
-const { useBreakpoint } = Grid;
 
 export default function FinanceManagement() {
   const { balance, transactions, isLoading, addTransaction, isAdding, recalculate, isRecalculating } = useFinance();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<FinanceTransactionType>('INCOME');
   const [form] = Form.useForm();
-  const screens = useBreakpoint();
+  const isMobile = useIsMobile();
 
   const summary = useMemo(() => {
     return transactions.reduce((acc, t) => {
@@ -160,7 +160,7 @@ export default function FinanceManagement() {
           <Title level={2} style={{ margin: 0 }}>Manajemen Keuangan</Title>
           <Text type="secondary">Pantau arus kas, pemasukan, dan pengeluaran toko</Text>
         </div>
-        {screens.md &&
+        {!isMobile &&
           <div className="flex flex-wrap gap-3">
             <Button
               icon={<RefreshCw size={16} />}
@@ -279,7 +279,7 @@ export default function FinanceManagement() {
       </Row>
 
       {
-        (!screens.md) &&
+        isMobile &&
         <Row gutter={[12, 12]}>
           <Col xs={6} sm={6} md={6}>
             <Button
@@ -335,22 +335,10 @@ export default function FinanceManagement() {
           </div>
         }
         className="shadow-sm"
-        styles={{ body: { padding: screens.md ? undefined : '12px' } }}
+        styles={{ body: { padding: isMobile ? '12px' : undefined } }}
       >
-        {/* Desktop View */}
-        <div className="hidden md:block">
-          <Table
-            dataSource={transactions}
-            columns={columns}
-            rowKey="id"
-            loading={isLoading}
-            pagination={{ pageSize: 10 }}
-            scroll={{ x: 800 }}
-          />
-        </div>
-
-        {/* Mobile View */}
-        <div className="md:hidden space-y-3">
+        {isMobile ? (
+          <div className="space-y-3">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center p-8 gap-3">
               <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -405,7 +393,17 @@ export default function FinanceManagement() {
               Belum ada riwayat transaksi
             </div>
           )}
-        </div>
+          </div>
+        ) : (
+          <Table
+            dataSource={transactions}
+            columns={columns}
+            rowKey="id"
+            loading={isLoading}
+            pagination={{ pageSize: 10 }}
+            scroll={{ x: 800 }}
+          />
+        )}
       </Card>
 
       <Modal

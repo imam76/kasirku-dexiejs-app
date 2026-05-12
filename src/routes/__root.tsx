@@ -2,6 +2,7 @@ import FeedbackModal from '@/components/FeedbackModal'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
 import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/hooks/useTheme'
 import dayjs from '@/lib/dayjs'
 import { db } from '@/lib/db'
@@ -20,6 +21,8 @@ import {
   History,
   Home,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Scale,
   Settings,
   SettingsIcon,
@@ -39,7 +42,7 @@ const RootLayout = () => {
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
-
+  const isMobile = useIsMobile()
   useEffect(() => {
     // Increment session on mount
     incrementSessionCount()
@@ -125,11 +128,10 @@ const RootLayout = () => {
   }, [conversions])
 
   const handleLogoClick = () => {
-    // Check if desktop (xl breakpoint - 1280px)
-    if (window.matchMedia('(min-width: 1280px)').matches) {
-      navigate({ to: '/' })
-    } else {
+    if (isMobile) {
       router.history.back()
+    } else {
+      navigate({ to: '/' })
     }
   }
 
@@ -208,12 +210,14 @@ const RootLayout = () => {
         }}
       >
         <div className="h-full px-4 flex justify-between items-center">
-          {/* Logo */}
-          <div
-            onClick={handleLogoClick}
-            className="text-xl font-bold text-blue-600 dark:text-blue-400 cursor-pointer"
-          >
-            Kasirku
+          <div className="flex items-center gap-2">
+            {/* Logo */}
+            <div
+              onClick={handleLogoClick}
+              className="text-xl font-bold text-blue-600 dark:text-blue-400 cursor-pointer"
+            >
+              Kasirku
+            </div>
           </div>
 
           {/* Theme Toggle & Settings */}
@@ -240,13 +244,23 @@ const RootLayout = () => {
         {/* Side Navigation */}
         <Sider
           collapsible
-          collapsed={collapsed}
+          collapsed={isMobile ? true : collapsed}
           onCollapse={setCollapsed}
+          trigger={null}
           theme={isDark ? 'dark' : 'light'}
-          breakpoint="xl"
           collapsedWidth={0}
           width={250}
         >
+          {!isMobile && (
+            <button
+              type="button"
+              aria-label={collapsed ? 'Buka sidebar' : 'Tutup sidebar'}
+              onClick={() => setCollapsed(!collapsed)}
+              className="absolute -right-9 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-r-md border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+            >
+              {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+            </button>
+          )}
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
@@ -260,8 +274,7 @@ const RootLayout = () => {
         {/* Main Content */}
         <Layout
           style={{
-            // marginLeft: collapsed ? 0 : 64,
-            marginLeft: 40,
+            marginLeft: isMobile ? 0 : collapsed ? 40 : 64,
             transition: 'margin-left 0.2s',
           }}
         >

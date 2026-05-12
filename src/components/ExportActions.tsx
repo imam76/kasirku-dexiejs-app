@@ -1,8 +1,9 @@
 import { CloseOutlined, DownOutlined, DownloadOutlined } from '@ant-design/icons';
-import { Button, Dropdown, Grid } from 'antd';
+import { Button, Dropdown } from 'antd';
 import type { ButtonProps, MenuProps } from 'antd';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { ExportTarget } from '@/utils/export';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 type ExportTargetAction = {
   key: Exclude<ExportTarget, 'auto'>;
@@ -26,8 +27,6 @@ type ExportActionsProps = {
   label?: string;
 };
 
-const { useBreakpoint } = Grid;
-
 const DEFAULT_TARGETS: ExportTargetAction[] = [
   { key: 'share', label: 'Bagikan' },
   { key: 'save', label: 'Simpan ke File' },
@@ -41,8 +40,7 @@ export default function ExportActions({
   label = 'Export',
 }: ExportActionsProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const screens = useBreakpoint();
-  const isMobile = !screens.md;
+  const isMobile = useIsMobile();
 
   const isDisabled = disabled || formats.length === 0 || formats.every((format) => format.disabled);
 
@@ -94,7 +92,7 @@ export default function ExportActions({
     <>
       {button}
       {drawerOpen ? (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-black bg-opacity-40"
             onClick={() => setDrawerOpen(false)}

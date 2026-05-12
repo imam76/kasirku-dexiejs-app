@@ -6,20 +6,21 @@ import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
 import { formatCategory, formatCurrency } from '@/utils/formatters';
 import { formatWeightTotal, resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { BarChartOutlined, FilePdfOutlined, FileTextOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
-import { App, Button, Card, DatePicker, Empty, Grid, Select, Statistic, Typography } from 'antd';
+import { App, Button, Card, DatePicker, Empty, Select, Statistic, Typography } from 'antd';
 import autoTable from 'jspdf-autotable';
 import { useState } from 'react';
 import ExportActions from '@/components/ExportActions';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { Loading } from '../components/Loading';
 import DesktopSalesTable from './sales-report/DesktopSalesTable';
 import MobileSalesList from './sales-report/MobileSalesList';
 import TopProductsTable from './sales-report/TopProductsTable';
 
 const { Title, Text } = Typography;
-const { useBreakpoint } = Grid;
 
 export default function SalesReport() {
   const { message } = App.useApp();
+  const isMobile = useIsMobile();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>([
@@ -33,8 +34,6 @@ export default function SalesReport() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const { data, isLoading, error, refetch } = useSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
-
-  const screens = useBreakpoint();
 
   const handleExportPDF = async (target: ExportTarget = 'auto') => {
     if (!data) return;
@@ -344,7 +343,7 @@ export default function SalesReport() {
               ].map((helper) => (
                 <Button
                   key={helper.key}
-                  size={screens.md ? 'middle' : 'small'}
+                  size={isMobile ? 'small' : 'middle'}
                   className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === helper.key ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`}
                   onClick={() => handleHelperChange(helper.key)}
                 >
@@ -393,7 +392,7 @@ export default function SalesReport() {
                 prefix={stat.prefix}
                 suffix={stat.suffix}
                 precision={stat.isCurrency ? 2 : 0}
-                valueStyle={{ color: stat.color, fontWeight: 'bold', fontSize: screens.md ? '20px' : '16px' }}
+                valueStyle={{ color: stat.color, fontWeight: 'bold', fontSize: isMobile ? '16px' : '20px' }}
               />
             </Card>
           ))}
@@ -420,21 +419,19 @@ export default function SalesReport() {
           <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] uppercase">DAFTAR TRANSAKSI</div>
         </div>
 
-        {/* Desktop View */}
-        <div className="hidden md:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <DesktopSalesTable
-            transactions={data?.transactions || []}
-            totalRevenue={data?.totalRevenue || 0}
-          />
-        </div>
-
-        {/* Mobile View */}
-        <div className="md:hidden">
+        {isMobile ? (
           <MobileSalesList
             transactions={data?.transactions || []}
             totalRevenue={data?.totalRevenue || 0}
           />
-        </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <DesktopSalesTable
+              transactions={data?.transactions || []}
+              totalRevenue={data?.totalRevenue || 0}
+            />
+          </div>
+        )}
       </div>
 
       {data && data.transactions.length === 0 && !isLoading && (

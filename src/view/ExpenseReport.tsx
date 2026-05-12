@@ -4,15 +4,15 @@ import dayjs from '@/lib/dayjs';
 import { exportPdf, exportXlsx, type ExportTarget } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
 import { FileExcelOutlined, FilePdfOutlined, ReloadOutlined } from '@ant-design/icons';
-import { App, Button, DatePicker, Grid, Select, Typography } from 'antd';
+import { App, Button, DatePicker, Select, Typography } from 'antd';
 import autoTable from 'jspdf-autotable';
 import { useState } from 'react';
 import ExportActions from '@/components/ExportActions';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import DesktopExpenseTable from './expense-report/DesktopExpenseTable';
 import MobileExpenseList from './expense-report/MobileExpenseList';
 
 const { Title } = Typography;
-const { useBreakpoint } = Grid;
 
 const EXPENSE_CATEGORIES = [
   { value: 'PEMBELIAN_STOK', label: 'Pembelian Stok (Modal Barang)' },
@@ -25,6 +25,7 @@ const EXPENSE_CATEGORIES = [
 
 export default function ExpenseReport() {
   const { message } = App.useApp();
+  const isMobile = useIsMobile();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>([
@@ -180,8 +181,6 @@ export default function ExpenseReport() {
     }
   };
 
-  const screens = useBreakpoint();
-
   if (isLoading) return <Loading />;
 
   return (
@@ -243,42 +242,42 @@ export default function ExpenseReport() {
             <span className="text-[13px] font-medium text-gray-700 ml-0.5">Rentang Waktu</span>
             <div className="flex flex-wrap gap-2">
               <Button 
-                size={screens.md ? 'middle' : 'small'}
+                size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'today' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('today')}
               >
                 Hari ini
               </Button>
               <Button 
-                size={screens.md ? 'middle' : 'small'}
+                size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'yesterday' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('yesterday')}
               >
                 Kemarin
               </Button>
               <Button 
-                size={screens.md ? 'middle' : 'small'}
+                size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-week' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('this-week')}
               >
                 Minggu ini
               </Button>
               <Button 
-                size={screens.md ? 'middle' : 'small'}
+                size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-month' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('this-month')}
               >
                 Bulan ini
               </Button>
               <Button 
-                size={screens.md ? 'middle' : 'small'}
+                size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'last-month' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('last-month')}
               >
                 Bulan lalu
               </Button>
               <Button 
-                size={screens.md ? 'middle' : 'small'}
+                size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'custom' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => setSelectedHelper('custom')}
               >
@@ -312,23 +311,21 @@ export default function ExpenseReport() {
       <div>
         <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">RINCIAN TRANSAKSI</div>
         
-        {/* Desktop View (Visible on MD and larger) */}
-        <div className="hidden md:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <DesktopExpenseTable 
-            transactions={data?.transactions || []} 
-            totalExpense={data?.totalExpense || 0}
-            expenseCategories={EXPENSE_CATEGORIES}
-          />
-        </div>
-
-        {/* Mobile View (Visible on screens smaller than MD) */}
-        <div className="md:hidden">
+        {isMobile ? (
           <MobileExpenseList 
             transactions={data?.transactions || []} 
             totalExpense={data?.totalExpense || 0}
             expenseCategories={EXPENSE_CATEGORIES}
           />
-        </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <DesktopExpenseTable
+              transactions={data?.transactions || []}
+              totalExpense={data?.totalExpense || 0}
+              expenseCategories={EXPENSE_CATEGORIES}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

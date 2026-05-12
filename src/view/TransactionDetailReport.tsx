@@ -2,6 +2,7 @@ import ExportActions from '@/components/ExportActions';
 import { Loading } from '@/components/Loading';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { useTransactionDetailReport, type TransactionDetailReportRow } from '@/hooks/useReports';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import dayjs from '@/lib/dayjs';
 import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
 import { formatCategory, formatCurrency } from '@/utils/formatters';
@@ -11,13 +12,12 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { App, Button, Card, DatePicker, Empty, Grid, Input, Select, Space, Statistic, Table, Tag, Typography } from 'antd';
+import { App, Button, Card, DatePicker, Empty, Input, Select, Space, Statistic, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import autoTable from 'jspdf-autotable';
 import { useMemo, useState } from 'react';
 
 const { Text, Title } = Typography;
-const { useBreakpoint } = Grid;
 
 const helperOptions = [
   { key: 'today', label: 'Hari ini' },
@@ -30,7 +30,7 @@ const helperOptions = [
 
 export default function TransactionDetailReport() {
   const { message } = App.useApp();
-  const screens = useBreakpoint();
+  const isMobile = useIsMobile();
   const [selectedHelper, setSelectedHelper] = useState('this-month');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>([
     dayjs.tz().startOf('month'),
@@ -56,14 +56,14 @@ export default function TransactionDetailReport() {
         title: 'Tanggal',
         dataIndex: 'transaction_created_at',
         width: 150,
-        fixed: screens.lg ? 'left' : undefined,
+        fixed: isMobile ? undefined : 'left',
         render: (value: string) => dayjs(value).tz().format('DD/MM/YY HH:mm'),
       },
       {
         title: 'Transaksi',
         dataIndex: 'transaction_number',
         width: 170,
-        fixed: screens.lg ? 'left' : undefined,
+        fixed: isMobile ? undefined : 'left',
         render: (value: string, row) => (
           <div>
             <div className="font-semibold text-gray-900">{value}</div>
@@ -150,7 +150,7 @@ export default function TransactionDetailReport() {
         ),
       },
     ],
-    [screens.lg]
+    [isMobile]
   );
 
   const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
@@ -363,7 +363,7 @@ export default function TransactionDetailReport() {
               {helperOptions.map((helper) => (
                 <Button
                   key={helper.key}
-                  size={screens.md ? 'middle' : 'small'}
+                  size={isMobile ? 'small' : 'middle'}
                   className={`rounded-full px-4 text-[12px] font-medium ${selectedHelper === helper.key ? 'border-[#2563EB] bg-[#2563EB] text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-[#2563EB]'}`}
                   onClick={() => handleHelperChange(helper.key)}
                 >
@@ -450,7 +450,7 @@ export default function TransactionDetailReport() {
                   prefix={stat.prefix}
                   suffix={stat.suffix}
                   precision={stat.currency ? 2 : 0}
-                  valueStyle={{ color: stat.color, fontSize: screens.md ? 20 : 16, fontWeight: 700 }}
+                  valueStyle={{ color: stat.color, fontSize: isMobile ? 16 : 20, fontWeight: 700 }}
                 />
               </Card>
             ))}
@@ -460,7 +460,7 @@ export default function TransactionDetailReport() {
             <Table
               columns={columns}
               dataSource={data.rows}
-              size="middle"
+              size={isMobile ? 'small' : 'middle'}
               scroll={{ x: 1460 }}
               pagination={{ pageSize: 20, showSizeChanger: true }}
               summary={() => (

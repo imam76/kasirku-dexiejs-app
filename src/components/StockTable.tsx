@@ -1,6 +1,7 @@
 import { Button, Drawer, Input, InputNumber, Select } from 'antd';
 import type { ChangeEvent } from 'react';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Product } from '@/types';
 import { formatCategory, formatCurrency, getStockStatusClass } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
@@ -39,6 +40,7 @@ const WHOLESALE_STATUS_OPTIONS = [
 ];
 
 export default function StockTable({ products, onEdit, onDelete }: StockTableProps) {
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [stockStatus, setStockStatus] = useState<StockStatusFilter>('all');
@@ -218,8 +220,8 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
     setCurrentPage(1);
   };
 
-  const renderFilterControls = () => (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+  const renderFilterControls = (compact = false) => (
+    <div className={compact ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4'}>
       <Select
         mode="multiple"
         allowClear
@@ -314,7 +316,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:col-span-2">
+      <div className={compact ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-2 md:col-span-2'}>
         <InputNumber
           size="large"
           min={0}
@@ -360,7 +362,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         </div>
 
         <div className="space-y-3">
-          <div className="grid grid-cols-[1fr_auto] gap-2 md:block">
+          <div className={isMobile ? 'grid grid-cols-[1fr_auto] gap-2' : 'block'}>
             <Input
               size="large"
               allowClear
@@ -369,32 +371,30 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               value={searchQuery}
               onChange={handleSearchChange}
             />
-            <Button
-              size="large"
-              icon={<SlidersHorizontal size={18} />}
-              onClick={() => setIsFilterDrawerOpen(true)}
-              className="md:hidden"
-            >
-              <span className="hidden min-[380px]:inline">
-                Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-              </span>
-            </Button>
+            {isMobile && (
+              <Button
+                size="large"
+                icon={<SlidersHorizontal size={18} />}
+                onClick={() => setIsFilterDrawerOpen(true)}
+              >
+                <span className="hidden min-[380px]:inline">
+                  Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                </span>
+              </Button>
+            )}
           </div>
 
-          <div className="hidden md:block">
-            {renderFilterControls()}
-          </div>
+          {!isMobile && renderFilterControls()}
         </div>
       </div>
 
       <Drawer
         title="Filter Produk"
         placement="bottom"
-        open={isFilterDrawerOpen}
+        open={isMobile && isFilterDrawerOpen}
         onClose={() => setIsFilterDrawerOpen(false)}
         size="auto"
         rootClassName="mobile-bottom-drawer"
-        className="md:hidden"
         styles={{
           body: { padding: 16 },
           header: { padding: '16px 20px' },
@@ -406,7 +406,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               <SlidersHorizontal size={18} />
               <span>Parameter Filter</span>
             </div>
-            {renderFilterControls()}
+            {renderFilterControls(true)}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -430,10 +430,57 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         </div>
       </Drawer>
 
-      {/* Desktop & Tablet Table View */}
-      <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+      {isMobile ? (
+        <div className="space-y-3">
+          {paginatedProducts.length === 0 && (
+            <div className="bg-white rounded-lg shadow-md border border-gray-200 text-center py-8 text-gray-500 text-sm">
+              {searchQuery || activeFilterCount > 0 ? 'Tidak ada produk yang sesuai dengan filter.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
+            </div>
+          )}
+          {paginatedProducts.map((product) => {
+            const margin = product.selling_price - product.purchase_price;
+            const marginPercent = product.purchase_price > 0
+              ? ((margin / product.purchase_price) * 100).toFixed(1)
+              : '0';
+
+            return (
+              <div key={product.id} onClick={() => setSelectedProduct(product)} className="bg-white rounded-lg shadow-md border border-gray-200 p-4 cursor-pointer">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">{product.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">SKU: {product.sku || '-'}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{formatCategory(product.category || 'non_consumable')}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStockStatusClass(product.stock)}`}>
+                      Stok: {product.stock}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-gray-50 rounded p-2">
+                    <p className="text-gray-500 mb-0.5">Harga Beli</p>
+                    <p className="font-semibold text-gray-900">Rp {formatCurrency(product.purchase_price)}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded p-2">
+                    <p className="text-gray-500 mb-0.5">Harga Jual</p>
+                    <p className="font-semibold text-gray-900">Rp {formatCurrency(product.selling_price)}</p>
+                  </div>
+                  <div className={`rounded p-2 ${margin > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                    <p className={`mb-0.5 ${margin > 0 ? 'text-green-600' : 'text-red-600'}`}>Margin</p>
+                    <p className={`font-semibold ${margin > 0 ? 'text-green-800' : 'text-red-800'}`}>
+                      {marginPercent}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th
@@ -562,72 +609,18 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               })}
             </tbody>
           </table>
-        </div>
-        {paginatedProducts.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            {searchQuery || activeFilterCount > 0 ? 'Tidak ada produk yang sesuai dengan filter.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
           </div>
-        )}
-      </div>
-
-      {/* Mobile Card View */}
-      <div className="md:hidden space-y-3">
-        {paginatedProducts.length === 0 && (
-          <div className="bg-white rounded-lg shadow-md border border-gray-200 text-center py-8 text-gray-500 text-sm">
-            {searchQuery || activeFilterCount > 0 ? 'Tidak ada produk yang sesuai dengan filter.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
-          </div>
-        )}
-        {paginatedProducts.map((product) => {
-          const margin = product.selling_price - product.purchase_price;
-          const marginPercent = product.purchase_price > 0
-            ? ((margin / product.purchase_price) * 100).toFixed(1)
-            : '0';
-
-          return (
-            <div key={product.id} onClick={() => setSelectedProduct(product)} className="bg-white rounded-lg shadow-md border border-gray-200 p-4 cursor-pointer">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <p className="text-sm font-bold text-gray-900">{product.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">SKU: {product.sku || '-'}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{formatCategory(product.category || 'non_consumable')}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${getStockStatusClass(product.stock)}`}>
-                    Stok: {product.stock}
-                  </span>
-                  {/* <button
-                    onClick={() => setSelectedProduct(product)}
-                    className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-                    title="Menu aksi"
-                  >
-                    <MoreVertical size={20} />
-                  </button> */}
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="bg-gray-50 rounded p-2">
-                  <p className="text-gray-500 mb-0.5">Harga Beli</p>
-                  <p className="font-semibold text-gray-900">Rp {formatCurrency(product.purchase_price)}</p>
-                </div>
-                <div className="bg-gray-50 rounded p-2">
-                  <p className="text-gray-500 mb-0.5">Harga Jual</p>
-                  <p className="font-semibold text-gray-900">Rp {formatCurrency(product.selling_price)}</p>
-                </div>
-                <div className={`rounded p-2 ${margin > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                  <p className={`mb-0.5 ${margin > 0 ? 'text-green-600' : 'text-red-600'}`}>Margin</p>
-                  <p className={`font-semibold ${margin > 0 ? 'text-green-800' : 'text-red-800'}`}>
-                    {marginPercent}%
-                  </p>
-                </div>
-              </div>
+          {paginatedProducts.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              {searchQuery || activeFilterCount > 0 ? 'Tidak ada produk yang sesuai dengan filter.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
             </div>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Mobile Action Drawer */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-50 md:hidden">
+      {isMobile && selectedProduct && (
+        <div className="fixed inset-0 z-50">
           <div
             className="absolute inset-0 bg-black bg-opacity-40 transition-opacity"
             onClick={() => setSelectedProduct(null)}
