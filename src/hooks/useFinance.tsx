@@ -1,13 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { App } from 'antd';
-import { FinanceTransaction, FinanceTransactionType } from '@/types';
-import {
-  FINANCE_CATEGORIES,
-  getFinanceTransactionBusinessType,
-  isProfitAffectingFinanceTransaction,
-  normalizeFinanceTransactionType,
-} from '@/constants/finance';
+import { addFinanceTransaction, recalculateFinance } from '@/services/financeService';
+import type { FinanceTransactionType } from '@/types';
 
 export const useFinance = () => {
   const queryClient = useQueryClient();
@@ -40,63 +35,11 @@ export const useFinance = () => {
       amount: number; 
       description: string;
     }) => {
-      const normalizedType = normalizeFinanceTransactionType(type, category);
-      const currentBalance = await db.financeBalance.get('current');
-      const currentAmount = currentBalance?.amount || 0;
-
-      const currentProfitBalance = await db.profitBalance.get('current');
-      const currentProfitAmount = currentProfitBalance?.amount || 0;
-
-      const now = new Date().toISOString();
-      let newBalance = currentAmount;
-      let newProfitBalance = currentProfitAmount;
-      const affectsProfit = isProfitAffectingFinanceTransaction(normalizedType, category);
-
-      if (normalizedType === 'INCOME' || normalizedType === 'OPENING_BALANCE') {
-        newBalance += amount;
-        if (affectsProfit) {
-          newProfitBalance += amount;
-        }
-      } else if (normalizedType === 'EXPENSE') {
-        newBalance -= amount;
-        if (affectsProfit) {
-          newProfitBalance -= amount;
-        }
-      }
-
-      await db.transaction('rw', [db.financeBalance, db.financeTransactions, db.profitBalance, db.profitLogs], async () => {
-        await db.financeBalance.put({
-          id: 'current',
-          amount: newBalance,
-          updated_at: now,
-        });
-
-        await db.financeTransactions.add({
-          id: crypto.randomUUID(),
-          type: normalizedType,
-          category,
-          amount,
-          description,
-          created_at: now,
-        });
-
-        if (affectsProfit) {
-          await db.profitBalance.put({
-            id: 'current',
-            amount: newProfitBalance,
-            updated_at: now,
-          });
-
-          await db.profitLogs.add({
-            id: crypto.randomUUID(),
-            amount: amount,
-            type: normalizedType === 'EXPENSE' ? 'OUT' : 'IN',
-            category: 'OPERATIONAL',
-            description: `Operasional: ${description || category}`,
-            created_at: now,
-            balance_after: newProfitBalance,
-          });
-        }
+      await addFinanceTransaction({
+        type,
+        category,
+        amount,
+        description,
       });
     },
     onSuccess: () => {
@@ -115,80 +58,7 @@ export const useFinance = () => {
   });
 
   const recalculateFinanceMutation = useMutation({
-    mutationFn: async () => {
-      await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases], async () => {
-        // 1. Delete only auto-generated entries (those with reference_id)
-        const autoCategories = [
-          FINANCE_CATEGORIES.SALES,
-          FINANCE_CATEGORIES.AUTO_COGS,
-          FINANCE_CATEGORIES.STOCK_PURCHASE,
-        ];
-        await db.financeTransactions
-          .where('category')
-          .anyOf(autoCategories)
-          .filter(t => !!t.reference_id)
-          .delete();
-
-        // 2. Get source data for auto-regeneration
-        const posTransactions = await db.transactions.toArray();
-        const stockPurchases = await db.stockPurchases.toArray();
-
-        // 3. Create new auto-generated entries
-        const newAutoTransactions: FinanceTransaction[] = [];
-        
-        // Sales entries
-        for (const t of posTransactions) {
-          newAutoTransactions.push({
-            id: crypto.randomUUID(),
-            type: 'INCOME',
-            category: FINANCE_CATEGORIES.SALES,
-            amount: t.total_amount,
-            description: `Penjualan dari transaksi ${t.transaction_number}`,
-            created_at: t.created_at,
-            reference_id: t.id,
-          });
-        }
-
-        // Stock Purchase entries
-        for (const sp of stockPurchases) {
-          newAutoTransactions.push({
-            id: crypto.randomUUID(),
-            type: 'EXPENSE',
-            category: FINANCE_CATEGORIES.STOCK_PURCHASE,
-            amount: sp.total_cost,
-            description: `Beli Stok: ${sp.product_name} (${sp.quantity} pcs)`,
-            created_at: sp.created_at,
-            reference_id: sp.id,
-          });
-        }
-
-        // 4. Save new auto-generated entries
-        if (newAutoTransactions.length > 0) {
-          await db.financeTransactions.bulkAdd(newAutoTransactions);
-        }
-
-        // 5. Calculate final balance from ALL transactions (manual + new auto)
-        const allTransactions = await db.financeTransactions.toArray();
-        let runningBalance = 0;
-        
-        for (const ft of allTransactions) {
-          const businessType = getFinanceTransactionBusinessType(ft);
-
-          if (businessType === 'INCOME' || businessType === 'OPENING_BALANCE') {
-            runningBalance += ft.amount;
-          } else if (businessType === 'EXPENSE') {
-            runningBalance -= ft.amount;
-          }
-        }
-
-        // 6. Update final balance
-        await db.financeBalance.put({
-          id: 'current',
-          amount: runningBalance,
-          updated_at: new Date().toISOString(),
-        });
-      });
-    },
+    mutationFn: recalculateFinance,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });

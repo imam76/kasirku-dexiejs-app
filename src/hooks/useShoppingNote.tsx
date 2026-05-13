@@ -5,7 +5,8 @@ import { shoppingItemSchema, type ShoppingItemFormData } from '@/lib/validations
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
-import { Product, ShoppingNoteItem, StockPurchase } from '@/types';
+import { recordStockPurchase } from '@/services/stockPurchaseService';
+import type { Product, ShoppingNoteItem } from '@/types';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 
 export const useShoppingNote = () => {
@@ -110,21 +111,6 @@ export const useShoppingNote = () => {
           const quantityInStockUnit = konversiSatuanProduk(item.quantity, product, item.unit, product.purchase_unit);
           const costPerStockUnit = normalisasiHargaProduk(item.unit_price, product, item.unit, product.purchase_unit);
           const totalCost = item.total_cost ?? item.subtotal;
-          const purchaseId = crypto.randomUUID();
-
-          const purchase: StockPurchase = {
-            id: purchaseId,
-            product_id: product.id,
-            product_name: product.name,
-            sku: product.sku,
-            quantity: quantityInStockUnit,
-            cost_per_unit: costPerStockUnit,
-            total_cost: totalCost,
-            created_at: now,
-            updated_at: now,
-          };
-
-          await db.stockPurchases.add(purchase);
 
           const productUpdate: Partial<Product> = {
             stock: product.stock + quantityInStockUnit,
@@ -137,21 +123,15 @@ export const useShoppingNote = () => {
 
           await db.products.update(product.id, productUpdate);
 
-          const currentFinanceBalance = await db.financeBalance.get('current');
-          await db.financeBalance.put({
-            id: 'current',
-            amount: (currentFinanceBalance?.amount || 0) - totalCost,
-            updated_at: now,
-          });
-
-          await db.financeTransactions.add({
-            id: crypto.randomUUID(),
-            type: 'EXPENSE',
-            category: 'PEMBELIAN_STOK',
-            amount: totalCost,
+          await recordStockPurchase({
+            productId: product.id,
+            productName: product.name,
+            sku: product.sku,
+            quantity: quantityInStockUnit,
+            costPerUnit: costPerStockUnit,
+            totalCost,
             description: `Belanja Stok: ${product.name} (${item.quantity} ${item.unit})`,
-            created_at: now,
-            reference_id: purchaseId,
+            createdAt: now,
           });
         }
       });
