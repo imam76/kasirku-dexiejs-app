@@ -31,6 +31,8 @@ interface TopProduct {
   units: Record<string, number>;
 }
 
+type TopProductAggregation = Omit<TopProduct, 'totalQuantity' | 'margin'>;
+
 interface PurchaseReportData {
   purchases: StockPurchase[];
   totalCost: number;
@@ -179,10 +181,10 @@ export const useSalesReport = (
           acc[item.product_id].units[unit] = (acc[item.product_id].units[unit] || 0) + item.quantity;
 
           return acc;
-        }, {} as Record<string, any>);
+        }, {} as Record<string, TopProductAggregation>);
 
-        topProducts = Object.values(aggregation).map((p: any) => {
-          const totalQuantity = Object.entries(p.units as Record<string, number>)
+        topProducts = Object.values(aggregation).map((p) => {
+          const totalQuantity = Object.entries(p.units)
             .map(([unit, qty]) => `${qty.toLocaleString('id-ID')} ${unit}`)
             .join(', ');
 

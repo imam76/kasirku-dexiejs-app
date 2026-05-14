@@ -3,6 +3,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { Switch } from 'antd';
 import { Delete, DollarSign, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 
 const PAYMENT_SHORTCUTS_STORAGE_KEY = 'kasirku-show-payment-shortcuts';
 
@@ -29,6 +30,7 @@ export default function CartSummary({
   handleCheckout,
   onCancel
 }: CartSummaryProps) {
+  const { t } = useI18n();
   const [showPaymentShortcuts, setShowPaymentShortcuts] = useState(() => {
     if (typeof window === 'undefined') {
       return true;
@@ -69,12 +71,12 @@ export default function CartSummary({
     <>
       <div className="border-t pt-4 mb-4">
         <div className="flex justify-between text-xl font-bold text-gray-800">
-          <span>Total:</span>
+          <span>{t('cart.total')}:</span>
           <span>Rp {formatCurrency(total)}</span>
         </div>
          {!isNonCash && paymentAmount && payment >= total && (
               <p className="text-sm text-gray-700 flex justify-between mt-1">
-                Kembalian: <span className="font-bold">Rp {formatCurrency(change)}</span>
+                {t('payment.change')}: <span className="font-bold">Rp {formatCurrency(change)}</span>
               </p>
             )}
       </div>
@@ -85,7 +87,7 @@ export default function CartSummary({
           className="w-full bg-green-600 hover:bg-green-700 text-white py-3 mb-6 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
         >
           <DollarSign size={20} />
-          Bayar
+          {t('payment.pay')}
         </button>
       ) : (
         <div className="space-y-4 pb-6">
@@ -98,7 +100,7 @@ export default function CartSummary({
                 }`}
             >
               <DollarSign size={16} />
-              Tunai
+              {t('payment.cash')}
             </button>
             <button
               onClick={() => handlePaymentMethodChange('NON_TUNAI')}
@@ -108,14 +110,14 @@ export default function CartSummary({
                 }`}
             >
               <Wallet size={16} />
-              Non-Tunai
+              {t('payment.nonCash')}
             </button>
           </div>
 
           <div className="space-y-3 pb-6">
             <input
               type="number"
-              placeholder="Jumlah pembayaran"
+              placeholder={t('payment.amountPlaceholder')}
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
               disabled={isNonCash}
@@ -125,7 +127,7 @@ export default function CartSummary({
             />
             {!isNonCash && (
               <div className="flex items-center justify-between gap-3 rounded-lg py-2 text-sm font-medium text-gray-700">
-                <span>Shortcut Uang Pecahan</span>
+                <span>{t('payment.shortcuts')}</span>
                 <Switch
                   size="small"
                   checked={showPaymentShortcuts}
@@ -151,7 +153,7 @@ export default function CartSummary({
                   className="px-3 py-2 text-sm font-semibold text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center gap-1"
                 >
                   <Delete size={16} />
-                  Bersihkan
+                  {t('cart.clear')}
                 </button>
               </div>
             )}
@@ -163,7 +165,7 @@ export default function CartSummary({
                   className="w-full px-3 py-2 text-sm font-semibold text-green-700 bg-green-100 rounded-lg hover:bg-green-200 transition-colors flex items-center justify-center gap-1"
                 >
                   <DollarSign size={16} />
-                  Uang Pas
+                  {t('payment.exactAmount')}
                 </button>
               </div>
             )}
@@ -178,13 +180,13 @@ export default function CartSummary({
               }}
               className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-semibold transition-colors"
             >
-              Batal
+              {t('payment.cancel')}
             </button>
             <button
               onClick={handleCheckout}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition-colors"
             >
-              Konfirmasi
+              {t('payment.confirm')}
             </button>
           </div>
         </div>

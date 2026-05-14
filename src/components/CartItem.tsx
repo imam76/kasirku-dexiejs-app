@@ -4,6 +4,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
 import { getProductSellableUnits } from '@/utils/productUnits';
 import { InputNumber, Select } from 'antd';
+import { useI18n } from '@/hooks/useI18n';
 
 interface CartItemProps {
   item: CartItemType;
@@ -13,6 +14,7 @@ interface CartItemProps {
 }
 
 export default function CartItem({ item, updateQuantity, updateUnit, removeFromCart }: CartItemProps) {
+  const { t } = useI18n();
   const currentPrice = getPrice(item.product, item.quantity, item.unit);
   const isWholesale = currentPrice < getPrice(item.product, 1, item.unit);
 
@@ -39,7 +41,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
               Rp {formatCurrency(currentPrice)} / {item.unit}
             </p>
             {isWholesale && (
-              <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Grosir</span>
+              <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">{t('product.wholesale')}</span>
             )}
           </div>
         </div>
@@ -53,7 +55,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
 
       <div className="flex flex-col gap-2 sm:gap-3">
         <p className="text-sm font-bold text-gray-700">
-          Total: Rp {formatCurrency(currentPrice * item.quantity)}
+          {t('cart.total')}: Rp {formatCurrency(currentPrice * item.quantity)}
         </p>
 
         <div className="flex flex-col gap-2">
@@ -62,7 +64,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
             <button
               onClick={() => updateQuantity(item.product.id, item.quantity - (['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1))}
               className="p-1.5 bg-gray-300 hover:bg-gray-400 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-              title="Kurangi"
+              title={t('cart.decrease')}
             >
               <Minus size={16} />
             </button>
@@ -80,7 +82,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
             <button
               onClick={() => updateQuantity(item.product.id, item.quantity + (['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1))}
               className="p-1.5 bg-gray-300 hover:bg-gray-400 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-              title="Tambah"
+              title={t('cart.increase')}
             >
               <Plus size={16} />
             </button>

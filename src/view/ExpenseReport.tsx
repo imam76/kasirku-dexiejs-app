@@ -1,5 +1,7 @@
 import { Loading } from '@/components/Loading';
 import { useExpenseReport } from '@/hooks/useReports';
+import { useI18n } from '@/hooks/useI18n';
+import { getFinanceCategoryLabel } from '@/i18n/finance';
 import dayjs from '@/lib/dayjs';
 import { exportPdf, exportXlsx, type ExportTarget } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
@@ -14,17 +16,9 @@ import MobileExpenseList from './expense-report/MobileExpenseList';
 
 const { Title } = Typography;
 
-const EXPENSE_CATEGORIES = [
-  { value: 'PEMBELIAN_STOK', label: 'Pembelian Stok (Modal Barang)' },
-  { value: 'OPERASIONAL', label: 'Operasional (Listrik, Sewa, dll)' },
-  { value: 'GAJI', label: 'Gaji Karyawan' },
-  { value: 'PERLENGKAPAN', label: 'Perlengkapan Toko' },
-  { value: 'MAKAN', label: 'Makan/Minum' },
-  { value: 'TRANSPORT', label: 'Transportasi' },
-];
-
 export default function ExpenseReport() {
   const { message } = App.useApp();
+  const { t } = useI18n();
   const isMobile = useIsMobile();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
@@ -36,6 +30,14 @@ export default function ExpenseReport() {
   const [selectedHelper, setSelectedHelper] = useState<string | undefined>('today');
 
   const { data, isLoading, refetch } = useExpenseReport(startDate, endDate, selectedCategories);
+  const expenseCategories = [
+    { value: 'PEMBELIAN_STOK', label: t('finance.category.stockPurchaseOption') },
+    { value: 'OPERASIONAL', label: t('finance.category.operationalOption') },
+    { value: 'GAJI', label: t('finance.category.GAJI') },
+    { value: 'PERLENGKAPAN', label: t('finance.category.PERLENGKAPAN') },
+    { value: 'MAKAN', label: t('finance.category.MAKAN') },
+    { value: 'TRANSPORT', label: t('finance.category.TRANSPORT') },
+  ];
 
   const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
     setDateRange(dates);
@@ -105,9 +107,9 @@ export default function ExpenseReport() {
         filename: `laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
         target,
         build: (doc) => {
-          const title = 'Laporan Pengeluaran';
-          const period = `Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`;
-          const printDate = `Tanggal Cetak: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`;
+          const title = t('report.expense.title');
+          const period = `${t('report.periodWithColon')} ${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`;
+          const printDate = `${t('report.printDate')} ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`;
 
           doc.setFontSize(18);
           doc.text(title, 14, 22);
@@ -115,28 +117,28 @@ export default function ExpenseReport() {
           doc.text(period, 14, 30);
           doc.text(printDate, 14, 38);
 
-          const tableData = data.transactions.map((t) => [
-            dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm'),
-            t.description || '-',
-            EXPENSE_CATEGORIES.find(c => c.value === t.category)?.label || t.category,
-            formatCurrency(t.amount),
+          const tableData = data.transactions.map((transaction) => [
+            dayjs(transaction.created_at).tz().format('YYYY-MM-DD HH:mm'),
+            transaction.description || '-',
+            getFinanceCategoryLabel(transaction.category, t),
+            formatCurrency(transaction.amount),
           ]);
 
           autoTable(doc, {
             startY: 45,
-            head: [['Tanggal & Jam', 'Keterangan/Deskripsi', 'Kategori', 'Nominal']],
+            head: [[t('report.dateTime'), t('report.descriptionLong'), t('report.category'), t('report.amount')]],
             body: tableData,
-            foot: [['', '', 'Total Keseluruhan', formatCurrency(data.totalExpense)]],
+            foot: [['', '', t('report.totalOverall'), formatCurrency(data.totalExpense)]],
             theme: 'grid',
             headStyles: { fillColor: [41, 128, 185], textColor: 255 },
             footStyles: { fillColor: [241, 241, 241], textColor: 0, fontStyle: 'bold' },
           });
         },
       });
-      message.success('Export PDF pengeluaran berhasil.');
+      message.success(t('report.expense.exportPdfSuccess'));
     } catch (error) {
       console.error('Failed to export expense PDF:', error);
-      message.error('Gagal export PDF pengeluaran.');
+      message.error(t('report.expense.exportPdfFailed'));
     }
   };
 
@@ -145,23 +147,23 @@ export default function ExpenseReport() {
 
     try {
       const header = [
-        ['Laporan Pengeluaran'],
-        [`Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`],
-        [`Tanggal Cetak: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`],
+        [t('report.expense.title')],
+        [`${t('report.periodWithColon')} ${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`],
+        [`${t('report.printDate')} ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`],
         [],
-        ['Tanggal & Jam', 'Keterangan/Deskripsi', 'Kategori', 'Nominal'],
+        [t('report.dateTime'), t('report.descriptionLong'), t('report.category'), t('report.amount')],
       ];
 
-      const body = data.transactions.map((t) => [
-        dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm'),
-        t.description || '-',
-        EXPENSE_CATEGORIES.find(c => c.value === t.category)?.label || t.category,
-        t.amount,
+      const body = data.transactions.map((transaction) => [
+        dayjs(transaction.created_at).tz().format('YYYY-MM-DD HH:mm'),
+        transaction.description || '-',
+        getFinanceCategoryLabel(transaction.category, t),
+        transaction.amount,
       ]);
 
       const footer = [
         [],
-        ['', '', 'Total Keseluruhan', data.totalExpense],
+        ['', '', t('report.totalOverall'), data.totalExpense],
       ];
 
       await exportXlsx({
@@ -169,15 +171,15 @@ export default function ExpenseReport() {
         target,
         sheets: [
           {
-            name: 'Laporan Pengeluaran',
+            name: t('report.expense.title'),
             rows: [...header, ...body, ...footer],
           },
         ],
       });
-      message.success('Export Excel pengeluaran berhasil.');
+      message.success(t('report.expense.exportExcelSuccess'));
     } catch (error) {
       console.error('Failed to export expense Excel:', error);
-      message.error('Gagal export Excel pengeluaran.');
+      message.error(t('report.expense.exportExcelFailed'));
     }
   };
 
@@ -187,8 +189,8 @@ export default function ExpenseReport() {
     <div className="p-4 sm:p-6 bg-[#FDFDFD] min-h-screen">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <Title level={4} className="!mb-1 !font-bold text-gray-900">Laporan Pengeluaran</Title>
-          <p className="text-gray-500 text-xs sm:text-sm">Pantau semua pengeluaran operasional dan pembelian stok</p>
+          <Title level={4} className="!mb-1 !font-bold text-gray-900">{t('report.expense.title')}</Title>
+          <p className="text-gray-500 text-xs sm:text-sm">{t('report.expense.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
@@ -197,7 +199,7 @@ export default function ExpenseReport() {
             onClick={() => refetch()}
             loading={isLoading}
           >
-            Refresh
+            {t('common.refresh')}
           </Button>
           <ExportActions
             buttonClassName="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
@@ -222,71 +224,71 @@ export default function ExpenseReport() {
 
       {/* FILTER SECTION */}
       <div className="mb-8 bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">PARAMETER LAPORAN</div>
+        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">{t('report.parameterTitle')}</div>
         <div className="space-y-5">
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-gray-700 ml-0.5">Kategori Pengeluaran</span>
+            <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.expenseCategory')}</span>
             <Select
               mode="multiple"
-              placeholder="Semua kategori"
+              placeholder={t('report.allCategories')}
               className="w-full"
               value={selectedCategories}
               onChange={setSelectedCategories}
               allowClear
-              options={EXPENSE_CATEGORIES}
+              options={expenseCategories}
               size="large"
             />
           </div>
           
           <div className="flex flex-col gap-2.5">
-            <span className="text-[13px] font-medium text-gray-700 ml-0.5">Rentang Waktu</span>
+            <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.dateRange')}</span>
             <div className="flex flex-wrap gap-2">
               <Button 
                 size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'today' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('today')}
               >
-                Hari ini
+                {t('report.today')}
               </Button>
               <Button 
                 size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'yesterday' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('yesterday')}
               >
-                Kemarin
+                {t('report.yesterday')}
               </Button>
               <Button 
                 size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-week' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('this-week')}
               >
-                Minggu ini
+                {t('report.thisWeek')}
               </Button>
               <Button 
                 size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-month' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('this-month')}
               >
-                Bulan ini
+                {t('report.thisMonth')}
               </Button>
               <Button 
                 size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'last-month' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => handleHelperChange('last-month')}
               >
-                Bulan lalu
+                {t('report.lastMonth')}
               </Button>
               <Button 
                 size={isMobile ? 'small' : 'middle'}
                 className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'custom' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
                 onClick={() => setSelectedHelper('custom')}
               >
-                Custom
+                {t('report.custom')}
               </Button>
 
               {(selectedCategories.length > 0 || selectedHelper !== 'today') && (
                 <Button type="link" onClick={handleReset} className="text-gray-400 hover:text-red-500 flex items-center gap-1">
-                  <ReloadOutlined className="text-[10px]" /> Reset
+                  <ReloadOutlined className="text-[10px]" /> {t('common.reset')}
                 </Button>
               )}
             </div>
@@ -297,7 +299,7 @@ export default function ExpenseReport() {
                   value={dateRange}
                   onChange={handleDateRangeChange}
                   format="YYYY-MM-DD"
-                  placeholder={['Mulai', 'Hingga']}
+                  placeholder={[t('common.from'), t('common.to')]}
                   className="w-full sm:w-[320px] rounded-lg"
                   size="large"
                 />
@@ -309,20 +311,20 @@ export default function ExpenseReport() {
 
       {/* DATA SECTION */}
       <div>
-        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">RINCIAN TRANSAKSI</div>
+        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">{t('report.transactionDetails')}</div>
         
         {isMobile ? (
           <MobileExpenseList 
             transactions={data?.transactions || []} 
             totalExpense={data?.totalExpense || 0}
-            expenseCategories={EXPENSE_CATEGORIES}
+            expenseCategories={expenseCategories}
           />
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <DesktopExpenseTable
               transactions={data?.transactions || []}
               totalExpense={data?.totalExpense || 0}
-              expenseCategories={EXPENSE_CATEGORIES}
+              expenseCategories={expenseCategories}
             />
           </div>
         )}

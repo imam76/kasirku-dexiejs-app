@@ -7,6 +7,7 @@ import '@/index.css';
 import { ThemeProvider } from '@/ThemeProvider';
 import { QueryProvider } from '@/providers/QueryProvider';
 import '@/lib/dayjs';
+import { I18nProvider } from '@/providers/I18nProvider';
 
 // Create a new router instance
 const router = createRouter({ routeTree })
@@ -21,9 +22,11 @@ declare module '@tanstack/react-router' {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryProvider>
-      <ThemeProvider defaultMode="light">
-        <RouterProvider router={router} scrollRestoration={true} />
-      </ThemeProvider>
+      <I18nProvider>
+        <ThemeProvider defaultMode="light">
+          <RouterProvider router={router} scrollRestoration={true} />
+        </ThemeProvider>
+      </I18nProvider>
     </QueryProvider>
   </StrictMode>
 );

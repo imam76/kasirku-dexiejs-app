@@ -3,10 +3,12 @@ import { db } from '@/lib/db';
 import { App } from 'antd';
 import { addFinanceTransaction, recalculateFinance } from '@/services/financeService';
 import type { FinanceTransactionType } from '@/types';
+import { useI18n } from '@/hooks/useI18n';
 
 export const useFinance = () => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
+  const { t } = useI18n();
 
   const { data: balance = 0, isLoading: isLoadingBalance } = useQuery({
     queryKey: ['financeBalance'],
@@ -47,12 +49,12 @@ export const useFinance = () => {
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
       queryClient.invalidateQueries({ queryKey: ['profitBalance'] });
       queryClient.invalidateQueries({ queryKey: ['profitLogs'] });
-      message.success('Transaksi keuangan berhasil dicatat');
+      message.success(t('finance.transactionRecorded'));
     },
     onError: (error: Error) => {
       modal.error({
-        title: 'Gagal Mencatat Transaksi',
-        content: error.message || 'Terjadi kesalahan saat mencatat transaksi keuangan.',
+        title: t('finance.recordFailedTitle'),
+        content: error.message || t('finance.recordFailedContent'),
       });
     },
   });
@@ -62,12 +64,12 @@ export const useFinance = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
-      message.success('Data keuangan berhasil dihitung ulang');
+      message.success(t('finance.recalculateSuccess'));
     },
     onError: (error: Error) => {
       modal.error({
-        title: 'Gagal Menghitung Ulang',
-        content: error.message || 'Terjadi kesalahan saat menghitung ulang data keuangan.',
+        title: t('finance.recalculateFailedTitle'),
+        content: error.message || t('finance.recalculateFailedContent'),
       });
     },
   });

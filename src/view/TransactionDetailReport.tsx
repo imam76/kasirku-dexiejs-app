@@ -1,11 +1,12 @@
 import ExportActions from '@/components/ExportActions';
 import { Loading } from '@/components/Loading';
-import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { useTransactionDetailReport, type TransactionDetailReportRow } from '@/hooks/useReports';
+import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import dayjs from '@/lib/dayjs';
 import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
-import { formatCategory, formatCurrency } from '@/utils/formatters';
+import { formatCurrency } from '@/utils/formatters';
 import {
   FilePdfOutlined,
   FileTextOutlined,
@@ -19,17 +20,9 @@ import { useMemo, useState } from 'react';
 
 const { Text, Title } = Typography;
 
-const helperOptions = [
-  { key: 'today', label: 'Hari ini' },
-  { key: 'yesterday', label: 'Kemarin' },
-  { key: 'this-week', label: 'Minggu ini' },
-  { key: 'this-month', label: 'Bulan ini' },
-  { key: 'last-month', label: 'Bulan lalu' },
-  { key: 'custom', label: 'Custom' },
-];
-
 export default function TransactionDetailReport() {
   const { message } = App.useApp();
+  const { t } = useI18n();
   const isMobile = useIsMobile();
   const [selectedHelper, setSelectedHelper] = useState('this-month');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>([
@@ -49,18 +42,27 @@ export default function TransactionDetailReport() {
     selectedCategories,
     search
   );
+  const categoryOptions = getProductCategoryOptions(t);
+  const helperOptions = [
+    { key: 'today', label: t('report.today') },
+    { key: 'yesterday', label: t('report.yesterday') },
+    { key: 'this-week', label: t('report.thisWeek') },
+    { key: 'this-month', label: t('report.thisMonth') },
+    { key: 'last-month', label: t('report.lastMonth') },
+    { key: 'custom', label: t('report.custom') },
+  ];
 
   const columns = useMemo<ColumnsType<TransactionDetailReportRow>>(
     () => [
       {
-        title: 'Tanggal',
+        title: t('report.date'),
         dataIndex: 'transaction_created_at',
         width: 150,
         fixed: isMobile ? undefined : 'left',
         render: (value: string) => dayjs(value).tz().format('DD/MM/YY HH:mm'),
       },
       {
-        title: 'Transaksi',
+        title: t('report.transaction'),
         dataIndex: 'transaction_number',
         width: 170,
         fixed: isMobile ? undefined : 'left',
@@ -68,20 +70,20 @@ export default function TransactionDetailReport() {
           <div>
             <div className="font-semibold text-gray-900">{value}</div>
             <Tag color={row.payment_method === 'NON_TUNAI' ? 'blue' : 'green'} className="mt-1">
-              {row.payment_method}
+              {row.payment_method === 'NON_TUNAI' ? t('payment.nonCash') : t('payment.cash')}
             </Tag>
           </div>
         ),
       },
       {
-        title: 'Item',
+        title: t('report.item'),
         dataIndex: 'product_name',
         width: 220,
         render: (value: string, row) => (
           <div>
             <div className="font-medium text-gray-900">{value}</div>
             <div className="text-xs text-gray-400">
-              {formatCategory(row.category)}
+              {getProductCategoryLabel(row.category, t)}
               {row.sku ? ` / ${row.sku}` : ''}
             </div>
           </div>
@@ -94,7 +96,7 @@ export default function TransactionDetailReport() {
         render: (_, row) => `${row.quantity.toLocaleString('id-ID')} ${row.unit}`,
       },
       {
-        title: 'Harga Jual',
+        title: t('report.sellingPrice'),
         dataIndex: 'selling_price',
         width: 130,
         align: 'right',
@@ -115,14 +117,14 @@ export default function TransactionDetailReport() {
         render: (value: number) => `Rp ${formatCurrency(value)}`,
       },
       {
-        title: 'Modal',
+        title: t('report.cost'),
         dataIndex: 'cost_total',
         width: 130,
         align: 'right',
         render: (value: number) => `Rp ${formatCurrency(value)}`,
       },
       {
-        title: 'Margin Item',
+        title: t('report.itemMargin'),
         dataIndex: 'profit',
         width: 150,
         align: 'right',
@@ -136,7 +138,7 @@ export default function TransactionDetailReport() {
         ),
       },
       {
-        title: 'Margin Transaksi',
+        title: t('report.transactionMargin'),
         dataIndex: 'transaction_profit',
         width: 160,
         align: 'right',
@@ -150,7 +152,7 @@ export default function TransactionDetailReport() {
         ),
       },
     ],
-    [isMobile]
+    [isMobile, t]
   );
 
   const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
@@ -216,14 +218,14 @@ export default function TransactionDetailReport() {
       const exported = await exportCsv({
         filename: `laporan-detail-transaksi-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
         rows: [
-          ['No. Transaksi', 'Tanggal', 'Metode', 'Produk', 'SKU', 'Kategori', 'Qty', 'Satuan', 'Harga Jual', 'HPP', 'Subtotal', 'Total Modal', 'Margin Item', 'Margin Item %', 'Margin Transaksi', 'Margin Transaksi %'],
+          [t('report.transactionNo'), t('report.date'), t('report.method'), t('report.product'), 'SKU', t('report.category'), t('report.qty'), t('report.unit'), t('report.sellingPrice'), t('report.hpp'), t('report.subtotal'), t('report.totalCost'), t('report.itemMargin'), `${t('report.itemMargin')} %`, t('report.transactionMargin'), `${t('report.transactionMargin')} %`],
           ...data.rows.map((row) => [
             row.transaction_number,
             dayjs(row.transaction_created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
             row.payment_method,
             row.product_name,
             row.sku || '',
-            formatCategory(row.category),
+            getProductCategoryLabel(row.category, t),
             row.quantity,
             row.unit,
             row.selling_price,
@@ -236,24 +238,24 @@ export default function TransactionDetailReport() {
             row.transaction_margin.toFixed(2),
           ]),
           [],
-          ['Ringkasan'],
-          ['Total Transaksi', data.transactions.length],
-          ['Total Item Line', data.rows.length],
-          ['Total Qty', data.totalItems],
-          ['Produk Unik', data.uniqueProducts],
-          ['Total Penjualan', data.totalRevenue],
-          ['Total Modal', data.totalCost],
-          ['Total Margin', data.totalProfit],
-          ['Rata-rata Margin %', data.averageMargin.toFixed(2)],
+          [t('report.summary')],
+          [t('report.totalTransactions'), data.transactions.length],
+          [t('report.totalItemLine'), data.rows.length],
+          [t('report.totalQty'), data.totalItems],
+          [t('report.uniqueProducts'), data.uniqueProducts],
+          [t('report.salesTotal'), data.totalRevenue],
+          [t('report.totalCost'), data.totalCost],
+          [t('report.totalMargin'), data.totalProfit],
+          [t('report.marginPercentAverage'), data.averageMargin.toFixed(2)],
         ],
         target,
       });
 
       if (!exported) return;
-      message.success('Export CSV detail transaksi berhasil.');
+      message.success(t('report.detail.exportCsvSuccess'));
     } catch (error) {
       console.error('Failed to export transaction detail CSV:', error);
-      message.error('Gagal export CSV detail transaksi.');
+      message.error(t('report.detail.exportCsvFailed'));
     }
   };
 
@@ -269,15 +271,15 @@ export default function TransactionDetailReport() {
           doc.setFont('helvetica', 'bold');
           doc.text('Kasirku', 105, 16, { align: 'center' });
           doc.setFontSize(13);
-          doc.text('Laporan Detail Transaksi', 105, 27, { align: 'center' });
+          doc.text(t('report.detail.title'), 105, 27, { align: 'center' });
           doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
-          doc.text(`Periode ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`, 105, 36, { align: 'center' });
-          doc.text(`Total margin: Rp ${formatCurrency(data.totalProfit)} (${data.averageMargin.toFixed(2)}%)`, 105, 44, { align: 'center' });
+          doc.text(`${t('report.period')} ${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`, 105, 36, { align: 'center' });
+          doc.text(`${t('report.totalMargin')}: Rp ${formatCurrency(data.totalProfit)} (${data.averageMargin.toFixed(2)}%)`, 105, 44, { align: 'center' });
 
           autoTable(doc, {
             startY: 52,
-            head: [['Tgl', 'Transaksi', 'Item', 'Qty', 'Subtotal', 'Modal', 'Margin', '%']],
+            head: [[t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.subtotal'), t('report.cost'), t('report.margin'), '%']],
             body: data.rows.map((row) => [
               dayjs(row.transaction_created_at).tz().format('DD/MM/YY'),
               row.transaction_number,
@@ -291,7 +293,7 @@ export default function TransactionDetailReport() {
             foot: [[
               '',
               '',
-              'Total',
+              t('common.total'),
               data.totalItems.toLocaleString('id-ID'),
               formatCurrency(data.totalRevenue),
               formatCurrency(data.totalCost),
@@ -315,10 +317,10 @@ export default function TransactionDetailReport() {
       });
 
       if (!exported) return;
-      message.success('Export PDF detail transaksi berhasil.');
+      message.success(t('report.detail.exportPdfSuccess'));
     } catch (error) {
       console.error('Failed to export transaction detail PDF:', error);
-      message.error('Gagal export PDF detail transaksi.');
+      message.error(t('report.detail.exportPdfFailed'));
     }
   };
 
@@ -327,7 +329,7 @@ export default function TransactionDetailReport() {
   if (error) {
     return (
       <div className="p-6">
-        <Empty description={`Terjadi kesalahan: ${error instanceof Error ? error.message : 'Unknown error'}`} />
+        <Empty description={t('report.withDateError', { message: error instanceof Error ? error.message : t('common.unknownError') })} />
       </div>
     );
   }
@@ -336,12 +338,12 @@ export default function TransactionDetailReport() {
     <div className="min-h-screen bg-[#FDFDFD] p-4 sm:p-6">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <Title level={4} className="!mb-1 !font-bold text-gray-900">Laporan Detail Transaksi</Title>
-          <p className="text-xs text-gray-500 sm:text-sm">Rincian item terjual, HPP, margin per item, dan margin total per transaksi</p>
+          <Title level={4} className="!mb-1 !font-bold text-gray-900">{t('report.detail.title')}</Title>
+          <p className="text-xs text-gray-500 sm:text-sm">{t('report.detail.subtitle')}</p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Button className="flex flex-1 items-center justify-center gap-1.5 sm:flex-none" icon={<ReloadOutlined />} onClick={() => refetch()}>
-            Refresh
+            {t('common.refresh')}
           </Button>
           <ExportActions
             buttonClassName="flex flex-1 items-center justify-center gap-1.5 border-none bg-[#2563EB] shadow-sm hover:bg-[#1D4ED8] sm:flex-none"
@@ -355,10 +357,10 @@ export default function TransactionDetailReport() {
       </div>
 
       <div className="mb-8 rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Parameter Laporan</div>
+        <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('report.parameterTitle')}</div>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_240px_220px_260px]">
           <div className="flex flex-col gap-2.5">
-            <span className="ml-0.5 text-[13px] font-medium text-gray-700">Rentang Waktu</span>
+            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.dateRange')}</span>
             <div className="flex flex-wrap gap-2">
               {helperOptions.map((helper) => (
                 <Button
@@ -376,7 +378,7 @@ export default function TransactionDetailReport() {
                 value={dateRange}
                 onChange={handleDateRangeChange}
                 format="YYYY-MM-DD"
-                placeholder={['Mulai', 'Hingga']}
+                placeholder={[t('common.from'), t('common.to')]}
                 className="mt-1 w-full sm:w-[320px]"
                 size="large"
               />
@@ -384,47 +386,47 @@ export default function TransactionDetailReport() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="ml-0.5 text-[13px] font-medium text-gray-700">Kategori Produk</span>
+            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.productCategory')}</span>
             <Select
               mode="multiple"
               allowClear
               maxTagCount="responsive"
               value={selectedCategories}
               onChange={setSelectedCategories}
-              placeholder="Semua kategori"
+              placeholder={t('report.allCategories')}
               size="large"
-              options={PRODUCT_CATEGORIES}
+              options={categoryOptions}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="ml-0.5 text-[13px] font-medium text-gray-700">Metode Pembayaran</span>
+            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.paymentMethod')}</span>
             <Select
               value={paymentMethod}
               onChange={setPaymentMethod}
               size="large"
               options={[
-                { value: 'SEMUA', label: 'Semua Metode' },
-                { value: 'TUNAI', label: 'Tunai' },
-                { value: 'NON_TUNAI', label: 'Non-Tunai' },
+                { value: 'SEMUA', label: t('report.allMethods') },
+                { value: 'TUNAI', label: t('payment.cash') },
+                { value: 'NON_TUNAI', label: t('payment.nonCash') },
               ]}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="ml-0.5 text-[13px] font-medium text-gray-700">Cari Transaksi / Item</span>
+            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.searchTransactionItem')}</span>
             <Space.Compact>
               <Input
                 allowClear
                 size="large"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="TRX atau nama produk"
+                placeholder={t('report.searchPlaceholder')}
                 prefix={<SearchOutlined className="text-gray-400" />}
               />
               {(selectedHelper !== 'this-month' || paymentMethod !== 'SEMUA' || selectedCategories.length > 0 || search) && (
                 <Button size="large" onClick={handleReset}>
-                  Reset
+                  {t('common.reset')}
                 </Button>
               )}
             </Space.Compact>
@@ -436,12 +438,12 @@ export default function TransactionDetailReport() {
         <>
           <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
             {[
-              { title: 'Transaksi', value: data.transactions.length, suffix: 'trx', color: '#2563eb' },
-              { title: 'Item Line', value: data.rows.length, suffix: 'baris', color: '#7c3aed' },
-              { title: 'Produk Unik', value: data.uniqueProducts, suffix: 'produk', color: '#0f766e' },
-              { title: 'Penjualan', value: data.totalRevenue, prefix: 'Rp ', color: '#16a34a', currency: true },
-              { title: 'Modal', value: data.totalCost, prefix: 'Rp ', color: '#dc2626', currency: true },
-              { title: 'Total Margin', value: data.totalProfit, prefix: 'Rp ', suffix: ` / ${data.averageMargin.toFixed(2)}%`, color: '#ea580c', currency: true },
+              { title: t('report.transaction'), value: data.transactions.length, suffix: t('report.trxSuffix'), color: '#2563eb' },
+              { title: t('report.totalItemLine'), value: data.rows.length, suffix: t('report.rowSuffix'), color: '#7c3aed' },
+              { title: t('report.uniqueProducts'), value: data.uniqueProducts, suffix: t('report.productSuffix'), color: '#0f766e' },
+              { title: t('report.salesTotal'), value: data.totalRevenue, prefix: 'Rp ', color: '#16a34a', currency: true },
+              { title: t('report.cost'), value: data.totalCost, prefix: 'Rp ', color: '#dc2626', currency: true },
+              { title: t('report.totalMargin'), value: data.totalProfit, prefix: 'Rp ', suffix: ` / ${data.averageMargin.toFixed(2)}%`, color: '#ea580c', currency: true },
             ].map((stat) => (
               <Card key={stat.title} className="overflow-hidden rounded-xl border-none border-l-4 border-l-blue-500 shadow-sm">
                 <Statistic
@@ -467,7 +469,7 @@ export default function TransactionDetailReport() {
                 <Table.Summary fixed>
                   <Table.Summary.Row>
                     <Table.Summary.Cell index={0} colSpan={6}>
-                      <span className="font-semibold">Total</span>
+                      <span className="font-semibold">{t('common.total')}</span>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={6} align="right">
                       <span className="font-semibold">Rp {formatCurrency(data.totalRevenue)}</span>
@@ -489,7 +491,7 @@ export default function TransactionDetailReport() {
         </>
       ) : (
         <div className="rounded-xl border border-gray-100 bg-white py-16 text-center shadow-sm">
-          <p className="text-gray-400 italic">Tidak ada detail transaksi untuk filter ini</p>
+          <p className="text-gray-400 italic">{t('report.noTransactionDetailsForFilter')}</p>
         </div>
       )}
     </div>

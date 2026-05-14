@@ -3,6 +3,11 @@ import { Product, CartItem, PaymentMethod } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { getProductSellableUnits } from '@/utils/productUnits';
 
+export type TransactionError =
+  | { code: 'OUT_OF_STOCK' }
+  | { code: 'INSUFFICIENT_STOCK'; stock: number; unit: string }
+  | { code: 'INVALID_UNIT'; unit: string };
+
 interface TransactionState {
   products: Product[];
   cart: CartItem[];
@@ -20,9 +25,9 @@ interface TransactionState {
   setShowPayment: (show: boolean) => void;
 
   // Logical State Actions (Non-DB)
-  addToCart: (product: Product) => { success: boolean; error?: { title: string; message: string } };
-  updateQuantity: (productId: string, newQuantity: number) => { success: boolean; error?: { title: string; message: string } };
-  updateUnit: (productId: string, newUnit: string) => { success: boolean; error?: { title: string; message: string } };
+  addToCart: (product: Product) => { success: boolean; error?: TransactionError };
+  updateQuantity: (productId: string, newQuantity: number) => { success: boolean; error?: TransactionError };
+  updateUnit: (productId: string, newUnit: string) => { success: boolean; error?: TransactionError };
   removeFromCart: (productId: string) => void;
   reset: () => void;
 }
@@ -51,10 +56,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (product.stock <= 0) {
       return { 
         success: false, 
-        error: { 
-          title: 'Stok Tidak Tersedia', 
-          message: 'Stok produk ini tidak tersedia saat ini.' 
-        } 
+        error: { code: 'OUT_OF_STOCK' } 
       };
     }
 
@@ -73,10 +75,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       if (nextQuantityInStockUnit > product.stock) {
         return { 
           success: false, 
-          error: { 
-            title: 'Stok Tidak Mencukupi', 
-            message: `Stok hanya tersedia ${product.stock} unit.` 
-          } 
+          error: { code: 'INSUFFICIENT_STOCK', stock: product.stock, unit: product.purchase_unit } 
         };
       }
       set({
@@ -110,8 +109,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return { 
         success: false, 
         error: {
-          title: 'Stok Tidak Mencukupi', 
-          message: `Stok hanya tersedia ${item.product.stock} ${item.product.purchase_unit}.` 
+          code: 'INSUFFICIENT_STOCK',
+          stock: item.product.stock,
+          unit: item.product.purchase_unit,
         } 
       };
     }
@@ -140,8 +140,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return {
         success: false,
         error: {
-          title: 'Unit Tidak Valid',
-          message: `Unit "${newUnit}" tidak tersedia untuk produk ini.`
+          code: 'INVALID_UNIT',
+          unit: newUnit,
         }
       };
     }

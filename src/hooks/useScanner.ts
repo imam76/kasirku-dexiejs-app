@@ -2,9 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface UseScannerProps {
   onScan: (text: string) => void;
+  cameraErrorMessage?: string;
 }
 
-export const useScanner = ({ onScan }: UseScannerProps) => {
+export const useScanner = ({ onScan, cameraErrorMessage = 'Gagal mengakses kamera. Pastikan izin kamera diaktifkan.' }: UseScannerProps) => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerStarting, setScannerStarting] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
@@ -97,7 +98,7 @@ export const useScanner = ({ onScan }: UseScannerProps) => {
 
         controlsRef.current = controls;
       } catch {
-        if (!cancelled) setScannerError('Gagal mengakses kamera. Pastikan izin kamera diaktifkan.');
+        if (!cancelled) setScannerError(cameraErrorMessage);
       } finally {
         if (!cancelled) setScannerStarting(false);
       }
@@ -107,7 +108,7 @@ export const useScanner = ({ onScan }: UseScannerProps) => {
       cancelled = true;
       stopScanner();
     };
-  }, [scannerOpen, stopScanner, playBeep]);
+  }, [scannerOpen, stopScanner, playBeep, cameraErrorMessage]);
 
   return {
     scannerOpen,

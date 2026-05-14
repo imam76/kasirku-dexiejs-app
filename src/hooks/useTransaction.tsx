@@ -2,16 +2,18 @@ import { useEffect, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
-import { useTransactionStore } from '@/store/transactionStore';
+import { useTransactionStore, type TransactionError } from '@/store/transactionStore';
 import { Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { checkout } from '@/services/checkoutService';
+import { useI18n } from '@/hooks/useI18n';
 
 export const useTransaction = () => {
   const queryClient = useQueryClient();
   const { modal, message } = App.useApp();
+  const { t } = useI18n();
   const {
     products,
     cart,
@@ -55,23 +57,45 @@ export const useTransaction = () => {
     return cart.reduce((sum, item) => sum + getPrice(item.product, item.quantity, item.unit) * item.quantity, 0);
   }, [cart]);
 
+  const getTransactionErrorContent = (error: TransactionError) => {
+    if (error.code === 'OUT_OF_STOCK') {
+      return {
+        title: t('transactionError.outOfStockTitle'),
+        content: t('transactionError.outOfStockMessage'),
+      };
+    }
+
+    if (error.code === 'INSUFFICIENT_STOCK') {
+      return {
+        title: t('transactionError.insufficientStockTitle'),
+        content: t('transactionError.insufficientStockMessage', {
+          stock: error.stock,
+          unit: error.unit,
+        }),
+      };
+    }
+
+    return {
+      title: t('transactionError.invalidUnitTitle'),
+      content: t('transactionError.invalidUnitMessage', { unit: error.unit }),
+    };
+  };
+
+  const showTransactionError = (error: TransactionError) => {
+    modal.error(getTransactionErrorContent(error));
+  };
+
   const addToCart = (product: Product) => {
     const result = storeAddToCart(product);
     if (!result.success && result.error) {
-      modal.error({
-        title: result.error.title,
-        content: result.error.message,
-      });
+      showTransactionError(result.error);
     }
   };
 
   const updateQuantity = (productId: string, newQuantity: number) => {
     const result = storeUpdateQuantity(productId, newQuantity);
     if (!result.success && result.error) {
-      modal.error({
-        title: result.error.title,
-        content: result.error.message,
-      });
+      showTransactionError(result.error);
     }
   };
 
@@ -79,10 +103,7 @@ export const useTransaction = () => {
     const storeUpdateUnit = useTransactionStore.getState().updateUnit;
     const result = storeUpdateUnit(productId, newUnit);
     if (!result.success && result.error) {
-      modal.error({
-        title: result.error.title,
-        content: result.error.message,
-      });
+      showTransactionError(result.error);
     }
   };
 
@@ -92,8 +113,8 @@ export const useTransaction = () => {
 
     if (isNaN(payment) || payment < total) {
       modal.error({
-        title: 'Pembayaran Tidak Valid',
-        content: 'Jumlah pembayaran tidak valid atau kurang!',
+        title: t('payment.invalidTitle'),
+        content: t('payment.invalidContent'),
       });
       return;
     }
@@ -108,23 +129,23 @@ export const useTransaction = () => {
       const { transaction, items } = checkoutResult;
 
       modal.success({
-        title: 'Transaksi Berhasil',
+        title: t('checkout.successTitle'),
         content: (
           <div className="text-left space-y-2 mt-4" >
             <p className="text-gray-700">
-              <span className="font-semibold"> Nomor Transaksi: </span> {transaction.transaction_number}
+              <span className="font-semibold"> {t('checkout.transactionNumber')}: </span> {transaction.transaction_number}
             </p>
             <p className="text-gray-700">
-              <span className="font-semibold"> Metode: </span> {paymentMethod}
+              <span className="font-semibold"> {t('checkout.method')}: </span> {paymentMethod === 'TUNAI' ? t('payment.cash') : t('payment.nonCash')}
             </p>
             < p className="text-gray-700" >
-              <span className="font-semibold"> Total:</span> Rp {formatCurrency(total)}
+              <span className="font-semibold"> {t('cart.total')}:</span> Rp {formatCurrency(total)}
             </p>
             < p className="text-gray-700" >
-              <span className="font-semibold" > Dibayar: </span> Rp {formatCurrency(payment)}
+              <span className="font-semibold" > {t('checkout.paid')}: </span> Rp {formatCurrency(payment)}
             </p>
             < p className="text-green-600 font-semibold" >
-              <span>Kembalian: </span> Rp {formatCurrency(transaction.change_amount)}
+              <span>{t('payment.change')}: </span> Rp {formatCurrency(transaction.change_amount)}
             </p>
           </div>
         ),
@@ -139,15 +160,15 @@ export const useTransaction = () => {
           queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
 
           if (result.success) {
-            message.success('Struk berhasil dicetak');
+            message.success(t('checkout.receiptPrinted'));
             return;
           }
 
-          message.warning(result.error || 'Transaksi sukses, tetapi struk gagal dicetak');
+          message.warning(result.error || t('checkout.receiptPrintFailed'));
         })
         .catch((error) => {
           console.error('Receipt print process failed:', error);
-          message.warning('Transaksi sukses, tetapi proses print struk gagal');
+          message.warning(t('checkout.receiptPrintProcessFailed'));
         });
       
       // Trigger feedback check
@@ -155,8 +176,8 @@ export const useTransaction = () => {
     } catch (error) {
       console.error('Checkout failed:', error);
       modal.error({
-        title: 'Gagal Membuat Transaksi',
-        content: 'Terjadi kesalahan saat membuat transaksi. Silakan coba lagi.',
+        title: t('checkout.failedTitle'),
+        content: t('checkout.failedContent'),
       });
     }
   };

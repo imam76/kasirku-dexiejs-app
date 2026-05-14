@@ -1,6 +1,7 @@
 import dayjs from '@/lib/dayjs';
 import { FinanceTransaction } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
+import { useI18n } from '@/hooks/useI18n';
 
 interface DesktopExpenseTableProps {
   transactions: FinanceTransaction[];
@@ -9,15 +10,17 @@ interface DesktopExpenseTableProps {
 }
 
 export default function DesktopExpenseTable({ transactions, totalExpense, expenseCategories }: DesktopExpenseTableProps) {
+  const { t } = useI18n();
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-left border-separate border-spacing-0">
         <thead>
           <tr className="text-gray-500 font-normal">
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 rounded-tl-lg">Tanggal & jam</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">Keterangan</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">Kategori</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right rounded-tr-lg">Nominal</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 rounded-tl-lg">{t('report.dateTime')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">{t('report.description')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">{t('report.category')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right rounded-tr-lg">{t('report.amount')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
@@ -45,14 +48,14 @@ export default function DesktopExpenseTable({ transactions, totalExpense, expens
                 </tr>
               ))}
               <tr className="font-bold text-gray-900 bg-gray-50/30">
-                <td colSpan={3} className="py-6 px-4 text-base rounded-bl-lg border-t border-gray-100">Total pengeluaran</td>
+                <td colSpan={3} className="py-6 px-4 text-base rounded-bl-lg border-t border-gray-100">{t('report.totalExpense')}</td>
                 <td className="py-6 px-4 text-right text-base rounded-br-lg border-t border-gray-100">{formatCurrency(totalExpense)}</td>
               </tr>
             </>
           ) : (
             <tr>
               <td colSpan={4} className="py-12 text-center text-gray-400 italic bg-white rounded-b-lg">
-                Tidak ada data pengeluaran untuk periode ini
+                {t('report.noExpensesForPeriod')}
               </td>
             </tr>
           )}

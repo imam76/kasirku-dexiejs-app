@@ -3,6 +3,7 @@ import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
 import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useI18n } from '@/hooks/useI18n'
 import { useTheme } from '@/hooks/useTheme'
 import dayjs from '@/lib/dayjs'
 import { db } from '@/lib/db'
@@ -20,6 +21,7 @@ import {
   FileText,
   History,
   Home,
+  Languages,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -27,18 +29,27 @@ import {
   Settings,
   SettingsIcon,
   ShoppingCart,
-  Sun
+  Sun,
+  type LucideIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 const { Content, Sider } = Layout
 const NAVBAR_HEIGHT = 64
 
+type FeedbackValues = Record<string, unknown>
+type NavLeaf = { to: string; label: string; icon: LucideIcon }
+type NavGroup = { label: string; icon: LucideIcon; key: string; children: NavLeaf[] }
+type NavLink = NavLeaf | NavGroup
+
+const isNavGroup = (link: NavLink): link is NavGroup => 'children' in link
+
 const RootLayout = () => {
   const router = useRouter()
   const navigate = useNavigate()
   const location = useLocation()
   const { isDark, toggle } = useTheme()
+  const { locale, t, toggleLocale } = useI18n()
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
@@ -64,7 +75,7 @@ const RootLayout = () => {
     return () => window.removeEventListener('check-feedback', checkFeedback)
   }, [location.pathname]) // Re-check on navigation
 
-  const handleFeedbackSubmit = async (values: any) => {
+  const handleFeedbackSubmit = async (values: FeedbackValues) => {
     const FLY_OVER_THE_DRIVE = "8774401189:AAEWFdwvoH71-GSysuEmbsb2jaMC_OZ8QWA";
     const NEVER_TRUST_THE_GOVERMENT = "587438877";
 
@@ -73,7 +84,7 @@ const RootLayout = () => {
       .map((q) => {
         const val = values[`q${q.id}`];
         if (val === undefined || val === null) return null;
-        return `<b>${q.id}. ${q.question}</b>\nJawaban: ${val}`
+        return `<b>${q.id}. ${q.question}</b>\nJawaban: ${String(val)}`
       })
       .filter(Boolean)
       .join('\n\n');
@@ -105,8 +116,8 @@ const RootLayout = () => {
 
     setShowFeedback(false)
     notification.success({
-      message: 'Terima Kasih!',
-      description: 'Feedback Anda sangat berharga bagi kami.',
+      message: t('root.feedbackThanksTitle'),
+      description: t('root.feedbackThanksDescription'),
       placement: 'bottomRight',
     })
   }
@@ -135,31 +146,31 @@ const RootLayout = () => {
     }
   }
 
-  const navLinks = [
-    { to: '/', label: 'Home', icon: Home },
-    { to: '/transaction', label: 'Transaksi', icon: ShoppingCart },
-    { to: '/stock', label: 'Stok', icon: Box },
-    { to: '/units', label: 'Satuan & Konversi', icon: Scale },
-    { to: '/shopping-note', label: 'Belanja Stok', icon: ClipboardList },
-    { to: '/history', label: 'Riwayat', icon: History },
-    { to: '/finance', label: 'Keuangan', icon: Banknote },
+  const navLinks: NavLink[] = [
+    { to: '/', label: t('nav.home'), icon: Home },
+    { to: '/transaction', label: t('nav.transaction'), icon: ShoppingCart },
+    { to: '/stock', label: t('nav.stock'), icon: Box },
+    { to: '/units', label: t('nav.units'), icon: Scale },
+    { to: '/shopping-note', label: t('nav.shoppingNote'), icon: ClipboardList },
+    { to: '/history', label: t('nav.history'), icon: History },
+    { to: '/finance', label: t('nav.finance'), icon: Banknote },
     {
-      label: 'Laporan',
+      label: t('nav.reports'),
       icon: FileText,
       key: 'reports-group',
       children: [
-        { to: '/report/sales-report', label: 'Penjualan', icon: FileText },
-        { to: '/report/transaction-detail-report', label: 'Detail Transaksi', icon: FileText },
-        { to: '/report/purchase-report', label: 'Pembelian', icon: FileText },
-        { to: '/report/expense-report', label: 'Pengeluaran', icon: FileText },
-        { to: '/profit', label: 'Keuntungan', icon: DollarSign },
+        { to: '/report/sales-report', label: t('nav.report.sales'), icon: FileText },
+        { to: '/report/transaction-detail-report', label: t('nav.report.transactionDetail'), icon: FileText },
+        { to: '/report/purchase-report', label: t('nav.report.purchase'), icon: FileText },
+        { to: '/report/expense-report', label: t('nav.report.expense'), icon: FileText },
+        { to: '/profit', label: t('nav.report.profit'), icon: DollarSign },
       ],
     },
-    { to: '/settings', label: 'Pengaturan', icon: Settings },
+    { to: '/settings', label: t('nav.settings'), icon: Settings },
   ]
 
   const menuItems = navLinks.map((link) => {
-    if ('children' in link && link.children) {
+    if (isNavGroup(link)) {
       return {
         key: link.key,
         icon: <link.icon size={16} />,
@@ -179,8 +190,8 @@ const RootLayout = () => {
   })
 
   // Determine active menu key from current path
-  const allLinks = navLinks.reduce((acc: any[], link) => {
-    if ('children' in link && link.children) {
+  const allLinks = navLinks.reduce<NavLeaf[]>((acc, link) => {
+    if (isNavGroup(link)) {
       return [...acc, ...link.children]
     }
     return [...acc, link]
@@ -193,8 +204,9 @@ const RootLayout = () => {
       .find((link) => location.pathname.startsWith(link.to === '/' ? '/' : link.to))?.to ?? '/'
 
   const openKeys = navLinks
-    .filter((link) => 'children' in link && link.children?.some((child) => child.to === selectedKey))
-    .map((link: any) => link.key)
+    .filter(isNavGroup)
+    .filter((link) => link.children.some((child) => child.to === selectedKey))
+    .map((link) => link.key)
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
@@ -225,13 +237,24 @@ const RootLayout = () => {
             <button
               onClick={toggle}
               className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
-              aria-label="Toggle theme"
+              aria-label={t('common.toggleTheme')}
             >
               {isDark ? <Moon size={20} /> : <Sun size={20} />}
             </button>
             <button
+              onClick={toggleLocale}
+              className="flex items-center gap-1 rounded-full px-2 py-2 text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-100 focus:outline-none dark:hover:bg-gray-700"
+              aria-label={t('common.switchLanguage')}
+              title={t('common.switchLanguage')}
+            >
+              <Languages size={18} />
+              <span className="leading-none">{locale === 'id' ? 'EN' : 'ID'}</span>
+            </button>
+            <button
               onClick={() => navigate({ to: '/settings' })}
               className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+              aria-label={t('root.openSettings')}
+              title={t('root.openSettings')}
             >
               <SettingsIcon size={20} />
             </button>
@@ -254,7 +277,7 @@ const RootLayout = () => {
           {!isMobile && (
             <button
               type="button"
-              aria-label={collapsed ? 'Buka sidebar' : 'Tutup sidebar'}
+              aria-label={collapsed ? t('root.openSidebar') : t('root.closeSidebar')}
               onClick={() => setCollapsed(!collapsed)}
               className="absolute -right-9 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-r-md border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
             >

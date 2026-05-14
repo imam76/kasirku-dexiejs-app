@@ -2,6 +2,7 @@ import { Trash2 } from 'lucide-react';
 import { CartItem as CartItemType, PaymentMethod } from '@/types';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
+import { useI18n } from '@/hooks/useI18n';
 
 interface CartSidebarProps {
   cart: CartItemType[];
@@ -34,18 +35,20 @@ export default function CartSidebar({
   setPaymentMethod,
   handleCheckout,
 }: CartSidebarProps) {
+  const { t } = useI18n();
+
   return (
     <div className="hidden lg:block lg:col-span-1">
       <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200 sticky top-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Keranjang</h3>
+          <h3 className="text-lg font-semibold text-gray-800">{t('cart.title')}</h3>
           {cart.length > 0 && (
             <button
               onClick={clearCart}
               className="text-red-500 hover:text-red-700 text-sm font-medium transition-colors flex items-center gap-1"
             >
               <Trash2 size={14} />
-              Bersihkan
+              {t('cart.clear')}
             </button>
           )}
         </div>
@@ -61,7 +64,7 @@ export default function CartSidebar({
             />
           ))}
           {cart.length === 0 && (
-            <p className="text-center text-gray-500 py-8">Keranjang kosong</p>
+            <p className="text-center text-gray-500 py-8">{t('cart.empty')}</p>
           )}
         </div>
 

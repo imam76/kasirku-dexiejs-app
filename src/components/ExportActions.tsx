@@ -4,6 +4,7 @@ import type { ButtonProps, MenuProps } from 'antd';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { ExportTarget } from '@/utils/export';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useI18n } from '@/hooks/useI18n';
 
 type ExportTargetAction = {
   key: Exclude<ExportTarget, 'auto'>;
@@ -27,20 +28,21 @@ type ExportActionsProps = {
   label?: string;
 };
 
-const DEFAULT_TARGETS: ExportTargetAction[] = [
-  { key: 'share', label: 'Bagikan' },
-  { key: 'save', label: 'Simpan ke File' },
-];
-
 export default function ExportActions({
   formats,
   disabled = false,
   buttonClassName,
   buttonType = 'primary',
-  label = 'Export',
+  label,
 }: ExportActionsProps) {
+  const { t } = useI18n();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useIsMobile();
+  const buttonLabel = label ?? t('common.export');
+  const defaultTargets = useMemo<ExportTargetAction[]>(() => [
+    { key: 'share', label: t('common.share') },
+    { key: 'save', label: t('common.saveToFile') },
+  ], [t]);
 
   const isDisabled = disabled || formats.length === 0 || formats.every((format) => format.disabled);
 
@@ -51,12 +53,12 @@ export default function ExportActions({
         label: format.label,
         icon: format.icon,
         disabled: format.disabled,
-        children: (format.targets ?? DEFAULT_TARGETS).map((target) => ({
+        children: (format.targets ?? defaultTargets).map((target) => ({
           key: `${format.key}:${target.key}`,
           label: target.label,
         })),
       })),
-    [formats],
+    [formats, defaultTargets],
   );
 
   const handleMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
@@ -75,7 +77,7 @@ export default function ExportActions({
       disabled={isDisabled}
       onClick={isMobile ? () => setDrawerOpen(true) : undefined}
     >
-      {label}
+      {buttonLabel}
       {!isMobile ? <DownOutlined className="text-[10px]" /> : null}
     </Button>
   );
@@ -99,12 +101,12 @@ export default function ExportActions({
           />
           <div className="absolute bottom-0 left-0 right-0 flex max-h-[85vh] flex-col rounded-t-2xl bg-white shadow-2xl animate-slide-up">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <h3 className="text-lg font-semibold text-gray-800">Export</h3>
+              <h3 className="text-lg font-semibold text-gray-800">{buttonLabel}</h3>
               <button
                 type="button"
                 onClick={() => setDrawerOpen(false)}
                 className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100"
-                aria-label="Tutup pilihan export"
+                aria-label={t('common.closeExportOptions')}
               >
                 <CloseOutlined className="text-[16px]" />
               </button>
@@ -112,7 +114,7 @@ export default function ExportActions({
 
             <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
               {formats.map((format) => {
-                const targets = format.targets ?? DEFAULT_TARGETS;
+                const targets = format.targets ?? defaultTargets;
 
                 return (
                   <div key={format.key} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
@@ -145,7 +147,7 @@ export default function ExportActions({
                 onClick={() => setDrawerOpen(false)}
                 className="w-full py-2.5 text-center text-sm font-semibold text-gray-500 hover:text-gray-700"
               >
-                Batal
+                {t('common.cancel')}
               </button>
             </div>
           </div>

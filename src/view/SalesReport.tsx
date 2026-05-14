@@ -1,9 +1,10 @@
-import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { useSalesReport } from '@/hooks/useReports';
+import { useI18n } from '@/hooks/useI18n';
+import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
-import { formatCategory, formatCurrency } from '@/utils/formatters';
+import { formatCurrency } from '@/utils/formatters';
 import { formatWeightTotal, resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { BarChartOutlined, FilePdfOutlined, FileTextOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { App, Button, Card, DatePicker, Empty, Select, Statistic, Typography } from 'antd';
@@ -20,6 +21,7 @@ const { Title, Text } = Typography;
 
 export default function SalesReport() {
   const { message } = App.useApp();
+  const { t } = useI18n();
   const isMobile = useIsMobile();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
@@ -32,6 +34,7 @@ export default function SalesReport() {
   // New Filter States
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | undefined>('SEMUA');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const categoryOptions = getProductCategoryOptions(t);
 
   const { data, isLoading, error, refetch } = useSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
 
@@ -43,14 +46,14 @@ export default function SalesReport() {
         filename: `laporan-penjualan-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
         target,
         build: (doc) => {
-          const period = `Periode ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`;
-          const printDate = `Tanggal Cetak: ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`;
+          const period = `${t('report.period')} ${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`;
+          const printDate = `${t('report.printDate')} ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`;
 
           doc.setFontSize(16);
           doc.setFont('helvetica', 'bold');
           doc.text('Kasirku', 105, 18, { align: 'center' });
           doc.setFontSize(13);
-          doc.text('Laporan Penjualan', 105, 30, { align: 'center' });
+          doc.text(t('report.sales.title'), 105, 30, { align: 'center' });
           doc.setFontSize(11);
           doc.setFont('helvetica', 'normal');
           doc.text(period, 105, 41, { align: 'center' });
@@ -74,12 +77,12 @@ export default function SalesReport() {
 
           autoTable(doc, {
             startY: 58,
-            head: [['Tgl', 'No Order', 'Pembeli', 'Sub Total', 'Diskon', 'Total Penjualan', 'Pembayaran', 'Saldo']],
+            head: [[t('report.date'), t('report.orderNo'), t('report.buyer'), t('report.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.balance')]],
             body: tableData,
             foot: [[
               '',
               '',
-              'Total',
+              t('common.total'),
               formatCurrency(data.totalRevenue),
               formatCurrency(0),
               formatCurrency(data.totalRevenue),
@@ -106,10 +109,10 @@ export default function SalesReport() {
       });
 
       if (!exported) return;
-      message.success('Export PDF penjualan berhasil.');
+      message.success(t('report.sales.exportPdfSuccess'));
     } catch (error) {
       console.error('Failed to export sales PDF:', error);
-      message.error('Gagal export PDF penjualan.');
+      message.error(t('report.sales.exportPdfFailed'));
     }
   };
 
@@ -127,8 +130,8 @@ export default function SalesReport() {
       const productMap = new Map(products.map(p => [p.id, p]));
 
       const csvRows = [
-        ['SECTION 1: RINGKASAN TRANSAKSI'],
-        ['No. Transaksi', 'Tanggal', 'Metode Pembayaran', 'Total Penjualan', 'Pembayaran', 'Kembalian'],
+        ['SECTION 1: TRANSACTION SUMMARY'],
+        [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), t('report.salesTotal'), t('report.payment'), t('report.change')],
         ...data.transactions.map((t) => [
           t.transaction_number,
           dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
@@ -138,8 +141,8 @@ export default function SalesReport() {
           t.change_amount,
         ]),
         [],
-        ['SECTION 2: DETAIL ITEM PER TRANSAKSI'],
-        ['No. Transaksi', 'Tanggal', 'Nama Produk', 'Kategori', 'Jumlah', 'Satuan', 'Harga Satuan', 'Subtotal', 'HPP', 'Profit'],
+        ['SECTION 2: TRANSACTION ITEM DETAILS'],
+        [t('report.transactionNo'), t('report.date'), t('report.productName'), t('report.category'), t('report.amount'), t('report.unit'), t('report.unitPrice'), t('report.subtotal'), t('report.hpp'), t('report.profit')],
         ...allItems.map((item) => {
           const trans = data.transactions.find(t => t.id === item.transaction_id);
           const product = productMap.get(item.product_id);
@@ -148,7 +151,7 @@ export default function SalesReport() {
             trans?.transaction_number || '-',
             dayjs(item.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
             item.product_name,
-            formatCategory(product?.category || 'non_consumable'),
+            getProductCategoryLabel(product?.category || 'non_consumable', t),
             item.quantity,
             unit,
             item.price,
@@ -158,15 +161,15 @@ export default function SalesReport() {
           ];
         }),
         [],
-        ['RINGKASAN LAPORAN'],
-        ['Total Transaksi', data.transactions.length],
-        ['Total Penjualan', data.totalRevenue],
-        ['Total Keuntungan', data.totalProfit],
-        ['Barang Satuan Terjual', data.soldItems.unitItems],
-        ['Barang Timbang Terjual', data.soldItems.weightedLineItems],
-        ['Total Berat Timbang', formatWeightTotal(data.soldItems.totalWeightBase)],
-        ['Total Berat Timbang (gram)', data.soldItems.totalWeightBase],
-        ['Rata-rata Transaksi', data.averageTransaction],
+        [t('report.summary')],
+        [t('report.totalTransactions'), data.transactions.length],
+        [t('report.salesTotal'), data.totalRevenue],
+        [t('report.profit'), data.totalProfit],
+        [t('report.unitItemsSold'), data.soldItems.unitItems],
+        [t('report.weightedItemsSold'), data.soldItems.weightedLineItems],
+        [t('report.totalWeightedBase'), formatWeightTotal(data.soldItems.totalWeightBase)],
+        [t('report.totalWeightedGram'), data.soldItems.totalWeightBase],
+        [t('report.averageTransaction'), data.averageTransaction],
       ];
 
       const exported = await exportCsv({
@@ -175,10 +178,10 @@ export default function SalesReport() {
         target,
       });
       if (!exported) return;
-      message.success('Export laporan penjualan berhasil.');
+      message.success(t('report.sales.exportSuccess'));
     } catch (error) {
       console.error('Failed to export sales report:', error);
-      message.error('Gagal export laporan penjualan.');
+      message.error(t('report.sales.exportFailed'));
     }
   };
 
@@ -251,7 +254,7 @@ export default function SalesReport() {
     return (
       <div className="p-6">
         <Empty
-          description={`Terjadi kesalahan: ${error instanceof Error ? error.message : 'Unknown error'}`}
+          description={t('report.withDateError', { message: error instanceof Error ? error.message : t('common.unknownError') })}
         />
       </div>
     );
@@ -261,8 +264,8 @@ export default function SalesReport() {
     <div className="p-4 sm:p-6 bg-[#FDFDFD] min-h-screen">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <Title level={4} className="!mb-1 !font-bold text-gray-900">Laporan Penjualan</Title>
-          <p className="text-gray-500 text-xs sm:text-sm">Analisis performa penjualan dan produk terlaris Anda</p>
+          <Title level={4} className="!mb-1 !font-bold text-gray-900">{t('report.sales.title')}</Title>
+          <p className="text-gray-500 text-xs sm:text-sm">{t('report.sales.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
@@ -271,7 +274,7 @@ export default function SalesReport() {
             onClick={() => refetch()}
             loading={isLoading}
           >
-            Refresh
+            {t('common.refresh')}
           </Button>
           <ExportActions
             buttonClassName="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
@@ -296,34 +299,34 @@ export default function SalesReport() {
 
       {/* FILTER SECTION */}
       <div className="mb-8 bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">PARAMETER LAPORAN</div>
+        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">{t('report.parameterTitle')}</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-5">
             <div className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-medium text-gray-700 ml-0.5">Kategori Produk (Filter Breakdown)</span>
+              <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.productCategoryBreakdown')}</span>
               <Select
                 mode="multiple"
-                placeholder="Semua kategori"
+                placeholder={t('report.allCategories')}
                 className="w-full"
                 value={selectedCategories}
                 onChange={setSelectedCategories}
                 allowClear
-                options={PRODUCT_CATEGORIES}
+                options={categoryOptions}
                 size="large"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-medium text-gray-700 ml-0.5">Metode Pembayaran</span>
+              <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.paymentMethod')}</span>
               <Select
-                placeholder="Semua metode"
+                placeholder={t('report.allMethods')}
                 className="w-full"
                 value={selectedPaymentMethod}
                 onChange={setSelectedPaymentMethod}
                 options={[
-                  { value: 'SEMUA', label: 'Semua Metode' },
-                  { value: 'TUNAI', label: 'Tunai' },
-                  { value: 'NON_TUNAI', label: 'Non-Tunai' },
+                  { value: 'SEMUA', label: t('report.allMethods') },
+                  { value: 'TUNAI', label: t('payment.cash') },
+                  { value: 'NON_TUNAI', label: t('payment.nonCash') },
                 ]}
                 size="large"
               />
@@ -331,15 +334,15 @@ export default function SalesReport() {
           </div>
 
           <div className="flex flex-col gap-2.5">
-            <span className="text-[13px] font-medium text-gray-700 ml-0.5">Rentang Waktu</span>
+            <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.dateRange')}</span>
             <div className="flex flex-wrap gap-2">
               {[
-                { key: 'today', label: 'Hari ini' },
-                { key: 'yesterday', label: 'Kemarin' },
-                { key: 'this-week', label: 'Minggu ini' },
-                { key: 'this-month', label: 'Bulan ini' },
-                { key: 'last-month', label: 'Bulan lalu' },
-                { key: 'custom', label: 'Custom' },
+                { key: 'today', label: t('report.today') },
+                { key: 'yesterday', label: t('report.yesterday') },
+                { key: 'this-week', label: t('report.thisWeek') },
+                { key: 'this-month', label: t('report.thisMonth') },
+                { key: 'last-month', label: t('report.lastMonth') },
+                { key: 'custom', label: t('report.custom') },
               ].map((helper) => (
                 <Button
                   key={helper.key}
@@ -353,7 +356,7 @@ export default function SalesReport() {
 
               {(selectedCategories.length > 0 || selectedHelper !== 'today' || selectedPaymentMethod !== 'SEMUA') && (
                 <Button type="link" onClick={handleReset} className="text-gray-400 hover:text-red-500 flex items-center gap-1">
-                  <ReloadOutlined className="text-[10px]" /> Reset Semua
+                  <ReloadOutlined className="text-[10px]" /> {t('common.resetAll')}
                 </Button>
               )}
             </div>
@@ -364,7 +367,7 @@ export default function SalesReport() {
                   value={dateRange}
                   onChange={handleDateRangeChange}
                   format="YYYY-MM-DD"
-                  placeholder={['Mulai', 'Hingga']}
+                  placeholder={[t('common.from'), t('common.to')]}
                   className="w-full sm:w-[320px] rounded-lg"
                   size="large"
                 />
@@ -378,12 +381,12 @@ export default function SalesReport() {
       {data && data.transactions.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           {[
-            { title: 'Total Transaksi', value: data.transactions.length, suffix: 'transaksi', color: '#1890ff', border: 'border-l-blue-500' },
-            { title: 'Total Penjualan', value: data.totalRevenue, prefix: 'Rp ', color: '#52c41a', border: 'border-l-green-500', isCurrency: true },
-            { title: 'Total Keuntungan', value: data.totalProfit, prefix: 'Rp ', color: '#faad14', border: 'border-l-orange-500', isCurrency: true },
-            { title: 'Barang Satuan Terjual', value: data.soldItems.unitItems, suffix: 'unit', color: '#722ed1', border: 'border-l-purple-500' },
-            { title: 'Barang Timbang Terjual', value: data.soldItems.weightedLineItems, suffix: `item / ${formatWeightTotal(data.soldItems.totalWeightBase)}`, color: '#0f766e', border: 'border-l-teal-500' },
-            { title: 'Rata-rata Transaksi', value: data.averageTransaction, prefix: 'Rp ', color: '#eb2f96', border: 'border-l-pink-500', isCurrency: true },
+            { title: t('report.totalTransactions'), value: data.transactions.length, suffix: t('report.transaction'), color: '#1890ff', border: 'border-l-blue-500' },
+            { title: t('report.salesTotal'), value: data.totalRevenue, prefix: 'Rp ', color: '#52c41a', border: 'border-l-green-500', isCurrency: true },
+            { title: t('report.profit'), value: data.totalProfit, prefix: 'Rp ', color: '#faad14', border: 'border-l-orange-500', isCurrency: true },
+            { title: t('report.unitItemsSold'), value: data.soldItems.unitItems, suffix: t('report.unitSuffix'), color: '#722ed1', border: 'border-l-purple-500' },
+            { title: t('report.weightedItemsSold'), value: data.soldItems.weightedLineItems, suffix: `${t('report.itemSuffix')} / ${formatWeightTotal(data.soldItems.totalWeightBase)}`, color: '#0f766e', border: 'border-l-teal-500' },
+            { title: t('report.averageTransaction'), value: data.averageTransaction, prefix: 'Rp ', color: '#eb2f96', border: 'border-l-pink-500', isCurrency: true },
           ].map((stat, idx) => (
             <Card key={idx} className={`shadow-sm border-none border-l-4 ${stat.border} rounded-xl overflow-hidden`}>
               <Statistic
@@ -404,7 +407,7 @@ export default function SalesReport() {
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4 ml-1">
             <BarChartOutlined className="text-orange-500" />
-            <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] uppercase">BREAKDOWN PRODUK TERLARIS (TOP 10)</div>
+            <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] uppercase">{t('report.topProducts')}</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <TopProductsTable products={data.topProducts} />
@@ -416,7 +419,7 @@ export default function SalesReport() {
       <div>
         <div className="flex items-center gap-2 mb-4 ml-1">
           <ShoppingCartOutlined className="text-blue-500" />
-          <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] uppercase">DAFTAR TRANSAKSI</div>
+          <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] uppercase">{t('report.transactionList')}</div>
         </div>
 
         {isMobile ? (
@@ -436,7 +439,7 @@ export default function SalesReport() {
 
       {data && data.transactions.length === 0 && !isLoading && (
         <div className="bg-white py-16 rounded-xl border border-gray-100 shadow-sm text-center">
-          <p className="text-gray-400 italic">Tidak ada data transaksi untuk filter ini</p>
+          <p className="text-gray-400 italic">{t('report.noDataForFilter')}</p>
         </div>
       )}
     </div>

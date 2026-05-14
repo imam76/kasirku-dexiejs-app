@@ -5,6 +5,7 @@ import { Download, Upload as UploadIcon, Database, AlertTriangle } from 'lucide-
 import { backupDatabase, restoreDatabase } from '@/utils/backupRestore'
 import { useNavigate } from '@tanstack/react-router'
 import PrinterSettingsCard from '@/components/PrinterSettingsCard'
+import { useI18n } from '@/hooks/useI18n'
 
 const { Paragraph } = Typography
 
@@ -15,16 +16,17 @@ export const Route = createLazyFileRoute('/settings')({
 function Settings() {
   const { message, modal } = App.useApp()
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [loading, setLoading] = useState(false)
 
   const handleBackup = async () => {
     try {
       setLoading(true)
       await backupDatabase()
-      message.success('Backup database berhasil diunduh')
+      message.success(t('settings.backupSuccess'))
     } catch (error) {
       console.error(error)
-      message.error('Gagal melakukan backup database')
+      message.error(t('settings.backupFailed'))
     } finally {
       setLoading(false)
     }
@@ -32,35 +34,35 @@ function Settings() {
 
   const handleRestore = async (file: File) => {
     modal.confirm({
-      title: 'Konfirmasi Restore Database',
+      title: t('settings.restoreConfirmTitle'),
       icon: <AlertTriangle className="text-red-500 w-6 h-6 mr-2" />,
       content: (
         <div className="space-y-2">
-          <p>Apakah Anda yakin ingin mengembalikan database dari file ini?</p>
+          <p>{t('settings.restoreConfirmQuestion')}</p>
           <Alert
-            message="Peringatan"
-            description="Tindakan ini akan menghapus semua data saat ini dan menggantinya dengan data dari file backup. Tindakan ini tidak dapat dibatalkan."
+            message={t('settings.warning')}
+            description={t('settings.restoreWarningDescription')}
             type="warning"
             showIcon
             className="mt-2"
           />
         </div>
       ),
-      okText: 'Ya, Restore',
+      okText: t('settings.restoreOk'),
       okType: 'danger',
-      cancelText: 'Batal',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           setLoading(true)
           await restoreDatabase(file)
-          message.success('Database berhasil dipulihkan')
+          message.success(t('settings.restoreSuccess'))
           // Optional: Reload page to ensure all states are refreshed
           setTimeout(() => {
             window.location.reload()
           }, 1500)
         } catch (error) {
           console.error(error)
-          message.error('Gagal memulihkan database. Pastikan file valid.')
+          message.error(t('settings.restoreFailed'))
         } finally {
           setLoading(false)
         }
@@ -74,10 +76,10 @@ function Settings() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Database className="w-8 h-8 text-blue-600" />
-          Pengaturan Aplikasi
+          {t('settings.title')}
         </h1>
         <p className="text-gray-500 mt-2">
-          Kelola printer, backup, dan restore data aplikasi Anda
+          {t('settings.subtitle')}
         </p>
       </div>
 
@@ -88,12 +90,12 @@ function Settings() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Backup Section */}
         <Card 
-          title={<div className="flex items-center gap-2"><Download className="w-5 h-5" /> Backup Data</div>}
+          title={<div className="flex items-center gap-2"><Download className="w-5 h-5" /> {t('settings.backupTitle')}</div>}
           className="shadow-md hover:shadow-lg transition-shadow"
         >
           <div className="space-y-4">
             <Paragraph className="text-gray-600">
-              Unduh salinan lengkap database Anda saat ini. File backup akan disimpan dalam format JSON yang dapat digunakan untuk pemulihan di kemudian hari.
+              {t('settings.backupDescription')}
             </Paragraph>
             <Button 
               type="primary" 
@@ -103,21 +105,21 @@ function Settings() {
               size="large"
               block
             >
-              Download Backup
+              {t('settings.backupButton')}
             </Button>
           </div>
         </Card>
 
         {/* Restore Section */}
         <Card 
-          title={<div className="flex items-center gap-2"><UploadIcon className="w-5 h-5" /> Restore Data</div>}
+          title={<div className="flex items-center gap-2"><UploadIcon className="w-5 h-5" /> {t('settings.restoreTitle')}</div>}
           className="shadow-md hover:shadow-lg transition-shadow"
         >
           <div className="space-y-4">
             <Paragraph className="text-gray-600">
-              Pulihkan data dari file backup sebelumnya.
+              {t('settings.restoreDescription')}
               <span className="font-bold text-red-500 block mt-1">
-                Perhatian: Data saat ini akan ditimpa!
+                {t('settings.restoreWarningShort')}
               </span>
             </Paragraph>
             <Upload
@@ -133,7 +135,7 @@ function Settings() {
                 danger
                 block
               >
-                Upload File Backup
+                {t('settings.restoreButton')}
               </Button>
             </Upload>
           </div>
@@ -142,7 +144,7 @@ function Settings() {
       
       <div className="mt-8 text-center">
         <Button onClick={() => navigate({ to: '/' })} type="text">
-          Kembali ke Dashboard
+          {t('settings.backToDashboard')}
         </Button>
       </div>
     </div>

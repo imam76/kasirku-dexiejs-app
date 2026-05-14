@@ -3,6 +3,7 @@ import { App, Card, Button, DatePicker, Space, Table, Statistic, Empty, Tag, Sel
 import { FileTextOutlined, FilterOutlined } from '@ant-design/icons';
 import dayjs from '@/lib/dayjs';
 import { usePurchaseReport } from '@/hooks/useReports';
+import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency } from '@/utils/formatters';
 import { Loading } from '@/components/Loading';
 import { exportCsv, type ExportTarget } from '@/utils/export';
@@ -11,6 +12,7 @@ import ExportActions from '@/components/ExportActions';
 
 export default function PurchaseReport() {
   const { message } = App.useApp();
+  const { t } = useI18n();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
@@ -88,10 +90,10 @@ export default function PurchaseReport() {
         filename: `laporan-pembelian-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
         target,
         rows: [
-          ['Laporan Pembelian Stok', dayjs().tz().format('YYYY-MM-DD HH:mm:ss')],
-          [`Periode: ${startDate || 'Semua'} s/d ${endDate || 'Semua'}`],
+          [t('report.purchase.title'), dayjs().tz().format('YYYY-MM-DD HH:mm:ss')],
+          [`${t('report.periodWithColon')} ${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`],
           [],
-          ['Nama Produk', 'SKU', 'Tanggal', 'Qty', 'Harga Satuan', 'Total Biaya'],
+          [t('report.productName'), 'SKU', t('report.date'), t('report.qty'), t('report.unitPrice'), t('report.totalCost')],
           ...data.purchases.map((purchase) => [
             purchase.product_name,
             purchase.sku,
@@ -101,24 +103,24 @@ export default function PurchaseReport() {
             purchase.total_cost,
           ]),
           [],
-          ['Ringkasan'],
-          ['Total Item Dibeli', data.totalQuantity],
-          ['Total Biaya', data.totalCost],
-          ['Rata-rata Harga Satuan', data.averageCostPerUnit],
-          ['Produk Unik', data.uniqueProducts],
+          [t('report.summary')],
+          [t('report.totalItemsBought'), data.totalQuantity],
+          [t('report.totalCost'), data.totalCost],
+          [t('report.averageUnitPrice'), data.averageCostPerUnit],
+          [t('report.uniqueProducts'), data.uniqueProducts],
         ],
       });
       if (!exported) return;
-      message.success('Export laporan pembelian berhasil.');
+      message.success(t('report.purchase.exportSuccess'));
     } catch (error) {
       console.error('Failed to export purchase report:', error);
-      message.error('Gagal export laporan pembelian.');
+      message.error(t('report.purchase.exportFailed'));
     }
   };
 
   const columns = [
     {
-      title: 'Nama Produk',
+      title: t('report.productName'),
       dataIndex: 'product_name',
       key: 'product_name',
       width: 150,
@@ -131,7 +133,7 @@ export default function PurchaseReport() {
       render: (sku: string) => <Tag>{sku || '-'}</Tag>,
     },
     {
-      title: 'Tanggal',
+      title: t('report.date'),
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
@@ -145,14 +147,14 @@ export default function PurchaseReport() {
       render: (qty: number) => <Tag color="blue">{qty}</Tag>,
     },
     {
-      title: 'Harga Satuan',
+      title: t('report.unitPrice'),
       dataIndex: 'cost_per_unit',
       key: 'cost_per_unit',
       width: 120,
       render: (price: number) => formatCurrency(price),
     },
     {
-      title: 'Total Biaya',
+      title: t('report.totalCost'),
       dataIndex: 'total_cost',
       key: 'total_cost',
       width: 130,
@@ -168,7 +170,7 @@ export default function PurchaseReport() {
     return (
       <div className="p-6">
         <Empty
-          description={`Terjadi kesalahan: ${error instanceof Error ? error.message : 'Unknown error'}`}
+          description={t('report.withDateError', { message: error instanceof Error ? error.message : t('common.unknownError') })}
         />
       </div>
     );
@@ -176,28 +178,28 @@ export default function PurchaseReport() {
 
   return (
     <div className="p-4 sm:p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Laporan Pembelian Stok</h2>
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">{t('report.purchase.title')}</h2>
 
       {/* Filter Section */}
       <Card className="mb-6">
         <Space orientation="vertical" className="w-full" size="large">
           <Space wrap>
             <FilterOutlined className="text-gray-600" />
-            <span className="font-semibold">Filter Tanggal:</span>
+            <span className="font-semibold">{t('report.dateFilter')}</span>
             <Select
-              placeholder="Pilih Periode"
+              placeholder={t('report.periodPlaceholder')}
               style={{ width: 150 }}
               value={selectedHelper}
               onChange={handleHelperChange}
               allowClear
               options={[
-                { value: 'today', label: 'Hari Ini' },
-                { value: 'yesterday', label: 'Kemarin' },
-                { value: 'this-week', label: 'Minggu Ini' },
-                { value: 'last-week', label: 'Minggu Lalu' },
-                { value: 'this-month', label: 'Bulan Ini' },
-                { value: 'last-month', label: 'Bulan Lalu' },
-                { value: 'custom', label: 'Custom Range' },
+                { value: 'today', label: t('report.todayTitle') },
+                { value: 'yesterday', label: t('report.yesterday') },
+                { value: 'this-week', label: t('report.thisWeekTitle') },
+                { value: 'last-week', label: t('report.lastWeekTitle') },
+                { value: 'this-month', label: t('report.thisMonthTitle') },
+                { value: 'last-month', label: t('report.lastMonthTitle') },
+                { value: 'custom', label: t('report.customRange') },
               ]}
             />
             {selectedHelper === 'custom' && (
@@ -205,10 +207,10 @@ export default function PurchaseReport() {
                 value={dateRange}
                 onChange={handleDateRangeChange}
                 format="YYYY-MM-DD"
-                placeholder={['Mulai', 'Hingga']}
+                placeholder={[t('common.from'), t('common.to')]}
               />
             )}
-            <Button onClick={handleReset}>Reset</Button>
+            <Button onClick={handleReset}>{t('common.reset')}</Button>
             <ExportActions
               disabled={!data || data.purchases.length === 0}
               formats={[
@@ -229,15 +231,15 @@ export default function PurchaseReport() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <Card>
             <Statistic
-              title="Total Item Dibeli"
+              title={t('report.totalItemsBought')}
               value={data.totalQuantity}
-              suffix="item"
+              suffix={t('report.itemSuffix')}
               valueStyle={{ color: '#1890ff' }}
             />
           </Card>
           <Card>
             <Statistic
-              title="Total Biaya"
+              title={t('report.totalCost')}
               value={data.totalCost}
               prefix="Rp "
               precision={2}
@@ -246,7 +248,7 @@ export default function PurchaseReport() {
           </Card>
           <Card>
             <Statistic
-              title="Rata-rata Harga Satuan"
+              title={t('report.averageUnitPrice')}
               value={data.averageCostPerUnit}
               prefix="Rp "
               precision={2}
@@ -255,17 +257,17 @@ export default function PurchaseReport() {
           </Card>
           <Card>
             <Statistic
-              title="Produk Unik"
+              title={t('report.uniqueProducts')}
               value={data.uniqueProducts}
-              suffix="produk"
+              suffix={t('report.productSuffix')}
               valueStyle={{ color: '#722ed1' }}
             />
           </Card>
           <Card>
             <Statistic
-              title="Total Pembelian"
+              title={t('report.totalPurchase')}
               value={data.purchases.length}
-              suffix="kali"
+              suffix={t('report.timesSuffix')}
               valueStyle={{ color: '#eb2f96' }}
             />
           </Card>
@@ -284,13 +286,13 @@ export default function PurchaseReport() {
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
-              showTotal: (total) => `Total ${total} pembelian`,
+              showTotal: (total) => `${t('common.total')} ${total} ${t('report.purchaseCount')}`,
             }}
             scroll={{ x: 768 }}
           />
         </Card>
       ) : (
-        <Empty description="Tidak ada data pembelian untuk periode ini" />
+        <Empty description={t('report.noPurchasesForPeriod')} />
       )}
     </div>
   );

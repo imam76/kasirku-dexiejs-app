@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { stockSchema, type StockFormData } from '@/lib/validations/stock';
+import { createStockSchema, type StockFormData } from '@/lib/validations/stock';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
@@ -9,13 +9,20 @@ import { recordStockPurchase } from '@/services/stockPurchaseService';
 import type { Product, ProductUnit } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
+import { useI18n } from '@/hooks/useI18n';
 
 export type { StockFormData };
+
+type ProductUpsertData = Omit<Product, 'id' | 'created_at' | 'updated_at' | 'stock'> & {
+  stock?: number;
+};
 
 export const useStockManagement = () => {
   const queryClient = useQueryClient();
   const { modal, message } = App.useApp();
+  const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const stockSchema = useMemo(() => createStockSchema(t), [t]);
   
   const form = useForm<StockFormData>({
     resolver: zodResolver(stockSchema),
@@ -66,7 +73,7 @@ export const useStockManagement = () => {
         unit_mappings: productData.unit_mappings || [],
       });
 
-      const cleanData: any = {
+      const cleanData: ProductUpsertData = {
         name: productData.name,
         category: productData.category || 'non_consumable',
         purchase_unit: productData.purchase_unit || 'pcs',
@@ -111,7 +118,7 @@ export const useStockManagement = () => {
               quantity: purchase_quantity,
               costPerUnit: cleanData.purchase_price,
               totalCost,
-              description: `Beli Stok: ${cleanData.name} (${purchase_quantity} pcs)`,
+              description: t('stock.purchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
               createdAt: now,
             });
           }
@@ -138,7 +145,7 @@ export const useStockManagement = () => {
               quantity: purchase_quantity,
               costPerUnit: cleanData.purchase_price,
               totalCost,
-              description: `Beli Stok Awal: ${cleanData.name} (${purchase_quantity} pcs)`,
+              description: t('stock.initialPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
               createdAt: now,
             });
           }
@@ -227,7 +234,7 @@ export const useStockManagement = () => {
                 quantity: purchase_quantity,
                 costPerUnit: cleanData.purchase_price,
                 totalCost,
-                description: `Beli Stok (Import): ${cleanData.name} (${purchase_quantity} pcs)`,
+                description: t('stock.importPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
                 createdAt: now,
               });
             }
@@ -251,7 +258,7 @@ export const useStockManagement = () => {
                 quantity: purchase_quantity,
                 costPerUnit: cleanData.purchase_price,
                 totalCost,
-                description: `Beli Stok Awal (Import): ${cleanData.name} (${purchase_quantity} pcs)`,
+                description: t('stock.importInitialPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
                 createdAt: now,
               });
             }
@@ -262,7 +269,7 @@ export const useStockManagement = () => {
     onSuccess: (_data, items) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
-      message.success(`Import CSV selesai (${items.length} baris).`);
+      message.success(t('stock.importSuccess', { count: items.length }));
     },
   });
 
@@ -321,10 +328,10 @@ export const useStockManagement = () => {
 
   const handleDelete = (id: string) => {
     modal.confirm({
-      title: 'Hapus Produk',
-      content: 'Apakah Anda yakin ingin menghapus produk ini?',
-      okText: 'Ya, Hapus',
-      cancelText: 'Batal',
+      title: t('stock.deleteTitle'),
+      content: t('stock.deleteContent'),
+      okText: t('stock.deleteOk'),
+      cancelText: t('stock.form.cancel'),
       okType: 'danger',
       onOk: async () => {
         await deleteMutation.mutateAsync(id);

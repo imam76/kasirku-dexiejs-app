@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic, Select, Row, Col, Divider } from 'antd';
 import { useFinance } from '@/hooks/useFinance';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useI18n } from '@/hooks/useI18n';
+import { getFinanceCategoryLabel } from '@/i18n/finance';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import {
   ArrowUpCircle,
@@ -27,6 +29,7 @@ const { Option } = Select;
 
 export default function FinanceManagement() {
   const { balance, transactions, isLoading, addTransaction, isAdding, recalculate, isRecalculating } = useFinance();
+  const { t } = useI18n();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<FinanceTransactionType>('INCOME');
   const [form] = Form.useForm();
@@ -62,7 +65,7 @@ export default function FinanceManagement() {
 
     // Set default category based on type
     if (type === 'OPENING_BALANCE') {
-      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPENING_BALANCE, description: 'Saldo awal kas toko' });
+      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPENING_BALANCE, description: t('finance.defaultOpeningDescription') });
     } else if (type === 'INCOME') {
       form.setFieldsValue({ category: FINANCE_CATEGORIES.OTHER, description: '' });
     } else if (type === 'EXPENSE') {
@@ -77,16 +80,16 @@ export default function FinanceManagement() {
       return {
         color: 'red',
         icon: <ArrowDownCircle size={14} className="text-red-500" />,
-        label: 'Pengeluaran',
+        label: t('finance.expense'),
       };
     }
 
     if (businessType === 'OPENING_BALANCE') {
       const label =
-        transaction.category === FINANCE_CATEGORIES.CAPITAL_ADDITION ? 'Tambah Modal' :
-          transaction.category === FINANCE_CATEGORIES.DEPOSIT ? 'Top Up Kas' :
-            transaction.category === FINANCE_CATEGORIES.LOAN ? 'Pinjaman' :
-              'Saldo Awal';
+        transaction.category === FINANCE_CATEGORIES.CAPITAL_ADDITION ? t('finance.capitalAddition') :
+          transaction.category === FINANCE_CATEGORIES.DEPOSIT ? t('finance.cashTopUp') :
+            transaction.category === FINANCE_CATEGORIES.LOAN ? t('finance.loan') :
+              t('finance.openingBalance');
 
       return {
         color: 'blue',
@@ -98,32 +101,32 @@ export default function FinanceManagement() {
     return {
       color: 'green',
       icon: <ArrowUpCircle size={14} className="text-green-500" />,
-      label: 'Pemasukan',
+      label: t('finance.income'),
     };
   };
 
   const columns = [
     {
-      title: 'Tanggal',
+      title: t('finance.date'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (text: string) => formatDate(text),
       width: 180,
     },
     {
-      title: 'Kategori',
+      title: t('finance.category'),
       dataIndex: 'category',
       key: 'category',
-      render: (cat: string) => <Tag color="blue">{cat}</Tag>,
+      render: (cat: string) => <Tag color="blue">{getFinanceCategoryLabel(cat, t)}</Tag>,
       width: 120,
     },
     {
-      title: 'Keterangan',
+      title: t('finance.description'),
       dataIndex: 'description',
       key: 'description',
     },
     {
-      title: 'Tipe',
+      title: t('finance.type'),
       dataIndex: 'type',
       key: 'type',
       render: (_type: FinanceTransactionType, record: FinanceTransaction) => {
@@ -141,7 +144,7 @@ export default function FinanceManagement() {
       width: 140,
     },
     {
-      title: 'Jumlah',
+      title: t('finance.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number, record: FinanceTransaction) => (
@@ -157,8 +160,8 @@ export default function FinanceManagement() {
     <div className="p-3 sm:p-4 md:p-6 space-y-4">
       <div className="flex flex-col flex-wrap md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <Title level={2} style={{ margin: 0 }}>Manajemen Keuangan</Title>
-          <Text type="secondary">Pantau arus kas, pemasukan, dan pengeluaran toko</Text>
+          <Title level={2} style={{ margin: 0 }}>{t('finance.title')}</Title>
+          <Text type="secondary">{t('finance.subtitle')}</Text>
         </div>
         {!isMobile &&
           <div className="flex flex-wrap gap-3">
@@ -167,13 +170,13 @@ export default function FinanceManagement() {
               onClick={() => recalculate()}
               loading={isRecalculating}
             >
-              Hitung Ulang
+              {t('finance.recalculate')}
             </Button>
             <Button
               icon={<Banknote size={16} />}
               onClick={() => openModal('OPENING_BALANCE')}
             >
-              Saldo / Modal
+              {t('finance.balanceCapital')}
             </Button>
             <Button
               type="primary"
@@ -181,7 +184,7 @@ export default function FinanceManagement() {
               onClick={() => openModal('INCOME')}
               className="bg-green-600 hover:bg-green-700 border-none"
             >
-              Pemasukan
+              {t('finance.income')}
             </Button>
             <Button
               type="primary"
@@ -189,7 +192,7 @@ export default function FinanceManagement() {
               icon={<Minus size={16} />}
               onClick={() => openModal('EXPENSE')}
             >
-              Pengeluaran
+              {t('finance.expense')}
             </Button>
           </div>
         }
@@ -199,7 +202,7 @@ export default function FinanceManagement() {
         <Col xs={0} md={24}>
           <Card className="shadow-sm border-l-4 border-l-blue-500">
             <Statistic
-              title="Saldo Awal & Modal"
+              title={t('finance.openingBalanceAndCapital')}
               value={summary.opening}
               formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
               prefix={<Banknote size={20} className="text-blue-500 mr-2" />}
@@ -223,7 +226,7 @@ export default function FinanceManagement() {
             />
 
             <Text style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.5px' }}>
-              SALDO & MODAL
+              {t('finance.balanceAndCapitalMobile')}
             </Text>
             <div style={{ fontSize: 28, fontWeight: 700, color: '#fff', margin: '4px 0 14px' }}>
               {formatCurrency(summary.opening)}
@@ -231,7 +234,7 @@ export default function FinanceManagement() {
 
             <Divider style={{ borderColor: 'rgba(255,255,255,0.25)', margin: '0 0 14px' }} />
 
-            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>UANG DI TANGAN (NET)</Text>
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>{t('finance.cashOnHandNet')}</Text>
             <div style={{ fontSize: 20, fontWeight: 600, color: '#fff', marginTop: 2 }}>
               {formatCurrency(balance)}
             </div>
@@ -246,7 +249,7 @@ export default function FinanceManagement() {
         <Col xs={12} sm={12} md={8}>
           <Card className="shadow-sm border-l-4 border-l-green-500">
             <Statistic
-              title="Total Pemasukan"
+              title={t('finance.totalIncome')}
               value={summary.income}
               formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
               prefix={<TrendingUp size={20} className="text-green-500 mr-2" />}
@@ -257,7 +260,7 @@ export default function FinanceManagement() {
         <Col xs={12} sm={12} md={8}>
           <Card className="shadow-sm border-l-4 border-l-red-500">
             <Statistic
-              title="Total Pengeluaran"
+              title={t('finance.totalExpense')}
               value={summary.expense}
               formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
               prefix={<TrendingDown size={20} className="text-red-500 mr-2" />}
@@ -268,7 +271,7 @@ export default function FinanceManagement() {
         <Col xs={0} md={8}>
           <Card className="shadow-sm border-l-4 border-l-indigo-600 bg-indigo-50">
             <Statistic
-              title="Uang di Tangan (Net)"
+              title={t('finance.cashOnHandNetTitle')}
               value={balance}
               formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
               prefix={<Wallet size={20} className="text-indigo-600 mr-2" />}
@@ -288,7 +291,7 @@ export default function FinanceManagement() {
               className="h-16 flex flex-col items-center justify-center w-full"
             >
               <RefreshCw size={18} />
-              <span className="text-[10px] mt-1">Hitung Ulang</span>
+              <span className="text-[10px] mt-1">{t('finance.recalculate')}</span>
             </Button>
           </Col>
 
@@ -298,7 +301,7 @@ export default function FinanceManagement() {
               className="h-16 flex flex-col items-center justify-center w-full"
             >
               <Banknote size={18} />
-              <span className="text-[10px] mt-1">Saldo/Modal</span>
+              <span className="text-[10px] mt-1">{t('finance.balanceCapitalShort')}</span>
             </Button>
           </Col>
 
@@ -309,7 +312,7 @@ export default function FinanceManagement() {
               className="h-16 flex flex-col items-center justify-center w-full bg-green-600 hover:bg-green-700 border-none"
             >
               <Plus size={18} />
-              <span className="text-[10px] mt-1">Pemasukan</span>
+              <span className="text-[10px] mt-1">{t('finance.income')}</span>
             </Button>
           </Col>
 
@@ -321,7 +324,7 @@ export default function FinanceManagement() {
               className="h-16 flex flex-col items-center justify-center w-full"
             >
               <Minus size={18} />
-              <span className="text-[10px] mt-1">Pengeluaran</span>
+              <span className="text-[10px] mt-1">{t('finance.expense')}</span>
             </Button>
           </Col>
         </Row>
@@ -331,7 +334,7 @@ export default function FinanceManagement() {
         title={
           <div className="flex items-center gap-2">
             <LayoutDashboard size={18} />
-            <span>Riwayat Transaksi Keuangan</span>
+            <span>{t('finance.historyTitle')}</span>
           </div>
         }
         className="shadow-sm"
@@ -342,7 +345,7 @@ export default function FinanceManagement() {
           {isLoading ? (
             <div className="flex flex-col items-center justify-center p-8 gap-3">
               <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-              <p className="text-gray-500 text-sm">Memuat data...</p>
+              <p className="text-gray-500 text-sm">{t('finance.loadingData')}</p>
             </div>
           ) : transactions.length > 0 ? (
             <>
@@ -361,7 +364,7 @@ export default function FinanceManagement() {
                           {formatDate(transaction.created_at)}
                         </span>
                         <Tag color="blue" className="w-fit m-0 text-[10px] px-1.5 py-0">
-                          {transaction.category}
+                          {getFinanceCategoryLabel(transaction.category, t)}
                         </Tag>
                       </div>
                       <div className="text-right">
@@ -384,13 +387,13 @@ export default function FinanceManagement() {
               })}
               {transactions.length > 10 && (
                 <div className="text-center py-2">
-                  <Text type="secondary" className="text-xs">Lihat selengkapnya di desktop</Text>
+                  <Text type="secondary" className="text-xs">{t('finance.viewMoreDesktop')}</Text>
                 </div>
               )}
             </>
           ) : (
             <div className="text-center py-8 text-gray-400 text-sm">
-              Belum ada riwayat transaksi
+              {t('finance.emptyHistory')}
             </div>
           )}
           </div>
@@ -408,9 +411,9 @@ export default function FinanceManagement() {
 
       <Modal
         title={
-          modalType === 'OPENING_BALANCE' ? 'Tambah Saldo / Modal' :
-            modalType === 'INCOME' ? 'Tambah Pemasukan Manual' :
-              'Catat Pengeluaran'
+          modalType === 'OPENING_BALANCE' ? t('finance.addBalanceCapital') :
+            modalType === 'INCOME' ? t('finance.addManualIncome') :
+              t('finance.recordExpense')
         }
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
@@ -425,10 +428,10 @@ export default function FinanceManagement() {
         >
           <Form.Item
             name="amount"
-            label="Jumlah"
+            label={t('finance.amount')}
             rules={[
-              { required: true, message: 'Harap masukkan jumlah' },
-              { type: 'number', min: 1, message: 'Jumlah harus lebih dari 0' }
+              { required: true, message: t('finance.amountRequired') },
+              { type: 'number', min: 1, message: t('finance.amountMin') }
             ]}
           >
             <InputNumber
@@ -444,32 +447,32 @@ export default function FinanceManagement() {
 
           <Form.Item
             name="category"
-            label="Kategori"
-            rules={[{ required: true, message: 'Harap pilih/isi kategori' }]}
+            label={t('finance.category')}
+            rules={[{ required: true, message: t('finance.categoryRequired') }]}
           >
             {modalType === 'OPENING_BALANCE' ? (
-              <Select showSearch placeholder="Pilih sumber saldo/modal">
-                <Option value={FINANCE_CATEGORIES.OPENING_BALANCE}>Saldo Awal</Option>
-                <Option value={FINANCE_CATEGORIES.CAPITAL_ADDITION}>Tambahan Modal</Option>
-                <Option value={FINANCE_CATEGORIES.DEPOSIT}>Deposit / Top Up Kas</Option>
-                <Option value={FINANCE_CATEGORIES.LOAN}>Pinjaman</Option>
+              <Select showSearch placeholder={t('finance.balanceSourcePlaceholder')}>
+                <Option value={FINANCE_CATEGORIES.OPENING_BALANCE}>{t('finance.category.SALDO_AWAL')}</Option>
+                <Option value={FINANCE_CATEGORIES.CAPITAL_ADDITION}>{t('finance.category.TAMBAHAN_MODAL')}</Option>
+                <Option value={FINANCE_CATEGORIES.DEPOSIT}>{t('finance.category.DEPOSIT')}</Option>
+                <Option value={FINANCE_CATEGORIES.LOAN}>{t('finance.category.PINJAMAN')}</Option>
               </Select>
             ) : (
-              <Select showSearch allowClear placeholder="Pilih atau ketik kategori baru">
+              <Select showSearch allowClear placeholder={t('finance.categoryPlaceholder')}>
                 {modalType === 'INCOME' ? (
                   <>
-                    <Option value={FINANCE_CATEGORIES.OTHER}>Lainnya</Option>
-                    <Option value={FINANCE_CATEGORIES.SERVICE}>Biaya Layanan</Option>
-                    <Option value={FINANCE_CATEGORIES.BONUS_GRANT}>Bonus/Hibah</Option>
+                    <Option value={FINANCE_CATEGORIES.OTHER}>{t('finance.category.LAINNYA')}</Option>
+                    <Option value={FINANCE_CATEGORIES.SERVICE}>{t('finance.category.LAYANAN')}</Option>
+                    <Option value={FINANCE_CATEGORIES.BONUS_GRANT}>{t('finance.category.BONUS')}</Option>
                   </>
                 ) : (
                   <>
-                    <Option value={FINANCE_CATEGORIES.STOCK_PURCHASE}>Pembelian Stok (Modal Barang)</Option>
-                    <Option value={FINANCE_CATEGORIES.OPERATIONAL}>Operasional (Listrik, Sewa, dll)</Option>
-                    <Option value="GAJI">Gaji Karyawan</Option>
-                    <Option value="PERLENGKAPAN">Perlengkapan Toko</Option>
-                    <Option value="MAKAN">Makan/Minum</Option>
-                    <Option value="TRANSPORT">Transportasi</Option>
+                    <Option value={FINANCE_CATEGORIES.STOCK_PURCHASE}>{t('finance.category.stockPurchaseOption')}</Option>
+                    <Option value={FINANCE_CATEGORIES.OPERATIONAL}>{t('finance.category.operationalOption')}</Option>
+                    <Option value="GAJI">{t('finance.category.GAJI')}</Option>
+                    <Option value="PERLENGKAPAN">{t('finance.category.PERLENGKAPAN')}</Option>
+                    <Option value="MAKAN">{t('finance.category.MAKAN')}</Option>
+                    <Option value="TRANSPORT">{t('finance.category.TRANSPORT')}</Option>
                   </>
                 )}
               </Select>
@@ -478,14 +481,14 @@ export default function FinanceManagement() {
 
           <Form.Item
             name="description"
-            label="Keterangan"
-            rules={[{ required: true, message: 'Harap masukkan keterangan' }]}
+            label={t('finance.description')}
+            rules={[{ required: true, message: t('finance.descriptionRequired') }]}
           >
             <Input.TextArea
               placeholder={
-                modalType === 'OPENING_BALANCE' ? 'Contoh: Tambahan modal dari pemilik' :
-                  modalType === 'INCOME' ? 'Contoh: Biaya layanan pelanggan' :
-                    'Contoh: Pembayaran listrik bulan ini'
+                modalType === 'OPENING_BALANCE' ? t('finance.descriptionOpeningPlaceholder') :
+                  modalType === 'INCOME' ? t('finance.descriptionIncomePlaceholder') :
+                    t('finance.descriptionExpensePlaceholder')
               }
               rows={3}
             />
@@ -493,7 +496,7 @@ export default function FinanceManagement() {
 
           <div className="flex justify-end gap-2 mt-6">
             <Button onClick={() => setIsModalOpen(false)}>
-              Batal
+              {t('stock.form.cancel')}
             </Button>
             <Button
               type="primary"
@@ -502,7 +505,7 @@ export default function FinanceManagement() {
               danger={modalType === 'EXPENSE'}
               className={modalType === 'INCOME' ? 'bg-green-600 hover:bg-green-700 border-none' : ''}
             >
-              Simpan Transaksi
+              {t('finance.saveTransaction')}
             </Button>
           </div>
         </Form>

@@ -5,7 +5,9 @@ import { Edit2, Plus, RefreshCcw, Scale, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import type { UnitConversion, UnitDefinition, UnitDefinitionType } from '@/types';
+import type { TranslationKey } from '@/i18n/messages';
 import { setConversionRegistry } from '@/utils/pricing';
+import { useI18n } from '@/hooks/useI18n';
 import {
   DEFAULT_CONVERSIONS,
   DEFAULT_UNITS,
@@ -33,17 +35,17 @@ type ConversionFormValues = {
   ratio: number;
 };
 
-const unitTypeLabels: Record<UnitDefinitionType, string> = {
-  measurement: 'Unit Ukur',
-  count: 'Satuan Hitung',
-  package: 'Kemasan',
-  time: 'Waktu',
+const unitTypeLabelKeys: Record<UnitDefinitionType, TranslationKey> = {
+  measurement: 'units.type.measurement',
+  count: 'units.type.count',
+  package: 'units.type.package',
+  time: 'units.type.time',
 };
 
-const conversionTypeLabels: Record<UnitConversionType, string> = {
-  measurement: 'Unit Ukur',
-  package: 'Kemasan',
-  time: 'Waktu',
+const conversionTypeLabelKeys: Record<UnitConversionType, TranslationKey> = {
+  measurement: 'units.type.measurement',
+  package: 'units.type.package',
+  time: 'units.type.time',
 };
 
 const unitTypeColors: Record<UnitDefinitionType, string> = {
@@ -103,6 +105,7 @@ const getDefaultFlagsForType = (type: UnitDefinitionType) => ({
 export default function UnitManagement() {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
+  const { t } = useI18n();
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
   const [isConversionModalOpen, setIsConversionModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<UnitDefinition | null>(null);
@@ -167,7 +170,7 @@ export default function UnitManagement() {
       const now = new Date().toISOString();
 
       if (!id) {
-        throw new Error('Nama satuan harus diisi.');
+        throw new Error(t('units.validation.nameRequired'));
       }
 
       const record: UnitDefinition = {
@@ -195,18 +198,18 @@ export default function UnitManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['units'] });
-      message.success(editingUnit ? 'Satuan berhasil diperbarui' : 'Satuan berhasil ditambahkan');
+      message.success(editingUnit ? t('units.success.unitUpdated') : t('units.success.unitAdded'));
       setIsUnitModalOpen(false);
       setEditingUnit(null);
       unitForm.resetFields();
     },
     onError: (error: unknown) => {
       if (error instanceof Error && error.name === 'ConstraintError') {
-        message.error('Satuan ini sudah ada');
+        message.error(t('units.validation.duplicateUnit'));
         return;
       }
 
-      message.error(error instanceof Error ? error.message : 'Gagal menyimpan satuan');
+      message.error(error instanceof Error ? error.message : t('units.validation.saveUnitFailed'));
     },
   });
 
@@ -214,7 +217,7 @@ export default function UnitManagement() {
     mutationFn: async (unitId: string) => {
       const unit = await db.units.get(unitId);
       if (unit?.isPreset) {
-        throw new Error('Satuan bawaan tidak bisa dihapus.');
+        throw new Error(t('units.validation.presetDeleteBlocked'));
       }
 
       const [fromCount, toCount, products] = await Promise.all([
@@ -231,17 +234,17 @@ export default function UnitManagement() {
       );
 
       if (fromCount > 0 || toCount > 0 || usedByProduct) {
-        throw new Error('Satuan masih digunakan oleh produk atau konversi.');
+        throw new Error(t('units.validation.unitInUse'));
       }
 
       await db.units.delete(unitId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['units'] });
-      message.success('Satuan berhasil dihapus');
+      message.success(t('units.success.unitDeleted'));
     },
     onError: (error: unknown) => {
-      message.error(error instanceof Error ? error.message : 'Gagal menghapus satuan');
+      message.error(error instanceof Error ? error.message : t('units.validation.deleteUnitFailed'));
     },
   });
 
@@ -251,7 +254,7 @@ export default function UnitManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['units'] });
-      message.success('Satuan bawaan berhasil dipulihkan');
+      message.success(t('units.success.unitsRestored'));
     },
   });
 
@@ -262,34 +265,34 @@ export default function UnitManagement() {
       const ratio = Number(values.ratio);
 
       if (!baseUnit || !conversionUnit) {
-        throw new Error('Unit dasar dan unit konversi harus dipilih.');
+        throw new Error(t('units.validation.unitsRequired'));
       }
 
       if (baseUnit === conversionUnit) {
-        throw new Error('Unit dasar dan unit konversi tidak boleh sama.');
+        throw new Error(t('units.validation.sameUnits'));
       }
 
       if (!Number.isFinite(ratio) || ratio <= 0) {
-        throw new Error('Rasio harus lebih besar dari 0.');
+        throw new Error(t('units.validation.ratioPositive'));
       }
 
       const baseUnitRecord = unitMap.get(baseUnit);
       const conversionUnitRecord = unitMap.get(conversionUnit);
 
       if (!baseUnitRecord || !conversionUnitRecord) {
-        throw new Error('Unit yang dipilih tidak ditemukan.');
+        throw new Error(t('units.validation.unitNotFound'));
       }
 
       if (!baseUnitRecord.canBeBaseUnit || !conversionUnitRecord.canBeConversionUnit) {
-        throw new Error('Unit yang dipilih tidak sesuai dengan flag base/conversion.');
+        throw new Error(t('units.validation.invalidFlags'));
       }
 
       if (!isGlobalConvertibleUnitType(baseUnitRecord.type) || !isGlobalConvertibleUnitType(conversionUnitRecord.type)) {
-        throw new Error('Konversi global hanya boleh untuk unit ukur atau waktu.');
+        throw new Error(t('units.validation.globalConversionType'));
       }
 
       if (baseUnitRecord.type !== conversionUnitRecord.type) {
-        throw new Error('Jenis unit dasar dan unit konversi harus sama.');
+        throw new Error(t('units.validation.sameType'));
       }
 
       const id = `${conversionUnit}-${baseUnit}`;
@@ -333,18 +336,18 @@ export default function UnitManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['unitConversions'] });
-      message.success(editingConversion ? 'Konversi satuan berhasil diperbarui' : 'Konversi satuan berhasil ditambahkan');
+      message.success(editingConversion ? t('units.success.conversionUpdated') : t('units.success.conversionAdded'));
       setIsConversionModalOpen(false);
       setEditingConversion(null);
       conversionForm.resetFields();
     },
     onError: (error: unknown) => {
       if (error instanceof Error && error.name === 'ConstraintError') {
-        message.error('Kombinasi konversi ini sudah ada');
+        message.error(t('units.validation.duplicateConversion'));
         return;
       }
 
-      message.error(error instanceof Error ? error.message : 'Gagal menyimpan konversi');
+      message.error(error instanceof Error ? error.message : t('units.validation.saveConversionFailed'));
     },
   });
 
@@ -354,7 +357,7 @@ export default function UnitManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['unitConversions'] });
-      message.success('Konversi satuan berhasil dihapus');
+      message.success(t('units.success.conversionDeleted'));
     },
   });
 
@@ -364,7 +367,7 @@ export default function UnitManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['unitConversions'] });
-      message.success('Konversi bawaan berhasil dipulihkan');
+      message.success(t('units.success.conversionsRestored'));
     },
   });
 
@@ -396,21 +399,21 @@ export default function UnitManagement() {
     if (unit.isPreset) return;
 
     modal.confirm({
-      title: 'Hapus Satuan',
-      content: `Apakah Anda yakin ingin menghapus satuan "${unit.name}"?`,
-      okText: 'Hapus',
+      title: t('units.confirm.deleteUnitTitle'),
+      content: t('units.confirm.deleteUnitContent', { unit: unit.name }),
+      okText: t('units.confirm.deleteOk'),
       okType: 'danger',
-      cancelText: 'Batal',
+      cancelText: t('common.cancel'),
       onOk: () => deleteUnitMutation.mutate(unit.id),
     });
   };
 
   const handleRestoreUnits = () => {
     modal.confirm({
-      title: 'Pulihkan Satuan Bawaan',
-      content: 'Ini akan memulihkan daftar satuan bawaan tanpa menghapus satuan custom.',
-      okText: 'Pulihkan',
-      cancelText: 'Batal',
+      title: t('units.confirm.restoreUnitsTitle'),
+      content: t('units.confirm.restoreUnitsContent'),
+      okText: t('units.confirm.restoreOk'),
+      cancelText: t('common.cancel'),
       onOk: () => restoreUnitsMutation.mutate(),
     });
   };
@@ -439,60 +442,60 @@ export default function UnitManagement() {
     if (!canDelete) return;
 
     modal.confirm({
-      title: 'Hapus Konversi',
-      content: `Apakah Anda yakin ingin menghapus konversi "${record.label}"?`,
-      okText: 'Hapus',
+      title: t('units.confirm.deleteConversionTitle'),
+      content: t('units.confirm.deleteConversionContent', { label: record.label }),
+      okText: t('units.confirm.deleteOk'),
       okType: 'danger',
-      cancelText: 'Batal',
+      cancelText: t('common.cancel'),
       onOk: () => deleteConversionMutation.mutate(record.id),
     });
   };
 
   const handleRestoreConversions = () => {
     modal.confirm({
-      title: 'Pulihkan Konversi Bawaan',
-      content: 'Ini akan memulihkan konversi global bawaan untuk unit ukur dan waktu. Konversi custom tidak akan terhapus.',
-      okText: 'Pulihkan',
-      cancelText: 'Batal',
+      title: t('units.confirm.restoreConversionsTitle'),
+      content: t('units.confirm.restoreConversionsContent'),
+      okText: t('units.confirm.restoreOk'),
+      cancelText: t('common.cancel'),
       onOk: () => restoreConversionsMutation.mutate(),
     });
   };
 
   const unitColumns: ColumnsType<UnitDefinition> = [
     {
-      title: 'Satuan',
+      title: t('units.column.unit'),
       dataIndex: 'name',
       key: 'name',
       render: (text: string) => <Tag color="blue">{text}</Tag>,
     },
     {
-      title: 'Jenis',
+      title: t('units.column.kind'),
       dataIndex: 'type',
       key: 'type',
-      render: (type: UnitDefinitionType) => <Tag color={unitTypeColors[type]}>{unitTypeLabels[type]}</Tag>,
+      render: (type: UnitDefinitionType) => <Tag color={unitTypeColors[type]}>{t(unitTypeLabelKeys[type])}</Tag>,
     },
     {
-      title: 'Base Unit',
+      title: t('units.column.baseUnit'),
       dataIndex: 'canBeBaseUnit',
       key: 'canBeBaseUnit',
-      render: (value: boolean) => (value ? <Tag color="green">Ya</Tag> : <Tag>Tidak</Tag>),
+      render: (value: boolean) => (value ? <Tag color="green">{t('units.yes')}</Tag> : <Tag>{t('units.no')}</Tag>),
     },
     {
-      title: 'Conversion Unit',
+      title: t('units.column.conversionUnit'),
       dataIndex: 'canBeConversionUnit',
       key: 'canBeConversionUnit',
-      render: (value: boolean) => (value ? <Tag color="cyan">Ya</Tag> : <Tag>Tidak</Tag>),
+      render: (value: boolean) => (value ? <Tag color="cyan">{t('units.yes')}</Tag> : <Tag>{t('units.no')}</Tag>),
     },
     {
-      title: 'Tipe',
+      title: t('units.column.type'),
       dataIndex: 'isPreset',
       key: 'isPreset',
       render: (isPreset: boolean) => (
-        isPreset ? <Tag color="gold">Bawaan</Tag> : <Tag color="cyan">Custom</Tag>
+        isPreset ? <Tag color="gold">{t('units.preset')}</Tag> : <Tag color="cyan">{t('units.custom')}</Tag>
       ),
     },
     {
-      title: 'Aksi',
+      title: t('units.column.action'),
       key: 'action',
       render: (_value: unknown, record) => (
         <Space>
@@ -517,59 +520,59 @@ export default function UnitManagement() {
 
   const conversionColumns: ColumnsType<UnitConversion> = [
     {
-      title: 'Unit Konversi',
+      title: t('units.column.conversionUnitSource'),
       dataIndex: 'fromUnit',
       key: 'fromUnit',
       render: (text: string) => <Tag color="blue">{text}</Tag>,
     },
     {
-      title: 'Unit Dasar',
+      title: t('units.column.baseUnitTarget'),
       dataIndex: 'toUnit',
       key: 'toUnit',
       render: (text: string) => <Tag color="green">{text}</Tag>,
     },
     {
-      title: 'Rasio ke Dasar',
+      title: t('units.column.baseRatio'),
       dataIndex: 'ratio',
       key: 'ratio',
       render: (value: number) => <Text strong>{value}</Text>,
     },
     {
-      title: 'Jenis',
+      title: t('units.column.kind'),
       key: 'unitType',
       render: (_value: unknown, record) => {
         const unitType = record.unitType ?? inferConversionUnitType(record.fromUnit, record.toUnit);
 
         if (record.isDeprecated) {
-          return <Tag color="red">Legacy Kemasan</Tag>;
+          return <Tag color="red">{t('units.legacyPackage')}</Tag>;
         }
 
-        return <Tag color={conversionTypeColors[unitType]}>{conversionTypeLabels[unitType]}</Tag>;
+        return <Tag color={conversionTypeColors[unitType]}>{t(conversionTypeLabelKeys[unitType])}</Tag>;
       },
     },
     {
-      title: 'Pemakaian',
+      title: t('units.column.usage'),
       key: 'usage',
       render: (_value: unknown, record) => (
-        record.allowPriceFallback ? <Tag color="cyan">Stok + Fallback Harga</Tag> : <Tag>Stok Saja</Tag>
+        record.allowPriceFallback ? <Tag color="cyan">{t('units.stockAndPriceFallback')}</Tag> : <Tag>{t('units.stockOnly')}</Tag>
       ),
     },
     {
-      title: 'Keterangan',
+      title: t('units.column.description'),
       dataIndex: 'label',
       key: 'label',
     },
     {
-      title: 'Tipe',
+      title: t('units.column.type'),
       dataIndex: 'isPreset',
       key: 'isPreset',
       render: (_isPreset: boolean, record) => {
-        if (record.isDeprecated) return <Tag color="red">Legacy</Tag>;
-        return record.isPreset ? <Tag color="gold">Bawaan</Tag> : <Tag color="cyan">Custom</Tag>;
+        if (record.isDeprecated) return <Tag color="red">{t('units.legacy')}</Tag>;
+        return record.isPreset ? <Tag color="gold">{t('units.preset')}</Tag> : <Tag color="cyan">{t('units.custom')}</Tag>;
       },
     },
     {
-      title: 'Aksi',
+      title: t('units.column.action'),
       key: 'action',
       render: (_value: unknown, record) => {
         const canEdit = !record.isPreset && !record.isDeprecated;
@@ -604,8 +607,8 @@ export default function UnitManagement() {
           <Scale size={24} />
         </div>
         <div>
-          <Title level={4} style={{ margin: 0 }}>Manajemen Satuan & Konversi</Title>
-          <Text type="secondary">Kelola satuan produk dan konversi kuantitas untuk stok.</Text>
+          <Title level={4} style={{ margin: 0 }}>{t('units.title')}</Title>
+          <Text type="secondary">{t('units.subtitle')}</Text>
         </div>
       </div>
 
@@ -613,19 +616,19 @@ export default function UnitManagement() {
         items={[
           {
             key: 'units',
-            label: 'Daftar Satuan',
+            label: t('units.tab.units'),
             children: (
               <div className="space-y-4">
                 <Alert
                   type="info"
                   showIcon
-                  title="Satuan dipakai sebagai pilihan di produk"
-                  description="Flag base unit menentukan satuan yang boleh menjadi satuan dasar stok. Flag conversion unit menentukan satuan yang boleh dikonversi ke base unit."
+                  title={t('units.unitsAlertTitle')}
+                  description={t('units.unitsAlertDescription')}
                 />
 
                 <Card
                   className="shadow-sm"
-                  title="Daftar Satuan"
+                  title={t('units.tab.units')}
                   extra={
                     <Space>
                       <Button
@@ -633,10 +636,10 @@ export default function UnitManagement() {
                         onClick={handleRestoreUnits}
                         loading={restoreUnitsMutation.isPending}
                       >
-                        Pulihkan Bawaan
+                        {t('units.restoreDefaults')}
                       </Button>
                       <Button type="primary" icon={<Plus size={16} />} onClick={handleAddUnit}>
-                        Tambah Satuan
+                        {t('units.addUnit')}
                       </Button>
                     </Space>
                   }
@@ -655,23 +658,23 @@ export default function UnitManagement() {
           },
           {
             key: 'conversions',
-            label: 'Konversi Global',
+            label: t('units.tab.conversions'),
             children: (
               <div className="space-y-4">
                 <Alert
                   type={legacyPackageCount > 0 ? 'warning' : 'info'}
                   showIcon
-                  title="Konversi global hanya untuk unit ukur yang stabil"
+                  title={t('units.conversionsAlertTitle')}
                   description={
                     legacyPackageCount > 0
-                      ? `Terdapat ${legacyPackageCount} konversi kemasan legacy. Hapus dan pindahkan konsep isi kemasan ke pengaturan produk saat fitur product unit mapping tersedia.`
-                      : 'Unit kemasan seperti dus, pack, ikat, dan renteng sebaiknya diatur per produk karena isi kemasan bisa berbeda antar produk.'
+                      ? t('units.legacyPackageWarning', { count: legacyPackageCount })
+                      : t('units.conversionsAlertDescription')
                   }
                 />
 
                 <Card
                   className="shadow-sm"
-                  title="Konversi Global"
+                  title={t('units.tab.conversions')}
                   extra={
                     <Space>
                       <Button
@@ -679,10 +682,10 @@ export default function UnitManagement() {
                         onClick={handleRestoreConversions}
                         loading={restoreConversionsMutation.isPending}
                       >
-                        Pulihkan Bawaan
+                        {t('units.restoreDefaults')}
                       </Button>
                       <Button type="primary" icon={<Plus size={16} />} onClick={handleAddConversion}>
-                        Tambah Konversi
+                        {t('units.addConversion')}
                       </Button>
                     </Space>
                   }
@@ -703,7 +706,7 @@ export default function UnitManagement() {
       />
 
       <Modal
-        title={editingUnit ? 'Edit Satuan' : 'Tambah Satuan Baru'}
+        title={editingUnit ? t('units.editUnitTitle') : t('units.addUnitTitle')}
         open={isUnitModalOpen}
         onCancel={() => {
           setIsUnitModalOpen(false);
@@ -732,41 +735,41 @@ export default function UnitManagement() {
         >
           <Form.Item
             name="name"
-            label="Nama Satuan"
-            rules={[{ required: true, message: 'Wajib diisi' }]}
-            extra="Contoh: gram, kg, pcs, dus"
+            label={t('units.name')}
+            rules={[{ required: true, message: t('units.nameRequired') }]}
+            extra={t('units.nameExtra')}
           >
             <Input placeholder="gram" disabled={Boolean(editingUnit)} />
           </Form.Item>
 
           <Form.Item
             name="type"
-            label="Jenis Satuan"
-            rules={[{ required: true, message: 'Wajib dipilih' }]}
+            label={t('units.kind')}
+            rules={[{ required: true, message: t('units.requiredSelect') }]}
           >
             <Select
               options={[
-                { value: 'measurement', label: 'Unit Ukur' },
-                { value: 'count', label: 'Satuan Hitung' },
-                { value: 'package', label: 'Kemasan' },
-                { value: 'time', label: 'Waktu' },
+                { value: 'measurement', label: t('units.type.measurement') },
+                { value: 'count', label: t('units.type.count') },
+                { value: 'package', label: t('units.type.package') },
+                { value: 'time', label: t('units.type.time') },
               ]}
             />
           </Form.Item>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Form.Item name="canBeBaseUnit" valuePropName="checked">
-              <Checkbox>Can be base unit</Checkbox>
+              <Checkbox>{t('units.canBeBaseUnit')}</Checkbox>
             </Form.Item>
             <Form.Item name="canBeConversionUnit" valuePropName="checked">
-              <Checkbox>Can be conversion unit</Checkbox>
+              <Checkbox>{t('units.canBeConversionUnit')}</Checkbox>
             </Form.Item>
           </div>
         </Form>
       </Modal>
 
       <Modal
-        title={editingConversion ? 'Edit Konversi' : 'Tambah Konversi Baru'}
+        title={editingConversion ? t('units.editConversionTitle') : t('units.addConversionTitle')}
         open={isConversionModalOpen}
         onCancel={() => {
           setIsConversionModalOpen(false);
@@ -786,13 +789,13 @@ export default function UnitManagement() {
         >
           <Form.Item
             name="baseUnit"
-            label="Unit Dasar"
-            rules={[{ required: true, message: 'Wajib dipilih' }]}
-            extra="Satuan paling kecil/stabil untuk stok. Contoh: gram."
+            label={t('units.baseUnit')}
+            rules={[{ required: true, message: t('units.requiredSelect') }]}
+            extra={t('units.baseUnitExtra')}
           >
             <Select
               showSearch
-              placeholder="Pilih unit dasar"
+              placeholder={t('units.baseUnitPlaceholder')}
               options={globalBaseUnitOptions}
               disabled={Boolean(editingConversion?.isPreset)}
             />
@@ -800,13 +803,13 @@ export default function UnitManagement() {
 
           <Form.Item
             name="conversionUnit"
-            label="Unit Konversi"
-            rules={[{ required: true, message: 'Wajib dipilih' }]}
-            extra="Satuan yang dikonversi ke unit dasar. Contoh: kg."
+            label={t('units.conversionUnit')}
+            rules={[{ required: true, message: t('units.requiredSelect') }]}
+            extra={t('units.conversionUnitExtra')}
           >
             <Select
               showSearch
-              placeholder="Pilih unit konversi"
+              placeholder={t('units.conversionUnitPlaceholder')}
               options={globalConversionUnitOptions}
               disabled={Boolean(editingConversion?.isPreset)}
             />
@@ -814,21 +817,21 @@ export default function UnitManagement() {
 
           <Form.Item
             name="ratio"
-            label="Conversion Ratio"
-            rules={[{ required: true, message: 'Wajib diisi' }, { type: 'number', min: 0.000001, message: 'Harus > 0' }]}
-            extra="1 unit konversi sama dengan berapa unit dasar."
+            label={t('units.ratio')}
+            rules={[{ required: true, message: t('units.ratioRequired') }, { type: 'number', min: 0.000001, message: t('units.ratioMin') }]}
+            extra={t('units.ratioExtra')}
           >
             <InputNumber
               inputMode="decimal"
               className="w-full"
-              placeholder="Contoh: 1000"
+              placeholder={t('units.ratioPlaceholder')}
               disabled={Boolean(editingConversion?.isPreset)}
             />
           </Form.Item>
 
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
             <Text type="secondary" className="text-xs">
-              Contoh: Unit Dasar gram, Unit Konversi kg, Ratio 1000 berarti 1 kg = 1000 gram.
+              {t('units.ratioExample')}
             </Text>
           </div>
         </Form>

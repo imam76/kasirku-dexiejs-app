@@ -1,4 +1,6 @@
-import { formatCurrency, formatCategory } from '@/utils/formatters';
+import { useI18n } from '@/hooks/useI18n';
+import { getProductCategoryLabel } from '@/i18n/stock';
+import { formatCurrency } from '@/utils/formatters';
 
 interface TopProduct {
   product_id: string;
@@ -15,17 +17,19 @@ interface TopProductsTableProps {
 }
 
 export default function TopProductsTable({ products }: TopProductsTableProps) {
+  const { t } = useI18n();
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-left border-separate border-spacing-0">
         <thead>
           <tr className="text-gray-500 font-normal">
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 rounded-tl-lg">Produk</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">Kategori</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">Terjual</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">Pendapatan</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">Keuntungan</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right rounded-tr-lg">Margin</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 rounded-tl-lg">{t('report.product')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">{t('report.category')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.sold')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.revenue')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.profit')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right rounded-tr-lg">{t('report.margin')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
@@ -36,7 +40,7 @@ export default function TopProductsTable({ products }: TopProductsTableProps) {
                   {p.product_name}
                 </td>
                 <td className="py-4 px-4">
-                  <span className="text-gray-500 italic">{formatCategory(p.category)}</span>
+                  <span className="text-gray-500 italic">{getProductCategoryLabel(p.category, t)}</span>
                 </td>
                 <td className="py-4 px-4 text-right">
                   <span className="font-medium text-[#2563EB]">{p.totalQuantity}</span>
@@ -57,7 +61,7 @@ export default function TopProductsTable({ products }: TopProductsTableProps) {
           ) : (
             <tr>
               <td colSpan={6} className="py-12 text-center text-gray-400 italic bg-white rounded-b-lg">
-                Tidak ada data produk untuk filter ini
+                {t('report.noProductsForFilter')}
               </td>
             </tr>
           )}

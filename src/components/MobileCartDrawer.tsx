@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react';
 import { CartItem as CartItemType, PaymentMethod } from '@/types';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
+import { useI18n } from '@/hooks/useI18n';
 
 interface MobileCartDrawerProps {
   isOpen: boolean;
@@ -39,9 +40,11 @@ export default function MobileCartDrawer({
   setPaymentMethod,
   handleCheckout,
 }: MobileCartDrawerProps) {
+  const { t } = useI18n();
+
   return (
     <Drawer
-      title="Keranjang"
+      title={t('cart.title')}
       placement="bottom"
       open={isOpen}
       onClose={onClose}
@@ -58,7 +61,7 @@ export default function MobileCartDrawer({
             onClick={clearCart}
             className="bg-red-50 text-xs font-medium"
           >
-            Bersihkan
+            {t('cart.clear')}
           </Button>
         ) : null
       }
@@ -70,7 +73,7 @@ export default function MobileCartDrawer({
       <div className="flex h-full flex-col">
         <div className="flex-1 space-y-3 overflow-y-auto px-5 py-3">
           {cart.length === 0 ? (
-            <p className="py-8 text-center text-gray-500">Keranjang kosong</p>
+            <p className="py-8 text-center text-gray-500">{t('cart.empty')}</p>
           ) : null}
 
           {cart.map((item) => (

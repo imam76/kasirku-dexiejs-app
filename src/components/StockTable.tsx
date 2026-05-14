@@ -1,12 +1,13 @@
 import { Button, Drawer, Input, InputNumber, Select } from 'antd';
 import type { ChangeEvent } from 'react';
-import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useI18n } from '@/hooks/useI18n';
+import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import type { Product } from '@/types';
-import { formatCategory, formatCurrency, getStockStatusClass } from '@/utils/formatters';
+import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
 import { Edit2, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 interface StockTableProps {
   products: Product[];
@@ -20,26 +21,8 @@ type StockStatusFilter = 'all' | 'out' | 'low' | 'safe';
 type SkuStatusFilter = 'all' | 'with' | 'without';
 type WholesaleStatusFilter = 'all' | 'with' | 'without';
 
-const STOCK_STATUS_OPTIONS = [
-  { value: 'all', label: 'Semua Stok' },
-  { value: 'out', label: 'Stok Habis' },
-  { value: 'low', label: 'Stok Menipis' },
-  { value: 'safe', label: 'Stok Aman' },
-];
-
-const SKU_STATUS_OPTIONS = [
-  { value: 'all', label: 'Semua SKU' },
-  { value: 'with', label: 'Punya SKU' },
-  { value: 'without', label: 'Belum Punya SKU' },
-];
-
-const WHOLESALE_STATUS_OPTIONS = [
-  { value: 'all', label: 'Semua Grosir' },
-  { value: 'with', label: 'Ada Harga Grosir' },
-  { value: 'without', label: 'Tanpa Harga Grosir' },
-];
-
 export default function StockTable({ products, onEdit, onDelete }: StockTableProps) {
+  const { t } = useI18n();
   const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -58,6 +41,23 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
+  const stockStatusOptions = useMemo(() => [
+    { value: 'all', label: t('stock.allStock') },
+    { value: 'out', label: t('stock.outOfStock') },
+    { value: 'low', label: t('stock.lowStock') },
+    { value: 'safe', label: t('stock.safeStock') },
+  ], [t]);
+  const skuStatusOptions = useMemo(() => [
+    { value: 'all', label: t('stock.allSku') },
+    { value: 'with', label: t('stock.withSku') },
+    { value: 'without', label: t('stock.withoutSku') },
+  ], [t]);
+  const wholesaleStatusOptions = useMemo(() => [
+    { value: 'all', label: t('stock.allWholesale') },
+    { value: 'with', label: t('stock.withWholesale') },
+    { value: 'without', label: t('stock.withoutWholesale') },
+  ], [t]);
 
   const activeFilterCount = [
     selectedCategories.length > 0,
@@ -69,7 +69,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
     wholesaleStatus !== 'all',
   ].filter(Boolean).length;
 
-  const isStockStatusMatch = (product: Product) => {
+  const isStockStatusMatch = useCallback((product: Product) => {
     switch (stockStatus) {
       case 'out':
         return product.stock <= 0;
@@ -80,7 +80,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
       default:
         return true;
     }
-  };
+  }, [stockStatus]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -167,7 +167,6 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
     products,
     searchQuery,
     selectedCategories,
-    stockStatus,
     minStock,
     maxStock,
     skuStatus,
@@ -176,6 +175,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
     minPurchasePrice,
     maxPurchasePrice,
     wholesaleStatus,
+    isStockStatusMatch,
   ]);
 
   // Sort products
@@ -227,13 +227,13 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         allowClear
         maxTagCount="responsive"
         size="large"
-        placeholder="Kategori produk"
+        placeholder={t('stock.categoryPlaceholder')}
         value={selectedCategories}
         onChange={(value) => {
           setSelectedCategories(value);
           setCurrentPage(1);
         }}
-        options={PRODUCT_CATEGORIES}
+        options={categoryOptions}
       />
 
       <Select
@@ -243,7 +243,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
           setStockStatus(value);
           setCurrentPage(1);
         }}
-        options={STOCK_STATUS_OPTIONS}
+        options={stockStatusOptions}
       />
 
       <div className="grid grid-cols-2 gap-2">
@@ -255,7 +255,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setMinStock(value);
             setCurrentPage(1);
           }}
-          placeholder="Stok min"
+          placeholder={t('stock.minStock')}
           className="w-full"
         />
         <InputNumber
@@ -266,7 +266,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setMaxStock(value);
             setCurrentPage(1);
           }}
-          placeholder="Stok max"
+          placeholder={t('stock.maxStock')}
           className="w-full"
         />
       </div>
@@ -278,7 +278,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
           setSkuStatus(value);
           setCurrentPage(1);
         }}
-        options={SKU_STATUS_OPTIONS}
+        options={skuStatusOptions}
       />
 
       <Select
@@ -288,7 +288,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
           setWholesaleStatus(value);
           setCurrentPage(1);
         }}
-        options={WHOLESALE_STATUS_OPTIONS}
+        options={wholesaleStatusOptions}
       />
 
       <div className="grid grid-cols-2 gap-2">
@@ -300,7 +300,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setMinSellingPrice(value);
             setCurrentPage(1);
           }}
-          placeholder="Jual min"
+          placeholder={t('stock.minSell')}
           className="w-full"
         />
         <InputNumber
@@ -311,7 +311,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setMaxSellingPrice(value);
             setCurrentPage(1);
           }}
-          placeholder="Jual max"
+          placeholder={t('stock.maxSell')}
           className="w-full"
         />
       </div>
@@ -325,7 +325,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setMinPurchasePrice(value);
             setCurrentPage(1);
           }}
-          placeholder="Beli min"
+          placeholder={t('stock.minBuy')}
           className="w-full"
         />
         <InputNumber
@@ -336,7 +336,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setMaxPurchasePrice(value);
             setCurrentPage(1);
           }}
-          placeholder="Beli max"
+          placeholder={t('stock.maxBuy')}
           className="w-full"
         />
       </div>
@@ -349,14 +349,14 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
       <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">Filter Produk</div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('stock.filterTitle')}</div>
             <p className="mt-1 text-xs text-gray-500">
-              {filteredProducts.length} dari {products.length} produk ditampilkan
+              {t('stock.filterSummary', { shown: filteredProducts.length, total: products.length })}
             </p>
           </div>
           {(searchQuery || activeFilterCount > 0) && (
             <Button onClick={resetFilters} className="w-full sm:w-auto">
-              Reset Filter
+              {t('stock.resetFilter')}
             </Button>
           )}
         </div>
@@ -367,7 +367,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               size="large"
               allowClear
               prefix={<Search size={18} className="text-gray-400" />}
-              placeholder="Cari produk berdasarkan nama atau SKU..."
+              placeholder={t('stock.searchPlaceholder')}
               value={searchQuery}
               onChange={handleSearchChange}
             />
@@ -378,7 +378,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                 onClick={() => setIsFilterDrawerOpen(true)}
               >
                 <span className="hidden min-[380px]:inline">
-                  Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                  {activeFilterCount > 0 ? t('stock.filterWithCount', { count: activeFilterCount }) : t('stock.filter')}
                 </span>
               </Button>
             )}
@@ -389,7 +389,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
       </div>
 
       <Drawer
-        title="Filter Produk"
+        title={t('stock.filterTitle')}
         placement="bottom"
         open={isMobile && isFilterDrawerOpen}
         onClose={() => setIsFilterDrawerOpen(false)}
@@ -404,7 +404,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
           <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
               <SlidersHorizontal size={18} />
-              <span>Parameter Filter</span>
+              <span>{t('stock.filterParams')}</span>
             </div>
             {renderFilterControls(true)}
           </div>
@@ -416,7 +416,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               onClick={resetFilters}
               className="h-12"
             >
-              Reset
+              {t('transaction.reset')}
             </Button>
             <Button
               size="large"
@@ -424,7 +424,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               onClick={() => setIsFilterDrawerOpen(false)}
               className="h-12"
             >
-              Terapkan
+              {t('stock.apply')}
             </Button>
           </div>
         </div>
@@ -434,7 +434,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         <div className="space-y-3">
           {paginatedProducts.length === 0 && (
             <div className="bg-white rounded-lg shadow-md border border-gray-200 text-center py-8 text-gray-500 text-sm">
-              {searchQuery || activeFilterCount > 0 ? 'Tidak ada produk yang sesuai dengan filter.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
+              {searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
             </div>
           )}
           {paginatedProducts.map((product) => {
@@ -449,25 +449,25 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                   <div>
                     <p className="text-sm font-bold text-gray-900">{product.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">SKU: {product.sku || '-'}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{formatCategory(product.category || 'non_consumable')}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{getProductCategoryLabel(product.category || 'non_consumable', t)}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${getStockStatusClass(product.stock)}`}>
-                      Stok: {product.stock}
+                      {t('product.stock')}: {product.stock}
                     </span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="bg-gray-50 rounded p-2">
-                    <p className="text-gray-500 mb-0.5">Harga Beli</p>
+                    <p className="text-gray-500 mb-0.5">{t('stock.purchasePrice')}</p>
                     <p className="font-semibold text-gray-900">Rp {formatCurrency(product.purchase_price)}</p>
                   </div>
                   <div className="bg-gray-50 rounded p-2">
-                    <p className="text-gray-500 mb-0.5">Harga Jual</p>
+                    <p className="text-gray-500 mb-0.5">{t('stock.sellingPrice')}</p>
                     <p className="font-semibold text-gray-900">Rp {formatCurrency(product.selling_price)}</p>
                   </div>
                   <div className={`rounded p-2 ${margin > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                    <p className={`mb-0.5 ${margin > 0 ? 'text-green-600' : 'text-red-600'}`}>Margin</p>
+                    <p className={`mb-0.5 ${margin > 0 ? 'text-green-600' : 'text-red-600'}`}>{t('stock.margin')}</p>
                     <p className={`font-semibold ${margin > 0 ? 'text-green-800' : 'text-red-800'}`}>
                       {marginPercent}%
                     </p>
@@ -499,21 +499,21 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                   className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    Nama Produk
+                    {t('stock.productName')}
                     {sortField === 'name' && (
                       <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </div>
                 </th>
                 <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Kategori
+                  {t('stock.category')}
                 </th>
                 <th
                   onClick={() => handleSort('purchase_price')}
                   className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    Harga Beli
+                    {t('stock.purchasePrice')}
                     {sortField === 'purchase_price' && (
                       <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -524,28 +524,28 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                   className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    Harga Jual
+                    {t('stock.sellingPrice')}
                     {sortField === 'selling_price' && (
                       <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </div>
                 </th>
                 <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Margin
+                  {t('stock.margin')}
                 </th>
                 <th
                   onClick={() => handleSort('stock')}
                   className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    Stok
+                    {t('product.stock')}
                     {sortField === 'stock' && (
                       <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </div>
                 </th>
                 <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Aksi
+                  {t('stock.action')}
                 </th>
               </tr>
             </thead>
@@ -565,7 +565,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                       {product.name}
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCategory(product.category || 'non_consumable')}
+                      {getProductCategoryLabel(product.category || 'non_consumable', t)}
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       Rp {formatCurrency(product.purchase_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
@@ -591,14 +591,14 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                         <button
                           onClick={() => onEdit(product)}
                           className="text-blue-600 hover:text-blue-800 transition-colors"
-                          title="Edit produk"
+                          title={t('stock.editTitle')}
                         >
                           <Edit2 size={18} />
                         </button>
                         <button
                           onClick={() => onDelete(product.id)}
                           className="text-red-600 hover:text-red-800 transition-colors"
-                          title="Hapus produk"
+                          title={t('stock.deleteProductTitle')}
                         >
                           <Trash2 size={18} />
                         </button>
@@ -612,7 +612,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
           </div>
           {paginatedProducts.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              {searchQuery || activeFilterCount > 0 ? 'Tidak ada produk yang sesuai dengan filter.' : 'Belum ada produk. Tambahkan produk pertama Anda!'}
+              {searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
             </div>
           )}
         </div>
@@ -647,8 +647,8 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                   <Edit2 size={22} />
                 </div>
                 <div>
-                  <span className="block font-bold text-gray-900">Edit Produk</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">Ubah detail informasi produk</span>
+                  <span className="block font-bold text-gray-900">{t('stock.editProduct')}</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">{t('stock.editDescription')}</span>
                 </div>
               </button>
 
@@ -663,8 +663,8 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                   <Trash2 size={22} />
                 </div>
                 <div>
-                  <span className="block font-bold text-gray-900">Hapus Produk</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">Hapus produk ini secara permanen</span>
+                  <span className="block font-bold text-gray-900">{t('stock.deleteProductTitle')}</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">{t('stock.deleteDescription')}</span>
                 </div>
               </button>
             </div>
@@ -673,7 +673,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               onClick={() => setSelectedProduct(null)}
               className="w-full mt-6 py-3 text-gray-500 font-semibold hover:text-gray-700 border-t border-gray-100"
             >
-              Batal
+              {t('stock.form.cancel')}
             </button>
           </div>
         </div>
@@ -683,34 +683,24 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
       {totalPages > 1 && (
         <div className="bg-white rounded-lg shadow-md border border-gray-200 p-3 sm:p-4">
 
-          {/* Info teks: tampil di semua layar */}
           <div className="text-xs sm:text-sm text-gray-600 text-center mb-3">
-            Menampilkan{' '}
-            <span className="font-medium">
-              {paginatedProducts.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}
-            </span>
-            {' – '}
-            <span className="font-medium">
-              {Math.min(currentPage * itemsPerPage, sortedProducts.length)}
-            </span>
-            {' dari '}
-            <span className="font-medium">{sortedProducts.length}</span>
-            {' produk'}
+            {t('stock.showingRange', {
+              start: paginatedProducts.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0,
+              end: Math.min(currentPage * itemsPerPage, sortedProducts.length),
+              total: sortedProducts.length,
+            })}
           </div>
 
-          {/* Baris navigasi + per-halaman */}
           <div className="flex flex-wrap items-center justify-between gap-2">
 
-            {/* Tombol Sebelumnya */}
             <button
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
               className="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
             >
-              ← <span className="hidden sm:inline">Sebelumnya</span>
+              ← <span className="hidden sm:inline">{t('stock.previous')}</span>
             </button>
 
-            {/* Nomor halaman */}
             <div className="flex gap-1">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pageNum;
@@ -739,18 +729,16 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
               })}
             </div>
 
-            {/* Tombol Selanjutnya */}
             <button
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
               className="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
             >
-              <span className="hidden sm:inline">Selanjutnya</span> →
+              <span className="hidden sm:inline">{t('stock.next')}</span> →
             </button>
 
-            {/* Per halaman — full width di mobile agar tidak terlalu sempit */}
             <div className="flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto justify-center sm:justify-start border-t sm:border-t-0 pt-2 sm:pt-0">
-              <span className="text-gray-600">Per halaman:</span>
+              <span className="text-gray-600">{t('stock.perPage')}:</span>
               <select
                 value={itemsPerPage}
                 onChange={(e) => {

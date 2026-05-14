@@ -2,6 +2,7 @@ import { ShoppingCart } from 'lucide-react';
 import { CartItem, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
+import { useI18n } from '@/hooks/useI18n';
 
 interface ProductListProps {
   products: Product[];
@@ -10,6 +11,8 @@ interface ProductListProps {
 }
 
 export default function ProductList({ products, cart, addToCart }: ProductListProps) {
+  const { t } = useI18n();
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 pb-24 lg:pb-0">
       {products.map((product) => {
@@ -41,11 +44,11 @@ export default function ProductList({ products, cart, addToCart }: ProductListPr
               </p>
               <span className="text-xs text-gray-500">/ {product.selling_unit}</span>
               {product.wholesale_prices && product.wholesale_prices.length > 0 && (
-                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Grosir</span>
+                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">{t('product.wholesale')}</span>
               )}
             </div>
             <p className="text-xs sm:text-sm text-gray-500 mt-1">
-              Stok: {product.stock} {product.purchase_unit}
+              {t('product.stock')}: {product.stock} {product.purchase_unit}
             </p>
           </div>
         );

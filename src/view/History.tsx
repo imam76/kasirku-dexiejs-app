@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { Receipt, ChevronDown, ChevronUp, Wallet, DollarSign, Printer, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
+import { useI18n } from '@/hooks/useI18n';
 import { formatDate, formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
@@ -14,6 +15,7 @@ interface TransactionWithItems extends Transaction {
 
 export default function History() {
   const { message } = App.useApp();
+  const { t } = useI18n();
   const {
     transactions,
     expandedId,
@@ -71,7 +73,7 @@ export default function History() {
 
   const handleReprint = async (transaction: TransactionWithItems) => {
     if (!transaction.items) {
-      message.warning('Detail item transaksi belum siap');
+      message.warning(t('history.itemsNotReady'));
       return;
     }
 
@@ -83,13 +85,13 @@ export default function History() {
       if (result.success) {
         message.success(
           transaction.receipt_status === 'printed'
-            ? 'Struk berhasil dicetak ulang'
-            : 'Struk berhasil dicetak'
+            ? t('history.reprintSuccess')
+            : t('history.printSuccess')
         );
         return;
       }
 
-      message.warning(result.error || 'Cetak ulang struk gagal');
+      message.warning(result.error || t('history.reprintFailed'));
     } finally {
       setReprintingId(null);
     }
@@ -97,37 +99,37 @@ export default function History() {
 
   const getPrintActionLabel = (transaction: TransactionWithItems) => {
     if (reprintingId === transaction.id) {
-      return 'Mencetak...';
+      return t('history.printing');
     }
 
     if (transaction.receipt_status === 'printed') {
-      return 'Cetak Ulang';
+      return t('history.reprint');
     }
 
     if (transaction.receipt_status === 'pending') {
-      return 'Cetak Struk';
+      return t('history.printReceipt');
     }
 
-    return 'Reprint';
+    return t('history.reprint');
   };
 
   return (
     <div className="p-4 sm:p-6 min-h-screen bg-gray-50">
       <div className="flex items-center gap-3 mb-6">
         <Receipt size={32} className="text-blue-600" />
-        <h2 className="text-2xl font-bold text-gray-800">Riwayat Transaksi</h2>
+        <h2 className="text-2xl font-bold text-gray-800">{t('history.title')}</h2>
       </div>
 
       <div ref={parentRef} className="w-full">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center p-12 gap-4 bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-            <p className="text-gray-500 font-medium">Memuat riwayat...</p>
+            <p className="text-gray-500 font-medium">{t('history.loading')}</p>
           </div>
         ) : isError ? (
           <div className="p-12 text-center bg-white rounded-lg shadow-sm border border-red-200">
-            <p className="text-red-600 font-medium">Terjadi kesalahan:</p>
-            <p className="text-gray-500 text-sm mt-1">{(error as Error)?.message || 'Gagal memuat riwayat transaksi'}</p>
+            <p className="text-red-600 font-medium">{t('history.errorTitle')}</p>
+            <p className="text-gray-500 text-sm mt-1">{(error as Error)?.message || t('history.errorFallback')}</p>
           </div>
         ) : transactions.length > 0 ? (
           <>
@@ -174,31 +176,31 @@ export default function History() {
                                 {transaction.payment_method === 'NON_TUNAI' ? (
                                   <>
                                     <Wallet size={12} />
-                                    NON-TUNAI
+                                    {t('payment.nonCash').toUpperCase()}
                                   </>
                                 ) : (
                                   <>
                                     <DollarSign size={12} />
-                                    TUNAI
+                                    {t('payment.cash').toUpperCase()}
                                   </>
                                 )}
                               </span>
                               {transaction.receipt_status === 'printed' && (
                                 <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-emerald-100 text-emerald-700">
                                   <CheckCircle2 size={12} />
-                                  STRUK TERCETAK
+                                  {t('history.receiptPrintedBadge')}
                                 </span>
                               )}
                               {transaction.receipt_status === 'print_failed' && (
                                 <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-red-100 text-red-700">
                                   <AlertCircle size={12} />
-                                  PRINT GAGAL
+                                  {t('history.printFailedBadge')}
                                 </span>
                               )}
                               {transaction.receipt_status === 'pending' && (
                                 <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-yellow-100 text-yellow-700">
                                   <Printer size={12} />
-                                  PRINT PENDING
+                                  {t('history.printPendingBadge')}
                                 </span>
                               )}
                             </div>
@@ -209,19 +211,19 @@ export default function History() {
                             {/* Summary: 2 col di mobile, 4 col di sm+ */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
                               <div>
-                                <p className="text-xs text-gray-500">Total</p>
+                                <p className="text-xs text-gray-500">{t('common.total')}</p>
                                 <p className="font-bold text-gray-800">
                                   Rp {formatCurrency(transaction.total_amount)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-xs text-gray-500">Bayar</p>
+                                <p className="text-xs text-gray-500">{t('history.paid')}</p>
                                 <p className="font-semibold text-gray-700">
                                   Rp {formatCurrency(transaction.payment_amount)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-xs text-gray-500">Kembali</p>
+                                <p className="text-xs text-gray-500">{t('history.change')}</p>
                                 <p className="font-semibold text-gray-700">
                                   Rp {formatCurrency(transaction.change_amount)}
                                 </p>
@@ -252,7 +254,7 @@ export default function History() {
 
                       {expandedId === transaction.id && transaction.items && (
                         <div className="border-t bg-gray-50 p-4">
-                          <h4 className="font-semibold text-gray-700 mb-3">Detail Item:</h4>
+                          <h4 className="font-semibold text-gray-700 mb-3">{t('history.itemDetails')}</h4>
                           <div className="space-y-2">
                             {transaction.items.map((item) => (
                               <div
@@ -272,11 +274,11 @@ export default function History() {
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-gray-100">
                                   <div>
-                                    <p className="text-gray-500">Beli</p>
+                                    <p className="text-gray-500">{t('history.purchase')}</p>
                                     <p className="font-semibold text-gray-700">Rp {formatCurrency(item.purchase_price)}</p>
                                   </div>
                                   <div>
-                                    <p className="text-gray-500">Jual</p>
+                                    <p className="text-gray-500">{t('history.sell')}</p>
                                     <p className="font-semibold text-gray-700">Rp {formatCurrency(item.price)}</p>
                                   </div>
                                   <div>
@@ -302,8 +304,8 @@ export default function History() {
                                     : 'text-gray-700'
                                 }`}>
                                   {transaction.receipt_status === 'print_failed'
-                                    ? 'Struk belum tercetak'
-                                    : 'Print struk'}
+                                    ? t('history.receiptNotPrinted')
+                                    : t('history.receiptPrint')}
                                 </p>
                                 <p className={`text-sm ${
                                   transaction.receipt_status === 'print_failed'
@@ -311,10 +313,10 @@ export default function History() {
                                     : 'text-gray-500'
                                 }`}>
                                   {transaction.receipt_status === 'print_failed'
-                                    ? transaction.receipt_print_error || 'Periksa printer lalu coba cetak ulang.'
+                                    ? transaction.receipt_print_error || t('history.checkPrinter')
                                     : transaction.receipt_status === 'printed'
-                                      ? 'Struk transaksi ini sudah tercetak.'
-                                      : 'Struk transaksi ini belum tercetak.'}
+                                      ? t('history.receiptAlreadyPrinted')
+                                      : t('history.receiptNotYetPrinted')}
                                 </p>
                               </div>
                               <button
@@ -351,24 +353,24 @@ export default function History() {
                   {isFetchingNextPage ? (
                     <>
                       <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-                      Memuat lebih banyak...
+                      {t('history.loadingMore')}
                     </>
                   ) : (
-                    'Muat Lebih Banyak'
+                    t('history.loadMore')
                   )}
                 </button>
               </div>
             )}
             {!hasNextPage && transactions.length > 0 && (
               <p className="text-center text-gray-400 text-sm mt-8 pb-12">
-                Semua transaksi telah ditampilkan
+                {t('history.allShown')}
               </p>
             )}
           </>
         ) : (
           <div className="p-12 text-center">
             <Receipt size={48} className="mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-500">Belum ada transaksi</p>
+            <p className="text-gray-500">{t('history.empty')}</p>
           </div>
         )}
       </div>

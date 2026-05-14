@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useScanner } from '@/hooks/useScanner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface ScannerModalProps {
   onClose: () => void;
@@ -8,12 +9,13 @@ interface ScannerModalProps {
 }
 
 export default function ScannerModal({ onClose, onScan }: ScannerModalProps) {
+  const { t } = useI18n();
   const {
     setScannerOpen,
     scannerStarting,
     scannerError,
     videoRef,
-  } = useScanner({ onScan });
+  } = useScanner({ onScan, cameraErrorMessage: t('scanner.cameraError') });
 
   // Start scanner when modal opens
   useEffect(() => {
@@ -27,13 +29,13 @@ export default function ScannerModal({ onClose, onScan }: ScannerModalProps) {
       <div className="absolute inset-x-0 top-0 sm:top-16 mx-auto w-full h-full sm:h-auto sm:w-[92vw] sm:max-w-xl bg-white sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h3 className="text-lg font-semibold text-gray-800">Scan Barcode</h3>
-            <p className="text-xs text-gray-500">Arahkan kamera ke barcode/SKU produk</p>
+            <h3 className="text-lg font-semibold text-gray-800">{t('scanner.title')}</h3>
+            <p className="text-xs text-gray-500">{t('scanner.description')}</p>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
-            aria-label="Tutup scanner"
+            aria-label={t('scanner.closeAria')}
           >
             <X size={20} />
           </button>
@@ -45,7 +47,7 @@ export default function ScannerModal({ onClose, onScan }: ScannerModalProps) {
           </div>
 
           {scannerStarting && (
-            <div className="text-sm text-gray-600">Menyalakan kamera...</div>
+            <div className="text-sm text-gray-600">{t('scanner.starting')}</div>
           )}
           {scannerError && (
             <div className="text-sm text-red-600">{scannerError}</div>
@@ -57,7 +59,7 @@ export default function ScannerModal({ onClose, onScan }: ScannerModalProps) {
               onClick={onClose}
               className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
             >
-              Tutup
+              {t('scanner.close')}
             </button>
           </div>
         </div>

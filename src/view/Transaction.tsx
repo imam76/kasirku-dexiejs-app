@@ -9,9 +9,11 @@ import ProductList from '../components/ProductList';
 import CartSidebar from '../components/CartSidebar';
 import MobileCartDrawer from '../components/MobileCartDrawer';
 import ScannerModal from '../components/ScannerModal';
+import { useI18n } from '@/hooks/useI18n';
 
 export default function Transaction() {
   const { message } = App.useApp();
+  const { t } = useI18n();
   const {
     products,
     cart,
@@ -84,15 +86,15 @@ export default function Transaction() {
 
     if (match) {
       addToCart(match);
-      message.success(`Ditambahkan: ${match.name}`);
+      message.success(t('transaction.addedToCart', { name: match.name }));
     } else {
-      message.error(`Produk dengan SKU/barcode "${text}" tidak ditemukan.`);
+      message.error(t('transaction.productNotFound', { code: text }));
     }
-  }, [products, addToCart, message]);
+  }, [products, addToCart, message, t]);
 
   return (
     <div className="p-4 sm:p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Transaksi</h2>
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">{t('transaction.title')}</h2>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
@@ -103,7 +105,7 @@ export default function Transaction() {
                 size="large"
                 allowClear={false}
                 prefix={<SearchOutlined className="text-gray-400" />}
-                placeholder="Cari produk (nama atau SKU)..."
+                placeholder={t('transaction.searchPlaceholder')}
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 className="rounded-lg"
@@ -116,7 +118,7 @@ export default function Transaction() {
                 disabled={!searchTerm}
                 className="w-full sm:w-auto"
               >
-                Reset
+                {t('transaction.reset')}
               </Button>
               <Button
                 htmlType="button"
@@ -125,7 +127,7 @@ export default function Transaction() {
                 onClick={() => setScannerOpen(true)}
                 className="flex w-full items-center justify-center gap-2 bg-indigo-600 font-semibold text-white hover:!border-indigo-700 hover:!bg-indigo-700 hover:!text-white sm:w-auto"
               >
-                Scan Barcode
+                {t('transaction.scanBarcode')}
               </Button>
             </div>
           </div>
@@ -165,7 +167,7 @@ export default function Transaction() {
               <span className="bg-white text-green-600 font-bold rounded-full w-7 h-7 flex items-center justify-center text-sm">
                 {totalItems}
               </span>
-              <span>Lihat Keranjang</span>
+              <span>{t('transaction.viewCart')}</span>
             </div>
             <span className="font-bold">Rp {formatCurrency(total)}</span>
           </button>

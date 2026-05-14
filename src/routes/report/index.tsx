@@ -3,6 +3,7 @@ import {
   FileSearchOutlined,
   FileTextOutlined
 } from '@ant-design/icons'
+import { useI18n } from '@/hooks/useI18n'
 import { Link, createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/report/')({
@@ -10,11 +11,12 @@ export const Route = createFileRoute('/report/')({
 })
 
 function Laporan() {
+  const { t } = useI18n()
   const menuItems = [
-    { to: '/report/sales-report', label: 'Lap. Jual', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
-    { to: '/report/transaction-detail-report', label: 'Detail Trx', icon: FileSearchOutlined, color: 'text-blue-600', desc: 'Lihat item, HPP, dan margin per transaksi' },
-    { to: '/report/purchase-report', label: 'Lap. Beli', icon: FileExcelOutlined, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
-    { to: '/report/expense-report', label: 'Lap. Pengeeluaran', icon: FileExcelOutlined, color: 'text-red-600', desc: 'Lihat laporan biaya' },
+    { to: '/report/sales-report', label: t('report.index.salesShort'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('report.index.salesDesc') },
+    { to: '/report/transaction-detail-report', label: t('report.index.detailShort'), icon: FileSearchOutlined, color: 'text-blue-600', desc: t('report.index.detailDesc') },
+    { to: '/report/purchase-report', label: t('report.index.purchaseShort'), icon: FileExcelOutlined, color: 'text-teal-600', desc: t('report.index.purchaseDesc') },
+    { to: '/report/expense-report', label: t('report.index.expenseShort'), icon: FileExcelOutlined, color: 'text-red-600', desc: t('report.index.expenseDesc') },
   ]
 
   return (
@@ -36,7 +38,7 @@ function Laporan() {
         lg:text-[34px] lg:tracking-[-0.02em] lg:leading-[1.2] lg:mb-[14px]
       "
           >
-            Selamat Datang di Kasirku
+            {t('report.index.welcome')}
           </h1>
 
           <p
@@ -46,8 +48,7 @@ function Laporan() {
         lg:text-base lg:max-w-[560px] lg:font-light
       "
           >
-            Kelola transaksi, stok produk, dan lihat riwayat penjualan Anda dengan
-            mudah
+            {t('report.index.subtitle')}
           </p>
         </div>
 

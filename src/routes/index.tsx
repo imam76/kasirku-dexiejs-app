@@ -14,12 +14,14 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import dayjs from '@/lib/dayjs'
 import { formatCurrency } from '@/utils/formatters'
+import { useI18n } from '@/hooks/useI18n'
 
 export const Route = createFileRoute('/')({
   component: Index,
 })
 
 function Index() {
+  const { t } = useI18n()
   const todaySales = useLiveQuery(
     async () => {
       const startOfToday = dayjs.tz().startOf('day').toISOString()
@@ -40,17 +42,15 @@ function Index() {
   const averageTransaction = todaySales.count > 0 ? todaySales.total / todaySales.count : 0
 
   const menuItems = [
-    { to: '/transaction', label: 'Kasir', icon: ShoppingCartOutlined, color: 'text-blue-600', desc: 'Buat dan kelola transaksi penjualan baru' },
-    { to: '/finance', label: 'Keuangan', icon: BankOutlined, color: 'text-red-600', desc: 'Lihat ringkasan keuangan bisnis Anda secara real-time' },
-    { to: '/stock', label: 'Stok', icon: ProductOutlined, color: 'text-green-600', desc: 'Tambah, edit, dan kelola inventori produk' },
-    { to: '/shopping-note', label: 'Catatan', icon: AccountBookOutlined, color: 'text-yellow-600', desc: 'Kelola catatan belanja harian' },
-    { to: '/history', label: 'Riwayat', icon: HistoryOutlined, color: 'text-purple-600', desc: 'Lihat dan analisis semua transaksi sebelumnya' },
-    // { to: '/sales-report', label: 'Lap. Jual', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dengan filter' },
-    // { to: '/purchase-report', label: 'Lap. Beli', icon: FileExcelOutlined, color: 'text-teal-600', desc: 'Lihat laporan pembelian stok' },
-    { to: '/units', label: 'Satuan Konversi', icon: SwapOutlined, color: 'text-cyan-600', desc: 'Kelola konversi satuan produk' },
-    { to: '/profit', label: 'Keuntungan', icon: DollarOutlined, color: 'text-emerald-600', desc: 'Analisis keuntungan penjualan' },
-    { to: '/report', label: 'Laporan', icon: FileTextOutlined, color: 'text-orange-600', desc: 'Lihat laporan penjualan dan pembelian' },
-    { to: '/settings', label: 'Pengaturan', icon: SettingOutlined, color: 'text-gray-600', desc: 'Backup dan restore database aplikasi' },
+    { to: '/transaction', label: t('home.menu.cashier'), icon: ShoppingCartOutlined, color: 'text-blue-600', desc: t('home.menu.cashierDesc') },
+    { to: '/finance', label: t('nav.finance'), icon: BankOutlined, color: 'text-red-600', desc: t('home.menu.financeDesc') },
+    { to: '/stock', label: t('nav.stock'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.menu.stockDesc') },
+    { to: '/shopping-note', label: t('home.menu.shoppingNote'), icon: AccountBookOutlined, color: 'text-yellow-600', desc: t('home.menu.shoppingNoteDesc') },
+    { to: '/history', label: t('nav.history'), icon: HistoryOutlined, color: 'text-purple-600', desc: t('home.historyDesc') },
+    { to: '/units', label: t('home.units'), icon: SwapOutlined, color: 'text-cyan-600', desc: t('home.unitsDesc') },
+    { to: '/profit', label: t('nav.report.profit'), icon: DollarOutlined, color: 'text-emerald-600', desc: t('home.profitDesc') },
+    { to: '/report', label: t('nav.reports'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('home.reportDesc') },
+    { to: '/settings', label: t('nav.settings'), icon: SettingOutlined, color: 'text-gray-600', desc: t('home.settingsDesc') },
   ]
 
   return (
@@ -106,7 +106,7 @@ function Index() {
 
                   <div className="min-w-0">
                     <h2 className="text-[15px] font-medium leading-[1.3] text-gray-900 sm:text-[18px] lg:text-[20px]">
-                      Total penjualan hari ini
+                      {t('home.todaySales')}
                     </h2>
                     <p className="mt-1 text-[12px] text-gray-500 leading-[1.4] sm:text-[14px]">
                       {dayjs.tz().format('dddd, D MMMM YYYY')}
@@ -120,13 +120,13 @@ function Index() {
                     sm:px-4 sm:text-[12px]
                   "
                 >
-                  {todaySales.count} transaksi
+                  {todaySales.count} {t('home.transactionSuffix')}
                 </span>
               </div>
 
               <div className="py-5 border-b border-gray-100 sm:py-6 lg:py-7">
                 <p className="text-[11px] font-medium uppercase leading-none text-gray-500 sm:text-[12px]">
-                  Total
+                  {t('common.total')}
                 </p>
                 <p
                   className="
@@ -147,7 +147,7 @@ function Index() {
               >
                 <div className="min-w-0 rounded-[10px] bg-gray-50 px-4 py-4 sm:rounded-[12px]">
                   <p className="text-[12px] leading-[1.35] text-gray-500 sm:text-[13px]">
-                    Rata-rata / transaksi
+                    {t('home.averagePerTransaction')}
                   </p>
                   <p className="mt-2 break-words text-[20px] font-medium leading-[1.2] text-gray-900 sm:text-[22px]">
                     Rp {formatCurrency(Math.round(averageTransaction))}
@@ -156,10 +156,10 @@ function Index() {
 
                 <div className="min-w-0 rounded-[10px] bg-gray-50 px-4 py-4 sm:rounded-[12px]">
                   <p className="text-[12px] leading-[1.35] text-gray-500 sm:text-[13px]">
-                    Jumlah transaksi
+                    {t('home.transactionCount')}
                   </p>
                   <p className="mt-2 text-[20px] font-medium leading-[1.2] text-gray-900 sm:text-[22px]">
-                    {todaySales.count} transaksi
+                    {todaySales.count} {t('home.transactionSuffix')}
                   </p>
                 </div>
               </div>

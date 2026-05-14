@@ -1,10 +1,11 @@
-import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import {
   DEFAULT_UNITS,
   inferUnitDefinitionType,
   isGlobalConvertibleUnitType,
 } from '@/constants/units';
 import type { StockFormData } from '@/hooks/useStockManagement';
+import { useI18n } from '@/hooks/useI18n';
+import { getProductCategoryOptions } from '@/i18n/stock';
 import { db } from '@/lib/db';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -53,6 +54,7 @@ function FieldContainer({ label, error, help, children }: FieldContainerProps) {
 }
 
 export default function StockProductModal({ open, editingId, control, errors, setValue, onCancel, onSave }: Props) {
+  const { t } = useI18n();
   const screens = useBreakpoint();
   const { fields: wholesaleFields, append: appendWholesale, remove: removeWholesale } = useFieldArray({
     control,
@@ -65,8 +67,10 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
   const purchaseUnit = useWatch({ control, name: 'purchase_unit' }) || 'pcs';
   const sellingUnit = useWatch({ control, name: 'selling_unit' }) || 'pcs';
-  const sellableUnits = useWatch({ control, name: 'sellable_units' }) || [];
-  const unitMappings = useWatch({ control, name: 'unit_mappings' }) || [];
+  const watchedSellableUnits = useWatch({ control, name: 'sellable_units' });
+  const watchedUnitMappings = useWatch({ control, name: 'unit_mappings' });
+  const sellableUnits = useMemo(() => watchedSellableUnits || [], [watchedSellableUnits]);
+  const unitMappings = useMemo(() => watchedUnitMappings || [], [watchedUnitMappings]);
 
   const { data: conversions = [] } = useQuery({
     queryKey: ['unitConversions'],
@@ -94,6 +98,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
     () => availableUnits.map((unit) => ({ value: unit, label: unit })),
     [availableUnits],
   );
+  const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
 
   const unitTypeById = useMemo(() => {
     const map = new Map(DEFAULT_UNITS.map((unit) => [unit.id, unit.type]));
@@ -189,12 +194,14 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
     return missingGlobalConversionUnits.length > 0
       ? {
-        title: 'Konversi Global Belum Ada',
+        title: t('stock.form.globalConversionMissingTitle'),
         description: (
           <div className="flex flex-col gap-2">
             <p>
-              Konversi <strong>{missingGlobalConversionUnits.join(', ')}</strong> ke <strong>{purchaseUnit}</strong>{' '}
-              mengikuti Manajemen Unit. Tambahkan konversi global agar harga dan stok akurat.
+              {t('stock.form.globalConversionMissingDescription', {
+                units: missingGlobalConversionUnits.join(', '),
+                baseUnit: purchaseUnit,
+              })}
             </p>
             <Link to="/units">
               <Button
@@ -204,22 +211,24 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 icon={<ExternalLink size={14} />}
                 className="flex w-fit items-center gap-1"
               >
-                Atur Konversi Global
+                {t('stock.form.setupGlobalConversion')}
               </Button>
             </Link>
           </div>
         ),
       }
       : {
-        title: 'Konversi Produk Belum Ada',
+        title: t('stock.form.productConversionMissingTitle'),
         description: (
           <p>
-            Satuan <strong>{missingProductMappingUnits.join(', ')}</strong> perlu ratio khusus produk ke{' '}
-            <strong>{purchaseUnit}</strong>. Tambahkan row di tab Konversi Unit.
+            {t('stock.form.productConversionMissingDescription', {
+              units: missingProductMappingUnits.join(', '),
+              baseUnit: purchaseUnit,
+            })}
           </p>
         ),
       };
-  }, [hasUnitConversion, purchaseUnit, missingGlobalConversionUnits, missingProductMappingUnits]);
+  }, [hasUnitConversion, purchaseUnit, missingGlobalConversionUnits, missingProductMappingUnits, t]);
 
   useEffect(() => {
     unitMappingFields.forEach((_, index) => {
@@ -331,15 +340,15 @@ export default function StockProductModal({ open, editingId, control, errors, se
               <video ref={videoRef} className="h-full w-full object-cover" muted autoPlay playsInline />
             </div>
             <div className="bg-white p-4 text-center">
-              <p className="text-lg font-bold">Scan Barcode</p>
-              <p className="text-sm text-gray-500">Arahkan kamera ke barcode produk</p>
+              <p className="text-lg font-bold">{t('stock.form.scanBarcode')}</p>
+              <p className="text-sm text-gray-500">{t('stock.form.scanBarcodeDescription')}</p>
             </div>
           </div>
         </div>
       ) : null}
 
       <Modal
-        title={editingId ? 'Edit Produk' : 'Tambah Produk Baru'}
+        title={editingId ? t('stock.editProduct') : t('stock.newProduct')}
         open={open}
         onCancel={onCancel}
         footer={null}
@@ -355,11 +364,11 @@ export default function StockProductModal({ open, editingId, control, errors, se
             items={[
               {
                 key: 'product',
-                label: 'Produk',
+                label: t('stock.form.productTab'),
                 children: (
                   <>
                     <div className="grid grid-cols-1 gap-x-4">
-                      <FieldContainer label="Nama Produk" error={errors.name}>
+                      <FieldContainer label={t('stock.form.name')} error={errors.name}>
                         <Controller
                           name="name"
                           control={control}
@@ -378,19 +387,19 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         </div>
                       </FieldContainer>
 
-                      <FieldContainer label="Kategori" error={errors.category}>
+                      <FieldContainer label={t('stock.category')} error={errors.category}>
                         <Controller
                           name="category"
                           control={control}
                           render={({ field }) => (
-                            <Select {...field} className="w-full" options={PRODUCT_CATEGORIES} />
+                            <Select {...field} className="w-full" options={categoryOptions} />
                           )}
                         />
                       </FieldContainer>
                     </div>
 
                     <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                      <FieldContainer label="Satuan Dasar Stok" error={errors.purchase_unit}>
+                      <FieldContainer label={t('stock.form.baseStockUnit')} error={errors.purchase_unit}>
                         <Controller
                           name="purchase_unit"
                           control={control}
@@ -404,15 +413,15 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         <FieldContainer
                           label={(
                             <span className="inline-flex items-center gap-1.5">
-                              Satuan Jual Tersedia
+                              {t('stock.form.sellableUnits')}
                               <Tooltip
                                 trigger={['hover', 'click']}
-                                title="Unit pertama menjadi default kasir. Unit ukur pakai konversi global; package/custom perlu ratio di tab Konversi Unit."
+                                title={t('stock.form.sellableUnitsHelp')}
                               >
                                 <button
                                   type="button"
                                   className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                                  aria-label="Info satuan jual tersedia"
+                                  aria-label={t('stock.form.sellableUnitsInfo')}
                                 >
                                   <Info size={14} />
                                 </button>
@@ -434,7 +443,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                                   setValue('selling_unit', nextUnits[0] || '', { shouldDirty: true, shouldValidate: true });
                                 }}
                                 className="w-full"
-                                placeholder="Pilih satuan jual"
+                                placeholder={t('stock.form.sellableUnitsPlaceholder')}
                                 options={availableUnitOptions}
                               />
                             )}
@@ -442,7 +451,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         </FieldContainer>
                       
 
-                      <FieldContainer label={`Harga Beli (per ${purchaseUnit})`} error={errors.purchase_price}>
+                      <FieldContainer label={t('stock.form.purchasePricePer', { unit: purchaseUnit })} error={errors.purchase_price}>
                         <Controller
                           name="purchase_price"
                           control={control}
@@ -453,7 +462,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                               onBlur={field.onBlur}
                               onChange={(value) => field.onChange(value ?? 0)}
                               className="w-full"
-                              placeholder={`Masukkan harga beli per ${purchaseUnit}`}
+                              placeholder={t('stock.form.purchasePricePlaceholder', { unit: purchaseUnit })}
                               step={0.01}
                               min={0}
                             />
@@ -461,7 +470,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         />
                       </FieldContainer>
 
-                      <FieldContainer label={`Harga Jual (per ${purchaseUnit})`} error={errors.selling_price}>
+                      <FieldContainer label={t('stock.form.sellingPricePer', { unit: purchaseUnit })} error={errors.selling_price}>
                         <Controller
                           name="selling_price"
                           control={control}
@@ -472,7 +481,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                               onBlur={field.onBlur}
                               onChange={(value) => field.onChange(value ?? 0)}
                               className="w-full"
-                              placeholder={`Masukkan harga jual per ${purchaseUnit}`}
+                              placeholder={t('stock.form.sellingPricePlaceholder', { unit: purchaseUnit })}
                               step={0.01}
                               min={0}
                             />
@@ -480,7 +489,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         />
                       </FieldContainer>
 
-                      <FieldContainer label="Stok" error={errors.stock}>
+                      <FieldContainer label={t('product.stock')} error={errors.stock}>
                         <Controller
                           name="stock"
                           control={control}
@@ -491,14 +500,14 @@ export default function StockProductModal({ open, editingId, control, errors, se
                               onBlur={field.onBlur}
                               onChange={(value) => field.onChange(value ?? 0)}
                               className="w-full"
-                              placeholder="Masukkan stok"
+                              placeholder={t('stock.form.stockPlaceholder')}
                               min={0}
                             />
                           )}
                         />
                       </FieldContainer>
 
-                      <FieldContainer label="Qty Pembelian (opsional)" error={errors.purchase_quantity}>
+                      <FieldContainer label={t('stock.form.purchaseQuantity')} error={errors.purchase_quantity}>
                         <Controller
                           name="purchase_quantity"
                           control={control}
@@ -509,7 +518,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                               onBlur={field.onBlur}
                               onChange={(value) => field.onChange(value ?? 0)}
                               className="w-full"
-                              placeholder="Jumlah item yang dibeli (untuk laporan)"
+                              placeholder={t('stock.form.purchaseQuantityPlaceholder')}
                               min={0}
                             />
                           )}
@@ -532,14 +541,14 @@ export default function StockProductModal({ open, editingId, control, errors, se
               },
               ...(shouldShowUnitConversionTab ? [{
                 key: 'unit-conversion',
-                label: 'Konversi Unit',
+                label: t('stock.form.unitConversionTab'),
                 children: (
                   <div className="space-y-4">
                     <Alert
                       type="info"
                       showIcon
-                      message="Unit ukur mengikuti Manajemen Unit"
-                      description="Kg, gram, ons, liter, ml, jam, dan menit tidak perlu diatur ulang per produk. Isi ratio di sini hanya untuk package/custom seperti dus, pack, box, renteng, atau isi kemasan lain."
+                      message={t('stock.form.unitUsesGlobalManagement')}
+                      description={t('stock.form.unitUsesGlobalManagementDescription')}
                     />
 
                     {conversionWarning ? (
@@ -555,8 +564,8 @@ export default function StockProductModal({ open, editingId, control, errors, se
                     <div>
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div>
-                          <h3 className="font-medium text-gray-700">Konversi Satuan Produk</h3>
-                          <p className="text-xs text-gray-500">Format: 1 satuan = jumlah dalam Satuan Dasar Stok.</p>
+                          <h3 className="font-medium text-gray-700">{t('stock.form.productUnitConversion')}</h3>
+                          <p className="text-xs text-gray-500">{t('stock.form.productUnitConversionFormat')}</p>
                         </div>
                         <Button
                           type="dashed"
@@ -568,7 +577,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                           icon={<Plus size={16} />}
                           className="flex items-center gap-1"
                         >
-                          Tambah Unit
+                          {t('stock.form.addUnit')}
                         </Button>
                       </div>
 
@@ -581,7 +590,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                             <div className="grid flex-1 grid-cols-12 gap-2">
                               <div className="col-span-5">
                                 <FieldContainer
-                                  label="Satuan"
+                                  label={t('stock.form.unit')}
                                   error={errors.unit_mappings?.[index]?.unit as FieldError | undefined}
                                 >
                                   <Controller
@@ -592,7 +601,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                                         value={itemField.value}
                                         onChange={itemField.onChange}
                                         className="w-full"
-                                        placeholder="Pilih satuan"
+                                        placeholder={t('stock.form.unitPlaceholder')}
                                         options={unitMappingOptions}
                                       />
                                     )}
@@ -602,7 +611,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
                               <div className="col-span-4">
                                 <FieldContainer
-                                  label={`Isi per ${purchaseUnit}`}
+                                  label={t('stock.form.contentPer', { unit: purchaseUnit })}
                                   error={errors.unit_mappings?.[index]?.ratio as FieldError | undefined}
                                 >
                                   <Controller
@@ -625,7 +634,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
                               <div className="col-span-3">
                                 <FieldContainer
-                                  label="Dasar"
+                                  label={t('stock.form.base')}
                                   error={errors.unit_mappings?.[index]?.base_unit as FieldError | undefined}
                                 >
                                   <Controller
@@ -649,7 +658,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                           </div>
                         ))}
                         {unitMappingFields.length === 0 ? (
-                          <p className="text-sm italic text-gray-500">Belum ada konversi khusus produk.</p>
+                          <p className="text-sm italic text-gray-500">{t('stock.form.noProductConversions')}</p>
                         ) : null}
                       </div>
                     </div>
@@ -658,18 +667,18 @@ export default function StockProductModal({ open, editingId, control, errors, se
               }] : []),
               {
                 key: 'wholesale',
-                label: 'Harga Grosir',
+                label: t('stock.form.wholesaleTab'),
                 children: (
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <h3 className="font-medium text-gray-700">Harga Grosir (Multi Price)</h3>
+                      <h3 className="font-medium text-gray-700">{t('stock.form.wholesaleTitle')}</h3>
                       <Button
                         type="dashed"
                         onClick={() => appendWholesale({ min_quantity: 2, price: 0, price_type: 'unit' })}
                         icon={<Plus size={16} />}
                         className="flex items-center gap-1"
                       >
-                        Tambah Harga
+                        {t('stock.form.addPrice')}
                       </Button>
                     </div>
 
@@ -682,7 +691,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                           <div className="grid flex-1 grid-cols-12 gap-2">
                             <div className="col-span-3">
                               <FieldContainer
-                                label={`Min. Qty (${sellingUnit})`}
+                                label={t('stock.form.minQty', { unit: sellingUnit })}
                                 error={errors.wholesale_prices?.[index]?.min_quantity}
                               >
                                 <Controller
@@ -695,7 +704,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                                       onBlur={itemField.onBlur}
                                       onChange={(value) => itemField.onChange(value ?? 1)}
                                       className="w-full"
-                                      placeholder="Qty"
+                                      placeholder={t('stock.form.qtyPlaceholder')}
                                       min={1}
                                     />
                                   )}
@@ -704,7 +713,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                             </div>
 
                             <div className="col-span-4">
-                              <FieldContainer label="Tipe">
+                              <FieldContainer label={t('stock.form.type')}>
                                 <Controller
                                   name={`wholesale_prices.${index}.price_type`}
                                   control={control}
@@ -714,8 +723,8 @@ export default function StockProductModal({ open, editingId, control, errors, se
                                       onChange={itemField.onChange}
                                       className="w-full"
                                       options={[
-                                        { value: 'unit', label: `Per ${purchaseUnit}` },
-                                        { value: 'bundle', label: 'Paket' },
+                                        { value: 'unit', label: t('stock.form.perUnit', { unit: purchaseUnit }) },
+                                        { value: 'bundle', label: t('stock.form.bundle') },
                                       ]}
                                     />
                                   )}
@@ -724,7 +733,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                             </div>
 
                             <div className="col-span-5">
-                              <FieldContainer label="Harga" error={errors.wholesale_prices?.[index]?.price}>
+                              <FieldContainer label={t('stock.form.price')} error={errors.wholesale_prices?.[index]?.price}>
                                 <Controller
                                   name={`wholesale_prices.${index}.price`}
                                   control={control}
@@ -734,7 +743,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                                       onBlur={itemField.onBlur}
                                       onChange={(value) => itemField.onChange(value ?? 0)}
                                       className="w-full"
-                                      placeholder="Nominal"
+                                      placeholder={t('stock.form.nominalPlaceholder')}
                                       min={0}
                                       formatter={(value) =>
                                         value !== undefined && value !== null
@@ -759,7 +768,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         </div>
                       ))}
                       {wholesaleFields.length === 0 ? (
-                        <p className="text-sm italic text-gray-500">Belum ada harga grosir diatur.</p>
+                        <p className="text-sm italic text-gray-500">{t('stock.form.noWholesalePrices')}</p>
                       ) : null}
                     </div>
                   </div>
@@ -774,14 +783,14 @@ export default function StockProductModal({ open, editingId, control, errors, se
               onClick={onCancel}
               className="flex items-center gap-2 rounded-lg bg-gray-500 px-4 py-2 text-sm text-white transition-colors hover:bg-gray-600"
             >
-              Batal
+              {t('stock.form.cancel')}
             </button>
             <button
               type="button"
               onClick={onSave}
               className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm text-white transition-colors hover:bg-green-700"
             >
-              Simpan
+              {t('stock.form.save')}
             </button>
           </div>
         </form>

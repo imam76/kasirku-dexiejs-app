@@ -11,9 +11,11 @@ import {
   createProductCsvExportRows,
 } from '@/utils/productsCsv';
 import { exportCsv, type ExportTarget } from '@/utils/export';
+import { useI18n } from '@/hooks/useI18n';
 
 export default function StockManagement() {
   const { modal, message } = App.useApp();
+  const { t } = useI18n();
   const {
     products,
     editingId,
@@ -49,7 +51,7 @@ export default function StockManagement() {
 
   const handleExportCsv = async (target: ExportTarget = 'auto') => {
     if (products.length === 0) {
-      message.info('Tidak ada data produk untuk diexport.');
+      message.info(t('stock.noExportData'));
       return;
     }
 
@@ -60,10 +62,10 @@ export default function StockManagement() {
         target,
       });
       if (!exported) return;
-      message.success('Export CSV produk berhasil.');
+      message.success(t('stock.exportSuccess'));
     } catch (error) {
       console.error('Failed to export products CSV:', error);
-      message.error('Gagal export CSV produk.');
+      message.error(t('stock.exportFailed'));
     }
   };
 
@@ -77,7 +79,7 @@ export default function StockManagement() {
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith('.csv')) {
-      message.error('File harus berformat .csv');
+      message.error(t('stock.csvOnly'));
       return;
     }
 
@@ -86,43 +88,41 @@ export default function StockManagement() {
       const { items, errors: parseErrors } = buildProductCsvImportItems(text);
 
       if (items.length === 0) {
-        message.error(parseErrors[0] ?? 'Tidak ada data valid untuk diimport.');
+        message.error(parseErrors[0] ?? t('stock.noValidImportData'));
         return;
       }
 
       modal.confirm({
-        title: 'Import CSV Produk',
+        title: t('stock.importTitle'),
         content: (
           <div className="space-y-2">
             <div className="text-sm text-gray-700">
-              File: <span className="font-medium">{file.name}</span>
+              {t('stock.file')}: <span className="font-medium">{file.name}</span>
             </div>
             <div className="text-sm text-gray-700">
-              Baris valid: <span className="font-medium">{items.length}</span>
+              {t('stock.validRows')}: <span className="font-medium">{items.length}</span>
               {parseErrors.length > 0 ? (
                 <>
                   {' '}
-                  • Error: <span className="font-medium">{parseErrors.length}</span>
+                  • {t('stock.errorCount')}: <span className="font-medium">{parseErrors.length}</span>
                 </>
               ) : null}
             </div>
             <div className="text-xs text-gray-500">
-              Kolom yang didukung: id, sku, name/nama, category/kategori, purchase_unit/satuan_beli,
-              selling_unit/satuan_jual, purchase_price/harga_beli, selling_price/harga_jual, stock/stok,
-              purchase_quantity, wholesale_prices, sellable_units, unit_mappings.
+              {t('stock.supportedColumns')}
             </div>
             {parseErrors.length > 0 ? (
               <div className="text-xs text-red-600">
                 {parseErrors.slice(0, 5).map((errorText) => (
                   <div key={errorText}>{errorText}</div>
                 ))}
-                {parseErrors.length > 5 ? <div>...dan {parseErrors.length - 5} error lainnya.</div> : null}
+                {parseErrors.length > 5 ? <div>{t('stock.moreErrors', { count: parseErrors.length - 5 })}</div> : null}
               </div>
             ) : null}
           </div>
         ),
-        okText: 'Import',
-        cancelText: 'Batal',
+        okText: t('stock.importCsv'),
+        cancelText: t('stock.form.cancel'),
         okButtonProps: { disabled: isImporting },
         onOk: async () => {
           await importProductsFromCsv(items);
@@ -130,13 +130,13 @@ export default function StockManagement() {
       });
     } catch (error) {
       console.error('Failed to import CSV:', error);
-      message.error('Gagal membaca file CSV.');
+      message.error(t('stock.readCsvFailed'));
     }
   };
 
   const exportMenuItems: MenuProps['items'] = [
-    { key: 'share', label: 'Bagikan' },
-    { key: 'save', label: 'Simpan ke File' },
+    { key: 'share', label: t('stock.share') },
+    { key: 'save', label: t('stock.saveToFile') },
   ];
 
   const handleExportMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
@@ -164,7 +164,7 @@ export default function StockManagement() {
       />
 
       <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6">
-        <h2 className="min-w-0 flex-1 text-lg font-bold text-gray-800 sm:text-xl md:text-2xl">Manajemen Stok</h2>
+        <h2 className="min-w-0 flex-1 text-lg font-bold text-gray-800 sm:text-xl md:text-2xl">{t('stock.title')}</h2>
         <div className="flex shrink-0 items-center justify-end gap-2 sm:hidden">
           <Button
             type="primary"
@@ -173,11 +173,11 @@ export default function StockManagement() {
             onClick={handleAddProduct}
             className="h-11 px-3 font-semibold"
           >
-            Tambah
+            {t('stock.add')}
           </Button>
           <Button
             size="large"
-            aria-label="Menu export import stok"
+            aria-label={t('stock.actionMenuAria')}
             icon={<MoreVertical size={20} />}
             onClick={() => setIsActionDrawerOpen(true)}
             className="h-11 w-11"
@@ -191,7 +191,7 @@ export default function StockManagement() {
               className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm text-white transition-colors hover:bg-green-700 disabled:bg-green-400 sm:px-4 sm:py-2 sm:text-base"
             >
               <Download size={18} />
-              <span>Export CSV</span>
+              <span>{t('stock.exportCsv')}</span>
             </button>
           </Dropdown>
           <button
@@ -201,7 +201,7 @@ export default function StockManagement() {
             className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white transition-colors hover:bg-indigo-700 disabled:bg-indigo-400 sm:px-4 sm:py-2 sm:text-base"
           >
             <Upload size={18} />
-            <span>Import CSV</span>
+            <span>{t('stock.importCsv')}</span>
           </button>
           <button
             type="button"
@@ -209,13 +209,13 @@ export default function StockManagement() {
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-base"
           >
             <Plus size={18} />
-            <span>Tambah Produk</span>
+            <span>{t('stock.addProduct')}</span>
           </button>
         </div>
       </div>
 
       <Drawer
-        title="Aksi Stok"
+        title={t('stock.actions')}
         placement="bottom"
         open={isActionDrawerOpen}
         onClose={() => setIsActionDrawerOpen(false)}
@@ -230,7 +230,7 @@ export default function StockManagement() {
           <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
               <Download size={18} />
-              <span>Export CSV</span>
+              <span>{t('stock.exportCsv')}</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button
@@ -239,7 +239,7 @@ export default function StockManagement() {
                 onClick={() => handleMobileExport('share')}
                 className="h-12"
               >
-                Bagikan
+                {t('stock.share')}
               </Button>
               <Button
                 size="large"
@@ -247,7 +247,7 @@ export default function StockManagement() {
                 onClick={() => handleMobileExport('save')}
                 className="h-12"
               >
-                Simpan ke File
+                {t('stock.saveToFile')}
               </Button>
             </div>
           </div>
@@ -260,7 +260,7 @@ export default function StockManagement() {
             onClick={handleMobileImportClick}
             className="flex h-14 items-center justify-start font-semibold"
           >
-            Import CSV
+            {t('stock.importCsv')}
           </Button>
         </div>
       </Drawer>
