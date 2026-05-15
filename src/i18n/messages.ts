@@ -41,6 +41,8 @@ export const messages = {
     'root.startTour': 'Mulai panduan',
     'root.feedbackThanksTitle': 'Terima Kasih!',
     'root.feedbackThanksDescription': 'Feedback Anda sangat berharga bagi kami.',
+    'root.feedbackSubmitFailedTitle': 'Feedback gagal dikirim',
+    'root.feedbackSubmitFailedDescription': 'Coba lagi sebentar lagi.',
 
     'tour.dashboardStockTitle': 'Mulai dari stok',
     'tour.dashboardStockDescription': 'Sebelum transaksi pertama, tambahkan produk yang akan dijual dari menu Stok.',
@@ -660,6 +662,8 @@ export const messages = {
     'root.startTour': 'Start guide',
     'root.feedbackThanksTitle': 'Thank You!',
     'root.feedbackThanksDescription': 'Your feedback is very valuable to us.',
+    'root.feedbackSubmitFailedTitle': 'Feedback failed to send',
+    'root.feedbackSubmitFailedDescription': 'Please try again in a moment.',
 
     'tour.dashboardStockTitle': 'Start with stock',
     'tour.dashboardStockDescription': 'Before the first sale, add the products you want to sell from the Stock menu.',

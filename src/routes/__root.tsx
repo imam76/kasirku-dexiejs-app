@@ -46,6 +46,11 @@ type NavGroup = { label: string; icon: LucideIcon; key: string; children: NavLea
 type NavLink = NavLeaf | NavGroup
 
 const isNavGroup = (link: NavLink): link is NavGroup => 'children' in link
+const escapeTelegramHtml = (value: unknown) =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 
 const RootLayout = () => {
   const router = useRouter()
@@ -79,20 +84,39 @@ const RootLayout = () => {
   }, [location.pathname]) // Re-check on navigation
 
   const handleFeedbackSubmit = async (values: FeedbackValues) => {
-    const FLY_OVER_THE_DRIVE = "8774401189:AAEWFdwvoH71-GSysuEmbsb2jaMC_OZ8QWA";
-    const NEVER_TRUST_THE_GOVERMENT = "587438877";
-
     const questions = FEEDBACK_QUESTIONS.filter(q => q.wave === feedbackWave)
     const valueLines = questions
       .map((q) => {
-        const val = values[`q${q.id}`];
-        if (val === undefined || val === null) return null;
-        return `<b>${q.id}. ${q.question}</b>\nJawaban: ${String(val)}`
+        const val = values[`q${q.id}`]
+        if (val === undefined || val === null) return null
+        return `<b>${q.id}. ${escapeTelegramHtml(q.question)}</b>\nJawaban: ${escapeTelegramHtml(val)}`
       })
       .filter(Boolean)
-      .join('\n\n');
+      .join('\n\n')
 
     const message = `📊 <b>Feedback Wave ${feedbackWave} Baru Diterima</b>\n\n${valueLines}\n\n🕒 <i>Dikirim pada ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</i>`
+
+    console.log(`Feedback Wave ${feedbackWave} submitted:`, values)
+
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: message }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Feedback API failed with status ${response.status}`)
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error)
+      notification.error({
+        message: t('root.feedbackSubmitFailedTitle'),
+        description: t('root.feedbackSubmitFailedDescription'),
+        placement: 'bottomRight',
+      })
+      return
+    }
 
     markFeedbackSubmitted(feedbackWave)
 
@@ -100,22 +124,6 @@ const RootLayout = () => {
       values,
       submittedAt: dayjs().toISOString()
     }))
-
-    console.log(`Feedback Wave ${feedbackWave} submitted:`, values)
-
-    try {
-      await fetch(`https://api.telegram.org/bot${FLY_OVER_THE_DRIVE}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: NEVER_TRUST_THE_GOVERMENT,
-          text: message,
-          parse_mode: "HTML",
-        }),
-      });
-    } catch (error) {
-      console.error('Error submitting feedback:', error)
-    }
 
     setShowFeedback(false)
     notification.success({
