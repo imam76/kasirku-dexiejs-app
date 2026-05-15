@@ -1,6 +1,7 @@
 import { FINANCE_CATEGORIES, isProfitAffectingFinanceTransaction } from '@/constants/finance';
 import { db } from '@/lib/db';
 import type { FinanceTransaction, ProfitLog, Transaction } from '@/types';
+import { isTransactionVoided } from '@/utils/transactions';
 
 interface WithdrawProfitInput {
   amount: number;
@@ -61,7 +62,7 @@ export const recalculateProfit = async () => {
     const existingLogs = await db.profitLogs.toArray();
     const withdrawLogs = existingLogs.filter((log) =>
       log.type === 'OUT' &&
-      (log.category === 'WITHDRAW' || !log.description.startsWith('Operasional: '))
+      (log.category === 'WITHDRAW' || (!log.transaction_id && !log.description.startsWith('Operasional: ')))
     );
 
     await db.profitLogs.clear();
@@ -84,6 +85,13 @@ export const recalculateProfit = async () => {
         data: transaction,
         date: new Date(transaction.created_at).getTime(),
       })),
+      ...transactions
+        .filter(isTransactionVoided)
+        .map((transaction) => ({
+          type: 'VOID',
+          data: transaction,
+          date: new Date(transaction.voided_at || transaction.created_at).getTime(),
+        })),
       ...withdrawLogs.map((withdraw) => ({
         type: 'WITHDRAW',
         data: withdraw,
@@ -125,6 +133,34 @@ export const recalculateProfit = async () => {
             category: 'SALES',
             description: `Keuntungan dari transaksi ${transaction.transaction_number}`,
             created_at: transaction.created_at,
+            balance_after: runningBalance,
+          });
+        }
+      } else if (event.type === 'VOID') {
+        const transaction = event.data as Transaction;
+        const transactionItems = itemsByTransaction[transaction.id] || [];
+        let profit = 0;
+
+        for (const item of transactionItems) {
+          if (typeof item.profit === 'number') {
+            profit += item.profit;
+          } else {
+            const buyPrice = item.purchase_price || 0;
+            const sellPrice = item.price || 0;
+            profit += (sellPrice - buyPrice) * item.quantity;
+          }
+        }
+
+        if (profit !== 0) {
+          runningBalance -= profit;
+          newLogs.push({
+            id: crypto.randomUUID(),
+            transaction_id: transaction.id,
+            amount: Math.abs(profit),
+            type: profit > 0 ? 'OUT' : 'IN',
+            category: 'VOID',
+            description: `Pembatalan profit transaksi ${transaction.transaction_number}: ${transaction.void_reason || 'Transaksi dibatalkan'}`,
+            created_at: transaction.voided_at || transaction.created_at,
             balance_after: runningBalance,
           });
         }

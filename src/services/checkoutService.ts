@@ -145,6 +145,7 @@ export const checkout = async ({
         payment_amount: payment,
         change_amount: change,
         payment_method: paymentMethod,
+        status: 'COMPLETED',
         receipt_status: 'pending',
         created_at: createdAt,
       };

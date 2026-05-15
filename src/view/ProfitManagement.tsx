@@ -41,10 +41,12 @@ export default function ProfitManagement() {
               <Tag color={
                 record.category === 'SALES' ? 'blue' :
                   record.category === 'WITHDRAW' ? 'purple' :
+                    record.category === 'VOID' ? 'red' :
                     'orange'
               } style={{ fontSize: '10px' }}>
                 {record.category === 'SALES' ? 'PENJUALAN' :
                   record.category === 'WITHDRAW' ? 'PENARIKAN' :
+                    record.category === 'VOID' ? 'PEMBATALAN' :
                     'OPERASIONAL'}
               </Tag>
             </div>

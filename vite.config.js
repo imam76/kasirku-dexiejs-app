@@ -39,11 +39,58 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 var host = process.env.TAURI_DEV_HOST;
+var FEEDBACK_API_PATH = '/api/feedback';
+var feedbackApiUrl = new URL('./api/feedback.js', import.meta.url).href;
+var withJsonResponseHelpers = function (response) {
+    var feedbackResponse = response;
+    feedbackResponse.status = function (code) {
+        feedbackResponse.statusCode = code;
+        return feedbackResponse;
+    };
+    feedbackResponse.json = function (body) {
+        if (!feedbackResponse.headersSent) {
+            feedbackResponse.setHeader('Content-Type', 'application/json');
+        }
+        feedbackResponse.end(JSON.stringify(body));
+    };
+    return feedbackResponse;
+};
+var feedbackApiDevPlugin = function () { return ({
+    name: 'kasirku-feedback-api-dev',
+    apply: 'serve',
+    configureServer: function (server) {
+        var _this = this;
+        server.middlewares.use(FEEDBACK_API_PATH, function (request, response) { return __awaiter(_this, void 0, void 0, function () {
+            var feedbackHandler, error_1;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 3, , 4]);
+                        return [4 /*yield*/, import(feedbackApiUrl)];
+                    case 1:
+                        feedbackHandler = (_a.sent()).default;
+                        return [4 /*yield*/, feedbackHandler(request, withJsonResponseHelpers(response))];
+                    case 2:
+                        _a.sent();
+                        return [3 /*break*/, 4];
+                    case 3:
+                        error_1 = _a.sent();
+                        console.error('Local feedback API failed:', error_1);
+                        withJsonResponseHelpers(response)
+                            .status(500)
+                            .json({ error: 'Failed to submit feedback' });
+                        return [3 /*break*/, 4];
+                    case 4: return [2 /*return*/];
+                }
+            });
+        }); });
+    },
+}); };
 // https://vite.dev/config/
 export default defineConfig(function () { return __awaiter(void 0, void 0, void 0, function () {
-    return __generator(this, function (_c) {
+    return __generator(this, function (_a) {
         return [2 /*return*/, {
-                plugins: [tanstackRouter(), react()],
+                plugins: [feedbackApiDevPlugin(), tanstackRouter(), react()],
                 // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
                 //
                 // 1. prevent Vite from obscuring rust errors

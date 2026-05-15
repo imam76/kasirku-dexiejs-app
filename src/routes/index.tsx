@@ -14,6 +14,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/lib/db'
 import dayjs from '@/lib/dayjs'
 import { formatCurrency } from '@/utils/formatters'
+import { filterActiveTransactions } from '@/utils/transactions'
 import { useI18n } from '@/hooks/useI18n'
 
 export const Route = createFileRoute('/')({
@@ -31,9 +32,11 @@ function Index() {
         .between(startOfToday, endOfToday, true, true)
         .toArray()
 
+      const activeTransactions = filterActiveTransactions(transactions)
+
       return {
-        total: transactions.reduce((sum, transaction) => sum + transaction.total_amount, 0),
-        count: transactions.length,
+        total: activeTransactions.reduce((sum, transaction) => sum + transaction.total_amount, 0),
+        count: activeTransactions.length,
       }
     },
     [],

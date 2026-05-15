@@ -13,6 +13,8 @@ import {
 import { exportCsv, type ExportTarget } from '@/utils/export';
 import { useI18n } from '@/hooks/useI18n';
 
+const STOCK_SAVED_EVENT = 'kasirku-workflow-tour-stock-saved';
+
 export default function StockManagement() {
   const { modal, message } = App.useApp();
   const { t } = useI18n();
@@ -280,6 +282,7 @@ export default function StockManagement() {
             const submit = await handleSubmit();
             if (submit) {
               setIsModalOpen(false);
+              window.dispatchEvent(new Event(STOCK_SAVED_EVENT));
             }
           } catch (error) {
             console.error('Failed to save product:', error);

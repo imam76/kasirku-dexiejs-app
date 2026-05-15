@@ -68,6 +68,7 @@ export interface Product {
 
 export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
 export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
+export type TransactionStatus = 'COMPLETED' | 'VOIDED';
 
 export interface Transaction {
   id: string;
@@ -76,6 +77,9 @@ export interface Transaction {
   payment_amount: number;
   change_amount: number;
   payment_method: PaymentMethod;
+  status?: TransactionStatus;
+  voided_at?: string;
+  void_reason?: string;
   receipt_status?: ReceiptPrintStatus;
   receipt_printed_at?: string;
   receipt_print_error?: string;
@@ -205,7 +209,7 @@ export interface ProfitLog {
   transaction_id?: string; // Optional, link to transaction if source is transaction
   amount: number;
   type: 'IN' | 'OUT';
-  category?: 'WITHDRAW' | 'OPERATIONAL' | 'SALES'; // New field to categorize profit log
+  category?: 'WITHDRAW' | 'OPERATIONAL' | 'SALES' | 'VOID'; // New field to categorize profit log
   description: string;
   created_at: string;
   balance_after: number;

@@ -1,12 +1,13 @@
 import { useRef, useEffect, useState, useLayoutEffect } from 'react';
-import { App } from 'antd';
-import { Receipt, ChevronDown, ChevronUp, Wallet, DollarSign, Printer, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { App, Input } from 'antd';
+import { Receipt, ChevronDown, ChevronUp, Wallet, DollarSign, Printer, AlertCircle, CheckCircle2, Ban } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
 import { useI18n } from '@/hooks/useI18n';
 import { formatDate, formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
+import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
 import { Transaction, TransactionItem, TransactionReceiptInput } from '@/types';
 
 interface TransactionWithItems extends Transaction {
@@ -14,7 +15,7 @@ interface TransactionWithItems extends Transaction {
 }
 
 export default function History() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { t } = useI18n();
   const {
     transactions,
@@ -26,11 +27,14 @@ export default function History() {
     error,
     toggleExpand,
     loadMore,
-    refetch
+    refetch,
+    voidTransaction,
+    isVoiding,
   } = useHistory();
   const parentRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     if (parentRef.current) {
@@ -72,6 +76,11 @@ export default function History() {
   }, [expandedId, rowVirtualizer]);
 
   const handleReprint = async (transaction: TransactionWithItems) => {
+    if (isTransactionVoided(transaction)) {
+      message.warning(t('history.voidedPrintBlocked'));
+      return;
+    }
+
     if (!transaction.items) {
       message.warning(t('history.itemsNotReady'));
       return;
@@ -95,6 +104,49 @@ export default function History() {
     } finally {
       setReprintingId(null);
     }
+  };
+
+  const handleVoid = (transaction: TransactionWithItems) => {
+    let reason = '';
+
+    modal.confirm({
+      title: t('history.voidTitle'),
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">{t('history.voidContent')}</p>
+          <Input.TextArea
+            rows={3}
+            maxLength={160}
+            showCount
+            placeholder={t('history.voidReasonPlaceholder')}
+            onChange={(event) => {
+              reason = event.target.value;
+            }}
+          />
+        </div>
+      ),
+      okText: t('history.voidOk'),
+      cancelText: t('common.cancel'),
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          setVoidingId(transaction.id);
+          await voidTransaction({
+            transactionId: transaction.id,
+            reason: reason.trim() || t('history.voidDefaultReason'),
+          });
+          await refetch();
+          message.success(t('history.voidSuccess'));
+        } catch (error) {
+          modal.error({
+            title: t('history.voidFailedTitle'),
+            content: error instanceof Error ? error.message : t('history.voidFailedContent'),
+          });
+        } finally {
+          setVoidingId(null);
+        }
+      },
+    });
   };
 
   const getPrintActionLabel = (transaction: TransactionWithItems) => {
@@ -143,6 +195,7 @@ export default function History() {
               {rowVirtualizer.getVirtualItems().map((virtualItem) => {
                 const transaction = transactions[virtualItem.index];
                 if (!transaction) return null;
+                const isVoided = isTransactionVoided(transaction);
 
                 return (
                   <div
@@ -155,11 +208,15 @@ export default function History() {
                     }}
                   >
                     <div
-                      className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden"
+                      className={`bg-white rounded-lg shadow-md border overflow-hidden ${
+                        isVoided ? 'border-red-200' : 'border-gray-200'
+                      }`}
                     >
                       <div
                         onClick={() => toggleExpand(transaction.id)}
-                        className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                        className={`p-4 cursor-pointer transition-colors ${
+                          isVoided ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-gray-50'
+                        }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
@@ -168,6 +225,12 @@ export default function History() {
                               <span className="font-mono text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded">
                                 {transaction.transaction_number}
                               </span>
+                              {isVoided && (
+                                <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-red-100 text-red-700">
+                                  <Ban size={12} />
+                                  {t('history.voidedBadge')}
+                                </span>
+                              )}
                               <span className={`text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold ${
                                 transaction.payment_method === 'NON_TUNAI'
                                   ? 'bg-indigo-100 text-indigo-700'
@@ -212,7 +275,7 @@ export default function History() {
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
                               <div>
                                 <p className="text-xs text-gray-500">{t('common.total')}</p>
-                                <p className="font-bold text-gray-800">
+                                <p className={`font-bold ${isVoided ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
                                   Rp {formatCurrency(transaction.total_amount)}
                                 </p>
                               </div>
@@ -231,9 +294,9 @@ export default function History() {
                               <div>
                                 <p className="text-xs text-gray-500">Profit</p>
                                 {(() => {
-                                  const totalProfit = transaction.items?.reduce((sum, item) => sum + (item.profit || 0), 0) || 0;
+                                  const totalProfit = transaction.items ? getTransactionProfit(transaction.items) : 0;
                                   return (
-                                    <p className={`font-bold ${totalProfit > 0 ? 'text-green-700' : totalProfit < 0 ? 'text-red-700' : 'text-gray-700'}`}>
+                                    <p className={`font-bold ${isVoided ? 'text-gray-500 line-through' : totalProfit > 0 ? 'text-green-700' : totalProfit < 0 ? 'text-red-700' : 'text-gray-700'}`}>
                                       Rp {formatCurrency(totalProfit)}
                                     </p>
                                   );
@@ -255,6 +318,14 @@ export default function History() {
                       {expandedId === transaction.id && transaction.items && (
                         <div className="border-t bg-gray-50 p-4">
                           <h4 className="font-semibold text-gray-700 mb-3">{t('history.itemDetails')}</h4>
+                          {isVoided && (
+                            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                              <p className="font-semibold">{t('history.voidedNotice')}</p>
+                              {transaction.void_reason && (
+                                <p className="mt-1">{transaction.void_reason}</p>
+                              )}
+                            </div>
+                          )}
                           <div className="space-y-2">
                             {transaction.items.map((item) => (
                               <div
@@ -292,7 +363,9 @@ export default function History() {
                             ))}
                           </div>
                           <div className={`mt-4 rounded-lg border p-3 ${
-                            transaction.receipt_status === 'print_failed'
+                            isVoided
+                              ? 'border-red-200 bg-red-50'
+                              : transaction.receipt_status === 'print_failed'
                               ? 'border-red-200 bg-red-50'
                               : 'border-gray-200 bg-white'
                           }`}>
@@ -303,7 +376,9 @@ export default function History() {
                                     ? 'text-red-700'
                                     : 'text-gray-700'
                                 }`}>
-                                  {transaction.receipt_status === 'print_failed'
+                                  {isVoided
+                                    ? t('history.voidedReceiptBlocked')
+                                    : transaction.receipt_status === 'print_failed'
                                     ? t('history.receiptNotPrinted')
                                     : t('history.receiptPrint')}
                                 </p>
@@ -312,28 +387,45 @@ export default function History() {
                                     ? 'text-red-600'
                                     : 'text-gray-500'
                                 }`}>
-                                  {transaction.receipt_status === 'print_failed'
+                                  {isVoided
+                                    ? t('history.voidedReceiptBlockedDescription')
+                                    : transaction.receipt_status === 'print_failed'
                                     ? transaction.receipt_print_error || t('history.checkPrinter')
                                     : transaction.receipt_status === 'printed'
                                       ? t('history.receiptAlreadyPrinted')
                                       : t('history.receiptNotYetPrinted')}
                                 </p>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleReprint(transaction)}
-                                disabled={reprintingId === transaction.id}
-                                className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 ${
-                                  transaction.receipt_status === 'print_failed'
-                                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                }`}
-                              >
-                                <Printer size={16} />
-                                {getPrintActionLabel(transaction)}
-                              </button>
+                              {!isVoided && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleReprint(transaction)}
+                                  disabled={reprintingId === transaction.id}
+                                  className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 ${
+                                    transaction.receipt_status === 'print_failed'
+                                      ? 'bg-red-600 hover:bg-red-700 text-white'
+                                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  }`}
+                                >
+                                  <Printer size={16} />
+                                  {getPrintActionLabel(transaction)}
+                                </button>
+                              )}
                             </div>
                           </div>
+                          {!isVoided && (
+                            <div className="mt-3 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => handleVoid(transaction)}
+                                disabled={isVoiding || voidingId === transaction.id}
+                                className="flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
+                              >
+                                <Ban size={16} />
+                                {voidingId === transaction.id ? t('history.voiding') : t('history.voidAction')}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

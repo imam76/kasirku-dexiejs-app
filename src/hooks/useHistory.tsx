@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { Transaction, TransactionItem } from '../types';
+import { voidTransaction as voidTransactionService } from '@/services/transactionVoidService';
 
 interface TransactionWithItems extends Transaction {
   items?: TransactionItem[];
@@ -10,6 +11,7 @@ interface TransactionWithItems extends Transaction {
 const PAGE_SIZE = 10;
 
 export const useHistory = () => {
+  const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const {
@@ -63,6 +65,21 @@ export const useHistory = () => {
     setExpandedId(expandedId === transactionId ? null : transactionId);
   };
 
+  const voidMutation = useMutation({
+    mutationFn: voidTransactionService,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['profitBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['profitLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['salesReport'] });
+      queryClient.invalidateQueries({ queryKey: ['transactionDetailReport'] });
+      queryClient.invalidateQueries({ queryKey: ['expenseReport'] });
+    },
+  });
+
   return {
     transactions,
     expandedId,
@@ -74,5 +91,7 @@ export const useHistory = () => {
     toggleExpand,
     loadMore: fetchNextPage,
     refetch,
+    voidTransaction: voidMutation.mutateAsync,
+    isVoiding: voidMutation.isPending,
   };
 };

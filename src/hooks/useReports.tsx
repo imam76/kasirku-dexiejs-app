@@ -8,6 +8,7 @@ import {
   createEmptySoldItemSummary,
   resolveTransactionItemUnit,
 } from '@/utils/salesUnits';
+import { filterActiveTransactions } from '@/utils/transactions';
 import type { SoldItemSummary } from '@/utils/salesUnits';
 
 interface SalesReportData {
@@ -113,7 +114,7 @@ export const useSalesReport = (
           .reverse();
       }
 
-      let transactions = await collection.toArray();
+      let transactions = filterActiveTransactions(await collection.toArray());
 
       // Filter by payment method if provided
       if (paymentMethod && paymentMethod !== 'SEMUA') {
@@ -254,7 +255,7 @@ export const useTransactionDetailReport = (
           .reverse();
       }
 
-      let transactions = await collection.toArray();
+      let transactions = filterActiveTransactions(await collection.toArray());
 
       if (paymentMethod && paymentMethod !== 'SEMUA') {
         transactions = transactions.filter((transaction) => transaction.payment_method === paymentMethod);

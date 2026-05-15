@@ -6,6 +6,7 @@ import {
 } from '@/constants/finance';
 import { db } from '@/lib/db';
 import type { FinanceTransaction, FinanceTransactionType } from '@/types';
+import { isTransactionActive } from '@/utils/transactions';
 
 interface AddFinanceTransactionInput {
   type: FinanceTransactionType;
@@ -93,7 +94,7 @@ export const recalculateFinance = async () => {
       .filter((transaction) => !!transaction.reference_id)
       .delete();
 
-    const posTransactions = await db.transactions.toArray();
+    const posTransactions = (await db.transactions.toArray()).filter(isTransactionActive);
     const stockPurchases = await db.stockPurchases.toArray();
     const newAutoTransactions: FinanceTransaction[] = [];
 
