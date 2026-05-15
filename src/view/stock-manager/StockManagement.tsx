@@ -171,6 +171,7 @@ export default function StockManagement() {
             size="large"
             icon={<Plus size={18} />}
             onClick={handleAddProduct}
+            data-tour="stock-add-product"
             className="h-11 px-3 font-semibold"
           >
             {t('stock.add')}
@@ -206,6 +207,7 @@ export default function StockManagement() {
           <button
             type="button"
             onClick={handleAddProduct}
+            data-tour="stock-add-product"
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-base"
           >
             <Plus size={18} />

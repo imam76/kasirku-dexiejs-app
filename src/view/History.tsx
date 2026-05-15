@@ -115,7 +115,7 @@ export default function History() {
 
   return (
     <div className="p-4 sm:p-6 min-h-screen bg-gray-50">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-6" data-tour="history-results">
         <Receipt size={32} className="text-blue-600" />
         <h2 className="text-2xl font-bold text-gray-800">{t('history.title')}</h2>
       </div>

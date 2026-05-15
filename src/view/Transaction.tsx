@@ -103,6 +103,7 @@ export default function Transaction() {
               <Input
                 ref={searchInputRef}
                 size="large"
+                data-tour="transaction-search"
                 allowClear={false}
                 prefix={<SearchOutlined className="text-gray-400" />}
                 placeholder={t('transaction.searchPlaceholder')}
@@ -125,6 +126,7 @@ export default function Transaction() {
                 size="large"
                 icon={<ScanLine size={18} />}
                 onClick={() => setScannerOpen(true)}
+                data-tour="transaction-scan"
                 className="flex w-full items-center justify-center gap-2 bg-indigo-600 font-semibold text-white hover:!border-indigo-700 hover:!bg-indigo-700 hover:!text-white sm:w-auto"
               >
                 {t('transaction.scanBarcode')}
@@ -161,6 +163,7 @@ export default function Transaction() {
         <div className="fixed bottom-4 left-4 right-4 lg:hidden z-30">
           <button
             onClick={() => setCartOpen(true)}
+            data-tour="transaction-mobile-cart"
             className="w-full bg-green-600 hover:bg-green-700 text-white py-3.5 px-5 rounded-xl shadow-xl font-semibold flex items-center justify-between transition-colors"
           >
             <div className="flex items-center gap-3">

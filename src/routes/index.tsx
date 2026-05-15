@@ -179,6 +179,7 @@ function Index() {
             <Link
               key={item.to}
               to={item.to}
+              data-tour={item.to === '/stock' ? 'dashboard-stock' : undefined}
               className="
             flex flex-col items-center justify-center
             bg-white border border-gray-100 rounded-[10px]

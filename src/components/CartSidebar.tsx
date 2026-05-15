@@ -38,7 +38,7 @@ export default function CartSidebar({
   const { t } = useI18n();
 
   return (
-    <div className="hidden lg:block lg:col-span-1">
+    <div className="hidden lg:block lg:col-span-1" data-tour="transaction-desktop-cart">
       <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200 sticky top-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-800">{t('cart.title')}</h3>

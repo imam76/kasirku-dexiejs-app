@@ -1,4 +1,5 @@
 import FeedbackModal from '@/components/FeedbackModal'
+import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
 import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
@@ -20,6 +21,7 @@ import {
   DollarSign,
   FileText,
   History,
+  HelpCircle,
   Home,
   Languages,
   Moon,
@@ -250,6 +252,18 @@ const RootLayout = () => {
               <Languages size={18} />
               <span className="leading-none">{locale === 'id' ? 'EN' : 'ID'}</span>
             </button>
+            <AppWorkflowTour>
+              {(startTour) => (
+                <button
+                  onClick={startTour}
+                  className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+                  aria-label={t('root.startTour')}
+                  title={t('root.startTour')}
+                >
+                  <HelpCircle size={20} />
+                </button>
+              )}
+            </AppWorkflowTour>
             <button
               onClick={() => navigate({ to: '/settings' })}
               className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"

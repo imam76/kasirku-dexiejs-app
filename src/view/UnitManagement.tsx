@@ -602,7 +602,7 @@ export default function UnitManagement() {
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6 flex items-center gap-3" data-tour="units-workflow">
         <div className="rounded-lg bg-blue-100 p-2 text-blue-600">
           <Scale size={24} />
         </div>

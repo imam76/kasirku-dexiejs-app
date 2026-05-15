@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Alert, Button, Grid, Input, InputNumber, Modal, Select, Tabs, Tooltip } from 'antd';
 import { AlertTriangle, ExternalLink, Info, Plus, ScanLine, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type Control,
   Controller,
@@ -36,16 +36,25 @@ type Props = {
 };
 
 type FieldContainerProps = {
-  label: React.ReactNode;
+  label: ReactNode;
   error?: FieldError;
   help?: string;
-  children: React.ReactNode;
+  required?: boolean;
+  requiredLabel?: string;
+  children: ReactNode;
 };
 
-function FieldContainer({ label, error, help, children }: FieldContainerProps) {
+function FieldContainer({ label, error, help, required, requiredLabel, children }: FieldContainerProps) {
   return (
     <div className="mb-4">
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-gray-700">
+        <span>{label}</span>
+        {required ? (
+          <span className="text-sm font-bold leading-none text-red-500" aria-label={requiredLabel} title={requiredLabel}>
+            *
+          </span>
+        ) : null}
+      </label>
       {children}
       {error?.message ? <p className="mt-1 text-xs text-red-600">{String(error.message)}</p> : null}
       {!error?.message && help ? <p className="mt-1 text-xs text-gray-500">{help}</p> : null}
@@ -359,6 +368,10 @@ export default function StockProductModal({ open, editingId, control, errors, se
         centered={!!screens.sm}
       >
         <form onSubmit={onSave} className="mt-6">
+          <div className="mb-4 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-gray-600">
+            <span className="mr-1 font-bold text-red-500">*</span>
+            {t('stock.form.requiredHint')}
+          </div>
           <Tabs
             defaultActiveKey="product"
             items={[
@@ -368,7 +381,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 children: (
                   <>
                     <div className="grid grid-cols-1 gap-x-4">
-                      <FieldContainer label={t('stock.form.name')} error={errors.name}>
+                      <FieldContainer
+                        label={t('stock.form.name')}
+                        error={errors.name}
+                        required
+                        requiredLabel={t('stock.form.requiredLabel')}
+                      >
                         <Controller
                           name="name"
                           control={control}
@@ -387,7 +405,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         </div>
                       </FieldContainer>
 
-                      <FieldContainer label={t('stock.category')} error={errors.category}>
+                      <FieldContainer
+                        label={t('stock.category')}
+                        error={errors.category}
+                        required
+                        requiredLabel={t('stock.form.requiredLabel')}
+                      >
                         <Controller
                           name="category"
                           control={control}
@@ -399,7 +422,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
                     </div>
 
                     <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                      <FieldContainer label={t('stock.form.baseStockUnit')} error={errors.purchase_unit}>
+                      <FieldContainer
+                        label={t('stock.form.baseStockUnit')}
+                        error={errors.purchase_unit}
+                        required
+                        requiredLabel={t('stock.form.requiredLabel')}
+                      >
                         <Controller
                           name="purchase_unit"
                           control={control}
@@ -429,6 +457,8 @@ export default function StockProductModal({ open, editingId, control, errors, se
                             </span>
                           )}
                           error={(errors.sellable_units || errors.selling_unit) as FieldError | undefined}
+                          required
+                          requiredLabel={t('stock.form.requiredLabel')}
                         >
                           <Controller
                             name="sellable_units"
@@ -451,7 +481,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         </FieldContainer>
                       
 
-                      <FieldContainer label={t('stock.form.purchasePricePer', { unit: purchaseUnit })} error={errors.purchase_price}>
+                      <FieldContainer
+                        label={t('stock.form.purchasePricePer', { unit: purchaseUnit })}
+                        error={errors.purchase_price}
+                        required
+                        requiredLabel={t('stock.form.requiredLabel')}
+                      >
                         <Controller
                           name="purchase_price"
                           control={control}
@@ -470,7 +505,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         />
                       </FieldContainer>
 
-                      <FieldContainer label={t('stock.form.sellingPricePer', { unit: purchaseUnit })} error={errors.selling_price}>
+                      <FieldContainer
+                        label={t('stock.form.sellingPricePer', { unit: purchaseUnit })}
+                        error={errors.selling_price}
+                        required
+                        requiredLabel={t('stock.form.requiredLabel')}
+                      >
                         <Controller
                           name="selling_price"
                           control={control}
@@ -489,7 +529,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         />
                       </FieldContainer>
 
-                      <FieldContainer label={t('product.stock')} error={errors.stock}>
+                      <FieldContainer
+                        label={t('product.stock')}
+                        error={errors.stock}
+                        required
+                        requiredLabel={t('stock.form.requiredLabel')}
+                      >
                         <Controller
                           name="stock"
                           control={control}
@@ -592,6 +637,8 @@ export default function StockProductModal({ open, editingId, control, errors, se
                                 <FieldContainer
                                   label={t('stock.form.unit')}
                                   error={errors.unit_mappings?.[index]?.unit as FieldError | undefined}
+                                  required
+                                  requiredLabel={t('stock.form.requiredLabel')}
                                 >
                                   <Controller
                                     name={`unit_mappings.${index}.unit`}
@@ -613,6 +660,8 @@ export default function StockProductModal({ open, editingId, control, errors, se
                                 <FieldContainer
                                   label={t('stock.form.contentPer', { unit: purchaseUnit })}
                                   error={errors.unit_mappings?.[index]?.ratio as FieldError | undefined}
+                                  required
+                                  requiredLabel={t('stock.form.requiredLabel')}
                                 >
                                   <Controller
                                     name={`unit_mappings.${index}.ratio`}
@@ -693,6 +742,8 @@ export default function StockProductModal({ open, editingId, control, errors, se
                               <FieldContainer
                                 label={t('stock.form.minQty', { unit: sellingUnit })}
                                 error={errors.wholesale_prices?.[index]?.min_quantity}
+                                required
+                                requiredLabel={t('stock.form.requiredLabel')}
                               >
                                 <Controller
                                   name={`wholesale_prices.${index}.min_quantity`}
@@ -733,7 +784,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
                             </div>
 
                             <div className="col-span-5">
-                              <FieldContainer label={t('stock.form.price')} error={errors.wholesale_prices?.[index]?.price}>
+                              <FieldContainer
+                                label={t('stock.form.price')}
+                                error={errors.wholesale_prices?.[index]?.price}
+                                required
+                                requiredLabel={t('stock.form.requiredLabel')}
+                              >
                                 <Controller
                                   name={`wholesale_prices.${index}.price`}
                                   control={control}
