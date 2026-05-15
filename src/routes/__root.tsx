@@ -38,6 +38,7 @@ import { useEffect, useState } from 'react'
 
 const { Content, Sider } = Layout
 const NAVBAR_HEIGHT = 64
+const SIDEBAR_WIDTH = 250
 
 type FeedbackValues = Record<string, unknown>
 type NavLeaf = { to: string; label: string; icon: LucideIcon }
@@ -212,9 +213,10 @@ const RootLayout = () => {
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
+  const contentHeight = `calc(100vh - ${topOffset})`
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Top Navbar - Logo & Theme Toggle */}
       <nav
         className="fixed top-0 z-40 w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200"
@@ -277,7 +279,7 @@ const RootLayout = () => {
       </nav>
 
       {/* Body: Sider + Content */}
-      <Layout style={{ marginTop: topOffset }}>
+      <Layout hasSider={!isMobile} style={{ marginTop: topOffset, minHeight: contentHeight }}>
         {/* Side Navigation */}
         <Sider
           collapsible
@@ -286,7 +288,19 @@ const RootLayout = () => {
           trigger={null}
           theme={isDark ? 'dark' : 'light'}
           collapsedWidth={0}
-          width={250}
+          width={SIDEBAR_WIDTH}
+          style={
+            !isMobile
+              ? {
+                  position: 'fixed',
+                  top: topOffset,
+                  bottom: 0,
+                  left: 0,
+                  height: contentHeight,
+                  zIndex: 30,
+                }
+              : undefined
+          }
         >
           {!isMobile && (
             <button
@@ -304,18 +318,20 @@ const RootLayout = () => {
             defaultOpenKeys={openKeys}
             items={menuItems}
             theme={isDark ? 'dark' : 'light'}
-            style={{ height: '100%', borderRight: 0 }}
+            style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto' }}
           />
         </Sider>
 
         {/* Main Content */}
         <Layout
           style={{
-            marginLeft: isMobile ? 0 : collapsed ? 40 : 64,
+            height: contentHeight,
+            marginLeft: isMobile || collapsed ? 0 : SIDEBAR_WIDTH,
+            overflow: 'hidden',
             transition: 'margin-left 0.2s',
           }}
         >
-          <Content className="min-h-screen transition-all duration-200">
+          <Content className="transition-all duration-200" style={{ height: '100%', overflowY: 'auto' }}>
             <div className="p-4">
               <Outlet />
             </div>

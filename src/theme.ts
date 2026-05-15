@@ -136,8 +136,8 @@ export const lightTheme: ThemeConfig = {
     },
     Modal: {
       colorBgElevated: "#FFFFFF",
-      headerBg: "#F4F5F7",
-      footerBg: "#F4F5F7",
+      headerBg: "#FFFFFF",
+      footerBg: "#FFFFFF",
       borderRadiusLG: 10,
     },
     Tabs: {

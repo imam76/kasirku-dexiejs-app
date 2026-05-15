@@ -9,6 +9,7 @@ import type { TranslationKey } from '@/i18n/messages';
 import { setConversionRegistry } from '@/utils/pricing';
 import { useI18n } from '@/hooks/useI18n';
 import {
+  areUnitsInSameCategory,
   DEFAULT_CONVERSIONS,
   DEFAULT_UNITS,
   inferConversionUnitType,
@@ -292,6 +293,10 @@ export default function UnitManagement() {
       }
 
       if (baseUnitRecord.type !== conversionUnitRecord.type) {
+        throw new Error(t('units.validation.sameType'));
+      }
+
+      if (!areUnitsInSameCategory(baseUnit, conversionUnit)) {
         throw new Error(t('units.validation.sameType'));
       }
 

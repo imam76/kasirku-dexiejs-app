@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { inferUnitDefinitionType, isGlobalConvertibleUnitType } from '@/constants/units';
+import {
+  areUnitsInSameCategory,
+  inferUnitCategory,
+  inferUnitDefinitionType,
+  isGlobalConvertibleUnitType,
+} from '@/constants/units';
 import { defaultLocale, translate, type TranslationKey } from '@/i18n/messages';
 
 type StockValidationTranslator = (
@@ -35,6 +40,9 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
   const sellableUnits = Array.from(new Set([data.selling_unit, ...data.sellable_units].filter(Boolean)));
 
   data.unit_mappings.forEach((mapping, index) => {
+    const unitCategory = inferUnitCategory(mapping.unit);
+    const purchaseCategory = inferUnitCategory(data.purchase_unit);
+
     if (mapping.base_unit !== data.purchase_unit) {
       ctx.addIssue({
         code: 'custom',
@@ -51,6 +59,22 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
       });
     }
 
+    if (unitCategory === 'package' && purchaseCategory !== 'count') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['unit_mappings', index, 'unit'],
+        message: t('stock.validation.incompatibleUnitCategory', { unit: mapping.unit }),
+      });
+    }
+
+    if (unitCategory !== 'package' && !areUnitsInSameCategory(mapping.unit, data.purchase_unit)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['unit_mappings', index, 'unit'],
+        message: t('stock.validation.incompatibleUnitCategory', { unit: mapping.unit }),
+      });
+    }
+
     const key = `${mapping.unit}:${mapping.base_unit}`;
     if (seen.has(key)) {
       ctx.addIssue({
@@ -64,6 +88,27 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
 
   sellableUnits.forEach((unit) => {
     if (unit === data.purchase_unit) return;
+
+    const unitCategory = inferUnitCategory(unit);
+    const purchaseCategory = inferUnitCategory(data.purchase_unit);
+
+    if (unitCategory === 'package' && purchaseCategory !== 'count') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sellable_units'],
+        message: t('stock.validation.incompatibleUnitCategory', { unit }),
+      });
+      return;
+    }
+
+    if (unitCategory !== 'package' && !areUnitsInSameCategory(unit, data.purchase_unit)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sellable_units'],
+        message: t('stock.validation.incompatibleUnitCategory', { unit }),
+      });
+      return;
+    }
 
     const unitType = inferUnitDefinitionType(unit);
     const purchaseType = inferUnitDefinitionType(data.purchase_unit);

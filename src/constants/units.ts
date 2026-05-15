@@ -1,6 +1,7 @@
 import type { ProductUnit, UnitConversion, UnitDefinition, UnitDefinitionType } from '@/types';
 
 export const WEIGHT_BASE_UNIT: ProductUnit = 'gram';
+export type UnitCategory = 'count' | 'package' | 'weight' | 'volume' | 'length' | 'time' | 'measurement';
 
 export const WEIGHT_UNIT_ALIASES: Record<string, ProductUnit> = {
   g: 'gram',
@@ -35,6 +36,8 @@ export const PACKAGE_UNITS = [
 ] as const;
 
 export const TIME_UNITS = ['jam', 'menit', 'detik'] as const;
+export const VOLUME_UNITS = ['liter', 'l', 'ml', 'milliliter', 'mililiter'] as const;
+export const LENGTH_UNITS = ['meter', 'm', 'cm', 'centimeter', 'sentimeter', 'mm', 'millimeter', 'milimeter'] as const;
 
 export const isCountUnit = (unit?: ProductUnit) => {
   return normalizeUnitKey(unit) === 'pcs';
@@ -54,6 +57,28 @@ export const isPackageUnit = (unit?: ProductUnit) => {
 
 export const isTimeUnit = (unit?: ProductUnit) => {
   return TIME_UNITS.includes(normalizeUnitKey(unit) as typeof TIME_UNITS[number]);
+};
+
+export const isVolumeUnit = (unit?: ProductUnit) => {
+  return VOLUME_UNITS.includes(normalizeUnitKey(unit) as typeof VOLUME_UNITS[number]);
+};
+
+export const isLengthUnit = (unit?: ProductUnit) => {
+  return LENGTH_UNITS.includes(normalizeUnitKey(unit) as typeof LENGTH_UNITS[number]);
+};
+
+export const inferUnitCategory = (unit?: ProductUnit): UnitCategory => {
+  if (isCountUnit(unit)) return 'count';
+  if (isPackageUnit(unit)) return 'package';
+  if (isTimeUnit(unit)) return 'time';
+  if (normalizeWeightUnit(unit)) return 'weight';
+  if (isVolumeUnit(unit)) return 'volume';
+  if (isLengthUnit(unit)) return 'length';
+  return 'measurement';
+};
+
+export const areUnitsInSameCategory = (a?: ProductUnit, b?: ProductUnit) => {
+  return inferUnitCategory(a) === inferUnitCategory(b);
 };
 
 export const inferUnitDefinitionType = (unit?: ProductUnit): UnitDefinitionType => {
