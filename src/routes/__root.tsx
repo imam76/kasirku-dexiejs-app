@@ -37,8 +37,10 @@ import {
 import { useEffect, useState } from 'react'
 
 const { Content, Sider } = Layout
+
 const NAVBAR_HEIGHT = 64
 const SIDEBAR_WIDTH = 250
+const TRIGGER_WIDTH = 36
 
 type FeedbackValues = Record<string, unknown>
 type NavLeaf = { to: string; label: string; icon: LucideIcon }
@@ -221,10 +223,10 @@ const RootLayout = () => {
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
-  const contentHeight = `calc(100vh - ${topOffset})`
+  const contentHeight = `calc(100dvh - ${topOffset})`
 
   return (
-    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
+    <Layout style={{ height: '100dvh', overflow: 'hidden' }}>
       {/* Top Navbar - Logo & Theme Toggle */}
       <nav
         className="fixed top-0 z-40 w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200"
@@ -287,19 +289,20 @@ const RootLayout = () => {
       </nav>
 
       {/* Body: Sider + Content */}
-      <Layout hasSider={!isMobile} style={{ marginTop: topOffset, minHeight: contentHeight }}>
+      <Layout hasSider={!isMobile} style={{ marginTop: topOffset, height: contentHeight }}>
         {/* Side Navigation */}
-        <Sider
-          collapsible
-          collapsed={isMobile ? true : collapsed}
-          onCollapse={setCollapsed}
-          trigger={null}
-          theme={isDark ? 'dark' : 'light'}
-          collapsedWidth={0}
-          width={SIDEBAR_WIDTH}
-          style={
-            !isMobile
-              ? {
+        {!isMobile && (
+          <Sider
+            collapsible
+            collapsed={collapsed}
+            onCollapse={setCollapsed}
+            trigger={null}
+            theme={isDark ? 'dark' : 'light'}
+            collapsedWidth={0}
+            width={SIDEBAR_WIDTH}
+            style={
+              !isMobile
+                ? {
                   position: 'fixed',
                   top: topOffset,
                   bottom: 0,
@@ -307,34 +310,35 @@ const RootLayout = () => {
                   height: contentHeight,
                   zIndex: 30,
                 }
-              : undefined
-          }
-        >
-          {!isMobile && (
-            <button
-              type="button"
-              aria-label={collapsed ? t('root.openSidebar') : t('root.closeSidebar')}
-              onClick={() => setCollapsed(!collapsed)}
-              className="absolute -right-9 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-r-md border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
-            >
-              {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-            </button>
-          )}
-          <Menu
-            mode="inline"
-            selectedKeys={[selectedKey]}
-            defaultOpenKeys={openKeys}
-            items={menuItems}
-            theme={isDark ? 'dark' : 'light'}
-            style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto' }}
-          />
-        </Sider>
+                : undefined
+            }
+          >
+            {!isMobile && (
+              <button
+                type="button"
+                aria-label={collapsed ? t('root.openSidebar') : t('root.closeSidebar')}
+                onClick={() => setCollapsed(!collapsed)}
+                className="absolute -right-9 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-r-md border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+              >
+                {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+              </button>
+            )}
+            <Menu
+              mode="inline"
+              selectedKeys={[selectedKey]}
+              defaultOpenKeys={openKeys}
+              items={menuItems}
+              theme={isDark ? 'dark' : 'light'}
+              style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto' }}
+            />
+          </Sider>
+        )}
 
         {/* Main Content */}
         <Layout
           style={{
             height: contentHeight,
-            marginLeft: isMobile || collapsed ? 0 : SIDEBAR_WIDTH,
+            marginLeft: isMobile ? 0 : collapsed ? TRIGGER_WIDTH : SIDEBAR_WIDTH + TRIGGER_WIDTH,
             overflow: 'hidden',
             transition: 'margin-left 0.2s',
           }}
