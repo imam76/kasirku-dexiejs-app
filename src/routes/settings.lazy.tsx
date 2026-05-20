@@ -6,6 +6,9 @@ import { backupDatabase, restoreDatabase } from '@/utils/backupRestore'
 import { useNavigate } from '@tanstack/react-router'
 import PrinterSettingsCard from '@/components/PrinterSettingsCard'
 import { useI18n } from '@/hooks/useI18n'
+import { useAuth } from '@/auth/useAuth'
+import { UserManagement } from '@/view/auth/UserManagement'
+import { ActivityLogViewer } from '@/view/auth/ActivityLogViewer'
 
 const { Paragraph } = Typography
 
@@ -17,6 +20,7 @@ function Settings() {
   const { message, modal } = App.useApp()
   const navigate = useNavigate()
   const { t } = useI18n()
+  const { can } = useAuth()
   const [loading, setLoading] = useState(false)
 
   const handleBackup = async () => {
@@ -86,6 +90,18 @@ function Settings() {
       <div className="mb-6">
         <PrinterSettingsCard />
       </div>
+
+      {can('USER_MANAGE') && (
+        <div className="mb-6">
+          <UserManagement />
+        </div>
+      )}
+
+      {can('ACTIVITY_LOG_VIEW') && (
+        <div className="mb-6">
+          <ActivityLogViewer />
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Backup Section */}

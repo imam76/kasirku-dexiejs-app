@@ -4,7 +4,7 @@ import {
   isLegacyGlobalPackageConversion,
   normalizeUnitKey,
 } from '@/constants/units';
-import type { Product, ProductUnit, UnitConversion } from '@/types';
+import type { CartItem, Product, ProductUnit, UnitConversion } from '@/types';
 import { getProductUnitRatio } from '@/utils/productUnits';
 
 // Global registry for unit conversions
@@ -155,4 +155,12 @@ export const getPrice = (product: Product, quantity: number, unit?: ProductUnit)
   
   // 2. Normalisasi dari selling_unit ke target unit (jika berbeda, misal dari gram ke ons)
   return normalisasiHargaProduk(priceInSellingUnit, product, product.selling_unit, targetUnit);
+};
+
+export const getCartItemOriginalPrice = (item: CartItem): number => {
+  return getPrice(item.product, item.quantity, item.unit);
+};
+
+export const getCartItemPrice = (item: CartItem): number => {
+  return item.custom_price ?? getCartItemOriginalPrice(item);
 };

@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
+import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import type { Product, ProductUnit } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
@@ -63,8 +64,12 @@ export const useStockManagement = () => {
   // Upsert (add/update) mutation
   const upsertMutation = useMutation({
     mutationFn: async (productData: Omit<Product, 'id' | 'created_at' | 'updated_at'> & { purchase_quantity?: number }) => {
+      const currentUser = await getCurrentSessionUser();
+      requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
       const purchase_quantity = productData.purchase_quantity || 0;
       const now = new Date().toISOString();
+      let productId = editingId ?? '';
+      const isEdit = Boolean(editingId);
 
       const unitMappings = normalizeProductUnitMappings({
         purchase_unit: productData.purchase_unit || 'pcs',
@@ -102,6 +107,7 @@ export const useStockManagement = () => {
 
       await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
         if (editingId) {
+          productId = editingId;
           // Update product
           await db.products.update(editingId, {
             ...cleanData,
@@ -125,6 +131,7 @@ export const useStockManagement = () => {
         } else {
           // Create new product
           const newId = crypto.randomUUID();
+          productId = newId;
           const newProduct: Product = {
             id: newId,
             ...cleanData,
@@ -151,6 +158,14 @@ export const useStockManagement = () => {
           }
         }
       });
+
+      await writeActivityLog({
+        user: currentUser,
+        action: isEdit ? 'PRODUCT_UPDATED' : 'PRODUCT_CREATED',
+        entity: 'products',
+        entity_id: productId,
+        description: `${currentUser?.name ?? 'User'} ${isEdit ? 'memperbarui' : 'menambahkan'} produk ${cleanData.name}.`,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -162,7 +177,19 @@ export const useStockManagement = () => {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      const currentUser = await getCurrentSessionUser();
+      requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
+      const product = await db.products.get(id);
+
       await db.products.delete(id);
+
+      await writeActivityLog({
+        user: currentUser,
+        action: 'PRODUCT_DELETED',
+        entity: 'products',
+        entity_id: id,
+        description: `${currentUser?.name ?? 'User'} menghapus produk ${product?.name ?? id}.`,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -171,7 +198,11 @@ export const useStockManagement = () => {
 
   const importCsvMutation = useMutation({
     mutationFn: async (items: ProductCsvImportItem[]) => {
+      const currentUser = await getCurrentSessionUser();
+      requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
       const now = new Date().toISOString();
+      let createdCount = 0;
+      let updatedCount = 0;
 
       await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
         for (const item of items) {
@@ -220,6 +251,7 @@ export const useStockManagement = () => {
           const purchase_quantity = item.purchase_quantity || 0;
 
           if (existing) {
+            updatedCount += 1;
             await db.products.update(existing.id, {
               ...cleanData,
               updated_at: now,
@@ -239,6 +271,7 @@ export const useStockManagement = () => {
               });
             }
           } else {
+            createdCount += 1;
             const newId = item.id && item.id.length > 0 ? item.id : crypto.randomUUID();
             const newProduct: Product = {
               id: newId,
@@ -264,6 +297,13 @@ export const useStockManagement = () => {
             }
           }
         }
+      });
+
+      await writeActivityLog({
+        user: currentUser,
+        action: 'PRODUCT_CSV_IMPORTED',
+        entity: 'products',
+        description: `${currentUser?.name ?? 'User'} mengimpor ${items.length} baris produk dari CSV. Produk baru: ${createdCount}, diperbarui: ${updatedCount}.`,
       });
     },
     onSuccess: (_data, items) => {

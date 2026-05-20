@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/ThemeProvider';
 import { QueryProvider } from '@/providers/QueryProvider';
 import '@/lib/dayjs';
 import { I18nProvider } from '@/providers/I18nProvider';
+import { AuthProvider } from '@/auth/AuthProvider';
 
 // Create a new router instance
 const router = createRouter({ routeTree })
@@ -24,7 +25,9 @@ createRoot(document.getElementById('root')!).render(
     <QueryProvider>
       <I18nProvider>
         <ThemeProvider defaultMode="light">
-          <RouterProvider router={router} scrollRestoration={true} />
+          <AuthProvider>
+            <RouterProvider router={router} scrollRestoration={true} />
+          </AuthProvider>
         </ThemeProvider>
       </I18nProvider>
     </QueryProvider>

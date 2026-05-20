@@ -5,15 +5,17 @@ import { db } from '@/lib/db';
 import { useTransactionStore, type TransactionError } from '@/store/transactionStore';
 import { Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
-import { getPrice } from '@/utils/pricing';
+import { getCartItemPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { checkout } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
+import { useAuth } from '@/auth/useAuth';
 
 export const useTransaction = () => {
   const queryClient = useQueryClient();
   const { modal, message } = App.useApp();
   const { t } = useI18n();
+  const { currentUser } = useAuth();
   const {
     products,
     cart,
@@ -28,6 +30,7 @@ export const useTransaction = () => {
     setShowPayment,
     addToCart: storeAddToCart,
     updateQuantity: storeUpdateQuantity,
+    updateCustomPrice: storeUpdateCustomPrice,
     removeFromCart,
     reset,
   } = useTransactionStore();
@@ -54,7 +57,7 @@ export const useTransaction = () => {
   }, [products, searchTerm]);
 
   const calculateTotal = useCallback(() => {
-    return cart.reduce((sum, item) => sum + getPrice(item.product, item.quantity, item.unit) * item.quantity, 0);
+    return cart.reduce((sum, item) => sum + getCartItemPrice(item) * item.quantity, 0);
   }, [cart]);
 
   const getTransactionErrorContent = (error: TransactionError) => {
@@ -105,6 +108,10 @@ export const useTransaction = () => {
     if (!result.success && result.error) {
       showTransactionError(result.error);
     }
+  };
+
+  const updateCustomPrice = (productId: string, customPrice: number | undefined) => {
+    storeUpdateCustomPrice(productId, customPrice, currentUser?.name);
   };
 
   const handleCheckout = async () => {
@@ -193,6 +200,7 @@ export const useTransaction = () => {
     addToCart,
     updateQuantity,
     updateUnit,
+    updateCustomPrice,
     removeFromCart,
     calculateTotal,
     handleCheckout,

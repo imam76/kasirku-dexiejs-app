@@ -3,6 +3,7 @@ import { Loading } from '@/components/Loading';
 import { useTransactionDetailReport, type TransactionDetailReportRow } from '@/hooks/useReports';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useAuth } from '@/auth/useAuth';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import dayjs from '@/lib/dayjs';
 import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
@@ -24,6 +25,8 @@ export default function TransactionDetailReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
   const isMobile = useIsMobile();
+  const { can } = useAuth();
+  const canViewProfit = can('PROFIT_VIEW');
   const [selectedHelper, setSelectedHelper] = useState('this-month');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>([
     dayjs.tz().startOf('month'),
@@ -102,13 +105,13 @@ export default function TransactionDetailReport() {
         align: 'right',
         render: (value: number) => `Rp ${formatCurrency(value)}`,
       },
-      {
+      ...(canViewProfit ? [{
         title: 'HPP',
         dataIndex: 'purchase_price',
         width: 120,
-        align: 'right',
+        align: 'right' as const,
         render: (value: number) => `Rp ${formatCurrency(value)}`,
-      },
+      }] : []),
       {
         title: 'Subtotal',
         dataIndex: 'subtotal',
@@ -116,43 +119,45 @@ export default function TransactionDetailReport() {
         align: 'right',
         render: (value: number) => `Rp ${formatCurrency(value)}`,
       },
-      {
-        title: t('report.cost'),
-        dataIndex: 'cost_total',
-        width: 130,
-        align: 'right',
-        render: (value: number) => `Rp ${formatCurrency(value)}`,
-      },
-      {
-        title: t('report.itemMargin'),
-        dataIndex: 'profit',
-        width: 150,
-        align: 'right',
-        render: (value: number, row) => (
-          <div>
-            <div className={value >= 0 ? 'font-semibold text-green-600' : 'font-semibold text-red-600'}>
-              Rp {formatCurrency(value)}
+      ...(canViewProfit ? [
+        {
+          title: t('report.cost'),
+          dataIndex: 'cost_total',
+          width: 130,
+          align: 'right' as const,
+          render: (value: number) => `Rp ${formatCurrency(value)}`,
+        },
+        {
+          title: t('report.itemMargin'),
+          dataIndex: 'profit',
+          width: 150,
+          align: 'right' as const,
+          render: (value: number, row: TransactionDetailReportRow) => (
+            <div>
+              <div className={value >= 0 ? 'font-semibold text-green-600' : 'font-semibold text-red-600'}>
+                Rp {formatCurrency(value)}
+              </div>
+              <div className="text-xs text-gray-400">{row.margin.toFixed(2)}%</div>
             </div>
-            <div className="text-xs text-gray-400">{row.margin.toFixed(2)}%</div>
-          </div>
-        ),
-      },
-      {
-        title: t('report.transactionMargin'),
-        dataIndex: 'transaction_profit',
-        width: 160,
-        align: 'right',
-        render: (value: number, row) => (
-          <div>
-            <div className={value >= 0 ? 'font-semibold text-green-700' : 'font-semibold text-red-700'}>
-              Rp {formatCurrency(value)}
+          ),
+        },
+        {
+          title: t('report.transactionMargin'),
+          dataIndex: 'transaction_profit',
+          width: 160,
+          align: 'right' as const,
+          render: (value: number, row: TransactionDetailReportRow) => (
+            <div>
+              <div className={value >= 0 ? 'font-semibold text-green-700' : 'font-semibold text-red-700'}>
+                Rp {formatCurrency(value)}
+              </div>
+              <div className="text-xs text-gray-400">{row.transaction_margin.toFixed(2)}%</div>
             </div>
-            <div className="text-xs text-gray-400">{row.transaction_margin.toFixed(2)}%</div>
-          </div>
-        ),
-      },
+          ),
+        },
+      ] : []),
     ],
-    [isMobile, t]
+    [canViewProfit, isMobile, t]
   );
 
   const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
@@ -215,10 +220,36 @@ export default function TransactionDetailReport() {
     if (!data) return;
 
     try {
+      const header = [
+        t('report.transactionNo'),
+        t('report.date'),
+        t('report.method'),
+        t('report.product'),
+        'SKU',
+        t('report.category'),
+        t('report.qty'),
+        t('report.unit'),
+        t('report.sellingPrice'),
+        ...(canViewProfit ? [t('report.hpp')] : []),
+        t('report.subtotal'),
+        ...(canViewProfit ? [t('report.totalCost'), t('report.itemMargin'), `${t('report.itemMargin')} %`, t('report.transactionMargin'), `${t('report.transactionMargin')} %`] : []),
+      ];
+      const summaryRows = [
+        [t('report.totalTransactions'), data.transactions.length],
+        [t('report.totalItemLine'), data.rows.length],
+        [t('report.totalQty'), data.totalItems],
+        [t('report.uniqueProducts'), data.uniqueProducts],
+        [t('report.salesTotal'), data.totalRevenue],
+        ...(canViewProfit ? [
+          [t('report.totalCost'), data.totalCost],
+          [t('report.totalMargin'), data.totalProfit],
+          [t('report.marginPercentAverage'), data.averageMargin.toFixed(2)],
+        ] : []),
+      ];
       const exported = await exportCsv({
         filename: `laporan-detail-transaksi-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
         rows: [
-          [t('report.transactionNo'), t('report.date'), t('report.method'), t('report.product'), 'SKU', t('report.category'), t('report.qty'), t('report.unit'), t('report.sellingPrice'), t('report.hpp'), t('report.subtotal'), t('report.totalCost'), t('report.itemMargin'), `${t('report.itemMargin')} %`, t('report.transactionMargin'), `${t('report.transactionMargin')} %`],
+          header,
           ...data.rows.map((row) => [
             row.transaction_number,
             dayjs(row.transaction_created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
@@ -229,24 +260,19 @@ export default function TransactionDetailReport() {
             row.quantity,
             row.unit,
             row.selling_price,
-            row.purchase_price,
+            ...(canViewProfit ? [row.purchase_price] : []),
             row.subtotal,
-            row.cost_total,
-            row.profit,
-            row.margin.toFixed(2),
-            row.transaction_profit,
-            row.transaction_margin.toFixed(2),
+            ...(canViewProfit ? [
+              row.cost_total,
+              row.profit,
+              row.margin.toFixed(2),
+              row.transaction_profit,
+              row.transaction_margin.toFixed(2),
+            ] : []),
           ]),
           [],
           [t('report.summary')],
-          [t('report.totalTransactions'), data.transactions.length],
-          [t('report.totalItemLine'), data.rows.length],
-          [t('report.totalQty'), data.totalItems],
-          [t('report.uniqueProducts'), data.uniqueProducts],
-          [t('report.salesTotal'), data.totalRevenue],
-          [t('report.totalCost'), data.totalCost],
-          [t('report.totalMargin'), data.totalProfit],
-          [t('report.marginPercentAverage'), data.averageMargin.toFixed(2)],
+          ...summaryRows,
         ],
         target,
       });
@@ -275,22 +301,32 @@ export default function TransactionDetailReport() {
           doc.setFontSize(9);
           doc.setFont('helvetica', 'normal');
           doc.text(`${t('report.period')} ${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`, 105, 36, { align: 'center' });
-          doc.text(`${t('report.totalMargin')}: Rp ${formatCurrency(data.totalProfit)} (${data.averageMargin.toFixed(2)}%)`, 105, 44, { align: 'center' });
+          doc.text(
+            canViewProfit
+              ? `${t('report.totalMargin')}: Rp ${formatCurrency(data.totalProfit)} (${data.averageMargin.toFixed(2)}%)`
+              : `${t('report.salesTotal')}: Rp ${formatCurrency(data.totalRevenue)}`,
+            105,
+            44,
+            { align: 'center' },
+          );
 
-          autoTable(doc, {
-            startY: 52,
-            head: [[t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.subtotal'), t('report.cost'), t('report.margin'), '%']],
-            body: data.rows.map((row) => [
-              dayjs(row.transaction_created_at).tz().format('DD/MM/YY'),
-              row.transaction_number,
-              row.product_name,
-              `${row.quantity.toLocaleString('id-ID')} ${row.unit}`,
-              formatCurrency(row.subtotal),
+          const tableHead = canViewProfit
+            ? [t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.subtotal'), t('report.cost'), t('report.margin'), '%']
+            : [t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.subtotal')];
+          const tableBody = data.rows.map((row) => [
+            dayjs(row.transaction_created_at).tz().format('DD/MM/YY'),
+            row.transaction_number,
+            row.product_name,
+            `${row.quantity.toLocaleString('id-ID')} ${row.unit}`,
+            formatCurrency(row.subtotal),
+            ...(canViewProfit ? [
               formatCurrency(row.cost_total),
               formatCurrency(row.profit),
               row.margin.toFixed(2),
-            ]),
-            foot: [[
+            ] : []),
+          ]);
+          const tableFoot = canViewProfit
+            ? [
               '',
               '',
               t('common.total'),
@@ -299,17 +335,33 @@ export default function TransactionDetailReport() {
               formatCurrency(data.totalCost),
               formatCurrency(data.totalProfit),
               data.averageMargin.toFixed(2),
-            ]],
+            ]
+            : [
+              '',
+              '',
+              t('common.total'),
+              data.totalItems.toLocaleString('id-ID'),
+              formatCurrency(data.totalRevenue),
+            ];
+
+          autoTable(doc, {
+            startY: 52,
+            head: [tableHead],
+            body: tableBody,
+            foot: [tableFoot],
             theme: 'grid',
             styles: { fontSize: 7, cellPadding: 1.8, overflow: 'linebreak' },
             headStyles: { fillColor: [219, 234, 254], textColor: 30 },
             footStyles: { fillColor: [240, 253, 244], textColor: 20, fontStyle: 'bold' },
-            columnStyles: {
+            columnStyles: canViewProfit ? {
               3: { halign: 'right' },
               4: { halign: 'right' },
               5: { halign: 'right' },
               6: { halign: 'right' },
               7: { halign: 'right' },
+            } : {
+              3: { halign: 'right' },
+              4: { halign: 'right' },
             },
             margin: { left: 8, right: 8 },
           });
@@ -442,8 +494,10 @@ export default function TransactionDetailReport() {
               { title: t('report.totalItemLine'), value: data.rows.length, suffix: t('report.rowSuffix'), color: '#7c3aed' },
               { title: t('report.uniqueProducts'), value: data.uniqueProducts, suffix: t('report.productSuffix'), color: '#0f766e' },
               { title: t('report.salesTotal'), value: data.totalRevenue, prefix: 'Rp ', color: '#16a34a', currency: true },
-              { title: t('report.cost'), value: data.totalCost, prefix: 'Rp ', color: '#dc2626', currency: true },
-              { title: t('report.totalMargin'), value: data.totalProfit, prefix: 'Rp ', suffix: ` / ${data.averageMargin.toFixed(2)}%`, color: '#ea580c', currency: true },
+              ...(canViewProfit ? [
+                { title: t('report.cost'), value: data.totalCost, prefix: 'Rp ', color: '#dc2626', currency: true },
+                { title: t('report.totalMargin'), value: data.totalProfit, prefix: 'Rp ', suffix: ` / ${data.averageMargin.toFixed(2)}%`, color: '#ea580c', currency: true },
+              ] : []),
             ].map((stat) => (
               <Card key={stat.title} className="overflow-hidden rounded-xl border-none border-l-4 border-l-blue-500 shadow-sm">
                 <Statistic
@@ -463,26 +517,30 @@ export default function TransactionDetailReport() {
               columns={columns}
               dataSource={data.rows}
               size={isMobile ? 'small' : 'middle'}
-              scroll={{ x: 1460 }}
+              scroll={{ x: canViewProfit ? 1460 : 980 }}
               pagination={{ pageSize: 20, showSizeChanger: true }}
               summary={() => (
                 <Table.Summary fixed>
                   <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={6}>
+                    <Table.Summary.Cell index={0} colSpan={canViewProfit ? 6 : 5}>
                       <span className="font-semibold">{t('common.total')}</span>
                     </Table.Summary.Cell>
-                    <Table.Summary.Cell index={6} align="right">
+                    <Table.Summary.Cell index={canViewProfit ? 6 : 5} align="right">
                       <span className="font-semibold">Rp {formatCurrency(data.totalRevenue)}</span>
                     </Table.Summary.Cell>
-                    <Table.Summary.Cell index={7} align="right">
-                      <span className="font-semibold">Rp {formatCurrency(data.totalCost)}</span>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={8} align="right">
-                      <span className="font-semibold text-green-700">Rp {formatCurrency(data.totalProfit)}</span>
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={9} align="right">
-                      <span className="font-semibold">{data.averageMargin.toFixed(2)}%</span>
-                    </Table.Summary.Cell>
+                    {canViewProfit && (
+                      <>
+                        <Table.Summary.Cell index={7} align="right">
+                          <span className="font-semibold">Rp {formatCurrency(data.totalCost)}</span>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={8} align="right">
+                          <span className="font-semibold text-green-700">Rp {formatCurrency(data.totalProfit)}</span>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={9} align="right">
+                          <span className="font-semibold">{data.averageMargin.toFixed(2)}%</span>
+                        </Table.Summary.Cell>
+                      </>
+                    )}
                   </Table.Summary.Row>
                 </Table.Summary>
               )}

@@ -4,6 +4,7 @@ import {
   isProfitAffectingFinanceTransaction,
   normalizeFinanceTransactionType,
 } from '@/constants/finance';
+import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type { FinanceTransaction, FinanceTransactionType } from '@/types';
 import { isTransactionActive } from '@/utils/transactions';
@@ -21,6 +22,8 @@ export const addFinanceTransaction = async ({
   amount,
   description,
 }: AddFinanceTransactionInput) => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const normalizedType = normalizeFinanceTransactionType(type, category);
   const currentBalance = await db.financeBalance.get('current');
   const currentAmount = currentBalance?.amount || 0;
@@ -45,6 +48,8 @@ export const addFinanceTransaction = async ({
     }
   }
 
+  let transactionId = '';
+
   await db.transaction('rw', [db.financeBalance, db.financeTransactions, db.profitBalance, db.profitLogs], async () => {
     await db.financeBalance.put({
       id: 'current',
@@ -52,8 +57,9 @@ export const addFinanceTransaction = async ({
       updated_at: now,
     });
 
+    transactionId = crypto.randomUUID();
     await db.financeTransactions.add({
-      id: crypto.randomUUID(),
+      id: transactionId,
       type: normalizedType,
       category,
       amount,
@@ -79,9 +85,20 @@ export const addFinanceTransaction = async ({
       });
     }
   });
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'FINANCE_TRANSACTION_CREATED',
+    entity: 'financeTransactions',
+    entity_id: transactionId,
+    description: `${currentUser?.name ?? 'User'} mencatat transaksi finance ${category} sebesar ${amount}.`,
+  });
 };
 
 export const recalculateFinance = async () => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+
   await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases], async () => {
     const autoCategories = [
       FINANCE_CATEGORIES.SALES,
@@ -144,5 +161,13 @@ export const recalculateFinance = async () => {
       amount: runningBalance,
       updated_at: new Date().toISOString(),
     });
+  });
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'FINANCE_RECALCULATED',
+    entity: 'financeBalance',
+    entity_id: 'current',
+    description: `${currentUser?.name ?? 'User'} menghitung ulang saldo finance.`,
   });
 };

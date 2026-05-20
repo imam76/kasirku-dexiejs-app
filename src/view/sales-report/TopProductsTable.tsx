@@ -14,9 +14,10 @@ interface TopProduct {
 
 interface TopProductsTableProps {
   products: TopProduct[];
+  canViewProfit: boolean;
 }
 
-export default function TopProductsTable({ products }: TopProductsTableProps) {
+export default function TopProductsTable({ products, canViewProfit }: TopProductsTableProps) {
   const { t } = useI18n();
 
   return (
@@ -27,9 +28,13 @@ export default function TopProductsTable({ products }: TopProductsTableProps) {
             <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 rounded-tl-lg">{t('report.product')}</th>
             <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">{t('report.category')}</th>
             <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.sold')}</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.revenue')}</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.profit')}</th>
-            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right rounded-tr-lg">{t('report.margin')}</th>
+            <th className={`py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right ${canViewProfit ? '' : 'rounded-tr-lg'}`}>{t('report.revenue')}</th>
+            {canViewProfit && (
+              <>
+                <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.profit')}</th>
+                <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right rounded-tr-lg">{t('report.margin')}</th>
+              </>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
@@ -48,19 +53,23 @@ export default function TopProductsTable({ products }: TopProductsTableProps) {
                 <td className="py-4 px-4 text-right text-gray-900">
                   {formatCurrency(p.totalRevenue)}
                 </td>
-                <td className="py-4 px-4 text-right text-orange-600 font-medium">
-                  {formatCurrency(p.totalProfit)}
-                </td>
-                <td className="py-4 px-4 text-right">
-                  <span className={`font-bold ${p.margin >= 20 ? 'text-green-600' : 'text-orange-500'}`}>
-                    {p.margin.toFixed(2)}%
-                  </span>
-                </td>
+                {canViewProfit && (
+                  <>
+                    <td className="py-4 px-4 text-right text-orange-600 font-medium">
+                      {formatCurrency(p.totalProfit)}
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <span className={`font-bold ${p.margin >= 20 ? 'text-green-600' : 'text-orange-500'}`}>
+                        {p.margin.toFixed(2)}%
+                      </span>
+                    </td>
+                  </>
+                )}
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan={6} className="py-12 text-center text-gray-400 italic bg-white rounded-b-lg">
+              <td colSpan={canViewProfit ? 6 : 4} className="py-12 text-center text-gray-400 italic bg-white rounded-b-lg">
                 {t('report.noProductsForFilter')}
               </td>
             </tr>

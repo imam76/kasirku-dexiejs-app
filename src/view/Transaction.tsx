@@ -25,6 +25,7 @@ export default function Transaction() {
     addToCart,
     updateQuantity,
     updateUnit,
+    updateCustomPrice,
     removeFromCart,
     calculateTotal,
     handleCheckout,
@@ -145,6 +146,7 @@ export default function Transaction() {
           cart={cart}
           updateQuantity={updateQuantity}
           updateUnit={updateUnit}
+          updateCustomPrice={updateCustomPrice}
           removeFromCart={removeFromCart}
           clearCart={clearCart}
           total={total}
@@ -183,6 +185,7 @@ export default function Transaction() {
         cart={cart}
         updateQuantity={updateQuantity}
         updateUnit={updateUnit}
+        updateCustomPrice={updateCustomPrice}
         removeFromCart={removeFromCart}
         clearCart={clearCart}
         total={total}

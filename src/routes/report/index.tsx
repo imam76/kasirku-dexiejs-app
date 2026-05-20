@@ -5,6 +5,9 @@ import {
 } from '@ant-design/icons'
 import { useI18n } from '@/hooks/useI18n'
 import { Link, createFileRoute } from '@tanstack/react-router'
+import { Empty } from 'antd'
+import { canAccessPath } from '@/auth/routePermissions'
+import { useAuth } from '@/auth/useAuth'
 
 export const Route = createFileRoute('/report/')({
   component: Laporan,
@@ -12,12 +15,13 @@ export const Route = createFileRoute('/report/')({
 
 function Laporan() {
   const { t } = useI18n()
+  const { currentUser } = useAuth()
   const menuItems = [
     { to: '/report/sales-report', label: t('report.index.salesShort'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('report.index.salesDesc') },
     { to: '/report/transaction-detail-report', label: t('report.index.detailShort'), icon: FileSearchOutlined, color: 'text-blue-600', desc: t('report.index.detailDesc') },
     { to: '/report/purchase-report', label: t('report.index.purchaseShort'), icon: FileExcelOutlined, color: 'text-teal-600', desc: t('report.index.purchaseDesc') },
     { to: '/report/expense-report', label: t('report.index.expenseShort'), icon: FileExcelOutlined, color: 'text-red-600', desc: t('report.index.expenseDesc') },
-  ]
+  ].filter((item) => canAccessPath(currentUser?.role, item.to))
 
   return (
     <div
@@ -53,18 +57,19 @@ function Laporan() {
         </div>
 
         {/* Grid */}
-        <div
-          className="
+        {menuItems.length > 0 ? (
+          <div
+            className="
       grid grid-cols-3 gap-[10px]
       sm:grid-cols-3 sm:gap-[14px]
       lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]
     "
-        >
-          {menuItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="
+          >
+            {menuItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="
             flex flex-col items-center justify-center
             bg-white border border-gray-100 rounded-[10px]
             transition-all duration-200 ease-out
@@ -77,49 +82,52 @@ function Laporan() {
             hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
             hover:-translate-y-[1px]
           "
-            >
-              {/* Icon */}
-              <div
-                className="
+              >
+                {/* Icon */}
+                <div
+                  className="
             mb-[6px]
             sm:mb-[10px]
             lg:mb-[12px]
           "
-              >
-                <item.icon
-                  className={`
+                >
+                  <item.icon
+                    className={`
                 ${item.color}
                 text-[24px]
                 sm:text-[30px]
                 lg:text-[34px]
               `}
-                />
-              </div>
+                  />
+                </div>
 
-              {/* Label */}
-              <h2
-                className="
+                {/* Label */}
+                <h2
+                  className="
             text-[12px] font-medium text-gray-800 text-center leading-[1.3]
             sm:text-[14px] sm:mb-[6px]
             lg:text-[15px] lg:mb-[6px]
           "
-              >
-                {item.label}
-              </h2>
+                >
+                  {item.label}
+                </h2>
 
-              {/* Desc */}
-              <p
-                className="
+                {/* Desc */}
+                <p
+                  className="
             hidden
             sm:block sm:text-[11px] sm:text-gray-400 sm:text-center sm:leading-[1.618] sm:line-clamp-2
             lg:text-[12px]
           "
-              >
-                {item.desc}
-              </p>
-            </Link>
-          ))}
-        </div>
+                >
+                  {item.desc}
+                </p>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <Empty description="Tidak ada laporan yang tersedia untuk role ini." />
+        )}
 
       </div>
     </div>

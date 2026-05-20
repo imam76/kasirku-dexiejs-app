@@ -4,6 +4,7 @@ import { Receipt, ChevronDown, ChevronUp, Wallet, DollarSign, Printer, AlertCirc
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
 import { useI18n } from '@/hooks/useI18n';
+import { useAuth } from '@/auth/useAuth';
 import { formatDate, formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
@@ -17,6 +18,8 @@ interface TransactionWithItems extends Transaction {
 export default function History() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
+  const { can, requirePermission } = useAuth();
+  const canViewProfit = can('PROFIT_VIEW');
   const {
     transactions,
     expandedId,
@@ -107,6 +110,13 @@ export default function History() {
   };
 
   const handleVoid = (transaction: TransactionWithItems) => {
+    try {
+      requirePermission('TRANSACTION_VOID');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Anda tidak memiliki akses untuk aksi ini.');
+      return;
+    }
+
     let reason = '';
 
     modal.confirm({
@@ -272,7 +282,7 @@ export default function History() {
                               {formatDate(transaction.created_at)}
                             </p>
                             {/* Summary: 2 col di mobile, 4 col di sm+ */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+                            <div className={`grid grid-cols-2 gap-x-4 gap-y-2 ${canViewProfit ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
                               <div>
                                 <p className="text-xs text-gray-500">{t('common.total')}</p>
                                 <p className={`font-bold ${isVoided ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
@@ -291,17 +301,19 @@ export default function History() {
                                   Rp {formatCurrency(transaction.change_amount)}
                                 </p>
                               </div>
-                              <div>
-                                <p className="text-xs text-gray-500">Profit</p>
-                                {(() => {
-                                  const totalProfit = transaction.items ? getTransactionProfit(transaction.items) : 0;
-                                  return (
-                                    <p className={`font-bold ${isVoided ? 'text-gray-500 line-through' : totalProfit > 0 ? 'text-green-700' : totalProfit < 0 ? 'text-red-700' : 'text-gray-700'}`}>
-                                      Rp {formatCurrency(totalProfit)}
-                                    </p>
-                                  );
-                                })()}
-                              </div>
+                              {canViewProfit && (
+                                <div>
+                                  <p className="text-xs text-gray-500">Profit</p>
+                                  {(() => {
+                                    const totalProfit = transaction.items ? getTransactionProfit(transaction.items) : 0;
+                                    return (
+                                      <p className={`font-bold ${isVoided ? 'text-gray-500 line-through' : totalProfit > 0 ? 'text-green-700' : totalProfit < 0 ? 'text-red-700' : 'text-gray-700'}`}>
+                                        Rp {formatCurrency(totalProfit)}
+                                      </p>
+                                    );
+                                  })()}
+                                </div>
+                              )}
                             </div>
                           </div>
                           {/* Chevron tidak ikut terdesak */}
@@ -343,21 +355,25 @@ export default function History() {
                                     Rp {formatCurrency(item.subtotal)}
                                   </p>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-gray-100">
-                                  <div>
-                                    <p className="text-gray-500">{t('history.purchase')}</p>
-                                    <p className="font-semibold text-gray-700">Rp {formatCurrency(item.purchase_price)}</p>
-                                  </div>
+                                <div className={`grid gap-2 text-xs pt-2 border-t border-gray-100 ${canViewProfit ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                                  {canViewProfit && (
+                                    <div>
+                                      <p className="text-gray-500">{t('history.purchase')}</p>
+                                      <p className="font-semibold text-gray-700">Rp {formatCurrency(item.purchase_price)}</p>
+                                    </div>
+                                  )}
                                   <div>
                                     <p className="text-gray-500">{t('history.sell')}</p>
                                     <p className="font-semibold text-gray-700">Rp {formatCurrency(item.price)}</p>
                                   </div>
-                                  <div>
-                                    <p className="text-gray-500">Profit</p>
-                                    <p className={`font-semibold ${item.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                      Rp {formatCurrency(item.profit)}
-                                    </p>
-                                  </div>
+                                  {canViewProfit && (
+                                    <div>
+                                      <p className="text-gray-500">Profit</p>
+                                      <p className={`font-semibold ${item.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        Rp {formatCurrency(item.profit)}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -413,7 +429,7 @@ export default function History() {
                               )}
                             </div>
                           </div>
-                          {!isVoided && (
+                          {!isVoided && can('TRANSACTION_VOID') && (
                             <div className="mt-3 flex justify-end">
                               <button
                                 type="button"

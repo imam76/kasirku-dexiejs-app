@@ -1,4 +1,5 @@
 import { FINANCE_CATEGORIES, isProfitAffectingFinanceTransaction } from '@/constants/finance';
+import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type { FinanceTransaction, ProfitLog, Transaction } from '@/types';
 import { isTransactionVoided } from '@/utils/transactions';
@@ -9,6 +10,8 @@ interface WithdrawProfitInput {
 }
 
 export const withdrawProfit = async ({ amount, description }: WithdrawProfitInput) => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'PROFIT_VIEW');
   const currentBalance = await db.profitBalance.get('current');
   const currentAmount = currentBalance?.amount || 0;
 
@@ -22,6 +25,7 @@ export const withdrawProfit = async ({ amount, description }: WithdrawProfitInpu
   const currentFinanceBalance = await db.financeBalance.get('current');
   const currentFinanceAmount = currentFinanceBalance?.amount || 0;
   const newFinanceBalance = currentFinanceAmount - amount;
+  let profitLogId = '';
 
   await db.transaction('rw', [db.profitBalance, db.profitLogs, db.financeBalance, db.financeTransactions], async () => {
     await db.profitBalance.put({
@@ -30,8 +34,9 @@ export const withdrawProfit = async ({ amount, description }: WithdrawProfitInpu
       updated_at: now,
     });
 
+    profitLogId = crypto.randomUUID();
     await db.profitLogs.add({
-      id: crypto.randomUUID(),
+      id: profitLogId,
       amount,
       type: 'OUT',
       category: 'WITHDRAW',
@@ -55,9 +60,20 @@ export const withdrawProfit = async ({ amount, description }: WithdrawProfitInpu
       created_at: now,
     });
   });
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'PROFIT_WITHDRAWN',
+    entity: 'profitLogs',
+    entity_id: profitLogId,
+    description: `${currentUser?.name ?? 'User'} menarik saldo profit sebesar ${amount}. Keterangan: ${description}`,
+  });
 };
 
 export const recalculateProfit = async () => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'PROFIT_VIEW');
+
   await db.transaction('rw', [db.transactions, db.transactionItems, db.profitLogs, db.profitBalance, db.financeTransactions], async () => {
     const existingLogs = await db.profitLogs.toArray();
     const withdrawLogs = existingLogs.filter((log) =>
@@ -199,5 +215,13 @@ export const recalculateProfit = async () => {
       amount: runningBalance,
       updated_at: new Date().toISOString(),
     });
+  });
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'PROFIT_RECALCULATED',
+    entity: 'profitBalance',
+    entity_id: 'current',
+    description: `${currentUser?.name ?? 'User'} menghitung ulang saldo profit.`,
   });
 };

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import type { Product, TransactionItem } from '@/types';
+import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
@@ -29,8 +30,12 @@ const getReturnedStockQuantity = (item: TransactionItem, product: Product) => {
 };
 
 export const voidTransaction = async ({ transactionId, reason }: VoidTransactionInput) => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'TRANSACTION_VOID');
+
   const now = new Date().toISOString();
   const normalizedReason = reason.trim() || 'Transaksi dibatalkan';
+  let transactionNumber = transactionId;
 
   await db.transaction(
     'rw',
@@ -48,6 +53,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       if (!transaction) {
         throw new Error('Transaksi tidak ditemukan');
       }
+      transactionNumber = transaction.transaction_number;
 
       if (isTransactionVoided(transaction)) {
         throw new Error('Transaksi sudah dibatalkan');
@@ -112,4 +118,12 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       });
     },
   );
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'TRANSACTION_VOID',
+    entity: 'transactions',
+    entity_id: transactionId,
+    description: `${currentUser?.name ?? 'User'} membatalkan transaksi ${transactionNumber}. Alasan: ${normalizedReason}`,
+  });
 };

@@ -1,5 +1,6 @@
 import { useSalesReport } from '@/hooks/useReports';
 import { useI18n } from '@/hooks/useI18n';
+import { useAuth } from '@/auth/useAuth';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
@@ -22,6 +23,8 @@ const { Title, Text } = Typography;
 export default function SalesReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
+  const { can } = useAuth();
+  const canViewProfit = can('PROFIT_VIEW');
   const isMobile = useIsMobile();
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().format('YYYY-MM-DD'));
@@ -129,6 +132,27 @@ export default function SalesReport() {
       const products = await db.products.toArray();
       const productMap = new Map(products.map(p => [p.id, p]));
 
+      const itemDetailHeader = [
+        t('report.transactionNo'),
+        t('report.date'),
+        t('report.productName'),
+        t('report.category'),
+        t('report.amount'),
+        t('report.unit'),
+        t('report.unitPrice'),
+        t('report.subtotal'),
+        ...(canViewProfit ? [t('report.hpp'), t('report.profit')] : []),
+      ];
+      const summaryRows = [
+        [t('report.totalTransactions'), data.transactions.length],
+        [t('report.salesTotal'), data.totalRevenue],
+        ...(canViewProfit ? [[t('report.profit'), data.totalProfit]] : []),
+        [t('report.unitItemsSold'), data.soldItems.unitItems],
+        [t('report.weightedItemsSold'), data.soldItems.weightedLineItems],
+        [t('report.totalWeightedBase'), formatWeightTotal(data.soldItems.totalWeightBase)],
+        [t('report.totalWeightedGram'), data.soldItems.totalWeightBase],
+        [t('report.averageTransaction'), data.averageTransaction],
+      ];
       const csvRows = [
         ['SECTION 1: TRANSACTION SUMMARY'],
         [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), t('report.salesTotal'), t('report.payment'), t('report.change')],
@@ -142,7 +166,7 @@ export default function SalesReport() {
         ]),
         [],
         ['SECTION 2: TRANSACTION ITEM DETAILS'],
-        [t('report.transactionNo'), t('report.date'), t('report.productName'), t('report.category'), t('report.amount'), t('report.unit'), t('report.unitPrice'), t('report.subtotal'), t('report.hpp'), t('report.profit')],
+        itemDetailHeader,
         ...allItems.map((item) => {
           const trans = data.transactions.find(t => t.id === item.transaction_id);
           const product = productMap.get(item.product_id);
@@ -156,20 +180,12 @@ export default function SalesReport() {
             unit,
             item.price,
             item.subtotal,
-            item.purchase_price,
-            item.profit,
+            ...(canViewProfit ? [item.purchase_price, item.profit] : []),
           ];
         }),
         [],
         [t('report.summary')],
-        [t('report.totalTransactions'), data.transactions.length],
-        [t('report.salesTotal'), data.totalRevenue],
-        [t('report.profit'), data.totalProfit],
-        [t('report.unitItemsSold'), data.soldItems.unitItems],
-        [t('report.weightedItemsSold'), data.soldItems.weightedLineItems],
-        [t('report.totalWeightedBase'), formatWeightTotal(data.soldItems.totalWeightBase)],
-        [t('report.totalWeightedGram'), data.soldItems.totalWeightBase],
-        [t('report.averageTransaction'), data.averageTransaction],
+        ...summaryRows,
       ];
 
       const exported = await exportCsv({
@@ -383,7 +399,7 @@ export default function SalesReport() {
           {[
             { title: t('report.totalTransactions'), value: data.transactions.length, suffix: t('report.transaction'), color: '#1890ff', border: 'border-l-blue-500' },
             { title: t('report.salesTotal'), value: data.totalRevenue, prefix: 'Rp ', color: '#52c41a', border: 'border-l-green-500', isCurrency: true },
-            { title: t('report.profit'), value: data.totalProfit, prefix: 'Rp ', color: '#faad14', border: 'border-l-orange-500', isCurrency: true },
+            ...(canViewProfit ? [{ title: t('report.profit'), value: data.totalProfit, prefix: 'Rp ', color: '#faad14', border: 'border-l-orange-500', isCurrency: true }] : []),
             { title: t('report.unitItemsSold'), value: data.soldItems.unitItems, suffix: t('report.unitSuffix'), color: '#722ed1', border: 'border-l-purple-500' },
             { title: t('report.weightedItemsSold'), value: data.soldItems.weightedLineItems, suffix: `${t('report.itemSuffix')} / ${formatWeightTotal(data.soldItems.totalWeightBase)}`, color: '#0f766e', border: 'border-l-teal-500' },
             { title: t('report.averageTransaction'), value: data.averageTransaction, prefix: 'Rp ', color: '#eb2f96', border: 'border-l-pink-500', isCurrency: true },
@@ -410,7 +426,7 @@ export default function SalesReport() {
             <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] uppercase">{t('report.topProducts')}</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <TopProductsTable products={data.topProducts} />
+            <TopProductsTable products={data.topProducts} canViewProfit={canViewProfit} />
           </div>
         </div>
       )}

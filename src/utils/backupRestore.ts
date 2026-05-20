@@ -1,6 +1,12 @@
 import { db } from '@/lib/db';
 import dayjs from 'dayjs';
 import { exportJson } from '@/utils/export';
+import { clearAuthSessionState, getCurrentSessionUser, writeActivityLog } from '@/auth/authService';
+import type { AuthUser } from '@/types';
+
+const hasActiveOwner = (users: AuthUser[]) => {
+  return users.some((user) => user.role === 'OWNER' && user.is_active);
+};
 
 export const backupDatabase = async () => {
   try {
@@ -11,7 +17,9 @@ export const backupDatabase = async () => {
       stockPurchases: await db.stockPurchases.toArray(),
       profitLogs: await db.profitLogs.toArray(),
       profitBalance: await db.profitBalance.toArray(),
-      version: 1,
+      authUsers: await db.authUsers.toArray(),
+      activityLogs: await db.activityLogs.toArray(),
+      version: 2,
       timestamp: new Date().toISOString(),
     };
 
@@ -36,12 +44,27 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
           throw new Error('Format file backup tidak valid');
         }
+
+        const hasAuthUsersPayload = Array.isArray(data.authUsers);
+        const hasActivityLogsPayload = Array.isArray(data.activityLogs);
+        const currentUser = await getCurrentSessionUser();
+
+        if (hasAuthUsersPayload && !hasActiveOwner(data.authUsers)) {
+          throw new Error('Restore dibatalkan: backup tidak memiliki Owner aktif.');
+        }
+
+        const shouldWriteRestoreLog = Boolean(
+          currentUser && (
+            !hasAuthUsersPayload ||
+            data.authUsers.some((user: AuthUser) => user.id === currentUser.id && user.is_active)
+          ),
+        );
 
         const tables = [
           db.products,
@@ -49,7 +72,10 @@ export const restoreDatabase = async (file: File) => {
           db.transactionItems,
           db.stockPurchases,
           db.profitLogs,
-          db.profitBalance
+          db.profitBalance,
+          db.authUsers,
+          db.authSessions,
+          db.activityLogs,
         ];
 
         await db.transaction('rw', tables, async () => {
@@ -60,6 +86,15 @@ export const restoreDatabase = async (file: File) => {
           await db.stockPurchases.clear();
           await db.profitLogs.clear();
           await db.profitBalance.clear();
+          await db.authSessions.clear();
+
+          if (hasAuthUsersPayload) {
+            await db.authUsers.clear();
+          }
+
+          if (hasActivityLogsPayload) {
+            await db.activityLogs.clear();
+          }
 
           // Import new data
           if (data.products?.length) await db.products.bulkAdd(data.products);
@@ -68,7 +103,21 @@ export const restoreDatabase = async (file: File) => {
           if (data.stockPurchases?.length) await db.stockPurchases.bulkAdd(data.stockPurchases);
           if (data.profitLogs?.length) await db.profitLogs.bulkAdd(data.profitLogs);
           if (data.profitBalance?.length) await db.profitBalance.bulkAdd(data.profitBalance);
+          if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
+          if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
         });
+
+        await clearAuthSessionState();
+
+        if (shouldWriteRestoreLog && currentUser) {
+          await writeActivityLog({
+            user: currentUser,
+            action: 'BACKUP_RESTORE',
+            entity: 'database',
+            description: `${currentUser.name} melakukan restore database dari file backup.`,
+          });
+        }
+
         resolve();
       } catch (error) {
         console.error('Restore failed:', error);

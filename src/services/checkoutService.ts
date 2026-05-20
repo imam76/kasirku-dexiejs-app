@@ -1,8 +1,9 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
 import type { CartItem, PaymentMethod, Transaction, TransactionItem } from '@/types';
-import { getPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
+import { getCartItemOriginalPrice, getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
+import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -22,7 +23,9 @@ const createTransactionItems = (
   createdAt: string,
 ): TransactionItem[] => {
   return cart.map((item) => {
-    const sellingPrice = getPrice(item.product, item.quantity, item.unit);
+    const originalPrice = getCartItemOriginalPrice(item);
+    const sellingPrice = getCartItemPrice(item);
+    const isPriceEdited = item.custom_price !== undefined;
     const normalizedPurchasePrice = normalisasiHargaProduk(
       item.product.purchase_price,
       item.product,
@@ -38,6 +41,10 @@ const createTransactionItems = (
       product_name: item.product.name,
       price: sellingPrice,
       selling_price: sellingPrice,
+      original_price: isPriceEdited ? originalPrice : undefined,
+      is_price_edited: isPriceEdited,
+      price_edited_by: item.price_edited_by,
+      price_edited_at: item.price_edited_at,
       purchase_price: normalizedPurchasePrice,
       unit: item.unit,
       ...unitSnapshot,
@@ -121,6 +128,12 @@ export const checkout = async ({
   payment,
   paymentMethod,
 }: CheckoutInput): Promise<CheckoutResult> => {
+  const currentUser = await getCurrentSessionUser();
+  const hasEditedPrice = cart.some((item) => item.custom_price !== undefined);
+  if (hasEditedPrice) {
+    requireRolePermission(currentUser?.role, 'TRANSACTION_EDIT_PRICE');
+  }
+
   const transactionId = crypto.randomUUID();
   const transactionNumber = `TRX-${Date.now()}`;
   const createdAt = new Date().toISOString();
@@ -136,6 +149,7 @@ export const checkout = async ({
       db.profitBalance,
       db.financeTransactions,
       db.financeBalance,
+      db.activityLogs,
     ],
     async () => {
       const transaction: Transaction = {
@@ -157,6 +171,16 @@ export const checkout = async ({
       await recordProfit(transaction, items, createdAt);
       await recordFinanceIncome(transaction, createdAt);
       await reduceProductStock(cart);
+
+      for (const item of items.filter((item) => item.is_price_edited)) {
+        await writeActivityLog({
+          user: currentUser,
+          action: 'TRANSACTION_EDIT_PRICE',
+          entity: 'transactionItems',
+          entity_id: item.id,
+          description: `${currentUser?.name ?? 'User'} mengubah harga item ${item.product_name} dari Rp ${item.original_price ?? item.price} menjadi Rp ${item.price} di transaksi ${transaction.transaction_number}.`,
+        });
+      }
 
       return { transaction, items };
     },

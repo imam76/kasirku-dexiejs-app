@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Product, CartItem, PaymentMethod } from '@/types';
-import { konversiSatuanProduk } from '@/utils/pricing';
+import { getCartItemOriginalPrice, konversiSatuanProduk } from '@/utils/pricing';
 import { getProductSellableUnits } from '@/utils/productUnits';
 
 export type TransactionError =
@@ -28,6 +28,7 @@ interface TransactionState {
   addToCart: (product: Product) => { success: boolean; error?: TransactionError };
   updateQuantity: (productId: string, newQuantity: number) => { success: boolean; error?: TransactionError };
   updateUnit: (productId: string, newUnit: string) => { success: boolean; error?: TransactionError };
+  updateCustomPrice: (productId: string, customPrice: number | undefined, editedBy?: string) => void;
   removeFromCart: (productId: string) => void;
   reset: () => void;
 }
@@ -122,9 +123,17 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
 
     set({
-      cart: cart.map((item) =>
-        item.product.id === productId ? { ...item, quantity: newQuantity } : item
-      )
+      cart: cart.map((item) => {
+        if (item.product.id !== productId) return item;
+
+        const nextItem = { ...item, quantity: newQuantity };
+        if (nextItem.custom_price === undefined) return nextItem;
+
+        return {
+          ...nextItem,
+          original_price: getCartItemOriginalPrice(nextItem),
+        };
+      })
     });
     return { success: true };
   },
@@ -146,13 +155,45 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       };
     }
 
-    // Update the unit
+    // Harga manual disimpan per satuan. Kalau satuan berubah, reset harga manual supaya tidak salah basis.
     set({
-      cart: cart.map((cartItem) =>
-        cartItem.product.id === productId ? { ...cartItem, unit: newUnit } : cartItem
-      )
+      cart: cart.map((cartItem) => {
+        if (cartItem.product.id !== productId) return cartItem;
+
+        return {
+          product: cartItem.product,
+          quantity: cartItem.quantity,
+          unit: newUnit,
+        };
+      })
     });
     return { success: true };
+  },
+
+  updateCustomPrice: (productId, customPrice, editedBy) => {
+    const { cart } = get();
+
+    set({
+      cart: cart.map((cartItem) => {
+        if (cartItem.product.id !== productId) return cartItem;
+
+        if (customPrice === undefined) {
+          return {
+            product: cartItem.product,
+            quantity: cartItem.quantity,
+            unit: cartItem.unit,
+          };
+        }
+
+        return {
+          ...cartItem,
+          custom_price: customPrice,
+          original_price: cartItem.original_price ?? getCartItemOriginalPrice(cartItem),
+          price_edited_by: editedBy,
+          price_edited_at: new Date().toISOString(),
+        };
+      })
+    });
   },
 
   removeFromCart: (productId) => {

@@ -1,5 +1,8 @@
 import FeedbackModal from '@/components/FeedbackModal'
 import { AppWorkflowTour } from '@/components/AppWorkflowTour'
+import { AuthGate } from '@/auth/AuthGate'
+import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
+import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
 import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
@@ -13,7 +16,7 @@ import { setConversionRegistry } from '@/utils/pricing'
 import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { Layout, Menu, notification } from 'antd'
+import { Button, Layout, Menu, Result, notification } from 'antd'
 import {
   Banknote,
   Box,
@@ -60,6 +63,7 @@ const RootLayout = () => {
   const location = useLocation()
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
+  const { can, currentUser } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
@@ -182,7 +186,23 @@ const RootLayout = () => {
     { to: '/settings', label: t('nav.settings'), icon: Settings },
   ]
 
-  const menuItems = navLinks.map((link) => {
+  const filteredNavLinks = navLinks.reduce<NavLink[]>((acc, link) => {
+    if (isNavGroup(link)) {
+      const children = link.children.filter((child) => canAccessPath(currentUser?.role, child.to))
+      if (children.length > 0) {
+        acc.push({ ...link, children })
+      }
+      return acc
+    }
+
+    if (canAccessPath(currentUser?.role, link.to)) {
+      acc.push(link)
+    }
+
+    return acc
+  }, [])
+
+  const menuItems = filteredNavLinks.map((link) => {
     if (isNavGroup(link)) {
       return {
         key: link.key,
@@ -216,17 +236,20 @@ const RootLayout = () => {
       .reverse()
       .find((link) => location.pathname.startsWith(link.to === '/' ? '/' : link.to))?.to ?? '/'
 
-  const openKeys = navLinks
+  const openKeys = filteredNavLinks
     .filter(isNavGroup)
     .filter((link) => link.children.some((child) => child.to === selectedKey))
     .map((link) => link.key)
+  const requiredPermission = getRequiredPermissionForPath(location.pathname)
+  const canOpenCurrentPath = canAccessPermissionRule(currentUser?.role, requiredPermission)
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
   const contentHeight = `calc(100dvh - ${topOffset})`
 
   return (
-    <Layout style={{ height: '100dvh', overflow: 'hidden' }}>
+    <AuthGate>
+      <Layout style={{ height: '100dvh', overflow: 'hidden' }}>
       {/* Top Navbar - Logo & Theme Toggle */}
       <nav
         className="fixed top-0 z-40 w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200"
@@ -276,14 +299,16 @@ const RootLayout = () => {
                 </button>
               )}
             </AppWorkflowTour>
-            <button
-              onClick={() => navigate({ to: '/settings' })}
-              className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
-              aria-label={t('root.openSettings')}
-              title={t('root.openSettings')}
-            >
-              <SettingsIcon size={20} />
-            </button>
+            {can('SETTINGS_ACCESS') && (
+              <button
+                onClick={() => navigate({ to: '/settings' })}
+                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
+                aria-label={t('root.openSettings')}
+                title={t('root.openSettings')}
+              >
+                <SettingsIcon size={20} />
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -345,7 +370,20 @@ const RootLayout = () => {
         >
           <Content className="transition-all duration-200" style={{ height: '100%', overflowY: 'auto' }}>
             <div className="p-4">
-              <Outlet />
+              {canOpenCurrentPath ? (
+                <Outlet />
+              ) : (
+                <Result
+                  status="403"
+                  title="Akses tidak tersedia"
+                  subTitle="User Anda tidak memiliki izin untuk membuka halaman ini."
+                  extra={(
+                    <Button type="primary" onClick={() => navigate({ to: '/' })}>
+                      Kembali ke Home
+                    </Button>
+                  )}
+                />
+              )}
             </div>
           </Content>
         </Layout>
@@ -357,7 +395,8 @@ const RootLayout = () => {
         wave={feedbackWave}
         onFinish={handleFeedbackSubmit}
       />
-    </Layout>
+      </Layout>
+    </AuthGate>
   )
 }
 

@@ -69,6 +69,50 @@ export interface Product {
 export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
 export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 export type TransactionStatus = 'COMPLETED' | 'VOIDED';
+export type UserRole = 'OWNER' | 'ADMIN' | 'KASIR' | 'GUDANG';
+
+export type Permission =
+  | 'TRANSACTION_VOID'
+  | 'TRANSACTION_DELETE'
+  | 'TRANSACTION_EDIT_PRICE'
+  | 'PROFIT_VIEW'
+  | 'CASHIER_ACCESS'
+  | 'STOCK_ACCESS'
+  | 'STOCK_PURCHASE_ACCESS'
+  | 'FINANCE_ACCESS'
+  | 'SETTINGS_ACCESS'
+  | 'USER_MANAGE'
+  | 'ACTIVITY_LOG_VIEW';
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  role: UserRole;
+  pin_hash: string;
+  pin_salt: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuthSession {
+  id: string;
+  user_id: string;
+  created_at: string;
+  last_active_at: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  user_id?: string;
+  user_name?: string;
+  role?: UserRole;
+  action: string;
+  entity: string;
+  entity_id?: string;
+  description: string;
+  created_at: string;
+}
 
 export interface Transaction {
   id: string;
@@ -93,6 +137,10 @@ export interface TransactionItem {
   product_name: string;
   price: number;
   selling_price?: number;
+  original_price?: number;
+  is_price_edited?: boolean;
+  price_edited_by?: string;
+  price_edited_at?: string;
   purchase_price: number;
   quantity: number;
   unit: ProductUnit; // Satuan yang digunakan (misal: gram)
@@ -122,6 +170,10 @@ export interface CartItem {
   product: Product;
   quantity: number;
   unit: ProductUnit; // Satuan yang dipilih (default product.selling_unit)
+  custom_price?: number;
+  original_price?: number;
+  price_edited_by?: string;
+  price_edited_at?: string;
 }
 
 export interface BluetoothPrinterDevice {
