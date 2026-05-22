@@ -70,6 +70,8 @@ export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
 export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 export type TransactionStatus = 'COMPLETED' | 'VOIDED';
 export type UserRole = 'OWNER' | 'ADMIN' | 'KASIR' | 'GUDANG';
+export type PromoType = 'percent' | 'fixed';
+export type PromoAppliesTo = 'all' | 'product' | 'category';
 
 export type Permission =
   | 'TRANSACTION_VOID'
@@ -114,9 +116,54 @@ export interface ActivityLog {
   created_at: string;
 }
 
+export interface Promo {
+  id: string;
+  name: string;
+  type: PromoType;
+  value: number;
+  applies_to: PromoAppliesTo;
+  product_ids?: string[];
+  categories?: ProductCategory[];
+  start_at?: string | null;
+  end_at?: string | null;
+  min_qty?: number | null;
+  min_total?: number | null;
+  voucher_code?: string | null;
+  active: boolean;
+  priority: number;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromoAdjustment {
+  promo_id: string;
+  promo_name: string;
+  scope: 'line' | 'order';
+  product_id?: string;
+  amount: number;
+  reason: string;
+}
+
+export interface AppliedPromoSnapshot {
+  promo_id: string;
+  name: string;
+  type: PromoType;
+  value: number;
+  applies_to: PromoAppliesTo;
+  product_ids?: string[];
+  categories?: ProductCategory[];
+  voucher_code?: string | null;
+  adjustments: PromoAdjustment[];
+}
+
 export interface Transaction {
   id: string;
   transaction_number: string;
+  subtotal_amount?: number;
+  discount_amount?: number;
+  discount_breakdown?: Array<{ label: string; amount: number }>;
+  applied_promos_snapshot?: AppliedPromoSnapshot[];
   total_amount: number;
   payment_amount: number;
   change_amount: number;
@@ -149,6 +196,9 @@ export interface TransactionItem {
   unit_category?: SalesUnitCategory;
   conversion_value?: number;
   base_unit?: ProductUnit;
+  price_before_discount?: number;
+  subtotal_before_discount?: number;
+  discount_amount?: number;
   subtotal: number;
   profit: number;
   created_at: string;
@@ -192,6 +242,9 @@ export interface ReceiptLineItem {
   quantity: number;
   unit: ProductUnit;
   price: number;
+  priceBeforeDiscount?: number;
+  subtotalBeforeDiscount?: number;
+  discountAmount?: number;
   subtotal: number;
 }
 
@@ -202,6 +255,9 @@ export interface ReceiptPayload {
   createdAt: string;
   paymentMethod: PaymentMethod;
   items: ReceiptLineItem[];
+  subtotalAmount?: number;
+  discountAmount?: number;
+  discountBreakdown?: Array<{ label: string; amount: number }>;
   totalAmount: number;
   paymentAmount: number;
   changeAmount: number;

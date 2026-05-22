@@ -14,6 +14,7 @@ interface TransactionState {
   searchTerm: string;
   paymentAmount: string;
   paymentMethod: PaymentMethod;
+  voucherCode: string;
   showPayment: boolean;
 
   // Actions
@@ -22,6 +23,7 @@ interface TransactionState {
   setSearchTerm: (term: string) => void;
   setPaymentAmount: (amount: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
+  setVoucherCode: (voucherCode: string) => void;
   setShowPayment: (show: boolean) => void;
 
   // Logical State Actions (Non-DB)
@@ -39,6 +41,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   searchTerm: '',
   paymentAmount: '',
   paymentMethod: 'TUNAI',
+  voucherCode: '',
   showPayment: false,
 
   setProducts: (products) => set({ products }),
@@ -48,6 +51,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   setSearchTerm: (searchTerm) => set({ searchTerm }),
   setPaymentAmount: (paymentAmount) => set({ paymentAmount }),
   setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+  setVoucherCode: (voucherCode) => set({ voucherCode }),
   setShowPayment: (showPayment) => set({ showPayment }),
 
   addToCart: (product) => {
@@ -207,6 +211,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       cart: [],
       paymentAmount: '',
       paymentMethod: 'TUNAI',
+      voucherCode: '',
       showPayment: false,
     });
   }

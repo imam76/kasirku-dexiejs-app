@@ -41,6 +41,9 @@ class ReceiptLineItemArg {
   var quantity: Double = 0.0
   var unit: String = ""
   var price: Double = 0.0
+  var priceBeforeDiscount: Double = 0.0
+  var subtotalBeforeDiscount: Double = 0.0
+  var discountAmount: Double = 0.0
   var subtotal: Double = 0.0
 }
 
@@ -52,6 +55,8 @@ class ReceiptPayloadArg {
   var createdAt: String = ""
   var paymentMethod: String = ""
   var items: List<ReceiptLineItemArg> = emptyList()
+  var subtotalAmount: Double = 0.0
+  var discountAmount: Double = 0.0
   var totalAmount: Double = 0.0
   var paymentAmount: Double = 0.0
   var changeAmount: Double = 0.0
@@ -372,6 +377,11 @@ object EscPosReceiptRenderer {
     }
 
     output.writeLine(separator())
+    if (receipt.discountAmount > 0.0) {
+      val subtotal = if (receipt.subtotalAmount > 0.0) receipt.subtotalAmount else receipt.totalAmount + receipt.discountAmount
+      output.writeLine(twoColumns("SUBTOTAL", formatCurrency(subtotal)))
+      output.writeLine(twoColumns("DISKON", "-${formatCurrency(receipt.discountAmount)}"))
+    }
     output.writeCommand(0x1B, 0x45, 0x01)
     output.writeLine(twoColumns("TOTAL", formatCurrency(receipt.totalAmount)))
     output.writeCommand(0x1B, 0x45, 0x00)

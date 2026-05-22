@@ -6,9 +6,10 @@ import { useI18n } from '@/hooks/useI18n';
 interface MobileSalesListProps {
   transactions: Transaction[];
   totalRevenue: number;
+  totalDiscount: number;
 }
 
-export default function MobileSalesList({ transactions, totalRevenue }: MobileSalesListProps) {
+export default function MobileSalesList({ transactions, totalRevenue, totalDiscount }: MobileSalesListProps) {
   const { t } = useI18n();
 
   if (transactions.length === 0) {
@@ -24,9 +25,16 @@ export default function MobileSalesList({ transactions, totalRevenue }: MobileSa
       <div className="mt-6 p-4 bg-[#F9FAFB] rounded-xl border border-gray-100">
         <div className="flex justify-between items-center">
           <span className="text-sm font-semibold text-gray-500">{t('report.salesTotal')}</span>
-          <span className="text-lg font-bold text-[#2563EB]">
-            {formatCurrency(totalRevenue)}
-          </span>
+          <div className="text-right">
+            <span className="text-lg font-bold text-[#2563EB]">
+              {formatCurrency(totalRevenue)}
+            </span>
+            {totalDiscount > 0 && (
+              <div className="text-xs font-semibold text-green-700">
+                {t('report.discount')}: -{formatCurrency(totalDiscount)}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4">
@@ -58,6 +66,11 @@ export default function MobileSalesList({ transactions, totalRevenue }: MobileSa
                 <div className="text-[10px] text-gray-400 mt-1">
                   {t('history.paid')}: {formatCurrency(transaction.payment_amount)}
                 </div>
+                {(transaction.discount_amount ?? 0) > 0 && (
+                  <div className="text-[10px] font-semibold text-green-700">
+                    {t('report.discount')}: -{formatCurrency(transaction.discount_amount ?? 0)}
+                  </div>
+                )}
               </div>
             </div>
           </div>

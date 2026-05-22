@@ -3,6 +3,7 @@ import { Alert, App, Button, Card, Checkbox, Form, Input, InputNumber, Modal, Se
 import type { ColumnsType } from 'antd/es/table';
 import { Edit2, Plus, RefreshCcw, Scale, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import { db } from '@/lib/db';
 import type { UnitConversion, UnitDefinition, UnitDefinitionType } from '@/types';
 import type { TranslationKey } from '@/i18n/messages';
@@ -62,6 +63,11 @@ const conversionTypeColors: Record<UnitConversionType, string> = {
   time: 'purple',
 };
 
+const getUnitTabFromHash = (hash: string) => {
+  const normalizedHash = hash.replace(/^#/, '');
+  return normalizedHash === 'conversions' ? 'conversions' : 'units';
+};
+
 const normalizeStoredUnit = (unit: UnitDefinition): UnitDefinition => {
   const id = normalizeUnitKey(unit.id || unit.name);
   const type = unit.type ?? inferUnitDefinitionType(id);
@@ -107,6 +113,8 @@ export default function UnitManagement() {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
   const { t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
   const [isConversionModalOpen, setIsConversionModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<UnitDefinition | null>(null);
@@ -138,6 +146,12 @@ export default function UnitManagement() {
   useEffect(() => {
     setConversionRegistry(conversions);
   }, [conversions]);
+
+  const activeTab = getUnitTabFromHash(location.hash);
+  const handleTabChange = (tabKey: string) => {
+    navigate({ to: '/master-data/units', hash: tabKey });
+  };
+
 
   const unitMap = useMemo(() => {
     return new Map(units.map((unit) => [unit.id, unit]));
@@ -618,6 +632,8 @@ export default function UnitManagement() {
       </div>
 
       <Tabs
+        activeKey={activeTab}
+        onChange={handleTabChange}
         items={[
           {
             key: 'units',

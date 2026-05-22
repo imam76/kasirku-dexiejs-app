@@ -1,6 +1,7 @@
 import { PaymentMethod } from '@/types';
+import type { PromoEvaluationResult } from '@/services/promoService';
 import { formatCurrency } from '@/utils/formatters';
-import { Switch } from 'antd';
+import { Input, Switch } from 'antd';
 import { Delete, DollarSign, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
@@ -12,9 +13,12 @@ interface CartSummaryProps {
   showPayment: boolean;
   paymentAmount: string;
   paymentMethod: PaymentMethod;
+  voucherCode: string;
+  promoPreview: PromoEvaluationResult;
   setShowPayment: (show: boolean) => void;
   setPaymentAmount: (amount: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
+  setVoucherCode: (voucherCode: string) => void;
   handleCheckout: () => void;
   onCancel?: () => void;
 }
@@ -24,9 +28,12 @@ export default function CartSummary({
   showPayment,
   paymentAmount,
   paymentMethod,
+  voucherCode,
+  promoPreview,
   setShowPayment,
   setPaymentAmount,
   setPaymentMethod,
+  setVoucherCode,
   handleCheckout,
   onCancel
 }: CartSummaryProps) {
@@ -43,6 +50,7 @@ export default function CartSummary({
   const payment = parseFloat(paymentAmount);
   const change = payment >= total ? payment - total : 0;
   const quickAmounts = [5000, 10000, 20000, 50000, 100000];
+  const hasDiscount = promoPreview.discount_amount > 0;
 
   const handleQuickAmount = (amount: number) => {
     const currentAmount = Number.isFinite(payment) ? payment : 0;
@@ -70,6 +78,34 @@ export default function CartSummary({
   return (
     <>
       <div className="border-t pt-4 mb-4">
+        <div className="mb-3">
+          <Input
+            value={voucherCode}
+            onChange={(event) => setVoucherCode(event.target.value)}
+            placeholder={t('promo.voucherPlaceholder')}
+            size="large"
+            className="rounded-lg"
+          />
+        </div>
+
+        {(hasDiscount || voucherCode.trim()) && (
+          <div className="mb-3 space-y-1 rounded-lg bg-green-50 p-3 text-sm">
+            <div className="flex justify-between text-gray-700">
+              <span>{t('cart.subtotal')}</span>
+              <span>Rp {formatCurrency(promoPreview.subtotal_before_discount)}</span>
+            </div>
+            {promoPreview.discount_breakdown.map((discount) => (
+              <div key={discount.label} className="flex justify-between font-semibold text-green-700">
+                <span>{discount.label}</span>
+                <span>-Rp {formatCurrency(discount.amount)}</span>
+              </div>
+            ))}
+            {!hasDiscount && voucherCode.trim() && (
+              <p className="text-xs text-gray-500">{t('promo.noVoucherDiscount')}</p>
+            )}
+          </div>
+        )}
+
         <div className="flex justify-between text-xl font-bold text-gray-800">
           <span>{t('cart.total')}:</span>
           <span>Rp {formatCurrency(total)}</span>

@@ -70,6 +70,9 @@ pub struct ReceiptLineItem {
     quantity: f64,
     unit: String,
     price: f64,
+    price_before_discount: Option<f64>,
+    subtotal_before_discount: Option<f64>,
+    discount_amount: Option<f64>,
     subtotal: f64,
 }
 
@@ -82,6 +85,8 @@ pub struct ReceiptPayload {
     created_at: String,
     payment_method: String,
     items: Vec<ReceiptLineItem>,
+    subtotal_amount: Option<f64>,
+    discount_amount: Option<f64>,
     total_amount: f64,
     payment_amount: f64,
     change_amount: f64,

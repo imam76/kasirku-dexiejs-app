@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 
 export class KasirkuDB extends Dexie {
@@ -17,6 +17,7 @@ export class KasirkuDB extends Dexie {
   authUsers!: Table<AuthUser>;
   authSessions!: Table<AuthSession>;
   activityLogs!: Table<ActivityLog>;
+  promos!: Table<Promo>;
 
   constructor() {
     super('KasirkuDB');
@@ -77,6 +78,10 @@ export class KasirkuDB extends Dexie {
       authUsers: 'id, role, is_active, created_at',
       authSessions: 'id, user_id, last_active_at',
       activityLogs: 'id, user_id, action, entity, created_at'
+    });
+
+    this.version(12).stores({
+      promos: 'id, active, type, applies_to, voucher_code, priority, start_at, end_at, created_at'
     });
 
     this.on('populate', async () => {

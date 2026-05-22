@@ -327,7 +327,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 baseUnit: purchaseUnit,
               })}
             </p>
-            <Link to="/units">
+            <Link to="/master-data/units" hash="conversions">
               <Button
                 size="small"
                 type="primary"

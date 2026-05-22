@@ -18,9 +18,11 @@ import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } fr
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { Button, Layout, Menu, Result, notification } from 'antd'
 import {
+  BadgePercent,
   Banknote,
   Box,
   ClipboardList,
+  Database,
   DollarSign,
   FileText,
   History,
@@ -46,11 +48,12 @@ const SIDEBAR_WIDTH = 250
 const TRIGGER_WIDTH = 36
 
 type FeedbackValues = Record<string, unknown>
-type NavLeaf = { to: string; label: string; icon: LucideIcon }
+type NavLeaf = { to: string; label: string; icon: LucideIcon; key?: string; hash?: string }
 type NavGroup = { label: string; icon: LucideIcon; key: string; children: NavLeaf[] }
 type NavLink = NavLeaf | NavGroup
 
 const isNavGroup = (link: NavLink): link is NavGroup => 'children' in link
+const getNavLeafKey = (link: NavLeaf) => link.key ?? `${link.to}${link.hash ? `#${link.hash}` : ''}`
 const escapeTelegramHtml = (value: unknown) =>
   String(value)
     .replace(/&/g, '&amp;')
@@ -166,8 +169,17 @@ const RootLayout = () => {
   const navLinks: NavLink[] = [
     { to: '/', label: t('nav.home'), icon: Home },
     { to: '/transaction', label: t('nav.transaction'), icon: ShoppingCart },
-    { to: '/stock', label: t('nav.stock'), icon: Box },
-    { to: '/units', label: t('nav.units'), icon: Scale },
+    {
+      label: t('nav.masterData'),
+      icon: Database,
+      key: 'master-data-group',
+      children: [
+        { to: '/master-data/products', label: t('nav.product'), icon: Box },
+        { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
+        { to: '/master-data/units', label: t('nav.units'), icon: Scale, key: '/master-data/units#conversions', hash: 'conversions' },
+        { to: '/master-data/units', label: t('nav.unit'), icon: Scale, key: '/master-data/units#units', hash: 'units' },
+      ],
+    },
     { to: '/shopping-note', label: t('nav.shoppingNote'), icon: ClipboardList },
     { to: '/history', label: t('nav.history'), icon: History },
     { to: '/finance', label: t('nav.finance'), icon: Banknote },
@@ -209,16 +221,16 @@ const RootLayout = () => {
         icon: <link.icon size={16} />,
         label: link.label,
         children: link.children.map((child) => ({
-          key: child.to,
+          key: getNavLeafKey(child),
           icon: <child.icon size={16} />,
-          label: <Link to={child.to}>{child.label}</Link>,
+          label: <Link to={child.to} hash={child.hash}>{child.label}</Link>,
         })),
       }
     }
     return {
-      key: link.to,
+      key: getNavLeafKey(link),
       icon: <link.icon size={16} />,
-      label: <Link to={link.to}>{link.label}</Link>,
+      label: <Link to={link.to} hash={link.hash}>{link.label}</Link>,
     }
   })
 
@@ -230,16 +242,37 @@ const RootLayout = () => {
     return [...acc, link]
   }, [])
 
-  const selectedKey =
+  const currentHash = location.hash.replace(/^#/, '')
+  const selectedLink =
     allLinks
       .slice()
       .reverse()
-      .find((link) => location.pathname.startsWith(link.to === '/' ? '/' : link.to))?.to ?? '/'
+      .find((link) => {
+        const pathMatches = link.to === '/'
+          ? location.pathname === '/'
+          : location.pathname === link.to || location.pathname.startsWith(`${link.to}/`)
+
+        if (!pathMatches) return false
+        if (link.hash) return currentHash === link.hash
+
+        return true
+      })
+  const selectedKey = location.pathname === '/master-data'
+    ? 'master-data-group'
+    : selectedLink ? getNavLeafKey(selectedLink) : '/'
 
   const openKeys = filteredNavLinks
     .filter(isNavGroup)
-    .filter((link) => link.children.some((child) => child.to === selectedKey))
+    .filter((link) => link.key === selectedKey || link.children.some((child) => getNavLeafKey(child) === selectedKey))
     .map((link) => link.key)
+  const openKeySignature = openKeys.join('|')
+  const [openMenuKeys, setOpenMenuKeys] = useState<string[]>(openKeys)
+
+  useEffect(() => {
+    const activeOpenKeys = openKeySignature ? openKeySignature.split('|') : []
+    setOpenMenuKeys((currentKeys) => Array.from(new Set([...currentKeys, ...activeOpenKeys])))
+  }, [openKeySignature])
+
   const requiredPermission = getRequiredPermissionForPath(location.pathname)
   const canOpenCurrentPath = canAccessPermissionRule(currentUser?.role, requiredPermission)
 
@@ -351,7 +384,8 @@ const RootLayout = () => {
             <Menu
               mode="inline"
               selectedKeys={[selectedKey]}
-              defaultOpenKeys={openKeys}
+              openKeys={openMenuKeys}
+              onOpenChange={setOpenMenuKeys}
               items={menuItems}
               theme={isDark ? 'dark' : 'light'}
               style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto' }}

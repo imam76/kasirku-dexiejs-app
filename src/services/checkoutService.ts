@@ -4,12 +4,13 @@ import type { CartItem, PaymentMethod, Transaction, TransactionItem } from '@/ty
 import { getCartItemOriginalPrice, getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
 
 interface CheckoutInput {
   cart: CartItem[];
-  total: number;
   payment: number;
   paymentMethod: PaymentMethod;
+  voucherCode?: string;
 }
 
 export interface CheckoutResult {
@@ -21,10 +22,16 @@ const createTransactionItems = (
   cart: CartItem[],
   transactionId: string,
   createdAt: string,
+  promoEvaluation: PromoEvaluationResult,
 ): TransactionItem[] => {
-  return cart.map((item) => {
+  return cart.map((item, index) => {
     const originalPrice = getCartItemOriginalPrice(item);
-    const sellingPrice = getCartItemPrice(item);
+    const promoLine = promoEvaluation.lines[index];
+    const priceBeforeDiscount = promoLine?.price_before_discount ?? getCartItemPrice(item);
+    const subtotalBeforeDiscount = promoLine?.subtotal_before_discount ?? priceBeforeDiscount * item.quantity;
+    const discountAmount = promoLine?.discount_amount ?? 0;
+    const sellingPrice = promoLine?.final_unit_price ?? priceBeforeDiscount;
+    const finalSubtotal = promoLine?.final_subtotal ?? sellingPrice * item.quantity;
     const isPriceEdited = item.custom_price !== undefined;
     const normalizedPurchasePrice = normalisasiHargaProduk(
       item.product.purchase_price,
@@ -49,8 +56,11 @@ const createTransactionItems = (
       unit: item.unit,
       ...unitSnapshot,
       quantity: item.quantity,
-      subtotal: sellingPrice * item.quantity,
-      profit: (sellingPrice - normalizedPurchasePrice) * item.quantity,
+      price_before_discount: priceBeforeDiscount,
+      subtotal_before_discount: subtotalBeforeDiscount,
+      discount_amount: discountAmount,
+      subtotal: finalSubtotal,
+      profit: finalSubtotal - normalizedPurchasePrice * item.quantity,
       created_at: createdAt,
     };
   });
@@ -124,9 +134,9 @@ const reduceProductStock = async (cart: CartItem[]) => {
 
 export const checkout = async ({
   cart,
-  total,
   payment,
   paymentMethod,
+  voucherCode,
 }: CheckoutInput): Promise<CheckoutResult> => {
   const currentUser = await getCurrentSessionUser();
   const hasEditedPrice = cart.some((item) => item.custom_price !== undefined);
@@ -134,10 +144,24 @@ export const checkout = async ({
     requireRolePermission(currentUser?.role, 'TRANSACTION_EDIT_PRICE');
   }
 
+  const now = new Date();
   const transactionId = crypto.randomUUID();
   const transactionNumber = `TRX-${Date.now()}`;
-  const createdAt = new Date().toISOString();
-  const change = paymentMethod === 'NON_TUNAI' ? 0 : payment - total;
+  const createdAt = now.toISOString();
+  const activePromos = await getActivePromos(now);
+  const promoEvaluation = evaluatePromos({
+    cart,
+    promos: activePromos,
+    voucherCode,
+    now,
+  });
+  const finalTotal = promoEvaluation.total_amount;
+  const finalPayment = paymentMethod === 'NON_TUNAI' ? finalTotal : payment;
+  const change = paymentMethod === 'NON_TUNAI' ? 0 : finalPayment - finalTotal;
+
+  if (!Number.isFinite(finalPayment) || finalPayment < finalTotal) {
+    throw new Error('Jumlah pembayaran tidak valid atau kurang.');
+  }
 
   return db.transaction(
     'rw',
@@ -155,8 +179,12 @@ export const checkout = async ({
       const transaction: Transaction = {
         id: transactionId,
         transaction_number: transactionNumber,
-        total_amount: total,
-        payment_amount: payment,
+        subtotal_amount: promoEvaluation.subtotal_before_discount,
+        discount_amount: promoEvaluation.discount_amount,
+        discount_breakdown: promoEvaluation.discount_breakdown,
+        applied_promos_snapshot: promoEvaluation.applied_promos_snapshot,
+        total_amount: finalTotal,
+        payment_amount: finalPayment,
         change_amount: change,
         payment_method: paymentMethod,
         status: 'COMPLETED',
@@ -164,7 +192,7 @@ export const checkout = async ({
         created_at: createdAt,
       };
 
-      const items = createTransactionItems(cart, transactionId, createdAt);
+      const items = createTransactionItems(cart, transactionId, createdAt, promoEvaluation);
 
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);

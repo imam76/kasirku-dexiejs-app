@@ -9,7 +9,7 @@ const TOUR_STORAGE_KEY = 'kasirku-workflow-tour-dismissed';
 const STOCK_SAVED_EVENT = 'kasirku-workflow-tour-stock-saved';
 const ROUTE_SETTLE_DELAY_MS = 120;
 
-type WorkflowRoute = '/' | '/stock' | '/units' | '/transaction' | '/history';
+type WorkflowRoute = '/' | '/master-data/products' | '/master-data/units' | '/transaction' | '/history';
 
 type WorkflowTourStep = {
   route: WorkflowRoute;
@@ -63,7 +63,7 @@ export function AppWorkflowTour({ children }: AppWorkflowTourProps) {
         targetClickAction: 'next',
       },
       {
-        route: '/stock',
+        route: '/master-data/products',
         selector: '[data-tour="stock-add-product"]',
         title: t('tour.stockAddTitle'),
         description: t('tour.stockAddDescription'),
@@ -71,7 +71,7 @@ export function AppWorkflowTour({ children }: AppWorkflowTourProps) {
         targetClickAction: 'pause',
       },
       {
-        route: '/units',
+        route: '/master-data/units',
         selector: '[data-tour="units-workflow"]',
         title: t('tour.unitsTitle'),
         description: t('tour.unitsDescription'),

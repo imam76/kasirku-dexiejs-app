@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { useTransactionStore, type TransactionError } from '@/store/transactionStore';
@@ -10,6 +10,7 @@ import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { checkout } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
+import { evaluatePromos, getActivePromos } from '@/services/promoService';
 
 export const useTransaction = () => {
   const queryClient = useQueryClient();
@@ -22,11 +23,13 @@ export const useTransaction = () => {
     searchTerm,
     paymentAmount,
     paymentMethod,
+    voucherCode,
     showPayment,
     setProducts,
     setSearchTerm,
     setPaymentAmount,
     setPaymentMethod,
+    setVoucherCode,
     setShowPayment,
     addToCart: storeAddToCart,
     updateQuantity: storeUpdateQuantity,
@@ -48,6 +51,11 @@ export const useTransaction = () => {
     loadProducts();
   }, [loadProducts]);
 
+  const { data: activePromos = [] } = useQuery({
+    queryKey: ['activePromos'],
+    queryFn: () => getActivePromos(new Date()),
+  });
+
   const filteredProducts = useMemo(() => {
     return products.filter(
       (p) =>
@@ -56,9 +64,21 @@ export const useTransaction = () => {
     );
   }, [products, searchTerm]);
 
-  const calculateTotal = useCallback(() => {
+  const calculateSubtotal = useCallback(() => {
     return cart.reduce((sum, item) => sum + getCartItemPrice(item) * item.quantity, 0);
   }, [cart]);
+
+  const promoPreview = useMemo(() => {
+    return evaluatePromos({
+      cart,
+      promos: activePromos,
+      voucherCode,
+    });
+  }, [activePromos, cart, voucherCode]);
+
+  const calculateTotal = useCallback(() => {
+    return promoPreview.total_amount;
+  }, [promoPreview.total_amount]);
 
   const getTransactionErrorContent = (error: TransactionError) => {
     if (error.code === 'OUT_OF_STOCK') {
@@ -115,7 +135,7 @@ export const useTransaction = () => {
   };
 
   const handleCheckout = async () => {
-    const total = calculateTotal();
+    const total = promoPreview.total_amount;
     const payment = paymentMethod === 'NON_TUNAI' ? total : parseFloat(paymentAmount);
 
     if (isNaN(payment) || payment < total) {
@@ -129,9 +149,9 @@ export const useTransaction = () => {
     try {
       const checkoutResult = await checkout({
         cart,
-        total,
         payment,
         paymentMethod,
+        voucherCode,
       });
       const { transaction, items } = checkoutResult;
 
@@ -146,10 +166,15 @@ export const useTransaction = () => {
               <span className="font-semibold"> {t('checkout.method')}: </span> {paymentMethod === 'TUNAI' ? t('payment.cash') : t('payment.nonCash')}
             </p>
             < p className="text-gray-700" >
-              <span className="font-semibold"> {t('cart.total')}:</span> Rp {formatCurrency(total)}
+              <span className="font-semibold"> {t('cart.total')}:</span> Rp {formatCurrency(transaction.total_amount)}
             </p>
+            {(transaction.discount_amount ?? 0) > 0 && (
+              <p className="text-gray-700">
+                <span className="font-semibold"> {t('cart.discount')}:</span> -Rp {formatCurrency(transaction.discount_amount ?? 0)}
+              </p>
+            )}
             < p className="text-gray-700" >
-              <span className="font-semibold" > {t('checkout.paid')}: </span> Rp {formatCurrency(payment)}
+              <span className="font-semibold" > {t('checkout.paid')}: </span> Rp {formatCurrency(transaction.payment_amount)}
             </p>
             < p className="text-green-600 font-semibold" >
               <span>{t('payment.change')}: </span> Rp {formatCurrency(transaction.change_amount)}
@@ -195,19 +220,23 @@ export const useTransaction = () => {
     searchTerm,
     paymentAmount,
     paymentMethod,
+    voucherCode,
     showPayment,
     filteredProducts,
+    promoPreview,
     addToCart,
     updateQuantity,
     updateUnit,
     updateCustomPrice,
     removeFromCart,
+    calculateSubtotal,
     calculateTotal,
     handleCheckout,
     clearCart: reset,
     setSearchTerm,
     setPaymentAmount,
     setPaymentMethod,
+    setVoucherCode,
     setShowPayment,
   };
 };

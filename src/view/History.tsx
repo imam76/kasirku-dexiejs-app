@@ -206,6 +206,7 @@ export default function History() {
                 const transaction = transactions[virtualItem.index];
                 if (!transaction) return null;
                 const isVoided = isTransactionVoided(transaction);
+                const transactionDiscount = transaction.discount_amount ?? 0;
 
                 return (
                   <div
@@ -338,45 +339,75 @@ export default function History() {
                               )}
                             </div>
                           )}
+                          {transactionDiscount > 0 && (
+                            <div className="mb-3 rounded-lg border border-green-100 bg-green-50 p-3 text-sm">
+                              <div className="flex justify-between text-gray-700">
+                                <span>{t('cart.subtotal')}</span>
+                                <span>Rp {formatCurrency(transaction.subtotal_amount ?? transaction.total_amount + transactionDiscount)}</span>
+                              </div>
+                              <div className="flex justify-between font-semibold text-green-700">
+                                <span>{t('cart.discount')}</span>
+                                <span>-Rp {formatCurrency(transactionDiscount)}</span>
+                              </div>
+                              <div className="flex justify-between font-bold text-gray-800">
+                                <span>{t('cart.total')}</span>
+                                <span>Rp {formatCurrency(transaction.total_amount)}</span>
+                              </div>
+                            </div>
+                          )}
                           <div className="space-y-2">
-                            {transaction.items.map((item) => (
-                              <div
-                                key={item.id}
-                                className="bg-white p-3 rounded border border-gray-200"
-                              >
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="min-w-0 flex-1 pr-2">
-                                    <p className="font-medium text-gray-800">{item.product_name}</p>
-                                    <p className="text-sm text-gray-600">
-                                      {item.quantity} {resolveTransactionItemUnit(item)} x Rp {formatCurrency(item.price)} = Rp {formatCurrency(item.subtotal)}
+                            {transaction.items.map((item) => {
+                              const lineDiscount = item.discount_amount ?? 0;
+
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="bg-white p-3 rounded border border-gray-200"
+                                >
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div className="min-w-0 flex-1 pr-2">
+                                      <p className="font-medium text-gray-800">{item.product_name}</p>
+                                      <p className="text-sm text-gray-600">
+                                        {item.quantity} {resolveTransactionItemUnit(item)} x Rp {formatCurrency(item.price)} = Rp {formatCurrency(item.subtotal)}
+                                      </p>
+                                      {lineDiscount > 0 && (
+                                        <div className="mt-1 space-y-0.5 text-xs text-green-700">
+                                          <p>
+                                            {t('history.priceBeforeDiscount')}: Rp {formatCurrency(item.price_before_discount ?? item.price)}
+                                          </p>
+                                          <p>
+                                            {t('history.lineDiscount')}: -Rp {formatCurrency(lineDiscount)}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <p className="font-bold text-gray-800 shrink-0">
+                                      Rp {formatCurrency(item.subtotal)}
                                     </p>
                                   </div>
-                                  <p className="font-bold text-gray-800 shrink-0">
-                                    Rp {formatCurrency(item.subtotal)}
-                                  </p>
-                                </div>
-                                <div className={`grid gap-2 text-xs pt-2 border-t border-gray-100 ${canViewProfit ? 'grid-cols-3' : 'grid-cols-1'}`}>
-                                  {canViewProfit && (
+                                  <div className={`grid gap-2 text-xs pt-2 border-t border-gray-100 ${canViewProfit ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                                    {canViewProfit && (
+                                      <div>
+                                        <p className="text-gray-500">{t('history.purchase')}</p>
+                                        <p className="font-semibold text-gray-700">Rp {formatCurrency(item.purchase_price)}</p>
+                                      </div>
+                                    )}
                                     <div>
-                                      <p className="text-gray-500">{t('history.purchase')}</p>
-                                      <p className="font-semibold text-gray-700">Rp {formatCurrency(item.purchase_price)}</p>
+                                      <p className="text-gray-500">{t('history.sell')}</p>
+                                      <p className="font-semibold text-gray-700">Rp {formatCurrency(item.price)}</p>
                                     </div>
-                                  )}
-                                  <div>
-                                    <p className="text-gray-500">{t('history.sell')}</p>
-                                    <p className="font-semibold text-gray-700">Rp {formatCurrency(item.price)}</p>
+                                    {canViewProfit && (
+                                      <div>
+                                        <p className="text-gray-500">Profit</p>
+                                        <p className={`font-semibold ${item.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                          Rp {formatCurrency(item.profit)}
+                                        </p>
+                                      </div>
+                                    )}
                                   </div>
-                                  {canViewProfit && (
-                                    <div>
-                                      <p className="text-gray-500">Profit</p>
-                                      <p className={`font-semibold ${item.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        Rp {formatCurrency(item.profit)}
-                                      </p>
-                                    </div>
-                                  )}
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                           <div className={`mt-4 rounded-lg border p-3 ${
                             isVoided

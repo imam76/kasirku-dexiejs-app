@@ -14,6 +14,7 @@ import type { SoldItemSummary } from '@/utils/salesUnits';
 interface SalesReportData {
   transactions: Transaction[];
   totalRevenue: number;
+  totalDiscount: number;
   totalProfit: number;
   soldItems: SoldItemSummary;
   averageTransaction: number;
@@ -65,6 +66,8 @@ export interface TransactionDetailReportRow {
   unit: string;
   selling_price: number;
   purchase_price: number;
+  subtotal_before_discount: number;
+  discount_amount: number;
   subtotal: number;
   cost_total: number;
   profit: number;
@@ -75,6 +78,7 @@ interface TransactionDetailReportData {
   rows: TransactionDetailReportRow[];
   transactions: Transaction[];
   totalRevenue: number;
+  totalDiscount: number;
   totalCost: number;
   totalProfit: number;
   totalItems: number;
@@ -122,6 +126,7 @@ export const useSalesReport = (
       }
 
       const totalRevenue = transactions.reduce((sum, t) => sum + t.total_amount, 0);
+      const totalDiscount = transactions.reduce((sum, t) => sum + (t.discount_amount ?? 0), 0);
       const transactionIds = transactions.map((t) => t.id);
 
       // Calculate profit and items from transaction items
@@ -202,6 +207,7 @@ export const useSalesReport = (
       return {
         transactions,
         totalRevenue,
+        totalDiscount,
         totalProfit,
         soldItems,
         averageTransaction:
@@ -267,6 +273,7 @@ export const useTransactionDetailReport = (
           rows: [],
           transactions: [],
           totalRevenue: 0,
+          totalDiscount: 0,
           totalCost: 0,
           totalProfit: 0,
           totalItems: 0,
@@ -317,6 +324,8 @@ export const useTransactionDetailReport = (
             unit,
             selling_price: item.selling_price ?? item.price,
             purchase_price: item.purchase_price || 0,
+            subtotal_before_discount: item.subtotal_before_discount ?? item.subtotal + (item.discount_amount ?? 0),
+            discount_amount: item.discount_amount ?? 0,
             subtotal: item.subtotal,
             cost_total: costTotal,
             profit,
@@ -348,6 +357,7 @@ export const useTransactionDetailReport = (
       const visibleTransactionIds = new Set(rows.map((row) => row.transaction_id));
       const visibleTransactions = transactions.filter((transaction) => visibleTransactionIds.has(transaction.id));
       const totalRevenue = rows.reduce((sum, row) => sum + row.subtotal, 0);
+      const totalDiscount = rows.reduce((sum, row) => sum + row.discount_amount, 0);
       const totalCost = rows.reduce((sum, row) => sum + row.cost_total, 0);
       const totalProfit = rows.reduce((sum, row) => sum + row.profit, 0);
 
@@ -355,6 +365,7 @@ export const useTransactionDetailReport = (
         rows,
         transactions: visibleTransactions,
         totalRevenue,
+        totalDiscount,
         totalCost,
         totalProfit,
         totalItems: rows.reduce((sum, row) => sum + row.quantity, 0),

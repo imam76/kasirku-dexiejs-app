@@ -17,9 +17,10 @@ export const backupDatabase = async () => {
       stockPurchases: await db.stockPurchases.toArray(),
       profitLogs: await db.profitLogs.toArray(),
       profitBalance: await db.profitBalance.toArray(),
+      promos: await db.promos.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 2,
+      version: 3,
       timestamp: new Date().toISOString(),
     };
 
@@ -44,7 +45,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance', 'promos', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -73,6 +74,7 @@ export const restoreDatabase = async (file: File) => {
           db.stockPurchases,
           db.profitLogs,
           db.profitBalance,
+          db.promos,
           db.authUsers,
           db.authSessions,
           db.activityLogs,
@@ -86,6 +88,7 @@ export const restoreDatabase = async (file: File) => {
           await db.stockPurchases.clear();
           await db.profitLogs.clear();
           await db.profitBalance.clear();
+          await db.promos.clear();
           await db.authSessions.clear();
 
           if (hasAuthUsersPayload) {
@@ -103,6 +106,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.stockPurchases?.length) await db.stockPurchases.bulkAdd(data.stockPurchases);
           if (data.profitLogs?.length) await db.profitLogs.bulkAdd(data.profitLogs);
           if (data.profitBalance?.length) await db.profitBalance.bulkAdd(data.profitBalance);
+          if (data.promos?.length) await db.promos.bulkAdd(data.promos);
           if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
           if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
         });

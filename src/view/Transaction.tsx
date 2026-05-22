@@ -20,8 +20,10 @@ export default function Transaction() {
     searchTerm,
     paymentAmount,
     paymentMethod,
+    voucherCode,
     showPayment,
     filteredProducts,
+    promoPreview,
     addToCart,
     updateQuantity,
     updateUnit,
@@ -33,6 +35,7 @@ export default function Transaction() {
     setSearchTerm,
     setPaymentAmount,
     setPaymentMethod,
+    setVoucherCode,
     setShowPayment,
   } = useTransaction();
 
@@ -153,9 +156,12 @@ export default function Transaction() {
           showPayment={showPayment}
           paymentAmount={paymentAmount}
           paymentMethod={paymentMethod}
+          voucherCode={voucherCode}
+          promoPreview={promoPreview}
           setShowPayment={setShowPayment}
           setPaymentAmount={setPaymentAmount}
           setPaymentMethod={setPaymentMethod}
+          setVoucherCode={setVoucherCode}
           handleCheckout={handleCheckout}
         />
       </div>
@@ -192,9 +198,12 @@ export default function Transaction() {
         showPayment={showPayment}
         paymentAmount={paymentAmount}
         paymentMethod={paymentMethod}
+        voucherCode={voucherCode}
+        promoPreview={promoPreview}
         setShowPayment={setShowPayment}
         setPaymentAmount={setPaymentAmount}
         setPaymentMethod={setPaymentMethod}
+        setVoucherCode={setVoucherCode}
         handleCheckout={handleCheckout}
       />
 

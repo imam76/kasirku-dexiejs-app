@@ -65,13 +65,15 @@ export default function SalesReport() {
 
           const tableData = data.transactions.map((t, index) => {
             const balance = Math.max(t.total_amount - (t.payment_amount || 0), 0);
+            const discount = t.discount_amount ?? 0;
+            const subtotal = t.subtotal_amount ?? t.total_amount + discount;
 
             return [
               dayjs(t.created_at).tz().format('DD/MM/YYYY'),
               t.transaction_number || String(index + 1),
               '-',
-              formatCurrency(t.total_amount),
-              formatCurrency(0),
+              formatCurrency(subtotal),
+              formatCurrency(discount),
               formatCurrency(t.total_amount),
               formatCurrency(t.payment_amount || 0),
               formatCurrency(balance),
@@ -86,8 +88,8 @@ export default function SalesReport() {
               '',
               '',
               t('common.total'),
-              formatCurrency(data.totalRevenue),
-              formatCurrency(0),
+              formatCurrency(data.totalRevenue + data.totalDiscount),
+              formatCurrency(data.totalDiscount),
               formatCurrency(data.totalRevenue),
               formatCurrency(data.transactions.reduce((sum, t) => sum + (t.payment_amount || 0), 0)),
               formatCurrency(data.transactions.reduce((sum, t) => sum + Math.max(t.total_amount - (t.payment_amount || 0), 0), 0)),
@@ -140,11 +142,13 @@ export default function SalesReport() {
         t('report.amount'),
         t('report.unit'),
         t('report.unitPrice'),
+        t('report.discount'),
         t('report.subtotal'),
         ...(canViewProfit ? [t('report.hpp'), t('report.profit')] : []),
       ];
       const summaryRows = [
         [t('report.totalTransactions'), data.transactions.length],
+        [t('report.discount'), data.totalDiscount],
         [t('report.salesTotal'), data.totalRevenue],
         ...(canViewProfit ? [[t('report.profit'), data.totalProfit]] : []),
         [t('report.unitItemsSold'), data.soldItems.unitItems],
@@ -155,11 +159,13 @@ export default function SalesReport() {
       ];
       const csvRows = [
         ['SECTION 1: TRANSACTION SUMMARY'],
-        [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), t('report.salesTotal'), t('report.payment'), t('report.change')],
+        [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), t('cart.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.change')],
         ...data.transactions.map((t) => [
           t.transaction_number,
           dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
           t.payment_method || 'TUNAI',
+          t.subtotal_amount ?? t.total_amount + (t.discount_amount ?? 0),
+          t.discount_amount ?? 0,
           t.total_amount,
           t.payment_amount,
           t.change_amount,
@@ -179,6 +185,7 @@ export default function SalesReport() {
             item.quantity,
             unit,
             item.price,
+            item.discount_amount ?? 0,
             item.subtotal,
             ...(canViewProfit ? [item.purchase_price, item.profit] : []),
           ];
@@ -442,12 +449,14 @@ export default function SalesReport() {
           <MobileSalesList
             transactions={data?.transactions || []}
             totalRevenue={data?.totalRevenue || 0}
+            totalDiscount={data?.totalDiscount || 0}
           />
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <DesktopSalesTable
               transactions={data?.transactions || []}
               totalRevenue={data?.totalRevenue || 0}
+              totalDiscount={data?.totalDiscount || 0}
             />
           </div>
         )}

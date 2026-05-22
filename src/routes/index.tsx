@@ -6,8 +6,7 @@ import {
   HistoryOutlined,
   ProductOutlined,
   SettingOutlined,
-  ShoppingCartOutlined,
-  SwapOutlined
+  ShoppingCartOutlined
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -22,6 +21,16 @@ import { useAuth } from '@/auth/useAuth'
 export const Route = createFileRoute('/')({
   component: Index,
 })
+
+type HomeMenuItem = {
+  to: string
+  hash?: string
+  label: string
+  icon: typeof ShoppingCartOutlined
+  color: string
+  desc: string
+  tour?: string
+}
 
 function Index() {
   const { t } = useI18n()
@@ -47,17 +56,60 @@ function Index() {
   )
   const averageTransaction = todaySales.count > 0 ? todaySales.total / todaySales.count : 0
 
-  const menuItems = [
+  const menuItems: HomeMenuItem[] = [
     { to: '/transaction', label: t('home.menu.cashier'), icon: ShoppingCartOutlined, color: 'text-blue-600', desc: t('home.menu.cashierDesc') },
+    { to: '/master-data', label: t('nav.masterData'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.masterDataDesc') },
     { to: '/finance', label: t('nav.finance'), icon: BankOutlined, color: 'text-red-600', desc: t('home.menu.financeDesc') },
-    { to: '/stock', label: t('nav.stock'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.menu.stockDesc') },
     { to: '/shopping-note', label: t('home.menu.shoppingNote'), icon: AccountBookOutlined, color: 'text-yellow-600', desc: t('home.menu.shoppingNoteDesc') },
     { to: '/history', label: t('nav.history'), icon: HistoryOutlined, color: 'text-purple-600', desc: t('home.historyDesc') },
-    { to: '/units', label: t('home.units'), icon: SwapOutlined, color: 'text-cyan-600', desc: t('home.unitsDesc') },
     { to: '/profit', label: t('nav.report.profit'), icon: DollarOutlined, color: 'text-emerald-600', desc: t('home.profitDesc') },
     { to: '/report', label: t('nav.reports'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('home.reportDesc') },
     { to: '/settings', label: t('nav.settings'), icon: SettingOutlined, color: 'text-gray-600', desc: t('home.settingsDesc') },
   ].filter((item) => canAccessPath(currentUser?.role, item.to))
+
+  const renderMenuGrid = (items: HomeMenuItem[]) => (
+    <div
+      className="
+        grid grid-cols-3 gap-[10px]
+        sm:grid-cols-3 sm:gap-[14px]
+        lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]
+      "
+    >
+      {items.map((item) => (
+        <Link
+          key={`${item.to}${item.hash ?? ''}`}
+          to={item.to}
+          hash={item.hash}
+          data-tour={item.tour}
+          className="
+            flex flex-col items-center justify-center
+            bg-white border border-gray-100 rounded-[10px]
+            transition-all duration-200 ease-out
+
+            aspect-square p-2
+            sm:aspect-auto sm:rounded-[12px] sm:p-[18px]
+            lg:aspect-auto lg:w-[192px] lg:h-[192px] lg:rounded-[14px] lg:p-[24px]
+
+            hover:border-gray-200
+            hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
+            hover:-translate-y-[1px]
+          "
+        >
+          <div className="mb-[6px] sm:mb-[10px] lg:mb-[12px]">
+            <item.icon className={`${item.color} text-[24px] sm:text-[30px] lg:text-[34px]`} />
+          </div>
+
+          <h2 className="text-[12px] font-medium text-gray-800 text-center leading-[1.3] sm:text-[14px] sm:mb-[6px] lg:text-[15px] lg:mb-[6px]">
+            {item.label}
+          </h2>
+
+          <p className="hidden sm:block sm:text-[11px] sm:text-gray-400 sm:text-center sm:leading-[1.618] sm:line-clamp-2 lg:text-[12px]">
+            {item.desc}
+          </p>
+        </Link>
+      ))}
+    </div>
+  )
 
   return (
     <div
@@ -173,75 +225,11 @@ function Index() {
           </Link>
         </div>
 
-        {/* Grid */}
-        <div
-          className="
-      grid grid-cols-3 gap-[10px]
-      sm:grid-cols-3 sm:gap-[14px]
-      lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]
-    "
-        >
-          {menuItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              data-tour={item.to === '/stock' ? 'dashboard-stock' : undefined}
-              className="
-            flex flex-col items-center justify-center
-            bg-white border border-gray-100 rounded-[10px]
-            transition-all duration-200 ease-out
-
-            aspect-square p-2
-            sm:aspect-auto sm:rounded-[12px] sm:p-[18px]
-            lg:aspect-auto lg:w-[192px] lg:h-[192px] lg:rounded-[14px] lg:p-[24px]
-
-            hover:border-gray-200
-            hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
-            hover:-translate-y-[1px]
-          "
-            >
-              {/* Icon */}
-              <div
-                className="
-            mb-[6px]
-            sm:mb-[10px]
-            lg:mb-[12px]
-          "
-              >
-                <item.icon
-                  className={`
-                ${item.color}
-                text-[24px]
-                sm:text-[30px]
-                lg:text-[34px]
-              `}
-                />
-              </div>
-
-              {/* Label */}
-              <h2
-                className="
-            text-[12px] font-medium text-gray-800 text-center leading-[1.3]
-            sm:text-[14px] sm:mb-[6px]
-            lg:text-[15px] lg:mb-[6px]
-          "
-              >
-                {item.label}
-              </h2>
-
-              {/* Desc */}
-              <p
-                className="
-            hidden
-            sm:block sm:text-[11px] sm:text-gray-400 sm:text-center sm:leading-[1.618] sm:line-clamp-2
-            lg:text-[12px]
-          "
-              >
-                {item.desc}
-              </p>
-            </Link>
-          ))}
-        </div>
+        {menuItems.length > 0 && (
+          <section>
+            {renderMenuGrid(menuItems)}
+          </section>
+        )}
 
       </div>
     </div>

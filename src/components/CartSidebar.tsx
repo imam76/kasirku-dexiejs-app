@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
 import { CartItem as CartItemType, PaymentMethod } from '@/types';
+import type { PromoEvaluationResult } from '@/services/promoService';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
 import { useI18n } from '@/hooks/useI18n';
@@ -15,9 +16,12 @@ interface CartSidebarProps {
   showPayment: boolean;
   paymentAmount: string;
   paymentMethod: PaymentMethod;
+  voucherCode: string;
+  promoPreview: PromoEvaluationResult;
   setShowPayment: (show: boolean) => void;
   setPaymentAmount: (amount: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
+  setVoucherCode: (voucherCode: string) => void;
   handleCheckout: () => void;
 }
 
@@ -32,9 +36,12 @@ export default function CartSidebar({
   showPayment,
   paymentAmount,
   paymentMethod,
+  voucherCode,
+  promoPreview,
   setShowPayment,
   setPaymentAmount,
   setPaymentMethod,
+  setVoucherCode,
   handleCheckout,
 }: CartSidebarProps) {
   const { t } = useI18n();
@@ -77,9 +84,12 @@ export default function CartSidebar({
             showPayment={showPayment}
             paymentAmount={paymentAmount}
             paymentMethod={paymentMethod}
+            voucherCode={voucherCode}
+            promoPreview={promoPreview}
             setShowPayment={setShowPayment}
             setPaymentAmount={setPaymentAmount}
             setPaymentMethod={setPaymentMethod}
+            setVoucherCode={setVoucherCode}
             handleCheckout={handleCheckout}
           />
         )}
