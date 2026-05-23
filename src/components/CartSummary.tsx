@@ -172,7 +172,7 @@ export default function CartSummary({
               </div>
             )}
             {!isNonCash && showPaymentShortcuts && (
-              <div className="grid grid-cols-2 gap-2 py-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 py-2 md:grid-cols-3">
                 {quickAmounts.map((amount) => (
                   <button
                     key={amount}
