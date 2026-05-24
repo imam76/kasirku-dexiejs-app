@@ -47,6 +47,16 @@ export const validateSalesDocument = ({
       throw new Error(`Harga ${item.product_name} tidak valid.`);
     }
 
+    if (config.behavior.hasTax && document.tax_id) {
+      if (!Number.isFinite(Number(item.tax_rate)) || Number(item.tax_rate) < 0) {
+        throw new Error(`Rate pajak ${item.product_name} tidak valid.`);
+      }
+
+      if (!Number.isFinite(Number(item.tax_amount)) || Number(item.tax_amount) < 0) {
+        throw new Error(`Nilai pajak ${item.product_name} tidak valid.`);
+      }
+    }
+
     if (
       config.type === 'SALES_DELIVERY' &&
       item.ordered_quantity !== undefined &&

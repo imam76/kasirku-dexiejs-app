@@ -88,16 +88,25 @@ export const SalesDocumentForm = ({
   const discountAmount = useWatch({ control, name: 'discount_amount' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
   const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
+  const taxRate = selectedTax?.rate ?? initialData?.document?.tax_rate;
+  const taxCalculationMode = selectedTax?.calculation_mode ?? initialData?.document?.tax_calculation_mode;
+  const taxId = selectedTax?.id ?? initialData?.document?.tax_id;
+  const taxName = selectedTax?.name ?? initialData?.document?.tax_name;
+  const taxCode = selectedTax?.code ?? initialData?.document?.tax_code;
   const documentId = initialData?.document?.id ?? 'draft';
   const total = useMemo(
     () => calculateDocumentTotal({
       items,
       discountAmount,
-      taxRate: selectedTax?.rate ?? initialData?.document?.tax_rate,
-      taxCalculationMode: selectedTax?.calculation_mode ?? initialData?.document?.tax_calculation_mode,
+      taxRate,
+      taxCalculationMode,
+      taxId,
+      taxName,
+      taxCode,
+      taxes,
       config,
     }),
-    [config, discountAmount, initialData?.document?.tax_calculation_mode, initialData?.document?.tax_rate, items, selectedTax],
+    [config, discountAmount, items, taxCalculationMode, taxCode, taxId, taxName, taxRate],
   );
 
   const handleFinish = async (values: SalesDocumentFormValues) => {
@@ -137,6 +146,7 @@ export const SalesDocumentForm = ({
         documentId={documentId}
         items={total.items}
         products={products}
+        taxes={taxes}
         onChange={(nextItems) => setValue('items', nextItems, { shouldDirty: true, shouldValidate: true })}
       />
       <DocumentSummary

@@ -264,9 +264,18 @@ export interface SalesDocumentItem {
   ordered_quantity?: number;
   delivered_quantity?: number;
   price?: number;
+  discount_type?: PromoType;
+  discount_value?: number;
   discount_amount?: number;
+  tax_id?: string;
+  tax_name?: string;
+  tax_code?: string;
+  tax_rate?: number;
+  tax_calculation_mode?: TaxCalculationMode;
+  tax_base_amount?: number;
   tax_amount?: number;
   subtotal?: number;
+  total_amount?: number;
   purchase_price?: number;
   created_at: string;
 }

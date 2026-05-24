@@ -66,6 +66,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     ...(config.behavior.hasPricing ? [
       { title: 'Harga', dataIndex: 'price', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
       { title: 'Diskon', dataIndex: 'discount_amount', width: 120, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
+      { title: 'Pajak', dataIndex: 'tax_amount', width: 120, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
       { title: 'Subtotal', dataIndex: 'subtotal', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
     ] : []),
   ];

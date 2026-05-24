@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, InputNumber, Select, Table } from 'antd';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import type { Key } from 'react';
-import type { Product, ProductUnit, SalesDocumentItem } from '@/types';
+import type { Product, ProductUnit, PromoType, SalesDocumentItem, Tax } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { mapProductToSalesDocumentItem } from '@/utils/salesDocuments/mapProductToSalesDocumentItem';
 import { formatCurrency } from '@/utils/formatters';
@@ -13,6 +13,7 @@ interface DocumentLineItemsProps {
   documentId: string;
   items: SalesDocumentItem[];
   products: Product[];
+  taxes: Tax[];
   onChange: (items: SalesDocumentItem[]) => void;
 }
 
@@ -31,6 +32,8 @@ const createEmptyItem = (documentId: string): SalesDocumentItem => ({
   ordered_quantity: 1,
   delivered_quantity: 1,
   price: 0,
+  discount_type: 'fixed',
+  discount_value: 0,
   discount_amount: 0,
   subtotal: 0,
   created_at: new Date().toISOString(),
@@ -41,6 +44,7 @@ export const DocumentLineItems = ({
   documentId,
   items,
   products,
+  taxes,
   onChange,
 }: DocumentLineItemsProps) => {
   const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
@@ -52,6 +56,18 @@ export const DocumentLineItems = ({
   const addRow = () => {
     onChange([...items, createEmptyItem(documentId)]);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'enter') {
+        event.preventDefault();
+        addRow();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [items, documentId]);
 
   const selectProduct = (itemId: string, productId: string) => {
     const product = products.find((candidate) => candidate.id === productId);
@@ -66,6 +82,8 @@ export const DocumentLineItems = ({
         quantity: item.quantity || nextItem.quantity,
         ordered_quantity: item.ordered_quantity ?? nextItem.ordered_quantity,
         delivered_quantity: item.delivered_quantity ?? nextItem.delivered_quantity,
+        discount_type: item.discount_type ?? nextItem.discount_type,
+        discount_value: item.discount_value ?? nextItem.discount_value,
         discount_amount: item.discount_amount ?? nextItem.discount_amount,
         created_at: item.created_at,
       };
@@ -189,11 +207,6 @@ export const DocumentLineItems = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end gap-3">
-        <Button type="dashed" icon={<Plus size={16} />} onClick={addRow}>
-          Tambah Baris
-        </Button>
-      </div>
       <Table
         rowKey="id"
         size="small"
@@ -218,11 +231,43 @@ export const DocumentLineItems = ({
               </div>
               <div>
                 <div className="mb-1 text-xs text-gray-500">Diskon</div>
-                <InputNumber
-                  min={0}
+                <div className="grid grid-cols-[120px_1fr] gap-2">
+                  <Select
+                    value={item.discount_type ?? 'fixed'}
+                    options={[
+                      { value: 'percent' satisfies PromoType, label: 'Persen' },
+                      { value: 'fixed' satisfies PromoType, label: 'Nominal' },
+                    ]}
+                    onChange={(discountType) => updateItem(item.id, { discount_type: discountType })}
+                  />
+                  <InputNumber
+                    min={0}
+                    className="w-full"
+                    value={item.discount_value ?? item.discount_amount}
+                    onChange={(value) => updateItem(item.id, { discount_value: Number(value || 0) })}
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-gray-500">Pajak (%)</div>
+                <Select
+                  allowClear
                   className="w-full"
-                  value={item.discount_amount}
-                  onChange={(value) => updateItem(item.id, { discount_amount: Number(value || 0) })}
+                  placeholder="Pajak item (opsional)"
+                  value={item.tax_id || undefined}
+                  options={taxes.map((tax) => ({
+                    value: tax.id,
+                    label: `${tax.name} (${tax.rate}%, ${tax.calculation_mode})`,
+                  }))}
+                  onChange={(taxId) => updateItem(item.id, { tax_id: taxId, tax_name: undefined, tax_code: undefined, tax_rate: undefined, tax_calculation_mode: undefined })}
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-gray-500">Pajak</div>
+                <InputNumber
+                  className="w-full"
+                  value={item.tax_amount}
+                  disabled
                 />
               </div>
             </div>
@@ -230,6 +275,18 @@ export const DocumentLineItems = ({
           rowExpandable: (item) => Boolean(item.product_id),
         } : undefined}
       />
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs text-gray-500">
+          Shortcut tambah baris:
+          {' '}
+          <span className="font-medium">Ctrl + Enter</span>
+          {' / '}
+          <span className="font-medium">Cmd + Enter</span>
+        </div>
+        <Button type="dashed" icon={<Plus size={16} />} onClick={addRow}>
+          Tambah Baris
+        </Button>
+      </div>
     </div>
   );
 };

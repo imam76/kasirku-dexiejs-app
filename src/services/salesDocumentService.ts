@@ -69,9 +69,18 @@ const normalizeDocumentItems = (
   ordered_quantity: item.ordered_quantity === undefined ? undefined : Number(item.ordered_quantity),
   delivered_quantity: item.delivered_quantity === undefined ? undefined : Number(item.delivered_quantity),
   price: item.price === undefined ? undefined : Number(item.price),
+  discount_type: item.discount_type,
+  discount_value: item.discount_value === undefined ? undefined : Number(item.discount_value),
   discount_amount: item.discount_amount === undefined ? undefined : Number(item.discount_amount),
+  tax_id: item.tax_id,
+  tax_name: item.tax_name,
+  tax_code: item.tax_code,
+  tax_rate: item.tax_rate === undefined ? undefined : Number(item.tax_rate),
+  tax_calculation_mode: item.tax_calculation_mode,
+  tax_base_amount: item.tax_base_amount === undefined ? undefined : Number(item.tax_base_amount),
   tax_amount: item.tax_amount === undefined ? undefined : Number(item.tax_amount),
   subtotal: item.subtotal === undefined ? undefined : Number(item.subtotal),
+  total_amount: item.total_amount === undefined ? undefined : Number(item.total_amount),
   purchase_price: item.purchase_price === undefined ? undefined : Number(item.purchase_price),
   created_at: item.created_at || createdAt,
 }));
@@ -128,6 +137,9 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     discountAmount: snapshot.discount_amount,
     taxRate: snapshot.tax_rate,
     taxCalculationMode: snapshot.tax_calculation_mode,
+    taxId: snapshot.tax_id,
+    taxName: snapshot.tax_name,
+    taxCode: snapshot.tax_code,
     config,
   });
   const nextDocument: SalesDocument = {
@@ -177,6 +189,9 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     discountAmount: snapshot.discount_amount,
     taxRate: snapshot.tax_rate,
     taxCalculationMode: snapshot.tax_calculation_mode,
+    taxId: snapshot.tax_id,
+    taxName: snapshot.tax_name,
+    taxCode: snapshot.tax_code,
     config,
   });
   const nextDocument: SalesDocument = {
@@ -263,6 +278,9 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     discountAmount: source.discount_amount,
     taxRate: source.tax_rate,
     taxCalculationMode: source.tax_calculation_mode,
+    taxId: source.tax_id,
+    taxName: source.tax_name,
+    taxCode: source.tax_code,
     config: targetConfig,
   });
   const targetDocument: SalesDocument = {
