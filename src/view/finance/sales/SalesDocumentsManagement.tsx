@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, Input, Select, Space, Table, Tag, Typography } from 'antd';
 import { Link } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
+import { Eye, Plus } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import { SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
@@ -81,6 +81,19 @@ export default function SalesDocumentsManagement() {
       align: 'right',
       render: (value: number | undefined) => value === undefined ? '-' : `Rp ${formatCurrency(value)}`,
       width: 150,
+    },
+    {
+      title: '',
+      key: 'action',
+      fixed: 'right',
+      width: 110,
+      render: (_, record) => (
+        <Link to="/finance/sales/$documentType/$documentId" params={{ documentType: record.type, documentId: record.id }}>
+          <Button size="small" icon={<Eye size={14} />}>
+            Detail
+          </Button>
+        </Link>
+      ),
     },
   ];
 

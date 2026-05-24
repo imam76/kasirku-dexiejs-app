@@ -311,8 +311,15 @@ export const voidSalesDocument = async (id: string, reason: string) => {
   const document = await db.salesDocuments.get(id);
   if (!document) throw new Error('Dokumen tidak ditemukan.');
   if (document.status === 'VOIDED') return;
+  if (document.status !== 'DRAFT' && document.status !== 'ISSUED') {
+    throw new Error('Hanya dokumen draft atau posted yang bisa di-void.');
+  }
   if (document.type === 'SALES_INVOICE' && document.finance_transaction_id) {
     throw new Error('Invoice yang sudah memiliki pembayaran tidak bisa di-void dari fitur ini.');
+  }
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw new Error('Alasan pembatalan wajib diisi.');
   }
 
   const items = await db.salesDocumentItems.where('document_id').equals(id).toArray();
@@ -326,7 +333,7 @@ export const voidSalesDocument = async (id: string, reason: string) => {
     await db.salesDocuments.update(id, {
       status: 'VOIDED',
       voided_at: now,
-      void_reason: reason,
+      void_reason: normalizedReason,
       updated_at: now,
     });
     await writeActivityLog({
@@ -334,7 +341,7 @@ export const voidSalesDocument = async (id: string, reason: string) => {
       action: 'SALES_DOCUMENT_VOIDED',
       entity: 'salesDocuments',
       entity_id: id,
-      description: `${currentUser?.name ?? 'User'} membatalkan ${document.document_number}. Alasan: ${reason}`,
+      description: `${currentUser?.name ?? 'User'} membatalkan ${document.document_number}. Alasan: ${normalizedReason}`,
     });
   });
 };

@@ -57,6 +57,9 @@ const FinanceSalesDocumentTypeNewLazyRouteImport = createFileRoute(
 const FinanceSalesDocumentTypeDocumentIdLazyRouteImport = createFileRoute(
   '/finance/sales/$documentType/$documentId',
 )()
+const FinanceSalesDocumentTypeDocumentIdEditLazyRouteImport = createFileRoute(
+  '/finance/sales/$documentType/$documentId_/edit',
+)()
 
 const TransactionLazyRoute = TransactionLazyRouteImport.update({
   id: '/transaction',
@@ -222,6 +225,16 @@ const FinanceSalesDocumentTypeDocumentIdLazyRoute =
       (d) => d.Route,
     ),
   )
+const FinanceSalesDocumentTypeDocumentIdEditLazyRoute =
+  FinanceSalesDocumentTypeDocumentIdEditLazyRouteImport.update({
+    id: '/finance/sales/$documentType/$documentId_/edit',
+    path: '/finance/sales/$documentType/$documentId/edit',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/sales/$documentType/$documentId_.edit.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -249,6 +262,7 @@ export interface FileRoutesByFullPath {
   '/finance/sales/': typeof FinanceSalesIndexRoute
   '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
+  '/finance/sales/$documentType/$documentId/edit': typeof FinanceSalesDocumentTypeDocumentIdEditLazyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -276,6 +290,7 @@ export interface FileRoutesByTo {
   '/finance/sales': typeof FinanceSalesIndexRoute
   '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
+  '/finance/sales/$documentType/$documentId/edit': typeof FinanceSalesDocumentTypeDocumentIdEditLazyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -304,6 +319,7 @@ export interface FileRoutesById {
   '/finance/sales/': typeof FinanceSalesIndexRoute
   '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
+  '/finance/sales/$documentType/$documentId_/edit': typeof FinanceSalesDocumentTypeDocumentIdEditLazyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -333,6 +349,7 @@ export interface FileRouteTypes {
     | '/finance/sales/'
     | '/finance/sales/$documentType/$documentId'
     | '/finance/sales/$documentType/new'
+    | '/finance/sales/$documentType/$documentId/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -360,6 +377,7 @@ export interface FileRouteTypes {
     | '/finance/sales'
     | '/finance/sales/$documentType/$documentId'
     | '/finance/sales/$documentType/new'
+    | '/finance/sales/$documentType/$documentId/edit'
   id:
     | '__root__'
     | '/'
@@ -387,6 +405,7 @@ export interface FileRouteTypes {
     | '/finance/sales/'
     | '/finance/sales/$documentType/$documentId'
     | '/finance/sales/$documentType/new'
+    | '/finance/sales/$documentType/$documentId_/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -415,6 +434,7 @@ export interface RootRouteChildren {
   FinanceSalesIndexRoute: typeof FinanceSalesIndexRoute
   FinanceSalesDocumentTypeDocumentIdLazyRoute: typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
   FinanceSalesDocumentTypeNewLazyRoute: typeof FinanceSalesDocumentTypeNewLazyRoute
+  FinanceSalesDocumentTypeDocumentIdEditLazyRoute: typeof FinanceSalesDocumentTypeDocumentIdEditLazyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -594,6 +614,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceSalesDocumentTypeDocumentIdLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/sales/$documentType/$documentId_/edit': {
+      id: '/finance/sales/$documentType/$documentId_/edit'
+      path: '/finance/sales/$documentType/$documentId/edit'
+      fullPath: '/finance/sales/$documentType/$documentId/edit'
+      preLoaderRoute: typeof FinanceSalesDocumentTypeDocumentIdEditLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -625,6 +652,8 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceSalesDocumentTypeDocumentIdLazyRoute:
     FinanceSalesDocumentTypeDocumentIdLazyRoute,
   FinanceSalesDocumentTypeNewLazyRoute: FinanceSalesDocumentTypeNewLazyRoute,
+  FinanceSalesDocumentTypeDocumentIdEditLazyRoute:
+    FinanceSalesDocumentTypeDocumentIdEditLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

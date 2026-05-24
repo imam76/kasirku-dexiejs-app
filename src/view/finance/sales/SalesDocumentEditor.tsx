@@ -70,7 +70,17 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
         departments={departments}
         projects={projects}
         submitting={isSubmitting}
-        onCancel={() => navigate({ to: '/finance/sales' })}
+        onCancel={() => {
+          if (!document) {
+            navigate({ to: '/finance/sales' });
+            return;
+          }
+
+          navigate({
+            to: '/finance/sales/$documentType/$documentId',
+            params: { documentType: document.type, documentId: document.id },
+          });
+        }}
         onSubmit={async (input) => {
           const result = document
             ? await updateDocument({ id: document.id, input })

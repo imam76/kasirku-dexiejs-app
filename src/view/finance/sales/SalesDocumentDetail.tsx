@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Descriptions, InputNumber, Modal, Space, Table, Tag, Typography } from 'antd';
+import { Button, Card, Descriptions, Input, InputNumber, Modal, Space, Table, Tag, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
 import type { ColumnsType } from 'antd/es/table';
 import { getSalesDocumentConfig, SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
@@ -44,7 +44,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
 
   const config = document ? getSalesDocumentConfig(document.type) : undefined;
   const nextConvertOptions = useMemo(() => {
-    if (!document) return [];
+    if (!document || document.status !== 'ISSUED') return [];
     const allowed: Record<SalesDocumentType, SalesDocumentType[]> = {
       SALES_QUOTATION: ['SALES_ORDER', 'SALES_INVOICE'],
       SALES_ORDER: ['SALES_DELIVERY', 'SALES_INVOICE'],
@@ -69,15 +69,39 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       { title: 'Subtotal', dataIndex: 'subtotal', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
     ] : []),
   ];
+  const canEdit = document.status === 'DRAFT';
+  const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
+    !(document.type === 'SALES_INVOICE' && document.finance_transaction_id);
+  const canRecordPayment = document.type === 'SALES_INVOICE' && document.status === 'ISSUED';
 
   const handleVoid = () => {
+    let voidReason = '';
+
     Modal.confirm({
       title: 'Batalkan dokumen?',
-      content: 'Stok delivery yang sudah terbit akan dikembalikan.',
+      content: (
+        <div className="space-y-3">
+          <Text type="secondary">
+            Dokumen akan menjadi read-only. Stok delivery yang sudah terbit akan dikembalikan.
+          </Text>
+          <Input.TextArea
+            rows={3}
+            placeholder="Alasan pembatalan"
+            onChange={(event) => {
+              voidReason = event.target.value;
+            }}
+          />
+        </div>
+      ),
       okText: 'Void',
       okButtonProps: { danger: true },
       onOk: async () => {
-        await voidDocument({ id: document.id, reason: 'Dibatalkan dari halaman detail' });
+        const normalizedReason = voidReason.trim();
+        if (!normalizedReason) {
+          throw new Error('Alasan pembatalan wajib diisi.');
+        }
+
+        await voidDocument({ id: document.id, reason: normalizedReason });
         await loadDocument();
       },
     });
@@ -91,6 +115,16 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
           <Text type="secondary">{config.title}</Text>
         </div>
         <Space wrap>
+          {canEdit && (
+            <Button
+              onClick={() => navigate({
+                to: '/finance/sales/$documentType/$documentId/edit',
+                params: { documentType: document.type, documentId: document.id },
+              })}
+            >
+              Edit Draft
+            </Button>
+          )}
           {document.status === 'DRAFT' && (
             <Button type="primary" loading={isMutating} onClick={async () => {
               await issueDocument(document.id);
@@ -114,7 +148,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               Convert ke {SALES_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === targetType)?.label}
             </Button>
           ))}
-          {document.status !== 'VOIDED' && <Button danger onClick={handleVoid}>Void</Button>}
+          {canVoid && <Button danger onClick={handleVoid}>Void</Button>}
         </Space>
       </div>
 
@@ -129,10 +163,18 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
           <Descriptions.Item label="Pajak">{document.tax_name ? `${document.tax_name} (${document.tax_rate}%)` : '-'}</Descriptions.Item>
           <Descriptions.Item label="Status Bayar">{document.payment_status ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="Catatan">{document.notes || '-'}</Descriptions.Item>
+          {document.status === 'VOIDED' && (
+            <>
+              <Descriptions.Item label="Dibatalkan Pada">
+                {document.voided_at ? formatDate(document.voided_at) : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Alasan Void">{document.void_reason || '-'}</Descriptions.Item>
+            </>
+          )}
         </Descriptions>
       </Card>
 
-      {document.type === 'SALES_INVOICE' && (
+      {canRecordPayment && (
         <Card size="small" title="Pembayaran Invoice">
           <Space wrap>
             <InputNumber
