@@ -3,6 +3,7 @@ import { Alert, Spin, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
 import { getSalesDocumentConfig } from '@/configs/sales-document';
 import { SalesDocumentForm } from '@/components/sales-document/SalesDocumentForm';
+import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
 import type { SalesDocument, SalesDocumentItem, SalesDocumentType } from '@/types';
@@ -15,6 +16,7 @@ interface SalesDocumentEditorProps {
 }
 
 export default function SalesDocumentEditor({ documentType, documentId }: SalesDocumentEditorProps) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const {
     products,
@@ -52,14 +54,18 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
   }
 
   if (documentId && !document) {
-    return <div className="p-6"><Alert type="error" message="Dokumen tidak ditemukan." /></div>;
+    return <div className="p-6"><Alert type="error" message={t('salesDocuments.notFound')} /></div>;
   }
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4">
       <div>
-        <Title level={2} style={{ margin: 0 }}>{document ? `Edit ${document.document_number}` : `New ${config.title}`}</Title>
-        <Text type="secondary">Simpan sebagai draft dulu, lalu terbitkan dari halaman detail.</Text>
+        <Title level={2} style={{ margin: 0 }}>
+          {document
+            ? t('salesDocuments.editTitle', { number: document.document_number })
+            : t('salesDocuments.newTitle', { type: t(config.titleKey) })}
+        </Title>
+        <Text type="secondary">{t('salesDocuments.editorSubtitle')}</Text>
       </div>
       <SalesDocumentForm
         config={config}

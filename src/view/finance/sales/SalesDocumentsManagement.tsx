@@ -4,9 +4,11 @@ import { Link } from '@tanstack/react-router';
 import { Eye, Plus } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import { SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
+import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import type { SalesDocument, SalesDocumentStatus, SalesDocumentType } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 
 const { Title, Text } = Typography;
 
@@ -18,6 +20,7 @@ const statusColor: Record<SalesDocumentStatus, string> = {
 };
 
 export default function SalesDocumentsManagement() {
+  const { t } = useI18n();
   const { documents } = useSalesDocuments();
   const [typeFilter, setTypeFilter] = useState<SalesDocumentType | 'ALL'>('ALL');
   const [searchText, setSearchText] = useState('');
@@ -39,7 +42,7 @@ export default function SalesDocumentsManagement() {
 
   const columns: ColumnsType<SalesDocument> = [
     {
-      title: 'No Dokumen',
+      title: t('salesDocuments.table.documentNumber'),
       dataIndex: 'document_number',
       render: (value: string, record) => (
         <Link to="/finance/sales/$documentType/$documentId" params={{ documentType: record.type, documentId: record.id }}>
@@ -48,35 +51,37 @@ export default function SalesDocumentsManagement() {
       ),
     },
     {
-      title: 'Tipe',
+      title: t('salesDocuments.table.type'),
       dataIndex: 'type',
-      render: (value: SalesDocumentType) => SALES_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? value,
+      render: (value: SalesDocumentType) => t(
+        SALES_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === value)?.labelKey ?? 'salesDocuments.table.type',
+      ),
       width: 150,
     },
     {
-      title: 'Customer',
+      title: t('salesDocuments.table.customer'),
       dataIndex: 'customer_name',
     },
     {
-      title: 'Tanggal',
+      title: t('salesDocuments.table.date'),
       dataIndex: 'document_date',
       render: (value: string) => formatDate(value),
       width: 130,
     },
     {
-      title: 'Status',
+      title: t('salesDocuments.table.status'),
       dataIndex: 'status',
-      render: (value: SalesDocumentStatus) => <Tag color={statusColor[value]}>{value}</Tag>,
+      render: (value: SalesDocumentStatus) => <Tag color={statusColor[value]}>{t(salesDocumentStatusLabelKeys[value])}</Tag>,
       width: 120,
     },
     {
-      title: 'Bayar',
+      title: t('salesDocuments.table.payment'),
       dataIndex: 'payment_status',
-      render: (value: string | undefined) => value ? <Tag>{value}</Tag> : '-',
+      render: (value: SalesDocument['payment_status']) => value ? <Tag>{t(salesInvoicePaymentStatusLabelKeys[value])}</Tag> : '-',
       width: 110,
     },
     {
-      title: 'Total',
+      title: t('salesDocuments.table.total'),
       dataIndex: 'total_amount',
       align: 'right',
       render: (value: number | undefined) => value === undefined ? '-' : `Rp ${formatCurrency(value)}`,
@@ -90,7 +95,7 @@ export default function SalesDocumentsManagement() {
       render: (_, record) => (
         <Link to="/finance/sales/$documentType/$documentId" params={{ documentType: record.type, documentId: record.id }}>
           <Button size="small" icon={<Eye size={14} />}>
-            Detail
+            {t('salesDocuments.detail')}
           </Button>
         </Link>
       ),
@@ -101,14 +106,14 @@ export default function SalesDocumentsManagement() {
     <div className="p-3 sm:p-4 md:p-6 space-y-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <Title level={2} style={{ margin: 0 }}>Sales Documents</Title>
-          <Text type="secondary">Quotation, order, delivery, dan invoice di jalur finance sales.</Text>
+          <Title level={2} style={{ margin: 0 }}>{t('salesDocuments.title')}</Title>
+          <Text type="secondary">{t('salesDocuments.subtitle')}</Text>
         </div>
         <Space wrap>
           {SALES_DOCUMENT_TYPE_OPTIONS.map((option) => (
             <Link key={option.value} to="/finance/sales/$documentType/new" params={{ documentType: option.value }}>
               <Button type={option.value === 'SALES_INVOICE' ? 'primary' : 'default'} icon={<Plus size={16} />}>
-                {option.label}
+                {t(option.labelKey)}
               </Button>
             </Link>
           ))}
@@ -119,7 +124,7 @@ export default function SalesDocumentsManagement() {
         <div className="flex flex-col md:flex-row gap-3">
           <Input
             allowClear
-            placeholder="Cari nomor, customer, project, department"
+            placeholder={t('salesDocuments.searchPlaceholder')}
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
           />
@@ -128,8 +133,11 @@ export default function SalesDocumentsManagement() {
             value={typeFilter}
             onChange={setTypeFilter}
             options={[
-              { value: 'ALL', label: 'Semua tipe' },
-              ...SALES_DOCUMENT_TYPE_OPTIONS,
+              { value: 'ALL', label: t('salesDocuments.allTypes') },
+              ...SALES_DOCUMENT_TYPE_OPTIONS.map((option) => ({
+                value: option.value,
+                label: t(option.labelKey),
+              })),
             ]}
           />
         </div>

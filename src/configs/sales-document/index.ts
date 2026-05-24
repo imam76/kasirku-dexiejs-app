@@ -1,4 +1,5 @@
 import type { SalesDocumentType } from '@/types';
+import type { TranslationKey } from '@/i18n/messages';
 import { salesDeliveryConfig } from './salesDelivery.config';
 import { salesInvoiceConfig } from './salesInvoice.config';
 import { salesOrderConfig } from './salesOrder.config';
@@ -16,25 +17,26 @@ export type SalesDocumentFieldType =
 
 export interface SalesDocumentFieldConfig {
   name: string;
-  label: string;
+  labelKey: TranslationKey;
   type: SalesDocumentFieldType;
   required?: boolean;
 }
 
 export interface SalesDocumentLineColumnConfig {
   name: string;
-  label: string;
+  labelKey: TranslationKey;
   editable?: boolean;
 }
 
 export interface SalesDocumentSummaryFieldConfig {
   name: string;
-  label: string;
+  labelKey: TranslationKey;
 }
 
 export interface SalesDocumentConfig {
   type: SalesDocumentType;
   title: string;
+  titleKey: TranslationKey;
   numberPrefix: string;
   headerFields: SalesDocumentFieldConfig[];
   lineItemColumns: SalesDocumentLineColumnConfig[];
@@ -63,8 +65,8 @@ export const salesDocumentConfigs = {
 export const getSalesDocumentConfig = (type: SalesDocumentType) => salesDocumentConfigs[type];
 
 export const SALES_DOCUMENT_TYPE_OPTIONS = [
-  { value: 'SALES_QUOTATION', label: 'Quotation' },
-  { value: 'SALES_ORDER', label: 'Order' },
-  { value: 'SALES_DELIVERY', label: 'Delivery' },
-  { value: 'SALES_INVOICE', label: 'Invoice' },
-] satisfies Array<{ value: SalesDocumentType; label: string }>;
+  { value: 'SALES_QUOTATION', labelKey: 'salesDocuments.type.salesQuotation' },
+  { value: 'SALES_ORDER', labelKey: 'salesDocuments.type.salesOrder' },
+  { value: 'SALES_DELIVERY', labelKey: 'salesDocuments.type.salesDelivery' },
+  { value: 'SALES_INVOICE', labelKey: 'salesDocuments.type.salesInvoice' },
+] satisfies Array<{ value: SalesDocumentType; labelKey: TranslationKey }>;

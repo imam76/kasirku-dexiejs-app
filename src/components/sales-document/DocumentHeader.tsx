@@ -1,5 +1,6 @@
 import type { Control, FieldErrors, UseFormSetValue } from 'react-hook-form';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
+import { useI18n } from '@/hooks/useI18n';
 import type { Contact, Department, Project, Tax } from '@/types';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
 import { FieldRenderer } from './FieldRenderer';
@@ -24,20 +25,25 @@ export const DocumentHeader = ({
   taxes,
   departments,
   projects,
-}: DocumentHeaderProps) => (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-    {config.headerFields.map((field) => (
-      <FieldRenderer
-        key={field.name}
-        {...field}
-        control={control}
-        errors={errors}
-        setValue={setValue}
-        contacts={contacts}
-        taxes={taxes}
-        departments={departments}
-        projects={projects}
-      />
-    ))}
-  </div>
-);
+}: DocumentHeaderProps) => {
+  const { t } = useI18n();
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+      {config.headerFields.map((field) => (
+        <FieldRenderer
+          key={field.name}
+          {...field}
+          label={t(field.labelKey)}
+          control={control}
+          errors={errors}
+          setValue={setValue}
+          contacts={contacts}
+          taxes={taxes}
+          departments={departments}
+          projects={projects}
+        />
+      ))}
+    </div>
+  );
+};

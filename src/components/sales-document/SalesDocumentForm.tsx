@@ -5,6 +5,7 @@ import type { DefaultValues } from 'react-hook-form';
 import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
+import { useI18n } from '@/hooks/useI18n';
 import type { Contact, Department, Product, Project, SalesDocument, SalesDocumentItem, Tax } from '@/types';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { DocumentHeader } from './DocumentHeader';
@@ -77,6 +78,7 @@ export const SalesDocumentForm = ({
   onCancel,
   submitting,
 }: SalesDocumentFormProps) => {
+  const { t } = useI18n();
   const {
     control,
     formState: { errors },
@@ -165,9 +167,9 @@ export const SalesDocumentForm = ({
         onDiscountChange={(value) => setValue('discount_amount', value, { shouldDirty: true, shouldValidate: true })}
       />
       <div className="flex w-full justify-end gap-2">
-        {onCancel && <Button onClick={onCancel}>Batal</Button>}
+        {onCancel && <Button onClick={onCancel}>{t('common.cancel')}</Button>}
         <Button type="primary" htmlType="submit" loading={submitting}>
-          Simpan Draft
+          {t('salesDocuments.saveDraft')}
         </Button>
       </div>
     </form>

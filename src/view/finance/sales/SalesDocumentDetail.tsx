@@ -3,10 +3,12 @@ import { Button, Card, Descriptions, Input, InputNumber, Modal, Space, Table, Ta
 import { useNavigate } from '@tanstack/react-router';
 import type { ColumnsType } from 'antd/es/table';
 import { getSalesDocumentConfig, SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
+import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
 import type { SalesDocument, SalesDocumentItem, SalesDocumentStatus, SalesDocumentType } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 
 const { Title, Text } = Typography;
 
@@ -22,6 +24,7 @@ interface SalesDocumentDetailProps {
 }
 
 export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailProps) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { issueDocument, voidDocument, convertDocument, payInvoice, isMutating } = useSalesDocuments();
   const [document, setDocument] = useState<SalesDocument | undefined>();
@@ -55,19 +58,19 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   }, [document]);
 
   if (!document || !config) {
-    return <div className="p-6">Dokumen tidak ditemukan.</div>;
+    return <div className="p-6">{t('salesDocuments.notFound')}</div>;
   }
 
   const columns: ColumnsType<SalesDocumentItem> = [
-    { title: 'Produk', dataIndex: 'product_name' },
-    { title: 'Qty', dataIndex: 'quantity', width: 100 },
-    { title: 'Qty Kirim', dataIndex: 'delivered_quantity', width: 100, render: (value) => value ?? '-' },
-    { title: 'Unit', dataIndex: 'unit', width: 100 },
+    { title: t('salesDocuments.field.product'), dataIndex: 'product_name' },
+    { title: t('salesDocuments.field.quantity'), dataIndex: 'quantity', width: 100 },
+    { title: t('salesDocuments.field.deliveredQuantity'), dataIndex: 'delivered_quantity', width: 100, render: (value) => value ?? '-' },
+    { title: t('salesDocuments.field.unit'), dataIndex: 'unit', width: 100 },
     ...(config.behavior.hasPricing ? [
-      { title: 'Harga', dataIndex: 'price', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
-      { title: 'Diskon', dataIndex: 'discount_amount', width: 120, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
-      { title: 'Pajak', dataIndex: 'tax_amount', width: 120, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
-      { title: 'Subtotal', dataIndex: 'subtotal', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
+      { title: t('salesDocuments.field.price'), dataIndex: 'price', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
+      { title: t('salesDocuments.field.discount'), dataIndex: 'discount_amount', width: 120, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
+      { title: t('salesDocuments.field.tax'), dataIndex: 'tax_amount', width: 120, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
+      { title: t('salesDocuments.field.subtotal'), dataIndex: 'subtotal', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
     ] : []),
   ];
   const canEdit = document.status === 'DRAFT';
@@ -79,27 +82,27 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     let voidReason = '';
 
     Modal.confirm({
-      title: 'Batalkan dokumen?',
+      title: t('salesDocuments.voidConfirmTitle'),
       content: (
         <div className="space-y-3">
           <Text type="secondary">
-            Dokumen akan menjadi read-only. Stok delivery yang sudah terbit akan dikembalikan.
+            {t('salesDocuments.voidConfirmContent')}
           </Text>
           <Input.TextArea
             rows={3}
-            placeholder="Alasan pembatalan"
+            placeholder={t('salesDocuments.voidReasonPlaceholder')}
             onChange={(event) => {
               voidReason = event.target.value;
             }}
           />
         </div>
       ),
-      okText: 'Void',
+      okText: t('salesDocuments.void'),
       okButtonProps: { danger: true },
       onOk: async () => {
         const normalizedReason = voidReason.trim();
         if (!normalizedReason) {
-          throw new Error('Alasan pembatalan wajib diisi.');
+          throw new Error(t('salesDocuments.voidReasonRequired'));
         }
 
         await voidDocument({ id: document.id, reason: normalizedReason });
@@ -113,7 +116,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <Title level={2} style={{ margin: 0 }}>{document.document_number}</Title>
-          <Text type="secondary">{config.title}</Text>
+          <Text type="secondary">{t(config.titleKey)}</Text>
         </div>
         <Space wrap>
           {canEdit && (
@@ -123,7 +126,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 params: { documentType: document.type, documentId: document.id },
               })}
             >
-              Edit Draft
+              {t('salesDocuments.editDraft')}
             </Button>
           )}
           {document.status === 'DRAFT' && (
@@ -131,7 +134,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               await issueDocument(document.id);
               await loadDocument();
             }}>
-              Terbitkan
+              {t('salesDocuments.issue')}
             </Button>
           )}
           {nextConvertOptions.map((targetType) => (
@@ -146,37 +149,43 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 });
               }}
             >
-              Convert ke {SALES_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === targetType)?.label}
+              {t('salesDocuments.convertTo', {
+                type: t(SALES_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === targetType)?.labelKey ?? 'salesDocuments.table.type'),
+              })}
             </Button>
           ))}
-          {canVoid && <Button danger onClick={handleVoid}>Void</Button>}
+          {canVoid && <Button danger onClick={handleVoid}>{t('salesDocuments.void')}</Button>}
         </Space>
       </div>
 
       <Card>
         <Descriptions column={{ xs: 1, md: 2 }} bordered size="small">
-          <Descriptions.Item label="Customer">{document.customer_name}</Descriptions.Item>
-          <Descriptions.Item label="Status"><Tag color={statusColor[document.status]}>{document.status}</Tag></Descriptions.Item>
-          <Descriptions.Item label="Tanggal">{formatDate(document.document_date)}</Descriptions.Item>
-          <Descriptions.Item label="Jatuh Tempo">{document.due_date ? formatDate(document.due_date) : '-'}</Descriptions.Item>
-          <Descriptions.Item label="Department">{document.department_name ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="Project">{document.project_name ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="Pajak">{document.tax_name ? `${document.tax_name} (${document.tax_rate}%)` : '-'}</Descriptions.Item>
-          <Descriptions.Item label="Status Bayar">{document.payment_status ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="Catatan">{document.notes || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.field.customer')}>{document.customer_name}</Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.table.status')}>
+            <Tag color={statusColor[document.status]}>{t(salesDocumentStatusLabelKeys[document.status])}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.table.date')}>{formatDate(document.document_date)}</Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.field.dueDate')}>{document.due_date ? formatDate(document.due_date) : '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.field.department')}>{document.department_name ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.field.project')}>{document.project_name ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.field.tax')}>{document.tax_name ? `${document.tax_name} (${document.tax_rate}%)` : '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.field.paymentStatus')}>
+            {document.payment_status ? t(salesInvoicePaymentStatusLabelKeys[document.payment_status]) : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('salesDocuments.field.notes')}>{document.notes || '-'}</Descriptions.Item>
           {document.status === 'VOIDED' && (
             <>
-              <Descriptions.Item label="Dibatalkan Pada">
+              <Descriptions.Item label={t('salesDocuments.field.voidedAt')}>
                 {document.voided_at ? formatDate(document.voided_at) : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Alasan Void">{document.void_reason || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('salesDocuments.field.voidReason')}>{document.void_reason || '-'}</Descriptions.Item>
             </>
           )}
         </Descriptions>
       </Card>
 
       {canRecordPayment && (
-        <Card size="small" title="Pembayaran Invoice">
+        <Card size="small" title={t('salesDocuments.invoicePayment')}>
           <Space wrap>
             <InputNumber
               min={0}
@@ -193,7 +202,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 await loadDocument();
               }}
             >
-              Catat Pembayaran
+              {t('salesDocuments.recordPayment')}
             </Button>
           </Space>
         </Card>
@@ -204,11 +213,11 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       {config.behavior.hasPricing && (
         <Card size="small">
           <Descriptions column={1} size="small">
-            <Descriptions.Item label="Subtotal">Rp {formatCurrency(document.subtotal_amount || 0)}</Descriptions.Item>
-            <Descriptions.Item label="Diskon Dokumen">Rp {formatCurrency(document.discount_amount || 0)}</Descriptions.Item>
-            <Descriptions.Item label="Pajak">Rp {formatCurrency(document.tax_amount || 0)}</Descriptions.Item>
-            <Descriptions.Item label="Total">Rp {formatCurrency(document.total_amount || 0)}</Descriptions.Item>
-            <Descriptions.Item label="Terbayar">Rp {formatCurrency(document.paid_amount || 0)}</Descriptions.Item>
+            <Descriptions.Item label={t('salesDocuments.field.subtotal')}>Rp {formatCurrency(document.subtotal_amount || 0)}</Descriptions.Item>
+            <Descriptions.Item label={t('salesDocuments.field.documentDiscount')}>Rp {formatCurrency(document.discount_amount || 0)}</Descriptions.Item>
+            <Descriptions.Item label={t('salesDocuments.field.tax')}>Rp {formatCurrency(document.tax_amount || 0)}</Descriptions.Item>
+            <Descriptions.Item label={t('salesDocuments.field.total')}>Rp {formatCurrency(document.total_amount || 0)}</Descriptions.Item>
+            <Descriptions.Item label={t('salesDocuments.field.paidAmount')}>Rp {formatCurrency(document.paid_amount || 0)}</Descriptions.Item>
           </Descriptions>
         </Card>
       )}

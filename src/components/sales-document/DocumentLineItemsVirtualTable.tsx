@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useI18n } from '@/hooks/useI18n';
 import type { SalesDocumentItem } from '@/types';
 import { DocumentLineItemRow } from './DocumentLineItemRow';
 
@@ -48,6 +49,7 @@ export const DocumentLineItemsVirtualTable = ({
   onRemoveItem,
   onToggleExpanded,
 }: DocumentLineItemsVirtualTableProps) => {
+  const { t } = useI18n();
   const parentRef = useRef<HTMLDivElement>(null);
   const rowElementsRef = useRef(new Map<string, HTMLDivElement>());
   const gridTemplateColumns = useMemo(() => {
@@ -104,11 +106,11 @@ export const DocumentLineItemsVirtualTable = ({
             className="grid gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium uppercase tracking-wide text-gray-500"
             style={{ gridTemplateColumns }}
           >
-            <div>Produk</div>
-            <div>{isSalesDelivery ? 'Qty Order' : 'Qty'}</div>
-            {isSalesDelivery && <div>Qty Kirim</div>}
-            <div>Unit</div>
-            {hasPricing && <div className="text-right">Subtotal</div>}
+            <div>{t('salesDocuments.field.product')}</div>
+            <div>{t(isSalesDelivery ? 'salesDocuments.field.orderedQuantity' : 'salesDocuments.field.quantity')}</div>
+            {isSalesDelivery && <div>{t('salesDocuments.field.deliveredQuantity')}</div>}
+            <div>{t('salesDocuments.field.unit')}</div>
+            {hasPricing && <div className="text-right">{t('salesDocuments.field.subtotal')}</div>}
             {hasPricing && <div />}
             <div />
           </div>
@@ -116,7 +118,7 @@ export const DocumentLineItemsVirtualTable = ({
           <div ref={parentRef} className="max-h-[640px] min-h-[360px] overflow-auto">
             {items.length === 0 ? (
               <div className="flex h-[360px] items-center justify-center text-sm text-gray-500">
-                Belum ada baris item.
+                {t('salesDocuments.emptyItems')}
               </div>
             ) : (
               <div

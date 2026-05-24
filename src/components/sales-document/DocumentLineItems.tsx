@@ -3,9 +3,11 @@ import { Button } from 'antd';
 import { Plus } from 'lucide-react';
 import type { Product, SalesDocumentItem, Tax } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
+import { useI18n } from '@/hooks/useI18n';
 import { getProductDocumentUnits } from '@/utils/productUnits';
 import { createEmptySalesDocumentItem } from '@/utils/salesDocuments/createEmptySalesDocumentItem';
 import { mapProductToSalesDocumentItem } from '@/utils/salesDocuments/mapProductToSalesDocumentItem';
+import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import { DocumentLineItemsVirtualTable } from './DocumentLineItemsVirtualTable';
 
 interface DocumentLineItemsProps {
@@ -29,6 +31,7 @@ export const DocumentLineItems = ({
   taxes,
   onChange,
 }: DocumentLineItemsProps) => {
+  const { t } = useI18n();
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
   const [scrollToLastRequest, setScrollToLastRequest] = useState(0);
   const itemsRef = useRef(items);
@@ -53,9 +56,9 @@ export const DocumentLineItems = ({
   const taxOptions = useMemo(
     () => taxes.map((tax) => ({
       value: tax.id,
-      label: `${tax.name} (${tax.rate}%, ${tax.calculation_mode})`,
+      label: `${tax.name} (${tax.rate}%, ${t(taxCalculationModeLabelKeys[tax.calculation_mode])})`,
     })),
-    [taxes],
+    [t, taxes],
   );
 
   const unitOptionsByProductId = useMemo(
@@ -164,14 +167,14 @@ export const DocumentLineItems = ({
       />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-gray-500">
-          Shortcut tambah baris:
+          {t('salesDocuments.addRowShortcut')}
           {' '}
           <span className="font-medium">Ctrl + Enter</span>
           {' / '}
           <span className="font-medium">Cmd + Enter</span>
         </div>
         <Button type="dashed" icon={<Plus size={16} />} onClick={addRow}>
-          Tambah Baris
+          {t('salesDocuments.addRow')}
         </Button>
       </div>
     </div>

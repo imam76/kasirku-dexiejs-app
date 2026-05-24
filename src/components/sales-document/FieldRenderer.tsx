@@ -4,6 +4,8 @@ import type { Dayjs } from 'dayjs';
 import { Controller } from 'react-hook-form';
 import type { Control, FieldErrors, FieldPath, UseFormSetValue } from 'react-hook-form';
 import type { Contact, Department, Project, SalesInvoicePaymentStatus, Tax } from '@/types';
+import { useI18n } from '@/hooks/useI18n';
+import { salesInvoicePaymentStatusLabelKeys, taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
 
 interface FieldContainerProps {
@@ -52,10 +54,11 @@ export const FieldRenderer = ({
   departments,
   projects,
 }: FieldRendererProps) => {
+  const { t } = useI18n();
   const fieldName = name as FieldPath<SalesDocumentFormValues>;
   const fieldError = errors[name as keyof SalesDocumentFormValues];
   const error = fieldError?.message ? String(fieldError.message) : undefined;
-  const rules = required ? { required: `${label} wajib diisi.` } : undefined;
+  const rules = required ? { required: t('salesDocuments.validation.required', { field: label }) } : undefined;
 
   if (type === 'contact') {
     return (
@@ -69,7 +72,7 @@ export const FieldRenderer = ({
               allowClear
               showSearch
               optionFilterProp="label"
-              placeholder="Pilih customer"
+              placeholder={t('salesDocuments.placeholder.customer')}
               value={field.value as string | undefined}
               onBlur={field.onBlur}
               options={contacts.map((contact) => ({
@@ -107,12 +110,12 @@ export const FieldRenderer = ({
               allowClear
               showSearch
               optionFilterProp="label"
-              placeholder="Pilih pajak"
+              placeholder={t('salesDocuments.placeholder.tax')}
               value={field.value as string | undefined}
               onBlur={field.onBlur}
               options={taxes.map((tax) => ({
                 value: tax.id,
-                label: `${tax.name} (${tax.rate}%, ${tax.calculation_mode})`,
+                label: `${tax.name} (${tax.rate}%, ${t(taxCalculationModeLabelKeys[tax.calculation_mode])})`,
               }))}
               onChange={field.onChange}
             />
@@ -134,7 +137,7 @@ export const FieldRenderer = ({
               allowClear
               showSearch
               optionFilterProp="label"
-              placeholder="Pilih department"
+              placeholder={t('salesDocuments.placeholder.department')}
               value={field.value as string | undefined}
               onBlur={field.onBlur}
               options={departments.map((department) => ({
@@ -161,7 +164,7 @@ export const FieldRenderer = ({
               allowClear
               showSearch
               optionFilterProp="label"
-              placeholder="Pilih project"
+              placeholder={t('salesDocuments.placeholder.project')}
               value={field.value as string | undefined}
               onBlur={field.onBlur}
               options={projects.map((project) => ({
@@ -178,9 +181,9 @@ export const FieldRenderer = ({
 
   if (type === 'paymentStatus') {
     const options: Array<{ value: SalesInvoicePaymentStatus; label: string }> = [
-      { value: 'UNPAID', label: 'Unpaid' },
-      { value: 'PARTIAL', label: 'Partial' },
-      { value: 'PAID', label: 'Paid' },
+      { value: 'UNPAID', label: t(salesInvoicePaymentStatusLabelKeys.UNPAID) },
+      { value: 'PARTIAL', label: t(salesInvoicePaymentStatusLabelKeys.PARTIAL) },
+      { value: 'PAID', label: t(salesInvoicePaymentStatusLabelKeys.PAID) },
     ];
 
     return (

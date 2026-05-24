@@ -2,6 +2,7 @@ import { forwardRef, memo } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, InputNumber, Select } from 'antd';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 import type { SalesDocumentItem } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { DocumentLineItemExpandedFields } from './DocumentLineItemExpandedFields';
@@ -46,6 +47,7 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
   onRemoveItem,
   onToggleExpanded,
 }, ref) => {
+  const { t } = useI18n();
   const displayedItem = calculatedItem ?? item;
 
   return (
@@ -62,7 +64,7 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
         <Select
           showSearch
           className="w-full min-w-0"
-          placeholder="Pilih produk"
+          placeholder={t('salesDocuments.placeholder.product')}
           value={item.product_id || undefined}
           optionFilterProp="label"
           options={productOptions}
@@ -104,7 +106,7 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
             icon={isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             disabled={!item.product_id}
             onClick={() => onToggleExpanded(item.id)}
-            aria-label={isExpanded ? 'Tutup detail item' : 'Buka detail item'}
+            aria-label={t(isExpanded ? 'salesDocuments.closeItemDetail' : 'salesDocuments.openItemDetail')}
           />
         )}
         <Button
@@ -112,7 +114,7 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
           type="text"
           icon={<Trash2 size={16} />}
           onClick={() => onRemoveItem(item.id)}
-          aria-label="Hapus item"
+          aria-label={t('salesDocuments.deleteItem')}
         />
       </div>
       {hasPricing && isExpanded && item.product_id && (

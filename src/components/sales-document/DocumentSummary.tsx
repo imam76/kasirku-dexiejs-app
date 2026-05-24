@@ -1,5 +1,6 @@
 import { Card, InputNumber } from 'antd';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
+import { useI18n } from '@/hooks/useI18n';
 import type { SalesDocument } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 
@@ -16,17 +17,19 @@ export const DocumentSummary = ({
   discountAmount,
   onDiscountChange,
 }: DocumentSummaryProps) => {
+  const { t } = useI18n();
+
   if (!config.behavior.hasPricing) return null;
 
   return (
     <Card size="small" className="ml-auto w-full max-w-md">
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm text-gray-500">Subtotal</span>
+          <span className="text-sm text-gray-500">{t('salesDocuments.field.subtotal')}</span>
           <span className="font-medium text-gray-900">Rp {formatCurrency(total.subtotal_amount || 0)}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm text-gray-500">Diskon Dokumen</span>
+          <span className="text-sm text-gray-500">{t('salesDocuments.field.documentDiscount')}</span>
           <InputNumber
             min={0}
             className="w-40"
@@ -35,11 +38,11 @@ export const DocumentSummary = ({
           />
         </div>
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm text-gray-500">Pajak</span>
+          <span className="text-sm text-gray-500">{t('salesDocuments.field.tax')}</span>
           <span className="font-medium text-gray-900">Rp {formatCurrency(total.tax_amount || 0)}</span>
         </div>
         <div className="flex items-center justify-between gap-4 border-t border-gray-100 pt-3">
-          <span className="text-sm font-medium text-gray-700">Total</span>
+          <span className="text-sm font-medium text-gray-700">{t('salesDocuments.field.total')}</span>
           <span className="text-lg font-semibold text-gray-900">Rp {formatCurrency(total.total_amount || 0)}</span>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { InputNumber, Select } from 'antd';
+import { useI18n } from '@/hooks/useI18n';
 import type { PromoType, SalesDocumentItem } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 
@@ -20,13 +21,14 @@ export const DocumentLineItemExpandedFields = ({
   taxOptions,
   onUpdateItem,
 }: DocumentLineItemExpandedFieldsProps) => {
+  const { t } = useI18n();
   const displayedItem = calculatedItem ?? item;
 
   return (
     <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-3">
       <div className="grid grid-cols-4 gap-3">
         <div>
-          <div className="mb-1 text-xs text-gray-500">Harga</div>
+          <div className="mb-1 text-xs text-gray-500">{t('salesDocuments.field.price')}</div>
           <InputNumber
             min={0}
             className="w-full"
@@ -35,13 +37,13 @@ export const DocumentLineItemExpandedFields = ({
           />
         </div>
         <div>
-          <div className="mb-1 text-xs text-gray-500">Diskon</div>
+          <div className="mb-1 text-xs text-gray-500">{t('salesDocuments.field.discount')}</div>
           <div className="grid grid-cols-[120px_1fr] gap-2">
             <Select
               value={item.discount_type ?? 'fixed'}
               options={[
-                { value: 'percent' satisfies PromoType, label: 'Persen' },
-                { value: 'fixed' satisfies PromoType, label: 'Nominal' },
+                { value: 'percent' satisfies PromoType, label: t('salesDocuments.discountType.percent') },
+                { value: 'fixed' satisfies PromoType, label: t('salesDocuments.discountType.fixed') },
               ]}
               onChange={(discountType: PromoType) => onUpdateItem(item.id, { discount_type: discountType })}
             />
@@ -54,11 +56,11 @@ export const DocumentLineItemExpandedFields = ({
           </div>
         </div>
         <div>
-          <div className="mb-1 text-xs text-gray-500">Pajak (%)</div>
+          <div className="mb-1 text-xs text-gray-500">{t('salesDocuments.field.tax')} (%)</div>
           <Select
             allowClear
             className="w-full"
-            placeholder="Pajak item (opsional)"
+            placeholder={t('salesDocuments.placeholder.itemTax')}
             value={item.tax_id || undefined}
             options={taxOptions}
             onChange={(taxId?: string) => onUpdateItem(item.id, {
@@ -71,7 +73,7 @@ export const DocumentLineItemExpandedFields = ({
           />
         </div>
         <div>
-          <div className="mb-1 text-xs text-gray-500">Pajak</div>
+          <div className="mb-1 text-xs text-gray-500">{t('salesDocuments.field.tax')}</div>
           <InputNumber
             className="w-full"
             value={displayedItem.tax_amount}

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { App } from 'antd';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import {
   convertSalesDocument,
@@ -18,6 +19,7 @@ import type { SalesDocument, SalesDocumentType } from '@/types';
 export const useSalesDocuments = () => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
+  const { t } = useI18n();
   const documents = useLiveQuery(
     () => db.salesDocuments.orderBy('created_at').reverse().toArray(),
     [],
@@ -67,49 +69,49 @@ export const useSalesDocuments = () => {
     mutationFn: createSalesDocument,
     onSuccess: () => {
       invalidate();
-      message.success('Sales document tersimpan.');
+      message.success(t('salesDocuments.message.createSuccess'));
     },
-    onError: (error: Error) => modal.error({ title: 'Gagal menyimpan dokumen', content: error.message }),
+    onError: (error: Error) => modal.error({ title: t('salesDocuments.error.saveTitle'), content: error.message }),
   });
   const updateMutation = useMutation({
     mutationFn: ({ id, input }: { id: string; input: SalesDocumentUpsertInput }) => updateSalesDocument(id, input),
     onSuccess: () => {
       invalidate();
-      message.success('Sales document diperbarui.');
+      message.success(t('salesDocuments.message.updateSuccess'));
     },
-    onError: (error: Error) => modal.error({ title: 'Gagal memperbarui dokumen', content: error.message }),
+    onError: (error: Error) => modal.error({ title: t('salesDocuments.error.updateTitle'), content: error.message }),
   });
   const issueMutation = useMutation({
     mutationFn: issueSalesDocument,
     onSuccess: () => {
       invalidate();
-      message.success('Sales document diterbitkan.');
+      message.success(t('salesDocuments.message.issueSuccess'));
     },
-    onError: (error: Error) => modal.error({ title: 'Gagal menerbitkan dokumen', content: error.message }),
+    onError: (error: Error) => modal.error({ title: t('salesDocuments.error.issueTitle'), content: error.message }),
   });
   const convertMutation = useMutation({
     mutationFn: ({ sourceId, targetType }: { sourceId: string; targetType: SalesDocumentType }) => convertSalesDocument(sourceId, targetType),
     onSuccess: () => {
       invalidate();
-      message.success('Sales document berhasil di-convert.');
+      message.success(t('salesDocuments.message.convertSuccess'));
     },
-    onError: (error: Error) => modal.error({ title: 'Gagal convert dokumen', content: error.message }),
+    onError: (error: Error) => modal.error({ title: t('salesDocuments.error.convertTitle'), content: error.message }),
   });
   const voidMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => voidSalesDocument(id, reason),
     onSuccess: () => {
       invalidate();
-      message.success('Sales document dibatalkan.');
+      message.success(t('salesDocuments.message.voidSuccess'));
     },
-    onError: (error: Error) => modal.error({ title: 'Gagal membatalkan dokumen', content: error.message }),
+    onError: (error: Error) => modal.error({ title: t('salesDocuments.error.voidTitle'), content: error.message }),
   });
   const payMutation = useMutation({
     mutationFn: ({ id, input }: { id: string; input: SalesInvoicePaymentInput }) => markSalesInvoicePaid(id, input),
     onSuccess: () => {
       invalidate();
-      message.success('Pembayaran invoice tercatat.');
+      message.success(t('salesDocuments.message.paymentSuccess'));
     },
-    onError: (error: Error) => modal.error({ title: 'Gagal mencatat pembayaran', content: error.message }),
+    onError: (error: Error) => modal.error({ title: t('salesDocuments.error.paymentTitle'), content: error.message }),
   });
 
   const getItems = (documentId: string) => db.salesDocumentItems.where('document_id').equals(documentId).toArray();
