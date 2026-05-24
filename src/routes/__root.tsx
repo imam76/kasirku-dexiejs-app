@@ -196,6 +196,7 @@ const RootLayout = () => {
       key: 'finance-group',
       children: [
         { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
+        { to: '/finance/sales', label: t('nav.finance.sales'), icon: FileText },
       ],
     },
     {

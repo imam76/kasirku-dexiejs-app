@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ReportIndexRouteImport } from './routes/report/index'
 import { Route as MasterDataIndexRouteImport } from './routes/master-data/index'
 import { Route as FinanceIndexRouteImport } from './routes/finance/index'
+import { Route as FinanceSalesIndexRouteImport } from './routes/finance/sales/index'
 
 const TransactionLazyRouteImport = createFileRoute('/transaction')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
@@ -50,6 +51,12 @@ const MasterDataContactsLazyRouteImport = createFileRoute(
   '/master-data/contacts',
 )()
 const FinanceCashFlowLazyRouteImport = createFileRoute('/finance/cash-flow')()
+const FinanceSalesDocumentTypeNewLazyRouteImport = createFileRoute(
+  '/finance/sales/$documentType/new',
+)()
+const FinanceSalesDocumentTypeDocumentIdLazyRouteImport = createFileRoute(
+  '/finance/sales/$documentType/$documentId',
+)()
 
 const TransactionLazyRoute = TransactionLazyRouteImport.update({
   id: '/transaction',
@@ -190,6 +197,31 @@ const FinanceCashFlowLazyRoute = FinanceCashFlowLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/finance/cash-flow.lazy').then((d) => d.Route),
 )
+const FinanceSalesIndexRoute = FinanceSalesIndexRouteImport.update({
+  id: '/finance/sales/',
+  path: '/finance/sales/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceSalesDocumentTypeNewLazyRoute =
+  FinanceSalesDocumentTypeNewLazyRouteImport.update({
+    id: '/finance/sales/$documentType/new',
+    path: '/finance/sales/$documentType/new',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/sales/$documentType/new.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const FinanceSalesDocumentTypeDocumentIdLazyRoute =
+  FinanceSalesDocumentTypeDocumentIdLazyRouteImport.update({
+    id: '/finance/sales/$documentType/$documentId',
+    path: '/finance/sales/$documentType/$documentId',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/sales/$documentType/$documentId.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -214,6 +246,9 @@ export interface FileRoutesByFullPath {
   '/finance/': typeof FinanceIndexRoute
   '/master-data/': typeof MasterDataIndexRoute
   '/report/': typeof ReportIndexRoute
+  '/finance/sales/': typeof FinanceSalesIndexRoute
+  '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
+  '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -238,6 +273,9 @@ export interface FileRoutesByTo {
   '/finance': typeof FinanceIndexRoute
   '/master-data': typeof MasterDataIndexRoute
   '/report': typeof ReportIndexRoute
+  '/finance/sales': typeof FinanceSalesIndexRoute
+  '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
+  '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -263,6 +301,9 @@ export interface FileRoutesById {
   '/finance/': typeof FinanceIndexRoute
   '/master-data/': typeof MasterDataIndexRoute
   '/report/': typeof ReportIndexRoute
+  '/finance/sales/': typeof FinanceSalesIndexRoute
+  '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
+  '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -289,6 +330,9 @@ export interface FileRouteTypes {
     | '/finance/'
     | '/master-data/'
     | '/report/'
+    | '/finance/sales/'
+    | '/finance/sales/$documentType/$documentId'
+    | '/finance/sales/$documentType/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -313,6 +357,9 @@ export interface FileRouteTypes {
     | '/finance'
     | '/master-data'
     | '/report'
+    | '/finance/sales'
+    | '/finance/sales/$documentType/$documentId'
+    | '/finance/sales/$documentType/new'
   id:
     | '__root__'
     | '/'
@@ -337,6 +384,9 @@ export interface FileRouteTypes {
     | '/finance/'
     | '/master-data/'
     | '/report/'
+    | '/finance/sales/'
+    | '/finance/sales/$documentType/$documentId'
+    | '/finance/sales/$documentType/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -362,6 +412,9 @@ export interface RootRouteChildren {
   FinanceIndexRoute: typeof FinanceIndexRoute
   MasterDataIndexRoute: typeof MasterDataIndexRoute
   ReportIndexRoute: typeof ReportIndexRoute
+  FinanceSalesIndexRoute: typeof FinanceSalesIndexRoute
+  FinanceSalesDocumentTypeDocumentIdLazyRoute: typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
+  FinanceSalesDocumentTypeNewLazyRoute: typeof FinanceSalesDocumentTypeNewLazyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -520,6 +573,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceCashFlowLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/sales/': {
+      id: '/finance/sales/'
+      path: '/finance/sales'
+      fullPath: '/finance/sales/'
+      preLoaderRoute: typeof FinanceSalesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance/sales/$documentType/new': {
+      id: '/finance/sales/$documentType/new'
+      path: '/finance/sales/$documentType/new'
+      fullPath: '/finance/sales/$documentType/new'
+      preLoaderRoute: typeof FinanceSalesDocumentTypeNewLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance/sales/$documentType/$documentId': {
+      id: '/finance/sales/$documentType/$documentId'
+      path: '/finance/sales/$documentType/$documentId'
+      fullPath: '/finance/sales/$documentType/$documentId'
+      preLoaderRoute: typeof FinanceSalesDocumentTypeDocumentIdLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -547,6 +621,10 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceIndexRoute: FinanceIndexRoute,
   MasterDataIndexRoute: MasterDataIndexRoute,
   ReportIndexRoute: ReportIndexRoute,
+  FinanceSalesIndexRoute: FinanceSalesIndexRoute,
+  FinanceSalesDocumentTypeDocumentIdLazyRoute:
+    FinanceSalesDocumentTypeDocumentIdLazyRoute,
+  FinanceSalesDocumentTypeNewLazyRoute: FinanceSalesDocumentTypeNewLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

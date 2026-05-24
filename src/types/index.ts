@@ -76,6 +76,13 @@ export type ContactType = 'CUSTOMER' | 'SUPPLIER' | 'CUSTOMER_SUPPLIER' | 'OTHER
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type TaxRateType = 'PERCENTAGE';
 export type TaxCalculationMode = 'EXCLUSIVE' | 'INCLUSIVE';
+export type SalesDocumentType =
+  | 'SALES_QUOTATION'
+  | 'SALES_ORDER'
+  | 'SALES_DELIVERY'
+  | 'SALES_INVOICE';
+export type SalesDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
+export type SalesInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 
 export type Permission =
   | 'TRANSACTION_VOID'
@@ -198,6 +205,70 @@ export interface Tax {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface SalesDocument {
+  id: string;
+  document_number: string;
+  type: SalesDocumentType;
+  status: SalesDocumentStatus;
+  contact_id?: string;
+  customer_name: string;
+  customer_phone?: string;
+  customer_email?: string;
+  customer_address?: string;
+  customer_company_name?: string;
+  customer_tax_number?: string;
+  department_id?: string;
+  department_code?: string;
+  department_name?: string;
+  project_id?: string;
+  project_code?: string;
+  project_name?: string;
+  document_date: string;
+  expired_at?: string;
+  due_date?: string;
+  warehouse_name?: string;
+  source_document_id?: string;
+  source_document_number?: string;
+  source_document_type?: SalesDocumentType;
+  subtotal_amount?: number;
+  discount_amount?: number;
+  tax_id?: string;
+  tax_name?: string;
+  tax_code?: string;
+  tax_rate?: number;
+  tax_calculation_mode?: TaxCalculationMode;
+  tax_amount?: number;
+  total_amount?: number;
+  payment_status?: SalesInvoicePaymentStatus;
+  paid_amount?: number;
+  paid_at?: string;
+  finance_transaction_id?: string;
+  notes?: string;
+  issued_at?: string;
+  voided_at?: string;
+  void_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalesDocumentItem {
+  id: string;
+  document_id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  unit: ProductUnit;
+  quantity: number;
+  ordered_quantity?: number;
+  delivered_quantity?: number;
+  price?: number;
+  discount_amount?: number;
+  tax_amount?: number;
+  subtotal?: number;
+  purchase_price?: number;
+  created_at: string;
 }
 
 export interface PromoAdjustment {

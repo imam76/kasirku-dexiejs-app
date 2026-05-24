@@ -22,6 +22,8 @@ export const backupDatabase = async () => {
       departments: await db.departments.toArray(),
       projects: await db.projects.toArray(),
       taxes: await db.taxes.toArray(),
+      salesDocuments: await db.salesDocuments.toArray(),
+      salesDocumentItems: await db.salesDocumentItems.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
       version: 3,
@@ -49,7 +51,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'salesDocuments', 'salesDocumentItems', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -83,6 +85,8 @@ export const restoreDatabase = async (file: File) => {
           db.departments,
           db.projects,
           db.taxes,
+          db.salesDocuments,
+          db.salesDocumentItems,
           db.authUsers,
           db.authSessions,
           db.activityLogs,
@@ -101,6 +105,8 @@ export const restoreDatabase = async (file: File) => {
           await db.departments.clear();
           await db.projects.clear();
           await db.taxes.clear();
+          await db.salesDocuments.clear();
+          await db.salesDocumentItems.clear();
           await db.authSessions.clear();
 
           if (hasAuthUsersPayload) {
@@ -123,6 +129,8 @@ export const restoreDatabase = async (file: File) => {
           if (data.departments?.length) await db.departments.bulkAdd(data.departments);
           if (data.projects?.length) await db.projects.bulkAdd(data.projects);
           if (data.taxes?.length) await db.taxes.bulkAdd(data.taxes);
+          if (data.salesDocuments?.length) await db.salesDocuments.bulkAdd(data.salesDocuments);
+          if (data.salesDocumentItems?.length) await db.salesDocumentItems.bulkAdd(data.salesDocumentItems);
           if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
           if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
         });

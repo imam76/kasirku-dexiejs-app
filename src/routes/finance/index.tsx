@@ -1,4 +1,4 @@
-import { BankOutlined } from '@ant-design/icons'
+import { BankOutlined, FileTextOutlined } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
 import { canAccessPath } from '@/auth/routePermissions'
@@ -27,6 +27,13 @@ function Finance() {
       icon: BankOutlined,
       color: 'text-red-600',
       desc: t('finance.index.cashFlowDesc'),
+    },
+    {
+      to: '/finance/sales',
+      label: t('nav.finance.sales'),
+      icon: FileTextOutlined,
+      color: 'text-blue-600',
+      desc: t('finance.index.salesDesc'),
     },
   ].filter((item) => canAccessPath(currentUser?.role, item.to))
 
