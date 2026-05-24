@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { App, Button, Card, Form, Input, Modal, Select, Space, Switch, Table, Tag, Typography } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { Archive, Building2, Edit2, Plus, RotateCcw } from 'lucide-react';
+import { App, Button, Card, Form, Input, Select } from 'antd';
+import { Building2, Plus } from 'lucide-react';
 import { useDepartments, type DepartmentStatusFilter } from '@/hooks/useDepartments';
 import { useI18n } from '@/hooks/useI18n';
 import type { Department } from '@/types';
-
-const { Text } = Typography;
-const { TextArea } = Input;
+import DepartmentFormModal, { type DepartmentFormValues } from './DepartmentFormModal';
+import DepartmentTable from './DepartmentTable';
 
 export default function DepartmentManagement() {
   const { message, modal } = App.useApp();
@@ -92,62 +90,6 @@ export default function DepartmentManagement() {
     }
   };
 
-  const columns: ColumnsType<Department> = [
-    {
-      title: t('departments.table.name'),
-      dataIndex: 'name',
-      key: 'name',
-      render: (name: string, department) => (
-        <Space direction="vertical" size={0}>
-          <Text strong>{name}</Text>
-          {department.code && <Text type="secondary">{department.code}</Text>}
-        </Space>
-      ),
-    },
-    {
-      title: t('departments.table.code'),
-      dataIndex: 'code',
-      key: 'code',
-      render: (code?: string) => code ? <Tag color="blue">{code}</Tag> : '-',
-    },
-    {
-      title: t('departments.table.description'),
-      dataIndex: 'description',
-      key: 'description',
-      render: (description?: string) => description || '-',
-    },
-    {
-      title: t('departments.table.status'),
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (isActive: boolean) => (
-        <Tag color={isActive ? 'green' : 'default'}>
-          {isActive ? t('departments.status.active') : t('departments.status.inactive')}
-        </Tag>
-      ),
-    },
-    {
-      title: t('departments.table.action'),
-      key: 'action',
-      render: (_value: unknown, department) => (
-        <Space wrap>
-          <Button type="text" icon={<Edit2 size={16} />} onClick={() => openEditModal(department)}>
-            {t('departments.edit')}
-          </Button>
-          {department.is_active ? (
-            <Button danger type="text" icon={<Archive size={16} />} onClick={() => handleArchive(department)}>
-              {t('departments.archive')}
-            </Button>
-          ) : (
-            <Button type="text" icon={<RotateCcw size={16} />} onClick={() => handleRestore(department)}>
-              {t('departments.restore')}
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
-
   return (
     <Card
       className="shadow-md"
@@ -181,56 +123,20 @@ export default function DepartmentManagement() {
         />
       </div>
 
-      <Table
-        dataSource={filteredDepartments}
-        columns={columns}
-        rowKey="id"
-        pagination={{ pageSize: 8 }}
-        scroll={{ x: true }}
-        locale={{ emptyText: t('departments.empty') }}
+      <DepartmentTable
+        departments={filteredDepartments}
+        onEdit={openEditModal}
+        onArchive={handleArchive}
+        onRestore={handleRestore}
       />
-
-      <Modal
-        title={editingDepartment ? t('departments.editTitle') : t('departments.addTitle')}
+      <DepartmentFormModal
+        form={form}
         open={isModalOpen}
+        isEditing={Boolean(editingDepartment)}
+        isSubmitting={isSubmitting}
         onCancel={closeModal}
-        onOk={() => form.submit()}
-        confirmLoading={isSubmitting}
-        destroyOnHidden
-        forceRender
-        width={680}
-      >
-        <Form<DepartmentFormValues>
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-          requiredMark={false}
-          className="mt-4"
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Form.Item name="name" label={t('departments.form.name')} rules={[{ required: true, whitespace: true, message: t('departments.validation.nameRequired') }]}>
-              <Input placeholder={t('departments.form.namePlaceholder')} />
-            </Form.Item>
-            <Form.Item name="code" label={t('departments.form.code')} rules={[{ max: 20, message: t('departments.validation.codeMax') }]}>
-              <Input placeholder={t('departments.form.codePlaceholder')} />
-            </Form.Item>
-          </div>
-
-          <Form.Item name="description" label={t('departments.form.description')}>
-            <TextArea rows={3} placeholder={t('departments.form.descriptionPlaceholder')} />
-          </Form.Item>
-          <Form.Item name="is_active" label={t('departments.form.status')} valuePropName="checked">
-            <Switch checkedChildren={t('departments.status.active')} unCheckedChildren={t('departments.status.inactive')} />
-          </Form.Item>
-        </Form>
-      </Modal>
+        onSubmit={handleSubmit}
+      />
     </Card>
   );
-}
-
-interface DepartmentFormValues {
-  name: string;
-  code?: string;
-  description?: string;
-  is_active?: boolean;
 }

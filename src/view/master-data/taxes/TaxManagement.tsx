@@ -1,20 +1,13 @@
 import { useState } from 'react';
-import { App, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Typography } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import type { Dayjs } from 'dayjs';
-import { Archive, CheckCircle2, Edit2, Percent, Plus, RotateCcw } from 'lucide-react';
+import { App, Button, Card, Form, Input, Select } from 'antd';
+import { Percent, Plus } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { useTaxes, type TaxCalculationModeFilter, type TaxStatusFilter } from '@/hooks/useTaxes';
 import { useI18n } from '@/hooks/useI18n';
-import type { Tax, TaxCalculationMode } from '@/types';
-
-const { Text } = Typography;
-const { TextArea } = Input;
-
-const calculationModeOptions: Array<{ value: TaxCalculationMode; labelKey: string; color: string }> = [
-  { value: 'EXCLUSIVE', labelKey: 'taxes.mode.exclusive', color: 'blue' },
-  { value: 'INCLUSIVE', labelKey: 'taxes.mode.inclusive', color: 'purple' },
-];
+import type { Tax } from '@/types';
+import TaxFormModal, { type TaxFormValues } from './TaxFormModal';
+import TaxTable from './TaxTable';
+import { taxCalculationModeOptions } from './taxOptions';
 
 export default function TaxManagement() {
   const { message, modal } = App.useApp();
@@ -38,11 +31,6 @@ export default function TaxManagement() {
     setDefaultTax,
     isSubmitting,
   } = useTaxes();
-
-  const modeLabelMap = calculationModeOptions.reduce<Record<TaxCalculationMode, string>>((acc, option) => {
-    acc[option.value] = t(option.labelKey as Parameters<typeof t>[0]);
-    return acc;
-  }, {} as Record<TaxCalculationMode, string>);
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -140,81 +128,6 @@ export default function TaxManagement() {
     }
   };
 
-  const columns: ColumnsType<Tax> = [
-    {
-      title: t('taxes.table.name'),
-      dataIndex: 'name',
-      key: 'name',
-      render: (name: string, tax) => (
-        <Space direction="vertical" size={0}>
-          <Text strong>{name}</Text>
-          {tax.code && <Text type="secondary">{tax.code}</Text>}
-        </Space>
-      ),
-    },
-    {
-      title: t('taxes.table.rate'),
-      dataIndex: 'rate',
-      key: 'rate',
-      render: (rate: number) => `${rate}%`,
-    },
-    {
-      title: t('taxes.table.mode'),
-      dataIndex: 'calculation_mode',
-      key: 'calculation_mode',
-      render: (mode: TaxCalculationMode) => {
-        const option = calculationModeOptions.find((item) => item.value === mode);
-        return <Tag color={option?.color}>{modeLabelMap[mode]}</Tag>;
-      },
-    },
-    {
-      title: t('taxes.table.default'),
-      dataIndex: 'is_default',
-      key: 'is_default',
-      render: (isDefault: boolean) => isDefault ? <Tag color="gold">{t('taxes.default.yes')}</Tag> : '-',
-    },
-    {
-      title: t('taxes.table.period'),
-      key: 'period',
-      render: (_value: unknown, tax) => getPeriodLabel(tax),
-    },
-    {
-      title: t('taxes.table.status'),
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (isActive: boolean) => (
-        <Tag color={isActive ? 'green' : 'default'}>
-          {isActive ? t('taxes.status.active') : t('taxes.status.inactive')}
-        </Tag>
-      ),
-    },
-    {
-      title: t('taxes.table.action'),
-      key: 'action',
-      render: (_value: unknown, tax) => (
-        <Space wrap>
-          <Button type="text" icon={<Edit2 size={16} />} onClick={() => openEditModal(tax)}>
-            {t('taxes.edit')}
-          </Button>
-          {tax.is_active && !tax.is_default && (
-            <Button type="text" icon={<CheckCircle2 size={16} />} onClick={() => handleSetDefault(tax)}>
-              {t('taxes.setDefault')}
-            </Button>
-          )}
-          {tax.is_active ? (
-            <Button danger type="text" icon={<Archive size={16} />} onClick={() => handleArchive(tax)}>
-              {t('taxes.archive')}
-            </Button>
-          ) : (
-            <Button type="text" icon={<RotateCcw size={16} />} onClick={() => handleRestore(tax)}>
-              {t('taxes.restore')}
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
-
   return (
     <Card
       className="shadow-md"
@@ -251,122 +164,26 @@ export default function TaxManagement() {
           onChange={setCalculationModeFilter}
           options={[
             { value: 'ALL', label: t('taxes.filter.allModes') },
-            ...calculationModeOptions.map((option) => ({
-              value: option.value,
-              label: t(option.labelKey as Parameters<typeof t>[0]),
-            })),
+            ...taxCalculationModeOptions.map((option) => ({ value: option.value, label: t(option.labelKey) })),
           ]}
         />
       </div>
 
-      <Table
-        dataSource={filteredTaxes}
-        columns={columns}
-        rowKey="id"
-        pagination={{ pageSize: 8 }}
-        scroll={{ x: true }}
-        locale={{ emptyText: t('taxes.empty') }}
+      <TaxTable
+        taxes={filteredTaxes}
+        onEdit={openEditModal}
+        onArchive={handleArchive}
+        onRestore={handleRestore}
+        onSetDefault={handleSetDefault}
       />
-
-      <Modal
-        title={editingTax ? t('taxes.editTitle') : t('taxes.addTitle')}
+      <TaxFormModal
+        form={form}
         open={isModalOpen}
+        isEditing={Boolean(editingTax)}
+        isSubmitting={isSubmitting}
         onCancel={closeModal}
-        onOk={() => form.submit()}
-        confirmLoading={isSubmitting}
-        destroyOnHidden
-        forceRender
-        width={760}
-      >
-        <Form<TaxFormValues>
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-          requiredMark={false}
-          className="mt-4"
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Form.Item name="name" label={t('taxes.form.name')} rules={[{ required: true, whitespace: true, message: t('taxes.validation.nameRequired') }]}>
-              <Input placeholder={t('taxes.form.namePlaceholder')} />
-            </Form.Item>
-            <Form.Item name="code" label={t('taxes.form.code')} rules={[{ max: 30, message: t('taxes.validation.codeMax') }]}>
-              <Input placeholder={t('taxes.form.codePlaceholder')} />
-            </Form.Item>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Form.Item name="rate" label={t('taxes.form.rate')} rules={[{ required: true, message: t('taxes.validation.rateRequired') }, { type: 'number', min: 0, max: 100, message: t('taxes.validation.rateRange') }]}>
-              <InputNumber min={0} max={100} className="w-full" suffix="%" />
-            </Form.Item>
-            <Form.Item name="calculation_mode" label={t('taxes.form.mode')} rules={[{ required: true, message: t('taxes.validation.modeRequired') }]}>
-              <Select
-                options={calculationModeOptions.map((option) => ({
-                  value: option.value,
-                  label: t(option.labelKey as Parameters<typeof t>[0]),
-                }))}
-              />
-            </Form.Item>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Form.Item name="effective_from" label={t('taxes.form.effectiveFrom')}>
-              <DatePicker className="w-full" />
-            </Form.Item>
-            <Form.Item
-              name="effective_to"
-              label={t('taxes.form.effectiveTo')}
-              dependencies={['effective_from']}
-              rules={[
-                ({ getFieldValue }) => ({
-                  validator(_, value: Dayjs | null) {
-                    const effectiveFrom = getFieldValue('effective_from') as Dayjs | null;
-                    if (!effectiveFrom || !value || !value.isBefore(effectiveFrom, 'day')) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error(t('taxes.validation.effectiveToAfterFrom')));
-                  },
-                }),
-              ]}
-            >
-              <DatePicker className="w-full" />
-            </Form.Item>
-          </div>
-
-          <Form.Item name="description" label={t('taxes.form.description')}>
-            <TextArea rows={3} placeholder={t('taxes.form.descriptionPlaceholder')} />
-          </Form.Item>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Form.Item name="is_default" label={t('taxes.form.default')} valuePropName="checked">
-              <Switch checkedChildren={t('taxes.default.yes')} unCheckedChildren={t('taxes.default.no')} />
-            </Form.Item>
-            <Form.Item name="is_active" label={t('taxes.form.status')} valuePropName="checked">
-              <Switch checkedChildren={t('taxes.status.active')} unCheckedChildren={t('taxes.status.inactive')} />
-            </Form.Item>
-          </div>
-        </Form>
-      </Modal>
+        onSubmit={handleSubmit}
+      />
     </Card>
   );
 }
-
-interface TaxFormValues {
-  name: string;
-  code?: string;
-  rate: number;
-  rate_type?: 'PERCENTAGE';
-  calculation_mode: TaxCalculationMode;
-  effective_from?: Dayjs | null;
-  effective_to?: Dayjs | null;
-  description?: string;
-  is_default?: boolean;
-  is_active?: boolean;
-}
-
-const getPeriodLabel = (tax: Tax) => {
-  if (!tax.effective_from && !tax.effective_to) return '-';
-
-  const startDate = tax.effective_from ? dayjs(tax.effective_from).format('DD MMM YYYY') : '-';
-  const endDate = tax.effective_to ? dayjs(tax.effective_to).format('DD MMM YYYY') : '-';
-
-  return `${startDate} - ${endDate}`;
-};
