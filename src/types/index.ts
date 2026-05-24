@@ -277,6 +277,10 @@ export interface SalesDocumentItem {
   subtotal?: number;
   total_amount?: number;
   purchase_price?: number;
+  original_price?: number;
+  is_price_edited?: boolean;
+  price_edited_by?: string;
+  price_edited_at?: string;
   created_at: string;
 }
 

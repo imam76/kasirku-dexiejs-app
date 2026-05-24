@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import type { Product, SalesDocumentItem, Tax } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
+import { getPrice, normalisasiHargaProduk } from '@/utils/pricing';
 import { getProductDocumentUnits } from '@/utils/productUnits';
 import { createEmptySalesDocumentItem } from '@/utils/salesDocuments/createEmptySalesDocumentItem';
 import { mapProductToSalesDocumentItem } from '@/utils/salesDocuments/mapProductToSalesDocumentItem';
@@ -21,6 +22,29 @@ interface DocumentLineItemsProps {
 }
 
 const emptyUnitOptions: Array<{ value: string; label: string }> = [];
+
+const getItemPricingQuantity = (
+  item: SalesDocumentItem,
+  patch: Partial<SalesDocumentItem> = {},
+) => Number(patch.quantity ?? item.quantity ?? 0);
+
+const createSystemPricingPatch = (
+  product: Product,
+  item: SalesDocumentItem,
+  patch: Partial<SalesDocumentItem> = {},
+): Partial<SalesDocumentItem> => {
+  const unit = patch.unit ?? item.unit ?? product.selling_unit;
+  const quantity = getItemPricingQuantity(item, patch);
+
+  return {
+    price: getPrice(product, quantity, unit),
+    purchase_price: normalisasiHargaProduk(product.purchase_price, product, product.purchase_unit, unit),
+    original_price: undefined,
+    is_price_edited: undefined,
+    price_edited_by: undefined,
+    price_edited_at: undefined,
+  };
+};
 
 export const DocumentLineItems = ({
   config,
@@ -90,8 +114,52 @@ export const DocumentLineItems = ({
   );
 
   const updateItem = useCallback((itemId: string, patch: Partial<SalesDocumentItem>) => {
-    onChange(itemsRef.current.map((item) => (item.id === itemId ? { ...item, ...patch } : item)));
-  }, [onChange]);
+    onChange(itemsRef.current.map((item) => {
+      if (item.id !== itemId) return item;
+
+      const product = productsById.get(item.product_id);
+      let nextPatch = patch;
+
+      if (config.behavior.hasPricing && product) {
+        const shouldReprice = patch.quantity !== undefined || patch.unit !== undefined;
+        const shouldResetManualPrice = patch.unit !== undefined;
+
+        if (shouldReprice && (!item.is_price_edited || shouldResetManualPrice)) {
+          nextPatch = {
+            ...patch,
+            ...createSystemPricingPatch(product, item, patch),
+          };
+        } else if (shouldReprice) {
+          nextPatch = {
+            ...patch,
+            purchase_price: normalisasiHargaProduk(
+              product.purchase_price,
+              product,
+              product.purchase_unit,
+              patch.unit ?? item.unit,
+            ),
+            original_price: getPrice(product, getItemPricingQuantity(item, patch), patch.unit ?? item.unit),
+          };
+        }
+
+        if (patch.price !== undefined) {
+          const price = Number(patch.price || 0);
+          const originalPrice = getPrice(product, getItemPricingQuantity(item, patch), patch.unit ?? item.unit);
+          const isPriceEdited = price !== originalPrice;
+
+          nextPatch = {
+            ...nextPatch,
+            price,
+            original_price: isPriceEdited ? originalPrice : undefined,
+            is_price_edited: isPriceEdited || undefined,
+            price_edited_at: isPriceEdited ? new Date().toISOString() : undefined,
+          };
+        }
+      }
+
+      return { ...item, ...nextPatch };
+    }));
+  }, [config.behavior.hasPricing, onChange, productsById]);
 
   const addRow = useCallback(() => {
     onChange([...itemsRef.current, createEmptySalesDocumentItem(documentId)]);
@@ -106,12 +174,16 @@ export const DocumentLineItems = ({
       if (item.id !== itemId) return item;
 
       const nextItem = mapProductToSalesDocumentItem(product, item.document_id);
+      const quantity = item.quantity || nextItem.quantity;
+      const unit = nextItem.unit;
+
       return {
         ...nextItem,
         id: item.id,
-        quantity: item.quantity || nextItem.quantity,
+        quantity,
         ordered_quantity: item.ordered_quantity ?? nextItem.ordered_quantity,
         delivered_quantity: item.delivered_quantity ?? nextItem.delivered_quantity,
+        ...createSystemPricingPatch(product, { ...nextItem, quantity, unit }),
         discount_type: item.discount_type ?? nextItem.discount_type,
         discount_value: item.discount_value ?? nextItem.discount_value,
         discount_amount: item.discount_amount ?? nextItem.discount_amount,

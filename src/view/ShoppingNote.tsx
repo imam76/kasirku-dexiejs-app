@@ -129,11 +129,10 @@ export default function ShoppingNote() {
                       <Form.Item validateStatus={errors.product_id ? 'error' : ''} help={errors.product_id?.message} style={{ marginBottom: 0 }}>
                         <Select
                           {...field}
-                          showSearch
+                          showSearch={{ optionFilterProp: 'children' }}
                           loading={isProductsLoading}
                           placeholder="Pilih produk"
                           size="large"
-                          optionFilterProp="children"
                           onChange={(value) => {
                             field.onChange(value);
                             handleProductChange(value);

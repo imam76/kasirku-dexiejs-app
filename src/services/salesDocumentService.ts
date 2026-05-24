@@ -82,6 +82,10 @@ const normalizeDocumentItems = (
   subtotal: item.subtotal === undefined ? undefined : Number(item.subtotal),
   total_amount: item.total_amount === undefined ? undefined : Number(item.total_amount),
   purchase_price: item.purchase_price === undefined ? undefined : Number(item.purchase_price),
+  original_price: item.original_price === undefined ? undefined : Number(item.original_price),
+  is_price_edited: item.is_price_edited || undefined,
+  price_edited_by: item.price_edited_by,
+  price_edited_at: item.price_edited_at,
   created_at: item.created_at || createdAt,
 }));
 

@@ -62,11 +62,10 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
         style={{ gridTemplateColumns }}
       >
         <Select
-          showSearch
+          showSearch={{ optionFilterProp: 'label' }}
           className="w-full min-w-0"
           placeholder={t('salesDocuments.placeholder.product')}
           value={item.product_id || undefined}
-          optionFilterProp="label"
           options={productOptions}
           onChange={(productId: string) => onSelectProduct(item.id, productId)}
         />

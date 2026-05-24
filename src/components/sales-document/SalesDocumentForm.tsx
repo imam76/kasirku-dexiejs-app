@@ -112,11 +112,14 @@ export const SalesDocumentForm = ({
   const discountAmount = useWatch({ control, name: 'discount_amount' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
   const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
-  const taxRate = selectedTax?.rate ?? initialData?.document?.tax_rate;
-  const taxCalculationMode = selectedTax?.calculation_mode ?? initialData?.document?.tax_calculation_mode;
-  const taxId = selectedTax?.id ?? initialData?.document?.tax_id;
-  const taxName = selectedTax?.name ?? initialData?.document?.tax_name;
-  const taxCode = selectedTax?.code ?? initialData?.document?.tax_code;
+  const initialTaxSnapshot = selectedTaxId && selectedTaxId === initialData?.document?.tax_id
+    ? initialData.document
+    : undefined;
+  const taxRate = selectedTax?.rate ?? initialTaxSnapshot?.tax_rate;
+  const taxCalculationMode = selectedTax?.calculation_mode ?? initialTaxSnapshot?.tax_calculation_mode;
+  const taxId = selectedTax?.id ?? initialTaxSnapshot?.tax_id;
+  const taxName = selectedTax?.name ?? initialTaxSnapshot?.tax_name;
+  const taxCode = selectedTax?.code ?? initialTaxSnapshot?.tax_code;
   const documentId = initialData?.document?.id ?? 'draft';
   const total = useMemo(
     () => calculateDocumentTotal({
@@ -135,6 +138,14 @@ export const SalesDocumentForm = ({
   const handleItemsChange = useCallback((nextItems: SalesDocumentItem[]) => {
     setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
   }, [setValue]);
+  const handleTaxChange = useCallback((taxId?: string) => {
+    const tax = taxes.find((candidate) => candidate.id === taxId);
+
+    setValue('tax_name', tax?.name, { shouldDirty: true });
+    setValue('tax_code', tax?.code, { shouldDirty: true });
+    setValue('tax_rate', tax?.rate, { shouldDirty: true });
+    setValue('tax_calculation_mode', tax?.calculation_mode, { shouldDirty: true });
+  }, [setValue, taxes]);
 
   const handleFinish = async (values: SalesDocumentFormValues) => {
     const documentValues = omitLineItems(values);
@@ -179,9 +190,12 @@ export const SalesDocumentForm = ({
       />
       <DocumentSummary
         config={config}
+        control={control}
         total={total}
+        taxes={taxes}
         discountAmount={discountAmount}
         onDiscountChange={(value) => setValue('discount_amount', value, { shouldDirty: true, shouldValidate: true })}
+        onTaxChange={handleTaxChange}
       />
       <div className="flex w-full justify-end gap-2">
         {onCancel && <Button onClick={onCancel}>{t('common.cancel')}</Button>}

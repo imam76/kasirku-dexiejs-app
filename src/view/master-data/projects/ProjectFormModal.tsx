@@ -84,10 +84,10 @@ export default function ProjectFormModal({
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Form.Item name="contact_id" label={t('projects.form.contact')}>
-            <Select allowClear showSearch optionFilterProp="label" options={contactOptions} placeholder={t('projects.form.contactPlaceholder')} />
+            <Select allowClear showSearch={{ optionFilterProp: 'label' }} options={contactOptions} placeholder={t('projects.form.contactPlaceholder')} />
           </Form.Item>
           <Form.Item name="department_id" label={t('projects.form.department')}>
-            <Select allowClear showSearch optionFilterProp="label" options={departmentOptions} placeholder={t('projects.form.departmentPlaceholder')} />
+            <Select allowClear showSearch={{ optionFilterProp: 'label' }} options={departmentOptions} placeholder={t('projects.form.departmentPlaceholder')} />
           </Form.Item>
         </div>
 

@@ -18,7 +18,6 @@ export const salesInvoiceConfig: SalesDocumentConfig = {
     { name: 'document_date', labelKey: 'salesDocuments.field.documentDate', type: 'date', required: true },
     { name: 'due_date', labelKey: 'salesDocuments.field.dueDate', type: 'date', required: true },
     { name: 'payment_status', labelKey: 'salesDocuments.field.paymentStatus', type: 'paymentStatus', required: true },
-    { name: 'tax_id', labelKey: 'salesDocuments.field.tax', type: 'tax' },
     { name: 'department_id', labelKey: 'salesDocuments.field.department', type: 'department' },
     { name: 'project_id', labelKey: 'salesDocuments.field.project', type: 'project' },
     { name: 'notes', labelKey: 'salesDocuments.field.notes', type: 'textarea' },
