@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Button, InputNumber, Select, Table } from 'antd';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
+import type { Key } from 'react';
 import type { Product, ProductUnit, SalesDocumentItem } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { mapProductToSalesDocumentItem } from '@/utils/salesDocuments/mapProductToSalesDocumentItem';
@@ -41,6 +43,8 @@ export const DocumentLineItems = ({
   products,
   onChange,
 }: DocumentLineItemsProps) => {
+  const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
+
   const updateItem = (itemId: string, patch: Partial<SalesDocumentItem>) => {
     onChange(items.map((item) => item.id === itemId ? { ...item, ...patch } : item));
   };
@@ -69,7 +73,16 @@ export const DocumentLineItems = ({
   };
 
   const removeItem = (itemId: string) => {
+    setExpandedRowKeys((currentKeys) => currentKeys.filter((key) => key !== itemId));
     onChange(items.filter((item) => item.id !== itemId));
+  };
+
+  const toggleExpanded = (itemId: string) => {
+    setExpandedRowKeys((currentKeys) => (
+      currentKeys.includes(itemId)
+        ? currentKeys.filter((key) => key !== itemId)
+        : [...currentKeys, itemId]
+    ));
   };
 
   const columns: ColumnsType<SalesDocumentItem> = [
@@ -138,38 +151,25 @@ export const DocumentLineItems = ({
         );
       },
     },
+    ...(config.behavior.hasPricing ? [{
+      title: 'Subtotal',
+      dataIndex: 'subtotal',
+      width: 150,
+      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
+    }] : []),
     ...(config.behavior.hasPricing ? [
       {
-        title: 'Harga',
-        dataIndex: 'price',
-        width: 150,
+        title: '',
+        key: 'expand',
+        width: 56,
         render: (_: unknown, item: SalesDocumentItem) => (
-          <InputNumber
-            min={0}
-            className="w-full"
-            value={item.price}
-            onChange={(value) => updateItem(item.id, { price: Number(value || 0) })}
+          <Button
+            type="text"
+            icon={expandedRowKeys.includes(item.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            disabled={!item.product_id}
+            onClick={() => toggleExpanded(item.id)}
           />
         ),
-      },
-      {
-        title: 'Diskon',
-        dataIndex: 'discount_amount',
-        width: 130,
-        render: (_: unknown, item: SalesDocumentItem) => (
-          <InputNumber
-            min={0}
-            className="w-full"
-            value={item.discount_amount}
-            onChange={(value) => updateItem(item.id, { discount_amount: Number(value || 0) })}
-          />
-        ),
-      },
-      {
-        title: 'Subtotal',
-        dataIndex: 'subtotal',
-        width: 150,
-        render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
       },
     ] : []),
     {
@@ -201,6 +201,34 @@ export const DocumentLineItems = ({
         pagination={false}
         columns={columns}
         dataSource={items}
+        expandable={config.behavior.hasPricing ? {
+          showExpandColumn: false,
+          expandedRowKeys,
+          onExpandedRowsChange: (nextExpandedRows) => setExpandedRowKeys([...nextExpandedRows]),
+          expandedRowRender: (item) => (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <div className="mb-1 text-xs text-gray-500">Harga</div>
+                <InputNumber
+                  min={0}
+                  className="w-full"
+                  value={item.price}
+                  onChange={(value) => updateItem(item.id, { price: Number(value || 0) })}
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-gray-500">Diskon</div>
+                <InputNumber
+                  min={0}
+                  className="w-full"
+                  value={item.discount_amount}
+                  onChange={(value) => updateItem(item.id, { discount_amount: Number(value || 0) })}
+                />
+              </div>
+            </div>
+          ),
+          rowExpandable: (item) => Boolean(item.product_id),
+        } : undefined}
       />
     </div>
   );
