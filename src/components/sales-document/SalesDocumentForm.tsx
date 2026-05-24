@@ -35,23 +35,40 @@ export type SalesDocumentFormValues = Omit<Partial<SalesDocument>, 'document_dat
   items: SalesDocumentItem[];
 };
 
-const toFormInitialValues = (document?: SalesDocument): DefaultValues<SalesDocumentFormValues> => {
+const toFormInitialValues = (
+  document: SalesDocument | undefined,
+  config: SalesDocumentConfig,
+): DefaultValues<SalesDocumentFormValues> => {
   if (!document) {
-    return {
+    const values: DefaultValues<SalesDocumentFormValues> = {
       document_date: dayjs(),
-      payment_status: 'UNPAID' as const,
       discount_amount: 0,
       items: [],
     };
+
+    if (config.behavior.hasPaymentStatus) {
+      values.payment_status = 'UNPAID';
+    }
+
+    return values;
   }
 
-  return {
+  const values: DefaultValues<SalesDocumentFormValues> = {
     ...document,
     document_date: document.document_date ? dayjs(document.document_date) : undefined,
     expired_at: document.expired_at ? dayjs(document.expired_at) : undefined,
     due_date: document.due_date ? dayjs(document.due_date) : undefined,
     discount_amount: document.discount_amount ?? 0,
   };
+
+  if (!config.behavior.hasPaymentStatus) {
+    delete values.payment_status;
+    delete values.paid_amount;
+    delete values.paid_at;
+    delete values.finance_transaction_id;
+  }
+
+  return values;
 };
 
 const toIsoDate = (value: unknown) => {
@@ -86,7 +103,7 @@ export const SalesDocumentForm = ({
     setValue,
   } = useForm<SalesDocumentFormValues, unknown, SalesDocumentFormValues>({
     defaultValues: {
-      ...toFormInitialValues(initialData?.document),
+      ...toFormInitialValues(initialData?.document, config),
       items: initialData?.items ?? [],
     } as DefaultValues<SalesDocumentFormValues>,
   });

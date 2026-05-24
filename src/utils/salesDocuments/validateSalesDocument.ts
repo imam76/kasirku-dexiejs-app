@@ -82,7 +82,7 @@ export const validateSalesDocument = ({
     throw new Error('Snapshot pajak belum lengkap.');
   }
 
-  if (config.type === 'SALES_INVOICE' && !document.payment_status) {
+  if (config.behavior.hasPaymentStatus && !document.payment_status) {
     throw new Error('Status bayar invoice wajib diisi.');
   }
 };

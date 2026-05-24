@@ -1,5 +1,5 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
-import { getSalesDocumentConfig } from '@/configs/sales-document';
+import { getSalesDocumentConfig, type SalesDocumentConfig } from '@/configs/sales-document';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type {
@@ -117,6 +117,26 @@ const assertDraft = (document: SalesDocument) => {
   }
 };
 
+const applyPaymentStatusBehavior = <T extends Partial<SalesDocument>>(
+  document: T,
+  config: SalesDocumentConfig,
+): T => {
+  const nextDocument = { ...document };
+
+  if (config.behavior.hasPaymentStatus) {
+    return {
+      ...nextDocument,
+      payment_status: nextDocument.payment_status ?? 'UNPAID',
+    } as T;
+  }
+
+  delete nextDocument.payment_status;
+  delete nextDocument.paid_amount;
+  delete nextDocument.paid_at;
+  delete nextDocument.finance_transaction_id;
+  return nextDocument as T;
+};
+
 export const createSalesDocument = async ({ document, items }: SalesDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
@@ -129,7 +149,7 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
   const now = new Date();
   const createdAt = now.toISOString();
   const documentId = crypto.randomUUID();
-  const snapshot = await buildDocumentSnapshot(document);
+  const snapshot = applyPaymentStatusBehavior(await buildDocumentSnapshot(document), config);
   const documentNumber = document.document_number || await createSalesDocumentNumber(config.numberPrefix, now);
   const normalizedItems = normalizeDocumentItems(items, documentId, createdAt);
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
@@ -142,19 +162,18 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     taxCode: snapshot.tax_code,
     config,
   });
-  const nextDocument: SalesDocument = {
+  const nextDocument = applyPaymentStatusBehavior({
     id: documentId,
     document_number: documentNumber,
     type: document.type,
     status: document.status ?? 'DRAFT',
     customer_name: snapshot.customer_name ?? '',
     document_date: snapshot.document_date || createdAt.slice(0, 10),
-    payment_status: document.type === 'SALES_INVOICE' ? snapshot.payment_status ?? 'UNPAID' : snapshot.payment_status,
     created_at: createdAt,
     updated_at: createdAt,
     ...snapshot,
     ...total,
-  };
+  } satisfies SalesDocument, config);
   const products = await db.products.toArray();
   validateSalesDocument({ document: nextDocument, items: calculatedItems, config, products });
 
@@ -182,7 +201,10 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
 
   const config = getSalesDocumentConfig(existing.type);
   const updatedAt = new Date().toISOString();
-  const snapshot = await buildDocumentSnapshot({ ...existing, ...document, type: existing.type });
+  const snapshot = applyPaymentStatusBehavior(
+    await buildDocumentSnapshot({ ...existing, ...document, type: existing.type }),
+    config,
+  );
   const normalizedItems = normalizeDocumentItems(items, id, existing.created_at);
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: normalizedItems,
@@ -194,7 +216,7 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     taxCode: snapshot.tax_code,
     config,
   });
-  const nextDocument: SalesDocument = {
+  const nextDocument = applyPaymentStatusBehavior({
     ...existing,
     ...snapshot,
     ...total,
@@ -203,7 +225,7 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     status: existing.status,
     document_number: existing.document_number,
     updated_at: updatedAt,
-  };
+  } satisfies SalesDocument, config);
   const products = await db.products.toArray();
   validateSalesDocument({ document: nextDocument, items: calculatedItems, config, products });
 
@@ -283,7 +305,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     taxCode: source.tax_code,
     config: targetConfig,
   });
-  const targetDocument: SalesDocument = {
+  const targetDocument = applyPaymentStatusBehavior({
     ...source,
     id: targetId,
     document_number: documentNumber,
@@ -292,7 +314,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     source_document_id: source.id,
     source_document_number: source.document_number,
     source_document_type: source.type,
-    payment_status: targetType === 'SALES_INVOICE' ? 'UNPAID' : undefined,
+    payment_status: targetConfig.behavior.hasPaymentStatus ? 'UNPAID' : undefined,
     finance_transaction_id: undefined,
     paid_amount: undefined,
     paid_at: undefined,
@@ -302,7 +324,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     created_at: createdAt,
     updated_at: createdAt,
     ...total,
-  };
+  } satisfies SalesDocument, targetConfig);
 
   await db.transaction('rw', salesDocumentTables, async () => {
     await db.salesDocuments.add(targetDocument);

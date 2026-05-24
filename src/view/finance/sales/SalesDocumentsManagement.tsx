@@ -3,7 +3,7 @@ import { Button, Card, Input, Select, Space, Table, Tag, Typography } from 'antd
 import { Link } from '@tanstack/react-router';
 import { Eye, Plus } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
-import { SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
+import { getSalesDocumentConfig, SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import type { SalesDocument, SalesDocumentStatus, SalesDocumentType } from '@/types';
@@ -18,6 +18,14 @@ const statusColor: Record<SalesDocumentStatus, string> = {
   CONVERTED: 'green',
   VOIDED: 'red',
 };
+
+const hasPaymentStatus = (document: Pick<SalesDocument, 'type'>) => (
+  getSalesDocumentConfig(document.type).behavior.hasPaymentStatus
+);
+
+const hasPricing = (document: Pick<SalesDocument, 'type'>) => (
+  getSalesDocumentConfig(document.type).behavior.hasPricing
+);
 
 export default function SalesDocumentsManagement() {
   const { t } = useI18n();
@@ -39,6 +47,13 @@ export default function SalesDocumentsManagement() {
       return matchesType && matchesSearch;
     });
   }, [documents, searchText, typeFilter]);
+
+  const showPaymentColumn = typeFilter === 'ALL'
+    ? filteredDocuments.some(hasPaymentStatus)
+    : getSalesDocumentConfig(typeFilter).behavior.hasPaymentStatus;
+  const showTotalColumn = typeFilter === 'ALL'
+    ? filteredDocuments.some(hasPricing)
+    : getSalesDocumentConfig(typeFilter).behavior.hasPricing;
 
   const columns: ColumnsType<SalesDocument> = [
     {
@@ -74,19 +89,23 @@ export default function SalesDocumentsManagement() {
       render: (value: SalesDocumentStatus) => <Tag color={statusColor[value]}>{t(salesDocumentStatusLabelKeys[value])}</Tag>,
       width: 120,
     },
-    {
+    ...(showPaymentColumn ? [{
       title: t('salesDocuments.table.payment'),
       dataIndex: 'payment_status',
-      render: (value: SalesDocument['payment_status']) => value ? <Tag>{t(salesInvoicePaymentStatusLabelKeys[value])}</Tag> : '-',
+      render: (value: SalesDocument['payment_status'], record: SalesDocument) => (
+        hasPaymentStatus(record) && value ? <Tag>{t(salesInvoicePaymentStatusLabelKeys[value])}</Tag> : '-'
+      ),
       width: 110,
-    },
-    {
+    }] : []),
+    ...(showTotalColumn ? [{
       title: t('salesDocuments.table.total'),
       dataIndex: 'total_amount',
-      align: 'right',
-      render: (value: number | undefined) => value === undefined ? '-' : `Rp ${formatCurrency(value)}`,
+      align: 'right' as const,
+      render: (value: number | undefined, record: SalesDocument) => (
+        hasPricing(record) && value !== undefined ? `Rp ${formatCurrency(value)}` : '-'
+      ),
       width: 150,
-    },
+    }] : []),
     {
       title: '',
       key: 'action',

@@ -1,22 +1,35 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Descriptions, Input, InputNumber, Modal, Space, Table, Tag, Typography } from 'antd';
+import { Button, Card, Input, InputNumber, Modal, Space, Table, Tag, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
+import { AlertTriangle } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import { getSalesDocumentConfig, SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
-import type { SalesDocument, SalesDocumentItem, SalesDocumentStatus, SalesDocumentType } from '@/types';
+import type {
+  SalesDocument,
+  SalesDocumentItem,
+  SalesDocumentStatus,
+  SalesDocumentType,
+  SalesInvoicePaymentStatus,
+} from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 
 const { Title, Text } = Typography;
 
 const statusColor: Record<SalesDocumentStatus, string> = {
-  DRAFT: 'default',
+  DRAFT: 'gold',
   ISSUED: 'blue',
   CONVERTED: 'green',
   VOIDED: 'red',
+};
+
+const paymentStatusColor: Record<SalesInvoicePaymentStatus, string> = {
+  UNPAID: 'red',
+  PARTIAL: 'gold',
+  PAID: 'green',
 };
 
 interface SalesDocumentDetailProps {
@@ -76,7 +89,60 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const canEdit = document.status === 'DRAFT';
   const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
     !(document.type === 'SALES_INVOICE' && document.finance_transaction_id);
-  const canRecordPayment = document.type === 'SALES_INVOICE' && document.status === 'ISSUED';
+  const canRecordPayment = config.behavior.hasPaymentStatus && document.status === 'ISSUED';
+  const statusTag = (
+    <Tag className="m-0 px-2.5 py-0.5 text-xs font-semibold" color={statusColor[document.status]}>
+      {t(salesDocumentStatusLabelKeys[document.status])}
+    </Tag>
+  );
+  const paymentStatusTag = document.payment_status ? (
+    <Tag className="m-0 px-2.5 py-0.5 text-xs font-semibold" color={paymentStatusColor[document.payment_status]}>
+      {t(salesInvoicePaymentStatusLabelKeys[document.payment_status])}
+    </Tag>
+  ) : '-';
+  const detailItems = [
+    { key: 'customer', label: t('salesDocuments.field.customer'), value: document.customer_name },
+    { key: 'status', label: t('salesDocuments.table.status'), value: statusTag },
+    { key: 'date', label: t('salesDocuments.table.date'), value: formatDate(document.document_date) },
+    ...(config.behavior.hasPaymentStatus ? [{
+      key: 'paymentStatus',
+      label: t('salesDocuments.field.paymentStatus'),
+      value: paymentStatusTag,
+      highlight: document.payment_status === 'UNPAID',
+    }] : []),
+    ...(config.behavior.hasDueDate ? [{
+      key: 'dueDate',
+      label: t('salesDocuments.field.dueDate'),
+      value: document.due_date ? formatDate(document.due_date) : '-',
+    }] : []),
+    ...(config.behavior.allowDepartmentPicker ? [{
+      key: 'department',
+      label: t('salesDocuments.field.department'),
+      value: document.department_name ?? '-',
+    }] : []),
+    ...(config.behavior.allowProjectPicker ? [{
+      key: 'project',
+      label: t('salesDocuments.field.project'),
+      value: document.project_name ?? '-',
+    }] : []),
+    ...(config.behavior.hasTax ? [{
+      key: 'tax',
+      label: t('salesDocuments.field.tax'),
+      value: document.tax_name ? `${document.tax_name} (${document.tax_rate}%)` : '-',
+    }] : []),
+    ...(document.status === 'VOIDED' ? [
+      {
+        key: 'voidedAt',
+        label: t('salesDocuments.field.voidedAt'),
+        value: document.voided_at ? formatDate(document.voided_at) : '-',
+      },
+      {
+        key: 'voidReason',
+        label: t('salesDocuments.field.voidReason'),
+        value: document.void_reason || '-',
+      },
+    ] : []),
+  ];
 
   const handleVoid = () => {
     let voidReason = '';
@@ -154,34 +220,39 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               })}
             </Button>
           ))}
-          {canVoid && <Button danger onClick={handleVoid}>{t('salesDocuments.void')}</Button>}
+          {canVoid && (
+            <Button
+              danger
+              icon={<AlertTriangle size={16} />}
+              className="md:ml-3"
+              onClick={handleVoid}
+            >
+              {t('salesDocuments.void')}
+            </Button>
+          )}
         </Space>
       </div>
 
       <Card>
-        <Descriptions column={{ xs: 1, md: 2 }} bordered size="small">
-          <Descriptions.Item label={t('salesDocuments.field.customer')}>{document.customer_name}</Descriptions.Item>
-          <Descriptions.Item label={t('salesDocuments.table.status')}>
-            <Tag color={statusColor[document.status]}>{t(salesDocumentStatusLabelKeys[document.status])}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label={t('salesDocuments.table.date')}>{formatDate(document.document_date)}</Descriptions.Item>
-          <Descriptions.Item label={t('salesDocuments.field.dueDate')}>{document.due_date ? formatDate(document.due_date) : '-'}</Descriptions.Item>
-          <Descriptions.Item label={t('salesDocuments.field.department')}>{document.department_name ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label={t('salesDocuments.field.project')}>{document.project_name ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label={t('salesDocuments.field.tax')}>{document.tax_name ? `${document.tax_name} (${document.tax_rate}%)` : '-'}</Descriptions.Item>
-          <Descriptions.Item label={t('salesDocuments.field.paymentStatus')}>
-            {document.payment_status ? t(salesInvoicePaymentStatusLabelKeys[document.payment_status]) : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('salesDocuments.field.notes')}>{document.notes || '-'}</Descriptions.Item>
-          {document.status === 'VOIDED' && (
-            <>
-              <Descriptions.Item label={t('salesDocuments.field.voidedAt')}>
-                {document.voided_at ? formatDate(document.voided_at) : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('salesDocuments.field.voidReason')}>{document.void_reason || '-'}</Descriptions.Item>
-            </>
-          )}
-        </Descriptions>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {detailItems.map((item) => (
+            <div
+              key={item.key}
+              className={`min-h-20 rounded border px-4 py-3 ${
+                item.highlight ? 'border-red-200 bg-red-50/70' : 'border-gray-100 bg-gray-50/60'
+              }`}
+            >
+              <div className="text-xs font-medium uppercase text-gray-500">{item.label}</div>
+              <div className="mt-2 break-words text-sm font-semibold text-gray-900">{item.value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <div className="text-xs font-medium uppercase text-gray-500">{t('salesDocuments.field.notes')}</div>
+          <div className="mt-2 min-h-10 whitespace-pre-wrap rounded border border-gray-100 bg-white px-3 py-2 text-sm text-gray-700">
+            {document.notes || '-'}
+          </div>
+        </div>
       </Card>
 
       {canRecordPayment && (
@@ -211,14 +282,33 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       <Table rowKey="id" columns={columns} dataSource={items} pagination={false} scroll={{ x: true }} />
 
       {config.behavior.hasPricing && (
-        <Card size="small">
-          <Descriptions column={1} size="small">
-            <Descriptions.Item label={t('salesDocuments.field.subtotal')}>Rp {formatCurrency(document.subtotal_amount || 0)}</Descriptions.Item>
-            <Descriptions.Item label={t('salesDocuments.field.documentDiscount')}>Rp {formatCurrency(document.discount_amount || 0)}</Descriptions.Item>
-            <Descriptions.Item label={t('salesDocuments.field.tax')}>Rp {formatCurrency(document.tax_amount || 0)}</Descriptions.Item>
-            <Descriptions.Item label={t('salesDocuments.field.total')}>Rp {formatCurrency(document.total_amount || 0)}</Descriptions.Item>
-            <Descriptions.Item label={t('salesDocuments.field.paidAmount')}>Rp {formatCurrency(document.paid_amount || 0)}</Descriptions.Item>
-          </Descriptions>
+        <Card size="small" className="ml-auto w-full max-w-md">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-gray-500">{t('salesDocuments.field.subtotal')}</span>
+              <span className="font-medium text-gray-900">Rp {formatCurrency(document.subtotal_amount || 0)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-gray-500">{t('salesDocuments.field.documentDiscount')}</span>
+              <span className="font-medium text-gray-900">Rp {formatCurrency(document.discount_amount || 0)}</span>
+            </div>
+            {config.behavior.hasTax && (
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className="text-gray-500">{t('salesDocuments.field.tax')}</span>
+                <span className="font-medium text-gray-900">Rp {formatCurrency(document.tax_amount || 0)}</span>
+              </div>
+            )}
+            <div className="flex items-end justify-between gap-4 border-t border-gray-200 pt-3">
+              <span className="text-sm font-semibold text-gray-700">{t('salesDocuments.field.total')}</span>
+              <span className="text-xl font-bold text-gray-950">Rp {formatCurrency(document.total_amount || 0)}</span>
+            </div>
+            {config.behavior.hasPaymentStatus && (
+              <div className="flex items-center justify-between gap-4 rounded border border-green-100 bg-green-50 px-3 py-2 text-sm">
+                <span className="font-medium text-green-700">{t('salesDocuments.field.paidAmount')}</span>
+                <span className="font-semibold text-green-800">Rp {formatCurrency(document.paid_amount || 0)}</span>
+              </div>
+            )}
+          </div>
         </Card>
       )}
     </div>
