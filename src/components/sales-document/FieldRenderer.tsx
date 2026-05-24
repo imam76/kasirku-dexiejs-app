@@ -70,8 +70,7 @@ export const FieldRenderer = ({
           render={({ field }) => (
             <Select
               allowClear
-              showSearch
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
               placeholder={t('salesDocuments.placeholder.customer')}
               value={field.value as string | undefined}
               onBlur={field.onBlur}
@@ -108,8 +107,7 @@ export const FieldRenderer = ({
           render={({ field }) => (
             <Select
               allowClear
-              showSearch
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
               placeholder={t('salesDocuments.placeholder.tax')}
               value={field.value as string | undefined}
               onBlur={field.onBlur}
@@ -135,8 +133,7 @@ export const FieldRenderer = ({
           render={({ field }) => (
             <Select
               allowClear
-              showSearch
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
               placeholder={t('salesDocuments.placeholder.department')}
               value={field.value as string | undefined}
               onBlur={field.onBlur}
@@ -162,8 +159,7 @@ export const FieldRenderer = ({
           render={({ field }) => (
             <Select
               allowClear
-              showSearch
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
               placeholder={t('salesDocuments.placeholder.project')}
               value={field.value as string | undefined}
               onBlur={field.onBlur}
