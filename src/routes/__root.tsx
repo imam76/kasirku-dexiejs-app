@@ -182,7 +182,14 @@ const RootLayout = () => {
     },
     { to: '/shopping-note', label: t('nav.shoppingNote'), icon: ClipboardList },
     { to: '/history', label: t('nav.history'), icon: History },
-    { to: '/finance', label: t('nav.finance'), icon: Banknote },
+    {
+      label: t('nav.finance'),
+      icon: Banknote,
+      key: 'finance-group',
+      children: [
+        { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
+      ],
+    },
     {
       label: t('nav.reports'),
       icon: FileText,
@@ -257,9 +264,12 @@ const RootLayout = () => {
 
         return true
       })
-  const selectedKey = location.pathname === '/master-data'
-    ? 'master-data-group'
-    : selectedLink ? getNavLeafKey(selectedLink) : '/'
+  const selectedKey = (() => {
+    if (location.pathname === '/master-data') return 'master-data-group'
+    if (location.pathname === '/finance') return 'finance-group'
+
+    return selectedLink ? getNavLeafKey(selectedLink) : '/'
+  })()
 
   const openKeys = filteredNavLinks
     .filter(isNavGroup)

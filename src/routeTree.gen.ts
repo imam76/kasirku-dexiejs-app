@@ -14,13 +14,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ReportIndexRouteImport } from './routes/report/index'
 import { Route as MasterDataIndexRouteImport } from './routes/master-data/index'
+import { Route as FinanceIndexRouteImport } from './routes/finance/index'
 
 const TransactionLazyRouteImport = createFileRoute('/transaction')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
 const SettingsLazyRouteImport = createFileRoute('/settings')()
 const ProfitLazyRouteImport = createFileRoute('/profit')()
 const HistoryLazyRouteImport = createFileRoute('/history')()
-const FinanceLazyRouteImport = createFileRoute('/finance')()
 const SplatLazyRouteImport = createFileRoute('/$')()
 const ReportTransactionDetailReportLazyRouteImport = createFileRoute(
   '/report/transaction-detail-report',
@@ -39,6 +39,7 @@ const MasterDataPromosLazyRouteImport = createFileRoute('/master-data/promos')()
 const MasterDataProductsLazyRouteImport = createFileRoute(
   '/master-data/products',
 )()
+const FinanceCashFlowLazyRouteImport = createFileRoute('/finance/cash-flow')()
 
 const TransactionLazyRoute = TransactionLazyRouteImport.update({
   id: '/transaction',
@@ -65,11 +66,6 @@ const HistoryLazyRoute = HistoryLazyRouteImport.update({
   path: '/history',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/history.lazy').then((d) => d.Route))
-const FinanceLazyRoute = FinanceLazyRouteImport.update({
-  id: '/finance',
-  path: '/finance',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/finance.lazy').then((d) => d.Route))
 const SplatLazyRoute = SplatLazyRouteImport.update({
   id: '/$',
   path: '/$',
@@ -88,6 +84,11 @@ const ReportIndexRoute = ReportIndexRouteImport.update({
 const MasterDataIndexRoute = MasterDataIndexRouteImport.update({
   id: '/master-data/',
   path: '/master-data/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceIndexRoute = FinanceIndexRouteImport.update({
+  id: '/finance/',
+  path: '/finance/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportTransactionDetailReportLazyRoute =
@@ -143,16 +144,23 @@ const MasterDataProductsLazyRoute = MasterDataProductsLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/master-data/products.lazy').then((d) => d.Route),
 )
+const FinanceCashFlowLazyRoute = FinanceCashFlowLazyRouteImport.update({
+  id: '/finance/cash-flow',
+  path: '/finance/cash-flow',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/finance/cash-flow.lazy').then((d) => d.Route),
+)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
-  '/finance': typeof FinanceLazyRoute
   '/history': typeof HistoryLazyRoute
   '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
@@ -160,18 +168,19 @@ export interface FileRoutesByFullPath {
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
+  '/finance/': typeof FinanceIndexRoute
   '/master-data/': typeof MasterDataIndexRoute
   '/report/': typeof ReportIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
-  '/finance': typeof FinanceLazyRoute
   '/history': typeof HistoryLazyRoute
   '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
@@ -179,6 +188,7 @@ export interface FileRoutesByTo {
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
+  '/finance': typeof FinanceIndexRoute
   '/master-data': typeof MasterDataIndexRoute
   '/report': typeof ReportIndexRoute
 }
@@ -186,12 +196,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
-  '/finance': typeof FinanceLazyRoute
   '/history': typeof HistoryLazyRoute
   '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
@@ -199,6 +209,7 @@ export interface FileRoutesById {
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
+  '/finance/': typeof FinanceIndexRoute
   '/master-data/': typeof MasterDataIndexRoute
   '/report/': typeof ReportIndexRoute
 }
@@ -207,12 +218,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$'
-    | '/finance'
     | '/history'
     | '/profit'
     | '/settings'
     | '/shopping-note'
     | '/transaction'
+    | '/finance/cash-flow'
     | '/master-data/products'
     | '/master-data/promos'
     | '/master-data/units'
@@ -220,18 +231,19 @@ export interface FileRouteTypes {
     | '/report/purchase-report'
     | '/report/sales-report'
     | '/report/transaction-detail-report'
+    | '/finance/'
     | '/master-data/'
     | '/report/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$'
-    | '/finance'
     | '/history'
     | '/profit'
     | '/settings'
     | '/shopping-note'
     | '/transaction'
+    | '/finance/cash-flow'
     | '/master-data/products'
     | '/master-data/promos'
     | '/master-data/units'
@@ -239,18 +251,19 @@ export interface FileRouteTypes {
     | '/report/purchase-report'
     | '/report/sales-report'
     | '/report/transaction-detail-report'
+    | '/finance'
     | '/master-data'
     | '/report'
   id:
     | '__root__'
     | '/'
     | '/$'
-    | '/finance'
     | '/history'
     | '/profit'
     | '/settings'
     | '/shopping-note'
     | '/transaction'
+    | '/finance/cash-flow'
     | '/master-data/products'
     | '/master-data/promos'
     | '/master-data/units'
@@ -258,6 +271,7 @@ export interface FileRouteTypes {
     | '/report/purchase-report'
     | '/report/sales-report'
     | '/report/transaction-detail-report'
+    | '/finance/'
     | '/master-data/'
     | '/report/'
   fileRoutesById: FileRoutesById
@@ -265,12 +279,12 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatLazyRoute: typeof SplatLazyRoute
-  FinanceLazyRoute: typeof FinanceLazyRoute
   HistoryLazyRoute: typeof HistoryLazyRoute
   ProfitLazyRoute: typeof ProfitLazyRoute
   SettingsLazyRoute: typeof SettingsLazyRoute
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
   TransactionLazyRoute: typeof TransactionLazyRoute
+  FinanceCashFlowLazyRoute: typeof FinanceCashFlowLazyRoute
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
   MasterDataPromosLazyRoute: typeof MasterDataPromosLazyRoute
   MasterDataUnitsLazyRoute: typeof MasterDataUnitsLazyRoute
@@ -278,6 +292,7 @@ export interface RootRouteChildren {
   ReportPurchaseReportLazyRoute: typeof ReportPurchaseReportLazyRoute
   ReportSalesReportLazyRoute: typeof ReportSalesReportLazyRoute
   ReportTransactionDetailReportLazyRoute: typeof ReportTransactionDetailReportLazyRoute
+  FinanceIndexRoute: typeof FinanceIndexRoute
   MasterDataIndexRoute: typeof MasterDataIndexRoute
   ReportIndexRoute: typeof ReportIndexRoute
 }
@@ -319,13 +334,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HistoryLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/finance': {
-      id: '/finance'
-      path: '/finance'
-      fullPath: '/finance'
-      preLoaderRoute: typeof FinanceLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/$': {
       id: '/$'
       path: '/$'
@@ -352,6 +360,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data'
       fullPath: '/master-data/'
       preLoaderRoute: typeof MasterDataIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance/': {
+      id: '/finance/'
+      path: '/finance'
+      fullPath: '/finance/'
+      preLoaderRoute: typeof FinanceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report/transaction-detail-report': {
@@ -403,18 +418,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MasterDataProductsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/cash-flow': {
+      id: '/finance/cash-flow'
+      path: '/finance/cash-flow'
+      fullPath: '/finance/cash-flow'
+      preLoaderRoute: typeof FinanceCashFlowLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatLazyRoute: SplatLazyRoute,
-  FinanceLazyRoute: FinanceLazyRoute,
   HistoryLazyRoute: HistoryLazyRoute,
   ProfitLazyRoute: ProfitLazyRoute,
   SettingsLazyRoute: SettingsLazyRoute,
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
   TransactionLazyRoute: TransactionLazyRoute,
+  FinanceCashFlowLazyRoute: FinanceCashFlowLazyRoute,
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
   MasterDataPromosLazyRoute: MasterDataPromosLazyRoute,
   MasterDataUnitsLazyRoute: MasterDataUnitsLazyRoute,
@@ -423,6 +445,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportSalesReportLazyRoute: ReportSalesReportLazyRoute,
   ReportTransactionDetailReportLazyRoute:
     ReportTransactionDetailReportLazyRoute,
+  FinanceIndexRoute: FinanceIndexRoute,
   MasterDataIndexRoute: MasterDataIndexRoute,
   ReportIndexRoute: ReportIndexRoute,
 }
