@@ -5,6 +5,13 @@ export const salesOrderConfig: SalesDocumentConfig = {
   title: 'Sales Order',
   titleKey: 'salesDocuments.type.salesOrder',
   numberPrefix: 'SO',
+  theme: {
+    accent: '#2563EB',
+    accentDark: '#1D4ED8',
+    accentSoft: '#DBEAFE',
+    accentSubtle: '#EFF6FF',
+    accentShadow: 'rgba(37, 99, 235, .28)',
+  },
   headerFields: [
     { name: 'contact_id', labelKey: 'salesDocuments.field.customer', type: 'contact' },
     { name: 'customer_name', labelKey: 'salesDocuments.field.customerName', type: 'text', required: true },

@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Input, InputNumber, Modal, Space, Table, Tag, Typography } from 'antd';
+import { Button, Input, InputNumber, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
 import { AlertTriangle } from 'lucide-react';
-import type { ColumnsType } from 'antd/es/table';
 import { getSalesDocumentConfig, SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
@@ -19,17 +18,17 @@ import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from
 
 const { Title, Text } = Typography;
 
-const statusColor: Record<SalesDocumentStatus, string> = {
-  DRAFT: 'gold',
-  ISSUED: 'blue',
-  CONVERTED: 'green',
-  VOIDED: 'red',
+const statusColor: Record<SalesDocumentStatus, { background: string; color: string; border: string }> = {
+  DRAFT: { background: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  ISSUED: { background: '#DBEAFE', color: '#1D4ED8', border: '#BFDBFE' },
+  CONVERTED: { background: '#DCFCE7', color: '#166534', border: '#BBF7D0' },
+  VOIDED: { background: '#FEE2E2', color: '#991B1B', border: '#FECACA' },
 };
 
-const paymentStatusColor: Record<SalesInvoicePaymentStatus, string> = {
-  UNPAID: 'red',
-  PARTIAL: 'gold',
-  PAID: 'green',
+const paymentStatusColor: Record<SalesInvoicePaymentStatus, { background: string; color: string; border: string }> = {
+  UNPAID: { background: '#FEE2E2', color: '#991B1B', border: '#FECACA' },
+  PARTIAL: { background: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  PAID: { background: '#DCFCE7', color: '#166534', border: '#BBF7D0' },
 };
 
 interface SalesDocumentDetailProps {
@@ -74,75 +73,31 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     return <div className="p-6">{t('salesDocuments.notFound')}</div>;
   }
 
-  const columns: ColumnsType<SalesDocumentItem> = [
-    { title: t('salesDocuments.field.product'), dataIndex: 'product_name' },
-    { title: t('salesDocuments.field.quantity'), dataIndex: 'quantity', width: 100 },
-    { title: t('salesDocuments.field.deliveredQuantity'), dataIndex: 'delivered_quantity', width: 100, render: (value) => value ?? '-' },
-    { title: t('salesDocuments.field.unit'), dataIndex: 'unit', width: 100 },
-    ...(config.behavior.hasPricing ? [
-      { title: t('salesDocuments.field.price'), dataIndex: 'price', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
-      { title: t('salesDocuments.field.discount'), dataIndex: 'discount_amount', width: 120, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
-      { title: t('salesDocuments.field.tax'), dataIndex: 'tax_amount', width: 120, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
-      { title: t('salesDocuments.field.subtotal'), dataIndex: 'subtotal', width: 140, render: (value: number) => `Rp ${formatCurrency(value || 0)}` },
-    ] : []),
-  ];
   const canEdit = document.status === 'DRAFT';
   const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
     !(document.type === 'SALES_INVOICE' && document.finance_transaction_id);
   const canRecordPayment = config.behavior.hasPaymentStatus && document.status === 'ISSUED';
-  const statusTag = (
-    <Tag className="m-0 px-2.5 py-0.5 text-xs font-semibold" color={statusColor[document.status]}>
+  const balanceDue = Math.max(0, Number(document.total_amount || 0) - Number(document.paid_amount || 0));
+  const statusStyle = statusColor[document.status];
+  const paymentStyle = document.payment_status ? paymentStatusColor[document.payment_status] : undefined;
+  const statusBadge = (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[.05em]"
+      style={statusStyle}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusStyle.color }} />
       {t(salesDocumentStatusLabelKeys[document.status])}
-    </Tag>
+    </span>
   );
-  const paymentStatusTag = document.payment_status ? (
-    <Tag className="m-0 px-2.5 py-0.5 text-xs font-semibold" color={paymentStatusColor[document.payment_status]}>
+  const paymentStatusBadge = document.payment_status && paymentStyle ? (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[.05em]"
+      style={paymentStyle}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: paymentStyle.color }} />
       {t(salesInvoicePaymentStatusLabelKeys[document.payment_status])}
-    </Tag>
+    </span>
   ) : '-';
-  const detailItems = [
-    { key: 'customer', label: t('salesDocuments.field.customer'), value: document.customer_name },
-    { key: 'status', label: t('salesDocuments.table.status'), value: statusTag },
-    { key: 'date', label: t('salesDocuments.table.date'), value: formatDate(document.document_date) },
-    ...(config.behavior.hasPaymentStatus ? [{
-      key: 'paymentStatus',
-      label: t('salesDocuments.field.paymentStatus'),
-      value: paymentStatusTag,
-      highlight: document.payment_status === 'UNPAID',
-    }] : []),
-    ...(config.behavior.hasDueDate ? [{
-      key: 'dueDate',
-      label: t('salesDocuments.field.dueDate'),
-      value: document.due_date ? formatDate(document.due_date) : '-',
-    }] : []),
-    ...(config.behavior.allowDepartmentPicker ? [{
-      key: 'department',
-      label: t('salesDocuments.field.department'),
-      value: document.department_name ?? '-',
-    }] : []),
-    ...(config.behavior.allowProjectPicker ? [{
-      key: 'project',
-      label: t('salesDocuments.field.project'),
-      value: document.project_name ?? '-',
-    }] : []),
-    ...(config.behavior.hasTax ? [{
-      key: 'tax',
-      label: t('salesDocuments.field.tax'),
-      value: document.tax_name ? `${document.tax_name} (${document.tax_rate}%)` : '-',
-    }] : []),
-    ...(document.status === 'VOIDED' ? [
-      {
-        key: 'voidedAt',
-        label: t('salesDocuments.field.voidedAt'),
-        value: document.voided_at ? formatDate(document.voided_at) : '-',
-      },
-      {
-        key: 'voidReason',
-        label: t('salesDocuments.field.voidReason'),
-        value: document.void_reason || '-',
-      },
-    ] : []),
-  ];
 
   const handleVoid = () => {
     let voidReason = '';
@@ -178,8 +133,8 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   };
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div className="p-3 sm:p-4 md:p-6">
+      <div className="mx-auto mb-4 flex max-w-[900px] flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <Title level={2} style={{ margin: 0 }}>{document.document_number}</Title>
           <Text type="secondary">{t(config.titleKey)}</Text>
@@ -233,84 +188,283 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
         </Space>
       </div>
 
-      <Card>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {detailItems.map((item) => (
+      <div
+        className="mx-auto max-w-[900px] overflow-hidden rounded-2xl bg-white px-5 py-7 shadow-[0_8px_40px_rgba(0,0,0,.12),0_2px_8px_rgba(0,0,0,.06)] sm:px-8 md:px-12 md:py-11"
+      >
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+          <div>
             <div
-              key={item.key}
-              className={`min-h-20 rounded border px-4 py-3 ${
-                item.highlight ? 'border-red-200 bg-red-50/70' : 'border-gray-100 bg-gray-50/60'
-              }`}
+              className="flex h-[62px] w-[62px] items-center justify-center rounded-full text-2xl font-extrabold text-white shadow-md"
+              style={{ backgroundColor: config.theme.accent, boxShadow: `0 4px 12px ${config.theme.accentShadow}` }}
             >
-              <div className="text-xs font-medium uppercase text-gray-500">{item.label}</div>
-              <div className="mt-2 break-words text-sm font-semibold text-gray-900">{item.value}</div>
+              {config.numberPrefix}
             </div>
-          ))}
-        </div>
-        <div className="mt-4 border-t border-gray-100 pt-4">
-          <div className="text-xs font-medium uppercase text-gray-500">{t('salesDocuments.field.notes')}</div>
-          <div className="mt-2 min-h-10 whitespace-pre-wrap rounded border border-gray-100 bg-white px-3 py-2 text-sm text-gray-700">
-            {document.notes || '-'}
+            <div className="mt-3">
+              <div className="text-[15px] font-bold" style={{ color: config.theme.accent }}>
+                {t(config.titleKey)}
+              </div>
+              <div className="mt-1 text-xs leading-6 text-gray-500">
+                {document.source_document_number ? `${document.source_document_number}` : document.document_number}
+              </div>
+            </div>
           </div>
-        </div>
-      </Card>
 
-      {canRecordPayment && (
-        <Card size="small" title={t('salesDocuments.invoicePayment')}>
-          <Space wrap>
-            <InputNumber
-              min={0}
-              max={document.total_amount}
-              value={paidAmount}
-              onChange={(value) => setPaidAmount(Number(value || 0))}
-            />
-            <Button
-              type="primary"
-              loading={isMutating}
-              disabled={document.status === 'VOIDED'}
-              onClick={async () => {
-                await payInvoice({ id: document.id, input: { paid_amount: paidAmount } });
-                await loadDocument();
-              }}
-            >
-              {t('salesDocuments.recordPayment')}
-            </Button>
-          </Space>
-        </Card>
-      )}
-
-      <Table rowKey="id" columns={columns} dataSource={items} pagination={false} scroll={{ x: true }} />
-
-      {config.behavior.hasPricing && (
-        <Card size="small" className="ml-auto w-full max-w-md">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <span className="text-gray-500">{t('salesDocuments.field.subtotal')}</span>
-              <span className="font-medium text-gray-900">Rp {formatCurrency(document.subtotal_amount || 0)}</span>
+          <div className="text-left sm:text-right">
+            <div className="text-[32px] font-extrabold uppercase leading-none tracking-[.04em]" style={{ color: config.theme.accent }}>
+              {t(config.titleKey).replace(/^Sales\s+/i, '')}
             </div>
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <span className="text-gray-500">{t('salesDocuments.field.documentDiscount')}</span>
-              <span className="font-medium text-gray-900">Rp {formatCurrency(document.discount_amount || 0)}</span>
+            <div className="mt-2 text-sm font-medium text-gray-700">
+              <span className="text-gray-400">#</span>
+              {' '}
+              {document.document_number}
             </div>
-            {config.behavior.hasTax && (
-              <div className="flex items-center justify-between gap-4 text-sm">
-                <span className="text-gray-500">{t('salesDocuments.field.tax')}</span>
-                <span className="font-medium text-gray-900">Rp {formatCurrency(document.tax_amount || 0)}</span>
+            {config.behavior.hasPricing ? (
+              <div className="mt-5">
+                <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">
+                  {config.behavior.hasPaymentStatus ? 'Balance Due' : t('salesDocuments.field.total')}
+                </div>
+                <div className="mt-1 text-2xl font-extrabold text-gray-950">
+                  Rp {formatCurrency(config.behavior.hasPaymentStatus ? balanceDue : document.total_amount || 0)}
+                </div>
               </div>
-            )}
-            <div className="flex items-end justify-between gap-4 border-t border-gray-200 pt-3">
-              <span className="text-sm font-semibold text-gray-700">{t('salesDocuments.field.total')}</span>
-              <span className="text-xl font-bold text-gray-950">Rp {formatCurrency(document.total_amount || 0)}</span>
-            </div>
-            {config.behavior.hasPaymentStatus && (
-              <div className="flex items-center justify-between gap-4 rounded border border-green-100 bg-green-50 px-3 py-2 text-sm">
-                <span className="font-medium text-green-700">{t('salesDocuments.field.paidAmount')}</span>
-                <span className="font-semibold text-green-800">Rp {formatCurrency(document.paid_amount || 0)}</span>
-              </div>
+            ) : (
+              <div className="mt-5">{statusBadge}</div>
             )}
           </div>
-        </Card>
-      )}
+        </div>
+
+        <div className="my-6 h-px bg-gray-200" />
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <div>
+            <div className="text-[10.5px] font-bold uppercase tracking-[.08em] text-gray-400">Bill To</div>
+            <div className="mt-2 text-sm font-bold" style={{ color: config.theme.accent }}>
+              {document.customer_company_name || document.customer_name}
+            </div>
+            <div className="mt-1 whitespace-pre-wrap text-[12.5px] leading-6 text-gray-500">
+              {document.customer_name}
+              {document.customer_address ? (
+                <>
+                  <br />
+                  {document.customer_address}
+                </>
+              ) : null}
+              {document.customer_phone ? (
+                <>
+                  <br />
+                  {document.customer_phone}
+                </>
+              ) : null}
+              {document.customer_email ? (
+                <>
+                  <br />
+                  {document.customer_email}
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-3 md:text-right">
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-[.08em] text-gray-400">
+                {t('salesDocuments.table.date')}
+              </div>
+              <div className="mt-1 text-[13px] font-medium text-gray-700">{formatDate(document.document_date)}</div>
+            </div>
+            {(document.due_date || document.expired_at) && (
+              <div>
+                <div className="text-[10.5px] font-bold uppercase tracking-[.08em] text-gray-400">
+                  {document.due_date ? t('salesDocuments.field.dueDate') : t('salesDocuments.field.validUntil')}
+                </div>
+                <div className="mt-1 text-[13px] font-medium text-gray-700">
+                  {formatDate(document.due_date || document.expired_at || document.document_date)}
+                </div>
+              </div>
+            )}
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-[.08em] text-gray-400">
+                {t('salesDocuments.table.status')}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 md:justify-end">
+                {statusBadge}
+                {config.behavior.hasPaymentStatus && paymentStatusBadge}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          {config.behavior.allowProjectPicker && (
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">{t('salesDocuments.field.project')}</div>
+              <div className="mt-1 text-[13px] font-medium text-gray-700">{document.project_name || '-'}</div>
+            </div>
+          )}
+          {config.behavior.allowDepartmentPicker && (
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">{t('salesDocuments.field.department')}</div>
+              <div className="mt-1 text-[13px] font-medium text-gray-700">{document.department_name || '-'}</div>
+            </div>
+          )}
+          {(document.warehouse_name || config.type === 'SALES_DELIVERY' || config.type === 'SALES_ORDER') && (
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">{t('salesDocuments.field.warehouse')}</div>
+              <div className="mt-1 text-[13px] font-medium text-gray-700">{document.warehouse_name || '-'}</div>
+            </div>
+          )}
+          {config.behavior.hasTax && (
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">{t('salesDocuments.field.tax')}</div>
+              <div className="mt-1 text-[13px] font-medium text-gray-700">
+                {document.tax_name ? `${document.tax_name} (${document.tax_rate}%)` : '-'}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {canRecordPayment && (
+          <div className="mt-6 rounded-lg border border-gray-100 px-4 py-3" style={{ backgroundColor: config.theme.accentSubtle }}>
+            <Space wrap>
+              <InputNumber
+                min={0}
+                max={document.total_amount}
+                value={paidAmount}
+                onChange={(value) => setPaidAmount(Number(value || 0))}
+              />
+              <Button
+                type="primary"
+                loading={isMutating}
+                disabled={document.status === 'VOIDED'}
+                style={{ backgroundColor: config.theme.accent, borderColor: config.theme.accent }}
+                onClick={async () => {
+                  await payInvoice({ id: document.id, input: { paid_amount: paidAmount } });
+                  await loadDocument();
+                }}
+              >
+                {t('salesDocuments.recordPayment')}
+              </Button>
+            </Space>
+          </div>
+        )}
+
+        <div className="mt-7 overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-[13px]">
+            <thead>
+              <tr style={{ backgroundColor: config.theme.accent }}>
+                <th className="w-10 rounded-l-md px-3 py-3 text-center text-[11px] font-bold uppercase tracking-[.06em] text-white">#</th>
+                <th className="px-3 py-3 text-left text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                  {t('salesDocuments.field.product')}
+                </th>
+                <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                  {t('salesDocuments.field.quantity')}
+                </th>
+                {config.type === 'SALES_DELIVERY' && (
+                  <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                    {t('salesDocuments.field.deliveredQuantity')}
+                  </th>
+                )}
+                {config.behavior.hasPricing && (
+                  <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                    {t('salesDocuments.field.price')}
+                  </th>
+                )}
+                <th className={`${config.behavior.hasPricing ? '' : 'rounded-r-md'} px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white`}>
+                  {t('salesDocuments.field.unit')}
+                </th>
+                {config.behavior.hasPricing && (
+                  <th className="rounded-r-md px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                    {t('salesDocuments.field.subtotal')}
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, index) => (
+                <tr key={item.id} className="border-b border-gray-100 last:border-b-0">
+                  <td className="px-3 py-3 text-center align-top text-xs font-semibold text-gray-400">{index + 1}</td>
+                  <td className="px-3 py-3 align-top">
+                    <div className="font-semibold text-gray-950">{item.product_name}</div>
+                    <div className="mt-1 text-[11.5px] leading-5 text-gray-400">
+                      {item.sku ? `${item.sku} · ` : ''}
+                      {item.quantity} {item.unit}
+                      {item.delivered_quantity !== undefined ? ` · ${t('salesDocuments.field.deliveredQuantity')}: ${item.delivered_quantity}` : ''}
+                      {config.behavior.hasPricing ? ` · ${t('salesDocuments.field.discount')}: Rp ${formatCurrency(item.discount_amount || 0)}` : ''}
+                      {config.behavior.hasTax ? ` · ${t('salesDocuments.field.tax')}: Rp ${formatCurrency(item.tax_amount || 0)}` : ''}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-right align-top text-gray-700">{item.quantity}</td>
+                  {config.type === 'SALES_DELIVERY' && (
+                    <td className="px-3 py-3 text-right align-top text-gray-700">{item.delivered_quantity ?? '-'}</td>
+                  )}
+                  {config.behavior.hasPricing && (
+                    <td className="px-3 py-3 text-right align-top text-gray-700">Rp {formatCurrency(item.price || 0)}</td>
+                  )}
+                  <td className="px-3 py-3 text-right align-top text-gray-700">{item.unit}</td>
+                  {config.behavior.hasPricing && (
+                    <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
+                      Rp {formatCurrency(item.subtotal || 0)}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {config.behavior.hasPricing && (
+          <div className="mt-5 flex justify-end">
+            <div className="w-full max-w-[280px]">
+              <div className="flex justify-between py-1.5 text-[13px]">
+                <span className="text-gray-500">{t('salesDocuments.field.subtotal')}</span>
+                <span className="font-medium text-gray-700">Rp {formatCurrency(document.subtotal_amount || 0)}</span>
+              </div>
+              <div className="flex justify-between py-1.5 text-[13px]">
+                <span className="text-gray-500">{t('salesDocuments.field.documentDiscount')}</span>
+                <span className="font-medium text-gray-400">Rp {formatCurrency(document.discount_amount || 0)}</span>
+              </div>
+              {config.behavior.hasTax && (
+                <div className="flex justify-between py-1.5 text-[13px]">
+                  <span className="text-gray-500">{t('salesDocuments.field.tax')}</span>
+                  <span className="font-medium text-gray-400">Rp {formatCurrency(document.tax_amount || 0)}</span>
+                </div>
+              )}
+              {config.behavior.hasPaymentStatus && (
+                <div className="flex justify-between py-1.5 text-[13px]">
+                  <span className="text-gray-500">{t('salesDocuments.field.paidAmount')}</span>
+                  <span className="font-medium text-green-700">Rp {formatCurrency(document.paid_amount || 0)}</span>
+                </div>
+              )}
+              <div className="my-2 h-px bg-gray-200" />
+              <div className="flex justify-between rounded-lg px-3.5 py-3" style={{ backgroundColor: config.theme.accent }}>
+                <span className="text-sm font-bold text-white/85">{t('salesDocuments.field.total')}</span>
+                <span className="text-[17px] font-extrabold text-white">Rp {formatCurrency(document.total_amount || 0)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-9 flex flex-col gap-6 border-t border-gray-100 pt-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-[10.5px] font-bold uppercase tracking-[.07em] text-gray-400">{t('salesDocuments.field.notes')}</div>
+            <div className="mt-1 whitespace-pre-wrap text-[12.5px] leading-6 text-gray-500">{document.notes || '-'}</div>
+          </div>
+          <div className="text-left sm:text-right">
+            {document.status === 'VOIDED' && (
+              <div className="mb-3 text-[12.5px] leading-6 text-red-600">
+                {document.voided_at ? formatDate(document.voided_at) : '-'}
+                <br />
+                {document.void_reason || '-'}
+              </div>
+            )}
+            <div
+              className="inline-block rotate-[-6deg] rounded-lg border-[3px] px-4 py-1 text-[22px] font-extrabold uppercase tracking-[.08em]"
+              style={{ borderColor: statusStyle.border, color: statusStyle.color }}
+            >
+              {t(salesDocumentStatusLabelKeys[document.status])}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

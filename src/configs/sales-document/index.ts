@@ -33,11 +33,20 @@ export interface SalesDocumentSummaryFieldConfig {
   labelKey: TranslationKey;
 }
 
+export interface SalesDocumentThemeConfig {
+  accent: string;
+  accentDark: string;
+  accentSoft: string;
+  accentSubtle: string;
+  accentShadow: string;
+}
+
 export interface SalesDocumentConfig {
   type: SalesDocumentType;
   title: string;
   titleKey: TranslationKey;
   numberPrefix: string;
+  theme: SalesDocumentThemeConfig;
   headerFields: SalesDocumentFieldConfig[];
   lineItemColumns: SalesDocumentLineColumnConfig[];
   summaryFields: SalesDocumentSummaryFieldConfig[];

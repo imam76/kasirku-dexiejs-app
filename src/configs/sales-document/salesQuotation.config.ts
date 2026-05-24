@@ -5,6 +5,13 @@ export const salesQuotationConfig: SalesDocumentConfig = {
   title: 'Sales Quotation',
   titleKey: 'salesDocuments.type.salesQuotation',
   numberPrefix: 'SQ',
+  theme: {
+    accent: '#7C3AED',
+    accentDark: '#5B21B6',
+    accentSoft: '#F3E8FF',
+    accentSubtle: '#FAF5FF',
+    accentShadow: 'rgba(124, 58, 237, .28)',
+  },
   headerFields: [
     { name: 'contact_id', labelKey: 'salesDocuments.field.customer', type: 'contact' },
     { name: 'customer_name', labelKey: 'salesDocuments.field.customerName', type: 'text', required: true },

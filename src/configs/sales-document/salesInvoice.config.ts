@@ -5,6 +5,13 @@ export const salesInvoiceConfig: SalesDocumentConfig = {
   title: 'Sales Invoice',
   titleKey: 'salesDocuments.type.salesInvoice',
   numberPrefix: 'SI',
+  theme: {
+    accent: '#C84B11',
+    accentDark: '#9A3412',
+    accentSoft: '#FFEDD5',
+    accentSubtle: '#FFF7ED',
+    accentShadow: 'rgba(200, 75, 17, .32)',
+  },
   headerFields: [
     { name: 'contact_id', labelKey: 'salesDocuments.field.customer', type: 'contact' },
     { name: 'customer_name', labelKey: 'salesDocuments.field.customerName', type: 'text', required: true },

@@ -5,6 +5,13 @@ export const salesDeliveryConfig: SalesDocumentConfig = {
   title: 'Sales Delivery',
   titleKey: 'salesDocuments.type.salesDelivery',
   numberPrefix: 'SD',
+  theme: {
+    accent: '#059669',
+    accentDark: '#047857',
+    accentSoft: '#D1FAE5',
+    accentSubtle: '#ECFDF5',
+    accentShadow: 'rgba(5, 150, 105, .28)',
+  },
   headerFields: [
     { name: 'contact_id', labelKey: 'salesDocuments.field.customer', type: 'contact' },
     { name: 'customer_name', labelKey: 'salesDocuments.field.customerName', type: 'text', required: true },
