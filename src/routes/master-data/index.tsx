@@ -1,4 +1,5 @@
 import {
+  ContactsOutlined,
   DollarOutlined,
   ProductOutlined,
   SettingOutlined,
@@ -30,6 +31,7 @@ function MasterData() {
   const menuItems: MasterDataMenuItem[] = [
     { to: '/master-data/products', label: t('nav.product'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.menu.stockDesc'), tour: 'dashboard-stock' },
     { to: '/master-data/promos', label: t('nav.promos'), icon: DollarOutlined, color: 'text-rose-600', desc: t('home.promosDesc') },
+    { to: '/master-data/contacts', label: t('nav.contacts'), icon: ContactsOutlined, color: 'text-amber-600', desc: t('home.contactsDesc') },
     { to: '/master-data/units', hash: 'conversions', label: t('nav.units'), icon: SwapOutlined, color: 'text-cyan-600', desc: t('home.unitConversionDesc') },
     { to: '/master-data/units', hash: 'units', label: t('nav.unit'), icon: SettingOutlined, color: 'text-indigo-600', desc: t('home.unitDesc') },
   ].filter((item) => canAccessPath(currentUser?.role, item.to))

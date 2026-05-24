@@ -37,6 +37,7 @@ import {
   SettingsIcon,
   ShoppingCart,
   Sun,
+  Users,
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -176,6 +177,7 @@ const RootLayout = () => {
       children: [
         { to: '/master-data/products', label: t('nav.product'), icon: Box },
         { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
+        { to: '/master-data/contacts', label: t('nav.contacts'), icon: Users },
         { to: '/master-data/units', label: t('nav.units'), icon: Scale, key: '/master-data/units#conversions', hash: 'conversions' },
         { to: '/master-data/units', label: t('nav.unit'), icon: Scale, key: '/master-data/units#units', hash: 'units' },
       ],

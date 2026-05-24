@@ -10,6 +10,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/products': 'STOCK_ACCESS',
   '/master-data/units': 'STOCK_ACCESS',
   '/master-data/promos': 'SETTINGS_ACCESS',
+  '/master-data/contacts': 'SETTINGS_ACCESS',
   '/shopping-note': 'STOCK_PURCHASE_ACCESS',
   '/finance': 'FINANCE_ACCESS',
   '/finance/cash-flow': 'FINANCE_ACCESS',

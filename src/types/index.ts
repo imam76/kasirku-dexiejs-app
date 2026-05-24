@@ -72,6 +72,7 @@ export type TransactionStatus = 'COMPLETED' | 'VOIDED';
 export type UserRole = 'OWNER' | 'ADMIN' | 'KASIR' | 'GUDANG';
 export type PromoType = 'percent' | 'fixed';
 export type PromoAppliesTo = 'all' | 'product' | 'category';
+export type ContactType = 'CUSTOMER' | 'SUPPLIER' | 'CUSTOMER_SUPPLIER' | 'OTHER';
 
 export type Permission =
   | 'TRANSACTION_VOID'
@@ -132,6 +133,21 @@ export interface Promo {
   active: boolean;
   priority: number;
   created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Contact {
+  id: string;
+  name: string;
+  contact_type: ContactType;
+  phone?: string;
+  email?: string;
+  address?: string;
+  company_name?: string;
+  tax_number?: string;
+  notes?: string;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
