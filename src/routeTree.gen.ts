@@ -39,6 +39,9 @@ const MasterDataPromosLazyRouteImport = createFileRoute('/master-data/promos')()
 const MasterDataProductsLazyRouteImport = createFileRoute(
   '/master-data/products',
 )()
+const MasterDataDepartmentsLazyRouteImport = createFileRoute(
+  '/master-data/departments',
+)()
 const MasterDataContactsLazyRouteImport = createFileRoute(
   '/master-data/contacts',
 )()
@@ -147,6 +150,14 @@ const MasterDataProductsLazyRoute = MasterDataProductsLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/master-data/products.lazy').then((d) => d.Route),
 )
+const MasterDataDepartmentsLazyRoute =
+  MasterDataDepartmentsLazyRouteImport.update({
+    id: '/master-data/departments',
+    path: '/master-data/departments',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/master-data/departments.lazy').then((d) => d.Route),
+  )
 const MasterDataContactsLazyRoute = MasterDataContactsLazyRouteImport.update({
   id: '/master-data/contacts',
   path: '/master-data/contacts',
@@ -172,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
+  '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
@@ -193,6 +205,7 @@ export interface FileRoutesByTo {
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
+  '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
@@ -215,6 +228,7 @@ export interface FileRoutesById {
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
+  '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
@@ -238,6 +252,7 @@ export interface FileRouteTypes {
     | '/transaction'
     | '/finance/cash-flow'
     | '/master-data/contacts'
+    | '/master-data/departments'
     | '/master-data/products'
     | '/master-data/promos'
     | '/master-data/units'
@@ -259,6 +274,7 @@ export interface FileRouteTypes {
     | '/transaction'
     | '/finance/cash-flow'
     | '/master-data/contacts'
+    | '/master-data/departments'
     | '/master-data/products'
     | '/master-data/promos'
     | '/master-data/units'
@@ -280,6 +296,7 @@ export interface FileRouteTypes {
     | '/transaction'
     | '/finance/cash-flow'
     | '/master-data/contacts'
+    | '/master-data/departments'
     | '/master-data/products'
     | '/master-data/promos'
     | '/master-data/units'
@@ -302,6 +319,7 @@ export interface RootRouteChildren {
   TransactionLazyRoute: typeof TransactionLazyRoute
   FinanceCashFlowLazyRoute: typeof FinanceCashFlowLazyRoute
   MasterDataContactsLazyRoute: typeof MasterDataContactsLazyRoute
+  MasterDataDepartmentsLazyRoute: typeof MasterDataDepartmentsLazyRoute
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
   MasterDataPromosLazyRoute: typeof MasterDataPromosLazyRoute
   MasterDataUnitsLazyRoute: typeof MasterDataUnitsLazyRoute
@@ -435,6 +453,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MasterDataProductsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/master-data/departments': {
+      id: '/master-data/departments'
+      path: '/master-data/departments'
+      fullPath: '/master-data/departments'
+      preLoaderRoute: typeof MasterDataDepartmentsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/master-data/contacts': {
       id: '/master-data/contacts'
       path: '/master-data/contacts'
@@ -462,6 +487,7 @@ const rootRouteChildren: RootRouteChildren = {
   TransactionLazyRoute: TransactionLazyRoute,
   FinanceCashFlowLazyRoute: FinanceCashFlowLazyRoute,
   MasterDataContactsLazyRoute: MasterDataContactsLazyRoute,
+  MasterDataDepartmentsLazyRoute: MasterDataDepartmentsLazyRoute,
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
   MasterDataPromosLazyRoute: MasterDataPromosLazyRoute,
   MasterDataUnitsLazyRoute: MasterDataUnitsLazyRoute,

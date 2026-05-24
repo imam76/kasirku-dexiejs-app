@@ -19,6 +19,7 @@ export const backupDatabase = async () => {
       profitBalance: await db.profitBalance.toArray(),
       promos: await db.promos.toArray(),
       contacts: await db.contacts.toArray(),
+      departments: await db.departments.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
       version: 3,
@@ -46,7 +47,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -77,6 +78,7 @@ export const restoreDatabase = async (file: File) => {
           db.profitBalance,
           db.promos,
           db.contacts,
+          db.departments,
           db.authUsers,
           db.authSessions,
           db.activityLogs,
@@ -92,6 +94,7 @@ export const restoreDatabase = async (file: File) => {
           await db.profitBalance.clear();
           await db.promos.clear();
           await db.contacts.clear();
+          await db.departments.clear();
           await db.authSessions.clear();
 
           if (hasAuthUsersPayload) {
@@ -111,6 +114,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.profitBalance?.length) await db.profitBalance.bulkAdd(data.profitBalance);
           if (data.promos?.length) await db.promos.bulkAdd(data.promos);
           if (data.contacts?.length) await db.contacts.bulkAdd(data.contacts);
+          if (data.departments?.length) await db.departments.bulkAdd(data.departments);
           if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
           if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
         });
