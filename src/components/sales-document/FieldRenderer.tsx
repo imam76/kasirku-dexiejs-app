@@ -69,6 +69,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
               placeholder={t('salesDocuments.placeholder.customer')}
@@ -106,6 +107,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
               placeholder={t('salesDocuments.placeholder.tax')}
@@ -132,6 +134,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
               placeholder={t('salesDocuments.placeholder.department')}
@@ -158,6 +161,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
               placeholder={t('salesDocuments.placeholder.project')}
@@ -190,6 +194,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              style={{ width: '100%' }}
               value={field.value as SalesInvoicePaymentStatus | undefined}
               onBlur={field.onBlur}
               options={options}
@@ -210,7 +215,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <DatePicker
-              className="w-full"
+              style={{ width: '100%' }}
               value={(field.value as Dayjs | undefined) ?? null}
               onBlur={field.onBlur}
               onChange={field.onChange}
