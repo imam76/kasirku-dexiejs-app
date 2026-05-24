@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Button } from 'antd';
 import { useForm, useWatch } from 'react-hook-form';
 import type { DefaultValues } from 'react-hook-form';
@@ -59,7 +59,11 @@ const toIsoDate = (value: unknown) => {
   return String(value);
 };
 
-const omitLineItems = ({ items: _items, ...documentValues }: SalesDocumentFormValues) => documentValues;
+const omitLineItems = (values: SalesDocumentFormValues) => {
+  const documentValues: Partial<SalesDocumentFormValues> = { ...values };
+  delete documentValues.items;
+  return documentValues;
+};
 
 export const SalesDocumentForm = ({
   config,
@@ -84,7 +88,8 @@ export const SalesDocumentForm = ({
       items: initialData?.items ?? [],
     } as DefaultValues<SalesDocumentFormValues>,
   });
-  const items = useWatch({ control, name: 'items' }) ?? [];
+  const watchedItems = useWatch({ control, name: 'items' });
+  const items = useMemo(() => watchedItems ?? [], [watchedItems]);
   const discountAmount = useWatch({ control, name: 'discount_amount' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
   const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
@@ -106,8 +111,11 @@ export const SalesDocumentForm = ({
       taxes,
       config,
     }),
-    [config, discountAmount, items, taxCalculationMode, taxCode, taxId, taxName, taxRate],
+    [config, discountAmount, items, taxCalculationMode, taxCode, taxId, taxName, taxRate, taxes],
   );
+  const handleItemsChange = useCallback((nextItems: SalesDocumentItem[]) => {
+    setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
+  }, [setValue]);
 
   const handleFinish = async (values: SalesDocumentFormValues) => {
     const documentValues = omitLineItems(values);
@@ -144,10 +152,11 @@ export const SalesDocumentForm = ({
       <DocumentLineItems
         config={config}
         documentId={documentId}
-        items={total.items}
+        items={items}
+        calculatedItems={total.items}
         products={products}
         taxes={taxes}
-        onChange={(nextItems) => setValue('items', nextItems, { shouldDirty: true, shouldValidate: true })}
+        onChange={handleItemsChange}
       />
       <DocumentSummary
         config={config}

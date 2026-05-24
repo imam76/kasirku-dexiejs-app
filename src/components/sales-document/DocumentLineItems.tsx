@@ -1,78 +1,105 @@
-import { useEffect, useState } from 'react';
-import { Button, InputNumber, Select, Table } from 'antd';
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
-import type { ColumnsType } from 'antd/es/table';
-import type { Key } from 'react';
-import type { Product, ProductUnit, PromoType, SalesDocumentItem, Tax } from '@/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from 'antd';
+import { Plus } from 'lucide-react';
+import type { Product, SalesDocumentItem, Tax } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
+import { getProductDocumentUnits } from '@/utils/productUnits';
+import { createEmptySalesDocumentItem } from '@/utils/salesDocuments/createEmptySalesDocumentItem';
 import { mapProductToSalesDocumentItem } from '@/utils/salesDocuments/mapProductToSalesDocumentItem';
-import { formatCurrency } from '@/utils/formatters';
+import { DocumentLineItemsVirtualTable } from './DocumentLineItemsVirtualTable';
 
 interface DocumentLineItemsProps {
   config: SalesDocumentConfig;
   documentId: string;
   items: SalesDocumentItem[];
+  calculatedItems: SalesDocumentItem[];
   products: Product[];
   taxes: Tax[];
   onChange: (items: SalesDocumentItem[]) => void;
 }
 
-const getProductUnits = (product?: Product): ProductUnit[] => {
-  if (!product) return [];
-  return Array.from(new Set([product.selling_unit, product.purchase_unit, ...(product.sellable_units || [])]));
-};
-
-const createEmptyItem = (documentId: string): SalesDocumentItem => ({
-  id: crypto.randomUUID(),
-  document_id: documentId,
-  product_id: '',
-  product_name: '',
-  unit: '',
-  quantity: 1,
-  ordered_quantity: 1,
-  delivered_quantity: 1,
-  price: 0,
-  discount_type: 'fixed',
-  discount_value: 0,
-  discount_amount: 0,
-  subtotal: 0,
-  created_at: new Date().toISOString(),
-});
+const emptyUnitOptions: Array<{ value: string; label: string }> = [];
 
 export const DocumentLineItems = ({
   config,
   documentId,
   items,
+  calculatedItems,
   products,
   taxes,
   onChange,
 }: DocumentLineItemsProps) => {
-  const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
-
-  const updateItem = (itemId: string, patch: Partial<SalesDocumentItem>) => {
-    onChange(items.map((item) => item.id === itemId ? { ...item, ...patch } : item));
-  };
-
-  const addRow = () => {
-    onChange([...items, createEmptyItem(documentId)]);
-  };
+  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
+  const [scrollToLastRequest, setScrollToLastRequest] = useState(0);
+  const itemsRef = useRef(items);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'enter') {
-        event.preventDefault();
-        addRow();
-      }
-    };
+    itemsRef.current = items;
+  }, [items]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [items, documentId]);
+  const productOptions = useMemo(
+    () => products.map((product) => ({
+      value: product.id,
+      label: product.sku ? `${product.name} - ${product.sku}` : product.name,
+    })),
+    [products],
+  );
 
-  const selectProduct = (itemId: string, productId: string) => {
-    const product = products.find((candidate) => candidate.id === productId);
+  const productsById = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products],
+  );
+
+  const taxOptions = useMemo(
+    () => taxes.map((tax) => ({
+      value: tax.id,
+      label: `${tax.name} (${tax.rate}%, ${tax.calculation_mode})`,
+    })),
+    [taxes],
+  );
+
+  const unitOptionsByProductId = useMemo(
+    () => new Map(products.map((product) => [
+      product.id,
+      getProductDocumentUnits(product).map((unit) => ({ value: unit, label: unit })),
+    ])),
+    [products],
+  );
+
+  const unitOptionsByUnit = useMemo(() => {
+    const uniqueUnits = new Set(items.map((item) => item.unit).filter(Boolean));
+    return new Map(Array.from(uniqueUnits).map((unit) => [unit, [{ value: unit, label: unit }]]));
+  }, [items]);
+
+  const calculatedItemsById = useMemo(
+    () => new Map(calculatedItems.map((item) => [item.id, item])),
+    [calculatedItems],
+  );
+
+  const expandedRowKeySet = useMemo(
+    () => new Set(expandedRowKeys),
+    [expandedRowKeys],
+  );
+
+  const expandedRowSignature = useMemo(
+    () => expandedRowKeys.join('|'),
+    [expandedRowKeys],
+  );
+
+  const updateItem = useCallback((itemId: string, patch: Partial<SalesDocumentItem>) => {
+    onChange(itemsRef.current.map((item) => (item.id === itemId ? { ...item, ...patch } : item)));
+  }, [onChange]);
+
+  const addRow = useCallback(() => {
+    onChange([...itemsRef.current, createEmptySalesDocumentItem(documentId)]);
+    setScrollToLastRequest((current) => current + 1);
+  }, [documentId, onChange]);
+
+  const selectProduct = useCallback((itemId: string, productId: string) => {
+    const product = productsById.get(productId);
     if (!product) return;
-    onChange(items.map((item) => {
+
+    onChange(itemsRef.current.map((item) => {
       if (item.id !== itemId) return item;
 
       const nextItem = mapProductToSalesDocumentItem(product, item.document_id);
@@ -88,192 +115,52 @@ export const DocumentLineItems = ({
         created_at: item.created_at,
       };
     }));
-  };
+  }, [onChange, productsById]);
 
-  const removeItem = (itemId: string) => {
+  const removeItem = useCallback((itemId: string) => {
     setExpandedRowKeys((currentKeys) => currentKeys.filter((key) => key !== itemId));
-    onChange(items.filter((item) => item.id !== itemId));
-  };
+    onChange(itemsRef.current.filter((item) => item.id !== itemId));
+  }, [onChange]);
 
-  const toggleExpanded = (itemId: string) => {
+  const toggleExpanded = useCallback((itemId: string) => {
     setExpandedRowKeys((currentKeys) => (
       currentKeys.includes(itemId)
         ? currentKeys.filter((key) => key !== itemId)
         : [...currentKeys, itemId]
     ));
-  };
+  }, []);
 
-  const columns: ColumnsType<SalesDocumentItem> = [
-    {
-      title: 'Produk',
-      dataIndex: 'product_name',
-      render: (_, item) => (
-        <Select
-          showSearch
-          className="w-full min-w-[220px]"
-          placeholder="Pilih produk"
-          value={item.product_id || undefined}
-          optionFilterProp="label"
-          options={products.map((product) => ({
-            value: product.id,
-            label: product.sku ? `${product.name} - ${product.sku}` : product.name,
-          }))}
-          onChange={(productId) => selectProduct(item.id, productId)}
-        />
-      ),
-    },
-    {
-      title: config.type === 'SALES_DELIVERY' ? 'Qty Order' : 'Qty',
-      dataIndex: config.type === 'SALES_DELIVERY' ? 'ordered_quantity' : 'quantity',
-      width: 130,
-      render: (_, item) => (
-        <InputNumber
-          min={0}
-          className="w-full"
-          value={config.type === 'SALES_DELIVERY' ? item.ordered_quantity : item.quantity}
-          onChange={(value) => updateItem(item.id, config.type === 'SALES_DELIVERY'
-            ? { ordered_quantity: Number(value || 0) }
-            : { quantity: Number(value || 0) })}
-        />
-      ),
-    },
-    ...(config.type === 'SALES_DELIVERY' ? [{
-      title: 'Qty Kirim',
-      dataIndex: 'delivered_quantity',
-      width: 130,
-      render: (_: unknown, item: SalesDocumentItem) => (
-        <InputNumber
-          min={0}
-          className="w-full"
-          value={item.delivered_quantity}
-          onChange={(value) => updateItem(item.id, {
-            delivered_quantity: Number(value || 0),
-            quantity: Number(value || 0),
-          })}
-        />
-      ),
-    }] : []),
-    {
-      title: 'Unit',
-      dataIndex: 'unit',
-      width: 130,
-      render: (_, item) => {
-        const product = products.find((candidate) => candidate.id === item.product_id);
-        return (
-          <Select
-            className="w-full"
-            value={item.unit}
-            options={getProductUnits(product).map((unit) => ({ value: unit, label: unit }))}
-            onChange={(unit) => updateItem(item.id, { unit })}
-          />
-        );
-      },
-    },
-    ...(config.behavior.hasPricing ? [{
-      title: 'Subtotal',
-      dataIndex: 'subtotal',
-      width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
-    }] : []),
-    ...(config.behavior.hasPricing ? [
-      {
-        title: '',
-        key: 'expand',
-        width: 56,
-        render: (_: unknown, item: SalesDocumentItem) => (
-          <Button
-            type="text"
-            icon={expandedRowKeys.includes(item.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            disabled={!item.product_id}
-            onClick={() => toggleExpanded(item.id)}
-          />
-        ),
-      },
-    ] : []),
-    {
-      title: '',
-      key: 'action',
-      width: 56,
-      render: (_, item) => (
-        <Button
-          danger
-          type="text"
-          icon={<Trash2 size={16} />}
-          onClick={() => removeItem(item.id)}
-        />
-      ),
-    },
-  ];
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'enter') {
+        event.preventDefault();
+        addRow();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [addRow]);
 
   return (
     <div className="space-y-3">
-      <Table
-        rowKey="id"
-        size="small"
-        scroll={{ x: true }}
-        pagination={false}
-        columns={columns}
-        dataSource={items}
-        expandable={config.behavior.hasPricing ? {
-          showExpandColumn: false,
-          expandedRowKeys,
-          onExpandedRowsChange: (nextExpandedRows) => setExpandedRowKeys([...nextExpandedRows]),
-          expandedRowRender: (item) => (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <div className="mb-1 text-xs text-gray-500">Harga</div>
-                <InputNumber
-                  min={0}
-                  className="w-full"
-                  value={item.price}
-                  onChange={(value) => updateItem(item.id, { price: Number(value || 0) })}
-                />
-              </div>
-              <div>
-                <div className="mb-1 text-xs text-gray-500">Diskon</div>
-                <div className="grid grid-cols-[120px_1fr] gap-2">
-                  <Select
-                    value={item.discount_type ?? 'fixed'}
-                    options={[
-                      { value: 'percent' satisfies PromoType, label: 'Persen' },
-                      { value: 'fixed' satisfies PromoType, label: 'Nominal' },
-                    ]}
-                    onChange={(discountType) => updateItem(item.id, { discount_type: discountType })}
-                  />
-                  <InputNumber
-                    min={0}
-                    className="w-full"
-                    value={item.discount_value ?? item.discount_amount}
-                    onChange={(value) => updateItem(item.id, { discount_value: Number(value || 0) })}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="mb-1 text-xs text-gray-500">Pajak (%)</div>
-                <Select
-                  allowClear
-                  className="w-full"
-                  placeholder="Pajak item (opsional)"
-                  value={item.tax_id || undefined}
-                  options={taxes.map((tax) => ({
-                    value: tax.id,
-                    label: `${tax.name} (${tax.rate}%, ${tax.calculation_mode})`,
-                  }))}
-                  onChange={(taxId) => updateItem(item.id, { tax_id: taxId, tax_name: undefined, tax_code: undefined, tax_rate: undefined, tax_calculation_mode: undefined })}
-                />
-              </div>
-              <div>
-                <div className="mb-1 text-xs text-gray-500">Pajak</div>
-                <InputNumber
-                  className="w-full"
-                  value={item.tax_amount}
-                  disabled
-                />
-              </div>
-            </div>
-          ),
-          rowExpandable: (item) => Boolean(item.product_id),
-        } : undefined}
+      <DocumentLineItemsVirtualTable
+        items={items}
+        calculatedItemsById={calculatedItemsById}
+        productOptions={productOptions}
+        unitOptionsByProductId={unitOptionsByProductId}
+        unitOptionsByUnit={unitOptionsByUnit}
+        emptyUnitOptions={emptyUnitOptions}
+        taxOptions={taxOptions}
+        expandedRowKeySet={expandedRowKeySet}
+        expandedRowSignature={expandedRowSignature}
+        hasPricing={config.behavior.hasPricing}
+        isSalesDelivery={config.type === 'SALES_DELIVERY'}
+        scrollToLastRequest={scrollToLastRequest}
+        onUpdateItem={updateItem}
+        onSelectProduct={selectProduct}
+        onRemoveItem={removeItem}
+        onToggleExpanded={toggleExpanded}
       />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-gray-500">
