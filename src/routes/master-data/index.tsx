@@ -2,7 +2,9 @@ import {
   ApartmentOutlined,
   ContactsOutlined,
   DollarOutlined,
+  PercentageOutlined,
   ProductOutlined,
+  ProjectOutlined,
   SettingOutlined,
   SwapOutlined,
 } from '@ant-design/icons'
@@ -34,6 +36,8 @@ function MasterData() {
     { to: '/master-data/promos', label: t('nav.promos'), icon: DollarOutlined, color: 'text-rose-600', desc: t('home.promosDesc') },
     { to: '/master-data/contacts', label: t('nav.contacts'), icon: ContactsOutlined, color: 'text-amber-600', desc: t('home.contactsDesc') },
     { to: '/master-data/departments', label: t('nav.departments'), icon: ApartmentOutlined, color: 'text-sky-600', desc: t('home.departmentsDesc') },
+    { to: '/master-data/projects', label: t('nav.projects'), icon: ProjectOutlined, color: 'text-violet-600', desc: t('home.projectsDesc') },
+    { to: '/master-data/taxes', label: t('nav.taxes'), icon: PercentageOutlined, color: 'text-orange-600', desc: t('home.taxesDesc') },
     { to: '/master-data/units', hash: 'conversions', label: t('nav.units'), icon: SwapOutlined, color: 'text-cyan-600', desc: t('home.unitConversionDesc') },
     { to: '/master-data/units', hash: 'units', label: t('nav.unit'), icon: SettingOutlined, color: 'text-indigo-600', desc: t('home.unitDesc') },
   ].filter((item) => canAccessPath(currentUser?.role, item.to))

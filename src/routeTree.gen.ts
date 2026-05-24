@@ -35,7 +35,11 @@ const ReportExpenseReportLazyRouteImport = createFileRoute(
   '/report/expense-report',
 )()
 const MasterDataUnitsLazyRouteImport = createFileRoute('/master-data/units')()
+const MasterDataTaxesLazyRouteImport = createFileRoute('/master-data/taxes')()
 const MasterDataPromosLazyRouteImport = createFileRoute('/master-data/promos')()
+const MasterDataProjectsLazyRouteImport = createFileRoute(
+  '/master-data/projects',
+)()
 const MasterDataProductsLazyRouteImport = createFileRoute(
   '/master-data/products',
 )()
@@ -136,12 +140,26 @@ const MasterDataUnitsLazyRoute = MasterDataUnitsLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/master-data/units.lazy').then((d) => d.Route),
 )
+const MasterDataTaxesLazyRoute = MasterDataTaxesLazyRouteImport.update({
+  id: '/master-data/taxes',
+  path: '/master-data/taxes',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/master-data/taxes.lazy').then((d) => d.Route),
+)
 const MasterDataPromosLazyRoute = MasterDataPromosLazyRouteImport.update({
   id: '/master-data/promos',
   path: '/master-data/promos',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
   import('./routes/master-data/promos.lazy').then((d) => d.Route),
+)
+const MasterDataProjectsLazyRoute = MasterDataProjectsLazyRouteImport.update({
+  id: '/master-data/projects',
+  path: '/master-data/projects',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/master-data/projects.lazy').then((d) => d.Route),
 )
 const MasterDataProductsLazyRoute = MasterDataProductsLazyRouteImport.update({
   id: '/master-data/products',
@@ -185,7 +203,9 @@ export interface FileRoutesByFullPath {
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
+  '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
@@ -207,7 +227,9 @@ export interface FileRoutesByTo {
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
+  '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
@@ -230,7 +252,9 @@ export interface FileRoutesById {
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
+  '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
@@ -254,7 +278,9 @@ export interface FileRouteTypes {
     | '/master-data/contacts'
     | '/master-data/departments'
     | '/master-data/products'
+    | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/taxes'
     | '/master-data/units'
     | '/report/expense-report'
     | '/report/purchase-report'
@@ -276,7 +302,9 @@ export interface FileRouteTypes {
     | '/master-data/contacts'
     | '/master-data/departments'
     | '/master-data/products'
+    | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/taxes'
     | '/master-data/units'
     | '/report/expense-report'
     | '/report/purchase-report'
@@ -298,7 +326,9 @@ export interface FileRouteTypes {
     | '/master-data/contacts'
     | '/master-data/departments'
     | '/master-data/products'
+    | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/taxes'
     | '/master-data/units'
     | '/report/expense-report'
     | '/report/purchase-report'
@@ -321,7 +351,9 @@ export interface RootRouteChildren {
   MasterDataContactsLazyRoute: typeof MasterDataContactsLazyRoute
   MasterDataDepartmentsLazyRoute: typeof MasterDataDepartmentsLazyRoute
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
+  MasterDataProjectsLazyRoute: typeof MasterDataProjectsLazyRoute
   MasterDataPromosLazyRoute: typeof MasterDataPromosLazyRoute
+  MasterDataTaxesLazyRoute: typeof MasterDataTaxesLazyRoute
   MasterDataUnitsLazyRoute: typeof MasterDataUnitsLazyRoute
   ReportExpenseReportLazyRoute: typeof ReportExpenseReportLazyRoute
   ReportPurchaseReportLazyRoute: typeof ReportPurchaseReportLazyRoute
@@ -439,11 +471,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MasterDataUnitsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/master-data/taxes': {
+      id: '/master-data/taxes'
+      path: '/master-data/taxes'
+      fullPath: '/master-data/taxes'
+      preLoaderRoute: typeof MasterDataTaxesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/master-data/promos': {
       id: '/master-data/promos'
       path: '/master-data/promos'
       fullPath: '/master-data/promos'
       preLoaderRoute: typeof MasterDataPromosLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/master-data/projects': {
+      id: '/master-data/projects'
+      path: '/master-data/projects'
+      fullPath: '/master-data/projects'
+      preLoaderRoute: typeof MasterDataProjectsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/master-data/products': {
@@ -489,7 +535,9 @@ const rootRouteChildren: RootRouteChildren = {
   MasterDataContactsLazyRoute: MasterDataContactsLazyRoute,
   MasterDataDepartmentsLazyRoute: MasterDataDepartmentsLazyRoute,
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
+  MasterDataProjectsLazyRoute: MasterDataProjectsLazyRoute,
   MasterDataPromosLazyRoute: MasterDataPromosLazyRoute,
+  MasterDataTaxesLazyRoute: MasterDataTaxesLazyRoute,
   MasterDataUnitsLazyRoute: MasterDataUnitsLazyRoute,
   ReportExpenseReportLazyRoute: ReportExpenseReportLazyRoute,
   ReportPurchaseReportLazyRoute: ReportPurchaseReportLazyRoute,

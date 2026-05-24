@@ -73,6 +73,9 @@ export type UserRole = 'OWNER' | 'ADMIN' | 'KASIR' | 'GUDANG';
 export type PromoType = 'percent' | 'fixed';
 export type PromoAppliesTo = 'all' | 'product' | 'category';
 export type ContactType = 'CUSTOMER' | 'SUPPLIER' | 'CUSTOMER_SUPPLIER' | 'OTHER';
+export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
+export type TaxRateType = 'PERCENTAGE';
+export type TaxCalculationMode = 'EXCLUSIVE' | 'INCLUSIVE';
 
 export type Permission =
   | 'TRANSACTION_VOID'
@@ -157,6 +160,41 @@ export interface Department {
   name: string;
   code?: string;
   description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  code?: string;
+  status: ProjectStatus;
+  contact_id?: string;
+  contact_name?: string;
+  department_id?: string;
+  department_code?: string;
+  department_name?: string;
+  start_date?: string;
+  end_date?: string;
+  budget_amount?: number;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Tax {
+  id: string;
+  name: string;
+  code?: string;
+  rate: number;
+  rate_type: TaxRateType;
+  calculation_mode: TaxCalculationMode;
+  description?: string;
+  effective_from?: string;
+  effective_to?: string;
+  is_default: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
