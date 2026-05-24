@@ -1,5 +1,5 @@
 import { Button, InputNumber, Select, Table } from 'antd';
-import { Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import type { Product, ProductUnit, SalesDocumentItem } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
@@ -19,6 +19,21 @@ const getProductUnits = (product?: Product): ProductUnit[] => {
   return Array.from(new Set([product.selling_unit, product.purchase_unit, ...(product.sellable_units || [])]));
 };
 
+const createEmptyItem = (documentId: string): SalesDocumentItem => ({
+  id: crypto.randomUUID(),
+  document_id: documentId,
+  product_id: '',
+  product_name: '',
+  unit: '',
+  quantity: 1,
+  ordered_quantity: 1,
+  delivered_quantity: 1,
+  price: 0,
+  discount_amount: 0,
+  subtotal: 0,
+  created_at: new Date().toISOString(),
+});
+
 export const DocumentLineItems = ({
   config,
   documentId,
@@ -30,10 +45,27 @@ export const DocumentLineItems = ({
     onChange(items.map((item) => item.id === itemId ? { ...item, ...patch } : item));
   };
 
-  const addProduct = (productId: string) => {
+  const addRow = () => {
+    onChange([...items, createEmptyItem(documentId)]);
+  };
+
+  const selectProduct = (itemId: string, productId: string) => {
     const product = products.find((candidate) => candidate.id === productId);
     if (!product) return;
-    onChange([...items, mapProductToSalesDocumentItem(product, documentId)]);
+    onChange(items.map((item) => {
+      if (item.id !== itemId) return item;
+
+      const nextItem = mapProductToSalesDocumentItem(product, item.document_id);
+      return {
+        ...nextItem,
+        id: item.id,
+        quantity: item.quantity || nextItem.quantity,
+        ordered_quantity: item.ordered_quantity ?? nextItem.ordered_quantity,
+        delivered_quantity: item.delivered_quantity ?? nextItem.delivered_quantity,
+        discount_amount: item.discount_amount ?? nextItem.discount_amount,
+        created_at: item.created_at,
+      };
+    }));
   };
 
   const removeItem = (itemId: string) => {
@@ -45,10 +77,18 @@ export const DocumentLineItems = ({
       title: 'Produk',
       dataIndex: 'product_name',
       render: (_, item) => (
-        <div>
-          <div className="font-medium text-gray-900">{item.product_name}</div>
-          {item.sku && <div className="text-xs text-gray-500">{item.sku}</div>}
-        </div>
+        <Select
+          showSearch
+          className="w-full min-w-[220px]"
+          placeholder="Pilih produk"
+          value={item.product_id || undefined}
+          optionFilterProp="label"
+          options={products.map((product) => ({
+            value: product.id,
+            label: product.sku ? `${product.name} - ${product.sku}` : product.name,
+          }))}
+          onChange={(productId) => selectProduct(item.id, productId)}
+        />
       ),
     },
     {
@@ -149,19 +189,10 @@ export const DocumentLineItems = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between gap-3">
-        <Select
-          showSearch
-          className="min-w-0 flex-1"
-          placeholder="Tambah produk"
-          value={undefined}
-          optionFilterProp="label"
-          options={products.map((product) => ({
-            value: product.id,
-            label: product.sku ? `${product.name} - ${product.sku}` : product.name,
-          }))}
-          onChange={addProduct}
-        />
+      <div className="flex justify-end gap-3">
+        <Button type="dashed" icon={<Plus size={16} />} onClick={addRow}>
+          Tambah Baris
+        </Button>
       </div>
       <Table
         rowKey="id"

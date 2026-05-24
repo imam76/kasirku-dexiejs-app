@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react';
-import { Button, Form, Space } from 'antd';
+import { useMemo } from 'react';
+import { Button } from 'antd';
+import { useForm, useWatch } from 'react-hook-form';
+import type { DefaultValues } from 'react-hook-form';
+import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import type { Contact, Department, Product, Project, SalesDocument, SalesDocumentItem, Tax } from '@/types';
@@ -24,11 +27,20 @@ interface SalesDocumentFormProps {
   submitting?: boolean;
 }
 
-const toFormInitialValues = (document?: SalesDocument) => {
+export type SalesDocumentFormValues = Omit<Partial<SalesDocument>, 'document_date' | 'expired_at' | 'due_date'> & {
+  document_date?: Dayjs;
+  expired_at?: Dayjs;
+  due_date?: Dayjs;
+  items: SalesDocumentItem[];
+};
+
+const toFormInitialValues = (document?: SalesDocument): DefaultValues<SalesDocumentFormValues> => {
   if (!document) {
     return {
       document_date: dayjs(),
-      payment_status: 'UNPAID',
+      payment_status: 'UNPAID' as const,
+      discount_amount: 0,
+      items: [],
     };
   }
 
@@ -37,6 +49,7 @@ const toFormInitialValues = (document?: SalesDocument) => {
     document_date: document.document_date ? dayjs(document.document_date) : undefined,
     expired_at: document.expired_at ? dayjs(document.expired_at) : undefined,
     due_date: document.due_date ? dayjs(document.due_date) : undefined,
+    discount_amount: document.discount_amount ?? 0,
   };
 };
 
@@ -45,6 +58,8 @@ const toIsoDate = (value: unknown) => {
   if (dayjs.isDayjs(value)) return value.format('YYYY-MM-DD');
   return String(value);
 };
+
+const omitLineItems = ({ items: _items, ...documentValues }: SalesDocumentFormValues) => documentValues;
 
 export const SalesDocumentForm = ({
   config,
@@ -58,10 +73,20 @@ export const SalesDocumentForm = ({
   onCancel,
   submitting,
 }: SalesDocumentFormProps) => {
-  const [form] = Form.useForm();
-  const [items, setItems] = useState<SalesDocumentItem[]>(initialData?.items ?? []);
-  const [discountAmount, setDiscountAmount] = useState(initialData?.document?.discount_amount ?? 0);
-  const selectedTaxId = Form.useWatch('tax_id', form);
+  const {
+    control,
+    formState: { errors },
+    handleSubmit,
+    setValue,
+  } = useForm<SalesDocumentFormValues, unknown, SalesDocumentFormValues>({
+    defaultValues: {
+      ...toFormInitialValues(initialData?.document),
+      items: initialData?.items ?? [],
+    } as DefaultValues<SalesDocumentFormValues>,
+  });
+  const items = useWatch({ control, name: 'items' }) ?? [];
+  const discountAmount = useWatch({ control, name: 'discount_amount' }) ?? 0;
+  const selectedTaxId = useWatch({ control, name: 'tax_id' });
   const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
   const documentId = initialData?.document?.id ?? 'draft';
   const total = useMemo(
@@ -75,31 +100,33 @@ export const SalesDocumentForm = ({
     [config, discountAmount, initialData?.document?.tax_calculation_mode, initialData?.document?.tax_rate, items, selectedTax],
   );
 
-  const handleFinish = async (values: Record<string, unknown>) => {
+  const handleFinish = async (values: SalesDocumentFormValues) => {
+    const documentValues = omitLineItems(values);
+    const completedItems = total.items.filter((item) => item.product_id);
+
     await onSubmit({
       document: {
-        ...values,
+        ...documentValues,
         type: config.type,
         document_date: toIsoDate(values.document_date),
         expired_at: toIsoDate(values.expired_at),
         due_date: toIsoDate(values.due_date),
         discount_amount: discountAmount,
       },
-      items: total.items,
+      items: completedItems,
     });
   };
 
   return (
-    <Form
-      form={form}
-      layout="vertical"
-      initialValues={toFormInitialValues(initialData?.document)}
-      onFinish={handleFinish}
+    <form
+      onSubmit={handleSubmit(handleFinish)}
       className="space-y-4"
     >
       <DocumentHeader
         config={config}
-        form={form}
+        control={control}
+        errors={errors}
+        setValue={setValue}
         contacts={contacts}
         taxes={taxes}
         departments={departments}
@@ -110,20 +137,20 @@ export const SalesDocumentForm = ({
         documentId={documentId}
         items={total.items}
         products={products}
-        onChange={setItems}
+        onChange={(nextItems) => setValue('items', nextItems, { shouldDirty: true, shouldValidate: true })}
       />
       <DocumentSummary
         config={config}
         total={total}
         discountAmount={discountAmount}
-        onDiscountChange={setDiscountAmount}
+        onDiscountChange={(value) => setValue('discount_amount', value, { shouldDirty: true, shouldValidate: true })}
       />
-      <Space className="w-full justify-end">
+      <div className="flex w-full justify-end gap-2">
         {onCancel && <Button onClick={onCancel}>Batal</Button>}
         <Button type="primary" htmlType="submit" loading={submitting}>
           Simpan Draft
         </Button>
-      </Space>
-    </Form>
+      </div>
+    </form>
   );
 };

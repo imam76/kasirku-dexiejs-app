@@ -1,11 +1,14 @@
-import type { FormInstance } from 'antd';
+import type { Control, FieldErrors, UseFormSetValue } from 'react-hook-form';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import type { Contact, Department, Project, Tax } from '@/types';
+import type { SalesDocumentFormValues } from './SalesDocumentForm';
 import { FieldRenderer } from './FieldRenderer';
 
 interface DocumentHeaderProps {
   config: SalesDocumentConfig;
-  form: FormInstance;
+  control: Control<SalesDocumentFormValues>;
+  errors: FieldErrors<SalesDocumentFormValues>;
+  setValue: UseFormSetValue<SalesDocumentFormValues>;
   contacts: Contact[];
   taxes: Tax[];
   departments: Department[];
@@ -14,7 +17,9 @@ interface DocumentHeaderProps {
 
 export const DocumentHeader = ({
   config,
-  form,
+  control,
+  errors,
+  setValue,
   contacts,
   taxes,
   departments,
@@ -25,7 +30,9 @@ export const DocumentHeader = ({
       <FieldRenderer
         key={field.name}
         {...field}
-        form={form}
+        control={control}
+        errors={errors}
+        setValue={setValue}
         contacts={contacts}
         taxes={taxes}
         departments={departments}

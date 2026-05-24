@@ -1,13 +1,38 @@
-import { DatePicker, Form, Input, Select } from 'antd';
-import type { FormInstance } from 'antd';
+import { DatePicker, Input, Select } from 'antd';
+import type { ReactNode } from 'react';
+import type { Dayjs } from 'dayjs';
+import { Controller } from 'react-hook-form';
+import type { Control, FieldErrors, FieldPath, UseFormSetValue } from 'react-hook-form';
 import type { Contact, Department, Project, SalesInvoicePaymentStatus, Tax } from '@/types';
+import type { SalesDocumentFormValues } from './SalesDocumentForm';
+
+interface FieldContainerProps {
+  label: string;
+  required?: boolean;
+  error?: string;
+  className?: string;
+  children: ReactNode;
+}
+
+const FieldContainer = ({ label, required, error, className, children }: FieldContainerProps) => (
+  <div className={className ?? 'mb-4'}>
+    <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-gray-700">
+      <span>{label}</span>
+      {required ? <span className="text-sm font-bold leading-none text-red-500">*</span> : null}
+    </label>
+    {children}
+    {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+  </div>
+);
 
 interface FieldRendererProps {
   name: string;
   label: string;
   type: 'contact' | 'text' | 'date' | 'textarea' | 'tax' | 'department' | 'project' | 'paymentStatus';
   required?: boolean;
-  form: FormInstance;
+  control: Control<SalesDocumentFormValues>;
+  errors: FieldErrors<SalesDocumentFormValues>;
+  setValue: UseFormSetValue<SalesDocumentFormValues>;
   contacts: Contact[];
   taxes: Tax[];
   departments: Department[];
@@ -19,91 +44,135 @@ export const FieldRenderer = ({
   label,
   type,
   required,
-  form,
+  control,
+  errors,
+  setValue,
   contacts,
   taxes,
   departments,
   projects,
 }: FieldRendererProps) => {
-  const rules = required ? [{ required: true, message: `${label} wajib diisi.` }] : undefined;
+  const fieldName = name as FieldPath<SalesDocumentFormValues>;
+  const fieldError = errors[name as keyof SalesDocumentFormValues];
+  const error = fieldError?.message ? String(fieldError.message) : undefined;
+  const rules = required ? { required: `${label} wajib diisi.` } : undefined;
 
   if (type === 'contact') {
     return (
-      <Form.Item name={name} label={label} rules={rules}>
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="Pilih customer"
-          options={contacts.map((contact) => ({
-            value: contact.id,
-            label: contact.company_name ? `${contact.name} - ${contact.company_name}` : contact.name,
-          }))}
-          onChange={(contactId) => {
-            const contact = contacts.find((candidate) => candidate.id === contactId);
-            if (!contact) return;
-            form.setFieldsValue({
-              customer_name: contact.name,
-              customer_phone: contact.phone,
-              customer_email: contact.email,
-              customer_address: contact.address,
-              customer_company_name: contact.company_name,
-              customer_tax_number: contact.tax_number,
-            });
-          }}
+      <FieldContainer label={label} required={required} error={error}>
+        <Controller
+          name={fieldName}
+          control={control}
+          rules={rules}
+          render={({ field }) => (
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Pilih customer"
+              value={field.value as string | undefined}
+              onBlur={field.onBlur}
+              options={contacts.map((contact) => ({
+                value: contact.id,
+                label: contact.company_name ? `${contact.name} - ${contact.company_name}` : contact.name,
+              }))}
+              onChange={(contactId) => {
+                field.onChange(contactId);
+                const contact = contacts.find((candidate) => candidate.id === contactId);
+                if (!contact) return;
+
+                setValue('customer_name', contact.name, { shouldDirty: true, shouldValidate: true });
+                setValue('customer_phone', contact.phone, { shouldDirty: true });
+                setValue('customer_email', contact.email, { shouldDirty: true });
+                setValue('customer_address', contact.address, { shouldDirty: true });
+                setValue('customer_company_name', contact.company_name, { shouldDirty: true });
+                setValue('customer_tax_number', contact.tax_number, { shouldDirty: true });
+              }}
+            />
+          )}
         />
-      </Form.Item>
+      </FieldContainer>
     );
   }
 
   if (type === 'tax') {
     return (
-      <Form.Item name={name} label={label} rules={rules}>
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="Pilih pajak"
-          options={taxes.map((tax) => ({
-            value: tax.id,
-            label: `${tax.name} (${tax.rate}%, ${tax.calculation_mode})`,
-          }))}
+      <FieldContainer label={label} required={required} error={error}>
+        <Controller
+          name={fieldName}
+          control={control}
+          rules={rules}
+          render={({ field }) => (
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Pilih pajak"
+              value={field.value as string | undefined}
+              onBlur={field.onBlur}
+              options={taxes.map((tax) => ({
+                value: tax.id,
+                label: `${tax.name} (${tax.rate}%, ${tax.calculation_mode})`,
+              }))}
+              onChange={field.onChange}
+            />
+          )}
         />
-      </Form.Item>
+      </FieldContainer>
     );
   }
 
   if (type === 'department') {
     return (
-      <Form.Item name={name} label={label} rules={rules}>
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="Pilih department"
-          options={departments.map((department) => ({
-            value: department.id,
-            label: department.code ? `${department.code} - ${department.name}` : department.name,
-          }))}
+      <FieldContainer label={label} required={required} error={error}>
+        <Controller
+          name={fieldName}
+          control={control}
+          rules={rules}
+          render={({ field }) => (
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Pilih department"
+              value={field.value as string | undefined}
+              onBlur={field.onBlur}
+              options={departments.map((department) => ({
+                value: department.id,
+                label: department.code ? `${department.code} - ${department.name}` : department.name,
+              }))}
+              onChange={field.onChange}
+            />
+          )}
         />
-      </Form.Item>
+      </FieldContainer>
     );
   }
 
   if (type === 'project') {
     return (
-      <Form.Item name={name} label={label} rules={rules}>
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="Pilih project"
-          options={projects.map((project) => ({
-            value: project.id,
-            label: project.code ? `${project.code} - ${project.name}` : project.name,
-          }))}
+      <FieldContainer label={label} required={required} error={error}>
+        <Controller
+          name={fieldName}
+          control={control}
+          rules={rules}
+          render={({ field }) => (
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Pilih project"
+              value={field.value as string | undefined}
+              onBlur={field.onBlur}
+              options={projects.map((project) => ({
+                value: project.id,
+                label: project.code ? `${project.code} - ${project.name}` : project.name,
+              }))}
+              onChange={field.onChange}
+            />
+          )}
         />
-      </Form.Item>
+      </FieldContainer>
     );
   }
 
@@ -115,31 +184,65 @@ export const FieldRenderer = ({
     ];
 
     return (
-      <Form.Item name={name} label={label} rules={rules}>
-        <Select options={options} />
-      </Form.Item>
+      <FieldContainer label={label} required={required} error={error}>
+        <Controller
+          name={fieldName}
+          control={control}
+          rules={rules}
+          render={({ field }) => (
+            <Select
+              value={field.value as SalesInvoicePaymentStatus | undefined}
+              onBlur={field.onBlur}
+              options={options}
+              onChange={field.onChange}
+            />
+          )}
+        />
+      </FieldContainer>
     );
   }
 
   if (type === 'date') {
     return (
-      <Form.Item name={name} label={label} rules={rules}>
-        <DatePicker className="w-full" />
-      </Form.Item>
+      <FieldContainer label={label} required={required} error={error}>
+        <Controller
+          name={fieldName}
+          control={control}
+          rules={rules}
+          render={({ field }) => (
+            <DatePicker
+              className="w-full"
+              value={(field.value as Dayjs | undefined) ?? null}
+              onBlur={field.onBlur}
+              onChange={field.onChange}
+            />
+          )}
+        />
+      </FieldContainer>
     );
   }
 
   if (type === 'textarea') {
     return (
-      <Form.Item name={name} label={label} rules={rules} className="md:col-span-2">
-        <Input.TextArea rows={3} />
-      </Form.Item>
+      <FieldContainer label={label} required={required} error={error} className="mb-4 md:col-span-2">
+        <Controller
+          name={fieldName}
+          control={control}
+          rules={rules}
+          render={({ field }) => <Input.TextArea {...field} rows={3} value={String(field.value ?? '')} />}
+        />
+      </FieldContainer>
     );
   }
 
   return (
-    <Form.Item name={name} label={label} rules={rules}>
-      <Input />
-    </Form.Item>
+    <FieldContainer label={label} required={required} error={error}>
+      <Controller
+        name={fieldName}
+        control={control}
+        rules={rules}
+        render={({ field }) => <Input {...field} value={String(field.value ?? '')} />}
+      />
+    </FieldContainer>
   );
 };
