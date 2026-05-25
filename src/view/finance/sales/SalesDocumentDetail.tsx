@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, InputNumber, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
 import {
   getSalesDocumentConfig,
   getSalesDocumentTypePathSegment,
   SALES_DOCUMENT_TYPE_OPTIONS,
 } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
+import { useAuth } from '@/auth/useAuth';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
+import { getIssuedReturnSummaryForSource } from '@/services/salesReturnService';
 import type {
+  IssuedSalesReturnSummary,
   SalesDocument,
   SalesDocumentItem,
   SalesDocumentStatus,
@@ -42,9 +45,11 @@ interface SalesDocumentDetailProps {
 export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { can } = useAuth();
   const { issueDocument, voidDocument, convertDocument, payInvoice, isMutating } = useSalesDocuments();
   const [document, setDocument] = useState<SalesDocument | undefined>();
   const [items, setItems] = useState<SalesDocumentItem[]>([]);
+  const [returnSummary, setReturnSummary] = useState<IssuedSalesReturnSummary | undefined>();
   const [paidAmount, setPaidAmount] = useState<number>(0);
 
   const loadDocument = useCallback(async () => {
@@ -52,9 +57,15 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       db.salesDocuments.get(documentId),
       db.salesDocumentItems.where('document_id').equals(documentId).toArray(),
     ]);
+    const loadedReturnSummary = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
+      ? await getIssuedReturnSummaryForSource(loadedDocument.type, loadedDocument.id)
+      : undefined;
+    const netPayable = Math.max(0, Number(loadedDocument?.total_amount || 0) - Number(loadedReturnSummary?.credit_amount || 0));
+
     setDocument(loadedDocument);
     setItems(loadedItems);
-    setPaidAmount(loadedDocument?.paid_amount ?? loadedDocument?.total_amount ?? 0);
+    setReturnSummary(loadedReturnSummary);
+    setPaidAmount(loadedDocument?.paid_amount ?? netPayable);
   }, [documentId]);
 
   useEffect(() => {
@@ -65,12 +76,17 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
         db.salesDocuments.get(documentId),
         db.salesDocumentItems.where('document_id').equals(documentId).toArray(),
       ]);
+      const loadedReturnSummary = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
+        ? await getIssuedReturnSummaryForSource(loadedDocument.type, loadedDocument.id)
+        : undefined;
+      const netPayable = Math.max(0, Number(loadedDocument?.total_amount || 0) - Number(loadedReturnSummary?.credit_amount || 0));
 
       if (!isCurrent) return;
 
       setDocument(loadedDocument);
       setItems(loadedItems);
-      setPaidAmount(loadedDocument?.paid_amount ?? loadedDocument?.total_amount ?? 0);
+      setReturnSummary(loadedReturnSummary);
+      setPaidAmount(loadedDocument?.paid_amount ?? netPayable);
     };
 
     void syncDocument();
@@ -100,7 +116,12 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
     !(document.type === 'SALES_INVOICE' && document.finance_transaction_id);
   const canRecordPayment = config.behavior.hasPaymentStatus && document.status === 'ISSUED';
-  const balanceDue = Math.max(0, Number(document.total_amount || 0) - Number(document.paid_amount || 0));
+  const issuedCreditAmount = Number(returnSummary?.credit_amount || 0);
+  const balanceDue = Math.max(0, Number(document.total_amount || 0) - Number(document.paid_amount || 0) - issuedCreditAmount);
+  const netInvoiceAmount = Math.max(0, Number(document.total_amount || 0) - issuedCreditAmount);
+  const canCreateReturn = can('SALES_RETURN_MANAGE') &&
+    document.status === 'ISSUED' &&
+    (document.type === 'SALES_DELIVERY' || document.type === 'SALES_INVOICE');
   const statusStyle = statusColor[document.status];
   const paymentStyle = document.payment_status ? paymentStatusColor[document.payment_status] : undefined;
   const statusBadge = (
@@ -201,6 +222,17 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               })}
             </Button>
           ))}
+          {canCreateReturn && (
+            <Button
+              icon={<RotateCcw size={16} />}
+              onClick={() => navigate({
+                to: '/finance/sales/returns/new',
+                search: { sourceType: document.type, sourceId: document.id },
+              })}
+            >
+              {t('salesReturns.createFromSource')}
+            </Button>
+          )}
           {canVoid && (
             <Button
               danger
@@ -353,7 +385,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
             <Space wrap>
               <InputNumber
                 min={0}
-                max={document.total_amount}
+                max={netInvoiceAmount}
                 value={paidAmount}
                 onChange={(value) => setPaidAmount(Number(value || 0))}
               />
@@ -370,6 +402,25 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 {t('salesDocuments.recordPayment')}
               </Button>
             </Space>
+          </div>
+        )}
+
+        {returnSummary && returnSummary.return_count > 0 && (
+          <div className="mt-6 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3">
+            <div className="grid gap-2 text-[13px] text-rose-950 md:grid-cols-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.summary.totalReturn')}</div>
+                <div className="font-bold">Rp {formatCurrency(returnSummary.total_amount)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.field.creditAmount')}</div>
+                <div className="font-bold">Rp {formatCurrency(returnSummary.credit_amount)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.field.refundAmount')}</div>
+                <div className="font-bold">Rp {formatCurrency(returnSummary.refund_amount)}</div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -458,6 +509,12 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 <div className="flex justify-between py-1.5 text-[13px]">
                   <span className="text-gray-500">{t('salesDocuments.field.paidAmount')}</span>
                   <span className="font-medium text-green-700">Rp {formatCurrency(document.paid_amount || 0)}</span>
+                </div>
+              )}
+              {config.behavior.hasPaymentStatus && issuedCreditAmount > 0 && (
+                <div className="flex justify-between py-1.5 text-[13px]">
+                  <span className="text-gray-500">{t('salesReturns.field.creditAmount')}</span>
+                  <span className="font-medium text-rose-700">Rp {formatCurrency(issuedCreditAmount)}</span>
                 </div>
               )}
               <div className="my-2 h-px bg-gray-200" />

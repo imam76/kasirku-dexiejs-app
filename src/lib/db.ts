@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem, SalesReturn, SalesReturnItem } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 
 export class KasirkuDB extends Dexie {
@@ -24,6 +24,8 @@ export class KasirkuDB extends Dexie {
   taxes!: Table<Tax>;
   salesDocuments!: Table<SalesDocument>;
   salesDocumentItems!: Table<SalesDocumentItem>;
+  salesReturns!: Table<SalesReturn>;
+  salesReturnItems!: Table<SalesReturnItem>;
 
   constructor() {
     super('KasirkuDB');
@@ -109,6 +111,11 @@ export class KasirkuDB extends Dexie {
     this.version(17).stores({
       salesDocuments: 'id, document_number, type, status, contact_id, customer_name, document_date, due_date, payment_status, source_document_id, project_id, department_id, tax_id, created_at',
       salesDocumentItems: 'id, document_id, product_id'
+    });
+
+    this.version(18).stores({
+      salesReturns: 'id, return_number, status, source_type, source_id, source_document_type, contact_id, customer_name, document_date, resolution, created_at',
+      salesReturnItems: 'id, return_id, source_item_id, product_id'
     });
 
     this.on('populate', async () => {

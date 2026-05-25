@@ -2,6 +2,7 @@ import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { getSalesDocumentConfig, type SalesDocumentConfig } from '@/configs/sales-document';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
+import { getIssuedReturnSummaryForSource } from '@/services/salesReturnService';
 import type {
   SalesDocument,
   SalesDocumentItem,
@@ -399,8 +400,10 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
   if (document.status === 'VOIDED') throw new Error('Invoice voided tidak bisa dibayar.');
 
   const total = Number(document.total_amount || 0);
-  const nextPaidAmount = Math.min(Math.max(0, Number(input.paid_amount || 0)), total);
-  const paymentStatus: SalesInvoicePaymentStatus = nextPaidAmount >= total ? 'PAID' : nextPaidAmount > 0 ? 'PARTIAL' : 'UNPAID';
+  const returnSummary = await getIssuedReturnSummaryForSource('SALES_INVOICE', id);
+  const netTotal = Math.max(0, total - Number(returnSummary.credit_amount || 0));
+  const nextPaidAmount = Math.min(Math.max(0, Number(input.paid_amount || 0)), netTotal);
+  const paymentStatus: SalesInvoicePaymentStatus = netTotal <= 0 || nextPaidAmount >= netTotal ? 'PAID' : nextPaidAmount > 0 ? 'PARTIAL' : 'UNPAID';
   const now = new Date().toISOString();
   const paidAt = input.paid_at || now;
   const previousPaidAmount = Number(document.paid_amount || 0);

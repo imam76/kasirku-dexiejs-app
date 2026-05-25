@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product } from '@/types';
+import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import {
   aggregateSoldItems,
@@ -441,7 +442,8 @@ export const useExpenseReport = (startDate?: string, endDate?: string, categorie
           .reverse();
       }
 
-      let transactions = await collection.toArray();
+      let transactions = (await collection.toArray())
+        .filter((transaction) => transaction.category !== FINANCE_CATEGORIES.SALES_REFUND);
 
       // Filter by category if provided
       if (categories && categories.length > 0) {
@@ -468,7 +470,8 @@ export const useExpenseCategories = () => {
   return useQuery({
     queryKey: ['expenseCategories'],
     queryFn: async () => {
-      const transactions = await db.financeTransactions.where('type').equals('EXPENSE').toArray();
+      const transactions = (await db.financeTransactions.where('type').equals('EXPENSE').toArray())
+        .filter((transaction) => transaction.category !== FINANCE_CATEGORIES.SALES_REFUND);
       const categories = [...new Set(transactions.map((t) => t.category))];
       return categories.sort();
     },

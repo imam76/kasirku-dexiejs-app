@@ -84,6 +84,19 @@ export type SalesDocumentType =
 export type SalesDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type SalesInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 export type SalesDocumentMarginBasis = 'BEFORE_TAX' | 'AFTER_TAX';
+export type SalesReturnSourceType =
+  | 'SALES_DELIVERY'
+  | 'SALES_INVOICE'
+  | 'POS_TRANSACTION';
+export type SalesReturnStatus = 'DRAFT' | 'ISSUED' | 'VOIDED';
+export type SalesReturnResolution =
+  | 'NO_FINANCE'
+  | 'REFUND'
+  | 'CREDIT_NOTE';
+export type SalesReturnItemCondition =
+  | 'SELLABLE'
+  | 'DAMAGED'
+  | 'DISCARDED';
 
 export type Permission =
   | 'TRANSACTION_VOID'
@@ -94,6 +107,7 @@ export type Permission =
   | 'STOCK_ACCESS'
   | 'STOCK_PURCHASE_ACCESS'
   | 'FINANCE_ACCESS'
+  | 'SALES_RETURN_MANAGE'
   | 'SETTINGS_ACCESS'
   | 'USER_MANAGE'
   | 'ACTIVITY_LOG_VIEW';
@@ -285,6 +299,115 @@ export interface SalesDocumentItem {
   created_at: string;
 }
 
+export interface SalesReturn {
+  id: string;
+  return_number: string;
+  status: SalesReturnStatus;
+  source_type: SalesReturnSourceType;
+  source_id: string;
+  source_number: string;
+  source_document_type?: SalesDocumentType;
+  contact_id?: string;
+  customer_name: string;
+  customer_phone?: string;
+  customer_email?: string;
+  customer_address?: string;
+  document_date: string;
+  resolution: SalesReturnResolution;
+  reason?: string;
+  subtotal_amount: number;
+  discount_amount?: number;
+  tax_amount?: number;
+  total_amount: number;
+  refund_amount?: number;
+  credit_amount?: number;
+  finance_transaction_id?: string;
+  issued_at?: string;
+  voided_at?: string;
+  void_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalesReturnItem {
+  id: string;
+  return_id: string;
+  source_item_id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  unit: ProductUnit;
+  quantity: number;
+  source_quantity: number;
+  price: number;
+  discount_amount?: number;
+  tax_amount?: number;
+  subtotal: number;
+  total_amount: number;
+  purchase_price?: number;
+  profit_reversal?: number;
+  condition: SalesReturnItemCondition;
+  restock_quantity?: number;
+  created_at: string;
+}
+
+export interface SalesReturnSourceItem {
+  source_item_id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  unit: ProductUnit;
+  source_quantity: number;
+  remaining_quantity: number;
+  price: number;
+  discount_amount?: number;
+  tax_amount?: number;
+  subtotal: number;
+  total_amount: number;
+  purchase_price?: number;
+  profit?: number;
+}
+
+export interface SalesReturnableSource {
+  source_type: SalesReturnSourceType;
+  source_id: string;
+  source_number: string;
+  source_document_type?: SalesDocumentType;
+  status: SalesDocumentStatus | TransactionStatus;
+  contact_id?: string;
+  customer_name: string;
+  customer_phone?: string;
+  customer_email?: string;
+  customer_address?: string;
+  document_date: string;
+  items: SalesReturnSourceItem[];
+}
+
+export interface IssuedSalesReturnSummaryItem {
+  source_item_id: string;
+  quantity: number;
+  total_amount: number;
+  refund_amount: number;
+  credit_amount: number;
+  restock_quantity: number;
+  profit_reversal: number;
+}
+
+export interface IssuedSalesReturnSummary {
+  source_type: SalesReturnSourceType;
+  source_id: string;
+  return_count: number;
+  subtotal_amount: number;
+  discount_amount: number;
+  tax_amount: number;
+  total_amount: number;
+  refund_amount: number;
+  credit_amount: number;
+  restock_quantity: number;
+  profit_reversal: number;
+  items: Record<string, IssuedSalesReturnSummaryItem>;
+}
+
 export interface PromoAdjustment {
   promo_id: string;
   promo_name: string;
@@ -466,7 +589,7 @@ export interface ProfitLog {
   transaction_id?: string; // Optional, link to transaction if source is transaction
   amount: number;
   type: 'IN' | 'OUT';
-  category?: 'WITHDRAW' | 'OPERATIONAL' | 'SALES' | 'VOID'; // New field to categorize profit log
+  category?: 'WITHDRAW' | 'OPERATIONAL' | 'SALES' | 'VOID' | 'SALES_RETURN'; // New field to categorize profit log
   description: string;
   created_at: string;
   balance_after: number;
