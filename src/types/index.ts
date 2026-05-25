@@ -83,6 +83,7 @@ export type SalesDocumentType =
   | 'SALES_INVOICE';
 export type SalesDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type SalesInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
+export type SalesDocumentMarginBasis = 'BEFORE_TAX' | 'AFTER_TAX';
 
 export type Permission =
   | 'TRANSACTION_VOID'

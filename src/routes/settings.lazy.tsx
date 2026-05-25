@@ -1,7 +1,7 @@
 import { createLazyFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
-import { App, Card, Button, Upload, Typography, Alert } from 'antd'
-import { Download, Upload as UploadIcon, Database, AlertTriangle } from 'lucide-react'
+import { App, Card, Button, Upload, Typography, Alert, Segmented } from 'antd'
+import { Download, Upload as UploadIcon, Database, AlertTriangle, FileText } from 'lucide-react'
 import { backupDatabase, restoreDatabase } from '@/utils/backupRestore'
 import { useNavigate } from '@tanstack/react-router'
 import PrinterSettingsCard from '@/components/PrinterSettingsCard'
@@ -9,6 +9,8 @@ import { useI18n } from '@/hooks/useI18n'
 import { useAuth } from '@/auth/useAuth'
 import { UserManagement } from '@/view/auth/UserManagement'
 import { ActivityLogViewer } from '@/view/auth/ActivityLogViewer'
+import { useSalesDocumentMarginSettings } from '@/hooks/useSalesDocumentMarginSettings'
+import type { SalesDocumentMarginBasis } from '@/types'
 
 const { Paragraph } = Typography
 
@@ -21,6 +23,7 @@ function Settings() {
   const navigate = useNavigate()
   const { t } = useI18n()
   const { can } = useAuth()
+  const { marginBasis, setMarginBasis } = useSalesDocumentMarginSettings()
   const [loading, setLoading] = useState(false)
 
   const handleBackup = async () => {
@@ -89,6 +92,34 @@ function Settings() {
 
       <div className="mb-6">
         <PrinterSettingsCard />
+      </div>
+
+      <div className="mb-6">
+        <Card
+          title={<div className="flex items-center gap-2"><FileText className="w-5 h-5" /> {t('settings.salesDocumentTitle')}</div>}
+          className="shadow-md"
+        >
+          <div className="space-y-4">
+            <div>
+              <div className="mb-2 text-sm font-semibold text-gray-700">
+                {t('settings.salesDocumentMarginBasis')}
+              </div>
+              <Segmented
+                value={marginBasis}
+                onChange={(value) => setMarginBasis(value as SalesDocumentMarginBasis)}
+                options={[
+                  { label: t('settings.salesDocumentMarginBeforeTax'), value: 'BEFORE_TAX' },
+                  { label: t('settings.salesDocumentMarginAfterTax'), value: 'AFTER_TAX' },
+                ]}
+              />
+            </div>
+            <Paragraph className="!mb-0 text-gray-600">
+              {marginBasis === 'BEFORE_TAX'
+                ? t('settings.salesDocumentMarginBeforeTaxHelp')
+                : t('settings.salesDocumentMarginAfterTaxHelp')}
+            </Paragraph>
+          </div>
+        </Card>
       </div>
 
       {can('USER_MANAGE') && (
