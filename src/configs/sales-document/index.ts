@@ -74,8 +74,23 @@ export const salesDocumentConfigs = {
 export const getSalesDocumentConfig = (type: SalesDocumentType) => salesDocumentConfigs[type];
 
 export const SALES_DOCUMENT_TYPE_OPTIONS = [
-  { value: 'SALES_QUOTATION', labelKey: 'salesDocuments.type.salesQuotation' },
-  { value: 'SALES_ORDER', labelKey: 'salesDocuments.type.salesOrder' },
-  { value: 'SALES_DELIVERY', labelKey: 'salesDocuments.type.salesDelivery' },
-  { value: 'SALES_INVOICE', labelKey: 'salesDocuments.type.salesInvoice' },
-] satisfies Array<{ value: SalesDocumentType; labelKey: TranslationKey }>;
+  { value: 'SALES_QUOTATION', labelKey: 'salesDocuments.type.salesQuotation', slug: 'sq' },
+  { value: 'SALES_ORDER', labelKey: 'salesDocuments.type.salesOrder', slug: 'so' },
+  { value: 'SALES_DELIVERY', labelKey: 'salesDocuments.type.salesDelivery', slug: 'sd' },
+  { value: 'SALES_INVOICE', labelKey: 'salesDocuments.type.salesInvoice', slug: 'si' },
+] satisfies Array<{ value: SalesDocumentType; labelKey: TranslationKey; slug: string }>;
+
+export const getSalesDocumentTypePathSegment = (type: SalesDocumentType) => (
+  SALES_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === type)?.slug ?? type
+);
+
+export const getSalesDocumentTypeFromPathSegment = (pathSegment: string): SalesDocumentType | undefined => {
+  const normalizedType = pathSegment.trim().toUpperCase();
+
+  if (normalizedType in salesDocumentConfigs) {
+    return normalizedType as SalesDocumentType;
+  }
+
+  const normalizedSlug = pathSegment.trim().toLowerCase();
+  return SALES_DOCUMENT_TYPE_OPTIONS.find((option) => option.slug === normalizedSlug)?.value;
+};

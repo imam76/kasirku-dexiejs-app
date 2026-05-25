@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, InputNumber, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
 import { AlertTriangle } from 'lucide-react';
-import { getSalesDocumentConfig, SALES_DOCUMENT_TYPE_OPTIONS } from '@/configs/sales-document';
-import { useAuth } from '@/auth/useAuth';
+import {
+  getSalesDocumentConfig,
+  getSalesDocumentTypePathSegment,
+  SALES_DOCUMENT_TYPE_OPTIONS,
+} from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import { useSalesDocumentMarginSettings } from '@/hooks/useSalesDocumentMarginSettings';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
 import type {
@@ -16,7 +18,6 @@ import type {
   SalesInvoicePaymentStatus,
 } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import { calculateSalesDocumentMargin } from '@/utils/salesDocuments/calculateSalesDocumentMargin';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 
 const { Title, Text } = Typography;
@@ -41,8 +42,6 @@ interface SalesDocumentDetailProps {
 export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { can } = useAuth();
-  const { marginBasis } = useSalesDocumentMarginSettings();
   const { issueDocument, voidDocument, convertDocument, payInvoice, isMutating } = useSalesDocuments();
   const [document, setDocument] = useState<SalesDocument | undefined>();
   const [items, setItems] = useState<SalesDocumentItem[]>([]);
@@ -92,11 +91,6 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     };
     return allowed[document.type];
   }, [document]);
-  const marginSummary = useMemo(() => calculateSalesDocumentMargin(items, marginBasis), [items, marginBasis]);
-  const marginItemMap = useMemo(
-    () => new Map(marginSummary.items.map((item) => [item.item_id, item])),
-    [marginSummary],
-  );
 
   if (!document || !config) {
     return <div className="p-6">{t('salesDocuments.notFound')}</div>;
@@ -107,12 +101,6 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     !(document.type === 'SALES_INVOICE' && document.finance_transaction_id);
   const canRecordPayment = config.behavior.hasPaymentStatus && document.status === 'ISSUED';
   const balanceDue = Math.max(0, Number(document.total_amount || 0) - Number(document.paid_amount || 0));
-  const canViewMargin = can('PROFIT_VIEW') &&
-    config.behavior.hasPricing &&
-    document.type !== 'SALES_DELIVERY';
-  const marginBasisLabel = marginBasis === 'AFTER_TAX'
-    ? t('salesDocuments.marginBasis.afterTax')
-    : t('salesDocuments.marginBasis.beforeTax');
   const statusStyle = statusColor[document.status];
   const paymentStyle = document.payment_status ? paymentStatusColor[document.payment_status] : undefined;
   const statusBadge = (
@@ -179,7 +167,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
             <Button
               onClick={() => navigate({
                 to: '/finance/sales/$documentType/$documentId/edit',
-                params: { documentType: document.type, documentId: document.id },
+                params: { documentType: getSalesDocumentTypePathSegment(document.type), documentId: document.id },
               })}
             >
               {t('salesDocuments.editDraft')}
@@ -201,7 +189,10 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 const result = await convertDocument({ sourceId: document.id, targetType });
                 navigate({
                   to: '/finance/sales/$documentType/$documentId',
-                  params: { documentType: result.document.type, documentId: result.document.id },
+                  params: {
+                    documentType: getSalesDocumentTypePathSegment(result.document.type),
+                    documentId: result.document.id,
+                  },
                 });
               }}
             >
@@ -407,99 +398,47 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                   {t('salesDocuments.field.unit')}
                 </th>
                 {config.behavior.hasPricing && (
-                  <th className={`${canViewMargin ? '' : 'rounded-r-md'} px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white`}>
+                  <th className="rounded-r-md px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
                     {t('salesDocuments.field.subtotal')}
                   </th>
-                )}
-                {canViewMargin && (
-                  <>
-                    <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
-                      {t('salesDocuments.field.hpp')}
-                    </th>
-                    <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
-                      {t('salesDocuments.field.grossProfit')}
-                    </th>
-                    <th className="rounded-r-md px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
-                      {t('salesDocuments.field.marginPercent')}
-                    </th>
-                  </>
                 )}
               </tr>
             </thead>
             <tbody>
-              {items.map((item, index) => {
-                const itemMargin = marginItemMap.get(item.id);
-
-                return (
-                  <tr key={item.id} className="border-b border-gray-100 last:border-b-0">
-                    <td className="px-3 py-3 text-center align-top text-xs font-semibold text-gray-400">{index + 1}</td>
-                    <td className="px-3 py-3 align-top">
-                      <div className="font-semibold text-gray-950">{item.product_name}</div>
-                      <div className="mt-1 text-[11.5px] leading-5 text-gray-400">
-                        {item.sku ? `${item.sku} · ` : ''}
-                        {item.quantity} {item.unit}
-                        {item.delivered_quantity !== undefined ? ` · ${t('salesDocuments.field.deliveredQuantity')}: ${item.delivered_quantity}` : ''}
-                        {config.behavior.hasPricing ? ` · ${t('salesDocuments.field.discount')}: Rp ${formatCurrency(item.discount_amount || 0)}` : ''}
-                        {config.behavior.hasTax ? ` · ${t('salesDocuments.field.tax')}: Rp ${formatCurrency(item.tax_amount || 0)}` : ''}
-                      </div>
+              {items.map((item, index) => (
+                <tr key={item.id} className="border-b border-gray-100 last:border-b-0">
+                  <td className="px-3 py-3 text-center align-top text-xs font-semibold text-gray-400">{index + 1}</td>
+                  <td className="px-3 py-3 align-top">
+                    <div className="font-semibold text-gray-950">{item.product_name}</div>
+                    <div className="mt-1 text-[11.5px] leading-5 text-gray-400">
+                      {item.sku ? `${item.sku} · ` : ''}
+                      {item.quantity} {item.unit}
+                      {item.delivered_quantity !== undefined ? ` · ${t('salesDocuments.field.deliveredQuantity')}: ${item.delivered_quantity}` : ''}
+                      {config.behavior.hasPricing ? ` · ${t('salesDocuments.field.discount')}: Rp ${formatCurrency(item.discount_amount || 0)}` : ''}
+                      {config.behavior.hasTax ? ` · ${t('salesDocuments.field.tax')}: Rp ${formatCurrency(item.tax_amount || 0)}` : ''}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-right align-top text-gray-700">{item.quantity}</td>
+                  {config.type === 'SALES_DELIVERY' && (
+                    <td className="px-3 py-3 text-right align-top text-gray-700">{item.delivered_quantity ?? '-'}</td>
+                  )}
+                  {config.behavior.hasPricing && (
+                    <td className="px-3 py-3 text-right align-top text-gray-700">Rp {formatCurrency(item.price || 0)}</td>
+                  )}
+                  <td className="px-3 py-3 text-right align-top text-gray-700">{item.unit}</td>
+                  {config.behavior.hasPricing && (
+                    <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
+                      Rp {formatCurrency(item.subtotal || 0)}
                     </td>
-                    <td className="px-3 py-3 text-right align-top text-gray-700">{item.quantity}</td>
-                    {config.type === 'SALES_DELIVERY' && (
-                      <td className="px-3 py-3 text-right align-top text-gray-700">{item.delivered_quantity ?? '-'}</td>
-                    )}
-                    {config.behavior.hasPricing && (
-                      <td className="px-3 py-3 text-right align-top text-gray-700">Rp {formatCurrency(item.price || 0)}</td>
-                    )}
-                    <td className="px-3 py-3 text-right align-top text-gray-700">{item.unit}</td>
-                    {config.behavior.hasPricing && (
-                      <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
-                        Rp {formatCurrency(item.subtotal || 0)}
-                      </td>
-                    )}
-                    {canViewMargin && (
-                      <>
-                        <td className="px-3 py-3 text-right align-top text-gray-700">
-                          Rp {formatCurrency(itemMargin?.cost_amount || 0)}
-                        </td>
-                        <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
-                          Rp {formatCurrency(itemMargin?.gross_profit || 0)}
-                        </td>
-                        <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
-                          {formatCurrency(itemMargin?.margin_percent || 0)}%
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
+                  )}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
 
         {config.behavior.hasPricing && (
-          <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            {canViewMargin && (
-              <div className="w-full max-w-[320px] rounded-lg border border-gray-100 px-4 py-3">
-                <div className="mb-2 text-[11px] font-bold uppercase tracking-[.07em] text-gray-400">
-                  {t('salesDocuments.marginSummary')}
-                </div>
-                <div className="flex justify-between py-1.5 text-[13px]">
-                  <span className="text-gray-500">{t('salesDocuments.field.hpp')}</span>
-                  <span className="font-medium text-gray-700">Rp {formatCurrency(marginSummary.total_cost)}</span>
-                </div>
-                <div className="flex justify-between py-1.5 text-[13px]">
-                  <span className="text-gray-500">{t('salesDocuments.field.grossProfit')}</span>
-                  <span className="font-medium text-gray-700">Rp {formatCurrency(marginSummary.gross_profit)}</span>
-                </div>
-                <div className="flex justify-between py-1.5 text-[13px]">
-                  <span className="text-gray-500">{t('salesDocuments.field.marginPercent')}</span>
-                  <span className="font-semibold text-gray-950">{formatCurrency(marginSummary.margin_percent)}%</span>
-                </div>
-                <div className="mt-2 text-[11.5px] leading-5 text-gray-400">
-                  {t('salesDocuments.marginBasisLabel', { basis: marginBasisLabel })}
-                </div>
-              </div>
-            )}
+          <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-end">
             <div className="w-full max-w-[280px]">
               <div className="flex justify-between py-1.5 text-[13px]">
                 <span className="text-gray-500">{t('salesDocuments.field.subtotal')}</span>

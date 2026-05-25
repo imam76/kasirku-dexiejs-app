@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Spin, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
-import { getSalesDocumentConfig } from '@/configs/sales-document';
+import { getSalesDocumentConfig, getSalesDocumentTypePathSegment } from '@/configs/sales-document';
 import { SalesDocumentForm } from '@/components/sales-document/SalesDocumentForm';
 import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
@@ -78,13 +78,16 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
         submitting={isSubmitting}
         onCancel={() => {
           if (!document) {
-            navigate({ to: '/finance/sales' });
+            navigate({
+              to: '/finance/sales/$documentType',
+              params: { documentType: getSalesDocumentTypePathSegment(documentType) },
+            });
             return;
           }
 
           navigate({
             to: '/finance/sales/$documentType/$documentId',
-            params: { documentType: document.type, documentId: document.id },
+            params: { documentType: getSalesDocumentTypePathSegment(document.type), documentId: document.id },
           });
         }}
         onSubmit={async (input) => {
@@ -93,7 +96,10 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
             : await createDocument(input);
           navigate({
             to: '/finance/sales/$documentType/$documentId',
-            params: { documentType: result.document.type, documentId: result.document.id },
+            params: {
+              documentType: getSalesDocumentTypePathSegment(result.document.type),
+              documentId: result.document.id,
+            },
           });
         }}
       />

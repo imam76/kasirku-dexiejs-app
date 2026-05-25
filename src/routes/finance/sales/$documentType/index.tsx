@@ -1,14 +1,14 @@
-import { createLazyFileRoute } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { Alert } from 'antd';
 import { getSalesDocumentTypeFromPathSegment } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import SalesDocumentEditor from '@/view/finance/sales/SalesDocumentEditor';
+import { SalesDocumentTypeManagement } from '@/view/finance/sales/SalesDocumentsManagement';
 
-export const Route = createLazyFileRoute('/finance/sales/$documentType/new')({
-  component: NewSalesDocumentRoute,
+export const Route = createFileRoute('/finance/sales/$documentType/')({
+  component: SalesDocumentTypeRoute,
 });
 
-function NewSalesDocumentRoute() {
+function SalesDocumentTypeRoute() {
   const { t } = useI18n();
   const { documentType } = Route.useParams();
   const resolvedDocumentType = getSalesDocumentTypeFromPathSegment(documentType);
@@ -17,5 +17,5 @@ function NewSalesDocumentRoute() {
     return <div className="p-6"><Alert type="error" message={t('salesDocuments.invalidType')} /></div>;
   }
 
-  return <SalesDocumentEditor documentType={resolvedDocumentType} />;
+  return <SalesDocumentTypeManagement documentType={resolvedDocumentType} />;
 }

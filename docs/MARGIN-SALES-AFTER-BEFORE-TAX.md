@@ -1,6 +1,6 @@
 # Margin Sales Document - Before Tax dan After Tax
 
-Dokumen ini menjelaskan langkah implementasi pilihan basis margin untuk Sales Document: margin dihitung terhadap nilai sebelum pajak atau nilai setelah pajak. Targetnya: margin keuntungan dari Sales Invoice bisa terlihat tanpa mengubah total invoice, cash flow, dan flow POS yang sudah ada.
+Dokumen ini menjelaskan langkah implementasi pilihan basis margin untuk Sales Document: margin dihitung terhadap nilai sebelum pajak atau nilai setelah pajak. Targetnya: margin keuntungan dari Sales Invoice bisa dianalisis di laporan Sales/Sales Document tanpa mengubah detail dokumen, total invoice, cash flow, dan flow POS yang sudah ada.
 
 ## Audit Kondisi Project Saat Ini
 
@@ -14,7 +14,7 @@ Sales Document sudah memiliki pondasi data yang cukup untuk menghitung margin:
 - Profit POS masih berjalan lewat `src/services/checkoutService.ts`, `transactions`, `transactionItems`, `profitLogs`, dan `profitBalance`.
 - Report margin saat ini masih berbasis POS transaction item di `src/hooks/useReports.tsx`, belum membaca `salesDocuments` dan `salesDocumentItems`.
 
-Kesimpulan audit: pilihan before tax / after tax cukup dibuat sebagai basis tampilan dan report margin Sales Document. Nilai laba kotor tetap harus memakai pendapatan sebelum pajak karena pajak bukan keuntungan toko.
+Kesimpulan audit: pilihan before tax / after tax dibuat sebagai basis laporan margin Sales Document. Nilai laba kotor tetap harus memakai pendapatan sebelum pajak karena pajak bukan keuntungan toko. Detail dokumen SQ, SO, SD, dan SI tidak boleh menampilkan HPP, gross profit, atau margin karena detail itu adalah dokumen operasional/customer-facing, bukan laporan profit.
 
 ## Prinsip Implementasi
 
@@ -22,9 +22,10 @@ Kesimpulan audit: pilihan before tax / after tax cukup dibuat sebagai basis tamp
 - Jangan mengubah flow POS checkout.
 - Jangan memakai `transactions` dan `transactionItems` untuk Sales Document.
 - Jangan memasukkan pajak sebagai laba toko.
+- Jangan tampilkan HPP, gross profit, atau margin di detail dokumen SQ, SO, SD, atau SI.
 - `grossProfit` tetap dihitung dari revenue sebelum pajak dikurangi HPP.
 - Setting hanya menentukan denominator margin, bukan mengubah laba rupiah.
-- Gunakan util bersama agar detail invoice, report, dan service tidak punya rumus berbeda.
+- Gunakan util bersama agar report dan service tidak punya rumus berbeda.
 - Jika setting disimpan permanen, pastikan ikut backup/restore.
 - Jika setting hanya untuk preferensi tampilan, boleh mulai dari `localStorage`, tetapi tetap bungkus lewat hook/helper typed agar mudah dipindah ke Dexie.
 
@@ -76,12 +77,13 @@ src/services/appSettingsService.ts
 Update file existing:
 
 - `src/types/index.ts`: tambah tipe `SalesDocumentMarginBasis`.
-- `src/view/finance/sales/SalesDocumentDetail.tsx`: tampilkan HPP, gross profit, dan margin.
-- `src/view/finance/sales/SalesDocumentsManagement.tsx`: opsional, tampilkan summary margin per invoice di table/list.
-- `src/hooks/useReports.tsx`: tambah query/report gabungan atau report khusus Sales Document jika margin ingin masuk laporan.
+- `src/view/finance/sales/SalesDocumentDetail.tsx`: pastikan tidak ada HPP, gross profit, atau margin di detail dokumen.
+- `src/hooks/useSalesDocumentReports.tsx`: tambah query/report khusus Sales Document.
+- `src/view/finance/sales/*Report*.tsx` atau route report terkait: tampilkan ringkasan dan breakdown margin Sales Document di area laporan.
+- `src/hooks/useReports.tsx`: jangan dicampur ke report POS tanpa keputusan eksplisit.
 - `src/services/profitService.ts`: jika profit Sales Invoice mau masuk `profitBalance`, perluas replay agar membaca `salesDocuments` dan `salesDocumentItems`.
 - `src/routes/settings.lazy.tsx`: tambah pilihan basis margin di halaman Settings.
-- `src/i18n/messages.ts` atau file i18n terkait: tambah label setting dan label summary margin.
+- `src/i18n/messages.ts` atau file i18n terkait: tambah label setting dan label report margin.
 - `src/utils/backupRestore.ts`: update hanya jika setting disimpan di Dexie.
 - `src/lib/db.ts`: update hanya jika menambah table setting Dexie.
 
@@ -145,7 +147,7 @@ src/hooks/useSalesDocumentMarginSettings.tsx
    - `isBeforeTax`
    - `isAfterTax`
 
-4. Jangan baca/tulis `localStorage` langsung dari komponen detail/report. Semua akses lewat hook.
+4. Jangan baca/tulis `localStorage` langsung dari komponen report. Semua akses lewat hook.
 5. Jika nanti setting harus ikut backup/restore, pindahkan storage ke Dexie table `appSettings`.
 
 Rekomendasi default: mulai dari `localStorage` dulu karena pilihan ini hanya mempengaruhi tampilan persentase. Jangan tambah migrasi Dexie hanya untuk preferensi UI kecuali user memang butuh setting ikut backup/restore.
@@ -163,57 +165,53 @@ Rekomendasi default: mulai dari `localStorage` dulu karena pilihan ini hanya mem
    - `Setelah pajak`: margin dibanding total invoice.
 6. Jangan membuat halaman settings baru jika section existing masih cukup.
 
-## Fase 4 - Tampilkan Margin Di Detail Sales Document
+## Fase 4 - Jaga Detail Sales Document Tetap Bersih
 
-1. Update `src/view/finance/sales/SalesDocumentDetail.tsx`.
-2. Ambil setting dari `useSalesDocumentMarginSettings()`.
-3. Hitung margin summary dari `items` menggunakan util.
-4. Tampilkan hanya untuk dokumen yang punya pricing:
-   - `SALES_QUOTATION`
-   - `SALES_ORDER`
-   - `SALES_INVOICE`
-5. Jangan tampilkan margin untuk `SALES_DELIVERY` jika dokumen tidak punya harga.
-6. Tambahkan summary:
-   - Total HPP
-   - Gross Profit
-   - Margin
-7. Untuk line item, opsional tambahkan:
+1. Update atau audit `src/view/finance/sales/SalesDocumentDetail.tsx`.
+2. Jangan ambil `useSalesDocumentMarginSettings()` di detail dokumen.
+3. Jangan hitung `calculateSalesDocumentMargin()` di detail dokumen.
+4. Jangan tampilkan kolom atau card berikut di detail SQ, SO, SD, atau SI:
    - HPP
-   - Profit
+   - Gross Profit
    - Margin %
-8. Pastikan data sensitif profit mengikuti guard permission yang sudah berlaku untuk akses profit jika fitur permission sudah aktif.
+   - Ringkasan Margin
+5. Detail dokumen hanya menampilkan informasi dokumen: customer, tanggal, status, item, qty, harga jual, diskon, pajak, total, pembayaran, catatan, dan status dokumen.
+6. Jika nanti ada tombol cetak/export dokumen, pastikan HPP, gross profit, dan margin juga tidak ikut masuk ke output dokumen.
 
 ## Fase 5 - Report Sales Document
 
-1. Jangan campur langsung ke `useSalesReport()` POS tanpa keputusan eksplisit, karena report POS saat ini membaca `transactions` dan `transactionItems`.
-2. Buat helper/query khusus untuk Sales Document terlebih dahulu, misalnya:
+1. Margin Sales Document ditampilkan di area laporan, bukan di detail dokumen.
+2. Jangan campur langsung ke `useSalesReport()` POS tanpa keputusan eksplisit, karena report POS saat ini membaca `transactions` dan `transactionItems`.
+3. Buat helper/query khusus untuk Sales Document terlebih dahulu, misalnya:
 
 ```txt
 src/hooks/useSalesDocumentReports.tsx
 ```
 
-3. Query membaca:
+4. Query membaca:
    - `db.salesDocuments`
    - `db.salesDocumentItems`
-4. Filter hanya dokumen yang relevan:
+5. Filter hanya dokumen yang relevan:
    - `type === 'SALES_INVOICE'`
    - `status === 'ISSUED'`
    - exclude `VOIDED`
-5. Tentukan kapan invoice dihitung di report:
+6. Tentukan kapan invoice dihitung di report:
    - basis accrual: saat invoice issued.
    - basis cash: saat invoice paid/partial paid.
-6. Untuk fase awal, pakai basis accrual untuk margin operasional, dan tetap biarkan cash flow mengikuti pembayaran invoice.
-7. Return summary:
+7. Untuk fase awal, pakai basis accrual untuk margin operasional, dan tetap biarkan cash flow mengikuti pembayaran invoice.
+8. Ambil `marginBasis` dari `useSalesDocumentMarginSettings()` di layar/hook report.
+9. Return summary:
    - total invoice before tax
    - total invoice after tax
    - total HPP
    - gross profit
    - margin percent
    - breakdown per customer/project/department jika dibutuhkan.
+10. Pastikan data sensitif profit mengikuti guard permission yang sudah berlaku untuk akses profit jika fitur permission sudah aktif.
 
 ## Fase 6 - Profit Balance dan Recalculate Profit
 
-Fase ini hanya perlu jika margin Sales Invoice mau mempengaruhi `profitBalance`, bukan hanya tampil di detail/report.
+Fase ini hanya perlu jika margin Sales Invoice mau mempengaruhi `profitBalance`, bukan hanya tampil di report.
 
 1. Update `src/services/profitService.ts`.
 2. Perluas `recalculateProfit()` supaya membaca Sales Invoice dari `salesDocuments`.
@@ -242,7 +240,7 @@ Rekomendasi awal: gunakan accrual untuk report margin, tetapi jangan langsung ma
    - Gross Profit untuk laba kotor.
    - Margin untuk persentase.
 3. Jika permission profit sudah aktif, sembunyikan nilai HPP, gross profit, dan margin dari role yang tidak boleh melihat profit.
-4. Jangan hanya menyembunyikan UI table; pastikan export/report juga mengikuti guard yang sama.
+4. Jangan hanya menyembunyikan UI table; pastikan export report juga mengikuti guard yang sama.
 
 ## Fase 8 - Backup Restore Jika Setting Dexie Dipakai
 
@@ -277,10 +275,10 @@ Catatan: jika lint gagal karena issue existing yang tidak terkait, catat file da
 Skenario manual minimal:
 
 1. Buat Sales Invoice dengan tax exclusive.
-2. Cek margin before tax.
+2. Cek margin before tax di laporan Sales/Sales Document.
 3. Ganti setting ke after tax.
 4. Pastikan gross profit rupiah tetap sama.
-5. Pastikan margin percent berubah sesuai denominator.
+5. Pastikan margin percent di laporan berubah sesuai denominator.
 6. Buat Sales Invoice tax inclusive.
 7. Pastikan before tax memakai `tax_base_amount`.
 8. Void invoice dan pastikan tidak tampil sebagai invoice aktif di report.
@@ -292,8 +290,9 @@ Skenario manual minimal:
 - Pilihan basis margin tidak mengubah total invoice.
 - Gross profit rupiah tetap memakai revenue sebelum pajak.
 - Margin percent berubah sesuai setting.
-- Sales Document Detail menampilkan summary margin dengan benar.
-- Sales Document report bisa membaca data dari `salesDocuments` dan `salesDocumentItems`.
+- Detail SQ, SO, SD, dan SI tidak menampilkan HPP, gross profit, margin per item, atau ringkasan margin.
+- Sales Document report/laporan Sales bisa membaca data dari `salesDocuments` dan `salesDocumentItems`.
+- Sales Document report/laporan Sales menampilkan total HPP, gross profit, dan margin percent dengan benar.
 - POS checkout dan report POS tidak berubah.
 - Cash flow invoice tetap mengikuti pembayaran invoice.
 - Profit invoice tidak dihitung penuh dari finance income pembayaran invoice.
@@ -305,8 +304,8 @@ Skenario manual minimal:
 2. Tambah util `calculateSalesDocumentMargin()`.
 3. Tambah hook setting margin dengan default `BEFORE_TAX`.
 4. Tambah pilihan basis margin di Settings.
-5. Tampilkan summary margin di `SalesDocumentDetail`.
+5. Pastikan `SalesDocumentDetail` bersih dari HPP, gross profit, dan margin.
 6. Tambah report/query Sales Document khusus.
 7. Baru setelah policy profit disepakati, integrasikan ke `profitService.recalculateProfit()`.
 
-Dengan urutan ini, fitur margin bisa terlihat cepat di Sales Document tanpa risiko mengacaukan cash flow, POS checkout, atau withdrawable profit.
+Dengan urutan ini, fitur margin masuk ke laporan Sales/Sales Document tanpa mengubah detail dokumen operasional, cash flow, POS checkout, atau withdrawable profit.

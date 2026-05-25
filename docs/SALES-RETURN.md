@@ -318,7 +318,7 @@ Untuk source POS:
 - Saat return di-void, balikkan profit reversal.
 
 Untuk source Sales Invoice:
-- Saat dokumen ini dibuat, profit Sales Invoice belum menjadi sumber utama `profitBalance`; margin masih tampil di detail/report Sales Document.
+- Saat dokumen ini dibuat, profit Sales Invoice belum menjadi sumber utama `profitBalance`; margin Sales Invoice seharusnya dihitung di laporan Sales/Sales Document, bukan di detail dokumen SQ/SO/SD/SI.
 - Karena itu fase awal jangan langsung memasukkan Sales Invoice return ke `profitBalance` kalau profit invoice belum diposting ke sana.
 - Update report margin Sales Document agar invoice return mengurangi revenue dan gross profit.
 - Jika nanti Sales Invoice profit diposting ke `profitBalance`, perluas `recalculateProfit()` agar membaca `salesReturns` dan `salesReturnItems`.
