@@ -859,18 +859,6 @@ Acceptance:
 - `recalculateFinance()` tidak merusak pembayaran invoice.
 
 ### Fase 9 - QA dan Verifikasi
-
-1. Buat invoice unpaid.
-2. Catat partial payment tunai.
-3. Catat partial payment non-tunai ke akun bank.
-4. Pastikan finance balance naik sesuai payment.
-5. Pastikan payment history berisi dua record active.
-6. Void salah satu payment.
-7. Pastikan finance reversal muncul dan aggregate invoice turun.
-8. Buat Sales Return credit note.
-9. Pastikan balance due turun dan tidak bisa overpaid.
-10. Jika GL aktif, pastikan trial balance tetap balance.
-
 Verifikasi teknis:
 
 ```bash
