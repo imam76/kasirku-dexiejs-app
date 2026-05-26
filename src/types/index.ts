@@ -107,6 +107,7 @@ export type Permission =
   | 'STOCK_ACCESS'
   | 'STOCK_PURCHASE_ACCESS'
   | 'FINANCE_ACCESS'
+  | 'JOURNAL_MANAGE'
   | 'SALES_RETURN_MANAGE'
   | 'SETTINGS_ACCESS'
   | 'USER_MANAGE'
@@ -259,6 +260,10 @@ export interface SalesDocument {
   payment_status?: SalesInvoicePaymentStatus;
   paid_amount?: number;
   paid_at?: string;
+  payment_method?: PaymentMethod;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
   finance_transaction_id?: string;
   notes?: string;
   issued_at?: string;
@@ -636,6 +641,7 @@ export interface ProfitBalance {
 export type FinanceTransactionType = 'INCOME' | 'EXPENSE' | 'OPENING_BALANCE';
 
 export type JournalEntryStatus = 'DRAFT' | 'POSTED' | 'VOIDED' | 'REVERSED';
+export type InventoryAccountingPolicy = 'CASH_FLOW_ONLY' | 'PERPETUAL_INVENTORY';
 
 export type JournalSourceType =
   | 'POS_TRANSACTION'
@@ -726,6 +732,17 @@ export interface EnabledModule {
   source: 'SYSTEM' | 'PROFILE' | 'USER';
   requires_profile?: AccountingProfileCode;
   requires_extension?: IndustryExtensionCode;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GeneralLedgerSetting {
+  id: 'default';
+  is_ready: boolean;
+  cutoff_date?: string;
+  inventory_policy: InventoryAccountingPolicy;
+  opening_balance_journal_id?: string;
+  activated_at?: string;
   created_at: string;
   updated_at: string;
 }

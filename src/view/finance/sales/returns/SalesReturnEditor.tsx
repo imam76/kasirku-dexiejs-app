@@ -51,11 +51,11 @@ export default function SalesReturnEditor({ returnId, sourceType, sourceId }: Sa
   }
 
   if (returnId && !salesReturn) {
-    return <div className="p-6"><Alert type="error" message={t('salesReturns.notFound')} /></div>;
+    return <div className="p-6"><Alert type="error" title={t('salesReturns.notFound')} /></div>;
   }
 
   if (salesReturn && salesReturn.status !== 'DRAFT') {
-    return <div className="p-6"><Alert type="warning" message={t('salesReturns.readOnly')} /></div>;
+    return <div className="p-6"><Alert type="warning" title={t('salesReturns.readOnly')} /></div>;
   }
 
   return (

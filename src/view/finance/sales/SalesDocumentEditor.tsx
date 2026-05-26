@@ -54,7 +54,7 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
   }
 
   if (documentId && !document) {
-    return <div className="p-6"><Alert type="error" message={t('salesDocuments.notFound')} /></div>;
+    return <div className="p-6"><Alert type="error" title={t('salesDocuments.notFound')} /></div>;
   }
 
   return (

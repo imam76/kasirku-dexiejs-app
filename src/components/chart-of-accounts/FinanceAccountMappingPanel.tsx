@@ -254,13 +254,13 @@ export default function FinanceAccountMappingPanel({
           {selectedTemplatePreview && (
             <div className="mt-3 space-y-2">
               {selectedTemplatePreview.warningMessages.map((warning) => (
-                <Alert key={warning} type="warning" showIcon message={warning} />
+                <Alert key={warning} type="warning" showIcon title={warning} />
               ))}
               {selectedTemplatePreview.requiredDomainFeatures.length > 0 && (
                 <Alert
                   type="info"
                   showIcon
-                  message={t('coa.template.requiredFeatures')}
+                  title={t('coa.template.requiredFeatures')}
                   description={selectedTemplatePreview.requiredDomainFeatures.join(', ')}
                 />
               )}
@@ -320,7 +320,7 @@ export default function FinanceAccountMappingPanel({
         <Alert
           type="warning"
           showIcon
-          message={t('coa.mapping.healthTitle')}
+          title={t('coa.mapping.healthTitle')}
           description={(
             <Space direction="vertical" size={2}>
               <Text>{t('coa.mapping.unmappedCategories', { count: unmappedCategories.length })}</Text>

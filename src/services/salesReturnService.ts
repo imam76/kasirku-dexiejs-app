@@ -548,7 +548,7 @@ export const issueSalesReturn = async (id: string) => {
       source_stock_document_number: source.source_stock_document_number,
       updated_at: now,
     });
-    await postSalesReturnIssuedJournal(issuedSalesReturn);
+    await postSalesReturnIssuedJournal(issuedSalesReturn, items);
     if (salesReturn.source_type === 'SALES_INVOICE') {
       await recalculateSalesInvoicePaymentStatus(salesReturn.source_id);
     }

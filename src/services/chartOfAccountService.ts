@@ -2,6 +2,7 @@ import {
   ACCOUNTING_MODULE_ACTIVATION_RULES,
   DEFAULT_ACCOUNTING_PROFILE_SETTING,
   DEFAULT_ENABLED_MODULES,
+  DEFAULT_GENERAL_LEDGER_SETTING,
 } from '@/constants/accounting';
 import {
   DEFAULT_CHART_OF_ACCOUNTS,
@@ -18,6 +19,7 @@ import {
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { chartOfAccountSchema } from '@/lib/validations/chartOfAccount';
+import { getGeneralLedgerReadiness } from '@/utils/accounting/getGeneralLedgerReadiness';
 import type {
   AccountingModuleCode,
   AccountingProfileCode,
@@ -26,6 +28,7 @@ import type {
   ChartOfAccountTemplateLine,
   EnabledModule,
   FinanceAccountMapping,
+  GeneralLedgerSetting,
   IndustryExtensionCode,
 } from '@/types';
 
@@ -135,6 +138,11 @@ export const buildDefaultAccountingSeed = (now: string) => {
       created_at: now,
       updated_at: now,
     },
+    generalLedgerSetting: {
+      ...DEFAULT_GENERAL_LEDGER_SETTING,
+      created_at: now,
+      updated_at: now,
+    } satisfies GeneralLedgerSetting,
     enabledModules: toTimestampedModules(now),
   };
 };
@@ -148,6 +156,7 @@ export const ensureAccountingDefaults = async () => {
     db.financeAccountMappings,
     db.accountingProfileSetting,
     db.enabledModules,
+    db.generalLedgerSetting,
   ], async () => {
     if (await db.chartOfAccounts.count() === 0) {
       await db.chartOfAccounts.bulkPut(seed.accounts);
@@ -163,6 +172,10 @@ export const ensureAccountingDefaults = async () => {
 
     if (await db.enabledModules.count() === 0) {
       await db.enabledModules.bulkPut(seed.enabledModules);
+    }
+
+    if (!await db.generalLedgerSetting.get('default')) {
+      await db.generalLedgerSetting.put(seed.generalLedgerSetting);
     }
   });
 };
@@ -438,6 +451,18 @@ export const updateEnabledModule = async (
     throw new Error('Module domain ini masih preview. Aktifkan setelah flow domain dan report khusus tersedia.');
   }
 
+  if (isEnabled && code === 'GENERAL_LEDGER') {
+    const readiness = await getGeneralLedgerReadiness();
+    if (!readiness.isReady) {
+      const failedChecks = readiness.checks
+        .filter((check) => !check.passed)
+        .map((check) => check.message)
+        .join(' ');
+
+      throw new Error(`General Ledger belum siap production. ${failedChecks}`);
+    }
+  }
+
   const existingModule = await db.enabledModules.get(code);
   const now = new Date().toISOString();
   const module: EnabledModule = {
@@ -451,7 +476,23 @@ export const updateEnabledModule = async (
     updated_at: now,
   };
 
-  await db.enabledModules.put(module);
+  await db.transaction('rw', [db.enabledModules, db.generalLedgerSetting], async () => {
+    await db.enabledModules.put(module);
+
+    if (code === 'GENERAL_LEDGER') {
+      const setting = await db.generalLedgerSetting.get('default');
+      await db.generalLedgerSetting.put({
+        id: 'default',
+        is_ready: isEnabled ? true : setting?.is_ready ?? false,
+        cutoff_date: setting?.cutoff_date,
+        inventory_policy: setting?.inventory_policy ?? 'PERPETUAL_INVENTORY',
+        opening_balance_journal_id: setting?.opening_balance_journal_id,
+        activated_at: isEnabled ? (setting?.activated_at ?? now) : setting?.activated_at,
+        created_at: setting?.created_at ?? now,
+        updated_at: now,
+      });
+    }
+  });
   await writeActivityLog({
     user: currentUser,
     action: isEnabled ? 'ACCOUNTING_MODULE_ENABLED' : 'ACCOUNTING_MODULE_DISABLED',

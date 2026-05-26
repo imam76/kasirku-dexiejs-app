@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem, SalesReturn, SalesReturnItem, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, JournalEntry, JournalEntryLine } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem, SalesReturn, SalesReturnItem, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
-import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES } from '@/constants/accounting';
+import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
 
 const buildAccountingSeed = (now: string) => {
@@ -33,6 +33,11 @@ const buildAccountingSeed = (now: string) => {
     mappings,
     profileSetting: {
       ...DEFAULT_ACCOUNTING_PROFILE_SETTING,
+      created_at: now,
+      updated_at: now,
+    },
+    generalLedgerSetting: {
+      ...DEFAULT_GENERAL_LEDGER_SETTING,
       created_at: now,
       updated_at: now,
     },
@@ -72,6 +77,7 @@ export class KasirkuDB extends Dexie {
   financeAccountMappings!: Table<FinanceAccountMapping>;
   accountingProfileSetting!: Table<AccountingProfileSetting>;
   enabledModules!: Table<EnabledModule>;
+  generalLedgerSetting!: Table<GeneralLedgerSetting>;
   journalEntries!: Table<JournalEntry>;
   journalEntryLines!: Table<JournalEntryLine>;
 
@@ -226,6 +232,18 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(21).stores({
+      generalLedgerSetting: 'id, is_ready, cutoff_date, inventory_policy, opening_balance_journal_id, activated_at, updated_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      const generalLedgerSetting = tx.table<GeneralLedgerSetting, string>('generalLedgerSetting');
+
+      if (!await generalLedgerSetting.get('default')) {
+        await generalLedgerSetting.put(seed.generalLedgerSetting);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
@@ -235,6 +253,7 @@ export class KasirkuDB extends Dexie {
       await this.financeAccountMappings.bulkPut(seed.mappings);
       await this.accountingProfileSetting.put(seed.profileSetting);
       await this.enabledModules.bulkPut(seed.enabledModules);
+      await this.generalLedgerSetting.put(seed.generalLedgerSetting);
     });
   }
 }

@@ -1,16 +1,20 @@
 import { db } from '@/lib/db';
+import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import type {
   AccountNormalBalance,
   AccountType,
   ChartOfAccount,
+  InventoryAccountingPolicy,
   JournalEntry,
   JournalEntryLine,
   JournalSourceType,
   PaymentMethod,
   SalesDocument,
   SalesReturn,
+  SalesReturnItem,
   StockPurchase,
   Transaction,
+  TransactionItem,
 } from '@/types';
 import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
 
@@ -22,6 +26,8 @@ const SOURCE_EVENTS = {
   SALES_INVOICE_ISSUED: 'SALES_INVOICE_ISSUED',
   SALES_INVOICE_PAYMENT_POSTED: 'SALES_INVOICE_PAYMENT_POSTED',
   SALES_RETURN_ISSUED: 'SALES_RETURN_ISSUED',
+  OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
+  MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
 } as const;
 
 type JournalSourceEvent = typeof SOURCE_EVENTS[keyof typeof SOURCE_EVENTS];
@@ -60,6 +66,13 @@ interface PostJournalEntryInput {
   entry_date: string;
   description: string;
   lines: JournalLineDraft[];
+}
+
+interface OpeningBalanceLineInput {
+  account_id: string;
+  debit?: number;
+  credit?: number;
+  description?: string;
 }
 
 interface CreateJournalEntryInput {
@@ -129,6 +142,7 @@ const ACCOUNT_CANDIDATES = {
   salesPos: { ids: ['sales-pos', 'template-sales-pos'], codes: ['4000', '4010'] },
   salesInvoiceRevenue: { ids: ['sales-invoice-revenue', 'template-sales-invoice-revenue'], codes: ['4010', '4020'] },
   salesReturn: { ids: ['sales-return', 'template-sales-return'], codes: ['4020', '4100'] },
+  cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
 } satisfies Record<string, AccountCandidate>;
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -138,15 +152,54 @@ const amountOrZero = (value: number | undefined) => {
   return Number.isFinite(amount) ? roundCurrency(amount) : 0;
 };
 
-const isGeneralLedgerPostingEnabled = async () => {
+const getGeneralLedgerSetting = async () => {
+  return db.generalLedgerSetting.get('default');
+};
+
+const isDateBeforeCutoff = (entryDate: string, cutoffDate?: string) => {
+  if (!cutoffDate) return true;
+  return entryDate.slice(0, 10) < cutoffDate.slice(0, 10);
+};
+
+const isGeneralLedgerPostingEnabled = async (entryDate?: string) => {
   const module = await db.enabledModules.get('GENERAL_LEDGER');
-  return Boolean(module?.is_enabled);
+  const setting = await getGeneralLedgerSetting();
+  if (!module?.is_enabled || !setting?.is_ready || !setting.cutoff_date) return false;
+  if (setting.inventory_policy !== 'PERPETUAL_INVENTORY') return false;
+  if (entryDate && isDateBeforeCutoff(entryDate, setting.cutoff_date)) return false;
+  return true;
+};
+
+const getInventoryPolicy = async (): Promise<InventoryAccountingPolicy> => {
+  const setting = await getGeneralLedgerSetting();
+  return setting?.inventory_policy ?? 'CASH_FLOW_ONLY';
 };
 
 const getCashAccountCandidate = (paymentMethod?: PaymentMethod) => {
   return paymentMethod === 'NON_TUNAI'
     ? ACCOUNT_CANDIDATES.bank
     : ACCOUNT_CANDIDATES.cash;
+};
+
+export const getCashOrBankAccountForPayment = async (
+  paymentMethod?: PaymentMethod,
+  cashAccountId?: string,
+) => {
+  const accounts = await db.chartOfAccounts.toArray();
+
+  if (cashAccountId) {
+    const account = accounts.find((item) => item.id === cashAccountId);
+    if (!account) {
+      throw new Error('Akun kas/bank pembayaran tidak ditemukan.');
+    }
+    if (!account.is_active || !account.is_postable || account.type !== 'ASSET') {
+      throw new Error('Akun pembayaran harus bertipe aset, aktif, dan postable.');
+    }
+
+    return account;
+  }
+
+  return getPostableAccount(accounts, getCashAccountCandidate(paymentMethod), 'Kas/Bank');
 };
 
 const getPostableAccount = (
@@ -383,7 +436,7 @@ const reverseJournalEntry = async (
 };
 
 export const postBalancedJournalEntry = async (input: PostJournalEntryInput) => {
-  if (!await isGeneralLedgerPostingEnabled()) {
+  if (!await isGeneralLedgerPostingEnabled(input.entry_date)) {
     return undefined;
   }
 
@@ -425,7 +478,8 @@ export const reverseJournalEntriesForSource = async ({
   reason: string;
   entry_date?: string;
 }) => {
-  if (!await isGeneralLedgerPostingEnabled()) {
+  const reversalDate = entry_date ?? new Date().toISOString();
+  if (!await isGeneralLedgerPostingEnabled(reversalDate)) {
     return [];
   }
 
@@ -439,7 +493,6 @@ export const reverseJournalEntriesForSource = async ({
       (!source_event || entry.source_event === source_event)
     ))
     .toArray();
-  const reversalDate = entry_date ?? new Date().toISOString();
   const reversals: JournalEntry[] = [];
 
   await db.transaction('rw', [db.journalEntries, db.journalEntryLines], async () => {
@@ -451,16 +504,167 @@ export const reverseJournalEntriesForSource = async ({
   return reversals;
 };
 
-export const postPosSaleJournal = async (transaction: Transaction) => {
+export const postOpeningBalanceJournal = async ({
+  cutoff_date,
+  inventory_policy,
+  lines,
+}: {
+  cutoff_date: string;
+  inventory_policy: InventoryAccountingPolicy;
+  lines: OpeningBalanceLineInput[];
+}) => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+
+  const normalizedCutoffDate = cutoff_date.includes('T')
+    ? cutoff_date
+    : `${cutoff_date}T00:00:00.000`;
+  const now = new Date().toISOString();
+  let createdEntry: JournalEntry | undefined;
+
+  await db.transaction('rw', [
+    db.chartOfAccounts,
+    db.generalLedgerSetting,
+    db.journalEntries,
+    db.journalEntryLines,
+    db.activityLogs,
+  ], async () => {
+    const setting = await db.generalLedgerSetting.get('default');
+    const existingOpeningEntry = setting?.opening_balance_journal_id
+      ? await db.journalEntries.get(setting.opening_balance_journal_id)
+      : undefined;
+
+    if (existingOpeningEntry?.status === 'POSTED') {
+      throw new Error('Opening balance sudah posted. Cutoff tidak bisa diubah tanpa reset ledger eksplisit.');
+    }
+
+    const accounts = await db.chartOfAccounts.toArray();
+    const accountById = new Map(accounts.map((account) => [account.id, account]));
+    const draftLines = lines
+      .map((line) => {
+        const account = accountById.get(line.account_id);
+        if (!account) {
+          throw new Error('Akun opening balance tidak ditemukan.');
+        }
+
+        return {
+          account,
+          debit: line.debit,
+          credit: line.credit,
+          description: line.description,
+        };
+      })
+      .filter((line) => amountOrZero(line.debit) > 0 || amountOrZero(line.credit) > 0);
+    const normalizedLines = normalizeLines(draftLines);
+
+    createdEntry = await createPostedJournalEntry({
+      source_type: 'OPENING_BALANCE',
+      source_id: 'default',
+      source_number: 'Opening Balance',
+      source_event: SOURCE_EVENTS.OPENING_BALANCE_POSTED,
+      entry_date: normalizedCutoffDate,
+      description: `Opening balance General Ledger per ${normalizedCutoffDate.slice(0, 10)}`,
+      lines: normalizedLines,
+    });
+
+    await db.generalLedgerSetting.put({
+      id: 'default',
+      is_ready: true,
+      cutoff_date: normalizedCutoffDate,
+      inventory_policy,
+      opening_balance_journal_id: createdEntry.id,
+      activated_at: setting?.activated_at,
+      created_at: setting?.created_at ?? now,
+      updated_at: now,
+    });
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'GENERAL_LEDGER_OPENING_BALANCE_POSTED',
+      entity: 'generalLedgerSetting',
+      entity_id: 'default',
+      description: `${currentUser?.name ?? 'User'} posting opening balance General Ledger per ${normalizedCutoffDate.slice(0, 10)}.`,
+    });
+  });
+
+  return createdEntry;
+};
+
+export const postManualJournal = async ({
+  entry_date,
+  description,
+  lines,
+}: {
+  entry_date: string;
+  description: string;
+  lines: OpeningBalanceLineInput[];
+}) => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'JOURNAL_MANAGE');
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+
+  return postBalancedJournalEntry({
+    source_type: 'MANUAL_JOURNAL',
+    source_id: crypto.randomUUID(),
+    source_event: SOURCE_EVENTS.MANUAL_JOURNAL_POSTED,
+    entry_date,
+    description,
+    lines: lines.map((line) => {
+      const account = accountById.get(line.account_id);
+      if (!account) {
+        throw new Error('Akun jurnal manual tidak ditemukan.');
+      }
+
+      return {
+        account,
+        debit: line.debit,
+        credit: line.credit,
+        description: line.description,
+      };
+    }),
+  });
+};
+
+const getTransactionItemsCost = (items: TransactionItem[]) => {
+  return roundCurrency(items.reduce((sum, item) => {
+    return sum + amountOrZero(item.purchase_price) * amountOrZero(item.quantity);
+  }, 0));
+};
+
+const getSalesReturnRestockCost = (items: SalesReturnItem[]) => {
+  return roundCurrency(items.reduce((sum, item) => {
+    return sum + amountOrZero(item.purchase_price) * amountOrZero(item.restock_quantity);
+  }, 0));
+};
+
+export const postPosSaleJournal = async (transaction: Transaction, items: TransactionItem[] = []) => {
   if (transaction.status === 'VOIDED') return undefined;
-  if (!await isGeneralLedgerPostingEnabled()) return undefined;
+  if (!await isGeneralLedgerPostingEnabled(transaction.created_at)) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
   const cashAccount = getPostableAccount(accounts, getCashAccountCandidate(transaction.payment_method), 'Kas/Bank');
   const salesAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.salesPos, 'Penjualan POS');
   const amount = amountOrZero(transaction.total_amount);
+  const lines: JournalLineDraft[] = [
+    createDebitLine(cashAccount, amount, 'Penerimaan kas/bank dari POS'),
+    createCreditLine(salesAccount, amount, 'Pendapatan penjualan POS'),
+  ].filter((line): line is JournalLineDraft => Boolean(line));
 
   if (amount <= 0) return undefined;
+
+  if (await getInventoryPolicy() === 'PERPETUAL_INVENTORY') {
+    const cogsAmount = getTransactionItemsCost(items);
+    if (cogsAmount > 0) {
+      const cogsAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cogs, 'HPP');
+      const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+      const cogsLine = createDebitLine(cogsAccount, cogsAmount, 'HPP penjualan POS');
+      const inventoryLine = createCreditLine(inventoryAccount, cogsAmount, 'Persediaan keluar karena penjualan POS');
+      if (cogsLine) lines.push(cogsLine);
+      if (inventoryLine) lines.push(inventoryLine);
+    }
+  }
 
   return postBalancedJournalEntry({
     source_type: 'POS_TRANSACTION',
@@ -469,10 +673,7 @@ export const postPosSaleJournal = async (transaction: Transaction) => {
     source_event: SOURCE_EVENTS.POS_SALE_POSTED,
     entry_date: transaction.created_at,
     description: `Penjualan POS ${transaction.transaction_number}`,
-    lines: [
-      createDebitLine(cashAccount, amount, 'Penerimaan kas/bank dari POS'),
-      createCreditLine(salesAccount, amount, 'Pendapatan penjualan POS'),
-    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    lines,
   });
 };
 
@@ -486,7 +687,7 @@ export const reversePosSaleJournal = async (transaction: Transaction, reason: st
 };
 
 export const postStockPurchaseJournal = async (purchase: StockPurchase) => {
-  if (!await isGeneralLedgerPostingEnabled()) return undefined;
+  if (!await isGeneralLedgerPostingEnabled(purchase.created_at)) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
   const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
@@ -511,7 +712,8 @@ export const postStockPurchaseJournal = async (purchase: StockPurchase) => {
 
 export const postSalesInvoiceIssuedJournal = async (document: SalesDocument) => {
   if (document.type !== 'SALES_INVOICE' || document.status === 'VOIDED') return undefined;
-  if (!await isGeneralLedgerPostingEnabled()) return undefined;
+  const entryDate = document.issued_at ?? document.document_date;
+  if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
   const receivableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsReceivable, 'Piutang Usaha');
@@ -537,7 +739,7 @@ export const postSalesInvoiceIssuedJournal = async (document: SalesDocument) => 
     source_id: document.id,
     source_number: document.document_number,
     source_event: SOURCE_EVENTS.SALES_INVOICE_ISSUED,
-    entry_date: document.issued_at ?? document.document_date,
+    entry_date: entryDate,
     description: `Sales invoice ${document.document_number} diterbitkan`,
     lines,
   });
@@ -545,7 +747,8 @@ export const postSalesInvoiceIssuedJournal = async (document: SalesDocument) => 
 
 export const postSalesInvoicePaymentJournal = async (document: SalesDocument) => {
   if (document.type !== 'SALES_INVOICE' || document.status === 'VOIDED') return undefined;
-  if (!await isGeneralLedgerPostingEnabled()) return undefined;
+  const entryDate = document.paid_at ?? new Date().toISOString();
+  if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
 
   const amount = amountOrZero(document.paid_amount);
   if (amount <= 0) {
@@ -558,7 +761,7 @@ export const postSalesInvoicePaymentJournal = async (document: SalesDocument) =>
   }
 
   const accounts = await db.chartOfAccounts.toArray();
-  const cashAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cash, 'Kas');
+  const cashAccount = await getCashOrBankAccountForPayment(document.payment_method, document.cash_account_id);
   const receivableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsReceivable, 'Piutang Usaha');
 
   return postBalancedJournalEntry({
@@ -566,7 +769,7 @@ export const postSalesInvoicePaymentJournal = async (document: SalesDocument) =>
     source_id: document.id,
     source_number: document.document_number,
     source_event: SOURCE_EVENTS.SALES_INVOICE_PAYMENT_POSTED,
-    entry_date: document.paid_at ?? new Date().toISOString(),
+    entry_date: entryDate,
     description: `Pembayaran invoice ${document.document_number}`,
     lines: [
       createDebitLine(cashAccount, amount, 'Kas diterima dari pembayaran invoice', document.department_id, document.project_id),
@@ -584,9 +787,10 @@ export const reverseSalesInvoiceJournal = async (document: SalesDocument, reason
   });
 };
 
-export const postSalesReturnIssuedJournal = async (salesReturn: SalesReturn) => {
+export const postSalesReturnIssuedJournal = async (salesReturn: SalesReturn, items: SalesReturnItem[] = []) => {
   if (salesReturn.status === 'VOIDED' || salesReturn.resolution === 'NO_FINANCE') return undefined;
-  if (!await isGeneralLedgerPostingEnabled()) return undefined;
+  const entryDate = salesReturn.issued_at ?? salesReturn.document_date;
+  if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
 
   const totalAmount = amountOrZero(
     salesReturn.resolution === 'REFUND'
@@ -619,12 +823,24 @@ export const postSalesReturnIssuedJournal = async (salesReturn: SalesReturn) => 
   );
   if (creditLine) lines.push(creditLine);
 
+  if (await getInventoryPolicy() === 'PERPETUAL_INVENTORY') {
+    const restockCost = getSalesReturnRestockCost(items);
+    if (restockCost > 0) {
+      const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+      const cogsAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cogs, 'HPP');
+      const inventoryLine = createDebitLine(inventoryAccount, restockCost, 'Persediaan kembali dari retur');
+      const cogsLine = createCreditLine(cogsAccount, restockCost, 'Pembalikan HPP dari retur');
+      if (inventoryLine) lines.push(inventoryLine);
+      if (cogsLine) lines.push(cogsLine);
+    }
+  }
+
   return postBalancedJournalEntry({
     source_type: 'SALES_RETURN',
     source_id: salesReturn.id,
     source_number: salesReturn.return_number,
     source_event: SOURCE_EVENTS.SALES_RETURN_ISSUED,
-    entry_date: salesReturn.issued_at ?? salesReturn.document_date,
+    entry_date: entryDate,
     description: `Retur penjualan ${salesReturn.return_number}`,
     lines,
   });

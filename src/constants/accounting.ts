@@ -3,6 +3,7 @@ import type {
   AccountingProfileCode,
   AccountingProfileSetting,
   EnabledModule,
+  GeneralLedgerSetting,
   IndustryExtensionCode,
 } from '@/types';
 
@@ -27,6 +28,14 @@ export const DEFAULT_ACCOUNTING_PROFILE_SETTING: AccountingProfileSetting = {
   industry_extension: 'RETAIL',
   template_id: 'default-sak-emkm-retail',
   locked_after_transaction: false,
+  created_at: '',
+  updated_at: '',
+};
+
+export const DEFAULT_GENERAL_LEDGER_SETTING: GeneralLedgerSetting = {
+  id: 'default',
+  is_ready: false,
+  inventory_policy: 'PERPETUAL_INVENTORY',
   created_at: '',
   updated_at: '',
 };

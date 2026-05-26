@@ -242,12 +242,12 @@ export const SalesReturnForm = ({
         </div>
       </Card>
 
-      {loadError && <Alert type="error" message={loadError} showIcon />}
-      {source?.source_chain_label && <Alert type="info" message={source.source_chain_label} showIcon />}
+      {loadError && <Alert type="error" title={loadError} showIcon />}
+      {source?.source_chain_label && <Alert type="info" title={source.source_chain_label} showIcon />}
       {invalidResolution && (
         <Alert
           type="warning"
-          message={t('salesReturns.limit.resolutionExceeded')}
+          title={t('salesReturns.limit.resolutionExceeded')}
           showIcon
         />
       )}
@@ -271,7 +271,7 @@ export const SalesReturnForm = ({
           />
         </>
       ) : (
-        <Alert type="info" message={t('salesReturns.selectSourceInfo')} showIcon />
+        <Alert type="info" title={t('salesReturns.selectSourceInfo')} showIcon />
       )}
 
       <div className="flex justify-end">

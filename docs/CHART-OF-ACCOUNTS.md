@@ -141,6 +141,11 @@ Gate ini bukan untuk menyembunyikan bug. Gate dipakai agar modul yang belum puny
 5. [Fase 5 - Extension Industri dan Pemerintahan](./CHART-OF-ACCOUNTS-PHASE-5-INDUSTRY-GOVERNMENT.md)
    Manufaktur, konstruksi, dan PSAP sebagai jalur lanjut setelah general ledger atau setelah kebutuhan domainnya jelas.
 
+Production gate:
+
+- [Accounting Core - Production Readiness](./CHART-OF-ACCOUNTS-PRODUCTION-READINESS.md)
+  Alur kerja untuk menyelesaikan blocker production COA/General Ledger: activation guard, cutoff, opening balance, inventory accounting, payment channel, period lock, manual journal permission, backup/restore, automated tests, dan QA matrix.
+
 ## Urutan Implementasi Yang Disarankan
 
 Urutan aman untuk repo sekarang:

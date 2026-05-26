@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Input, InputNumber, Modal, Space, Typography } from 'antd';
+import { Button, Input, InputNumber, Modal, Select, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
 import {
   getSalesDocumentConfig,
@@ -14,6 +15,7 @@ import { db } from '@/lib/db';
 import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
 import type {
   IssuedSalesReturnSummary,
+  PaymentMethod,
   SalesDocument,
   SalesDocumentItem,
   SalesDocumentStatus,
@@ -52,6 +54,17 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const [returnSummary, setReturnSummary] = useState<IssuedSalesReturnSummary | undefined>();
   const [returnSourcePolicy, setReturnSourcePolicy] = useState<{ canReturn: boolean; notice?: string }>({ canReturn: true });
   const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('TUNAI');
+  const [cashAccountId, setCashAccountId] = useState<string>();
+  const paymentAccounts = useLiveQuery(
+    () => db.chartOfAccounts
+      .where('type')
+      .equals('ASSET')
+      .filter((account) => account.is_active && account.is_postable)
+      .toArray(),
+    [],
+    [],
+  );
 
   const loadDocument = useCallback(async () => {
     const [loadedDocument, loadedItems] = await Promise.all([
@@ -74,6 +87,8 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       notice: sourceChain?.chain.return_from_source_block_reason ?? sourceChain?.chain.source_chain_label,
     });
     setPaidAmount(loadedDocument?.paid_amount ?? netPayable);
+    setPaymentMethod(loadedDocument?.payment_method ?? 'TUNAI');
+    setCashAccountId(loadedDocument?.cash_account_id);
   }, [documentId]);
 
   useEffect(() => {
@@ -102,6 +117,8 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
         notice: sourceChain?.chain.return_from_source_block_reason ?? sourceChain?.chain.source_chain_label,
       });
       setPaidAmount(loadedDocument?.paid_amount ?? netPayable);
+      setPaymentMethod(loadedDocument?.payment_method ?? 'TUNAI');
+      setCashAccountId(loadedDocument?.cash_account_id);
     };
 
     void syncDocument();
@@ -140,6 +157,10 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     returnSourcePolicy.canReturn;
   const statusStyle = statusColor[document.status];
   const paymentStyle = document.payment_status ? paymentStatusColor[document.payment_status] : undefined;
+  const paymentAccountOptions = paymentAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.code} - ${account.name}`,
+  }));
   const statusBadge = (
     <span
       className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[.05em]"
@@ -405,13 +426,42 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 value={paidAmount}
                 onChange={(value) => setPaidAmount(Number(value || 0))}
               />
+              <Select
+                value={paymentMethod}
+                onChange={(value) => {
+                  setPaymentMethod(value);
+                  setCashAccountId(undefined);
+                }}
+                options={[
+                  { value: 'TUNAI', label: t('payment.cash') },
+                  { value: 'NON_TUNAI', label: t('payment.nonCash') },
+                ]}
+                className="min-w-[150px]"
+              />
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('salesDocuments.field.cashAccount')}
+                value={cashAccountId}
+                options={paymentAccountOptions}
+                onChange={setCashAccountId}
+                className="min-w-[240px]"
+              />
               <Button
                 type="primary"
                 loading={isMutating}
                 disabled={document.status === 'VOIDED'}
                 style={{ backgroundColor: config.theme.accent, borderColor: config.theme.accent }}
                 onClick={async () => {
-                  await payInvoice({ id: document.id, input: { paid_amount: paidAmount } });
+                  await payInvoice({
+                    id: document.id,
+                    input: {
+                      paid_amount: paidAmount,
+                      payment_method: paymentMethod,
+                      cash_account_id: cashAccountId,
+                    },
+                  });
                   await loadDocument();
                 }}
               >

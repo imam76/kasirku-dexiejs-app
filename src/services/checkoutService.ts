@@ -206,7 +206,7 @@ export const checkout = async ({
       await db.transactionItems.bulkAdd(items);
       await recordProfit(transaction, items, createdAt);
       await recordFinanceIncome(transaction, createdAt);
-      await postPosSaleJournal(transaction);
+      await postPosSaleJournal(transaction, items);
       await reduceProductStock(cart);
 
       for (const item of items.filter((item) => item.is_price_edited)) {

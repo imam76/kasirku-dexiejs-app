@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookOpen, RefreshCw } from 'lucide-react';
 import { db } from '@/lib/db';
+import OpeningBalanceForm from '@/components/general-ledger/OpeningBalanceForm';
 import {
   getBalanceSheetReport,
   getIncomeStatementReport,
@@ -17,6 +18,7 @@ import {
 import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import type { JournalEntryLine, JournalEntryStatus } from '@/types';
+import { getGeneralLedgerReadiness } from '@/utils/accounting/getGeneralLedgerReadiness';
 
 const { Text, Title } = Typography;
 
@@ -50,11 +52,24 @@ export default function GeneralLedgerManagement() {
     [],
     undefined,
   );
+  const generalLedgerSetting = useLiveQuery(
+    () => db.generalLedgerSetting.get('default'),
+    [],
+    undefined,
+  );
   const accounts = useLiveQuery(
     () => db.chartOfAccounts.orderBy('code').toArray(),
     [],
     [],
   );
+  const readinessQuery = useQuery({
+    queryKey: ['generalLedgerReadiness', generalLedgerSetting?.updated_at, accounts.length],
+    queryFn: getGeneralLedgerReadiness,
+  });
+  const readiness = readinessQuery.data;
+  const isLedgerReady = Boolean(readiness?.isReady);
+  const isModuleEnabled = Boolean(generalLedgerModule?.is_enabled);
+  const canShowReports = isModuleEnabled && isLedgerReady;
   const filters = useMemo(() => ({
     startDate: dateRange?.[0].startOf('day').toISOString(),
     endDate: dateRange?.[1].endOf('day').toISOString(),
@@ -64,18 +79,22 @@ export default function GeneralLedgerManagement() {
   const journalQuery = useQuery({
     queryKey: ['journalEntries', ...reportKey],
     queryFn: () => getJournalEntriesWithLines(filters),
+    enabled: canShowReports,
   });
   const trialBalanceQuery = useQuery({
     queryKey: ['trialBalance', ...reportKey],
     queryFn: () => getTrialBalanceReport(filters),
+    enabled: canShowReports,
   });
   const incomeStatementQuery = useQuery({
     queryKey: ['incomeStatement', ...reportKey],
     queryFn: () => getIncomeStatementReport(filters),
+    enabled: canShowReports,
   });
   const balanceSheetQuery = useQuery({
     queryKey: ['balanceSheet', ...reportKey],
     queryFn: () => getBalanceSheetReport(filters),
+    enabled: canShowReports,
   });
   const isLoading = journalQuery.isLoading ||
     trialBalanceQuery.isLoading ||
@@ -296,146 +315,211 @@ export default function GeneralLedgerManagement() {
           </Title>
           <Text type="secondary">{t('generalLedger.subtitle')}</Text>
         </div>
-        <Space wrap>
-          <DatePicker.RangePicker
-            value={dateRange}
-            onChange={(value) => setDateRange(value as [Dayjs, Dayjs] | null)}
-          />
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder={t('generalLedger.filterAccount')}
-            value={accountFilter}
-            options={accountOptions}
-            onChange={setAccountFilter}
-            className="min-w-[260px]"
-          />
-          <Button icon={<RefreshCw size={16} />} onClick={refetchReports} loading={isLoading}>
-            {t('common.refresh')}
-          </Button>
-        </Space>
+        {canShowReports && (
+          <Space wrap>
+            <DatePicker.RangePicker
+              value={dateRange}
+              onChange={(value) => setDateRange(value as [Dayjs, Dayjs] | null)}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('generalLedger.filterAccount')}
+              value={accountFilter}
+              options={accountOptions}
+              onChange={setAccountFilter}
+              className="min-w-[260px]"
+            />
+            <Button icon={<RefreshCw size={16} />} onClick={refetchReports} loading={isLoading}>
+              {t('common.refresh')}
+            </Button>
+          </Space>
+        )}
       </div>
 
-      {!generalLedgerModule?.is_enabled && (
-        <Alert
-          type="warning"
-          showIcon
-          message={t('generalLedger.disabledTitle')}
-          description={t('generalLedger.disabledDescription')}
+      <Card>
+        <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }}>
+          <Descriptions.Item label={t('generalLedger.cutoffDate')}>
+            {generalLedgerSetting?.cutoff_date ? formatDate(generalLedgerSetting.cutoff_date) : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('generalLedger.inventoryPolicy')}>
+            {generalLedgerSetting?.inventory_policy
+              ? generalLedgerSetting.inventory_policy === 'PERPETUAL_INVENTORY'
+                ? t('generalLedger.inventoryPolicy.perpetual')
+                : t('generalLedger.inventoryPolicy.cashFlowOnly')
+              : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('generalLedger.readiness')}>
+            <Tag color={isLedgerReady ? 'green' : 'orange'}>
+              {isLedgerReady ? t('generalLedger.ready') : t('generalLedger.notReady')}
+            </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('coa.modules.title')}>
+            <Tag color={isModuleEnabled ? 'green' : 'default'}>
+              {isModuleEnabled ? t('common.yes') : t('common.no')}
+            </Tag>
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+
+      {!isLedgerReady && readiness && (
+        <Card>
+          <Alert
+            type="warning"
+            showIcon
+            title={t('generalLedger.notReadyTitle')}
+            description={(
+              <Space direction="vertical" size={4}>
+                {readiness.checks.map((check) => (
+                  <Text key={check.key} type={check.passed ? 'secondary' : 'danger'}>
+                    {check.passed ? 'OK' : '!'} {check.message}
+                  </Text>
+                ))}
+              </Space>
+            )}
+          />
+        </Card>
+      )}
+
+      {!isLedgerReady && (
+        <OpeningBalanceForm
+          accounts={accounts}
+          setting={generalLedgerSetting}
+          onPosted={() => void readinessQuery.refetch()}
         />
       )}
 
-      <Tabs
-        items={[
-          {
-            key: 'journal',
-            label: t('generalLedger.tabs.journal'),
-            children: (
-              <Card>
-                <Table
-                  dataSource={journalQuery.data ?? []}
-                  columns={journalColumns}
-                  rowKey="id"
-                  loading={journalQuery.isLoading}
-                  scroll={{ x: 980 }}
-                  expandable={{
-                    expandedRowRender: (record) => (
-                      <Table
-                        dataSource={record.lines}
-                        columns={journalLineColumns}
-                        rowKey="id"
-                        pagination={false}
-                        size="small"
-                      />
-                    ),
-                  }}
-                />
-              </Card>
-            ),
-          },
-          {
-            key: 'ledger',
-            label: t('generalLedger.tabs.ledger'),
-            children: (
-              <Card>
-                {selectedAccount ? (
+      {isLedgerReady && !isModuleEnabled && (
+        <Alert
+          type="warning"
+          showIcon
+          title={t('generalLedger.disabledTitle')}
+          description={t('generalLedger.readyButDisabledDescription')}
+        />
+      )}
+
+      {canShowReports && (
+        <Alert
+          type="info"
+          showIcon
+          title={t('generalLedger.reportCutoffWarning', {
+            date: generalLedgerSetting?.cutoff_date?.slice(0, 10) ?? '-',
+          })}
+        />
+      )}
+
+      {canShowReports && (
+        <Tabs
+          items={[
+            {
+              key: 'journal',
+              label: t('generalLedger.tabs.journal'),
+              children: (
+                <Card>
                   <Table
-                    dataSource={ledgerRows}
-                    columns={ledgerColumns}
+                    dataSource={journalQuery.data ?? []}
+                    columns={journalColumns}
                     rowKey="id"
                     loading={journalQuery.isLoading}
-                    scroll={{ x: 850 }}
+                    scroll={{ x: 980 }}
+                    expandable={{
+                      expandedRowRender: (record) => (
+                        <Table
+                          dataSource={record.lines}
+                          columns={journalLineColumns}
+                          rowKey="id"
+                          pagination={false}
+                          size="small"
+                        />
+                      ),
+                    }}
                   />
-                ) : (
-                  <Alert type="info" showIcon message={t('generalLedger.ledger.selectAccount')} />
-                )}
-              </Card>
-            ),
-          },
-          {
-            key: 'trial-balance',
-            label: t('generalLedger.tabs.trialBalance'),
-            children: (
-              <Card>
-                <Table
-                  dataSource={trialBalance?.rows ?? []}
-                  columns={trialBalanceColumns}
-                  rowKey="account_id"
-                  loading={trialBalanceQuery.isLoading}
-                  scroll={{ x: 760 }}
-                  summary={() => (
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0} colSpan={2}>
-                        <Text strong>{t('common.total')}</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={2} align="right">
-                        <Text strong>Rp {formatCurrency(trialBalance?.total_debit ?? 0)}</Text>
-                      </Table.Summary.Cell>
-                      <Table.Summary.Cell index={3} align="right">
-                        <Text strong>Rp {formatCurrency(trialBalance?.total_credit ?? 0)}</Text>
-                      </Table.Summary.Cell>
-                    </Table.Summary.Row>
+                </Card>
+              ),
+            },
+            {
+              key: 'ledger',
+              label: t('generalLedger.tabs.ledger'),
+              children: (
+                <Card>
+                  {selectedAccount ? (
+                    <Table
+                      dataSource={ledgerRows}
+                      columns={ledgerColumns}
+                      rowKey="id"
+                      loading={journalQuery.isLoading}
+                      scroll={{ x: 850 }}
+                    />
+                  ) : (
+                    <Alert type="info" showIcon title={t('generalLedger.ledger.selectAccount')} />
                   )}
-                />
-                {trialBalance && !trialBalance.is_balanced && (
-                  <Alert className="mt-3" type="error" showIcon message={t('generalLedger.trialBalanceNotBalanced')} />
-                )}
-              </Card>
-            ),
-          },
-          {
-            key: 'income-statement',
-            label: t('generalLedger.tabs.incomeStatement'),
-            children: (
-              <Card loading={incomeStatementQuery.isLoading}>
-                <Descriptions bordered column={1}>
-                  <Descriptions.Item label={t('generalLedger.income.revenue')}>
-                    Rp {formatCurrency(incomeStatement?.revenue ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.income.contraRevenue')}>
-                    Rp {formatCurrency(incomeStatement?.contra_revenue ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.income.netRevenue')}>
-                    Rp {formatCurrency(incomeStatement?.net_revenue ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.income.expense')}>
-                    Rp {formatCurrency(incomeStatement?.expense ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.income.netIncome')}>
-                    <Text strong className={getSignedAmountClass(incomeStatement?.net_income ?? 0)}>
-                      Rp {formatCurrency(incomeStatement?.net_income ?? 0)}
-                    </Text>
-                  </Descriptions.Item>
-                </Descriptions>
-              </Card>
-            ),
-          },
-          {
-            key: 'balance-sheet',
-            label: t('generalLedger.tabs.balanceSheet'),
-            children: (
-              <Card loading={balanceSheetQuery.isLoading}>
+                </Card>
+              ),
+            },
+            {
+              key: 'trial-balance',
+              label: t('generalLedger.tabs.trialBalance'),
+              children: (
+                <Card>
+                  <Table
+                    dataSource={trialBalance?.rows ?? []}
+                    columns={trialBalanceColumns}
+                    rowKey="account_id"
+                    loading={trialBalanceQuery.isLoading}
+                    scroll={{ x: 760 }}
+                    summary={() => (
+                      <Table.Summary.Row>
+                        <Table.Summary.Cell index={0} colSpan={2}>
+                          <Text strong>{t('common.total')}</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={2} align="right">
+                          <Text strong>Rp {formatCurrency(trialBalance?.total_debit ?? 0)}</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={3} align="right">
+                          <Text strong>Rp {formatCurrency(trialBalance?.total_credit ?? 0)}</Text>
+                        </Table.Summary.Cell>
+                      </Table.Summary.Row>
+                    )}
+                  />
+                  {trialBalance && !trialBalance.is_balanced && (
+                    <Alert className="mt-3" type="error" showIcon title={t('generalLedger.trialBalanceNotBalanced')} />
+                  )}
+                </Card>
+              ),
+            },
+            {
+              key: 'income-statement',
+              label: t('generalLedger.tabs.incomeStatement'),
+              children: (
+                <Card loading={incomeStatementQuery.isLoading}>
+                  <Descriptions bordered column={1}>
+                    <Descriptions.Item label={t('generalLedger.income.revenue')}>
+                      Rp {formatCurrency(incomeStatement?.revenue ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.income.contraRevenue')}>
+                      Rp {formatCurrency(incomeStatement?.contra_revenue ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.income.netRevenue')}>
+                      Rp {formatCurrency(incomeStatement?.net_revenue ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.income.expense')}>
+                      Rp {formatCurrency(incomeStatement?.expense ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.income.netIncome')}>
+                      <Text strong className={getSignedAmountClass(incomeStatement?.net_income ?? 0)}>
+                        Rp {formatCurrency(incomeStatement?.net_income ?? 0)}
+                      </Text>
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Card>
+              ),
+            },
+            {
+              key: 'balance-sheet',
+              label: t('generalLedger.tabs.balanceSheet'),
+              children: (
+                <Card loading={balanceSheetQuery.isLoading}>
                 <Descriptions bordered column={1}>
                   <Descriptions.Item label={t('generalLedger.balance.assets')}>
                     Rp {formatCurrency(balanceSheet?.assets ?? 0)}
@@ -459,13 +543,14 @@ export default function GeneralLedgerManagement() {
                   </Descriptions.Item>
                 </Descriptions>
                 {balanceSheet && !balanceSheet.is_balanced && (
-                  <Alert className="mt-3" type="error" showIcon message={t('generalLedger.balanceNotBalanced')} />
+                  <Alert className="mt-3" type="error" showIcon title={t('generalLedger.balanceNotBalanced')} />
                 )}
               </Card>
             ),
           },
         ]}
-      />
+        />
+      )}
     </div>
   );
 }

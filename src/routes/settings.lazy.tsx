@@ -47,7 +47,7 @@ function Settings() {
         <div className="space-y-2">
           <p>{t('settings.restoreConfirmQuestion')}</p>
           <Alert
-            message={t('settings.warning')}
+            title={t('settings.warning')}
             description={t('settings.restoreWarningDescription')}
             type="warning"
             showIcon

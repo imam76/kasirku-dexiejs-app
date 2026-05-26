@@ -4,17 +4,18 @@ import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
 import {
+  getCashOrBankAccountForPayment,
   postSalesInvoiceIssuedJournal,
   postSalesInvoicePaymentJournal,
   reverseSalesInvoiceJournal,
 } from '@/services/generalLedgerService';
 import type {
+  PaymentMethod,
   SalesDocument,
   SalesDocumentItem,
   SalesDocumentStatus,
   SalesDocumentType,
 } from '@/types';
-import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { calculateInvoicePaymentStatus } from '@/utils/salesDocuments/calculateInvoicePaymentStatus';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
@@ -35,6 +36,8 @@ export interface SalesDocumentUpsertInput {
 export interface SalesInvoicePaymentInput {
   paid_amount: number;
   paid_at?: string;
+  payment_method?: PaymentMethod;
+  cash_account_id?: string;
 }
 
 const salesDocumentTables = [
@@ -149,6 +152,10 @@ const applyPaymentStatusBehavior = <T extends Partial<SalesDocument>>(
   delete nextDocument.payment_status;
   delete nextDocument.paid_amount;
   delete nextDocument.paid_at;
+  delete nextDocument.payment_method;
+  delete nextDocument.cash_account_id;
+  delete nextDocument.cash_account_code;
+  delete nextDocument.cash_account_name;
   delete nextDocument.finance_transaction_id;
   return nextDocument as T;
 };
@@ -455,14 +462,23 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
   const nextPaidAmount = requestedPaidAmount;
   const now = new Date().toISOString();
   const paidAt = input.paid_at || now;
+  const paymentMethod = input.payment_method ?? document.payment_method ?? 'TUNAI';
+  const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, input.cash_account_id);
   const previousPaidAmount = Number(document.paid_amount || 0);
   const delta = nextPaidAmount - previousPaidAmount;
+  const paymentAccountChanged = document.payment_method !== paymentMethod ||
+    document.cash_account_id !== cashAccount.id;
 
   await db.transaction('rw', salesDocumentTables, async () => {
     let financeTransactionId = document.finance_transaction_id;
 
-    if (delta !== 0) {
-      const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT);
+    if (delta !== 0 || paymentAccountChanged) {
+      const accountSnapshot = {
+        account_id: cashAccount.id,
+        account_code: cashAccount.code,
+        account_name: cashAccount.name,
+        account_type: cashAccount.type,
+      };
       const currentBalance = await db.financeBalance.get('current');
       await db.financeBalance.put({
         id: 'current',
@@ -504,6 +520,10 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
       payment_status: paymentStatus,
       paid_amount: nextPaidAmount,
       paid_at: nextPaidAmount > 0 ? paidAt : undefined,
+      payment_method: nextPaidAmount > 0 ? paymentMethod : undefined,
+      cash_account_id: nextPaidAmount > 0 ? cashAccount.id : undefined,
+      cash_account_code: nextPaidAmount > 0 ? cashAccount.code : undefined,
+      cash_account_name: nextPaidAmount > 0 ? cashAccount.name : undefined,
       finance_transaction_id: financeTransactionId,
       updated_at: now,
     };
@@ -512,6 +532,10 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
       payment_status: updatedDocument.payment_status,
       paid_amount: updatedDocument.paid_amount,
       paid_at: updatedDocument.paid_at,
+      payment_method: updatedDocument.payment_method,
+      cash_account_id: updatedDocument.cash_account_id,
+      cash_account_code: updatedDocument.cash_account_code,
+      cash_account_name: updatedDocument.cash_account_name,
       finance_transaction_id: updatedDocument.finance_transaction_id,
       updated_at: updatedDocument.updated_at,
     });
