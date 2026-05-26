@@ -1,6 +1,6 @@
-import { Card, Descriptions, Typography } from 'antd';
+import { Card, Descriptions, Tag, Typography } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
-import type { SalesReturnResolution } from '@/types';
+import type { SalesReturnLimitSnapshot, SalesReturnResolution } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 
 const { Text } = Typography;
@@ -12,6 +12,7 @@ interface SalesReturnSummaryProps {
   totalAmount: number;
   restockQuantity: number;
   resolution: SalesReturnResolution;
+  limits?: SalesReturnLimitSnapshot;
 }
 
 export const SalesReturnSummary = ({
@@ -21,6 +22,7 @@ export const SalesReturnSummary = ({
   totalAmount,
   restockQuantity,
   resolution,
+  limits,
 }: SalesReturnSummaryProps) => {
   const { t } = useI18n();
   const financeAmount = resolution === 'REFUND' || resolution === 'CREDIT_NOTE' ? totalAmount : 0;
@@ -46,6 +48,21 @@ export const SalesReturnSummary = ({
         <Descriptions.Item label={t('salesReturns.field.financeEffect')}>
           {resolution === 'NO_FINANCE' ? '-' : `Rp ${formatCurrency(financeAmount)}`}
         </Descriptions.Item>
+        {limits && (
+          <>
+            <Descriptions.Item label={t('salesReturns.limit.creditNote')}>
+              Rp {formatCurrency(limits.credit_note_limit)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('salesReturns.limit.refund')}>
+              Rp {formatCurrency(limits.refund_limit)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('salesReturns.stockEffect')}>
+              <Tag color={limits.can_restock ? 'green' : 'default'}>
+                {limits.can_restock ? t('common.yes') : t('common.no')}
+              </Tag>
+            </Descriptions.Item>
+          </>
+        )}
       </Descriptions>
     </Card>
   );

@@ -2,7 +2,6 @@ import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type {
-  IssuedSalesReturnSummary,
   SalesDocument,
   SalesDocumentItem,
   SalesReturn,
@@ -16,11 +15,15 @@ import type {
 } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { isTransactionActive } from '@/utils/transactions';
-import { aggregateIssuedSalesReturns, createEmptyIssuedSalesReturnSummary } from '@/utils/salesReturns/aggregateSalesReturns';
+import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
+import { recalculateSalesInvoicePaymentStatus } from '@/services/salesDocumentService';
+import { calculateSalesReturnLimits } from '@/utils/salesReturns/calculateSalesReturnLimits';
 import { calculateSalesReturnTotal } from '@/utils/salesReturns/calculateSalesReturnTotal';
 import { createSalesReturnNumber } from '@/utils/salesReturns/createSalesReturnNumber';
+import { getSalesReturnStockPolicy, type SalesReturnStockPolicy } from '@/utils/salesReturns/getSalesReturnStockPolicy';
 import { mapSalesReturnSourceItem } from '@/utils/salesReturns/mapSalesReturnSourceItem';
 import { validateSalesReturn } from '@/utils/salesReturns/validateSalesReturn';
+import type { SalesReturnSourceChain } from '@/utils/salesReturns/resolveSalesReturnSourceChain';
 
 export interface SalesReturnItemInput {
   source_item_id: string;
@@ -79,10 +82,14 @@ const getSourceQuantity = (document: SalesDocument, item: SalesDocumentItem) => 
 const mapSalesDocumentSourceItems = (
   document: SalesDocument,
   items: SalesDocumentItem[],
-  summary: IssuedSalesReturnSummary,
+  summary: Awaited<ReturnType<typeof getIssuedReturnSummaryForSource>>,
+  sourceChain: SalesReturnSourceChain,
+  stockPolicy: SalesReturnStockPolicy,
 ): SalesReturnSourceItem[] => items.map((item) => {
   const sourceQuantity = getSourceQuantity(document, item);
   const returnedQuantity = summary.items[item.id]?.quantity || 0;
+  const sourceStockItemId = sourceChain.source_stock_item_id_by_current_item_id[item.id] ??
+    (stockPolicy.source_stock_document_id === document.id ? item.id : undefined);
 
   return {
     source_item_id: item.id,
@@ -98,46 +105,52 @@ const mapSalesDocumentSourceItems = (
     subtotal: Number(item.subtotal || 0),
     total_amount: Number(item.total_amount ?? item.subtotal ?? 0),
     purchase_price: item.purchase_price,
+    can_restock: stockPolicy.can_restock,
+    source_stock_item_id: sourceStockItemId,
+    source_stock_document_id: stockPolicy.source_stock_document_id,
+    source_stock_document_type: stockPolicy.source_stock_document_type,
+    source_stock_document_number: stockPolicy.source_stock_document_number,
   };
 });
 
-export const getIssuedReturnSummaryForSource = async (
-  sourceType: SalesReturnSourceType,
-  sourceId: string,
-) => {
-  const salesReturns = await db.salesReturns
-    .where('source_id')
-    .equals(sourceId)
-    .and((salesReturn) => salesReturn.source_type === sourceType && salesReturn.status === 'ISSUED')
-    .toArray();
-
-  if (salesReturns.length === 0) {
-    return createEmptyIssuedSalesReturnSummary(sourceType, sourceId);
-  }
-
-  const returnIds = salesReturns.map((salesReturn) => salesReturn.id);
-  const salesReturnItems = await db.salesReturnItems
-    .where('return_id')
-    .anyOf(returnIds)
-    .toArray();
-
-  return aggregateIssuedSalesReturns(sourceType, sourceId, salesReturns, salesReturnItems);
-};
+interface GetReturnableSourceOptions {
+  excludeReturnId?: string;
+}
 
 export const getReturnableSource = async (
   sourceType: SalesReturnSourceType,
   sourceId: string,
+  options: GetReturnableSourceOptions = {},
 ): Promise<SalesReturnableSource> => {
-  const summary = await getIssuedReturnSummaryForSource(sourceType, sourceId);
-
   if (sourceType === 'SALES_DELIVERY' || sourceType === 'SALES_INVOICE') {
-    const document = await db.salesDocuments.get(sourceId);
-    if (!document) throw new Error('Source dokumen tidak ditemukan.');
+    const sourceChain = await loadSalesReturnSourceChain(sourceType, sourceId);
+    if (!sourceChain) throw new Error('Source dokumen tidak ditemukan.');
+    const { source: document, sourceItems: items, chain } = sourceChain;
     if (getSalesDocumentSourceType(document) !== sourceType) {
       throw new Error('Tipe source retur tidak sesuai.');
     }
 
-    const items = await db.salesDocumentItems.where('document_id').equals(sourceId).toArray();
+    if (!chain.can_return_from_source) {
+      throw new Error(chain.return_from_source_block_reason || 'Source ini harus diretur dari dokumen chain yang aktif.');
+    }
+
+    const stockPolicy = getSalesReturnStockPolicy({
+      source_type: sourceType,
+      source_id: document.id,
+      source_number: document.document_number,
+      source_stock_document_id: chain.source_stock_document_id,
+      source_stock_document_type: chain.source_stock_document_type,
+      source_stock_document_number: chain.source_stock_document_number,
+    });
+    const summary = await getIssuedReturnSummaryForSource(sourceType, sourceId, options);
+    const sourceItems = mapSalesDocumentSourceItems(document, items, summary, chain, stockPolicy);
+    const limits = calculateSalesReturnLimits({
+      sourceItems,
+      issuedSummary: summary,
+      invoice: document.type === 'SALES_INVOICE' ? document : undefined,
+      stockPolicy,
+    });
+
     return {
       source_type: sourceType,
       source_id: document.id,
@@ -150,7 +163,14 @@ export const getReturnableSource = async (
       customer_email: document.customer_email,
       customer_address: document.customer_address,
       document_date: document.document_date,
-      items: mapSalesDocumentSourceItems(document, items, summary),
+      source_chain_label: chain.source_chain_label,
+      source_chain_notice: chain.return_from_source_block_reason,
+      source_stock_document_id: stockPolicy.source_stock_document_id,
+      source_stock_document_type: stockPolicy.source_stock_document_type,
+      source_stock_document_number: stockPolicy.source_stock_document_number,
+      can_restock: stockPolicy.can_restock,
+      limits,
+      items: sourceItems,
     };
   }
 
@@ -183,6 +203,14 @@ const getDefaultResolution = (
     return 'NO_FINANCE';
   }
 
+  if (source.limits && source.limits.credit_note_limit >= totalAmount) {
+    return 'CREDIT_NOTE';
+  }
+
+  if (source.limits && source.limits.refund_limit >= totalAmount) {
+    return 'REFUND';
+  }
+
   return 'CREDIT_NOTE';
 };
 
@@ -190,7 +218,9 @@ const buildSalesReturnDraft = async (
   input: SalesReturnUpsertInput,
   existing?: SalesReturn,
 ) => {
-  const source = await getReturnableSource(input.salesReturn.source_type, input.salesReturn.source_id);
+  const source = await getReturnableSource(input.salesReturn.source_type, input.salesReturn.source_id, {
+    excludeReturnId: existing?.id,
+  });
   const sourceItemsById = new Map(source.items.map((item) => [item.source_item_id, item]));
   const now = new Date();
   const updatedAt = now.toISOString();
@@ -243,6 +273,10 @@ const buildSalesReturnDraft = async (
     refund_amount: refundAmount,
     credit_amount: creditAmount,
     finance_transaction_id: existing?.finance_transaction_id,
+    reversal_finance_transaction_id: existing?.reversal_finance_transaction_id,
+    source_stock_document_id: source.source_stock_document_id,
+    source_stock_document_type: source.source_stock_document_type,
+    source_stock_document_number: source.source_stock_document_number,
     issued_at: existing?.issued_at,
     voided_at: existing?.voided_at,
     void_reason: existing?.void_reason,
@@ -261,9 +295,31 @@ const buildSalesReturnDraft = async (
     items: total.items,
     sourceStatus,
     remainingQuantityBySourceItemId,
+    limits: source.limits,
   });
 
   return { salesReturn, items: total.items };
+};
+
+const normalizeItemsForSourcePolicy = (
+  items: SalesReturnItem[],
+  source: SalesReturnableSource,
+) => {
+  const sourceItemsById = new Map(source.items.map((item) => [item.source_item_id, item]));
+
+  return calculateSalesReturnTotal(items.map((item) => {
+    const sourceItem = sourceItemsById.get(item.source_item_id);
+    if (!sourceItem) return item;
+
+    const canRestock = sourceItem.can_restock !== false;
+    return {
+      ...item,
+      restock_quantity: canRestock ? Math.min(Number(item.restock_quantity ?? item.quantity ?? 0), Number(item.quantity || 0)) : 0,
+      source_stock_item_id: sourceItem.source_stock_item_id,
+      source_stock_document_id: sourceItem.source_stock_document_id,
+      source_stock_document_type: sourceItem.source_stock_document_type,
+    };
+  })).items;
 };
 
 const applyRestockEffect = async (
@@ -323,13 +379,13 @@ const reverseRefundFinanceTransaction = async (
   salesReturn: SalesReturn,
   now: string,
 ) => {
-  if (salesReturn.resolution !== 'REFUND') return;
+  if (salesReturn.resolution !== 'REFUND') return undefined;
 
   const financeTransaction = salesReturn.finance_transaction_id
     ? await db.financeTransactions.get(salesReturn.finance_transaction_id)
     : undefined;
   const amount = Number(financeTransaction?.amount ?? salesReturn.refund_amount ?? 0);
-  if (amount <= 0) return;
+  if (amount <= 0) return undefined;
 
   const currentBalance = await db.financeBalance.get('current');
   await db.financeBalance.put({
@@ -338,9 +394,18 @@ const reverseRefundFinanceTransaction = async (
     updated_at: now,
   });
 
-  if (financeTransaction) {
-    await db.financeTransactions.delete(financeTransaction.id);
-  }
+  const reversalFinanceTransactionId = crypto.randomUUID();
+  await db.financeTransactions.add({
+    id: reversalFinanceTransactionId,
+    type: 'INCOME',
+    category: FINANCE_CATEGORIES.SALES_REFUND,
+    amount,
+    description: `Pembalikan refund retur ${salesReturn.return_number}`,
+    created_at: now,
+    reference_id: salesReturn.id,
+  });
+
+  return reversalFinanceTransactionId;
 };
 
 const applyPosProfitReversal = async (
@@ -427,8 +492,9 @@ export const issueSalesReturn = async (id: string) => {
   if (!salesReturn) throw new Error('Retur tidak ditemukan.');
   assertDraft(salesReturn);
 
-  const items = await db.salesReturnItems.where('return_id').equals(id).toArray();
-  const source = await getReturnableSource(salesReturn.source_type, salesReturn.source_id);
+  const storedItems = await db.salesReturnItems.where('return_id').equals(id).toArray();
+  const source = await getReturnableSource(salesReturn.source_type, salesReturn.source_id, { excludeReturnId: id });
+  const items = normalizeItemsForSourcePolicy(storedItems, source);
   const sourceStatus = await getSourceStatus(salesReturn.source_type, salesReturn.source_id);
   const remainingQuantityBySourceItemId = source.items.reduce((acc, item) => {
     acc[item.source_item_id] = item.remaining_quantity;
@@ -440,6 +506,7 @@ export const issueSalesReturn = async (id: string) => {
     items,
     sourceStatus,
     remainingQuantityBySourceItemId,
+    limits: source.limits,
   });
 
   const now = new Date().toISOString();
@@ -448,12 +515,19 @@ export const issueSalesReturn = async (id: string) => {
     await applyRestockEffect(items, 1);
     const financeTransactionId = await createRefundFinanceTransaction(salesReturn, now);
     await applyPosProfitReversal(salesReturn, items, now, 1);
+    await db.salesReturnItems.bulkPut(items);
     await db.salesReturns.update(id, {
       status: 'ISSUED' satisfies SalesReturnStatus,
       issued_at: now,
       finance_transaction_id: financeTransactionId,
+      source_stock_document_id: source.source_stock_document_id,
+      source_stock_document_type: source.source_stock_document_type,
+      source_stock_document_number: source.source_stock_document_number,
       updated_at: now,
     });
+    if (salesReturn.source_type === 'SALES_INVOICE') {
+      await recalculateSalesInvoicePaymentStatus(salesReturn.source_id);
+    }
     await writeActivityLog({
       user: currentUser,
       action: 'SALES_RETURN_ISSUED',
@@ -480,9 +554,10 @@ export const voidSalesReturn = async (id: string, reason: string) => {
   const now = new Date().toISOString();
 
   await db.transaction('rw', salesReturnTables, async () => {
+    let reversalFinanceTransactionId = salesReturn.reversal_finance_transaction_id;
     if (salesReturn.status === 'ISSUED') {
       await applyRestockEffect(items, -1);
-      await reverseRefundFinanceTransaction(salesReturn, now);
+      reversalFinanceTransactionId = await reverseRefundFinanceTransaction(salesReturn, now);
       await applyPosProfitReversal(salesReturn, items, now, -1);
     }
 
@@ -490,9 +565,12 @@ export const voidSalesReturn = async (id: string, reason: string) => {
       status: 'VOIDED' satisfies SalesReturnStatus,
       voided_at: now,
       void_reason: normalizedReason,
-      finance_transaction_id: undefined,
+      reversal_finance_transaction_id: reversalFinanceTransactionId,
       updated_at: now,
     });
+    if (salesReturn.source_type === 'SALES_INVOICE') {
+      await recalculateSalesInvoicePaymentStatus(salesReturn.source_id);
+    }
     await writeActivityLog({
       user: currentUser,
       action: 'SALES_RETURN_VOIDED',
@@ -510,5 +588,12 @@ export const listReturnableSalesDocumentSources = async () => {
     .filter((document) => document.type === 'SALES_DELIVERY' || document.type === 'SALES_INVOICE')
     .toArray();
 
-  return documents;
+  const documentsWithPolicy = await Promise.all(documents.map(async (document) => {
+    if (document.type !== 'SALES_DELIVERY') return document;
+
+    const sourceChain = await loadSalesReturnSourceChain('SALES_DELIVERY', document.id);
+    return sourceChain?.chain.can_return_from_source ? document : undefined;
+  }));
+
+  return documentsWithPolicy.filter((document): document is SalesDocument => Boolean(document));
 };

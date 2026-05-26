@@ -60,6 +60,18 @@ export default function SalesReturnDetail({ returnId }: SalesReturnDetailProps) 
     [returnId],
     [],
   );
+  const financeTransaction = useLiveQuery(
+    () => salesReturn?.finance_transaction_id
+      ? db.financeTransactions.get(salesReturn.finance_transaction_id)
+      : undefined,
+    [salesReturn?.finance_transaction_id],
+  );
+  const reversalFinanceTransaction = useLiveQuery(
+    () => salesReturn?.reversal_finance_transaction_id
+      ? db.financeTransactions.get(salesReturn.reversal_finance_transaction_id)
+      : undefined,
+    [salesReturn?.reversal_finance_transaction_id],
+  );
 
   if (!salesReturn) {
     return <div className="p-6">{t('salesReturns.notFound')}</div>;
@@ -201,10 +213,30 @@ export default function SalesReturnDetail({ returnId }: SalesReturnDetailProps) 
           <Descriptions.Item label={t('salesReturns.field.customer')}>{salesReturn.customer_name}</Descriptions.Item>
           <Descriptions.Item label={t('salesReturns.field.documentDate')}>{formatDate(salesReturn.document_date)}</Descriptions.Item>
           <Descriptions.Item label={t('salesReturns.field.reason')}>{salesReturn.reason || '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('salesReturns.field.sourceStock')}>
+            {salesReturn.source_stock_document_number || '-'}
+          </Descriptions.Item>
           <Descriptions.Item label={t('salesReturns.field.refundAmount')}>Rp {formatCurrency(salesReturn.refund_amount || 0)}</Descriptions.Item>
           <Descriptions.Item label={t('salesReturns.field.creditAmount')}>Rp {formatCurrency(salesReturn.credit_amount || 0)}</Descriptions.Item>
         </Descriptions>
       </Card>
+
+      {(financeTransaction || reversalFinanceTransaction) && (
+        <Card size="small" title={t('salesReturns.financeAuditTrail')}>
+          <Descriptions column={{ xs: 1, md: 2 }} size="small">
+            <Descriptions.Item label={t('salesReturns.field.financeTransaction')}>
+              {financeTransaction
+                ? `${financeTransaction.description} - Rp ${formatCurrency(financeTransaction.amount)}`
+                : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('salesReturns.field.reversalFinanceTransaction')}>
+              {reversalFinanceTransaction
+                ? `${reversalFinanceTransaction.description} - Rp ${formatCurrency(reversalFinanceTransaction.amount)}`
+                : '-'}
+            </Descriptions.Item>
+          </Descriptions>
+        </Card>
+      )}
 
       <Table
         rowKey="id"

@@ -45,12 +45,13 @@ export const SalesReturnLineItems = ({
       ...currentItem,
       ...patch,
     };
+    const canRestock = sourceItem.can_restock !== false;
 
     if (patch.quantity !== undefined && nextItem.condition === 'SELLABLE') {
-      nextItem.restock_quantity = patch.quantity;
+      nextItem.restock_quantity = canRestock ? patch.quantity : 0;
     }
 
-    if (patch.condition && patch.condition !== 'SELLABLE') {
+    if (!canRestock || (patch.condition && patch.condition !== 'SELLABLE')) {
       nextItem.restock_quantity = 0;
     }
 
@@ -75,6 +76,7 @@ export const SalesReturnLineItems = ({
           <div className="mt-1 text-xs text-gray-500">
             {record.sku ? `${record.sku} · ` : ''}
             {t('salesReturns.field.sourceQuantity')}: {record.source_quantity} {record.unit}
+            {record.source_stock_document_number ? ` · ${record.source_stock_document_number}` : ''}
           </div>
         </div>
       ),
@@ -128,12 +130,13 @@ export const SalesReturnLineItems = ({
       render: (_, record) => {
         const currentItem = itemsBySourceItemId.get(record.source_item_id);
         const isSellable = (currentItem?.condition ?? 'SELLABLE') === 'SELLABLE';
+        const canRestock = record.can_restock !== false;
         return (
           <InputNumber
             min={0}
             max={currentItem?.quantity ?? 0}
             value={currentItem?.restock_quantity ?? 0}
-            disabled={!isSellable}
+            disabled={!isSellable || !canRestock}
             onChange={(value) => updateItem(record, { restock_quantity: Number(value || 0) })}
             className="w-full"
           />

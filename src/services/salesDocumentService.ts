@@ -2,15 +2,15 @@ import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { getSalesDocumentConfig, type SalesDocumentConfig } from '@/configs/sales-document';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
-import { getIssuedReturnSummaryForSource } from '@/services/salesReturnService';
+import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
 import type {
   SalesDocument,
   SalesDocumentItem,
   SalesDocumentStatus,
   SalesDocumentType,
-  SalesInvoicePaymentStatus,
 } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
+import { calculateInvoicePaymentStatus } from '@/utils/salesDocuments/calculateInvoicePaymentStatus';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { createSalesDocumentNumber } from '@/utils/salesDocuments/createSalesDocumentNumber';
 import {
@@ -391,6 +391,23 @@ export const voidSalesDocument = async (id: string, reason: string) => {
   });
 };
 
+export const recalculateSalesInvoicePaymentStatus = async (invoiceId: string) => {
+  const document = await db.salesDocuments.get(invoiceId);
+  if (!document || document.type !== 'SALES_INVOICE') return;
+
+  const returnSummary = await getIssuedReturnSummaryForSource('SALES_INVOICE', invoiceId);
+  const { paymentStatus } = calculateInvoicePaymentStatus({
+    invoiceTotal: Number(document.total_amount || 0),
+    paidAmount: Number(document.paid_amount || 0),
+    issuedCreditAmount: Number(returnSummary.credit_amount || 0),
+  });
+
+  await db.salesDocuments.update(invoiceId, {
+    payment_status: paymentStatus,
+    updated_at: new Date().toISOString(),
+  });
+};
+
 export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymentInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
@@ -401,9 +418,17 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
 
   const total = Number(document.total_amount || 0);
   const returnSummary = await getIssuedReturnSummaryForSource('SALES_INVOICE', id);
-  const netTotal = Math.max(0, total - Number(returnSummary.credit_amount || 0));
-  const nextPaidAmount = Math.min(Math.max(0, Number(input.paid_amount || 0)), netTotal);
-  const paymentStatus: SalesInvoicePaymentStatus = netTotal <= 0 || nextPaidAmount >= netTotal ? 'PAID' : nextPaidAmount > 0 ? 'PARTIAL' : 'UNPAID';
+  const requestedPaidAmount = Math.max(0, Number(input.paid_amount || 0));
+  const { netInvoiceAmount, paymentStatus } = calculateInvoicePaymentStatus({
+    invoiceTotal: total,
+    paidAmount: requestedPaidAmount,
+    issuedCreditAmount: Number(returnSummary.credit_amount || 0),
+  });
+  if (requestedPaidAmount > netInvoiceAmount + 0.01) {
+    throw new Error(`Pembayaran melebihi nilai invoice setelah credit note. Maksimal pembayaran Rp ${netInvoiceAmount}.`);
+  }
+
+  const nextPaidAmount = requestedPaidAmount;
   const now = new Date().toISOString();
   const paidAt = input.paid_at || now;
   const previousPaidAmount = Number(document.paid_amount || 0);

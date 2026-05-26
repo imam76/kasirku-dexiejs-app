@@ -11,7 +11,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
-import { getIssuedReturnSummaryForSource } from '@/services/salesReturnService';
+import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
 import type {
   IssuedSalesReturnSummary,
   SalesDocument,
@@ -50,6 +50,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const [document, setDocument] = useState<SalesDocument | undefined>();
   const [items, setItems] = useState<SalesDocumentItem[]>([]);
   const [returnSummary, setReturnSummary] = useState<IssuedSalesReturnSummary | undefined>();
+  const [returnSourcePolicy, setReturnSourcePolicy] = useState<{ canReturn: boolean; notice?: string }>({ canReturn: true });
   const [paidAmount, setPaidAmount] = useState<number>(0);
 
   const loadDocument = useCallback(async () => {
@@ -60,11 +61,18 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     const loadedReturnSummary = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
       ? await getIssuedReturnSummaryForSource(loadedDocument.type, loadedDocument.id)
       : undefined;
+    const sourceChain = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
+      ? await loadSalesReturnSourceChain(loadedDocument.type, loadedDocument.id)
+      : undefined;
     const netPayable = Math.max(0, Number(loadedDocument?.total_amount || 0) - Number(loadedReturnSummary?.credit_amount || 0));
 
     setDocument(loadedDocument);
     setItems(loadedItems);
     setReturnSummary(loadedReturnSummary);
+    setReturnSourcePolicy({
+      canReturn: sourceChain?.chain.can_return_from_source ?? true,
+      notice: sourceChain?.chain.return_from_source_block_reason ?? sourceChain?.chain.source_chain_label,
+    });
     setPaidAmount(loadedDocument?.paid_amount ?? netPayable);
   }, [documentId]);
 
@@ -79,6 +87,9 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       const loadedReturnSummary = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
         ? await getIssuedReturnSummaryForSource(loadedDocument.type, loadedDocument.id)
         : undefined;
+      const sourceChain = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
+        ? await loadSalesReturnSourceChain(loadedDocument.type, loadedDocument.id)
+        : undefined;
       const netPayable = Math.max(0, Number(loadedDocument?.total_amount || 0) - Number(loadedReturnSummary?.credit_amount || 0));
 
       if (!isCurrent) return;
@@ -86,6 +97,10 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       setDocument(loadedDocument);
       setItems(loadedItems);
       setReturnSummary(loadedReturnSummary);
+      setReturnSourcePolicy({
+        canReturn: sourceChain?.chain.can_return_from_source ?? true,
+        notice: sourceChain?.chain.return_from_source_block_reason ?? sourceChain?.chain.source_chain_label,
+      });
       setPaidAmount(loadedDocument?.paid_amount ?? netPayable);
     };
 
@@ -121,7 +136,8 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const netInvoiceAmount = Math.max(0, Number(document.total_amount || 0) - issuedCreditAmount);
   const canCreateReturn = can('SALES_RETURN_MANAGE') &&
     document.status === 'ISSUED' &&
-    (document.type === 'SALES_DELIVERY' || document.type === 'SALES_INVOICE');
+    (document.type === 'SALES_DELIVERY' || document.type === 'SALES_INVOICE') &&
+    returnSourcePolicy.canReturn;
   const statusStyle = statusColor[document.status];
   const paymentStyle = document.payment_status ? paymentStatusColor[document.payment_status] : undefined;
   const statusBadge = (
@@ -405,20 +421,38 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
           </div>
         )}
 
-        {returnSummary && returnSummary.return_count > 0 && (
+        {returnSourcePolicy.notice && (
+          <div className="mt-6 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] text-blue-900">
+            {returnSourcePolicy.notice}
+          </div>
+        )}
+
+        {config.behavior.hasPaymentStatus && (
           <div className="mt-6 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3">
-            <div className="grid gap-2 text-[13px] text-rose-950 md:grid-cols-3">
+            <div className="grid gap-2 text-[13px] text-rose-950 md:grid-cols-6">
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesDocuments.field.grossInvoice')}</div>
+                <div className="font-bold">Rp {formatCurrency(document.total_amount || 0)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesDocuments.field.paidAmount')}</div>
+                <div className="font-bold">Rp {formatCurrency(document.paid_amount || 0)}</div>
+              </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.summary.totalReturn')}</div>
-                <div className="font-bold">Rp {formatCurrency(returnSummary.total_amount)}</div>
+                <div className="font-bold">Rp {formatCurrency(returnSummary?.total_amount || 0)}</div>
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.field.creditAmount')}</div>
-                <div className="font-bold">Rp {formatCurrency(returnSummary.credit_amount)}</div>
+                <div className="font-bold">Rp {formatCurrency(returnSummary?.credit_amount || 0)}</div>
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.field.refundAmount')}</div>
-                <div className="font-bold">Rp {formatCurrency(returnSummary.refund_amount)}</div>
+                <div className="font-bold">Rp {formatCurrency(returnSummary?.refund_amount || 0)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesDocuments.field.netBalanceDue')}</div>
+                <div className="font-bold">Rp {formatCurrency(balanceDue)}</div>
               </div>
             </div>
           </div>

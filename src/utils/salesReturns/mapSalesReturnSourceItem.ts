@@ -30,7 +30,7 @@ export const mapSalesReturnSourceItem = ({
   const sourceQuantity = Math.max(0, Number(sourceItem.source_quantity || 0));
   const ratio = sourceQuantity > 0 ? normalizedQuantity / sourceQuantity : 0;
   const restock = condition === 'SELLABLE'
-    ? Math.max(0, Number(restockQuantity ?? normalizedQuantity))
+    ? (sourceItem.can_restock === false ? 0 : Math.max(0, Number(restockQuantity ?? normalizedQuantity)))
     : 0;
 
   return {
@@ -52,6 +52,9 @@ export const mapSalesReturnSourceItem = ({
     profit_reversal: prorate(sourceItem.profit, ratio),
     condition,
     restock_quantity: restock,
+    source_stock_item_id: sourceItem.source_stock_item_id,
+    source_stock_document_id: sourceItem.source_stock_document_id,
+    source_stock_document_type: sourceItem.source_stock_document_type,
     created_at: createdAt,
   };
 };

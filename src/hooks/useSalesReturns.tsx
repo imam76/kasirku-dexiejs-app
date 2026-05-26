@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { App } from 'antd';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -47,6 +46,11 @@ export const useSalesReturns = () => {
     [],
     [],
   );
+  const returnableSources = useLiveQuery(
+    () => listReturnableSalesDocumentSources(),
+    [salesDocuments.length],
+    [],
+  );
 
   const invalidate = () => {
     SALES_RETURN_RELATED_QUERY_KEYS.forEach((queryKey) => {
@@ -86,14 +90,6 @@ export const useSalesReturns = () => {
     },
     onError: (error: Error) => modal.error({ title: t('salesReturns.error.voidTitle'), content: error.message }),
   });
-
-  const returnableSources = useMemo(
-    () => salesDocuments.filter((document) => (
-      document.status === 'ISSUED' &&
-      (document.type === 'SALES_DELIVERY' || document.type === 'SALES_INVOICE')
-    )),
-    [salesDocuments],
-  );
 
   const getReturn = (returnId: string): SalesReturn | undefined => (
     salesReturns.find((salesReturn) => salesReturn.id === returnId)

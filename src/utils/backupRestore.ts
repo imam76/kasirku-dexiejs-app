@@ -28,7 +28,7 @@ export const backupDatabase = async () => {
       salesReturnItems: await db.salesReturnItems.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 4,
+      version: 5,
       timestamp: new Date().toISOString(),
     };
 

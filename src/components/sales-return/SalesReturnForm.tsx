@@ -65,6 +65,45 @@ const toInputItems = (items: SalesReturnItem[] = []): SalesReturnItemInput[] => 
   }))
 );
 
+const isResolutionAllowed = (
+  source: SalesReturnableSource | undefined,
+  resolution: SalesReturnResolution,
+  totalAmount: number,
+) => {
+  if (!source) return true;
+
+  if (source.source_type === 'SALES_DELIVERY') {
+    return resolution === 'NO_FINANCE';
+  }
+
+  if (source.source_type === 'SALES_INVOICE') {
+    if (resolution === 'NO_FINANCE') {
+      return totalAmount <= 0;
+    }
+
+    if (resolution === 'CREDIT_NOTE') {
+      return Boolean(source.limits && source.limits.credit_note_limit > 0 && totalAmount <= source.limits.credit_note_limit + 0.01);
+    }
+
+    if (resolution === 'REFUND') {
+      return Boolean(source.limits && source.limits.refund_limit > 0 && totalAmount <= source.limits.refund_limit + 0.01);
+    }
+  }
+
+  return resolution === 'NO_FINANCE';
+};
+
+const getPreferredResolution = (
+  source: SalesReturnableSource,
+  totalAmount: number,
+): SalesReturnResolution => {
+  const preferred: SalesReturnResolution[] = source.source_type === 'SALES_INVOICE'
+    ? ['CREDIT_NOTE', 'REFUND', 'NO_FINANCE']
+    : ['NO_FINANCE'];
+
+  return preferred.find((candidate) => isResolutionAllowed(source, candidate, totalAmount)) ?? 'NO_FINANCE';
+};
+
 export const SalesReturnForm = ({
   initialData,
   initialSourceType,
@@ -101,8 +140,9 @@ export const SalesReturnForm = ({
       .then((loadedSource) => {
         if (!isCurrent) return;
         setSource(loadedSource);
+        setLoadError(undefined);
         if (!initialReturn) {
-          setResolution(loadedSource.source_type === 'SALES_DELIVERY' ? 'NO_FINANCE' : 'CREDIT_NOTE');
+          setResolution(getPreferredResolution(loadedSource, 0));
         }
       })
       .catch((error: Error) => {
@@ -152,6 +192,9 @@ export const SalesReturnForm = ({
 
   const parsedSource = parseSourceKey(sourceKey);
   const hasPricing = Boolean(source?.items.some((item) => Number(item.total_amount || 0) > 0));
+  const selectedItems = items.filter((item) => Number(item.quantity || 0) > 0);
+  const hasSelectedItems = selectedItems.length > 0;
+  const invalidResolution = source ? !isResolutionAllowed(source, resolution, total.total_amount) : false;
 
   return (
     <div className="space-y-4">
@@ -183,7 +226,11 @@ export const SalesReturnForm = ({
             <div className="mb-1 text-xs font-medium text-gray-500">{t('salesReturns.field.resolution')}</div>
             <Select
               value={resolution}
-              options={resolutionOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+              options={resolutionOptions.map((option) => ({
+                value: option.value,
+                label: t(option.labelKey),
+                disabled: !isResolutionAllowed(source, option.value, total.total_amount),
+              }))}
               onChange={setResolution}
               className="w-full"
             />
@@ -196,6 +243,14 @@ export const SalesReturnForm = ({
       </Card>
 
       {loadError && <Alert type="error" message={loadError} showIcon />}
+      {source?.source_chain_label && <Alert type="info" message={source.source_chain_label} showIcon />}
+      {invalidResolution && (
+        <Alert
+          type="warning"
+          message={t('salesReturns.limit.resolutionExceeded')}
+          showIcon
+        />
+      )}
 
       {source ? (
         <>
@@ -212,6 +267,7 @@ export const SalesReturnForm = ({
             totalAmount={total.total_amount}
             restockQuantity={total.restock_quantity}
             resolution={resolution}
+            limits={source.limits}
           />
         </>
       ) : (
@@ -224,7 +280,7 @@ export const SalesReturnForm = ({
           <Button
             type="primary"
             loading={submitting}
-            disabled={!source || !parsedSource}
+            disabled={!source || !parsedSource || !hasSelectedItems || invalidResolution}
             onClick={async () => {
               if (!parsedSource || !source) return;
 
@@ -238,7 +294,7 @@ export const SalesReturnForm = ({
                   refund_amount: resolution === 'REFUND' ? total.total_amount : 0,
                   credit_amount: resolution === 'CREDIT_NOTE' ? total.total_amount : 0,
                 },
-                items: items.filter((item) => Number(item.quantity || 0) > 0),
+                items: selectedItems,
               });
             }}
           >

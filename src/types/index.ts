@@ -322,6 +322,10 @@ export interface SalesReturn {
   refund_amount?: number;
   credit_amount?: number;
   finance_transaction_id?: string;
+  reversal_finance_transaction_id?: string;
+  source_stock_document_id?: string;
+  source_stock_document_type?: 'SALES_DELIVERY';
+  source_stock_document_number?: string;
   issued_at?: string;
   voided_at?: string;
   void_reason?: string;
@@ -348,6 +352,9 @@ export interface SalesReturnItem {
   profit_reversal?: number;
   condition: SalesReturnItemCondition;
   restock_quantity?: number;
+  source_stock_item_id?: string;
+  source_stock_document_id?: string;
+  source_stock_document_type?: 'SALES_DELIVERY';
   created_at: string;
 }
 
@@ -366,6 +373,24 @@ export interface SalesReturnSourceItem {
   total_amount: number;
   purchase_price?: number;
   profit?: number;
+  can_restock?: boolean;
+  source_stock_item_id?: string;
+  source_stock_document_id?: string;
+  source_stock_document_type?: 'SALES_DELIVERY';
+  source_stock_document_number?: string;
+}
+
+export interface SalesReturnLimitSnapshot {
+  returnable_quantity_by_source_item_id: Record<string, number>;
+  credit_note_limit: number;
+  refund_limit: number;
+  balance_before_return: number;
+  refundable_cash: number;
+  invoice_total: number;
+  paid_amount: number;
+  existing_credit: number;
+  existing_refund: number;
+  can_restock: boolean;
 }
 
 export interface SalesReturnableSource {
@@ -380,6 +405,13 @@ export interface SalesReturnableSource {
   customer_email?: string;
   customer_address?: string;
   document_date: string;
+  source_chain_label?: string;
+  source_chain_notice?: string;
+  source_stock_document_id?: string;
+  source_stock_document_type?: 'SALES_DELIVERY';
+  source_stock_document_number?: string;
+  can_restock?: boolean;
+  limits?: SalesReturnLimitSnapshot;
   items: SalesReturnSourceItem[];
 }
 
