@@ -137,7 +137,7 @@ export function AccountsReceivableTable({
       title: t('accountsReceivable.actions'),
       key: 'actions',
       fixed: 'right',
-      width: 190,
+      width: 240,
       render: (_, record) => (
         <Space>
           <Button
@@ -169,7 +169,7 @@ export function AccountsReceivableTable({
       columns={columns}
       dataSource={rows}
       loading={loading}
-      scroll={{ x: 1500 }}
+      scroll={{ x: 1550 }}
       pagination={{ pageSize: 10, showSizeChanger: true }}
     />
   );

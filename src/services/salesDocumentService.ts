@@ -51,6 +51,7 @@ const salesDocumentTables = [
   db.chartOfAccounts,
   db.financeAccountMappings,
   db.enabledModules,
+  db.generalLedgerSetting,
   db.journalEntries,
   db.journalEntryLines,
   db.activityLogs,
