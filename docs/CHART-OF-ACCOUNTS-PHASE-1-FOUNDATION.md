@@ -1,17 +1,20 @@
-# Chart of Accounts - Fase 1 Fondasi COA Operasional
+# Accounting Core - Fase 1 Fondasi Operasional
 
-Fase ini adalah implementasi pertama yang paling cocok untuk kondisi Kasirku saat ini. Tujuannya membuat `Daftar Akun` sebagai modul Finance, memberi account snapshot ke transaksi finance, dan menjaga jalan ke general ledger tanpa memaksa double-entry sekarang.
+Fase ini adalah implementasi pertama yang paling cocok untuk kondisi Kasirku saat ini. Tujuannya membuat fondasi Accounting Core yang tetap ringan: `Daftar Akun` sebagai modul Finance, account snapshot ke transaksi finance, default accounting profile, feature gate awal, dan jalur menuju general ledger tanpa memaksa double-entry sekarang.
 
 ## Scope
 
 Masuk scope:
 
+- Audit backup/restore finance sebagai data safety gate sebelum table accounting baru dipakai.
 - CRUD Daftar Akun di Finance.
 - Default COA sederhana untuk toko kecil, basis `SAK_EMKM + RETAIL`.
+- Default `accountingProfileSetting` untuk toko retail awal.
+- Table `enabledModules` untuk feature gate/module activation awal.
 - Kode akun, nama akun, tipe akun, normal balance, parent optional, dan status aktif.
 - Mapping category finance ke akun default.
 - Snapshot akun optional di `financeTransactions`.
-- Backup/restore table COA dan mapping.
+- Backup/restore table finance, COA, mapping, profile setting, dan enabled modules.
 - Activity log untuk create/update/archive/restore akun dan update mapping.
 - I18n label Indonesia dan English.
 - Filter/group ringan di cash-flow berdasarkan account snapshot.
@@ -30,6 +33,7 @@ Tidak masuk scope:
 - Multi currency.
 - Perubahan cara POS mencatat transaksi.
 - Perubahan cara Sales Invoice payment mencatat cash-flow, selain penambahan snapshot akun.
+- UI module activation yang kompleks.
 
 ## Struktur File
 
@@ -42,6 +46,7 @@ src/components/chart-of-accounts/
   FinanceAccountMappingPanel.tsx
 
 src/constants/
+  accounting.ts
   chartOfAccounts.ts
 
 src/hooks/
@@ -68,14 +73,14 @@ src/routes/finance/
 
 Update file existing:
 
-- `src/types/index.ts`: tambah type/interface COA dan optional account snapshot di `FinanceTransaction`.
+- `src/types/index.ts`: tambah type/interface COA, accounting profile setting, enabled module, dan optional account snapshot di `FinanceTransaction`.
 - `src/lib/db.ts`: tambah table Dexie baru memakai versi berikutnya dari schema live.
 - `src/routes/finance/index.tsx`: tambah card `Daftar Akun`.
 - `src/routes/__root.tsx`: tambah sidebar child `/finance/chart-of-accounts` di group Finance.
 - `src/auth/routePermissions.ts`: tambah route `/finance/chart-of-accounts`.
 - `src/i18n/messages.ts`: tambah label menu, form, table, filter, dan feedback.
 - `src/services/financeService.ts`: pakai mapping akun saat membuat finance transaction.
-- `src/utils/backupRestore.ts`: export/import `chartOfAccounts` dan `financeAccountMappings`.
+- `src/utils/backupRestore.ts`: audit finance table existing, lalu export/import `financeTransactions`, `financeBalance`, `chartOfAccounts`, `financeAccountMappings`, `accountingProfileSetting`, dan `enabledModules`.
 - `src/routeTree.gen.ts`: jangan edit manual; biarkan generator/build TanStack Router yang update.
 
 ## Data Model
@@ -83,6 +88,28 @@ Update file existing:
 Tambahkan type di `src/types/index.ts`.
 
 ```ts
+export type AccountingProfileCode =
+  | 'SAK_EMKM'
+  | 'SAK_EP'
+  | 'PSAK_FULL'
+  | 'PSAP'
+  | 'SAK_ETAP_LEGACY';
+
+export type IndustryExtensionCode =
+  | 'NONE'
+  | 'RETAIL'
+  | 'MANUFACTURING'
+  | 'CONSTRUCTION';
+
+export type AccountingModuleCode =
+  | 'CHART_OF_ACCOUNTS'
+  | 'CASH_FLOW_ACCOUNT_FILTER'
+  | 'ACCOUNT_TEMPLATES'
+  | 'GENERAL_LEDGER'
+  | 'MANUFACTURING'
+  | 'CONSTRUCTION'
+  | 'PSAP_REPORTING';
+
 export type AccountType =
   | 'ASSET'
   | 'LIABILITY'
@@ -122,6 +149,27 @@ export interface FinanceAccountMapping {
   created_at: string;
   updated_at: string;
 }
+
+export interface AccountingProfileSetting {
+  id: 'default';
+  accounting_profile: AccountingProfileCode;
+  industry_extension: IndustryExtensionCode;
+  template_id?: string;
+  locked_after_transaction?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EnabledModule {
+  id: string;
+  code: AccountingModuleCode;
+  is_enabled: boolean;
+  source: 'SYSTEM' | 'PROFILE' | 'USER';
+  requires_profile?: AccountingProfileCode;
+  requires_extension?: IndustryExtensionCode;
+  created_at: string;
+  updated_at: string;
+}
 ```
 
 Tambahkan snapshot optional di `FinanceTransaction`:
@@ -149,6 +197,8 @@ Catatan:
 - `is_postable=false` dipakai untuk akun header/group, misalnya `1000 Aset Lancar`.
 - Transaksi hanya boleh memilih akun `is_postable=true` dan `is_active=true`.
 - `is_system=true` dipakai untuk akun seed yang dipakai mapping default.
+- `AccountingProfileSetting` fase awal cukup satu row `id='default'` dengan `SAK_EMKM + RETAIL`.
+- `EnabledModule` adalah feature gate lokal. Jangan pakai gate untuk mengganti permission; permission tetap lewat auth/role.
 
 ## Default COA Awal
 
@@ -191,6 +241,41 @@ EQUITY          CREDIT
 REVENUE         CREDIT
 ```
 
+## Default Accounting Profile dan Module Gate
+
+Buat default di `src/constants/accounting.ts`.
+
+Default profile:
+
+```txt
+accountingProfileSetting/default
+accounting_profile: SAK_EMKM
+industry_extension: RETAIL
+template_id: default-sak-emkm-retail
+locked_after_transaction: false
+```
+
+Default enabled modules:
+
+```txt
+CHART_OF_ACCOUNTS        true
+CASH_FLOW_ACCOUNT_FILTER false
+ACCOUNT_TEMPLATES        false
+GENERAL_LEDGER           false
+MANUFACTURING            false
+CONSTRUCTION             false
+PSAP_REPORTING           false
+```
+
+Aturan gate:
+
+- `CHART_OF_ACCOUNTS` boleh aktif sejak Fase 1.
+- `CASH_FLOW_ACCOUNT_FILTER` aktif hanya setelah account snapshot dan UI filter siap.
+- `ACCOUNT_TEMPLATES` aktif mulai Fase 2.
+- `GENERAL_LEDGER` aktif mulai Fase 4 setelah journal foundation ada.
+- `MANUFACTURING`, `CONSTRUCTION`, dan `PSAP_REPORTING` tidak aktif untuk retail default.
+- Gate tidak mengganti permission. User tetap harus punya permission route/action yang sesuai.
+
 ## Dexie Migration
 
 Schema live saat dokumen ini dibuat sudah sampai `version(18)`. Gunakan versi berikutnya yang tersedia saat implementasi.
@@ -201,9 +286,11 @@ Contoh jika masih `version(18)`:
 this.version(19).stores({
   financeTransactions: 'id, type, category, account_id, created_at, reference_id',
   chartOfAccounts: 'id, code, name, type, parent_id, is_postable, is_system, is_active, created_at',
-  financeAccountMappings: 'id, key, category, account_id, created_at'
+  financeAccountMappings: 'id, key, category, account_id, created_at',
+  accountingProfileSetting: 'id, accounting_profile, industry_extension, updated_at',
+  enabledModules: 'id, code, is_enabled, source, updated_at'
 }).upgrade(async (tx) => {
-  // Seed default accounts and mappings here.
+  // Seed default accounts, mappings, profile setting, and module gates here.
 });
 ```
 
@@ -212,6 +299,8 @@ Tambahkan table property:
 ```ts
 chartOfAccounts!: Table<ChartOfAccount>;
 financeAccountMappings!: Table<FinanceAccountMapping>;
+accountingProfileSetting!: Table<AccountingProfileSetting>;
+enabledModules!: Table<EnabledModule>;
 ```
 
 Aturan migration:
@@ -220,6 +309,8 @@ Aturan migration:
 - Jangan mengubah schema lama secara retroaktif.
 - Jika sudah ada migrasi baru setelah `version(18)`, pakai nomor berikutnya.
 - Seed default akun hanya jika table `chartOfAccounts` masih kosong.
+- Seed `accountingProfileSetting/default` jika belum ada.
+- Seed `enabledModules` jika table masih kosong.
 - Migration boleh mengisi snapshot akun untuk `financeTransactions` existing berdasarkan category, tetapi jangan mengubah `amount`, `type`, `category`, `reference_id`, atau `created_at`.
 - Jika category existing belum punya mapping, biarkan `account_id` kosong dan tampilkan sebagai `Belum Dipetakan` di UI/report.
 
@@ -266,6 +357,9 @@ export const updateChartOfAccount = async (id: string, input: ChartOfAccountUpse
 export const archiveChartOfAccount = async (id: string) => {};
 export const restoreChartOfAccount = async (id: string) => {};
 export const updateFinanceAccountMapping = async (key: string, accountId: string) => {};
+export const getAccountingProfileSetting = async () => {};
+export const isAccountingModuleEnabled = async (code: AccountingModuleCode) => {};
+export const updateEnabledModule = async (code: AccountingModuleCode, isEnabled: boolean) => {};
 ```
 
 Aturan service:
@@ -277,6 +371,8 @@ Aturan service:
 - Cek duplicate `code` di akun aktif lain.
 - Hitung `normal_balance` dari `type`, jangan percaya input form.
 - Saat memilih parent, simpan snapshot `parent_code` dan `parent_name`.
+- Default profile setting dibuat/diambil lewat service helper, bukan diulang di komponen.
+- Mutasi enabled module harus lewat service dan activity log.
 - Archive berarti `is_active=false`, bukan hard delete.
 - Tolak archive jika akun masih dipakai mapping aktif.
 - Jika akun sudah dipakai `financeTransactions`, archive tetap boleh selama mapping aktif sudah dipindah.
@@ -290,6 +386,9 @@ CHART_OF_ACCOUNT_UPDATED
 CHART_OF_ACCOUNT_ARCHIVED
 CHART_OF_ACCOUNT_RESTORED
 FINANCE_ACCOUNT_MAPPING_UPDATED
+ACCOUNTING_PROFILE_SETTING_UPDATED
+ACCOUNTING_MODULE_ENABLED
+ACCOUNTING_MODULE_DISABLED
 ```
 
 ## Hook
@@ -398,6 +497,7 @@ Catatan penting:
 
 Update `addFinanceTransaction()` di `src/services/financeService.ts`:
 
+- Perlakukan `financeTransactions` sebagai operational cash-flow layer, bukan accounting ledger.
 - Cari mapping account berdasarkan `category`.
 - Jika mapping ditemukan, snapshot `account_id`, `account_code`, `account_name`, dan `account_type`.
 - Jika tidak ada mapping, transaksi tetap boleh dibuat pada fase awal.
@@ -420,14 +520,25 @@ Aturan teknis:
 
 Update `src/utils/backupRestore.ts`:
 
+- Audit dulu table finance live yang sudah ada di `src/lib/db.ts`.
+- Pastikan `financeTransactions` ikut export/import.
+- Pastikan `financeBalance` ikut export/import.
 - Export `chartOfAccounts`.
 - Export `financeAccountMappings`.
-- Tambah keduanya ke `expectedKeys`.
-- Tambah keduanya ke daftar `tables`.
+- Export `accountingProfileSetting`.
+- Export `enabledModules`.
+- Tambahkan semua table finance/accounting di atas ke `expectedKeys`.
+- Tambahkan semua table finance/accounting di atas ke daftar `tables`.
 - Clear dan bulkAdd saat restore.
 - Naikkan `version` payload backup.
 
-Saat menyentuh backup/restore, audit dulu apakah table finance lain memang sudah ikut backup di versi live. Jangan diam-diam mengubah kontrak backup besar tanpa catatan, tetapi jangan lupa COA dan mapping wajib masuk backup sejak awal.
+Temuan audit saat dokumen ini diperbarui:
+
+- `src/lib/db.ts` sudah punya `financeTransactions` dan `financeBalance`.
+- `src/utils/backupRestore.ts` saat ini belum memasukkan `financeTransactions` dan `financeBalance` ke payload backup, `expectedKeys`, daftar transaction tables, clear, atau bulkAdd.
+- Ini prioritas data safety karena cash-flow operasional bisa hilang saat user restore dari backup.
+
+Saat menyentuh backup/restore, jangan diam-diam mengubah kontrak backup besar tanpa catatan, tetapi jangan lupa semua table finance/accounting wajib masuk backup sejak fase pertamanya.
 
 ## Report Ringan
 
@@ -443,27 +554,29 @@ Jangan langsung membuat buku besar. Laporan awal cukup membantu user melihat tra
 
 ## Checklist Implementasi
 
-1. Tambah type COA dan mapping di `src/types/index.ts`.
-2. Tambah `src/constants/chartOfAccounts.ts`.
-3. Tambah validation `src/lib/validations/chartOfAccount.ts`.
-4. Tambah Dexie `version(19)` atau versi berikutnya di `src/lib/db.ts`.
-5. Tambah table property `chartOfAccounts` dan `financeAccountMappings`.
-6. Seed default COA dan mapping jika table masih kosong.
-7. Tambah `src/services/chartOfAccountService.ts`.
-8. Tambah `src/hooks/useChartOfAccounts.tsx`.
-9. Tambah util tree/sort/normal balance/account snapshot.
-10. Tambah UI `src/view/finance/chart-of-accounts/ChartOfAccountsManagement.tsx`.
-11. Tambah components table/form/mapping panel.
-12. Tambah route `src/routes/finance/chart-of-accounts.lazy.tsx`.
-13. Tambah Finance landing card di `src/routes/finance/index.tsx`.
-14. Tambah sidebar child di `src/routes/__root.tsx`.
-15. Tambah route permission `/finance/chart-of-accounts`.
-16. Tambah i18n messages Indonesia dan English.
-17. Update `financeService.ts` agar transaksi baru mendapat account snapshot dari mapping.
-18. Update `recalculateFinance()` agar transaksi auto hasil replay juga mendapat account snapshot.
-19. Update `backupRestore.ts`.
-20. Tambah filter/kolom akun ringan di cash-flow jika scope UI memungkinkan.
-21. Jalankan build agar TanStack route tree sinkron.
+1. Audit `src/utils/backupRestore.ts` terhadap table finance live di `src/lib/db.ts`.
+2. Tambah type COA, mapping, `AccountingProfileSetting`, dan `EnabledModule` di `src/types/index.ts`.
+3. Tambah `src/constants/accounting.ts`.
+4. Tambah `src/constants/chartOfAccounts.ts`.
+5. Tambah validation `src/lib/validations/chartOfAccount.ts`.
+6. Tambah Dexie `version(19)` atau versi berikutnya di `src/lib/db.ts`.
+7. Tambah table property `chartOfAccounts`, `financeAccountMappings`, `accountingProfileSetting`, dan `enabledModules`.
+8. Seed default COA, mapping, profile setting, dan enabled modules jika table masih kosong.
+9. Tambah `src/services/chartOfAccountService.ts`.
+10. Tambah `src/hooks/useChartOfAccounts.tsx`.
+11. Tambah util tree/sort/normal balance/account snapshot.
+12. Tambah UI `src/view/finance/chart-of-accounts/ChartOfAccountsManagement.tsx`.
+13. Tambah components table/form/mapping panel.
+14. Tambah route `src/routes/finance/chart-of-accounts.lazy.tsx`.
+15. Tambah Finance landing card di `src/routes/finance/index.tsx`.
+16. Tambah sidebar child di `src/routes/__root.tsx`.
+17. Tambah route permission `/finance/chart-of-accounts`.
+18. Tambah i18n messages Indonesia dan English.
+19. Update `financeService.ts` agar transaksi baru mendapat account snapshot dari mapping.
+20. Update `recalculateFinance()` agar transaksi auto hasil replay juga mendapat account snapshot.
+21. Update `backupRestore.ts` untuk finance table existing dan table accounting baru.
+22. Tambah filter/kolom akun ringan di cash-flow jika scope UI memungkinkan.
+23. Jalankan build agar TanStack route tree sinkron.
 
 ## Acceptance Criteria
 
@@ -476,8 +589,10 @@ Jangan langsung membuat buku besar. Laporan awal cukup membantu user melihat tra
 - Transaksi finance baru menyimpan snapshot akun jika category punya mapping.
 - Transaksi finance lama tetap tampil walaupun belum punya akun.
 - Cash-flow tetap menghitung saldo seperti sebelumnya.
-- Backup membawa COA dan mapping.
-- Restore mengembalikan COA dan mapping.
+- `accountingProfileSetting/default` tersedia dengan `SAK_EMKM + RETAIL`.
+- `enabledModules` tersedia dan extension lanjut default nonaktif.
+- Backup membawa `financeTransactions`, `financeBalance`, COA, mapping, profile setting, dan enabled modules.
+- Restore mengembalikan `financeTransactions`, `financeBalance`, COA, mapping, profile setting, dan enabled modules.
 - POS checkout tetap berjalan seperti sebelumnya.
 - Finance > Sales dan Sales Return tetap berjalan seperti sebelumnya.
 - `src/routeTree.gen.ts` tidak diedit manual.
@@ -498,4 +613,3 @@ Prioritas test untuk COA:
 - `buildAccountTree`.
 - validation duplicate/parent/type.
 - mapping category finance ke account snapshot.
-

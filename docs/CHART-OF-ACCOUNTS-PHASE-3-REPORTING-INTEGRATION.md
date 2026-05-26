@@ -1,6 +1,6 @@
-# Chart of Accounts - Fase 3 Integrasi Modul dan Reporting Ringan
+# Accounting Core - Fase 3 Integrasi Modul dan Reporting Ringan
 
-Fase ini menghubungkan COA dengan modul finance yang sudah ada atau sedang direncanakan. Fokusnya tetap ringan: filter, grouping, account snapshot, dan mapping. Fase ini belum membuat general ledger.
+Fase ini menghubungkan COA dengan modul finance yang sudah ada atau sedang direncanakan. Fokusnya tetap ringan: filter, grouping, account snapshot, dan mapping di atas operational cash-flow layer. Fase ini belum membuat general ledger.
 
 ## Tujuan
 
@@ -12,7 +12,8 @@ Fase ini menghubungkan COA dengan modul finance yang sudah ada atau sedang diren
 
 ## Prinsip
 
-- `financeTransactions` tetap sumber cash-flow.
+- `financeTransactions` tetap operational cash-flow layer.
+- Operational cash-flow bukan accounting ledger dan tidak boleh dipakai untuk klaim debit/kredit.
 - Account snapshot tidak boleh mengubah `amount`, `type`, `category`, `reference_id`, atau `created_at`.
 - Account snapshot hanya memperkaya konteks laporan.
 - Modul lain tidak boleh langsung menulis rule COA sendiri. Gunakan service/helper mapping yang sama.
@@ -42,7 +43,7 @@ Catatan:
 
 - Ini bukan neraca.
 - Ini bukan laba rugi akuntansi.
-- Ini hanya view cash-flow berdasarkan snapshot akun.
+- Ini hanya view operational cash-flow berdasarkan snapshot akun.
 
 ## Mapping Health Check
 
@@ -146,11 +147,14 @@ Keputusan fase ini:
 
 ## Backup dan Restore
 
+Backup/restore tetap menjadi prioritas data safety untuk setiap integrasi finance.
+
 Pastikan table/field baru ikut backup:
 
 - account snapshot di finance transaction sudah bagian dari `financeTransactions`.
 - field account di payment ledger jika AR/AP sudah dibuat.
 - mapping table tetap ikut backup.
+- `accountingProfileSetting` dan `enabledModules` tetap ikut backup karena menentukan gate/module yang aktif.
 
 Restore harus menjaga data lama:
 
@@ -183,4 +187,3 @@ Prioritas test:
 - update mapping tidak merusak transaksi lama.
 - backfill tidak mengubah amount/type/category.
 - Sales Return refund/reversal masih balance.
-

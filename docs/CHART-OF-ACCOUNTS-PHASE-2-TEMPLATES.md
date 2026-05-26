@@ -1,14 +1,17 @@
-# Chart of Accounts - Fase 2 Template Standar Akuntansi
+# Accounting Core - Fase 2 Profile, Template, dan Module Activation
 
-Fase ini menambahkan template COA berdasarkan accounting profile dan industry extension. Fase ini tidak mengubah transaksi menjadi double-entry. Template hanya menjadi blueprint awal yang dicopy ke `chartOfAccounts`.
+Fase ini bukan cuma menambahkan template COA. Fase ini menghubungkan `accountingProfileSetting`, template akun, dan `enabledModules` supaya toko bisa memilih profile akuntansi, memakai blueprint akun yang sesuai, lalu mengaktifkan module yang memang aman untuk profile tersebut. Fase ini tetap tidak mengubah transaksi menjadi double-entry.
 
 ## Tujuan
 
 - User bisa memilih template COA yang sesuai jenis entitas.
+- User bisa melihat dan mengubah accounting profile toko secara terkontrol.
+- Sistem bisa menawarkan module activation berdasarkan profile dan industry extension.
 - Sistem punya default `SAK_EMKM + RETAIL` untuk toko kecil.
 - Template lain tersedia sebagai jalur naik kelas, bukan sebagai klaim compliance penuh.
 - Template tidak merusak akun yang sudah dipakai transaksi.
 - Template bisa diterapkan ke toko baru atau digunakan untuk menambah akun yang belum ada.
+- Module lanjut tidak aktif otomatis tanpa preview, konfirmasi, dan data safety check.
 
 ## Keputusan Grooming
 
@@ -18,25 +21,16 @@ Fase ini menambahkan template COA berdasarkan accounting profile dan industry ex
 - `PSAK_FULL` adalah profile lanjut yang butuh general ledger sebelum bisa diklaim serius.
 - `MANUFACTURING` dan `CONSTRUCTION` adalah extension di atas profile, bukan standar tunggal.
 - `PSAP` adalah profile khusus pemerintah dan tidak memakai konsep laba/rugi bisnis retail.
+- `accountingProfileSetting` dari Fase 1 menjadi source of truth untuk profile aktif.
+- `enabledModules` dari Fase 1 menjadi source of truth untuk module yang aktif.
+- Mengganti profile tidak boleh diam-diam apply template, mengubah transaksi lama, atau mengaktifkan module domain berat.
+- Aktivasi `GENERAL_LEDGER`, `MANUFACTURING`, `CONSTRUCTION`, dan `PSAP_REPORTING` harus tetap menunggu fondasi domain/report yang sesuai.
 
 ## Data Model Yang Disarankan
 
-Tambahkan type:
+Type `AccountingProfileCode`, `IndustryExtensionCode`, `AccountingModuleCode`, `AccountingProfileSetting`, dan `EnabledModule` sudah dibuat di Fase 1. Fase 2 menambahkan template dan rule aktivasi.
 
 ```ts
-export type AccountingProfileCode =
-  | 'SAK_EMKM'
-  | 'SAK_EP'
-  | 'PSAK_FULL'
-  | 'PSAP'
-  | 'SAK_ETAP_LEGACY';
-
-export type IndustryExtensionCode =
-  | 'NONE'
-  | 'RETAIL'
-  | 'MANUFACTURING'
-  | 'CONSTRUCTION';
-
 export interface ChartOfAccountTemplate {
   id: string;
   code: string;
@@ -66,12 +60,26 @@ export interface ChartOfAccountTemplateLine {
   created_at: string;
 }
 
-export interface AccountingProfileSetting {
+export interface AccountingProfileTemplateRecommendation {
   id: string;
   accounting_profile: AccountingProfileCode;
   industry_extension: IndustryExtensionCode;
-  template_id?: string;
-  locked_after_transaction?: boolean;
+  template_id: string;
+  is_default: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountingModuleActivationRule {
+  id: string;
+  accounting_profile: AccountingProfileCode;
+  industry_extension: IndustryExtensionCode;
+  module_code: AccountingModuleCode;
+  default_enabled: boolean;
+  requires_confirmation: boolean;
+  requires_data_safety_check: boolean;
+  description?: string;
   created_at: string;
   updated_at: string;
 }
@@ -83,6 +91,31 @@ Catatan:
 - Saat template diterapkan, line template dicopy menjadi `ChartOfAccount`.
 - Jangan pakai `template_account_id` sebagai `ChartOfAccount.id` jika sudah ada akun lama yang harus dipertahankan.
 - Mapping default boleh berasal dari `mapping_key`.
+- `AccountingProfileSetting.template_id` diupdate setelah template diterapkan dengan sukses.
+- `EnabledModule` diupdate dari activation rule hanya setelah user melihat preview dan menyetujui perubahan.
+
+## Alur Profile, Template, dan Module Activation
+
+Alur aman:
+
+1. User memilih `accounting_profile` dan `industry_extension`.
+2. Sistem menampilkan template yang cocok untuk kombinasi tersebut.
+3. Sistem menampilkan module yang direkomendasikan aktif/nonaktif dari `AccountingModuleActivationRule`.
+4. Sistem menampilkan data safety check: status backup/restore finance, jumlah akun existing, transaksi yang sudah punya snapshot, dan mapping yang akan berubah.
+5. User memilih mode apply template.
+6. Sistem menyalin line template ke `chartOfAccounts` sesuai mode.
+7. Sistem mengupdate `financeAccountMappings` jika user menyetujui mapping change.
+8. Sistem mengupdate `accountingProfileSetting`.
+9. Sistem mengupdate `enabledModules` hanya untuk module yang aman dan disetujui.
+
+Aturan activation:
+
+- `ACCOUNT_TEMPLATES` boleh aktif di Fase 2.
+- `CASH_FLOW_ACCOUNT_FILTER` boleh aktif jika account snapshot dan UI filter sudah selesai.
+- `GENERAL_LEDGER` tetap nonaktif sampai Fase 4.
+- `MANUFACTURING` dan `CONSTRUCTION` tetap nonaktif sampai Fase 5 domain flow jelas.
+- `PSAP_REPORTING` tetap nonaktif sampai profile PSAP punya UX dan report khusus.
+- Perubahan profile tidak boleh menghapus akun existing atau transaksi lama.
 
 ## Template Yang Didukung
 
@@ -223,7 +256,7 @@ Karakter:
 - Butuh report pemerintahan yang berbeda.
 - Sebaiknya tidak digabung ke UX default Kasirku retail.
 
-## Cara Apply Template
+## Cara Apply Profile dan Template
 
 Aturan aman:
 
@@ -233,6 +266,9 @@ Aturan aman:
 - Jangan overwrite nama akun user tanpa konfirmasi.
 - Jangan mengubah akun yang sudah dipakai transaksi kecuali hanya menambah field non-destruktif.
 - Mapping category finance boleh ditawarkan untuk diupdate setelah template diterapkan.
+- `accountingProfileSetting` boleh diupdate setelah preview disetujui.
+- `enabledModules` boleh diupdate setelah data safety check dan konfirmasi.
+- Jika data safety check menemukan backup/restore finance belum lengkap, tahan aktivasi module baru yang menulis table accounting/finance baru.
 
 Mode apply:
 
@@ -245,6 +281,12 @@ MERGE_MISSING_ONLY
 
 UPDATE_MAPPING_ONLY
   Tidak menambah akun. Hanya membantu mapping category finance ke akun existing.
+
+UPDATE_PROFILE_ONLY
+  Mengubah profile/extension aktif tanpa apply template. Cocok untuk toko yang sudah punya COA manual.
+
+ACTIVATE_MODULES_ONLY
+  Mengaktifkan module yang sudah siap tanpa mengubah daftar akun.
 ```
 
 ## UI Yang Disarankan
@@ -257,22 +299,31 @@ Lokasi:
 
 Tambahkan panel atau modal `Template Akun`:
 
+- Tampilkan profile aktif dari `accountingProfileSetting`.
 - Pilih accounting profile.
 - Pilih industry extension.
 - Preview daftar akun template.
 - Preview akun yang akan ditambah.
 - Preview mapping yang akan berubah.
+- Preview module yang akan aktif/nonaktif.
+- Warning jika backup/restore finance belum lulus data safety check.
 - Button apply template.
+- Button simpan profile/module activation jika user tidak ingin apply template.
 
 Untuk fase ini jangan buat wizard panjang di Settings. Tetap dekatkan ke modul Daftar Akun.
 
 ## Acceptance Criteria
 
+- User bisa melihat profile/extension aktif toko.
+- User bisa mengubah profile/extension lewat flow yang menampilkan preview dampak.
 - User bisa melihat template `SAK_EMKM + RETAIL`.
 - User bisa apply template hanya jika aman.
 - Apply template tidak menghapus akun existing.
 - Apply template tidak mengubah transaksi lama.
 - Mapping finance bisa dibuat/diupdate dari template.
+- Module activation tersimpan di `enabledModules`.
+- Module lanjut tetap nonaktif jika belum ada fondasi domain/report.
+- Flow menahan aktivasi berisiko jika backup/restore finance belum lulus data safety check.
 - `SAK_ETAP_LEGACY` tidak muncul sebagai rekomendasi utama untuk toko baru.
 - UI tidak mengklaim full PSAK/IFRS/PSAP compliance.
 
@@ -290,6 +341,7 @@ Prioritas test:
 - apply template ke database kosong.
 - merge missing only ke database yang sudah punya akun.
 - update mapping only.
+- update profile only.
+- activate modules only.
 - duplicate code handling.
 - preview perubahan sebelum apply.
-

@@ -1,4 +1,4 @@
-# Chart of Accounts - Fase 5 Extension Industri dan Pemerintahan
+# Accounting Core - Fase 5 Extension Industri dan Pemerintahan
 
 Fase ini berisi jalur lanjut untuk manufaktur, konstruksi, dan PSAP. Fase ini jangan dikerjakan sebelum target user jelas, karena masing-masing domain bukan sekadar tambahan daftar akun.
 
@@ -8,7 +8,7 @@ Fase ini berisi jalur lanjut untuk manufaktur, konstruksi, dan PSAP. Fase ini ja
 - PSAP adalah accounting profile terpisah.
 - Jangan aktifkan semua extension untuk semua toko.
 - Jangan mencampur istilah dan report pemerintahan ke retail.
-- Extension harus feature-gated berdasarkan `accounting_profile` dan `industry_extension`.
+- Extension harus memakai feature gate dari Fase 1 berdasarkan `accountingProfileSetting` dan `enabledModules`.
 
 ## Manufaktur
 
@@ -155,11 +155,19 @@ Konsekuensi produk:
 
 ## Feature Gate
 
-Tambahkan setting:
+Feature gate dasar sudah dibuat di Fase 1. Fase ini hanya menambah rule dan module domain yang lebih spesifik.
 
 ```ts
-accounting_profile: 'SAK_EMKM' | 'SAK_EP' | 'PSAK_FULL' | 'PSAP';
-industry_extension: 'NONE' | 'RETAIL' | 'MANUFACTURING' | 'CONSTRUCTION';
+accountingProfileSetting.accounting_profile:
+  'SAK_EMKM' | 'SAK_EP' | 'PSAK_FULL' | 'PSAP';
+
+accountingProfileSetting.industry_extension:
+  'NONE' | 'RETAIL' | 'MANUFACTURING' | 'CONSTRUCTION';
+
+enabledModules:
+  MANUFACTURING
+  CONSTRUCTION
+  PSAP_REPORTING
 ```
 
 Aturan gate:
@@ -168,6 +176,7 @@ Aturan gate:
 - `CONSTRUCTION` hanya menampilkan menu kontrak/proyek konstruksi jika extension aktif.
 - `PSAP` menonaktifkan label profit/loss retail dari area accounting.
 - Retail default tetap sederhana.
+- Module domain tidak boleh aktif hanya karena template akun extension dipilih.
 
 ## Acceptance Criteria
 
@@ -193,4 +202,3 @@ Prioritas test:
 - template extension tidak muncul di retail default tanpa dipilih.
 - mapping extension tidak merusak akun existing.
 - report retail tidak berubah saat extension nonaktif.
-

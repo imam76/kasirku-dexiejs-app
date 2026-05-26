@@ -1,4 +1,4 @@
-# Chart of Accounts - Fase 4 General Ledger dan Double Entry
+# Accounting Core - Fase 4 General Ledger dan Double Entry
 
 Fase ini adalah titik ketika Kasirku mulai masuk ke accounting engine penuh. Jangan mulai fase ini sebelum Fase 1 sampai 3 stabil dan kebutuhan report akuntansi benar-benar jelas.
 
@@ -15,8 +15,9 @@ Fase ini adalah titik ketika Kasirku mulai masuk ke accounting engine penuh. Jan
 ## Prinsip
 
 - `chartOfAccounts` dari Fase 1 tetap dipakai sebagai master akun.
-- `financeTransactions` tetap cash-flow view.
+- `financeTransactions` tetap operational cash-flow layer, bukan accounting ledger.
 - `journalEntries` dan `journalEntryLines` menjadi accounting ledger.
+- `enabledModules.GENERAL_LEDGER` baru boleh aktif setelah table ledger, posting rules, backup/restore, dan report minimal siap.
 - Source document tidak boleh langsung menulis line jurnal di UI. Posting dilakukan di service layer.
 - Posting harus idempotent berdasarkan source document dan event.
 - Void/reversal harus membuat reversal journal, bukan menghapus jejak.
@@ -236,4 +237,3 @@ Prioritas test:
 - duplicate posting prevention.
 - reversal.
 - trial balance debit/credit.
-
