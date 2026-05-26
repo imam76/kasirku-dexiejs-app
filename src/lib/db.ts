@@ -1,6 +1,48 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem, SalesReturn, SalesReturnItem } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem, SalesReturn, SalesReturnItem, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
+import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES } from '@/constants/accounting';
+import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
+
+const buildAccountingSeed = (now: string) => {
+  const accounts: ChartOfAccount[] = DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
+    ...account,
+    created_at: now,
+    updated_at: now,
+  }));
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const mappings: FinanceAccountMapping[] = DEFAULT_FINANCE_ACCOUNT_MAPPINGS
+    .map((mapping) => {
+      const account = accountById.get(mapping.account_id);
+      if (!account) return undefined;
+
+      return {
+        ...mapping,
+        id: mapping.key,
+        account_code: account.code,
+        account_name: account.name,
+        account_type: account.type,
+        created_at: now,
+        updated_at: now,
+      };
+    })
+    .filter((mapping): mapping is FinanceAccountMapping => Boolean(mapping));
+
+  return {
+    accounts,
+    mappings,
+    profileSetting: {
+      ...DEFAULT_ACCOUNTING_PROFILE_SETTING,
+      created_at: now,
+      updated_at: now,
+    },
+    enabledModules: DEFAULT_ENABLED_MODULES.map((module) => ({
+      ...module,
+      created_at: now,
+      updated_at: now,
+    })),
+  };
+};
 
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
@@ -26,6 +68,10 @@ export class KasirkuDB extends Dexie {
   salesDocumentItems!: Table<SalesDocumentItem>;
   salesReturns!: Table<SalesReturn>;
   salesReturnItems!: Table<SalesReturnItem>;
+  chartOfAccounts!: Table<ChartOfAccount>;
+  financeAccountMappings!: Table<FinanceAccountMapping>;
+  accountingProfileSetting!: Table<AccountingProfileSetting>;
+  enabledModules!: Table<EnabledModule>;
 
   constructor() {
     super('KasirkuDB');
@@ -118,9 +164,46 @@ export class KasirkuDB extends Dexie {
       salesReturnItems: 'id, return_id, source_item_id, product_id'
     });
 
+    this.version(19).stores({
+      financeTransactions: 'id, type, category, account_id, created_at, reference_id',
+      chartOfAccounts: 'id, code, name, type, parent_id, is_postable, is_system, is_active, created_at',
+      financeAccountMappings: 'id, key, category, account_id, created_at',
+      accountingProfileSetting: 'id, accounting_profile, industry_extension, updated_at',
+      enabledModules: 'id, code, is_enabled, source, updated_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+      const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
+      const accountingProfileSetting = tx.table<AccountingProfileSetting, string>('accountingProfileSetting');
+      const enabledModules = tx.table<EnabledModule, string>('enabledModules');
+
+      if (await chartOfAccounts.count() === 0) {
+        await chartOfAccounts.bulkPut(seed.accounts);
+      }
+
+      if (await financeAccountMappings.count() === 0) {
+        await financeAccountMappings.bulkPut(seed.mappings);
+      }
+
+      if (!await accountingProfileSetting.get('default')) {
+        await accountingProfileSetting.put(seed.profileSetting);
+      }
+
+      if (await enabledModules.count() === 0) {
+        await enabledModules.bulkPut(seed.enabledModules);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      await this.chartOfAccounts.bulkPut(seed.accounts);
+      await this.financeAccountMappings.bulkPut(seed.mappings);
+      await this.accountingProfileSetting.put(seed.profileSetting);
+      await this.enabledModules.bulkPut(seed.enabledModules);
     });
   }
 }

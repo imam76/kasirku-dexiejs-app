@@ -1,6 +1,7 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
 import type { CartItem, PaymentMethod, Transaction, TransactionItem } from '@/types';
+import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemOriginalPrice, getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
@@ -111,6 +112,7 @@ const recordFinanceIncome = async (transaction: Transaction, createdAt: string) 
     description: `Penjualan dari transaksi ${transaction.transaction_number}`,
     created_at: createdAt,
     reference_id: transaction.id,
+    ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES),
   });
 };
 
@@ -174,6 +176,8 @@ export const checkout = async ({
       db.financeTransactions,
       db.financeBalance,
       db.activityLogs,
+      db.chartOfAccounts,
+      db.financeAccountMappings,
     ],
     async () => {
       const transaction: Transaction = {

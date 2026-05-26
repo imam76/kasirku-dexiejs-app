@@ -9,6 +9,7 @@ import type {
   SalesDocumentStatus,
   SalesDocumentType,
 } from '@/types';
+import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { calculateInvoicePaymentStatus } from '@/utils/salesDocuments/calculateInvoicePaymentStatus';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
@@ -37,6 +38,8 @@ const salesDocumentTables = [
   db.products,
   db.financeTransactions,
   db.financeBalance,
+  db.chartOfAccounts,
+  db.financeAccountMappings,
   db.activityLogs,
 ];
 
@@ -438,6 +441,7 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
     let financeTransactionId = document.finance_transaction_id;
 
     if (delta !== 0) {
+      const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT);
       const currentBalance = await db.financeBalance.get('current');
       await db.financeBalance.put({
         id: 'current',
@@ -452,6 +456,7 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
             amount: nextPaidAmount,
             created_at: paidAt,
             description: `Pembayaran invoice ${document.document_number}`,
+            ...accountSnapshot,
           });
         } else {
           financeTransactionId = undefined;
@@ -468,6 +473,7 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
           description: `Pembayaran invoice ${document.document_number}`,
           created_at: paidAt,
           reference_id: document.id,
+          ...accountSnapshot,
         });
       }
     }

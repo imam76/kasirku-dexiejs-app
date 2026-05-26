@@ -17,6 +17,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/shopping-note': 'STOCK_PURCHASE_ACCESS',
   '/finance': 'FINANCE_ACCESS',
   '/finance/cash-flow': 'FINANCE_ACCESS',
+  '/finance/chart-of-accounts': 'FINANCE_ACCESS',
   '/finance/sales': 'FINANCE_ACCESS',
   '/finance/sales/returns': 'SALES_RETURN_MANAGE',
   '/settings': 'SETTINGS_ACCESS',

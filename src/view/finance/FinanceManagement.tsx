@@ -3,6 +3,7 @@ import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, 
 import { useFinance } from '@/hooks/useFinance';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useI18n } from '@/hooks/useI18n';
+import type { TranslationKey } from '@/i18n/messages';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import {
@@ -32,6 +33,8 @@ export default function FinanceManagement() {
   const { t } = useI18n();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<FinanceTransactionType>('INCOME');
+  const [accountFilter, setAccountFilter] = useState<string>('ALL');
+  const [accountTypeFilter, setAccountTypeFilter] = useState<string>('ALL');
   const [form] = Form.useForm();
   const isMobile = useIsMobile();
 
@@ -45,6 +48,37 @@ export default function FinanceManagement() {
       return acc;
     }, { opening: 0, income: 0, expense: 0 });
   }, [transactions]);
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((transaction) => {
+      const accountKey = transaction.account_id ?? 'UNMAPPED';
+      const matchesAccount = accountFilter === 'ALL' || accountFilter === accountKey;
+      const matchesAccountType =
+        accountTypeFilter === 'ALL' ||
+        (accountTypeFilter === 'UNMAPPED' ? !transaction.account_type : transaction.account_type === accountTypeFilter);
+
+      return matchesAccount && matchesAccountType;
+    });
+  }, [accountFilter, accountTypeFilter, transactions]);
+
+  const accountOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    transactions.forEach((transaction) => {
+      if (transaction.account_id && transaction.account_code && transaction.account_name) {
+        options.set(transaction.account_id, `${transaction.account_code} - ${transaction.account_name}`);
+      }
+    });
+
+    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+  }, [transactions]);
+
+  const accountTypeSummary = useMemo(() => {
+    return filteredTransactions.reduce<Record<string, number>>((acc, transaction) => {
+      const key = transaction.account_type ?? 'UNMAPPED';
+      acc[key] = (acc[key] || 0) + transaction.amount;
+      return acc;
+    }, {});
+  }, [filteredTransactions]);
 
   const handleAddTransaction = async (values: { amount: number; category: string; description: string }) => {
     try {
@@ -144,14 +178,31 @@ export default function FinanceManagement() {
       width: 140,
     },
     {
+      title: t('finance.account'),
+      dataIndex: 'account_name',
+      key: 'account_name',
+      render: (_value: string | undefined, record: FinanceTransaction) => (
+        record.account_code && record.account_name ? (
+          <Tag color="geekblue">{record.account_code} - {record.account_name}</Tag>
+        ) : (
+          <Tag color="default">{t('finance.unmappedAccount')}</Tag>
+        )
+      ),
+      width: 220,
+    },
+    {
       title: t('finance.amount'),
       dataIndex: 'amount',
       key: 'amount',
-      render: (amount: number, record: FinanceTransaction) => (
-        <span className={record.type === 'EXPENSE' ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
-          {record.type === 'EXPENSE' ? '-' : '+'} Rp {formatCurrency(amount)}
+      render: (amount: number, record: FinanceTransaction) => {
+        const businessType = getFinanceTransactionBusinessType(record);
+
+        return (
+        <span className={businessType === 'EXPENSE' ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
+          {businessType === 'EXPENSE' ? '-' : '+'} Rp {formatCurrency(amount)}
         </span>
-      ),
+      );
+      },
       width: 150,
     },
   ];
@@ -340,6 +391,38 @@ export default function FinanceManagement() {
         className="shadow-sm"
         styles={{ body: { padding: isMobile ? '12px' : undefined } }}
       >
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,1fr)_220px]">
+          <Select
+            value={accountFilter}
+            onChange={setAccountFilter}
+            options={[
+              { value: 'ALL', label: t('finance.allAccounts') },
+              { value: 'UNMAPPED', label: t('finance.unmappedAccount') },
+              ...accountOptions,
+            ]}
+          />
+          <Select
+            value={accountTypeFilter}
+            onChange={setAccountTypeFilter}
+            options={[
+              { value: 'ALL', label: t('finance.allAccountTypes') },
+              { value: 'ASSET', label: t('coa.accountType.ASSET') },
+              { value: 'LIABILITY', label: t('coa.accountType.LIABILITY') },
+              { value: 'EQUITY', label: t('coa.accountType.EQUITY') },
+              { value: 'REVENUE', label: t('coa.accountType.REVENUE') },
+              { value: 'CONTRA_REVENUE', label: t('coa.accountType.CONTRA_REVENUE') },
+              { value: 'EXPENSE', label: t('coa.accountType.EXPENSE') },
+              { value: 'UNMAPPED', label: t('finance.unmappedAccount') },
+            ]}
+          />
+        </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {Object.entries(accountTypeSummary).map(([type, amount]) => (
+            <Tag key={type} color={type === 'UNMAPPED' ? 'default' : 'blue'}>
+              {type === 'UNMAPPED' ? t('finance.unmappedAccount') : t(`coa.accountType.${type}` as TranslationKey)}: Rp {formatCurrency(amount)}
+            </Tag>
+          ))}
+        </div>
         {isMobile ? (
           <div className="space-y-3">
           {isLoading ? (
@@ -347,9 +430,9 @@ export default function FinanceManagement() {
               <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
               <p className="text-gray-500 text-sm">{t('finance.loadingData')}</p>
             </div>
-          ) : transactions.length > 0 ? (
+          ) : filteredTransactions.length > 0 ? (
             <>
-              {transactions.slice(0, 10).map((transaction) => {
+              {filteredTransactions.slice(0, 10).map((transaction) => {
                 const businessType = getFinanceTransactionBusinessType(transaction);
                 const { icon, label } = getFinanceTypeMeta(transaction);
 
@@ -365,6 +448,11 @@ export default function FinanceManagement() {
                         </span>
                         <Tag color="blue" className="w-fit m-0 text-[10px] px-1.5 py-0">
                           {getFinanceCategoryLabel(transaction.category, t)}
+                        </Tag>
+                        <Tag color={transaction.account_code ? 'geekblue' : 'default'} className="w-fit m-0 text-[10px] px-1.5 py-0">
+                          {transaction.account_code && transaction.account_name
+                            ? `${transaction.account_code} - ${transaction.account_name}`
+                            : t('finance.unmappedAccount')}
                         </Tag>
                       </div>
                       <div className="text-right">
@@ -385,7 +473,7 @@ export default function FinanceManagement() {
                   </div>
                 );
               })}
-              {transactions.length > 10 && (
+              {filteredTransactions.length > 10 && (
                 <div className="text-center py-2">
                   <Text type="secondary" className="text-xs">{t('finance.viewMoreDesktop')}</Text>
                 </div>
@@ -399,7 +487,7 @@ export default function FinanceManagement() {
           </div>
         ) : (
           <Table
-            dataSource={transactions}
+            dataSource={filteredTransactions}
             columns={columns}
             rowKey="id"
             loading={isLoading}

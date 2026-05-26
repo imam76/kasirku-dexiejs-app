@@ -635,6 +635,142 @@ export interface ProfitBalance {
 
 export type FinanceTransactionType = 'INCOME' | 'EXPENSE' | 'OPENING_BALANCE';
 
+export type AccountingProfileCode =
+  | 'SAK_EMKM'
+  | 'SAK_EP'
+  | 'PSAK_FULL'
+  | 'PSAP'
+  | 'SAK_ETAP_LEGACY';
+
+export type IndustryExtensionCode =
+  | 'NONE'
+  | 'RETAIL'
+  | 'MANUFACTURING'
+  | 'CONSTRUCTION';
+
+export type AccountingModuleCode =
+  | 'CHART_OF_ACCOUNTS'
+  | 'CASH_FLOW_ACCOUNT_FILTER'
+  | 'ACCOUNT_TEMPLATES'
+  | 'GENERAL_LEDGER'
+  | 'MANUFACTURING'
+  | 'CONSTRUCTION'
+  | 'PSAP_REPORTING';
+
+export type AccountType =
+  | 'ASSET'
+  | 'LIABILITY'
+  | 'EQUITY'
+  | 'REVENUE'
+  | 'CONTRA_REVENUE'
+  | 'EXPENSE';
+
+export type AccountNormalBalance = 'DEBIT' | 'CREDIT';
+
+export interface ChartOfAccount {
+  id: string;
+  code: string;
+  name: string;
+  type: AccountType;
+  normal_balance: AccountNormalBalance;
+  parent_id?: string;
+  parent_code?: string;
+  parent_name?: string;
+  is_postable: boolean;
+  is_system: boolean;
+  is_active: boolean;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FinanceAccountMapping {
+  id: string;
+  key: string;
+  category?: string;
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: AccountType;
+  is_system: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountingProfileSetting {
+  id: 'default';
+  accounting_profile: AccountingProfileCode;
+  industry_extension: IndustryExtensionCode;
+  template_id?: string;
+  locked_after_transaction?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EnabledModule {
+  id: string;
+  code: AccountingModuleCode;
+  is_enabled: boolean;
+  source: 'SYSTEM' | 'PROFILE' | 'USER';
+  requires_profile?: AccountingProfileCode;
+  requires_extension?: IndustryExtensionCode;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChartOfAccountTemplate {
+  id: string;
+  code: string;
+  name: string;
+  accounting_profile: AccountingProfileCode;
+  industry_extension: IndustryExtensionCode;
+  description?: string;
+  account_count_hint?: number;
+  is_system: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChartOfAccountTemplateLine {
+  id: string;
+  template_id: string;
+  template_account_id: string;
+  code: string;
+  name: string;
+  type: AccountType;
+  normal_balance: AccountNormalBalance;
+  parent_template_account_id?: string;
+  is_postable: boolean;
+  description?: string;
+  mapping_key?: string;
+  created_at: string;
+}
+
+export interface AccountingProfileTemplateRecommendation {
+  id: string;
+  accounting_profile: AccountingProfileCode;
+  industry_extension: IndustryExtensionCode;
+  template_id: string;
+  is_default: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountingModuleActivationRule {
+  id: string;
+  accounting_profile: AccountingProfileCode;
+  industry_extension: IndustryExtensionCode;
+  module_code: AccountingModuleCode;
+  default_enabled: boolean;
+  requires_confirmation: boolean;
+  requires_data_safety_check: boolean;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FinanceTransaction {
   id: string;
   type: FinanceTransactionType;
@@ -643,6 +779,10 @@ export interface FinanceTransaction {
   description: string;
   created_at: string;
   reference_id?: string; // Link to transaction_id or other IDs
+  account_id?: string;
+  account_code?: string;
+  account_name?: string;
+  account_type?: AccountType;
 }
 
 export interface FinanceBalance {

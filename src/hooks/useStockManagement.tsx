@@ -105,7 +105,7 @@ export const useStockManagement = () => {
         cleanData.stock = productData.stock;
       }
 
-      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
+      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings], async () => {
         if (editingId) {
           productId = editingId;
           // Update product
@@ -204,7 +204,7 @@ export const useStockManagement = () => {
       let createdCount = 0;
       let updatedCount = 0;
 
-      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
+      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings], async () => {
         for (const item of items) {
           let existing = null;
           if (item.sku) {

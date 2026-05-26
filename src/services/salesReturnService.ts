@@ -13,6 +13,7 @@ import type {
   SalesReturnStatus,
   SalesReturnableSource,
 } from '@/types';
+import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { isTransactionActive } from '@/utils/transactions';
 import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
@@ -52,6 +53,8 @@ const salesReturnTables = [
   db.products,
   db.financeTransactions,
   db.financeBalance,
+  db.chartOfAccounts,
+  db.financeAccountMappings,
   db.profitLogs,
   db.profitBalance,
   db.activityLogs,
@@ -370,6 +373,7 @@ const createRefundFinanceTransaction = async (
     description: `Refund retur ${salesReturn.return_number} dari ${salesReturn.source_number}`,
     created_at: now,
     reference_id: salesReturn.id,
+    ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES_REFUND),
   });
 
   return financeTransactionId;
@@ -403,6 +407,7 @@ const reverseRefundFinanceTransaction = async (
     description: `Pembalikan refund retur ${salesReturn.return_number}`,
     created_at: now,
     reference_id: salesReturn.id,
+    ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES_REFUND),
   });
 
   return reversalFinanceTransactionId;

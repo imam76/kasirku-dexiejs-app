@@ -52,6 +52,9 @@ const MasterDataDepartmentsLazyRouteImport = createFileRoute(
 const MasterDataContactsLazyRouteImport = createFileRoute(
   '/master-data/contacts',
 )()
+const FinanceChartOfAccountsLazyRouteImport = createFileRoute(
+  '/finance/chart-of-accounts',
+)()
 const FinanceCashFlowLazyRouteImport = createFileRoute('/finance/cash-flow')()
 const FinanceSalesReturnsNewLazyRouteImport = createFileRoute(
   '/finance/sales/returns/new',
@@ -204,6 +207,14 @@ const MasterDataContactsLazyRoute = MasterDataContactsLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/master-data/contacts.lazy').then((d) => d.Route),
 )
+const FinanceChartOfAccountsLazyRoute =
+  FinanceChartOfAccountsLazyRouteImport.update({
+    id: '/finance/chart-of-accounts',
+    path: '/finance/chart-of-accounts',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/chart-of-accounts.lazy').then((d) => d.Route),
+  )
 const FinanceCashFlowLazyRoute = FinanceCashFlowLazyRouteImport.update({
   id: '/finance/cash-flow',
   path: '/finance/cash-flow',
@@ -296,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
+  '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
@@ -329,6 +341,7 @@ export interface FileRoutesByTo {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
+  '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
@@ -363,6 +376,7 @@ export interface FileRoutesById {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
+  '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
@@ -398,6 +412,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/transaction'
     | '/finance/cash-flow'
+    | '/finance/chart-of-accounts'
     | '/master-data/contacts'
     | '/master-data/departments'
     | '/master-data/products'
@@ -431,6 +446,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/transaction'
     | '/finance/cash-flow'
+    | '/finance/chart-of-accounts'
     | '/master-data/contacts'
     | '/master-data/departments'
     | '/master-data/products'
@@ -464,6 +480,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/transaction'
     | '/finance/cash-flow'
+    | '/finance/chart-of-accounts'
     | '/master-data/contacts'
     | '/master-data/departments'
     | '/master-data/products'
@@ -498,6 +515,7 @@ export interface RootRouteChildren {
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
   TransactionLazyRoute: typeof TransactionLazyRoute
   FinanceCashFlowLazyRoute: typeof FinanceCashFlowLazyRoute
+  FinanceChartOfAccountsLazyRoute: typeof FinanceChartOfAccountsLazyRoute
   MasterDataContactsLazyRoute: typeof MasterDataContactsLazyRoute
   MasterDataDepartmentsLazyRoute: typeof MasterDataDepartmentsLazyRoute
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
@@ -672,6 +690,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MasterDataContactsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/chart-of-accounts': {
+      id: '/finance/chart-of-accounts'
+      path: '/finance/chart-of-accounts'
+      fullPath: '/finance/chart-of-accounts'
+      preLoaderRoute: typeof FinanceChartOfAccountsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/finance/cash-flow': {
       id: '/finance/cash-flow'
       path: '/finance/cash-flow'
@@ -754,6 +779,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
   TransactionLazyRoute: TransactionLazyRoute,
   FinanceCashFlowLazyRoute: FinanceCashFlowLazyRoute,
+  FinanceChartOfAccountsLazyRoute: FinanceChartOfAccountsLazyRoute,
   MasterDataContactsLazyRoute: MasterDataContactsLazyRoute,
   MasterDataDepartmentsLazyRoute: MasterDataDepartmentsLazyRoute,
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,

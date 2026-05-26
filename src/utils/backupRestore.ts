@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import dayjs from 'dayjs';
 import { exportJson } from '@/utils/export';
 import { clearAuthSessionState, getCurrentSessionUser, writeActivityLog } from '@/auth/authService';
+import { ensureAccountingDefaults } from '@/services/chartOfAccountService';
 import type { AuthUser } from '@/types';
 
 const hasActiveOwner = (users: AuthUser[]) => {
@@ -15,6 +16,8 @@ export const backupDatabase = async () => {
       transactions: await db.transactions.toArray(),
       transactionItems: await db.transactionItems.toArray(),
       stockPurchases: await db.stockPurchases.toArray(),
+      financeTransactions: await db.financeTransactions.toArray(),
+      financeBalance: await db.financeBalance.toArray(),
       profitLogs: await db.profitLogs.toArray(),
       profitBalance: await db.profitBalance.toArray(),
       promos: await db.promos.toArray(),
@@ -26,9 +29,13 @@ export const backupDatabase = async () => {
       salesDocumentItems: await db.salesDocumentItems.toArray(),
       salesReturns: await db.salesReturns.toArray(),
       salesReturnItems: await db.salesReturnItems.toArray(),
+      chartOfAccounts: await db.chartOfAccounts.toArray(),
+      financeAccountMappings: await db.financeAccountMappings.toArray(),
+      accountingProfileSetting: await db.accountingProfileSetting.toArray(),
+      enabledModules: await db.enabledModules.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 5,
+      version: 6,
       timestamp: new Date().toISOString(),
     };
 
@@ -53,7 +60,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'salesDocuments', 'salesDocumentItems', 'salesReturns', 'salesReturnItems', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'salesDocuments', 'salesDocumentItems', 'salesReturns', 'salesReturnItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -80,6 +87,8 @@ export const restoreDatabase = async (file: File) => {
           db.transactions,
           db.transactionItems,
           db.stockPurchases,
+          db.financeTransactions,
+          db.financeBalance,
           db.profitLogs,
           db.profitBalance,
           db.promos,
@@ -91,6 +100,10 @@ export const restoreDatabase = async (file: File) => {
           db.salesDocumentItems,
           db.salesReturns,
           db.salesReturnItems,
+          db.chartOfAccounts,
+          db.financeAccountMappings,
+          db.accountingProfileSetting,
+          db.enabledModules,
           db.authUsers,
           db.authSessions,
           db.activityLogs,
@@ -102,6 +115,8 @@ export const restoreDatabase = async (file: File) => {
           await db.transactions.clear();
           await db.transactionItems.clear();
           await db.stockPurchases.clear();
+          await db.financeTransactions.clear();
+          await db.financeBalance.clear();
           await db.profitLogs.clear();
           await db.profitBalance.clear();
           await db.promos.clear();
@@ -113,6 +128,10 @@ export const restoreDatabase = async (file: File) => {
           await db.salesDocumentItems.clear();
           await db.salesReturns.clear();
           await db.salesReturnItems.clear();
+          await db.chartOfAccounts.clear();
+          await db.financeAccountMappings.clear();
+          await db.accountingProfileSetting.clear();
+          await db.enabledModules.clear();
           await db.authSessions.clear();
 
           if (hasAuthUsersPayload) {
@@ -128,6 +147,8 @@ export const restoreDatabase = async (file: File) => {
           if (data.transactions?.length) await db.transactions.bulkAdd(data.transactions);
           if (data.transactionItems?.length) await db.transactionItems.bulkAdd(data.transactionItems);
           if (data.stockPurchases?.length) await db.stockPurchases.bulkAdd(data.stockPurchases);
+          if (data.financeTransactions?.length) await db.financeTransactions.bulkAdd(data.financeTransactions);
+          if (data.financeBalance?.length) await db.financeBalance.bulkAdd(data.financeBalance);
           if (data.profitLogs?.length) await db.profitLogs.bulkAdd(data.profitLogs);
           if (data.profitBalance?.length) await db.profitBalance.bulkAdd(data.profitBalance);
           if (data.promos?.length) await db.promos.bulkAdd(data.promos);
@@ -139,9 +160,15 @@ export const restoreDatabase = async (file: File) => {
           if (data.salesDocumentItems?.length) await db.salesDocumentItems.bulkAdd(data.salesDocumentItems);
           if (data.salesReturns?.length) await db.salesReturns.bulkAdd(data.salesReturns);
           if (data.salesReturnItems?.length) await db.salesReturnItems.bulkAdd(data.salesReturnItems);
+          if (data.chartOfAccounts?.length) await db.chartOfAccounts.bulkAdd(data.chartOfAccounts);
+          if (data.financeAccountMappings?.length) await db.financeAccountMappings.bulkAdd(data.financeAccountMappings);
+          if (data.accountingProfileSetting?.length) await db.accountingProfileSetting.bulkAdd(data.accountingProfileSetting);
+          if (data.enabledModules?.length) await db.enabledModules.bulkAdd(data.enabledModules);
           if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
           if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
         });
+
+        await ensureAccountingDefaults();
 
         await clearAuthSessionState();
 

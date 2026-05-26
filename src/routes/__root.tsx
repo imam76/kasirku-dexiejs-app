@@ -31,6 +31,7 @@ import {
   HelpCircle,
   Home,
   Languages,
+  ListTree,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -196,6 +197,7 @@ const RootLayout = () => {
       key: 'finance-group',
       children: [
         { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
+        { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
         { to: '/finance/sales', label: t('nav.finance.sales'), icon: FileText },
       ],
     },

@@ -1,6 +1,7 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
 import type { StockPurchase } from '@/types';
+import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 
 interface RecordStockPurchaseInput {
   productId: string;
@@ -52,6 +53,7 @@ export const recordStockPurchase = async ({
     description,
     created_at: createdAt,
     reference_id: purchase.id,
+    ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE),
   });
 
   return purchase;

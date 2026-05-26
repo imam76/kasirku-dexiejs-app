@@ -2,6 +2,7 @@ import { FINANCE_CATEGORIES, isProfitAffectingFinanceTransaction } from '@/const
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type { FinanceTransaction, ProfitLog, Transaction } from '@/types';
+import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { isTransactionVoided } from '@/utils/transactions';
 
 interface WithdrawProfitInput {
@@ -27,7 +28,7 @@ export const withdrawProfit = async ({ amount, description }: WithdrawProfitInpu
   const newFinanceBalance = currentFinanceAmount - amount;
   let profitLogId = '';
 
-  await db.transaction('rw', [db.profitBalance, db.profitLogs, db.financeBalance, db.financeTransactions], async () => {
+  await db.transaction('rw', [db.profitBalance, db.profitLogs, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings], async () => {
     await db.profitBalance.put({
       id: 'current',
       amount: newBalance,
@@ -58,6 +59,7 @@ export const withdrawProfit = async ({ amount, description }: WithdrawProfitInpu
       amount,
       description: `Penarikan Saldo: ${description}`,
       created_at: now,
+      ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.WITHDRAWAL),
     });
   });
 

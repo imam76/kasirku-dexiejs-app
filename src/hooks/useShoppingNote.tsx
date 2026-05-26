@@ -94,7 +94,7 @@ export const useShoppingNote = () => {
     try {
       const now = new Date().toISOString();
 
-      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
+      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings], async () => {
         await db.shoppingNotes.add({
           id: crypto.randomUUID(),
           created_at: now,

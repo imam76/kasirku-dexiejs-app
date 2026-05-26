@@ -7,6 +7,7 @@ import {
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type { FinanceTransaction, FinanceTransactionType } from '@/types';
+import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { isTransactionActive } from '@/utils/transactions';
 
 interface AddFinanceTransactionInput {
@@ -35,6 +36,7 @@ export const addFinanceTransaction = async ({
   let newBalance = currentAmount;
   let newProfitBalance = currentProfitAmount;
   const affectsProfit = isProfitAffectingFinanceTransaction(normalizedType, category);
+  const accountSnapshot = await getFinanceAccountSnapshotForCategory(category);
 
   if (normalizedType === 'INCOME' || normalizedType === 'OPENING_BALANCE') {
     newBalance += amount;
@@ -65,6 +67,7 @@ export const addFinanceTransaction = async ({
       amount,
       description,
       created_at: now,
+      ...accountSnapshot,
     });
 
     if (affectsProfit) {
@@ -99,7 +102,7 @@ export const recalculateFinance = async () => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
 
-  await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases], async () => {
+  await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases, db.chartOfAccounts, db.financeAccountMappings], async () => {
     const autoCategories = [
       FINANCE_CATEGORIES.SALES,
       FINANCE_CATEGORIES.AUTO_COGS,
@@ -116,6 +119,7 @@ export const recalculateFinance = async () => {
     const newAutoTransactions: FinanceTransaction[] = [];
 
     for (const transaction of posTransactions) {
+      const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES);
       newAutoTransactions.push({
         id: crypto.randomUUID(),
         type: 'INCOME',
@@ -124,10 +128,12 @@ export const recalculateFinance = async () => {
         description: `Penjualan dari transaksi ${transaction.transaction_number}`,
         created_at: transaction.created_at,
         reference_id: transaction.id,
+        ...accountSnapshot,
       });
     }
 
     for (const stockPurchase of stockPurchases) {
+      const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE);
       newAutoTransactions.push({
         id: crypto.randomUUID(),
         type: 'EXPENSE',
@@ -136,6 +142,7 @@ export const recalculateFinance = async () => {
         description: `Beli Stok: ${stockPurchase.product_name} (${stockPurchase.quantity} pcs)`,
         created_at: stockPurchase.created_at,
         reference_id: stockPurchase.id,
+        ...accountSnapshot,
       });
     }
 
