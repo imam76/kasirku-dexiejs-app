@@ -14,7 +14,7 @@ function NewSalesDocumentRoute() {
   const resolvedDocumentType = getSalesDocumentTypeFromPathSegment(documentType);
 
   if (!resolvedDocumentType) {
-    return <div className="p-6"><Alert type="error" message={t('salesDocuments.invalidType')} /></div>;
+    return <div className="p-6"><Alert type="error" title={t('salesDocuments.invalidType')} /></div>;
   }
 
   return <SalesDocumentEditor documentType={resolvedDocumentType} />;

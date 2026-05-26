@@ -708,30 +708,6 @@ Acceptance:
 - Invoice yang punya credit note tidak bisa overpaid.
 - Piutang bersih membaca return/credit note.
 
-### Fase 9 - QA
-
-Manual QA minimal:
-1. Buat Sales Invoice senilai 1.000.000.
-2. Issue invoice.
-3. Pastikan muncul di daftar piutang sebagai `UNPAID`.
-4. Catat pembayaran 300.000.
-5. Pastikan payment ledger bertambah satu row.
-6. Pastikan invoice menjadi `PARTIAL`.
-7. Pastikan balance due menjadi 700.000.
-8. Pastikan finance balance naik 300.000.
-9. Catat pembayaran 700.000.
-10. Pastikan invoice menjadi `PAID`.
-11. Pastikan balance due menjadi 0.
-12. Coba bayar lagi dan pastikan ditolak.
-13. Void pembayaran 700.000 dengan alasan.
-14. Pastikan invoice kembali `PARTIAL`.
-15. Pastikan balance due kembali 700.000.
-16. Pastikan finance balance turun 700.000.
-17. Backup data.
-18. Restore data.
-19. Pastikan payment history tetap ada.
-20. Jalankan build.
-
 ## Acceptance Criteria Utama
 
 - Ada halaman daftar piutang usaha.
