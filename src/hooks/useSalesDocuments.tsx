@@ -60,6 +60,7 @@ export const useSalesDocuments = () => {
   const activeProjects = useMemo(() => projects.filter((project) => project.is_active), [projects]);
 
   const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['accountsReceivable'] });
     queryClient.invalidateQueries({ queryKey: ['salesDocuments'] });
     queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
     queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });

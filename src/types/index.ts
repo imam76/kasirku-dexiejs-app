@@ -83,7 +83,14 @@ export type SalesDocumentType =
   | 'SALES_INVOICE';
 export type SalesDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type SalesInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
+export type SalesInvoicePaymentRecordStatus = 'ACTIVE' | 'VOIDED';
 export type SalesDocumentMarginBasis = 'BEFORE_TAX' | 'AFTER_TAX';
+export type ReceivableAgingBucket =
+  | 'CURRENT'
+  | 'OVERDUE_1_30'
+  | 'OVERDUE_31_60'
+  | 'OVERDUE_61_90'
+  | 'OVERDUE_90_PLUS';
 export type SalesReturnSourceType =
   | 'SALES_DELIVERY'
   | 'SALES_INVOICE'
@@ -271,6 +278,49 @@ export interface SalesDocument {
   void_reason?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface SalesInvoicePayment {
+  id: string;
+  sales_document_id: string;
+  document_number: string;
+  contact_id?: string;
+  customer_name: string;
+  amount: number;
+  paid_at: string;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  finance_transaction_id?: string;
+  journal_entry_id?: string;
+  reversal_finance_transaction_id?: string;
+  reversal_journal_entry_id?: string;
+  notes?: string;
+  status: SalesInvoicePaymentRecordStatus;
+  voided_at?: string;
+  void_reason?: string;
+  created_by?: string;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountsReceivableRow {
+  sales_document_id: string;
+  document_number: string;
+  contact_id?: string;
+  customer_name: string;
+  document_date: string;
+  due_date?: string;
+  total_amount: number;
+  paid_amount: number;
+  return_credit_amount: number;
+  balance_due: number;
+  payment_status: SalesInvoicePaymentStatus;
+  aging_bucket: ReceivableAgingBucket;
+  overdue_days: number;
 }
 
 export interface SalesDocumentItem {

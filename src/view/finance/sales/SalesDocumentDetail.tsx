@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Input, InputNumber, Modal, Select, Space, Typography } from 'antd';
+import { Button, Input, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { ReceivablePaymentHistory } from '@/components/accounts-receivable/ReceivablePaymentHistory';
+import { ReceivablePaymentModal } from '@/components/accounts-receivable/ReceivablePaymentModal';
 import {
   getSalesDocumentConfig,
   getSalesDocumentTypePathSegment,
@@ -10,12 +11,13 @@ import {
 } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
+import { useAccountsReceivable } from '@/hooks/useAccountsReceivable';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
 import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
 import type {
+  AccountsReceivableRow,
   IssuedSalesReturnSummary,
-  PaymentMethod,
   SalesDocument,
   SalesDocumentItem,
   SalesDocumentStatus,
@@ -23,6 +25,7 @@ import type {
   SalesInvoicePaymentStatus,
 } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { calculateReceivableBalance } from '@/utils/accountsReceivable/calculateReceivableBalance';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 
 const { Title, Text } = Typography;
@@ -48,23 +51,18 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const { t } = useI18n();
   const navigate = useNavigate();
   const { can } = useAuth();
-  const { issueDocument, voidDocument, convertDocument, payInvoice, isMutating } = useSalesDocuments();
+  const { issueDocument, voidDocument, convertDocument, isMutating } = useSalesDocuments();
+  const {
+    getInvoicePayments,
+    recordPayment,
+    voidPayment,
+    isMutating: isReceivableMutating,
+  } = useAccountsReceivable();
   const [document, setDocument] = useState<SalesDocument | undefined>();
   const [items, setItems] = useState<SalesDocumentItem[]>([]);
   const [returnSummary, setReturnSummary] = useState<IssuedSalesReturnSummary | undefined>();
   const [returnSourcePolicy, setReturnSourcePolicy] = useState<{ canReturn: boolean; notice?: string }>({ canReturn: true });
-  const [paidAmount, setPaidAmount] = useState<number>(0);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('TUNAI');
-  const [cashAccountId, setCashAccountId] = useState<string>();
-  const paymentAccounts = useLiveQuery(
-    () => db.chartOfAccounts
-      .where('type')
-      .equals('ASSET')
-      .filter((account) => account.is_active && account.is_postable)
-      .toArray(),
-    [],
-    [],
-  );
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   const loadDocument = useCallback(async () => {
     const [loadedDocument, loadedItems] = await Promise.all([
@@ -77,8 +75,6 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     const sourceChain = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
       ? await loadSalesReturnSourceChain(loadedDocument.type, loadedDocument.id)
       : undefined;
-    const netPayable = Math.max(0, Number(loadedDocument?.total_amount || 0) - Number(loadedReturnSummary?.credit_amount || 0));
-
     setDocument(loadedDocument);
     setItems(loadedItems);
     setReturnSummary(loadedReturnSummary);
@@ -86,9 +82,6 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       canReturn: sourceChain?.chain.can_return_from_source ?? true,
       notice: sourceChain?.chain.return_from_source_block_reason ?? sourceChain?.chain.source_chain_label,
     });
-    setPaidAmount(loadedDocument?.paid_amount ?? netPayable);
-    setPaymentMethod(loadedDocument?.payment_method ?? 'TUNAI');
-    setCashAccountId(loadedDocument?.cash_account_id);
   }, [documentId]);
 
   useEffect(() => {
@@ -105,8 +98,6 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       const sourceChain = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
         ? await loadSalesReturnSourceChain(loadedDocument.type, loadedDocument.id)
         : undefined;
-      const netPayable = Math.max(0, Number(loadedDocument?.total_amount || 0) - Number(loadedReturnSummary?.credit_amount || 0));
-
       if (!isCurrent) return;
 
       setDocument(loadedDocument);
@@ -116,9 +107,6 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
         canReturn: sourceChain?.chain.can_return_from_source ?? true,
         notice: sourceChain?.chain.return_from_source_block_reason ?? sourceChain?.chain.source_chain_label,
       });
-      setPaidAmount(loadedDocument?.paid_amount ?? netPayable);
-      setPaymentMethod(loadedDocument?.payment_method ?? 'TUNAI');
-      setCashAccountId(loadedDocument?.cash_account_id);
     };
 
     void syncDocument();
@@ -144,23 +132,49 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     return <div className="p-6">{t('salesDocuments.notFound')}</div>;
   }
 
-  const canEdit = document.status === 'DRAFT';
-  const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
-    !(document.type === 'SALES_INVOICE' && document.finance_transaction_id);
-  const canRecordPayment = config.behavior.hasPaymentStatus && document.status === 'ISSUED';
+  const invoicePayments = document.type === 'SALES_INVOICE' ? getInvoicePayments(document.id) : [];
+  const activePaymentAmount = invoicePayments
+    .filter((payment) => payment.status === 'ACTIVE')
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
   const issuedCreditAmount = Number(returnSummary?.credit_amount || 0);
-  const balanceDue = Math.max(0, Number(document.total_amount || 0) - Number(document.paid_amount || 0) - issuedCreditAmount);
-  const netInvoiceAmount = Math.max(0, Number(document.total_amount || 0) - issuedCreditAmount);
+  const receivableCalculation = calculateReceivableBalance({
+    invoiceTotal: Number(document.total_amount || 0),
+    activePaymentAmount,
+    dueDate: document.due_date,
+    returnCreditAmount: issuedCreditAmount,
+  });
+  const balanceDue = config.behavior.hasPaymentStatus
+    ? receivableCalculation.balance_due
+    : Math.max(0, Number(document.total_amount || 0));
+  const receivableRow: AccountsReceivableRow | undefined = document.type === 'SALES_INVOICE'
+    ? {
+      sales_document_id: document.id,
+      document_number: document.document_number,
+      contact_id: document.contact_id,
+      customer_name: document.customer_name,
+      document_date: document.document_date,
+      due_date: document.due_date,
+      total_amount: Number(document.total_amount || 0),
+      paid_amount: receivableCalculation.paid_amount,
+      return_credit_amount: receivableCalculation.return_credit_amount,
+      balance_due: receivableCalculation.balance_due,
+      payment_status: receivableCalculation.payment_status,
+      aging_bucket: receivableCalculation.aging_bucket,
+      overdue_days: receivableCalculation.overdue_days,
+    }
+    : undefined;
+  const canEdit = document.status === 'DRAFT';
+  const hasActiveInvoicePayments = invoicePayments.some((payment) => payment.status === 'ACTIVE');
+  const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
+    !(document.type === 'SALES_INVOICE' && (document.finance_transaction_id || hasActiveInvoicePayments));
+  const canRecordPayment = Boolean(receivableRow && config.behavior.hasPaymentStatus && document.status === 'ISSUED' && receivableRow.balance_due > 0);
   const canCreateReturn = can('SALES_RETURN_MANAGE') &&
     document.status === 'ISSUED' &&
     (document.type === 'SALES_DELIVERY' || document.type === 'SALES_INVOICE') &&
     returnSourcePolicy.canReturn;
   const statusStyle = statusColor[document.status];
-  const paymentStyle = document.payment_status ? paymentStatusColor[document.payment_status] : undefined;
-  const paymentAccountOptions = paymentAccounts.map((account) => ({
-    value: account.id,
-    label: `${account.code} - ${account.name}`,
-  }));
+  const effectivePaymentStatus = config.behavior.hasPaymentStatus ? receivableCalculation.payment_status : document.payment_status;
+  const paymentStyle = effectivePaymentStatus ? paymentStatusColor[effectivePaymentStatus] : undefined;
   const statusBadge = (
     <span
       className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[.05em]"
@@ -170,13 +184,13 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       {t(salesDocumentStatusLabelKeys[document.status])}
     </span>
   );
-  const paymentStatusBadge = document.payment_status && paymentStyle ? (
+  const paymentStatusBadge = effectivePaymentStatus && paymentStyle ? (
     <span
       className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[.05em]"
       style={paymentStyle}
     >
       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: paymentStyle.color }} />
-      {t(salesInvoicePaymentStatusLabelKeys[document.payment_status])}
+      {t(salesInvoicePaymentStatusLabelKeys[effectivePaymentStatus])}
     </span>
   ) : '-';
 
@@ -419,53 +433,23 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
 
         {canRecordPayment && (
           <div className="mt-6 rounded-lg border border-gray-100 px-4 py-3" style={{ backgroundColor: config.theme.accentSubtle }}>
-            <Space wrap>
-              <InputNumber
-                min={0}
-                max={netInvoiceAmount}
-                value={paidAmount}
-                onChange={(value) => setPaidAmount(Number(value || 0))}
-              />
-              <Select
-                value={paymentMethod}
-                onChange={(value) => {
-                  setPaymentMethod(value);
-                  setCashAccountId(undefined);
-                }}
-                options={[
-                  { value: 'TUNAI', label: t('payment.cash') },
-                  { value: 'NON_TUNAI', label: t('payment.nonCash') },
-                ]}
-                className="min-w-[150px]"
-              />
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t('salesDocuments.field.cashAccount')}
-                value={cashAccountId}
-                options={paymentAccountOptions}
-                onChange={setCashAccountId}
-                className="min-w-[240px]"
-              />
+            <Space wrap className="w-full justify-between">
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-gray-500">
+                  {t('accountsReceivable.balanceDue')}
+                </div>
+                <div className="text-lg font-bold text-rose-700">
+                  Rp {formatCurrency(receivableRow?.balance_due || 0)}
+                </div>
+              </div>
               <Button
                 type="primary"
-                loading={isMutating}
+                loading={isReceivableMutating}
                 disabled={document.status === 'VOIDED'}
                 style={{ backgroundColor: config.theme.accent, borderColor: config.theme.accent }}
-                onClick={async () => {
-                  await payInvoice({
-                    id: document.id,
-                    input: {
-                      paid_amount: paidAmount,
-                      payment_method: paymentMethod,
-                      cash_account_id: cashAccountId,
-                    },
-                  });
-                  await loadDocument();
-                }}
+                onClick={() => setIsPaymentModalOpen(true)}
               >
-                {t('salesDocuments.recordPayment')}
+                {t('accountsReceivable.recordPayment')}
               </Button>
             </Space>
           </div>
@@ -486,7 +470,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesDocuments.field.paidAmount')}</div>
-                <div className="font-bold">Rp {formatCurrency(document.paid_amount || 0)}</div>
+                <div className="font-bold">Rp {formatCurrency(receivableCalculation.paid_amount)}</div>
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.summary.totalReturn')}</div>
@@ -505,6 +489,25 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 <div className="font-bold">Rp {formatCurrency(balanceDue)}</div>
               </div>
             </div>
+          </div>
+        )}
+
+        {config.behavior.hasPaymentStatus && (
+          <div className="mt-6 rounded-lg border border-gray-100 px-4 py-3">
+            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-bold text-gray-900">{t('accountsReceivable.paymentHistory')}</div>
+                <div className="text-xs text-gray-500">{t('accountsReceivable.paymentHistorySubtitle')}</div>
+              </div>
+            </div>
+            <ReceivablePaymentHistory
+              payments={invoicePayments}
+              loading={isReceivableMutating}
+              onVoidPayment={async (paymentId, reason) => {
+                await voidPayment({ paymentId, reason });
+                await loadDocument();
+              }}
+            />
           </div>
         )}
 
@@ -592,7 +595,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               {config.behavior.hasPaymentStatus && (
                 <div className="flex justify-between py-1.5 text-[13px]">
                   <span className="text-gray-500">{t('salesDocuments.field.paidAmount')}</span>
-                  <span className="font-medium text-green-700">Rp {formatCurrency(document.paid_amount || 0)}</span>
+                  <span className="font-medium text-green-700">Rp {formatCurrency(receivableCalculation.paid_amount)}</span>
                 </div>
               )}
               {config.behavior.hasPaymentStatus && issuedCreditAmount > 0 && (
@@ -632,6 +635,19 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
           </div>
         </div>
       </div>
+
+      <ReceivablePaymentModal
+        open={isPaymentModalOpen}
+        row={receivableRow}
+        loading={isReceivableMutating}
+        onCancel={() => setIsPaymentModalOpen(false)}
+        onSubmit={async (input) => {
+          if (!receivableRow) return;
+          await recordPayment({ invoiceId: receivableRow.sales_document_id, input });
+          setIsPaymentModalOpen(false);
+          await loadDocument();
+        }}
+      />
     </div>
   );
 }

@@ -29,6 +29,13 @@ function Finance() {
       desc: t('finance.index.cashFlowDesc'),
     },
     {
+      to: '/finance/receivables',
+      label: t('nav.finance.receivables'),
+      icon: FileTextOutlined,
+      color: 'text-emerald-600',
+      desc: t('finance.index.receivablesDesc'),
+    },
+    {
       to: '/finance/chart-of-accounts',
       label: t('nav.finance.chartOfAccounts'),
       icon: BookOutlined,

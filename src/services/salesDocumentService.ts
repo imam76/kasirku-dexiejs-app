@@ -1,12 +1,12 @@
-import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { getSalesDocumentConfig, type SalesDocumentConfig } from '@/configs/sales-document';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
-import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
 import {
-  getCashOrBankAccountForPayment,
+  recalculateSalesInvoicePaidAmount,
+  recordSalesInvoicePayment,
+} from '@/services/accountsReceivableService';
+import {
   postSalesInvoiceIssuedJournal,
-  postSalesInvoicePaymentJournal,
   reverseSalesInvoiceJournal,
 } from '@/services/generalLedgerService';
 import type {
@@ -17,7 +17,6 @@ import type {
   SalesDocumentType,
 } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
-import { calculateInvoicePaymentStatus } from '@/utils/salesDocuments/calculateInvoicePaymentStatus';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { createSalesDocumentNumber } from '@/utils/salesDocuments/createSalesDocumentNumber';
 import {
@@ -34,10 +33,13 @@ export interface SalesDocumentUpsertInput {
 }
 
 export interface SalesInvoicePaymentInput {
-  paid_amount: number;
+  amount?: number;
+  paid_amount?: number;
   paid_at?: string;
   payment_method?: PaymentMethod;
+  payment_channel?: string;
   cash_account_id?: string;
+  notes?: string;
 }
 
 const salesDocumentTables = [
@@ -387,7 +389,14 @@ export const voidSalesDocument = async (id: string, reason: string) => {
   if (document.status !== 'DRAFT' && document.status !== 'ISSUED') {
     throw new Error('Hanya dokumen draft atau posted yang bisa di-void.');
   }
-  if (document.type === 'SALES_INVOICE' && document.finance_transaction_id) {
+  const activePaymentCount = document.type === 'SALES_INVOICE'
+    ? await db.salesInvoicePayments
+      .where('sales_document_id')
+      .equals(id)
+      .filter((payment) => payment.status === 'ACTIVE')
+      .count()
+    : 0;
+  if (document.type === 'SALES_INVOICE' && (document.finance_transaction_id || activePaymentCount > 0)) {
     throw new Error('Invoice yang sudah memiliki pembayaran tidak bisa di-void dari fitur ini.');
   }
   const normalizedReason = reason.trim();
@@ -423,129 +432,16 @@ export const voidSalesDocument = async (id: string, reason: string) => {
 };
 
 export const recalculateSalesInvoicePaymentStatus = async (invoiceId: string) => {
-  const document = await db.salesDocuments.get(invoiceId);
-  if (!document || document.type !== 'SALES_INVOICE') return;
-
-  const returnSummary = await getIssuedReturnSummaryForSource('SALES_INVOICE', invoiceId);
-  const { paymentStatus } = calculateInvoicePaymentStatus({
-    invoiceTotal: Number(document.total_amount || 0),
-    paidAmount: Number(document.paid_amount || 0),
-    issuedCreditAmount: Number(returnSummary.credit_amount || 0),
-  });
-
-  await db.salesDocuments.update(invoiceId, {
-    payment_status: paymentStatus,
-    updated_at: new Date().toISOString(),
-  });
+  await recalculateSalesInvoicePaidAmount(invoiceId);
 };
 
 export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymentInput) => {
-  const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
-  const document = await db.salesDocuments.get(id);
-  if (!document) throw new Error('Dokumen tidak ditemukan.');
-  if (document.type !== 'SALES_INVOICE') throw new Error('Hanya Sales Invoice yang bisa dibayar.');
-  if (document.status === 'VOIDED') throw new Error('Invoice voided tidak bisa dibayar.');
-
-  const total = Number(document.total_amount || 0);
-  const returnSummary = await getIssuedReturnSummaryForSource('SALES_INVOICE', id);
-  const requestedPaidAmount = Math.max(0, Number(input.paid_amount || 0));
-  const { netInvoiceAmount, paymentStatus } = calculateInvoicePaymentStatus({
-    invoiceTotal: total,
-    paidAmount: requestedPaidAmount,
-    issuedCreditAmount: Number(returnSummary.credit_amount || 0),
-  });
-  if (requestedPaidAmount > netInvoiceAmount + 0.01) {
-    throw new Error(`Pembayaran melebihi nilai invoice setelah credit note. Maksimal pembayaran Rp ${netInvoiceAmount}.`);
-  }
-
-  const nextPaidAmount = requestedPaidAmount;
-  const now = new Date().toISOString();
-  const paidAt = input.paid_at || now;
-  const paymentMethod = input.payment_method ?? document.payment_method ?? 'TUNAI';
-  const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, input.cash_account_id);
-  const previousPaidAmount = Number(document.paid_amount || 0);
-  const delta = nextPaidAmount - previousPaidAmount;
-  const paymentAccountChanged = document.payment_method !== paymentMethod ||
-    document.cash_account_id !== cashAccount.id;
-
-  await db.transaction('rw', salesDocumentTables, async () => {
-    let financeTransactionId = document.finance_transaction_id;
-
-    if (delta !== 0 || paymentAccountChanged) {
-      const accountSnapshot = {
-        account_id: cashAccount.id,
-        account_code: cashAccount.code,
-        account_name: cashAccount.name,
-        account_type: cashAccount.type,
-      };
-      const currentBalance = await db.financeBalance.get('current');
-      await db.financeBalance.put({
-        id: 'current',
-        amount: (currentBalance?.amount || 0) + delta,
-        updated_at: now,
-      });
-
-      if (financeTransactionId) {
-        const financeTransaction = await db.financeTransactions.get(financeTransactionId);
-        if (financeTransaction) {
-          await db.financeTransactions.update(financeTransactionId, {
-            amount: nextPaidAmount,
-            created_at: paidAt,
-            description: `Pembayaran invoice ${document.document_number}`,
-            ...accountSnapshot,
-          });
-        } else {
-          financeTransactionId = undefined;
-        }
-      }
-
-      if (!financeTransactionId && nextPaidAmount > 0) {
-        financeTransactionId = crypto.randomUUID();
-        await db.financeTransactions.add({
-          id: financeTransactionId,
-          type: 'INCOME',
-          category: FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT,
-          amount: nextPaidAmount,
-          description: `Pembayaran invoice ${document.document_number}`,
-          created_at: paidAt,
-          reference_id: document.id,
-          ...accountSnapshot,
-        });
-      }
-    }
-
-    const updatedDocument: SalesDocument = {
-      ...document,
-      payment_status: paymentStatus,
-      paid_amount: nextPaidAmount,
-      paid_at: nextPaidAmount > 0 ? paidAt : undefined,
-      payment_method: nextPaidAmount > 0 ? paymentMethod : undefined,
-      cash_account_id: nextPaidAmount > 0 ? cashAccount.id : undefined,
-      cash_account_code: nextPaidAmount > 0 ? cashAccount.code : undefined,
-      cash_account_name: nextPaidAmount > 0 ? cashAccount.name : undefined,
-      finance_transaction_id: financeTransactionId,
-      updated_at: now,
-    };
-
-    await db.salesDocuments.update(id, {
-      payment_status: updatedDocument.payment_status,
-      paid_amount: updatedDocument.paid_amount,
-      paid_at: updatedDocument.paid_at,
-      payment_method: updatedDocument.payment_method,
-      cash_account_id: updatedDocument.cash_account_id,
-      cash_account_code: updatedDocument.cash_account_code,
-      cash_account_name: updatedDocument.cash_account_name,
-      finance_transaction_id: updatedDocument.finance_transaction_id,
-      updated_at: updatedDocument.updated_at,
-    });
-    await postSalesInvoicePaymentJournal(updatedDocument);
-    await writeActivityLog({
-      user: currentUser,
-      action: 'SALES_INVOICE_PAYMENT_RECORDED',
-      entity: 'salesDocuments',
-      entity_id: id,
-      description: `${currentUser?.name ?? 'User'} mencatat pembayaran invoice ${document.document_number} sebesar ${nextPaidAmount}.`,
-    });
+  return recordSalesInvoicePayment(id, {
+    amount: Number(input.amount ?? input.paid_amount ?? 0),
+    paid_at: input.paid_at,
+    payment_method: input.payment_method,
+    payment_channel: input.payment_channel,
+    cash_account_id: input.cash_account_id,
+    notes: input.notes,
   });
 };

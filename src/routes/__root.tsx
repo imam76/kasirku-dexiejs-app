@@ -37,6 +37,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Percent,
+  ReceiptText,
   Scale,
   Settings,
   SettingsIcon,
@@ -198,6 +199,7 @@ const RootLayout = () => {
       key: 'finance-group',
       children: [
         { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
+        { to: '/finance/receivables', label: t('nav.finance.receivables'), icon: ReceiptText },
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
         { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
         { to: '/finance/sales', label: t('nav.finance.sales'), icon: FileText },
