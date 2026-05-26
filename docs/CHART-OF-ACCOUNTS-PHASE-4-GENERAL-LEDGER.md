@@ -227,13 +227,3 @@ Minimal:
 bun run build
 bun run lint
 ```
-
-Prioritas test:
-
-- posting POS sale.
-- posting invoice issued.
-- posting invoice payment.
-- posting sales return.
-- duplicate posting prevention.
-- reversal.
-- trial balance debit/credit.

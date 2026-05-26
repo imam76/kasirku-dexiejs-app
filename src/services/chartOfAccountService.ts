@@ -6,6 +6,12 @@ import {
 import {
   DEFAULT_CHART_OF_ACCOUNTS,
   DEFAULT_FINANCE_ACCOUNT_MAPPINGS,
+  CONSTRUCTION_EXTENSION_TEMPLATE_LINES,
+  CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW,
+  MANUFACTURING_EXTENSION_TEMPLATE_LINES,
+  MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW,
+  PSAP_TEMPLATE_LINES,
+  PSAP_TEMPLATE_PREVIEW,
   SAK_EMKM_RETAIL_TEMPLATE,
   SAK_EMKM_RETAIL_TEMPLATE_LINES,
 } from '@/constants/chartOfAccounts';
@@ -57,6 +63,9 @@ export interface ChartOfAccountTemplatePreview {
   moduleChangeCount: number;
   transactionSnapshotCount: number;
   unmappedTransactionCount: number;
+  canApply: boolean;
+  warningMessages: string[];
+  requiredDomainFeatures: string[];
 }
 
 const normalizeText = (value: string | undefined) => value?.trim() || undefined;
@@ -212,6 +221,35 @@ const requireFinanceActor = async () => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   return currentUser;
+};
+
+const isManufacturingProfile = (accountingProfile: AccountingProfileCode) => {
+  return accountingProfile === 'SAK_EP' || accountingProfile === 'PSAK_FULL';
+};
+
+const isConstructionProfile = (accountingProfile: AccountingProfileCode) => {
+  return accountingProfile === 'SAK_EP' || accountingProfile === 'PSAK_FULL';
+};
+
+const assertAccountingProfileCombination = (
+  accountingProfile: AccountingProfileCode,
+  industryExtension: IndustryExtensionCode,
+) => {
+  if (accountingProfile === 'PSAP' && industryExtension !== 'NONE') {
+    throw new Error('PSAP harus memakai industry extension NONE.');
+  }
+
+  if (industryExtension === 'MANUFACTURING' && !isManufacturingProfile(accountingProfile)) {
+    throw new Error('Manufaktur hanya didukung untuk SAK EP atau PSAK Full.');
+  }
+
+  if (industryExtension === 'CONSTRUCTION' && !isConstructionProfile(accountingProfile)) {
+    throw new Error('Konstruksi hanya didukung untuk SAK EP atau PSAK Full.');
+  }
+
+  if (industryExtension === 'RETAIL' && accountingProfile === 'PSAP') {
+    throw new Error('Profile PSAP tidak memakai extension retail.');
+  }
 };
 
 export const createChartOfAccount = async (input: ChartOfAccountUpsertInput): Promise<ChartOfAccount> => {
@@ -390,6 +428,16 @@ export const updateEnabledModule = async (
   isEnabled: boolean,
 ): Promise<EnabledModule> => {
   const currentUser = await requireFinanceActor();
+  const profile = await getAccountingProfileSetting();
+
+  if (isEnabled && profile.accounting_profile === 'PSAP' && code === 'GENERAL_LEDGER') {
+    throw new Error('General Ledger retail belum diaktifkan untuk profile PSAP.');
+  }
+
+  if (isEnabled && ['MANUFACTURING', 'CONSTRUCTION', 'PSAP_REPORTING'].includes(code)) {
+    throw new Error('Module domain ini masih preview. Aktifkan setelah flow domain dan report khusus tersedia.');
+  }
+
   const existingModule = await db.enabledModules.get(code);
   const now = new Date().toISOString();
   const module: EnabledModule = {
@@ -421,6 +469,7 @@ export const updateAccountingProfileSetting = async (
   templateId?: string,
 ): Promise<AccountingProfileSetting> => {
   const currentUser = await requireFinanceActor();
+  assertAccountingProfileCombination(accountingProfile, industryExtension);
   const existingProfile = await db.accountingProfileSetting.get('default');
   const now = new Date().toISOString();
   const profile: AccountingProfileSetting = {
@@ -445,16 +494,123 @@ export const updateAccountingProfileSetting = async (
   return profile;
 };
 
-const getTemplateForInput = (templateId?: string) => {
-  const id = templateId ?? SAK_EMKM_RETAIL_TEMPLATE.id;
-  if (id !== SAK_EMKM_RETAIL_TEMPLATE.id) {
-    throw new Error('Template belum tersedia.');
+const createUnsupportedTemplatePreview = (
+  accountingProfile: AccountingProfileCode,
+  industryExtension: IndustryExtensionCode,
+) => ({
+  template: {
+    id: `preview-unsupported-${accountingProfile}-${industryExtension}`,
+    code: 'UNSUPPORTED_PREVIEW',
+    name: 'Template belum tersedia',
+    accounting_profile: accountingProfile,
+    industry_extension: industryExtension,
+    description: 'Kombinasi profile dan extension ini belum memiliki template akun.',
+    account_count_hint: 0,
+    is_system: true,
+    is_active: false,
+    created_at: '',
+    updated_at: '',
+  },
+  lines: [] as ChartOfAccountTemplateLine[],
+  canApply: false,
+  warningMessages: ['Kombinasi profile dan extension ini belum siap diterapkan.'],
+  requiredDomainFeatures: [] as string[],
+});
+
+const getTemplateForInput = (
+  accountingProfile: AccountingProfileCode,
+  industryExtension: IndustryExtensionCode,
+  templateId?: string,
+) => {
+  if (
+    templateId === SAK_EMKM_RETAIL_TEMPLATE.id ||
+    (!templateId && accountingProfile === 'SAK_EMKM' && industryExtension === 'RETAIL')
+  ) {
+    return {
+      template: SAK_EMKM_RETAIL_TEMPLATE,
+      lines: SAK_EMKM_RETAIL_TEMPLATE_LINES,
+      canApply: true,
+      warningMessages: [] as string[],
+      requiredDomainFeatures: [] as string[],
+    };
   }
 
-  return {
-    template: SAK_EMKM_RETAIL_TEMPLATE,
-    lines: SAK_EMKM_RETAIL_TEMPLATE_LINES,
-  };
+  if (
+    templateId === MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW.id ||
+    (!templateId && industryExtension === 'MANUFACTURING' && isManufacturingProfile(accountingProfile))
+  ) {
+    return {
+      template: {
+        ...MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW,
+        accounting_profile: accountingProfile,
+      },
+      lines: MANUFACTURING_EXTENSION_TEMPLATE_LINES,
+      canApply: false,
+      warningMessages: [
+        'Preview akun manufaktur tidak diterapkan otomatis agar user tidak mengira produksi dan costing sudah lengkap.',
+      ],
+      requiredDomainFeatures: [
+        'BOM',
+        'Production order',
+        'Material issue',
+        'Labor cost allocation',
+        'Factory overhead allocation',
+        'Finished goods receipt',
+        'Inventory costing policy',
+        'WIP movement',
+      ],
+    };
+  }
+
+  if (
+    templateId === CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW.id ||
+    (!templateId && industryExtension === 'CONSTRUCTION' && isConstructionProfile(accountingProfile))
+  ) {
+    return {
+      template: {
+        ...CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW,
+        accounting_profile: accountingProfile,
+      },
+      lines: CONSTRUCTION_EXTENSION_TEMPLATE_LINES,
+      canApply: false,
+      warningMessages: [
+        'Preview akun konstruksi tidak diterapkan otomatis sebelum contract, progress, retensi, dan revenue recognition tersedia.',
+      ],
+      requiredDomainFeatures: [
+        'Contract master',
+        'Project phase/progress',
+        'Progress billing',
+        'Retention',
+        'Subcontractor billing',
+        'Cost to complete',
+        'Revenue recognition rule',
+        'Project margin report',
+      ],
+    };
+  }
+
+  if (
+    templateId === PSAP_TEMPLATE_PREVIEW.id ||
+    (!templateId && accountingProfile === 'PSAP' && industryExtension === 'NONE')
+  ) {
+    return {
+      template: PSAP_TEMPLATE_PREVIEW,
+      lines: PSAP_TEMPLATE_LINES,
+      canApply: false,
+      warningMessages: [
+        'PSAP membutuhkan mode dan report pemerintahan khusus. Jangan dicampur ke UX retail.',
+      ],
+      requiredDomainFeatures: [
+        'Laporan Realisasi Anggaran',
+        'Laporan Operasional',
+        'Neraca PSAP',
+        'Laporan Perubahan Ekuitas',
+        'Struktur anggaran dan realisasi',
+      ],
+    };
+  }
+
+  return createUnsupportedTemplatePreview(accountingProfile, industryExtension);
 };
 
 const countMappingChanges = async (lines: ChartOfAccountTemplateLine[]) => {
@@ -488,7 +644,13 @@ export const getChartOfAccountTemplatePreview = async (
   input: Pick<ApplyChartOfAccountTemplateInput, 'accounting_profile' | 'industry_extension' | 'template_id'>,
 ): Promise<ChartOfAccountTemplatePreview> => {
   await ensureAccountingDefaults();
-  const { template, lines } = getTemplateForInput(input.template_id);
+  const {
+    template,
+    lines,
+    canApply,
+    warningMessages,
+    requiredDomainFeatures,
+  } = getTemplateForInput(input.accounting_profile, input.industry_extension, input.template_id);
   const existingAccounts = await db.chartOfAccounts.toArray();
   const existingCodes = new Set(existingAccounts.map((account) => account.code));
   const transactions = await db.financeTransactions.toArray();
@@ -502,6 +664,9 @@ export const getChartOfAccountTemplatePreview = async (
     moduleChangeCount: await countModuleChanges(input.accounting_profile, input.industry_extension),
     transactionSnapshotCount: transactions.filter((transaction) => transaction.account_id).length,
     unmappedTransactionCount: transactions.filter((transaction) => !transaction.account_id).length,
+    canApply,
+    warningMessages,
+    requiredDomainFeatures,
   };
 };
 
@@ -618,7 +783,15 @@ const updateModulesFromRules = async (
 
 export const applyChartOfAccountTemplate = async (input: ApplyChartOfAccountTemplateInput) => {
   const currentUser = await requireFinanceActor();
-  const { template, lines } = getTemplateForInput(input.template_id);
+  assertAccountingProfileCombination(input.accounting_profile, input.industry_extension);
+  const { template, lines, canApply } = getTemplateForInput(
+    input.accounting_profile,
+    input.industry_extension,
+    input.template_id,
+  );
+  if (!canApply) {
+    throw new Error('Template ini masih preview dan belum boleh diterapkan otomatis.');
+  }
   const now = new Date().toISOString();
   let addedAccounts: ChartOfAccount[] = [];
   let updatedMappings: FinanceAccountMapping[] = [];
@@ -710,4 +883,3 @@ export const backfillFinanceTransactionAccountSnapshots = async () => {
 
   return updatedCount;
 };
-

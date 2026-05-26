@@ -20,6 +20,7 @@ import { Button, Layout, Menu, Result, notification } from 'antd'
 import {
   BadgePercent,
   Banknote,
+  BookOpen,
   Box,
   Building2,
   ClipboardList,
@@ -198,6 +199,7 @@ const RootLayout = () => {
       children: [
         { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
+        { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
         { to: '/finance/sales', label: t('nav.finance.sales'), icon: FileText },
       ],
     },

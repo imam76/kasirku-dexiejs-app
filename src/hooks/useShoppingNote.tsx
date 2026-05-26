@@ -94,7 +94,7 @@ export const useShoppingNote = () => {
     try {
       const now = new Date().toISOString();
 
-      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings], async () => {
+      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
         await db.shoppingNotes.add({
           id: crypto.randomUUID(),
           created_at: now,
@@ -143,6 +143,10 @@ export const useShoppingNote = () => {
       queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
       queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
+      queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
     } catch (error) {
       console.error('Failed to save stock shopping:', error);
       message.error(error instanceof Error ? error.message : 'Gagal menyimpan belanja stok');

@@ -36,6 +36,13 @@ function Finance() {
       desc: t('finance.index.chartOfAccountsDesc'),
     },
     {
+      to: '/finance/general-ledger',
+      label: t('nav.finance.generalLedger'),
+      icon: BookOutlined,
+      color: 'text-violet-600',
+      desc: t('finance.index.generalLedgerDesc'),
+    },
+    {
       to: '/finance/sales',
       label: t('nav.finance.sales'),
       icon: FileTextOutlined,

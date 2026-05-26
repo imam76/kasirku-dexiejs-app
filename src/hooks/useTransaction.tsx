@@ -184,6 +184,10 @@ export const useTransaction = () => {
       });
 
       queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
+      queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
       reset();
       loadProducts();
 

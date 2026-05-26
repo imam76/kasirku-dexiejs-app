@@ -63,6 +63,10 @@ export const useSalesDocuments = () => {
     queryClient.invalidateQueries({ queryKey: ['salesDocuments'] });
     queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
     queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
+    queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+    queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
+    queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
+    queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
   };
 
   const createMutation = useMutation({

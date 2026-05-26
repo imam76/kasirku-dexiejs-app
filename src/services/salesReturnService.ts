@@ -18,6 +18,10 @@ import { konversiSatuanProduk } from '@/utils/pricing';
 import { isTransactionActive } from '@/utils/transactions';
 import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
 import { recalculateSalesInvoicePaymentStatus } from '@/services/salesDocumentService';
+import {
+  postSalesReturnIssuedJournal,
+  reverseSalesReturnJournal,
+} from '@/services/generalLedgerService';
 import { calculateSalesReturnLimits } from '@/utils/salesReturns/calculateSalesReturnLimits';
 import { calculateSalesReturnTotal } from '@/utils/salesReturns/calculateSalesReturnTotal';
 import { createSalesReturnNumber } from '@/utils/salesReturns/createSalesReturnNumber';
@@ -55,6 +59,9 @@ const salesReturnTables = [
   db.financeBalance,
   db.chartOfAccounts,
   db.financeAccountMappings,
+  db.enabledModules,
+  db.journalEntries,
+  db.journalEntryLines,
   db.profitLogs,
   db.profitBalance,
   db.activityLogs,
@@ -519,6 +526,17 @@ export const issueSalesReturn = async (id: string) => {
   await db.transaction('rw', salesReturnTables, async () => {
     await applyRestockEffect(items, 1);
     const financeTransactionId = await createRefundFinanceTransaction(salesReturn, now);
+    const issuedSalesReturn: SalesReturn = {
+      ...salesReturn,
+      status: 'ISSUED',
+      issued_at: now,
+      finance_transaction_id: financeTransactionId,
+      source_stock_document_id: source.source_stock_document_id,
+      source_stock_document_type: source.source_stock_document_type,
+      source_stock_document_number: source.source_stock_document_number,
+      updated_at: now,
+    };
+
     await applyPosProfitReversal(salesReturn, items, now, 1);
     await db.salesReturnItems.bulkPut(items);
     await db.salesReturns.update(id, {
@@ -530,6 +548,7 @@ export const issueSalesReturn = async (id: string) => {
       source_stock_document_number: source.source_stock_document_number,
       updated_at: now,
     });
+    await postSalesReturnIssuedJournal(issuedSalesReturn);
     if (salesReturn.source_type === 'SALES_INVOICE') {
       await recalculateSalesInvoicePaymentStatus(salesReturn.source_id);
     }
@@ -563,6 +582,7 @@ export const voidSalesReturn = async (id: string, reason: string) => {
     if (salesReturn.status === 'ISSUED') {
       await applyRestockEffect(items, -1);
       reversalFinanceTransactionId = await reverseRefundFinanceTransaction(salesReturn, now);
+      await reverseSalesReturnJournal(salesReturn, `Pembalikan jurnal retur ${salesReturn.return_number}: ${normalizedReason}`);
       await applyPosProfitReversal(salesReturn, items, now, -1);
     }
 

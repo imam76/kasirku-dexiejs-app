@@ -12,13 +12,14 @@ import {
   restoreChartOfAccount,
   updateChartOfAccount,
   updateAccountingProfileSetting,
+  updateEnabledModule,
   updateFinanceAccountMapping,
   type ApplyChartOfAccountTemplateInput,
   type ChartOfAccountUpsertInput,
 } from '@/services/chartOfAccountService';
 import { buildAccountTree } from '@/utils/chartOfAccounts/buildAccountTree';
 import { sortAccountsByCode } from '@/utils/chartOfAccounts/sortAccountsByCode';
-import type { AccountType, ChartOfAccount } from '@/types';
+import type { AccountType, AccountingModuleCode, ChartOfAccount } from '@/types';
 
 export type ChartOfAccountStatusFilter = 'active' | 'inactive' | 'all';
 export type ChartOfAccountTypeFilter = AccountType | 'ALL';
@@ -125,6 +126,10 @@ export const useChartOfAccounts = () => {
     queryClient.invalidateQueries({ queryKey: ['chartOfAccountTemplatePreview'] });
     queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
     queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
+    queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+    queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
+    queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
+    queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
   };
 
   const createMutation = useMutation({
@@ -157,6 +162,10 @@ export const useChartOfAccounts = () => {
       industryExtension: Parameters<typeof updateAccountingProfileSetting>[1];
       templateId?: string;
     }) => updateAccountingProfileSetting(accountingProfile, industryExtension, templateId),
+    onSuccess: invalidateAccounting,
+  });
+  const updateModuleMutation = useMutation({
+    mutationFn: ({ code, isEnabled }: { code: AccountingModuleCode; isEnabled: boolean }) => updateEnabledModule(code, isEnabled),
     onSuccess: invalidateAccounting,
   });
   const applyTemplateMutation = useMutation({
@@ -204,6 +213,7 @@ export const useChartOfAccounts = () => {
     restoreAccount: restoreMutation.mutateAsync,
     updateMapping: updateMappingMutation.mutateAsync,
     updateProfileSetting: updateProfileMutation.mutateAsync,
+    updateModule: updateModuleMutation.mutateAsync,
     applyTemplate: applyTemplateMutation.mutateAsync,
     backfillSnapshots: backfillMutation.mutateAsync,
     isSubmitting: createMutation.isPending || updateMutation.isPending,
@@ -211,6 +221,7 @@ export const useChartOfAccounts = () => {
     isRestoring: restoreMutation.isPending,
     isUpdatingMapping: updateMappingMutation.isPending,
     isUpdatingProfile: updateProfileMutation.isPending,
+    isUpdatingModule: updateModuleMutation.isPending,
     isApplyingTemplate: applyTemplateMutation.isPending,
     isBackfilling: backfillMutation.isPending,
   };

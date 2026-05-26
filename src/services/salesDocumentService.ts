@@ -3,6 +3,11 @@ import { getSalesDocumentConfig, type SalesDocumentConfig } from '@/configs/sale
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
+import {
+  postSalesInvoiceIssuedJournal,
+  postSalesInvoicePaymentJournal,
+  reverseSalesInvoiceJournal,
+} from '@/services/generalLedgerService';
 import type {
   SalesDocument,
   SalesDocumentItem,
@@ -40,6 +45,9 @@ const salesDocumentTables = [
   db.financeBalance,
   db.chartOfAccounts,
   db.financeAccountMappings,
+  db.enabledModules,
+  db.journalEntries,
+  db.journalEntryLines,
   db.activityLogs,
 ];
 
@@ -267,6 +275,13 @@ export const issueSalesDocument = async (id: string) => {
   const now = new Date().toISOString();
 
   await db.transaction('rw', salesDocumentTables, async () => {
+    const issuedDocument: SalesDocument = {
+      ...document,
+      status: 'ISSUED',
+      issued_at: now,
+      updated_at: now,
+    };
+
     if (config.behavior.affectsStock) {
       await reduceDeliveryStock(items);
     }
@@ -276,6 +291,9 @@ export const issueSalesDocument = async (id: string) => {
       issued_at: now,
       updated_at: now,
     });
+    if (document.type === 'SALES_INVOICE') {
+      await postSalesInvoiceIssuedJournal(issuedDocument);
+    }
     await writeActivityLog({
       user: currentUser,
       action: 'SALES_DOCUMENT_ISSUED',
@@ -384,6 +402,9 @@ export const voidSalesDocument = async (id: string, reason: string) => {
       void_reason: normalizedReason,
       updated_at: now,
     });
+    if (document.type === 'SALES_INVOICE' && document.status === 'ISSUED') {
+      await reverseSalesInvoiceJournal(document, `Pembalikan jurnal invoice ${document.document_number}: ${normalizedReason}`);
+    }
     await writeActivityLog({
       user: currentUser,
       action: 'SALES_DOCUMENT_VOIDED',
@@ -478,13 +499,23 @@ export const markSalesInvoicePaid = async (id: string, input: SalesInvoicePaymen
       }
     }
 
-    await db.salesDocuments.update(id, {
+    const updatedDocument: SalesDocument = {
+      ...document,
       payment_status: paymentStatus,
       paid_amount: nextPaidAmount,
       paid_at: nextPaidAmount > 0 ? paidAt : undefined,
       finance_transaction_id: financeTransactionId,
       updated_at: now,
+    };
+
+    await db.salesDocuments.update(id, {
+      payment_status: updatedDocument.payment_status,
+      paid_amount: updatedDocument.paid_amount,
+      paid_at: updatedDocument.paid_at,
+      finance_transaction_id: updatedDocument.finance_transaction_id,
+      updated_at: updatedDocument.updated_at,
     });
+    await postSalesInvoicePaymentJournal(updatedDocument);
     await writeActivityLog({
       user: currentUser,
       action: 'SALES_INVOICE_PAYMENT_RECORDED',

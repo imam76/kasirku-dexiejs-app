@@ -47,6 +47,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('accounts-receivable', '1100', 'Piutang Usaha', 'ASSET'),
   createAccountSeed('inventory', '1200', 'Persediaan Barang', 'ASSET'),
   createAccountSeed('accounts-payable', '2000', 'Hutang Usaha', 'LIABILITY'),
+  createAccountSeed('output-tax', '2100', 'Pajak Keluaran', 'LIABILITY'),
   createAccountSeed('owner-capital', '3000', 'Modal Pemilik', 'EQUITY'),
   createAccountSeed('sales-pos', '4000', 'Penjualan POS', 'REVENUE'),
   createAccountSeed('sales-invoice-revenue', '4010', 'Pendapatan Sales Invoice', 'REVENUE'),
@@ -272,3 +273,99 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   }),
 ];
 
+export const MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW: ChartOfAccountTemplate = {
+  id: 'preview-manufacturing-extension',
+  code: 'INDUSTRY_MANUFACTURING_PREVIEW',
+  name: 'Preview Akun Manufaktur',
+  accounting_profile: 'SAK_EP',
+  industry_extension: 'MANUFACTURING',
+  description: 'Preview akun manufaktur. Tidak boleh diterapkan sebelum BOM, production order, costing, dan WIP movement tersedia.',
+  account_count_hint: 8,
+  is_system: true,
+  is_active: true,
+  created_at: '',
+  updated_at: '',
+};
+
+export const CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW: ChartOfAccountTemplate = {
+  id: 'preview-construction-extension',
+  code: 'INDUSTRY_CONSTRUCTION_PREVIEW',
+  name: 'Preview Akun Konstruksi',
+  accounting_profile: 'SAK_EP',
+  industry_extension: 'CONSTRUCTION',
+  description: 'Preview akun konstruksi. Tidak boleh diterapkan sebelum contract, progress billing, retention, dan revenue recognition tersedia.',
+  account_count_hint: 10,
+  is_system: true,
+  is_active: true,
+  created_at: '',
+  updated_at: '',
+};
+
+export const PSAP_TEMPLATE_PREVIEW: ChartOfAccountTemplate = {
+  id: 'preview-psap-profile',
+  code: 'PSAP_PREVIEW',
+  name: 'Preview Profile PSAP',
+  accounting_profile: 'PSAP',
+  industry_extension: 'NONE',
+  description: 'Preview struktur akun pemerintahan. PSAP membutuhkan mode/report khusus dan tidak memakai label laba rugi retail.',
+  account_count_hint: 8,
+  is_system: true,
+  is_active: true,
+  created_at: '',
+  updated_at: '',
+};
+
+const createPreviewTemplateLine = (
+  template: ChartOfAccountTemplate,
+  templateAccountId: string,
+  code: string,
+  name: string,
+  type: AccountType,
+  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description'>> = {},
+): ChartOfAccountTemplateLine => ({
+  id: `${template.id}-${templateAccountId}`,
+  template_id: template.id,
+  template_account_id: templateAccountId,
+  code,
+  name,
+  type,
+  normal_balance: getAccountNormalBalance(type),
+  is_postable: options.is_postable ?? true,
+  created_at: '',
+  ...options,
+});
+
+export const MANUFACTURING_EXTENSION_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
+  createPreviewTemplateLine(MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW, 'raw-material-inventory', '1210', 'Persediaan Bahan Baku', 'ASSET'),
+  createPreviewTemplateLine(MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW, 'wip-inventory', '1220', 'Persediaan Barang Dalam Proses / WIP', 'ASSET'),
+  createPreviewTemplateLine(MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW, 'finished-goods-inventory', '1230', 'Persediaan Barang Jadi', 'ASSET'),
+  createPreviewTemplateLine(MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW, 'factory-overhead', '5300', 'Overhead Pabrik', 'EXPENSE'),
+  createPreviewTemplateLine(MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW, 'direct-labor', '5310', 'Tenaga Kerja Langsung', 'EXPENSE'),
+  createPreviewTemplateLine(MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW, 'indirect-production-expense', '5320', 'Beban Produksi Tidak Langsung', 'EXPENSE'),
+  createPreviewTemplateLine(MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW, 'production-variance', '5330', 'Selisih Biaya Produksi', 'EXPENSE'),
+  createPreviewTemplateLine(MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW, 'finished-goods-cogs', '5400', 'HPP Produk Jadi', 'EXPENSE'),
+];
+
+export const CONSTRUCTION_EXTENSION_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'contract-asset', '1300', 'Aset Kontrak', 'ASSET'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'retention-receivable', '1310', 'Piutang Retensi', 'ASSET'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'project-advance', '1320', 'Uang Muka Proyek', 'ASSET'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'contract-liability', '2300', 'Liabilitas Kontrak', 'LIABILITY'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'retention-payable', '2310', 'Hutang Retensi', 'LIABILITY'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'contract-revenue', '4200', 'Pendapatan Kontrak', 'REVENUE'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'project-material-expense', '6200', 'Beban Material Proyek', 'EXPENSE'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'project-labor-expense', '6210', 'Beban Tenaga Kerja Proyek', 'EXPENSE'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'subcontractor-expense', '6220', 'Beban Subkontraktor', 'EXPENSE'),
+  createPreviewTemplateLine(CONSTRUCTION_EXTENSION_TEMPLATE_PREVIEW, 'project-overhead-expense', '6230', 'Beban Overhead Proyek', 'EXPENSE'),
+];
+
+export const PSAP_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
+  createPreviewTemplateLine(PSAP_TEMPLATE_PREVIEW, 'psap-asset', '1000', 'Aset', 'ASSET', { is_postable: false }),
+  createPreviewTemplateLine(PSAP_TEMPLATE_PREVIEW, 'psap-liability', '2000', 'Kewajiban', 'LIABILITY', { is_postable: false }),
+  createPreviewTemplateLine(PSAP_TEMPLATE_PREVIEW, 'psap-equity-fund', '3000', 'Ekuitas Dana', 'EQUITY'),
+  createPreviewTemplateLine(PSAP_TEMPLATE_PREVIEW, 'psap-revenue-lo', '4100', 'Pendapatan-LO', 'REVENUE'),
+  createPreviewTemplateLine(PSAP_TEMPLATE_PREVIEW, 'psap-revenue-lra', '4200', 'Pendapatan-LRA', 'REVENUE'),
+  createPreviewTemplateLine(PSAP_TEMPLATE_PREVIEW, 'psap-expense', '5100', 'Beban', 'EXPENSE'),
+  createPreviewTemplateLine(PSAP_TEMPLATE_PREVIEW, 'psap-spending', '5200', 'Belanja', 'EXPENSE'),
+  createPreviewTemplateLine(PSAP_TEMPLATE_PREVIEW, 'psap-financing', '7000', 'Pembiayaan', 'EQUITY'),
+];

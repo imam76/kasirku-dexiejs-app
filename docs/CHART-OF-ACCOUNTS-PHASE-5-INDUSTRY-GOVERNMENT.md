@@ -195,10 +195,3 @@ Minimal:
 bun run build
 bun run lint
 ```
-
-Prioritas test:
-
-- feature gate per profile/extension.
-- template extension tidak muncul di retail default tanpa dipilih.
-- mapping extension tidak merusak akun existing.
-- report retail tidak berubah saat extension nonaktif.

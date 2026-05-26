@@ -2,6 +2,7 @@ import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
 import type { StockPurchase } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
+import { postStockPurchaseJournal } from '@/services/generalLedgerService';
 
 interface RecordStockPurchaseInput {
   productId: string;
@@ -36,24 +37,37 @@ export const recordStockPurchase = async ({
     updated_at: createdAt,
   };
 
-  await db.stockPurchases.add(purchase);
+  await db.transaction('rw', [
+    db.stockPurchases,
+    db.financeBalance,
+    db.financeTransactions,
+    db.chartOfAccounts,
+    db.financeAccountMappings,
+    db.enabledModules,
+    db.journalEntries,
+    db.journalEntryLines,
+  ], async () => {
+    await db.stockPurchases.add(purchase);
 
-  const currentFinanceBalance = await db.financeBalance.get('current');
-  await db.financeBalance.put({
-    id: 'current',
-    amount: (currentFinanceBalance?.amount || 0) - totalCost,
-    updated_at: createdAt,
-  });
+    const currentFinanceBalance = await db.financeBalance.get('current');
+    await db.financeBalance.put({
+      id: 'current',
+      amount: (currentFinanceBalance?.amount || 0) - totalCost,
+      updated_at: createdAt,
+    });
 
-  await db.financeTransactions.add({
-    id: crypto.randomUUID(),
-    type: 'EXPENSE',
-    category: FINANCE_CATEGORIES.STOCK_PURCHASE,
-    amount: totalCost,
-    description,
-    created_at: createdAt,
-    reference_id: purchase.id,
-    ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE),
+    await db.financeTransactions.add({
+      id: crypto.randomUUID(),
+      type: 'EXPENSE',
+      category: FINANCE_CATEGORIES.STOCK_PURCHASE,
+      amount: totalCost,
+      description,
+      created_at: createdAt,
+      reference_id: purchase.id,
+      ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE),
+    });
+
+    await postStockPurchaseJournal(purchase);
   });
 
   return purchase;

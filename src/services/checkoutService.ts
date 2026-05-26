@@ -6,6 +6,7 @@ import { getCartItemOriginalPrice, getCartItemPrice, konversiSatuanProduk, norma
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
+import { postPosSaleJournal } from '@/services/generalLedgerService';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -178,6 +179,9 @@ export const checkout = async ({
       db.activityLogs,
       db.chartOfAccounts,
       db.financeAccountMappings,
+      db.enabledModules,
+      db.journalEntries,
+      db.journalEntryLines,
     ],
     async () => {
       const transaction: Transaction = {
@@ -202,6 +206,7 @@ export const checkout = async ({
       await db.transactionItems.bulkAdd(items);
       await recordProfit(transaction, items, createdAt);
       await recordFinanceIncome(transaction, createdAt);
+      await postPosSaleJournal(transaction);
       await reduceProductStock(cart);
 
       for (const item of items.filter((item) => item.is_price_edited)) {

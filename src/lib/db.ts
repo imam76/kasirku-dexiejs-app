@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem, SalesReturn, SalesReturnItem, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem, SalesReturn, SalesReturnItem, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, JournalEntry, JournalEntryLine } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
@@ -72,6 +72,8 @@ export class KasirkuDB extends Dexie {
   financeAccountMappings!: Table<FinanceAccountMapping>;
   accountingProfileSetting!: Table<AccountingProfileSetting>;
   enabledModules!: Table<EnabledModule>;
+  journalEntries!: Table<JournalEntry>;
+  journalEntryLines!: Table<JournalEntryLine>;
 
   constructor() {
     super('KasirkuDB');
@@ -192,6 +194,35 @@ export class KasirkuDB extends Dexie {
 
       if (await enabledModules.count() === 0) {
         await enabledModules.bulkPut(seed.enabledModules);
+      }
+    });
+
+    this.version(20).stores({
+      journalEntries: 'id, entry_number, entry_date, status, source_type, source_id, source_event, reversed_entry_id, created_at',
+      journalEntryLines: 'id, journal_entry_id, account_id, account_code, account_type, created_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+      const enabledModules = tx.table<EnabledModule, string>('enabledModules');
+
+      const accounts = await chartOfAccounts.toArray();
+      const accountCodes = new Set(accounts.map((account) => account.code));
+      const accountIds = new Set(accounts.map((account) => account.id));
+      const missingAccounts = seed.accounts.filter((account) => {
+        return !accountCodes.has(account.code) && !accountIds.has(account.id);
+      });
+
+      if (missingAccounts.length > 0) {
+        await chartOfAccounts.bulkPut(missingAccounts);
+      }
+
+      const modules = await enabledModules.toArray();
+      const moduleCodes = new Set(modules.map((module) => module.code));
+      const missingModules = seed.enabledModules.filter((module) => !moduleCodes.has(module.code));
+
+      if (missingModules.length > 0) {
+        await enabledModules.bulkPut(missingModules);
       }
     });
 

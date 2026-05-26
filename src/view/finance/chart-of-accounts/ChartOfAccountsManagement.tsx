@@ -45,6 +45,7 @@ export default function ChartOfAccountsManagement() {
     restoreAccount,
     updateMapping,
     updateProfileSetting,
+    updateModule,
     applyTemplate,
     backfillSnapshots,
     isSubmitting,
@@ -52,6 +53,7 @@ export default function ChartOfAccountsManagement() {
     isApplyingTemplate,
     isBackfilling,
     isUpdatingProfile,
+    isUpdatingModule,
   } = useChartOfAccounts();
 
   const closeModal = () => {
@@ -199,10 +201,12 @@ export default function ChartOfAccountsManagement() {
                 isApplyingTemplate={isApplyingTemplate}
                 isBackfilling={isBackfilling}
                 isUpdatingProfile={isUpdatingProfile}
+                isUpdatingModule={isUpdatingModule}
                 onUpdateMapping={(key, accountId) => updateMapping({ key, accountId })}
                 onApplyTemplate={applyTemplate}
                 onBackfillSnapshots={backfillSnapshots}
                 onUpdateProfile={updateProfileSetting}
+                onUpdateModule={(code, isEnabled) => updateModule({ code, isEnabled })}
               />
             ),
           },

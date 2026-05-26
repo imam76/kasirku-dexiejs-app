@@ -635,6 +635,18 @@ export interface ProfitBalance {
 
 export type FinanceTransactionType = 'INCOME' | 'EXPENSE' | 'OPENING_BALANCE';
 
+export type JournalEntryStatus = 'DRAFT' | 'POSTED' | 'VOIDED' | 'REVERSED';
+
+export type JournalSourceType =
+  | 'POS_TRANSACTION'
+  | 'STOCK_PURCHASE'
+  | 'SALES_INVOICE'
+  | 'SALES_INVOICE_PAYMENT'
+  | 'SALES_RETURN'
+  | 'ACCOUNTS_PAYABLE'
+  | 'MANUAL_JOURNAL'
+  | 'OPENING_BALANCE';
+
 export type AccountingProfileCode =
   | 'SAK_EMKM'
   | 'SAK_EP'
@@ -716,6 +728,40 @@ export interface EnabledModule {
   requires_extension?: IndustryExtensionCode;
   created_at: string;
   updated_at: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  entry_number: string;
+  entry_date: string;
+  status: JournalEntryStatus;
+  source_type: JournalSourceType;
+  source_id?: string;
+  source_number?: string;
+  source_event?: string;
+  description: string;
+  total_debit: number;
+  total_credit: number;
+  posted_at?: string;
+  voided_at?: string;
+  reversed_entry_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JournalEntryLine {
+  id: string;
+  journal_entry_id: string;
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: AccountType;
+  debit: number;
+  credit: number;
+  description?: string;
+  department_id?: string;
+  project_id?: string;
+  created_at: string;
 }
 
 export interface ChartOfAccountTemplate {

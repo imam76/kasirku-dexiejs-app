@@ -4,6 +4,7 @@ import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
+import { reversePosSaleJournal } from '@/services/generalLedgerService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -47,6 +48,9 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       db.profitBalance,
       db.financeTransactions,
       db.financeBalance,
+      db.enabledModules,
+      db.journalEntries,
+      db.journalEntryLines,
     ],
     async () => {
       const transaction = await db.transactions.get(transactionId);
@@ -116,6 +120,8 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         amount: nextFinanceBalance,
         updated_at: now,
       });
+
+      await reversePosSaleJournal(transaction, `Pembalikan jurnal POS ${transaction.transaction_number}: ${normalizedReason}`);
     },
   );
 

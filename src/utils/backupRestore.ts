@@ -33,6 +33,8 @@ export const backupDatabase = async () => {
       financeAccountMappings: await db.financeAccountMappings.toArray(),
       accountingProfileSetting: await db.accountingProfileSetting.toArray(),
       enabledModules: await db.enabledModules.toArray(),
+      journalEntries: await db.journalEntries.toArray(),
+      journalEntryLines: await db.journalEntryLines.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
       version: 6,
@@ -60,7 +62,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'salesDocuments', 'salesDocumentItems', 'salesReturns', 'salesReturnItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'salesDocuments', 'salesDocumentItems', 'salesReturns', 'salesReturnItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'journalEntries', 'journalEntryLines', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -104,6 +106,8 @@ export const restoreDatabase = async (file: File) => {
           db.financeAccountMappings,
           db.accountingProfileSetting,
           db.enabledModules,
+          db.journalEntries,
+          db.journalEntryLines,
           db.authUsers,
           db.authSessions,
           db.activityLogs,
@@ -132,6 +136,8 @@ export const restoreDatabase = async (file: File) => {
           await db.financeAccountMappings.clear();
           await db.accountingProfileSetting.clear();
           await db.enabledModules.clear();
+          await db.journalEntries.clear();
+          await db.journalEntryLines.clear();
           await db.authSessions.clear();
 
           if (hasAuthUsersPayload) {
@@ -164,6 +170,8 @@ export const restoreDatabase = async (file: File) => {
           if (data.financeAccountMappings?.length) await db.financeAccountMappings.bulkAdd(data.financeAccountMappings);
           if (data.accountingProfileSetting?.length) await db.accountingProfileSetting.bulkAdd(data.accountingProfileSetting);
           if (data.enabledModules?.length) await db.enabledModules.bulkAdd(data.enabledModules);
+          if (data.journalEntries?.length) await db.journalEntries.bulkAdd(data.journalEntries);
+          if (data.journalEntryLines?.length) await db.journalEntryLines.bulkAdd(data.journalEntryLines);
           if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
           if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
         });
