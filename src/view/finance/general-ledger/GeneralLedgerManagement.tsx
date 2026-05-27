@@ -4,9 +4,10 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { useQuery } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { BookOpen, RefreshCw } from 'lucide-react';
+import { BookOpen, FilePlus2, RefreshCw } from 'lucide-react';
 import { db } from '@/lib/db';
 import OpeningBalanceForm from '@/components/general-ledger/OpeningBalanceForm';
+import ManualJournalForm from '@/components/general-ledger/ManualJournalForm';
 import {
   getBalanceSheetReport,
   getIncomeStatementReport,
@@ -15,6 +16,8 @@ import {
   type JournalEntryWithLines,
   type TrialBalanceRow,
 } from '@/services/generalLedgerService';
+import { hasPermission } from '@/auth/permissions';
+import { useAuth } from '@/auth/useAuth';
 import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import type { JournalEntryLine, JournalEntryStatus } from '@/types';
@@ -45,8 +48,10 @@ interface LedgerRow {
 
 export default function GeneralLedgerManagement() {
   const { t } = useI18n();
+  const { currentUser } = useAuth();
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [accountFilter, setAccountFilter] = useState<string>();
+  const [isManualJournalOpen, setIsManualJournalOpen] = useState(false);
   const generalLedgerModule = useLiveQuery(
     () => db.enabledModules.get('GENERAL_LEDGER'),
     [],
@@ -70,6 +75,7 @@ export default function GeneralLedgerManagement() {
   const isLedgerReady = Boolean(readiness?.isReady);
   const isModuleEnabled = Boolean(generalLedgerModule?.is_enabled);
   const canShowReports = isModuleEnabled && isLedgerReady;
+  const canManageManualJournal = canShowReports && hasPermission(currentUser?.role, 'JOURNAL_MANAGE');
   const filters = useMemo(() => ({
     startDate: dateRange?.[0].startOf('day').toISOString(),
     endDate: dateRange?.[1].endOf('day').toISOString(),
@@ -317,6 +323,15 @@ export default function GeneralLedgerManagement() {
         </div>
         {canShowReports && (
           <Space wrap>
+            {canManageManualJournal && (
+              <Button
+                type="primary"
+                icon={<FilePlus2 size={16} />}
+                onClick={() => setIsManualJournalOpen(true)}
+              >
+                {t('generalLedger.manual.add')}
+              </Button>
+            )}
             <DatePicker.RangePicker
               value={dateRange}
               onChange={(value) => setDateRange(value as [Dayjs, Dayjs] | null)}
@@ -551,6 +566,13 @@ export default function GeneralLedgerManagement() {
         ]}
         />
       )}
+
+      <ManualJournalForm
+        open={isManualJournalOpen}
+        accounts={accounts}
+        onCancel={() => setIsManualJournalOpen(false)}
+        onPosted={refetchReports}
+      />
     </div>
   );
 }

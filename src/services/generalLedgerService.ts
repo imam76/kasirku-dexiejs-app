@@ -607,7 +607,7 @@ export const postManualJournal = async ({
   const accounts = await db.chartOfAccounts.toArray();
   const accountById = new Map(accounts.map((account) => [account.id, account]));
 
-  return postBalancedJournalEntry({
+  const entry = await postBalancedJournalEntry({
     source_type: 'MANUAL_JOURNAL',
     source_id: crypto.randomUUID(),
     source_event: SOURCE_EVENTS.MANUAL_JOURNAL_POSTED,
@@ -627,6 +627,18 @@ export const postManualJournal = async ({
       };
     }),
   });
+
+  if (entry) {
+    await writeActivityLog({
+      user: currentUser,
+      action: 'MANUAL_JOURNAL_POSTED',
+      entity: 'journalEntries',
+      entity_id: entry.id,
+      description: `${currentUser?.name ?? 'User'} posting jurnal umum ${entry.entry_number}.`,
+    });
+  }
+
+  return entry;
 };
 
 const getTransactionItemsCost = (items: TransactionItem[]) => {
