@@ -6,6 +6,7 @@ import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
+import type { TranslationKey } from '@/i18n/messages';
 import type { Contact, Department, Product, Project, PurchaseDocument, PurchaseDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { formatCurrency } from '@/utils/formatters';
@@ -92,6 +93,14 @@ const omitLineItems = (values: PurchaseDocumentFormValues) => {
 const fieldContainerClassName = 'mb-4';
 const labelClassName = 'mb-1.5 flex items-center gap-1 text-sm font-medium text-gray-700';
 
+const warehouseHelperKeysByType = {
+  PURCHASE_REQUEST: 'purchaseDocuments.helper.warehouse.purchaseRequest',
+  REQUEST_FOR_QUOTATION: 'purchaseDocuments.helper.warehouse.requestForQuotation',
+  PURCHASE_ORDER: 'purchaseDocuments.helper.warehouse.purchaseOrder',
+  PURCHASE_RECEIPT: 'purchaseDocuments.helper.warehouse.purchaseReceipt',
+  PURCHASE_INVOICE: 'purchaseDocuments.helper.warehouse.purchaseInvoice',
+} satisfies Record<PurchaseDocumentConfig['type'], TranslationKey>;
+
 export const PurchaseDocumentForm = ({
   config,
   initialData,
@@ -107,6 +116,7 @@ export const PurchaseDocumentForm = ({
 }: PurchaseDocumentFormProps) => {
   const { t } = useI18n();
   const documentId = initialData?.document?.id ?? 'draft';
+  const warehouseHelperKey = warehouseHelperKeysByType[config.type];
   const {
     control,
     handleSubmit,
@@ -209,6 +219,7 @@ export const PurchaseDocumentForm = ({
               />
             )}
           />
+          <p className="mt-1 text-xs leading-5 text-gray-500">{t(warehouseHelperKey)}</p>
         </div>
         <div className={fieldContainerClassName}>
           <label className={labelClassName}>{t('purchaseDocuments.field.supplierName')}</label>

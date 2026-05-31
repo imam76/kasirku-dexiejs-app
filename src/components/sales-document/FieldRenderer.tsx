@@ -5,24 +5,27 @@ import { Controller } from 'react-hook-form';
 import type { Control, FieldErrors, FieldPath, UseFormSetValue } from 'react-hook-form';
 import type { Contact, Department, Project, SalesInvoicePaymentStatus, Tax, Warehouse } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
+import type { TranslationKey } from '@/i18n/messages';
 import { salesInvoicePaymentStatusLabelKeys, taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
 
 interface FieldContainerProps {
   label: string;
   required?: boolean;
+  helper?: string;
   error?: string;
   className?: string;
   children: ReactNode;
 }
 
-const FieldContainer = ({ label, required, error, className, children }: FieldContainerProps) => (
+const FieldContainer = ({ label, required, helper, error, className, children }: FieldContainerProps) => (
   <div className={className ?? 'mb-4'}>
     <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-gray-700">
       <span>{label}</span>
       {required ? <span className="text-sm font-bold leading-none text-red-500">*</span> : null}
     </label>
     {children}
+    {helper ? <p className="mt-1 text-xs leading-5 text-gray-500">{helper}</p> : null}
     {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
   </div>
 );
@@ -30,6 +33,7 @@ const FieldContainer = ({ label, required, error, className, children }: FieldCo
 interface FieldRendererProps {
   name: string;
   label: string;
+  helperKey?: TranslationKey;
   type: 'contact' | 'text' | 'date' | 'textarea' | 'tax' | 'department' | 'project' | 'warehouse' | 'paymentStatus';
   required?: boolean;
   control: Control<SalesDocumentFormValues>;
@@ -45,6 +49,7 @@ interface FieldRendererProps {
 export const FieldRenderer = ({
   name,
   label,
+  helperKey,
   type,
   required,
   control,
@@ -60,11 +65,12 @@ export const FieldRenderer = ({
   const fieldName = name as FieldPath<SalesDocumentFormValues>;
   const fieldError = errors[name as keyof SalesDocumentFormValues];
   const error = fieldError?.message ? String(fieldError.message) : undefined;
+  const helper = helperKey ? t(helperKey) : undefined;
   const rules = required ? { required: t('salesDocuments.validation.required', { field: label }) } : undefined;
 
   if (type === 'contact') {
     return (
-      <FieldContainer label={label} required={required} error={error}>
+      <FieldContainer label={label} required={required} helper={helper} error={error}>
         <Controller
           name={fieldName}
           control={control}
@@ -102,7 +108,7 @@ export const FieldRenderer = ({
 
   if (type === 'tax') {
     return (
-      <FieldContainer label={label} required={required} error={error}>
+      <FieldContainer label={label} required={required} helper={helper} error={error}>
         <Controller
           name={fieldName}
           control={control}
@@ -129,7 +135,7 @@ export const FieldRenderer = ({
 
   if (type === 'department') {
     return (
-      <FieldContainer label={label} required={required} error={error}>
+      <FieldContainer label={label} required={required} helper={helper} error={error}>
         <Controller
           name={fieldName}
           control={control}
@@ -156,7 +162,7 @@ export const FieldRenderer = ({
 
   if (type === 'project') {
     return (
-      <FieldContainer label={label} required={required} error={error}>
+      <FieldContainer label={label} required={required} helper={helper} error={error}>
         <Controller
           name={fieldName}
           control={control}
@@ -183,7 +189,7 @@ export const FieldRenderer = ({
 
   if (type === 'warehouse') {
     return (
-      <FieldContainer label={label} required={required} error={error}>
+      <FieldContainer label={label} required={required} helper={helper} error={error}>
         <Controller
           name={fieldName}
           control={control}
@@ -221,7 +227,7 @@ export const FieldRenderer = ({
     ];
 
     return (
-      <FieldContainer label={label} required={required} error={error}>
+      <FieldContainer label={label} required={required} helper={helper} error={error}>
         <Controller
           name={fieldName}
           control={control}
@@ -242,7 +248,7 @@ export const FieldRenderer = ({
 
   if (type === 'date') {
     return (
-      <FieldContainer label={label} required={required} error={error}>
+      <FieldContainer label={label} required={required} helper={helper} error={error}>
         <Controller
           name={fieldName}
           control={control}
@@ -262,7 +268,7 @@ export const FieldRenderer = ({
 
   if (type === 'textarea') {
     return (
-      <FieldContainer label={label} required={required} error={error} className="mb-4 md:col-span-2">
+      <FieldContainer label={label} required={required} helper={helper} error={error} className="mb-4 md:col-span-2">
         <Controller
           name={fieldName}
           control={control}
@@ -274,7 +280,7 @@ export const FieldRenderer = ({
   }
 
   return (
-    <FieldContainer label={label} required={required} error={error}>
+    <FieldContainer label={label} required={required} helper={helper} error={error}>
       <Controller
         name={fieldName}
         control={control}

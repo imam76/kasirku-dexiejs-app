@@ -19,6 +19,7 @@ export type SalesDocumentFieldType =
 export interface SalesDocumentFieldConfig {
   name: string;
   labelKey: TranslationKey;
+  helperKey?: TranslationKey;
   type: SalesDocumentFieldType;
   required?: boolean;
 }
