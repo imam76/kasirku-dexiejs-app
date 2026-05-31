@@ -7,6 +7,7 @@ import {
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type { FinanceTransaction, FinanceTransactionType } from '@/types';
+import { getCashOrBankAccountForPayment } from '@/services/generalLedgerService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { isTransactionActive } from '@/utils/transactions';
 
@@ -37,6 +38,7 @@ export const addFinanceTransaction = async ({
   let newProfitBalance = currentProfitAmount;
   const affectsProfit = isProfitAffectingFinanceTransaction(normalizedType, category);
   const accountSnapshot = await getFinanceAccountSnapshotForCategory(category);
+  const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
 
   if (normalizedType === 'INCOME' || normalizedType === 'OPENING_BALANCE') {
     newBalance += amount;
@@ -67,6 +69,10 @@ export const addFinanceTransaction = async ({
       amount,
       description,
       created_at: now,
+      payment_method: 'TUNAI',
+      cash_account_id: cashAccount.id,
+      cash_account_code: cashAccount.code,
+      cash_account_name: cashAccount.name,
       ...accountSnapshot,
     });
 
@@ -120,6 +126,7 @@ export const recalculateFinance = async () => {
 
     for (const transaction of posTransactions) {
       const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES);
+      const cashAccount = await getCashOrBankAccountForPayment(transaction.payment_method);
       newAutoTransactions.push({
         id: crypto.randomUUID(),
         type: 'INCOME',
@@ -128,12 +135,17 @@ export const recalculateFinance = async () => {
         description: `Penjualan dari transaksi ${transaction.transaction_number}`,
         created_at: transaction.created_at,
         reference_id: transaction.id,
+        payment_method: transaction.payment_method,
+        cash_account_id: cashAccount.id,
+        cash_account_code: cashAccount.code,
+        cash_account_name: cashAccount.name,
         ...accountSnapshot,
       });
     }
 
     for (const stockPurchase of stockPurchases) {
       const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE);
+      const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
       newAutoTransactions.push({
         id: crypto.randomUUID(),
         type: 'EXPENSE',
@@ -142,6 +154,10 @@ export const recalculateFinance = async () => {
         description: `Beli Stok: ${stockPurchase.product_name} (${stockPurchase.quantity} pcs)`,
         created_at: stockPurchase.created_at,
         reference_id: stockPurchase.id,
+        payment_method: 'TUNAI',
+        cash_account_id: cashAccount.id,
+        cash_account_code: cashAccount.code,
+        cash_account_name: cashAccount.name,
         ...accountSnapshot,
       });
     }

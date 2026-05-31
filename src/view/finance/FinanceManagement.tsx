@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic, Select, Row, Col, Divider } from 'antd';
+import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic, Select, Row, Col, Divider, Empty } from 'antd';
 import { useFinance } from '@/hooks/useFinance';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useI18n } from '@/hooks/useI18n';
@@ -79,6 +79,53 @@ export default function FinanceManagement() {
       return acc;
     }, {});
   }, [filteredTransactions]);
+
+  const cashBankSummary = useMemo(() => {
+    const summaryMap = new Map<string, {
+      key: string;
+      label: string;
+      balance: number;
+      inflow: number;
+      outflow: number;
+      count: number;
+    }>();
+
+    transactions.forEach((transaction) => {
+      const cashAccountId = transaction.cash_account_id
+        ?? (transaction.account_type === 'ASSET' ? transaction.account_id : undefined);
+      const cashAccountCode = transaction.cash_account_code
+        ?? (transaction.account_type === 'ASSET' ? transaction.account_code : undefined);
+      const cashAccountName = transaction.cash_account_name
+        ?? (transaction.account_type === 'ASSET' ? transaction.account_name : undefined);
+
+      if (!cashAccountId || !cashAccountName) return;
+
+      const businessType = getFinanceTransactionBusinessType(transaction);
+      const signedAmount = businessType === 'EXPENSE'
+        ? -transaction.amount
+        : transaction.amount;
+      const existing = summaryMap.get(cashAccountId) ?? {
+        key: cashAccountId,
+        label: cashAccountCode ? `${cashAccountCode} - ${cashAccountName}` : cashAccountName,
+        balance: 0,
+        inflow: 0,
+        outflow: 0,
+        count: 0,
+      };
+
+      existing.balance += signedAmount;
+      if (signedAmount >= 0) {
+        existing.inflow += signedAmount;
+      } else {
+        existing.outflow += Math.abs(signedAmount);
+      }
+      existing.count += 1;
+      summaryMap.set(cashAccountId, existing);
+    });
+
+    return Array.from(summaryMap.values())
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [transactions]);
 
   const handleAddTransaction = async (values: { amount: number; category: string; description: string }) => {
     try {
@@ -380,6 +427,49 @@ export default function FinanceManagement() {
           </Col>
         </Row>
       }
+
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <Banknote size={18} />
+            <span>{t('finance.cashBankSummaryTitle')}</span>
+          </div>
+        }
+        className="shadow-sm"
+        styles={{ body: { padding: isMobile ? '12px' : undefined } }}
+      >
+        {cashBankSummary.length > 0 ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {cashBankSummary.map((item) => (
+              <div key={item.key} className="rounded-md border border-gray-100 bg-gray-50 p-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{item.label}</div>
+                    <div className="text-xs text-gray-500">
+                      {t('finance.cashBankTransactionCount', { count: item.count })}
+                    </div>
+                  </div>
+                  <Tag color={item.balance >= 0 ? 'green' : 'red'}>
+                    Rp {formatCurrency(item.balance)}
+                  </Tag>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded bg-white p-2">
+                    <div className="text-gray-500">{t('finance.cashBankInflow')}</div>
+                    <div className="font-semibold text-green-600">Rp {formatCurrency(item.inflow)}</div>
+                  </div>
+                  <div className="rounded bg-white p-2">
+                    <div className="text-gray-500">{t('finance.cashBankOutflow')}</div>
+                    <div className="font-semibold text-red-600">Rp {formatCurrency(item.outflow)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('finance.cashBankSummaryEmpty')} />
+        )}
+      </Card>
 
       <Card
         title={

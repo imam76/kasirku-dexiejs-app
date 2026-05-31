@@ -2,7 +2,7 @@ import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
 import type { StockPurchase } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
-import { postStockPurchaseJournal } from '@/services/generalLedgerService';
+import { getCashOrBankAccountForPayment, postStockPurchaseJournal } from '@/services/generalLedgerService';
 
 interface RecordStockPurchaseInput {
   productId: string;
@@ -55,6 +55,7 @@ export const recordStockPurchase = async ({
       amount: (currentFinanceBalance?.amount || 0) - totalCost,
       updated_at: createdAt,
     });
+    const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
 
     await db.financeTransactions.add({
       id: crypto.randomUUID(),
@@ -64,6 +65,10 @@ export const recordStockPurchase = async ({
       description,
       created_at: createdAt,
       reference_id: purchase.id,
+      payment_method: 'TUNAI',
+      cash_account_id: cashAccount.id,
+      cash_account_code: cashAccount.code,
+      cash_account_name: cashAccount.name,
       ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE),
     });
 

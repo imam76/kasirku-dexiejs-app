@@ -6,7 +6,7 @@ import { getCartItemOriginalPrice, getCartItemPrice, konversiSatuanProduk, norma
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
-import { postPosSaleJournal } from '@/services/generalLedgerService';
+import { getCashOrBankAccountForPayment, postPosSaleJournal } from '@/services/generalLedgerService';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -98,6 +98,7 @@ const recordProfit = async (
 const recordFinanceIncome = async (transaction: Transaction, createdAt: string) => {
   const currentFinanceBalance = await db.financeBalance.get('current');
   const newFinanceBalance = (currentFinanceBalance?.amount || 0) + transaction.total_amount;
+  const cashAccount = await getCashOrBankAccountForPayment(transaction.payment_method);
 
   await db.financeBalance.put({
     id: 'current',
@@ -113,6 +114,10 @@ const recordFinanceIncome = async (transaction: Transaction, createdAt: string) 
     description: `Penjualan dari transaksi ${transaction.transaction_number}`,
     created_at: createdAt,
     reference_id: transaction.id,
+    payment_method: transaction.payment_method,
+    cash_account_id: cashAccount.id,
+    cash_account_code: cashAccount.code,
+    cash_account_name: cashAccount.name,
     ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES),
   });
 };

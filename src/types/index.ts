@@ -1053,6 +1053,11 @@ export interface FinanceTransaction {
   account_code?: string;
   account_name?: string;
   account_type?: AccountType;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
 }
 
 export interface FinanceBalance {

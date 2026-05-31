@@ -19,6 +19,7 @@ import { isTransactionActive } from '@/utils/transactions';
 import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
 import { recalculateSalesInvoicePaymentStatus } from '@/services/salesDocumentService';
 import {
+  getCashOrBankAccountForPayment,
   postSalesReturnIssuedJournal,
   reverseSalesReturnJournal,
 } from '@/services/generalLedgerService';
@@ -370,6 +371,7 @@ const createRefundFinanceTransaction = async (
     amount: (currentBalance?.amount || 0) - refundAmount,
     updated_at: now,
   });
+  const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
 
   const financeTransactionId = crypto.randomUUID();
   await db.financeTransactions.add({
@@ -380,6 +382,10 @@ const createRefundFinanceTransaction = async (
     description: `Refund retur ${salesReturn.return_number} dari ${salesReturn.source_number}`,
     created_at: now,
     reference_id: salesReturn.id,
+    payment_method: 'TUNAI',
+    cash_account_id: cashAccount.id,
+    cash_account_code: cashAccount.code,
+    cash_account_name: cashAccount.name,
     ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES_REFUND),
   });
 
@@ -404,6 +410,7 @@ const reverseRefundFinanceTransaction = async (
     amount: (currentBalance?.amount || 0) + amount,
     updated_at: now,
   });
+  const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
 
   const reversalFinanceTransactionId = crypto.randomUUID();
   await db.financeTransactions.add({
@@ -414,6 +421,10 @@ const reverseRefundFinanceTransaction = async (
     description: `Pembalikan refund retur ${salesReturn.return_number}`,
     created_at: now,
     reference_id: salesReturn.id,
+    payment_method: 'TUNAI',
+    cash_account_id: cashAccount.id,
+    cash_account_code: cashAccount.code,
+    cash_account_name: cashAccount.name,
     ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES_REFUND),
   });
 
