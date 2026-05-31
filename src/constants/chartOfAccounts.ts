@@ -52,8 +52,10 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('sales-pos', '4000', 'Penjualan POS', 'REVENUE'),
   createAccountSeed('sales-invoice-revenue', '4010', 'Pendapatan Sales Invoice', 'REVENUE'),
   createAccountSeed('sales-return', '4020', 'Retur Penjualan', 'CONTRA_REVENUE'),
+  createAccountSeed('sales-discount', '4030', 'Diskon Penjualan', 'CONTRA_REVENUE'),
   createAccountSeed('cogs', '5000', 'HPP', 'EXPENSE'),
   createAccountSeed('stock-purchase', '5100', 'Pembelian Stok', 'EXPENSE'),
+  createAccountSeed('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE'),
   createAccountSeed('operational-expense', '6100', 'Beban Operasional', 'EXPENSE'),
   createAccountSeed('other-expense', '6900', 'Beban Lainnya', 'EXPENSE'),
 ];
@@ -262,6 +264,7 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     parent_template_account_id: 'cogs-group',
     mapping_key: FINANCE_CATEGORIES.STOCK_PURCHASE,
   }),
+  createTemplateLine('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE', { parent_template_account_id: 'cogs-group' }),
   createTemplateLine('operational-expense', '6000', 'Beban Operasional', 'EXPENSE', { is_postable: false }),
   createTemplateLine('salary-expense', '6010', 'Beban Gaji', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('rent-expense', '6020', 'Beban Sewa', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),

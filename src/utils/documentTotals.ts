@@ -26,6 +26,8 @@ export interface DocumentTotalBehaviorConfig {
 
 export interface DocumentTotalInput<TItem extends DocumentLineItemLike> {
   items: TItem[];
+  discountType?: PromoType;
+  discountValue?: number;
   discountAmount?: number;
   taxRate?: number;
   taxCalculationMode?: TaxCalculationMode;
@@ -39,6 +41,8 @@ export interface DocumentTotalInput<TItem extends DocumentLineItemLike> {
 export interface DocumentTotalResult<TItem extends DocumentLineItemLike> {
   items: TItem[];
   subtotal_amount?: number;
+  discount_type?: PromoType;
+  discount_value?: number;
   discount_amount?: number;
   tax_amount?: number;
   total_amount?: number;
@@ -59,8 +63,23 @@ const getLineDiscountAmount = (item: DocumentLineItemLike, lineBase: number) => 
   return normalizeMoney(Math.min(discountValue, lineBase));
 };
 
+const getDocumentDiscountAmount = (
+  discountType: PromoType,
+  discountValue: number,
+  subtotal: number,
+) => {
+  if (discountType === 'percent') {
+    const normalizedPercent = Math.min(100, normalizeMoney(discountValue));
+    return normalizeMoney(subtotal * (normalizedPercent / 100));
+  }
+
+  return normalizeMoney(Math.min(discountValue, subtotal));
+};
+
 export const calculateDocumentTotal = <TItem extends DocumentLineItemLike>({
   items,
+  discountType = 'fixed',
+  discountValue,
   discountAmount = 0,
   taxRate = 0,
   taxCalculationMode = 'EXCLUSIVE',
@@ -92,10 +111,9 @@ export const calculateDocumentTotal = <TItem extends DocumentLineItemLike>({
     };
   });
   const subtotal = lineItems.reduce((sum, item) => sum + (item.subtotal || 0), 0);
-  const normalizedDiscount = Math.min(
-    Math.max(0, Number(discountAmount || 0)),
-    subtotal,
-  );
+  const normalizedDiscountType = discountType ?? 'fixed';
+  const normalizedDiscountValue = normalizeMoney(Number(discountValue ?? discountAmount ?? 0));
+  const normalizedDiscount = getDocumentDiscountAmount(normalizedDiscountType, normalizedDiscountValue, subtotal);
   const normalizedRate = Math.max(0, Number(taxRate || 0));
 
   const lineTaxReadyItems = lineItems.map((item) => {
@@ -147,6 +165,8 @@ export const calculateDocumentTotal = <TItem extends DocumentLineItemLike>({
   return {
     items: lineTaxReadyItems,
     subtotal_amount: roundCurrency(subtotal),
+    discount_type: normalizedDiscountType,
+    discount_value: normalizedDiscountValue,
     discount_amount: roundCurrency(normalizedDiscount),
     tax_amount: roundCurrency(taxAmount),
     total_amount: roundCurrency(total),

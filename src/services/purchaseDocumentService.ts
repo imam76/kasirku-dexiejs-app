@@ -8,6 +8,7 @@ import type {
   PurchaseDocumentType,
 } from '@/types';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
+import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { getPurchaseReceiptStockQuantity } from '@/utils/purchaseDocuments/calculatePurchaseDocumentStockImpact';
 import { createPurchaseDocumentNumber } from '@/utils/purchaseDocuments/createPurchaseDocumentNumber';
 import {
@@ -40,12 +41,13 @@ const allowedConversions: Record<PurchaseDocumentType, PurchaseDocumentType[]> =
 };
 
 const buildDocumentSnapshot = async (input: Partial<PurchaseDocument>): Promise<Partial<PurchaseDocument>> => {
-  const [contact, tax, department, project, warehouse] = await Promise.all([
+  const [contact, tax, department, project, warehouse, discountAccountSnapshot] = await Promise.all([
     input.contact_id ? db.contacts.get(input.contact_id) : undefined,
     input.tax_id ? db.taxes.get(input.tax_id) : undefined,
     input.department_id ? db.departments.get(input.department_id) : undefined,
     input.project_id ? db.projects.get(input.project_id) : undefined,
     input.warehouse_id ? db.warehouses.get(input.warehouse_id) : undefined,
+    getDocumentDiscountAccountSnapshot('purchase', input.discount_account_id),
   ]);
   const contactSnapshot = createSupplierSnapshot(contact);
 
@@ -56,6 +58,7 @@ const buildDocumentSnapshot = async (input: Partial<PurchaseDocument>): Promise<
     ...createPurchaseDepartmentSnapshot(department),
     ...createPurchaseProjectSnapshot(project),
     ...createPurchaseWarehouseSnapshot(warehouse),
+    ...discountAccountSnapshot,
     supplier_name: contactSnapshot.supplier_name ?? input.supplier_name?.trim() ?? '',
   };
 };
@@ -95,7 +98,12 @@ const applyConfigBehavior = <T extends Partial<PurchaseDocument>>(
 
   if (!config.behavior.hasPricing) {
     delete nextDocument.subtotal_amount;
+    delete nextDocument.discount_type;
+    delete nextDocument.discount_value;
     delete nextDocument.discount_amount;
+    delete nextDocument.discount_account_id;
+    delete nextDocument.discount_account_code;
+    delete nextDocument.discount_account_name;
     delete nextDocument.tax_amount;
     delete nextDocument.total_amount;
   }
@@ -169,6 +177,8 @@ const calculatePurchaseTotal = async (
 
   return calculateDocumentTotal({
     items,
+    discountType: snapshot.discount_type,
+    discountValue: snapshot.discount_value,
     discountAmount: snapshot.discount_amount,
     taxRate: snapshot.tax_rate,
     taxCalculationMode: snapshot.tax_calculation_mode,
@@ -324,6 +334,7 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
   const products = await db.products.toArray();
   const productById = new Map(products.map((product) => [product.id, product]));
   const documentNumber = await createPurchaseDocumentNumber(targetConfig.numberPrefix, now);
+  const discountAccountSnapshot = await getDocumentDiscountAccountSnapshot('purchase', source.discount_account_id);
   const targetItems = normalizeDocumentItems(sourceItems.map((item) => {
     const product = productById.get(item.product_id);
 
@@ -356,6 +367,7 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
     void_reason: undefined,
     created_at: createdAt,
     updated_at: createdAt,
+    ...discountAccountSnapshot,
     ...total,
   } satisfies PurchaseDocument, targetConfig);
 

@@ -294,6 +294,22 @@ export class KasirkuDB extends Dexie {
       warehouses: 'id, name, code, is_active, created_at'
     });
 
+    this.version(25).stores({}).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+      const accounts = await chartOfAccounts.toArray();
+      const accountCodes = new Set(accounts.map((account) => account.code));
+      const accountIds = new Set(accounts.map((account) => account.id));
+      const missingAccounts = seed.accounts.filter((account) => {
+        return !accountCodes.has(account.code) && !accountIds.has(account.id);
+      });
+
+      if (missingAccounts.length > 0) {
+        await chartOfAccounts.bulkPut(missingAccounts);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

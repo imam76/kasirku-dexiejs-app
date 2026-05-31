@@ -144,6 +144,7 @@ const ACCOUNT_CANDIDATES = {
   salesPos: { ids: ['sales-pos', 'template-sales-pos'], codes: ['4000', '4010'] },
   salesInvoiceRevenue: { ids: ['sales-invoice-revenue', 'template-sales-invoice-revenue'], codes: ['4010', '4020'] },
   salesReturn: { ids: ['sales-return', 'template-sales-return'], codes: ['4020', '4100'] },
+  salesDiscount: { ids: ['sales-discount', 'template-sales-discount'], codes: ['4030', '4110'] },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
 } satisfies Record<string, AccountCandidate>;
 
@@ -734,9 +735,20 @@ export const postSalesInvoiceIssuedJournal = async (document: SalesDocument) => 
   const revenueAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.salesInvoiceRevenue, 'Pendapatan Sales Invoice');
   const totalAmount = amountOrZero(document.total_amount);
   const taxAmount = amountOrZero(document.tax_amount);
-  const revenueAmount = roundCurrency(totalAmount - taxAmount);
+  const discountAmount = amountOrZero(document.discount_amount);
+  const discountAccount = discountAmount > 0
+    ? getPostableAccount(
+      accounts,
+      document.discount_account_id
+        ? { ids: [document.discount_account_id, ...ACCOUNT_CANDIDATES.salesDiscount.ids], codes: ACCOUNT_CANDIDATES.salesDiscount.codes }
+        : ACCOUNT_CANDIDATES.salesDiscount,
+      'Diskon Penjualan',
+    )
+    : undefined;
+  const revenueAmount = roundCurrency(totalAmount - taxAmount + discountAmount);
   const lines: JournalLineDraft[] = [
     createDebitLine(receivableAccount, totalAmount, 'Piutang dari sales invoice', document.department_id, document.project_id),
+    discountAccount ? createDebitLine(discountAccount, discountAmount, 'Diskon sales invoice', document.department_id, document.project_id) : undefined,
     createCreditLine(revenueAccount, revenueAmount, 'Pendapatan sales invoice', document.department_id, document.project_id),
   ].filter((line): line is JournalLineDraft => Boolean(line));
 

@@ -1,9 +1,12 @@
-import { Card, InputNumber, Select } from 'antd';
+import { Card, InputNumber, Segmented, Select } from 'antd';
+import { useMemo } from 'react';
 import { Controller } from 'react-hook-form';
 import type { Control } from 'react-hook-form';
+import { useLiveQuery } from 'dexie-react-hooks';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import type { SalesDocument, Tax } from '@/types';
+import { db } from '@/lib/db';
+import type { PromoType, SalesDocument, Tax } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
@@ -13,8 +16,10 @@ interface DocumentSummaryProps {
   control: Control<SalesDocumentFormValues>;
   total: Pick<SalesDocument, 'subtotal_amount' | 'discount_amount' | 'tax_amount' | 'total_amount'>;
   taxes: Tax[];
-  discountAmount: number;
-  onDiscountChange: (value: number) => void;
+  discountType: PromoType;
+  discountValue: number;
+  onDiscountTypeChange: (value: PromoType) => void;
+  onDiscountValueChange: (value: number) => void;
   onTaxChange: (taxId?: string) => void;
 }
 
@@ -23,11 +28,26 @@ export const DocumentSummary = ({
   control,
   total,
   taxes,
-  discountAmount,
-  onDiscountChange,
+  discountType,
+  discountValue,
+  onDiscountTypeChange,
+  onDiscountValueChange,
   onTaxChange,
 }: DocumentSummaryProps) => {
   const { t } = useI18n();
+  const discountAccounts = useLiveQuery(
+    () => db.chartOfAccounts
+      .where('type')
+      .equals('CONTRA_REVENUE')
+      .filter((account) => account.is_active && account.is_postable)
+      .toArray(),
+    [],
+    [],
+  );
+  const accountOptions = useMemo(() => discountAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.code} - ${account.name}`,
+  })), [discountAccounts]);
 
   if (!config.behavior.hasPricing) return null;
 
@@ -38,13 +58,49 @@ export const DocumentSummary = ({
           <span className="text-sm text-gray-500">{t('salesDocuments.field.subtotal')}</span>
           <span className="font-medium text-gray-900">Rp {formatCurrency(total.subtotal_amount || 0)}</span>
         </div>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <span className="text-sm text-gray-500">{t('salesDocuments.field.documentDiscount')}</span>
-          <InputNumber
-            min={0}
-            className="w-40"
-            value={discountAmount}
-            onChange={(value) => onDiscountChange(Number(value || 0))}
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Segmented
+              size="small"
+              value={discountType}
+              options={[
+                { value: 'fixed', label: t('salesDocuments.discountType.fixed') },
+                { value: 'percent', label: t('salesDocuments.discountType.percent') },
+              ]}
+              onChange={(value) => onDiscountTypeChange(value as PromoType)}
+            />
+            <InputNumber
+              min={0}
+              max={discountType === 'percent' ? 100 : undefined}
+              className="w-full sm:w-32"
+              value={discountValue}
+              addonAfter={discountType === 'percent' ? '%' : undefined}
+              onChange={(value) => onDiscountValueChange(Number(value || 0))}
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm text-gray-500">{t('salesDocuments.field.discountAmount')}</span>
+          <span className="font-medium text-gray-900">Rp {formatCurrency(total.discount_amount || 0)}</span>
+        </div>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <span className="text-sm text-gray-500">{t('salesDocuments.field.discountAccount')}</span>
+          <Controller
+            name="discount_account_id"
+            control={control}
+            render={({ field }) => (
+              <Select
+                className="w-full sm:w-56"
+                allowClear
+                showSearch={{ optionFilterProp: 'label' }}
+                placeholder={t('salesDocuments.placeholder.discountAccount')}
+                value={field.value as string | undefined}
+                onBlur={field.onBlur}
+                options={accountOptions}
+                onChange={field.onChange}
+              />
+            )}
           />
         </div>
         {config.behavior.hasTax && (

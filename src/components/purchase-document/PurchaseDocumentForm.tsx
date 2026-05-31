@@ -1,13 +1,15 @@
 import { useCallback, useMemo } from 'react';
-import { Button, Card, DatePicker, Input, InputNumber, Select } from 'antd';
+import { Button, Card, DatePicker, Input, InputNumber, Segmented, Select } from 'antd';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import type { DefaultValues } from 'react-hook-form';
 import type { Dayjs } from 'dayjs';
+import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
-import type { Contact, Department, Product, Project, PurchaseDocument, PurchaseDocumentItem, Tax, Warehouse } from '@/types';
+import { db } from '@/lib/db';
+import type { Contact, Department, Product, Project, PromoType, PurchaseDocument, PurchaseDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { formatCurrency } from '@/utils/formatters';
 import { PurchaseDocumentLineItems } from './PurchaseDocumentLineItems';
@@ -47,6 +49,8 @@ const toFormInitialValues = (
   if (!document) {
     const values: DefaultValues<PurchaseDocumentFormValues> = {
       document_date: dayjs(),
+      discount_type: 'fixed',
+      discount_value: 0,
       discount_amount: 0,
       items: [],
     };
@@ -65,6 +69,8 @@ const toFormInitialValues = (
     required_date: document.required_date ? dayjs(document.required_date) : undefined,
     quotation_due_date: document.quotation_due_date ? dayjs(document.quotation_due_date) : undefined,
     due_date: document.due_date ? dayjs(document.due_date) : undefined,
+    discount_type: document.discount_type ?? 'fixed',
+    discount_value: document.discount_value ?? document.discount_amount ?? 0,
     discount_amount: document.discount_amount ?? 0,
   };
 
@@ -129,8 +135,22 @@ export const PurchaseDocumentForm = ({
   });
   const watchedItems = useWatch({ control, name: 'items' });
   const items = useMemo(() => watchedItems ?? [], [watchedItems]);
-  const discountAmount = useWatch({ control, name: 'discount_amount' }) ?? 0;
+  const discountType = useWatch({ control, name: 'discount_type' }) ?? 'fixed';
+  const discountValue = useWatch({ control, name: 'discount_value' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
+  const discountAccounts = useLiveQuery(
+    () => db.chartOfAccounts
+      .where('type')
+      .equals('EXPENSE')
+      .filter((account) => account.is_active && account.is_postable)
+      .toArray(),
+    [],
+    [],
+  );
+  const discountAccountOptions = useMemo(() => discountAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.code} - ${account.name}`,
+  })), [discountAccounts]);
   const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
   const initialTaxSnapshot = selectedTaxId && selectedTaxId === initialData?.document?.tax_id
     ? initialData.document
@@ -143,7 +163,8 @@ export const PurchaseDocumentForm = ({
   const total = useMemo(
     () => calculateDocumentTotal({
       items,
-      discountAmount,
+      discountType,
+      discountValue,
       taxRate,
       taxCalculationMode,
       taxId,
@@ -152,7 +173,7 @@ export const PurchaseDocumentForm = ({
       taxes,
       config,
     }),
-    [config, discountAmount, items, taxCalculationMode, taxCode, taxId, taxName, taxRate, taxes],
+    [config, discountType, discountValue, items, taxCalculationMode, taxCode, taxId, taxName, taxRate, taxes],
   );
 
   const handleItemsChange = useCallback((nextItems: PurchaseDocumentItem[]) => {
@@ -180,7 +201,9 @@ export const PurchaseDocumentForm = ({
         required_date: toIsoDate(values.required_date),
         quotation_due_date: toIsoDate(values.quotation_due_date),
         due_date: toIsoDate(values.due_date),
-        discount_amount: Number(discountAmount || 0),
+        discount_type: discountType,
+        discount_value: Number(discountValue || 0),
+        discount_amount: total.discount_amount,
       },
       items: completedItems,
     });
@@ -406,17 +429,47 @@ export const PurchaseDocumentForm = ({
               <span className="text-sm text-gray-500">{t('purchaseDocuments.field.subtotal')}</span>
               <span className="font-medium text-gray-900">Rp {formatCurrency(total.subtotal_amount || 0)}</span>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <span className="text-sm text-gray-500">{t('purchaseDocuments.field.documentDiscount')}</span>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <Segmented
+                  size="small"
+                  value={discountType}
+                  options={[
+                    { value: 'fixed', label: t('purchaseDocuments.discountType.fixed') },
+                    { value: 'percent', label: t('purchaseDocuments.discountType.percent') },
+                  ]}
+                  onChange={(value) => setValue('discount_type', value as PromoType, { shouldDirty: true, shouldValidate: true })}
+                />
+                <InputNumber
+                  min={0}
+                  max={discountType === 'percent' ? 100 : undefined}
+                  className="w-full sm:w-32"
+                  value={Number(discountValue || 0)}
+                  addonAfter={discountType === 'percent' ? '%' : undefined}
+                  onChange={(value) => setValue('discount_value', Number(value || 0), { shouldDirty: true, shouldValidate: true })}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-500">{t('purchaseDocuments.field.discountAmount')}</span>
+              <span className="font-medium text-gray-900">Rp {formatCurrency(total.discount_amount || 0)}</span>
+            </div>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <span className="text-sm text-gray-500">{t('purchaseDocuments.field.discountAccount')}</span>
               <Controller
-                name="discount_amount"
+                name="discount_account_id"
                 control={control}
                 render={({ field }) => (
-                  <InputNumber
-                    min={0}
-                    className="w-40"
-                    value={Number(field.value || 0)}
-                    onChange={(value) => field.onChange(Number(value || 0))}
+                  <Select
+                    className="w-full sm:w-56"
+                    allowClear
+                    showSearch={{ optionFilterProp: 'label' }}
+                    placeholder={t('purchaseDocuments.placeholder.discountAccount')}
+                    value={field.value}
+                    onBlur={field.onBlur}
+                    options={discountAccountOptions}
+                    onChange={field.onChange}
                   />
                 )}
               />

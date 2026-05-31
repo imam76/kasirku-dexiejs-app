@@ -278,7 +278,12 @@ export interface SalesDocument {
   source_document_number?: string;
   source_document_type?: SalesDocumentType;
   subtotal_amount?: number;
+  discount_type?: PromoType;
+  discount_value?: number;
   discount_amount?: number;
+  discount_account_id?: string;
+  discount_account_code?: string;
+  discount_account_name?: string;
   tax_id?: string;
   tax_name?: string;
   tax_code?: string;
@@ -405,7 +410,12 @@ export interface PurchaseDocument {
   source_document_number?: string;
   source_document_type?: PurchaseDocumentType;
   subtotal_amount?: number;
+  discount_type?: PromoType;
+  discount_value?: number;
   discount_amount?: number;
+  discount_account_id?: string;
+  discount_account_code?: string;
+  discount_account_name?: string;
   tax_id?: string;
   tax_name?: string;
   tax_code?: string;

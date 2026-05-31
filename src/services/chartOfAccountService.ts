@@ -160,6 +160,17 @@ export const ensureAccountingDefaults = async () => {
   ], async () => {
     if (await db.chartOfAccounts.count() === 0) {
       await db.chartOfAccounts.bulkPut(seed.accounts);
+    } else {
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountCodes = new Set(accounts.map((account) => account.code));
+      const accountIds = new Set(accounts.map((account) => account.id));
+      const missingAccounts = seed.accounts.filter((account) => {
+        return !accountCodes.has(account.code) && !accountIds.has(account.id);
+      });
+
+      if (missingAccounts.length > 0) {
+        await db.chartOfAccounts.bulkPut(missingAccounts);
+      }
     }
 
     if (await db.financeAccountMappings.count() === 0) {

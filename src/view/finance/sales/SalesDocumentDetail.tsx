@@ -43,6 +43,17 @@ const paymentStatusColor: Record<SalesInvoicePaymentStatus, { background: string
   PAID: { background: '#DCFCE7', color: '#166534', border: '#BBF7D0' },
 };
 
+const getDocumentDiscountLabel = (document: SalesDocument) => {
+  const discountType = document.discount_type ?? 'fixed';
+  const discountValue = Number(document.discount_value ?? document.discount_amount ?? 0);
+
+  if (discountType === 'percent') {
+    return `${formatCurrency(discountValue)}%`;
+  }
+
+  return `Rp ${formatCurrency(discountValue)}`;
+};
+
 interface SalesDocumentDetailProps {
   documentId: string;
 }
@@ -584,6 +595,20 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               </div>
               <div className="flex justify-between py-1.5 text-[13px]">
                 <span className="text-gray-500">{t('salesDocuments.field.documentDiscount')}</span>
+                <span className="font-medium text-gray-400">
+                  {getDocumentDiscountLabel(document)} · Rp {formatCurrency(document.discount_amount || 0)}
+                </span>
+              </div>
+              {document.discount_account_code && document.discount_account_name && (
+                <div className="flex justify-between gap-4 py-1.5 text-[13px]">
+                  <span className="text-gray-500">{t('salesDocuments.field.discountAccount')}</span>
+                  <span className="text-right font-medium text-gray-400">
+                    {document.discount_account_code} - {document.discount_account_name}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between py-1.5 text-[13px]">
+                <span className="text-gray-500">{t('salesDocuments.field.discountAmount')}</span>
                 <span className="font-medium text-gray-400">Rp {formatCurrency(document.discount_amount || 0)}</span>
               </div>
               {config.behavior.hasTax && (

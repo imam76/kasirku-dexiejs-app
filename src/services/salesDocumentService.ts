@@ -17,6 +17,7 @@ import type {
   SalesDocumentType,
 } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
+import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { createSalesDocumentNumber } from '@/utils/salesDocuments/createSalesDocumentNumber';
 import {
@@ -59,12 +60,13 @@ const salesDocumentTables = [
 ];
 
 const buildDocumentSnapshot = async (input: Partial<SalesDocument>): Promise<Partial<SalesDocument>> => {
-  const [contact, tax, department, project, warehouse] = await Promise.all([
+  const [contact, tax, department, project, warehouse, discountAccountSnapshot] = await Promise.all([
     input.contact_id ? db.contacts.get(input.contact_id) : undefined,
     input.tax_id ? db.taxes.get(input.tax_id) : undefined,
     input.department_id ? db.departments.get(input.department_id) : undefined,
     input.project_id ? db.projects.get(input.project_id) : undefined,
     input.warehouse_id ? db.warehouses.get(input.warehouse_id) : undefined,
+    getDocumentDiscountAccountSnapshot('sales', input.discount_account_id),
   ]);
 
   return {
@@ -74,6 +76,7 @@ const buildDocumentSnapshot = async (input: Partial<SalesDocument>): Promise<Par
     ...createDepartmentSnapshot(department),
     ...createProjectSnapshot(project),
     ...createWarehouseSnapshot(warehouse),
+    ...discountAccountSnapshot,
     customer_name: createContactSnapshot(contact).customer_name ?? input.customer_name?.trim() ?? '',
   };
 };
@@ -183,6 +186,8 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
   const normalizedItems = normalizeDocumentItems(items, documentId, createdAt);
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: normalizedItems,
+    discountType: snapshot.discount_type,
+    discountValue: snapshot.discount_value,
     discountAmount: snapshot.discount_amount,
     taxRate: snapshot.tax_rate,
     taxCalculationMode: snapshot.tax_calculation_mode,
@@ -237,6 +242,8 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
   const normalizedItems = normalizeDocumentItems(items, id, existing.created_at);
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: normalizedItems,
+    discountType: snapshot.discount_type,
+    discountValue: snapshot.discount_value,
     discountAmount: snapshot.discount_amount,
     taxRate: snapshot.tax_rate,
     taxCalculationMode: snapshot.tax_calculation_mode,
@@ -329,6 +336,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
   const targetId = crypto.randomUUID();
   const sourceItems = await db.salesDocumentItems.where('document_id').equals(sourceId).toArray();
   const documentNumber = await createSalesDocumentNumber(targetConfig.numberPrefix, now);
+  const discountAccountSnapshot = await getDocumentDiscountAccountSnapshot('sales', source.discount_account_id);
   const targetItems = normalizeDocumentItems(sourceItems.map((item) => ({
     ...item,
     id: crypto.randomUUID(),
@@ -336,6 +344,8 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
   })), targetId, createdAt);
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: targetItems,
+    discountType: source.discount_type,
+    discountValue: source.discount_value,
     discountAmount: source.discount_amount,
     taxRate: source.tax_rate,
     taxCalculationMode: source.tax_calculation_mode,
@@ -362,6 +372,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     void_reason: undefined,
     created_at: createdAt,
     updated_at: createdAt,
+    ...discountAccountSnapshot,
     ...total,
   } satisfies SalesDocument, targetConfig);
 

@@ -6,7 +6,7 @@ import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import type { Contact, Department, Product, Project, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
+import type { Contact, Department, Product, Project, PromoType, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { DocumentHeader } from './DocumentHeader';
 import { DocumentLineItems } from './DocumentLineItems';
@@ -43,6 +43,8 @@ const toFormInitialValues = (
   if (!document) {
     const values: DefaultValues<SalesDocumentFormValues> = {
       document_date: dayjs(),
+      discount_type: 'fixed',
+      discount_value: 0,
       discount_amount: 0,
       items: [],
     };
@@ -59,6 +61,8 @@ const toFormInitialValues = (
     document_date: document.document_date ? dayjs(document.document_date) : undefined,
     expired_at: document.expired_at ? dayjs(document.expired_at) : undefined,
     due_date: document.due_date ? dayjs(document.due_date) : undefined,
+    discount_type: document.discount_type ?? 'fixed',
+    discount_value: document.discount_value ?? document.discount_amount ?? 0,
     discount_amount: document.discount_amount ?? 0,
   };
 
@@ -111,7 +115,8 @@ export const SalesDocumentForm = ({
   });
   const watchedItems = useWatch({ control, name: 'items' });
   const items = useMemo(() => watchedItems ?? [], [watchedItems]);
-  const discountAmount = useWatch({ control, name: 'discount_amount' }) ?? 0;
+  const discountType = useWatch({ control, name: 'discount_type' }) ?? 'fixed';
+  const discountValue = useWatch({ control, name: 'discount_value' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
   const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
   const initialTaxSnapshot = selectedTaxId && selectedTaxId === initialData?.document?.tax_id
@@ -126,7 +131,8 @@ export const SalesDocumentForm = ({
   const total = useMemo(
     () => calculateDocumentTotal({
       items,
-      discountAmount,
+      discountType,
+      discountValue,
       taxRate,
       taxCalculationMode,
       taxId,
@@ -135,7 +141,7 @@ export const SalesDocumentForm = ({
       taxes,
       config,
     }),
-    [config, discountAmount, items, taxCalculationMode, taxCode, taxId, taxName, taxRate, taxes],
+    [config, discountType, discountValue, items, taxCalculationMode, taxCode, taxId, taxName, taxRate, taxes],
   );
   const handleItemsChange = useCallback((nextItems: SalesDocumentItem[]) => {
     setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
@@ -160,7 +166,9 @@ export const SalesDocumentForm = ({
         document_date: toIsoDate(values.document_date),
         expired_at: toIsoDate(values.expired_at),
         due_date: toIsoDate(values.due_date),
-        discount_amount: discountAmount,
+        discount_type: discountType,
+        discount_value: Number(discountValue || 0),
+        discount_amount: total.discount_amount,
       },
       items: completedItems,
     });
@@ -196,8 +204,10 @@ export const SalesDocumentForm = ({
         control={control}
         total={total}
         taxes={taxes}
-        discountAmount={discountAmount}
-        onDiscountChange={(value) => setValue('discount_amount', value, { shouldDirty: true, shouldValidate: true })}
+        discountType={discountType}
+        discountValue={discountValue}
+        onDiscountTypeChange={(value: PromoType) => setValue('discount_type', value, { shouldDirty: true, shouldValidate: true })}
+        onDiscountValueChange={(value) => setValue('discount_value', value, { shouldDirty: true, shouldValidate: true })}
         onTaxChange={handleTaxChange}
       />
       <div className="flex w-full justify-end gap-2">
