@@ -913,7 +913,7 @@ Karena repo sudah punya `accounts-payable` seed di COA, AP bisa masuk fase berik
 Jalankan:
 
 ```bash
-npm run build
+bun run build
 ```
 
 Jika build terlalu berat atau ada error unrelated, minimal jalankan targeted TypeScript/lint sesuai file yang disentuh dan catat error yang pre-existing.
