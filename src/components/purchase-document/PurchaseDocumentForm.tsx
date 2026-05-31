@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from 'react';
-import { Button, Card, DatePicker, Input, InputNumber, Segmented, Select } from 'antd';
+import { useCallback, useMemo, useState } from 'react';
+import { Button, Card, DatePicker, Input, InputNumber, Segmented, Select, Tooltip } from 'antd';
+import { Settings } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import type { DefaultValues } from 'react-hook-form';
 import type { Dayjs } from 'dayjs';
@@ -8,8 +9,10 @@ import dayjs from '@/lib/dayjs';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
+import { DocumentDiscountSettingsModal } from '@/components/DocumentDiscountSettingsModal';
 import { db } from '@/lib/db';
 import type { Contact, Department, Product, Project, PromoType, PurchaseDocument, PurchaseDocumentItem, Tax, Warehouse } from '@/types';
+import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { formatCurrency } from '@/utils/formatters';
 import { PurchaseDocumentLineItems } from './PurchaseDocumentLineItems';
@@ -123,6 +126,7 @@ export const PurchaseDocumentForm = ({
   const { t } = useI18n();
   const documentId = initialData?.document?.id ?? 'draft';
   const warehouseHelperKey = warehouseHelperKeysByType[config.type];
+  const [isDiscountSettingsOpen, setIsDiscountSettingsOpen] = useState(false);
   const {
     control,
     handleSubmit,
@@ -151,6 +155,10 @@ export const PurchaseDocumentForm = ({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [discountAccounts]);
+  const defaultDiscountAccount = useMemo(
+    () => getDefaultDocumentDiscountAccount('purchase', discountAccounts),
+    [discountAccounts],
+  );
   const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
   const initialTaxSnapshot = selectedTaxId && selectedTaxId === initialData?.document?.tax_id
     ? initialData.document
@@ -449,31 +457,37 @@ export const PurchaseDocumentForm = ({
                   addonAfter={discountType === 'percent' ? '%' : undefined}
                   onChange={(value) => setValue('discount_value', Number(value || 0), { shouldDirty: true, shouldValidate: true })}
                 />
+                <Tooltip title={t('purchaseDocuments.field.discountAccount')}>
+                  <Button
+                    type="default"
+                    icon={<Settings size={16} />}
+                    aria-label={t('purchaseDocuments.field.discountAccount')}
+                    onClick={() => setIsDiscountSettingsOpen(true)}
+                  />
+                </Tooltip>
               </div>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-gray-500">{t('purchaseDocuments.field.discountAmount')}</span>
               <span className="font-medium text-gray-900">Rp {formatCurrency(total.discount_amount || 0)}</span>
             </div>
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-              <span className="text-sm text-gray-500">{t('purchaseDocuments.field.discountAccount')}</span>
-              <Controller
-                name="discount_account_id"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    className="w-full sm:w-56"
-                    allowClear
-                    showSearch={{ optionFilterProp: 'label' }}
-                    placeholder={t('purchaseDocuments.placeholder.discountAccount')}
-                    value={field.value}
-                    onBlur={field.onBlur}
-                    options={discountAccountOptions}
-                    onChange={field.onChange}
-                  />
-                )}
-              />
-            </div>
+            <Controller
+              name="discount_account_id"
+              control={control}
+              render={({ field }) => (
+                <DocumentDiscountSettingsModal
+                  open={isDiscountSettingsOpen}
+                  title={t('purchaseDocuments.field.documentDiscount')}
+                  accountLabel={t('purchaseDocuments.field.discountAccount')}
+                  accountPlaceholder={t('purchaseDocuments.placeholder.discountAccount')}
+                  accountValue={field.value}
+                  defaultAccountValue={defaultDiscountAccount?.id}
+                  accountOptions={discountAccountOptions}
+                  onAccountChange={field.onChange}
+                  onClose={() => setIsDiscountSettingsOpen(false)}
+                />
+              )}
+            />
             {config.behavior.hasTax && (
               <>
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

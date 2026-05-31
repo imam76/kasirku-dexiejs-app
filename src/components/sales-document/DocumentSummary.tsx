@@ -1,12 +1,15 @@
-import { Card, InputNumber, Segmented, Select } from 'antd';
-import { useMemo } from 'react';
+import { Button, Card, InputNumber, Segmented, Select, Tooltip } from 'antd';
+import { Settings } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import type { Control } from 'react-hook-form';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
+import { DocumentDiscountSettingsModal } from '@/components/DocumentDiscountSettingsModal';
 import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import type { PromoType, SalesDocument, Tax } from '@/types';
+import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { formatCurrency } from '@/utils/formatters';
 import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
@@ -35,6 +38,7 @@ export const DocumentSummary = ({
   onTaxChange,
 }: DocumentSummaryProps) => {
   const { t } = useI18n();
+  const [isDiscountSettingsOpen, setIsDiscountSettingsOpen] = useState(false);
   const discountAccounts = useLiveQuery(
     () => db.chartOfAccounts
       .where('type')
@@ -48,6 +52,10 @@ export const DocumentSummary = ({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [discountAccounts]);
+  const defaultDiscountAccount = useMemo(
+    () => getDefaultDocumentDiscountAccount('sales', discountAccounts),
+    [discountAccounts],
+  );
 
   if (!config.behavior.hasPricing) return null;
 
@@ -78,31 +86,37 @@ export const DocumentSummary = ({
               addonAfter={discountType === 'percent' ? '%' : undefined}
               onChange={(value) => onDiscountValueChange(Number(value || 0))}
             />
+            <Tooltip title={t('salesDocuments.field.discountAccount')}>
+              <Button
+                type="default"
+                icon={<Settings size={16} />}
+                aria-label={t('salesDocuments.field.discountAccount')}
+                onClick={() => setIsDiscountSettingsOpen(true)}
+              />
+            </Tooltip>
           </div>
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-sm text-gray-500">{t('salesDocuments.field.discountAmount')}</span>
           <span className="font-medium text-gray-900">Rp {formatCurrency(total.discount_amount || 0)}</span>
         </div>
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <span className="text-sm text-gray-500">{t('salesDocuments.field.discountAccount')}</span>
-          <Controller
-            name="discount_account_id"
-            control={control}
-            render={({ field }) => (
-              <Select
-                className="w-full sm:w-56"
-                allowClear
-                showSearch={{ optionFilterProp: 'label' }}
-                placeholder={t('salesDocuments.placeholder.discountAccount')}
-                value={field.value as string | undefined}
-                onBlur={field.onBlur}
-                options={accountOptions}
-                onChange={field.onChange}
-              />
-            )}
-          />
-        </div>
+        <Controller
+          name="discount_account_id"
+          control={control}
+          render={({ field }) => (
+            <DocumentDiscountSettingsModal
+              open={isDiscountSettingsOpen}
+              title={t('salesDocuments.field.documentDiscount')}
+              accountLabel={t('salesDocuments.field.discountAccount')}
+              accountPlaceholder={t('salesDocuments.placeholder.discountAccount')}
+              accountValue={field.value as string | undefined}
+              defaultAccountValue={defaultDiscountAccount?.id}
+              accountOptions={accountOptions}
+              onAccountChange={field.onChange}
+              onClose={() => setIsDiscountSettingsOpen(false)}
+            />
+          )}
+        />
         {config.behavior.hasTax && (
           <>
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

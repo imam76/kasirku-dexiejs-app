@@ -34,6 +34,15 @@ const isAllowedAccount = (account: ChartOfAccount | undefined, purpose: Document
   );
 };
 
+export const getDefaultDocumentDiscountAccount = (
+  purpose: DocumentDiscountPurpose,
+  accounts: ChartOfAccount[],
+) => {
+  return defaultAccountIdsByPurpose[purpose]
+    .map((id) => accounts.find((account) => account.id === id))
+    .find((account) => isAllowedAccount(account, purpose));
+};
+
 export const getDocumentDiscountAccountSnapshot = async (
   purpose: DocumentDiscountPurpose,
   accountId?: string,
@@ -47,9 +56,7 @@ export const getDocumentDiscountAccountSnapshot = async (
     }
   }
 
-  const defaultAccount = defaultAccountIdsByPurpose[purpose]
-    .map((id) => accounts.find((account) => account.id === id))
-    .find((account) => isAllowedAccount(account, purpose));
+  const defaultAccount = getDefaultDocumentDiscountAccount(purpose, accounts);
 
   return defaultAccount ? toSnapshot(defaultAccount) : {};
 };
