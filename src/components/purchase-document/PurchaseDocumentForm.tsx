@@ -6,7 +6,7 @@ import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
-import type { Contact, Department, Product, Project, PurchaseDocument, PurchaseDocumentItem, Tax } from '@/types';
+import type { Contact, Department, Product, Project, PurchaseDocument, PurchaseDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { formatCurrency } from '@/utils/formatters';
 import { PurchaseDocumentLineItems } from './PurchaseDocumentLineItems';
@@ -21,6 +21,7 @@ interface PurchaseDocumentFormProps {
   taxes: Tax[];
   departments: Department[];
   projects: Project[];
+  warehouses: Warehouse[];
   products: Product[];
   onSubmit: (input: { document: Partial<PurchaseDocument>; items: PurchaseDocumentItem[] }) => Promise<void>;
   onCancel?: () => void;
@@ -98,6 +99,7 @@ export const PurchaseDocumentForm = ({
   taxes,
   departments,
   projects,
+  warehouses,
   products,
   onSubmit,
   onCancel,
@@ -335,13 +337,26 @@ export const PurchaseDocumentForm = ({
         <div className={fieldContainerClassName}>
           <label className={labelClassName}>{t('purchaseDocuments.field.warehouse')}</label>
           <Controller
-            name="warehouse_name"
+            name="warehouse_id"
             control={control}
             render={({ field }) => (
-              <Input
-                value={field.value ?? ''}
+              <Select
+                allowClear
+                showSearch={{ optionFilterProp: 'label' }}
+                className="w-full"
+                value={field.value}
+                placeholder={t('purchaseDocuments.placeholder.warehouse')}
+                options={warehouses.map((warehouse) => ({
+                  value: warehouse.id,
+                  label: warehouse.code ? `${warehouse.code} - ${warehouse.name}` : warehouse.name,
+                }))}
                 onBlur={field.onBlur}
-                onChange={field.onChange}
+                onChange={(warehouseId) => {
+                  field.onChange(warehouseId);
+                  const warehouse = warehouses.find((candidate) => candidate.id === warehouseId);
+                  setValue('warehouse_name', warehouse?.name, { shouldDirty: true });
+                  setValue('warehouse_code', warehouse?.code, { shouldDirty: true });
+                }}
               />
             )}
           />

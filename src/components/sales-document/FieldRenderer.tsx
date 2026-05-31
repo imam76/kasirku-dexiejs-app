@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { Dayjs } from 'dayjs';
 import { Controller } from 'react-hook-form';
 import type { Control, FieldErrors, FieldPath, UseFormSetValue } from 'react-hook-form';
-import type { Contact, Department, Project, SalesInvoicePaymentStatus, Tax } from '@/types';
+import type { Contact, Department, Project, SalesInvoicePaymentStatus, Tax, Warehouse } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { salesInvoicePaymentStatusLabelKeys, taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
@@ -30,7 +30,7 @@ const FieldContainer = ({ label, required, error, className, children }: FieldCo
 interface FieldRendererProps {
   name: string;
   label: string;
-  type: 'contact' | 'text' | 'date' | 'textarea' | 'tax' | 'department' | 'project' | 'paymentStatus';
+  type: 'contact' | 'text' | 'date' | 'textarea' | 'tax' | 'department' | 'project' | 'warehouse' | 'paymentStatus';
   required?: boolean;
   control: Control<SalesDocumentFormValues>;
   errors: FieldErrors<SalesDocumentFormValues>;
@@ -39,6 +39,7 @@ interface FieldRendererProps {
   taxes: Tax[];
   departments: Department[];
   projects: Project[];
+  warehouses: Warehouse[];
 }
 
 export const FieldRenderer = ({
@@ -53,6 +54,7 @@ export const FieldRenderer = ({
   taxes,
   departments,
   projects,
+  warehouses,
 }: FieldRendererProps) => {
   const { t } = useI18n();
   const fieldName = name as FieldPath<SalesDocumentFormValues>;
@@ -172,6 +174,38 @@ export const FieldRenderer = ({
                 label: project.code ? `${project.code} - ${project.name}` : project.name,
               }))}
               onChange={field.onChange}
+            />
+          )}
+        />
+      </FieldContainer>
+    );
+  }
+
+  if (type === 'warehouse') {
+    return (
+      <FieldContainer label={label} required={required} error={error}>
+        <Controller
+          name={fieldName}
+          control={control}
+          rules={rules}
+          render={({ field }) => (
+            <Select
+              style={{ width: '100%' }}
+              allowClear
+              showSearch={{ optionFilterProp: 'label' }}
+              placeholder={t('salesDocuments.placeholder.warehouse')}
+              value={field.value as string | undefined}
+              onBlur={field.onBlur}
+              options={warehouses.map((warehouse) => ({
+                value: warehouse.id,
+                label: warehouse.code ? `${warehouse.code} - ${warehouse.name}` : warehouse.name,
+              }))}
+              onChange={(warehouseId) => {
+                field.onChange(warehouseId);
+                const warehouse = warehouses.find((candidate) => candidate.id === warehouseId);
+                setValue('warehouse_name', warehouse?.name, { shouldDirty: true });
+                setValue('warehouse_code', warehouse?.code, { shouldDirty: true });
+              }}
             />
           )}
         />

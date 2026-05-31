@@ -193,6 +193,18 @@ export interface Contact {
   updated_at: string;
 }
 
+export interface Warehouse {
+  id: string;
+  name: string;
+  code?: string;
+  address?: string;
+  phone?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Department {
   id: string;
   name: string;
@@ -259,6 +271,8 @@ export interface SalesDocument {
   document_date: string;
   expired_at?: string;
   due_date?: string;
+  warehouse_id?: string;
+  warehouse_code?: string;
   warehouse_name?: string;
   source_document_id?: string;
   source_document_number?: string;
@@ -384,6 +398,8 @@ export interface PurchaseDocument {
   required_date?: string;
   quotation_due_date?: string;
   due_date?: string;
+  warehouse_id?: string;
+  warehouse_code?: string;
   warehouse_name?: string;
   source_document_id?: string;
   source_document_number?: string;

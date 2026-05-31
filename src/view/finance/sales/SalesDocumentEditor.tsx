@@ -24,6 +24,7 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
     taxes,
     departments,
     projects,
+    warehouses,
     createDocument,
     updateDocument,
     isSubmitting,
@@ -75,6 +76,7 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
         taxes={taxes}
         departments={departments}
         projects={projects}
+        warehouses={warehouses}
         submitting={isSubmitting}
         onCancel={() => {
           if (!document) {

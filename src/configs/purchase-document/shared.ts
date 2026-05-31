@@ -11,7 +11,7 @@ export const purchaseTheme = {
 export const baseHeaderFields: PurchaseDocumentConfig['headerFields'] = [
   { name: 'contact_id', labelKey: 'purchaseDocuments.field.supplier', type: 'contact' },
   { name: 'document_date', labelKey: 'purchaseDocuments.field.documentDate', type: 'date', required: true },
-  { name: 'warehouse_name', labelKey: 'purchaseDocuments.field.warehouse', type: 'text' },
+  { name: 'warehouse_id', labelKey: 'purchaseDocuments.field.warehouse', type: 'warehouse' },
   { name: 'department_id', labelKey: 'purchaseDocuments.field.department', type: 'department' },
   { name: 'project_id', labelKey: 'purchaseDocuments.field.project', type: 'project' },
   { name: 'notes', labelKey: 'purchaseDocuments.field.notes', type: 'textarea' },

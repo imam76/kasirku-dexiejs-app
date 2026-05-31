@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, Warehouse, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
@@ -69,6 +69,7 @@ export class KasirkuDB extends Dexie {
   departments!: Table<Department>;
   projects!: Table<Project>;
   taxes!: Table<Tax>;
+  warehouses!: Table<Warehouse>;
   salesDocuments!: Table<SalesDocument>;
   salesDocumentItems!: Table<SalesDocumentItem>;
   salesInvoicePayments!: Table<SalesInvoicePayment>;
@@ -287,6 +288,10 @@ export class KasirkuDB extends Dexie {
     this.version(23).stores({
       purchaseDocuments: 'id, document_number, type, status, contact_id, supplier_name, document_date, due_date, payment_status, source_document_id, project_id, department_id, tax_id, created_at',
       purchaseDocumentItems: 'id, document_id, product_id'
+    });
+
+    this.version(24).stores({
+      warehouses: 'id, name, code, is_active, created_at'
     });
 
     this.on('populate', async () => {

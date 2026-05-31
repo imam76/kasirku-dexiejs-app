@@ -24,6 +24,7 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
     taxes,
     departments,
     projects,
+    warehouses,
     createDocument,
     updateDocument,
     isSubmitting,
@@ -75,6 +76,7 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
         taxes={taxes}
         departments={departments}
         projects={projects}
+        warehouses={warehouses}
         submitting={isSubmitting}
         onCancel={() => {
           if (!document) {

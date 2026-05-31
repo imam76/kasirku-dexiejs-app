@@ -14,6 +14,7 @@ import {
   createPurchaseDepartmentSnapshot,
   createPurchaseProjectSnapshot,
   createPurchaseTaxSnapshot,
+  createPurchaseWarehouseSnapshot,
   createSupplierSnapshot,
 } from '@/utils/purchaseDocuments/createPurchaseDocumentSnapshots';
 import { validatePurchaseDocument } from '@/utils/purchaseDocuments/validatePurchaseDocument';
@@ -39,11 +40,12 @@ const allowedConversions: Record<PurchaseDocumentType, PurchaseDocumentType[]> =
 };
 
 const buildDocumentSnapshot = async (input: Partial<PurchaseDocument>): Promise<Partial<PurchaseDocument>> => {
-  const [contact, tax, department, project] = await Promise.all([
+  const [contact, tax, department, project, warehouse] = await Promise.all([
     input.contact_id ? db.contacts.get(input.contact_id) : undefined,
     input.tax_id ? db.taxes.get(input.tax_id) : undefined,
     input.department_id ? db.departments.get(input.department_id) : undefined,
     input.project_id ? db.projects.get(input.project_id) : undefined,
+    input.warehouse_id ? db.warehouses.get(input.warehouse_id) : undefined,
   ]);
   const contactSnapshot = createSupplierSnapshot(contact);
 
@@ -53,6 +55,7 @@ const buildDocumentSnapshot = async (input: Partial<PurchaseDocument>): Promise<
     ...createPurchaseTaxSnapshot(tax),
     ...createPurchaseDepartmentSnapshot(department),
     ...createPurchaseProjectSnapshot(project),
+    ...createPurchaseWarehouseSnapshot(warehouse),
     supplier_name: contactSnapshot.supplier_name ?? input.supplier_name?.trim() ?? '',
   };
 };

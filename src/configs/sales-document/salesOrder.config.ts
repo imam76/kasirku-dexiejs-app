@@ -16,7 +16,7 @@ export const salesOrderConfig: SalesDocumentConfig = {
     { name: 'contact_id', labelKey: 'salesDocuments.field.customer', type: 'contact' },
     { name: 'customer_name', labelKey: 'salesDocuments.field.customerName', type: 'text', required: true },
     { name: 'document_date', labelKey: 'salesDocuments.field.documentDate', type: 'date', required: true },
-    { name: 'warehouse_name', labelKey: 'salesDocuments.field.warehouse', type: 'text' },
+    { name: 'warehouse_id', labelKey: 'salesDocuments.field.warehouse', type: 'warehouse' },
     { name: 'department_id', labelKey: 'salesDocuments.field.department', type: 'department' },
     { name: 'project_id', labelKey: 'salesDocuments.field.project', type: 'project' },
     { name: 'notes', labelKey: 'salesDocuments.field.notes', type: 'textarea' },

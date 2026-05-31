@@ -48,6 +48,11 @@ export const usePurchaseDocuments = () => {
     [],
     [],
   );
+  const warehouses = useLiveQuery(
+    () => db.warehouses.orderBy('name').toArray(),
+    [],
+    [],
+  );
 
   const activeContacts = useMemo(
     () => contacts.filter((contact) => contact.is_active && ['SUPPLIER', 'CUSTOMER_SUPPLIER'].includes(contact.contact_type)),
@@ -56,6 +61,7 @@ export const usePurchaseDocuments = () => {
   const activeTaxes = useMemo(() => taxes.filter((tax) => tax.is_active), [taxes]);
   const activeDepartments = useMemo(() => departments.filter((department) => department.is_active), [departments]);
   const activeProjects = useMemo(() => projects.filter((project) => project.is_active), [projects]);
+  const activeWarehouses = useMemo(() => warehouses.filter((warehouse) => warehouse.is_active), [warehouses]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['purchaseDocuments'] });
@@ -119,6 +125,7 @@ export const usePurchaseDocuments = () => {
     taxes: activeTaxes,
     departments: activeDepartments,
     projects: activeProjects,
+    warehouses: activeWarehouses,
     getDocument,
     getItems,
     createDocument: createMutation.mutateAsync,

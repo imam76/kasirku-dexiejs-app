@@ -13,6 +13,7 @@ export type SalesDocumentFieldType =
   | 'tax'
   | 'department'
   | 'project'
+  | 'warehouse'
   | 'paymentStatus';
 
 export interface SalesDocumentFieldConfig {

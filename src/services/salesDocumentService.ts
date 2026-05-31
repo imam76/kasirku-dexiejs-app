@@ -24,6 +24,7 @@ import {
   createDepartmentSnapshot,
   createProjectSnapshot,
   createTaxSnapshot,
+  createWarehouseSnapshot,
 } from '@/utils/salesDocuments/createSalesDocumentSnapshots';
 import { validateSalesDocument } from '@/utils/salesDocuments/validateSalesDocument';
 
@@ -58,11 +59,12 @@ const salesDocumentTables = [
 ];
 
 const buildDocumentSnapshot = async (input: Partial<SalesDocument>): Promise<Partial<SalesDocument>> => {
-  const [contact, tax, department, project] = await Promise.all([
+  const [contact, tax, department, project, warehouse] = await Promise.all([
     input.contact_id ? db.contacts.get(input.contact_id) : undefined,
     input.tax_id ? db.taxes.get(input.tax_id) : undefined,
     input.department_id ? db.departments.get(input.department_id) : undefined,
     input.project_id ? db.projects.get(input.project_id) : undefined,
+    input.warehouse_id ? db.warehouses.get(input.warehouse_id) : undefined,
   ]);
 
   return {
@@ -71,6 +73,7 @@ const buildDocumentSnapshot = async (input: Partial<SalesDocument>): Promise<Par
     ...createTaxSnapshot(tax),
     ...createDepartmentSnapshot(department),
     ...createProjectSnapshot(project),
+    ...createWarehouseSnapshot(warehouse),
     customer_name: createContactSnapshot(contact).customer_name ?? input.customer_name?.trim() ?? '',
   };
 };

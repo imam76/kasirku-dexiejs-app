@@ -14,6 +14,7 @@ export type PurchaseDocumentFieldType =
   | 'tax'
   | 'department'
   | 'project'
+  | 'warehouse'
   | 'paymentStatus';
 
 export interface PurchaseDocumentFieldConfig {

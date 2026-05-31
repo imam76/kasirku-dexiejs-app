@@ -1,4 +1,4 @@
-import type { Contact, Department, Project, Tax } from '@/types';
+import type { Contact, Department, Project, Tax, Warehouse } from '@/types';
 
 export const createContactFieldsSnapshot = (contact?: Contact) => {
   if (!contact) return {};
@@ -43,5 +43,15 @@ export const createProjectFieldsSnapshot = (project?: Project) => {
     project_id: project.id,
     project_code: project.code,
     project_name: project.name,
+  };
+};
+
+export const createWarehouseFieldsSnapshot = (warehouse?: Warehouse) => {
+  if (!warehouse) return {};
+
+  return {
+    warehouse_id: warehouse.id,
+    warehouse_code: warehouse.code,
+    warehouse_name: warehouse.name,
   };
 };

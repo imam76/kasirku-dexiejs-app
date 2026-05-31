@@ -1,9 +1,10 @@
-import type { Contact, Department, Project, PurchaseDocument, Tax } from '@/types';
+import type { Contact, Department, Project, PurchaseDocument, Tax, Warehouse } from '@/types';
 import {
   createContactFieldsSnapshot,
   createDepartmentFieldsSnapshot,
   createProjectFieldsSnapshot,
   createTaxFieldsSnapshot,
+  createWarehouseFieldsSnapshot,
 } from '@/utils/documentSnapshots';
 
 export const createSupplierSnapshot = (contact?: Contact): Partial<PurchaseDocument> => {
@@ -31,4 +32,8 @@ export const createPurchaseDepartmentSnapshot = (department?: Department): Parti
 
 export const createPurchaseProjectSnapshot = (project?: Project): Partial<PurchaseDocument> => {
   return createProjectFieldsSnapshot(project);
+};
+
+export const createPurchaseWarehouseSnapshot = (warehouse?: Warehouse): Partial<PurchaseDocument> => {
+  return createWarehouseFieldsSnapshot(warehouse);
 };

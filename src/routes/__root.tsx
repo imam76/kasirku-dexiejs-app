@@ -45,6 +45,7 @@ import {
   ShoppingCart,
   Sun,
   Users,
+  Warehouse,
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -185,6 +186,7 @@ const RootLayout = () => {
         { to: '/master-data/products', label: t('nav.product'), icon: Box },
         { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
         { to: '/master-data/contacts', label: t('nav.contacts'), icon: Users },
+        { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: Warehouse },
         { to: '/master-data/departments', label: t('nav.departments'), icon: Building2 },
         { to: '/master-data/projects', label: t('nav.projects'), icon: FolderKanban },
         { to: '/master-data/taxes', label: t('nav.taxes'), icon: Percent },

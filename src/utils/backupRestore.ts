@@ -25,6 +25,7 @@ export const backupDatabase = async () => {
       departments: await db.departments.toArray(),
       projects: await db.projects.toArray(),
       taxes: await db.taxes.toArray(),
+      warehouses: await db.warehouses.toArray(),
       salesDocuments: await db.salesDocuments.toArray(),
       salesDocumentItems: await db.salesDocumentItems.toArray(),
       salesInvoicePayments: await db.salesInvoicePayments.toArray(),
@@ -41,7 +42,7 @@ export const backupDatabase = async () => {
       journalEntryLines: await db.journalEntryLines.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 9,
+      version: 10,
       timestamp: new Date().toISOString(),
     };
 
@@ -66,7 +67,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -102,6 +103,7 @@ export const restoreDatabase = async (file: File) => {
           db.departments,
           db.projects,
           db.taxes,
+          db.warehouses,
           db.salesDocuments,
           db.salesDocumentItems,
           db.salesInvoicePayments,
@@ -136,6 +138,7 @@ export const restoreDatabase = async (file: File) => {
           await db.departments.clear();
           await db.projects.clear();
           await db.taxes.clear();
+          await db.warehouses.clear();
           await db.salesDocuments.clear();
           await db.salesDocumentItems.clear();
           await db.salesInvoicePayments.clear();
@@ -174,6 +177,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.departments?.length) await db.departments.bulkAdd(data.departments);
           if (data.projects?.length) await db.projects.bulkAdd(data.projects);
           if (data.taxes?.length) await db.taxes.bulkAdd(data.taxes);
+          if (data.warehouses?.length) await db.warehouses.bulkAdd(data.warehouses);
           if (data.salesDocuments?.length) await db.salesDocuments.bulkAdd(data.salesDocuments);
           if (data.salesDocumentItems?.length) await db.salesDocumentItems.bulkAdd(data.salesDocumentItems);
           if (data.salesInvoicePayments?.length) await db.salesInvoicePayments.bulkAdd(data.salesInvoicePayments);

@@ -1,7 +1,7 @@
 import type { Control, FieldErrors, UseFormSetValue } from 'react-hook-form';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import type { Contact, Department, Project, Tax } from '@/types';
+import type { Contact, Department, Project, Tax, Warehouse } from '@/types';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
 import { FieldRenderer } from './FieldRenderer';
 
@@ -14,6 +14,7 @@ interface DocumentHeaderProps {
   taxes: Tax[];
   departments: Department[];
   projects: Project[];
+  warehouses: Warehouse[];
 }
 
 export const DocumentHeader = ({
@@ -25,6 +26,7 @@ export const DocumentHeader = ({
   taxes,
   departments,
   projects,
+  warehouses,
 }: DocumentHeaderProps) => {
   const { t } = useI18n();
 
@@ -42,6 +44,7 @@ export const DocumentHeader = ({
           taxes={taxes}
           departments={departments}
           projects={projects}
+          warehouses={warehouses}
         />
       ))}
     </div>

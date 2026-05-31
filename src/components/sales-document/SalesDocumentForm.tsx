@@ -6,7 +6,7 @@ import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import type { Contact, Department, Product, Project, SalesDocument, SalesDocumentItem, Tax } from '@/types';
+import type { Contact, Department, Product, Project, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { DocumentHeader } from './DocumentHeader';
 import { DocumentLineItems } from './DocumentLineItems';
@@ -22,6 +22,7 @@ interface SalesDocumentFormProps {
   taxes: Tax[];
   departments: Department[];
   projects: Project[];
+  warehouses: Warehouse[];
   products: Product[];
   onSubmit: (input: { document: Partial<SalesDocument>; items: SalesDocumentItem[] }) => Promise<void>;
   onCancel?: () => void;
@@ -90,6 +91,7 @@ export const SalesDocumentForm = ({
   taxes,
   departments,
   projects,
+  warehouses,
   products,
   onSubmit,
   onCancel,
@@ -178,6 +180,7 @@ export const SalesDocumentForm = ({
         taxes={taxes}
         departments={departments}
         projects={projects}
+        warehouses={warehouses}
       />
       <DocumentLineItems
         config={config}
