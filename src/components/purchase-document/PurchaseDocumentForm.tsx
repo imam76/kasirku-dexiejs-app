@@ -108,6 +108,7 @@ const warehouseHelperKeysByType = {
   PURCHASE_ORDER: 'purchaseDocuments.helper.warehouse.purchaseOrder',
   PURCHASE_RECEIPT: 'purchaseDocuments.helper.warehouse.purchaseReceipt',
   PURCHASE_INVOICE: 'purchaseDocuments.helper.warehouse.purchaseInvoice',
+  PURCHASE_RETURN: 'purchaseDocuments.helper.warehouse.purchaseReturn',
 } satisfies Record<PurchaseDocumentConfig['type'], TranslationKey>;
 
 export const PurchaseDocumentForm = ({

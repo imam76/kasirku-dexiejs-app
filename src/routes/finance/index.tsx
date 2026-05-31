@@ -36,6 +36,13 @@ function Finance() {
       desc: t('finance.index.receivablesDesc'),
     },
     {
+      to: '/finance/payables',
+      label: t('nav.finance.payables'),
+      icon: FileTextOutlined,
+      color: 'text-orange-700',
+      desc: t('finance.index.payablesDesc'),
+    },
+    {
       to: '/finance/chart-of-accounts',
       label: t('nav.finance.chartOfAccounts'),
       icon: BookOutlined,

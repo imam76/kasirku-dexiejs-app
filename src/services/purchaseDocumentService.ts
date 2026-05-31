@@ -10,6 +10,7 @@ import type {
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { getPurchaseReceiptStockQuantity } from '@/utils/purchaseDocuments/calculatePurchaseDocumentStockImpact';
+import { recalculatePurchaseInvoicePaymentsForReturnSource } from '@/services/accountsPayableService';
 import { createPurchaseDocumentNumber } from '@/utils/purchaseDocuments/createPurchaseDocumentNumber';
 import {
   createPurchaseDepartmentSnapshot,
@@ -36,9 +37,12 @@ const allowedConversions: Record<PurchaseDocumentType, PurchaseDocumentType[]> =
   PURCHASE_REQUEST: ['REQUEST_FOR_QUOTATION', 'PURCHASE_ORDER'],
   REQUEST_FOR_QUOTATION: ['PURCHASE_ORDER'],
   PURCHASE_ORDER: ['PURCHASE_RECEIPT'],
-  PURCHASE_RECEIPT: ['PURCHASE_INVOICE'],
-  PURCHASE_INVOICE: [],
+  PURCHASE_RECEIPT: ['PURCHASE_INVOICE', 'PURCHASE_RETURN'],
+  PURCHASE_INVOICE: ['PURCHASE_RETURN'],
+  PURCHASE_RETURN: [],
 };
+
+const nonClosingConversionTargets = new Set<PurchaseDocumentType>(['PURCHASE_RETURN']);
 
 const buildDocumentSnapshot = async (input: Partial<PurchaseDocument>): Promise<Partial<PurchaseDocument>> => {
   const [contact, tax, department, project, warehouse, discountAccountSnapshot] = await Promise.all([
@@ -163,6 +167,32 @@ const restoreReceiptStock = async (items: PurchaseDocumentItem[]) => {
     const quantityInStockUnit = getPurchaseReceiptStockQuantity(item, product);
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) - quantityInStockUnit,
+      updated_at: new Date().toISOString(),
+    });
+  }
+};
+
+const removePurchaseReturnStock = async (items: PurchaseDocumentItem[]) => {
+  for (const item of items) {
+    const product = await db.products.get(item.product_id);
+    if (!product) continue;
+
+    const quantityInStockUnit = getPurchaseReceiptStockQuantity(item, product);
+    await db.products.update(product.id, {
+      stock: Number(product.stock || 0) - quantityInStockUnit,
+      updated_at: new Date().toISOString(),
+    });
+  }
+};
+
+const restorePurchaseReturnStock = async (items: PurchaseDocumentItem[]) => {
+  for (const item of items) {
+    const product = await db.products.get(item.product_id);
+    if (!product) continue;
+
+    const quantityInStockUnit = getPurchaseReceiptStockQuantity(item, product);
+    await db.products.update(product.id, {
+      stock: Number(product.stock || 0) + quantityInStockUnit,
       updated_at: new Date().toISOString(),
     });
   }
@@ -295,7 +325,11 @@ export const issuePurchaseDocument = async (id: string) => {
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (config.behavior.affectsStock) {
-      await addReceiptStock(items);
+      if (document.type === 'PURCHASE_RETURN') {
+        await removePurchaseReturnStock(items);
+      } else {
+        await addReceiptStock(items);
+      }
     }
 
     await db.purchaseDocuments.update(id, {
@@ -312,6 +346,10 @@ export const issuePurchaseDocument = async (id: string) => {
       description: `${currentUser?.name ?? 'User'} menerbitkan ${config.title} ${document.document_number}.`,
     });
   });
+
+  if (document.type === 'PURCHASE_RETURN') {
+    await recalculatePurchaseInvoicePaymentsForReturnSource(document.source_document_id);
+  }
 };
 
 export const convertPurchaseDocument = async (sourceId: string, targetType: PurchaseDocumentType) => {
@@ -374,10 +412,12 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
   await db.transaction('rw', purchaseDocumentTables, async () => {
     await db.purchaseDocuments.add(targetDocument);
     await db.purchaseDocumentItems.bulkAdd(calculatedItems);
-    await db.purchaseDocuments.update(sourceId, {
-      status: 'CONVERTED',
-      updated_at: createdAt,
-    });
+    if (!nonClosingConversionTargets.has(targetType)) {
+      await db.purchaseDocuments.update(sourceId, {
+        status: 'CONVERTED',
+        updated_at: createdAt,
+      });
+    }
     await writeActivityLog({
       user: currentUser,
       action: 'PURCHASE_DOCUMENT_CONVERTED',
@@ -413,6 +453,8 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (document.type === 'PURCHASE_RECEIPT' && document.status === 'ISSUED') {
       await restoreReceiptStock(items);
+    } else if (document.type === 'PURCHASE_RETURN' && document.status === 'ISSUED') {
+      await restorePurchaseReturnStock(items);
     }
 
     await db.purchaseDocuments.update(id, {
@@ -429,4 +471,8 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
       description: `${currentUser?.name ?? 'User'} membatalkan ${document.document_number}. Alasan: ${normalizedReason}`,
     });
   });
+
+  if (document.type === 'PURCHASE_RETURN') {
+    await recalculatePurchaseInvoicePaymentsForReturnSource(document.source_document_id);
+  }
 };

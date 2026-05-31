@@ -9,6 +9,8 @@ import type {
   JournalEntryLine,
   JournalSourceType,
   PaymentMethod,
+  PurchaseDocument,
+  PurchaseInvoicePayment,
   SalesDocument,
   SalesInvoicePayment,
   SalesReturn,
@@ -28,6 +30,7 @@ const SOURCE_EVENTS = {
   SALES_INVOICE_PAYMENT_POSTED: 'SALES_INVOICE_PAYMENT_POSTED',
   SALES_INVOICE_PAYMENT_VOIDED: 'SALES_INVOICE_PAYMENT_VOIDED',
   SALES_RETURN_ISSUED: 'SALES_RETURN_ISSUED',
+  PURCHASE_INVOICE_PAYMENT_POSTED: 'PURCHASE_INVOICE_PAYMENT_POSTED',
   OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
   MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
 } as const;
@@ -139,6 +142,7 @@ const ACCOUNT_CANDIDATES = {
   cash: { ids: ['cash'], codes: ['1010'] },
   bank: { ids: ['bank'], codes: ['1020'] },
   accountsReceivable: { ids: ['accounts-receivable', 'template-accounts-receivable'], codes: ['1100'] },
+  accountsPayable: { ids: ['accounts-payable', 'template-accounts-payable'], codes: ['2000', '2010'] },
   inventory: { ids: ['inventory', 'template-inventory'], codes: ['1200'] },
   outputTax: { ids: ['output-tax', 'template-tax-payable'], codes: ['2100'] },
   salesPos: { ids: ['sales-pos', 'template-sales-pos'], codes: ['4000', '4010'] },
@@ -840,6 +844,46 @@ export const reverseSalesInvoicePaymentRecordJournal = async (
     source_type: 'SALES_INVOICE_PAYMENT',
     source_id: payment.id,
     source_event: SOURCE_EVENTS.SALES_INVOICE_PAYMENT_POSTED,
+    reason,
+  });
+};
+
+export const postPurchaseInvoicePaymentRecordJournal = async (
+  document: PurchaseDocument,
+  payment: PurchaseInvoicePayment,
+) => {
+  if (document.type !== 'PURCHASE_INVOICE' || document.status === 'VOIDED' || payment.status !== 'ACTIVE') return undefined;
+  if (!await isGeneralLedgerPostingEnabled(payment.paid_at)) return undefined;
+
+  const amount = amountOrZero(payment.amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cashAccount = await getCashOrBankAccountForPayment(payment.payment_method, payment.cash_account_id);
+  const payableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsPayable, 'Hutang Usaha');
+
+  return postBalancedJournalEntry({
+    source_type: 'PURCHASE_INVOICE_PAYMENT',
+    source_id: payment.id,
+    source_number: payment.document_number,
+    source_event: SOURCE_EVENTS.PURCHASE_INVOICE_PAYMENT_POSTED,
+    entry_date: payment.paid_at,
+    description: `Pembayaran purchase invoice ${payment.document_number}`,
+    lines: [
+      createDebitLine(payableAccount, amount, 'Pelunasan hutang purchase invoice', document.department_id, document.project_id),
+      createCreditLine(cashAccount, amount, 'Kas keluar untuk pembayaran purchase invoice', document.department_id, document.project_id),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+  });
+};
+
+export const reversePurchaseInvoicePaymentRecordJournal = async (
+  payment: PurchaseInvoicePayment,
+  reason: string,
+) => {
+  return reverseJournalEntriesForSource({
+    source_type: 'PURCHASE_INVOICE_PAYMENT',
+    source_id: payment.id,
+    source_event: SOURCE_EVENTS.PURCHASE_INVOICE_PAYMENT_POSTED,
     reason,
   });
 };

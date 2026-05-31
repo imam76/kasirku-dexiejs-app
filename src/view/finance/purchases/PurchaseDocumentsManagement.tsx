@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, Input, Table, Tag, Typography } from 'antd';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, ArrowRight, ClipboardList, Eye, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, Eye, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, type LucideIcon } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import {
   getPurchaseDocumentConfig,
@@ -79,6 +79,15 @@ export const purchaseDocumentMenuItems: PurchaseDocumentMenuItem[] = [
     color: 'text-rose-600',
     iconBackground: 'bg-rose-50',
   },
+  {
+    type: 'PURCHASE_RETURN',
+    code: 'PRT',
+    labelKey: 'purchaseDocuments.type.purchaseReturn',
+    descKey: 'purchaseDocuments.menu.purchaseReturnDesc',
+    icon: RotateCcw,
+    color: 'text-orange-700',
+    iconBackground: 'bg-orange-50',
+  },
 ];
 
 const hasPaymentStatus = (document: Pick<PurchaseDocument, 'type'>) => (
@@ -101,7 +110,7 @@ function PurchaseDocumentMenuGrid({ documents }: { documents: PurchaseDocument[]
   const documentCountByType = useMemo(() => getDocumentCountByType(documents), [documents]);
 
   return (
-    <div className="grid grid-cols-2 gap-[10px] sm:gap-[14px] lg:grid-cols-5 lg:gap-[18px]">
+    <div className="grid grid-cols-2 gap-[10px] sm:gap-[14px] lg:grid-cols-6 lg:gap-[18px]">
       {purchaseDocumentMenuItems.map((item) => (
         <Link
           key={item.type}
@@ -141,6 +150,31 @@ function PurchaseDocumentMenuGrid({ documents }: { documents: PurchaseDocument[]
   );
 }
 
+function PurchaseFinanceActionGrid() {
+  const { t } = useI18n();
+
+  return (
+    <div className="grid grid-cols-1 gap-[10px] sm:grid-cols-2 sm:gap-[14px] lg:max-w-[380px]">
+      <Link
+        to="/finance/payables"
+        className="
+          flex min-h-[96px] items-center gap-3 rounded-[10px] border border-gray-100 bg-white p-4
+          transition-all duration-200 ease-out hover:-translate-y-[1px] hover:border-gray-200
+          hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
+        "
+      >
+        <span className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-emerald-50">
+          <CreditCard className="h-5 w-5 text-emerald-700" />
+        </span>
+        <span>
+          <span className="block text-sm font-semibold text-gray-900">{t('accountsPayable.title')}</span>
+          <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-gray-500">{t('accountsPayable.shortDesc')}</span>
+        </span>
+      </Link>
+    </div>
+  );
+}
+
 export default function PurchaseDocumentsManagement() {
   const { t } = useI18n();
   const { documents } = usePurchaseDocuments();
@@ -153,6 +187,7 @@ export default function PurchaseDocumentsManagement() {
       </div>
 
       <PurchaseDocumentMenuGrid documents={documents} />
+      <PurchaseFinanceActionGrid />
     </div>
   );
 }

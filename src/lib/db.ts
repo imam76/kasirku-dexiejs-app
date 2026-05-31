@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, Warehouse, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, Warehouse, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
@@ -77,6 +77,7 @@ export class KasirkuDB extends Dexie {
   salesReturnItems!: Table<SalesReturnItem>;
   purchaseDocuments!: Table<PurchaseDocument>;
   purchaseDocumentItems!: Table<PurchaseDocumentItem>;
+  purchaseInvoicePayments!: Table<PurchaseInvoicePayment>;
   chartOfAccounts!: Table<ChartOfAccount>;
   financeAccountMappings!: Table<FinanceAccountMapping>;
   accountingProfileSetting!: Table<AccountingProfileSetting>;
@@ -307,6 +308,43 @@ export class KasirkuDB extends Dexie {
 
       if (missingAccounts.length > 0) {
         await chartOfAccounts.bulkPut(missingAccounts);
+      }
+    });
+
+    this.version(26).stores({
+      purchaseInvoicePayments: 'id, purchase_document_id, paid_at, status, finance_transaction_id, created_at'
+    }).upgrade(async (tx) => {
+      const documents = await tx.table<PurchaseDocument, string>('purchaseDocuments')
+        .where('type')
+        .equals('PURCHASE_INVOICE')
+        .toArray();
+      const payments = documents
+        .filter((document) => Number(document.paid_amount || 0) > 0)
+        .map((document) => {
+          const paidAt = document.paid_at || document.updated_at || document.created_at;
+
+          return {
+            id: crypto.randomUUID(),
+            purchase_document_id: document.id,
+            document_number: document.document_number,
+            contact_id: document.contact_id,
+            supplier_name: document.supplier_name || '',
+            amount: Number(document.paid_amount || 0),
+            paid_at: paidAt,
+            payment_method: document.payment_method,
+            cash_account_id: document.cash_account_id,
+            cash_account_code: document.cash_account_code,
+            cash_account_name: document.cash_account_name,
+            finance_transaction_id: document.finance_transaction_id,
+            status: 'ACTIVE' as const,
+            notes: 'Migrasi dari aggregate pembayaran purchase invoice lama.',
+            created_at: paidAt,
+            updated_at: document.updated_at || paidAt,
+          };
+        });
+
+      if (payments.length > 0) {
+        await tx.table<PurchaseInvoicePayment, string>('purchaseInvoicePayments').bulkAdd(payments);
       }
     });
 

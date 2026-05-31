@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
 import { AlertTriangle } from 'lucide-react';
+import { PayablePaymentHistory } from '@/components/accounts-payable/PayablePaymentHistory';
 import {
   getPurchaseDocumentConfig,
   getPurchaseDocumentTypePathSegment,
   PURCHASE_DOCUMENT_TYPE_OPTIONS,
 } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
+import { useAccountsPayable } from '@/hooks/useAccountsPayable';
 import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
 import { db } from '@/lib/db';
 import type {
@@ -54,6 +56,11 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
   const { t } = useI18n();
   const navigate = useNavigate();
   const { issueDocument, voidDocument, convertDocument, isMutating } = usePurchaseDocuments();
+  const {
+    getInvoicePayments,
+    voidPayment,
+    isMutating: isPayableMutating,
+  } = useAccountsPayable();
   const [document, setDocument] = useState<PurchaseDocument | undefined>();
   const [items, setItems] = useState<PurchaseDocumentItem[]>([]);
 
@@ -71,14 +78,16 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
   }, [loadDocument]);
 
   const config = document ? getPurchaseDocumentConfig(document.type) : undefined;
+  const invoicePayments = document?.type === 'PURCHASE_INVOICE' ? getInvoicePayments(document.id) : [];
   const nextConvertOptions = useMemo(() => {
     if (!document || document.status !== 'ISSUED') return [];
     const allowed: Record<PurchaseDocumentType, PurchaseDocumentType[]> = {
       PURCHASE_REQUEST: ['REQUEST_FOR_QUOTATION', 'PURCHASE_ORDER'],
       REQUEST_FOR_QUOTATION: ['PURCHASE_ORDER'],
       PURCHASE_ORDER: ['PURCHASE_RECEIPT'],
-      PURCHASE_RECEIPT: ['PURCHASE_INVOICE'],
-      PURCHASE_INVOICE: [],
+      PURCHASE_RECEIPT: ['PURCHASE_INVOICE', 'PURCHASE_RETURN'],
+      PURCHASE_INVOICE: ['PURCHASE_RETURN'],
+      PURCHASE_RETURN: [],
     };
     return allowed[document.type];
   }, [document]);
@@ -425,6 +434,25 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                 <span className="text-[17px] font-extrabold text-white">Rp {formatCurrency(document.total_amount || 0)}</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {config.behavior.hasPaymentStatus && (
+          <div className="mt-6 rounded-lg border border-gray-100 px-4 py-3">
+            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-bold text-gray-900">{t('accountsPayable.paymentHistory')}</div>
+                <div className="text-xs text-gray-500">{t('accountsPayable.paymentHistorySubtitle')}</div>
+              </div>
+            </div>
+            <PayablePaymentHistory
+              payments={invoicePayments}
+              loading={isPayableMutating}
+              onVoidPayment={async (paymentId, reason) => {
+                await voidPayment({ paymentId, reason });
+                await loadDocument();
+              }}
+            />
           </div>
         )}
 

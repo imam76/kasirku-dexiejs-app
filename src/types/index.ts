@@ -90,9 +90,11 @@ export type PurchaseDocumentType =
   | 'REQUEST_FOR_QUOTATION'
   | 'PURCHASE_ORDER'
   | 'PURCHASE_RECEIPT'
-  | 'PURCHASE_INVOICE';
+  | 'PURCHASE_INVOICE'
+  | 'PURCHASE_RETURN';
 export type PurchaseDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type PurchaseInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
+export type PurchaseInvoicePaymentRecordStatus = 'ACTIVE' | 'VOIDED';
 export type ReceivableAgingBucket =
   | 'CURRENT'
   | 'OVERDUE_1_30'
@@ -437,6 +439,49 @@ export interface PurchaseDocument {
   void_reason?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface PurchaseInvoicePayment {
+  id: string;
+  purchase_document_id: string;
+  document_number: string;
+  contact_id?: string;
+  supplier_name: string;
+  amount: number;
+  paid_at: string;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  finance_transaction_id?: string;
+  journal_entry_id?: string;
+  reversal_finance_transaction_id?: string;
+  reversal_journal_entry_id?: string;
+  notes?: string;
+  status: PurchaseInvoicePaymentRecordStatus;
+  voided_at?: string;
+  void_reason?: string;
+  created_by?: string;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccountsPayableRow {
+  purchase_document_id: string;
+  document_number: string;
+  contact_id?: string;
+  supplier_name: string;
+  document_date: string;
+  due_date?: string;
+  total_amount: number;
+  paid_amount: number;
+  return_credit_amount: number;
+  balance_due: number;
+  payment_status: PurchaseInvoicePaymentStatus;
+  aging_bucket: ReceivableAgingBucket;
+  overdue_days: number;
 }
 
 export interface PurchaseDocumentItem {
@@ -811,6 +856,7 @@ export type JournalSourceType =
   | 'SALES_INVOICE_PAYMENT'
   | 'SALES_RETURN'
   | 'ACCOUNTS_PAYABLE'
+  | 'PURCHASE_INVOICE_PAYMENT'
   | 'MANUAL_JOURNAL'
   | 'OPENING_BALANCE';
 

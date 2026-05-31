@@ -24,6 +24,7 @@ import {
   Box,
   Building2,
   ClipboardList,
+  CreditCard,
   Database,
   DollarSign,
   FileText,
@@ -203,6 +204,7 @@ const RootLayout = () => {
       children: [
         { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
         { to: '/finance/receivables', label: t('nav.finance.receivables'), icon: ReceiptText },
+        { to: '/finance/payables', label: t('nav.finance.payables'), icon: CreditCard },
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
         { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
         { to: '/finance/sales', label: t('nav.finance.sales'), icon: FileText },

@@ -14,6 +14,7 @@ const supplierRequiredOnIssue = new Set<PurchaseDocumentType>([
   'PURCHASE_ORDER',
   'PURCHASE_RECEIPT',
   'PURCHASE_INVOICE',
+  'PURCHASE_RETURN',
 ]);
 
 export const validatePurchaseDocument = ({

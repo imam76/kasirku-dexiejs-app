@@ -4,6 +4,7 @@ import { purchaseInvoiceConfig } from './purchaseInvoice.config';
 import { purchaseOrderConfig } from './purchaseOrder.config';
 import { purchaseReceiptConfig } from './purchaseReceipt.config';
 import { purchaseRequestConfig } from './purchaseRequest.config';
+import { purchaseReturnConfig } from './purchaseReturn.config';
 import { requestForQuotationConfig } from './requestForQuotation.config';
 
 export type PurchaseDocumentFieldType =
@@ -72,6 +73,7 @@ export const purchaseDocumentConfigs = {
   PURCHASE_ORDER: purchaseOrderConfig,
   PURCHASE_RECEIPT: purchaseReceiptConfig,
   PURCHASE_INVOICE: purchaseInvoiceConfig,
+  PURCHASE_RETURN: purchaseReturnConfig,
 } satisfies Record<PurchaseDocumentType, PurchaseDocumentConfig>;
 
 export const getPurchaseDocumentConfig = (type: PurchaseDocumentType) => purchaseDocumentConfigs[type];
@@ -82,6 +84,7 @@ export const PURCHASE_DOCUMENT_TYPE_OPTIONS = [
   { value: 'PURCHASE_ORDER', labelKey: 'purchaseDocuments.type.purchaseOrder', slug: 'po' },
   { value: 'PURCHASE_RECEIPT', labelKey: 'purchaseDocuments.type.purchaseReceipt', slug: 'gr' },
   { value: 'PURCHASE_INVOICE', labelKey: 'purchaseDocuments.type.purchaseInvoice', slug: 'pi' },
+  { value: 'PURCHASE_RETURN', labelKey: 'purchaseDocuments.type.purchaseReturn', slug: 'pret' },
 ] satisfies Array<{ value: PurchaseDocumentType; labelKey: TranslationKey; slug: string }>;
 
 export const getPurchaseDocumentTypePathSegment = (type: PurchaseDocumentType) => (
