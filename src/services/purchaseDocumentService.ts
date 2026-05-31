@@ -9,6 +9,7 @@ import type {
 } from '@/types';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
+import { getPurchasePrice } from '@/utils/pricing';
 import { getPurchaseReceiptStockQuantity } from '@/utils/purchaseDocuments/calculatePurchaseDocumentStockImpact';
 import { recalculatePurchaseInvoicePaymentsForReturnSource } from '@/services/accountsPayableService';
 import { createPurchaseDocumentNumber } from '@/utils/purchaseDocuments/createPurchaseDocumentNumber';
@@ -382,7 +383,9 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
       document_id: targetId,
       ordered_quantity: targetType === 'PURCHASE_RECEIPT' ? item.quantity : item.ordered_quantity,
       received_quantity: targetType === 'PURCHASE_RECEIPT' ? item.received_quantity ?? item.quantity : undefined,
-      price: targetConfig.behavior.hasPricing ? item.price ?? product?.purchase_price ?? 0 : undefined,
+      price: targetConfig.behavior.hasPricing
+        ? item.price ?? (product ? getPurchasePrice(product, item.unit) : 0)
+        : undefined,
     };
   }), targetId, createdAt);
   const snapshot = applyConfigBehavior(source, targetConfig);

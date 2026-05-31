@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import type { Product, PurchaseDocumentItem, Tax } from '@/types';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
+import { getPurchasePrice } from '@/utils/pricing';
 import { getProductDocumentUnits } from '@/utils/productUnits';
 import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/createEmptyPurchaseDocumentItem';
 import { mapProductToPurchaseDocumentItem } from '@/utils/purchaseDocuments/mapProductToPurchaseDocumentItem';
@@ -20,6 +21,18 @@ interface PurchaseDocumentLineItemsProps {
 }
 
 const emptyUnitOptions: Array<{ value: string; label: string }> = [];
+
+const createSystemPurchasePricingPatch = (
+  product: Product,
+  item: PurchaseDocumentItem,
+  patch: Partial<PurchaseDocumentItem> = {},
+): Partial<PurchaseDocumentItem> => {
+  const unit = patch.unit ?? item.unit ?? product.purchase_unit;
+
+  return {
+    price: getPurchasePrice(product, unit),
+  };
+};
 
 export const PurchaseDocumentLineItems = ({
   config,
@@ -89,10 +102,22 @@ export const PurchaseDocumentLineItems = ({
   );
 
   const updateItem = useCallback((itemId: string, patch: Partial<PurchaseDocumentItem>) => {
-    onChange(itemsRef.current.map((item) => (
-      item.id === itemId ? { ...item, ...patch } : item
-    )));
-  }, [onChange]);
+    onChange(itemsRef.current.map((item) => {
+      if (item.id !== itemId) return item;
+
+      const product = productsById.get(item.product_id);
+      let nextPatch = patch;
+
+      if (config.behavior.hasPricing && product && patch.unit !== undefined) {
+        nextPatch = {
+          ...patch,
+          ...createSystemPurchasePricingPatch(product, item, patch),
+        };
+      }
+
+      return { ...item, ...nextPatch };
+    }));
+  }, [config.behavior.hasPricing, onChange, productsById]);
 
   const addRow = useCallback(() => {
     onChange([...itemsRef.current, createEmptyPurchaseDocumentItem(documentId)]);
@@ -108,6 +133,7 @@ export const PurchaseDocumentLineItems = ({
 
       const nextItem = mapProductToPurchaseDocumentItem(product, item.document_id);
       const quantity = item.quantity || nextItem.quantity;
+      const unit = nextItem.unit;
 
       return {
         ...nextItem,
@@ -115,7 +141,9 @@ export const PurchaseDocumentLineItems = ({
         quantity,
         ordered_quantity: config.type === 'PURCHASE_RECEIPT' ? item.ordered_quantity ?? quantity : item.ordered_quantity,
         received_quantity: config.type === 'PURCHASE_RECEIPT' ? item.received_quantity ?? quantity : item.received_quantity,
-        price: config.behavior.hasPricing ? nextItem.price : undefined,
+        price: config.behavior.hasPricing
+          ? createSystemPurchasePricingPatch(product, { ...nextItem, quantity, unit }).price
+          : undefined,
         discount_type: item.discount_type ?? nextItem.discount_type,
         discount_value: item.discount_value ?? nextItem.discount_value,
         discount_amount: item.discount_amount ?? nextItem.discount_amount,

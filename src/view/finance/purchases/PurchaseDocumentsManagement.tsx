@@ -33,7 +33,7 @@ type PurchaseDocumentMenuItem = {
   iconBackground: string;
 };
 
-export const purchaseDocumentMenuItems: PurchaseDocumentMenuItem[] = [
+const purchaseDocumentMenuItems: PurchaseDocumentMenuItem[] = [
   {
     type: 'PURCHASE_REQUEST',
     code: 'PR',

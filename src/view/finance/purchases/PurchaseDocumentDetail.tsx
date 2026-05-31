@@ -74,8 +74,25 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
   }, [documentId]);
 
   useEffect(() => {
-    void loadDocument();
-  }, [loadDocument]);
+    let isCurrent = true;
+
+    const syncDocument = async () => {
+      const [loadedDocument, loadedItems] = await Promise.all([
+        db.purchaseDocuments.get(documentId),
+        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray(),
+      ]);
+      if (!isCurrent) return;
+
+      setDocument(loadedDocument);
+      setItems(loadedItems);
+    };
+
+    void syncDocument();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [documentId]);
 
   const config = document ? getPurchaseDocumentConfig(document.type) : undefined;
   const invoicePayments = document?.type === 'PURCHASE_INVOICE' ? getInvoicePayments(document.id) : [];
