@@ -16,8 +16,10 @@ import { Route as ReportIndexRouteImport } from './routes/report/index'
 import { Route as MasterDataIndexRouteImport } from './routes/master-data/index'
 import { Route as FinanceIndexRouteImport } from './routes/finance/index'
 import { Route as FinanceSalesIndexRouteImport } from './routes/finance/sales/index'
+import { Route as FinancePurchasesIndexRouteImport } from './routes/finance/purchases/index'
 import { Route as FinanceSalesReturnsIndexRouteImport } from './routes/finance/sales/returns/index'
 import { Route as FinanceSalesDocumentTypeIndexRouteImport } from './routes/finance/sales/$documentType/index'
+import { Route as FinancePurchasesDocumentTypeIndexRouteImport } from './routes/finance/purchases/$documentType/index'
 
 const TransactionLazyRouteImport = createFileRoute('/transaction')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
@@ -77,12 +79,20 @@ const FinanceSalesDocumentTypeNewLazyRouteImport = createFileRoute(
 const FinanceSalesDocumentTypeDocumentIdLazyRouteImport = createFileRoute(
   '/finance/sales/$documentType/$documentId',
 )()
+const FinancePurchasesDocumentTypeNewLazyRouteImport = createFileRoute(
+  '/finance/purchases/$documentType/new',
+)()
+const FinancePurchasesDocumentTypeDocumentIdLazyRouteImport = createFileRoute(
+  '/finance/purchases/$documentType/$documentId',
+)()
 const FinanceSalesReturnsReturnIdEditLazyRouteImport = createFileRoute(
   '/finance/sales/returns/$returnId_/edit',
 )()
 const FinanceSalesDocumentTypeDocumentIdEditLazyRouteImport = createFileRoute(
   '/finance/sales/$documentType/$documentId_/edit',
 )()
+const FinancePurchasesDocumentTypeDocumentIdEditLazyRouteImport =
+  createFileRoute('/finance/purchases/$documentType/$documentId_/edit')()
 
 const TransactionLazyRoute = TransactionLazyRouteImport.update({
   id: '/transaction',
@@ -251,6 +261,11 @@ const FinanceSalesIndexRoute = FinanceSalesIndexRouteImport.update({
   path: '/finance/sales/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FinancePurchasesIndexRoute = FinancePurchasesIndexRouteImport.update({
+  id: '/finance/purchases/',
+  path: '/finance/purchases/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FinanceGeneralLedgerSetupLazyRoute =
   FinanceGeneralLedgerSetupLazyRouteImport.update({
     id: '/setup',
@@ -269,6 +284,12 @@ const FinanceSalesDocumentTypeIndexRoute =
   FinanceSalesDocumentTypeIndexRouteImport.update({
     id: '/finance/sales/$documentType/',
     path: '/finance/sales/$documentType/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const FinancePurchasesDocumentTypeIndexRoute =
+  FinancePurchasesDocumentTypeIndexRouteImport.update({
+    id: '/finance/purchases/$documentType/',
+    path: '/finance/purchases/$documentType/',
     getParentRoute: () => rootRouteImport,
   } as any)
 const FinanceSalesReturnsNewLazyRoute =
@@ -309,6 +330,26 @@ const FinanceSalesDocumentTypeDocumentIdLazyRoute =
       (d) => d.Route,
     ),
   )
+const FinancePurchasesDocumentTypeNewLazyRoute =
+  FinancePurchasesDocumentTypeNewLazyRouteImport.update({
+    id: '/finance/purchases/$documentType/new',
+    path: '/finance/purchases/$documentType/new',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/purchases/$documentType/new.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const FinancePurchasesDocumentTypeDocumentIdLazyRoute =
+  FinancePurchasesDocumentTypeDocumentIdLazyRouteImport.update({
+    id: '/finance/purchases/$documentType/$documentId',
+    path: '/finance/purchases/$documentType/$documentId',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/purchases/$documentType/$documentId.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const FinanceSalesReturnsReturnIdEditLazyRoute =
   FinanceSalesReturnsReturnIdEditLazyRouteImport.update({
     id: '/finance/sales/returns/$returnId_/edit',
@@ -326,6 +367,16 @@ const FinanceSalesDocumentTypeDocumentIdEditLazyRoute =
     getParentRoute: () => rootRouteImport,
   } as any).lazy(() =>
     import('./routes/finance/sales/$documentType/$documentId_.edit.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const FinancePurchasesDocumentTypeDocumentIdEditLazyRoute =
+  FinancePurchasesDocumentTypeDocumentIdEditLazyRouteImport.update({
+    id: '/finance/purchases/$documentType/$documentId_/edit',
+    path: '/finance/purchases/$documentType/$documentId/edit',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/purchases/$documentType/$documentId_.edit.lazy').then(
       (d) => d.Route,
     ),
   )
@@ -357,13 +408,18 @@ export interface FileRoutesByFullPath {
   '/master-data/': typeof MasterDataIndexRoute
   '/report/': typeof ReportIndexRoute
   '/finance/general-ledger/setup': typeof FinanceGeneralLedgerSetupLazyRoute
+  '/finance/purchases/': typeof FinancePurchasesIndexRoute
   '/finance/sales/': typeof FinanceSalesIndexRoute
+  '/finance/purchases/$documentType/$documentId': typeof FinancePurchasesDocumentTypeDocumentIdLazyRoute
+  '/finance/purchases/$documentType/new': typeof FinancePurchasesDocumentTypeNewLazyRoute
   '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
+  '/finance/purchases/$documentType/': typeof FinancePurchasesDocumentTypeIndexRoute
   '/finance/sales/$documentType/': typeof FinanceSalesDocumentTypeIndexRoute
   '/finance/sales/returns/': typeof FinanceSalesReturnsIndexRoute
+  '/finance/purchases/$documentType/$documentId/edit': typeof FinancePurchasesDocumentTypeDocumentIdEditLazyRoute
   '/finance/sales/$documentType/$documentId/edit': typeof FinanceSalesDocumentTypeDocumentIdEditLazyRoute
   '/finance/sales/returns/$returnId/edit': typeof FinanceSalesReturnsReturnIdEditLazyRoute
 }
@@ -394,13 +450,18 @@ export interface FileRoutesByTo {
   '/master-data': typeof MasterDataIndexRoute
   '/report': typeof ReportIndexRoute
   '/finance/general-ledger/setup': typeof FinanceGeneralLedgerSetupLazyRoute
+  '/finance/purchases': typeof FinancePurchasesIndexRoute
   '/finance/sales': typeof FinanceSalesIndexRoute
+  '/finance/purchases/$documentType/$documentId': typeof FinancePurchasesDocumentTypeDocumentIdLazyRoute
+  '/finance/purchases/$documentType/new': typeof FinancePurchasesDocumentTypeNewLazyRoute
   '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
+  '/finance/purchases/$documentType': typeof FinancePurchasesDocumentTypeIndexRoute
   '/finance/sales/$documentType': typeof FinanceSalesDocumentTypeIndexRoute
   '/finance/sales/returns': typeof FinanceSalesReturnsIndexRoute
+  '/finance/purchases/$documentType/$documentId/edit': typeof FinancePurchasesDocumentTypeDocumentIdEditLazyRoute
   '/finance/sales/$documentType/$documentId/edit': typeof FinanceSalesDocumentTypeDocumentIdEditLazyRoute
   '/finance/sales/returns/$returnId/edit': typeof FinanceSalesReturnsReturnIdEditLazyRoute
 }
@@ -432,13 +493,18 @@ export interface FileRoutesById {
   '/master-data/': typeof MasterDataIndexRoute
   '/report/': typeof ReportIndexRoute
   '/finance/general-ledger/setup': typeof FinanceGeneralLedgerSetupLazyRoute
+  '/finance/purchases/': typeof FinancePurchasesIndexRoute
   '/finance/sales/': typeof FinanceSalesIndexRoute
+  '/finance/purchases/$documentType/$documentId': typeof FinancePurchasesDocumentTypeDocumentIdLazyRoute
+  '/finance/purchases/$documentType/new': typeof FinancePurchasesDocumentTypeNewLazyRoute
   '/finance/sales/$documentType/$documentId': typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
+  '/finance/purchases/$documentType/': typeof FinancePurchasesDocumentTypeIndexRoute
   '/finance/sales/$documentType/': typeof FinanceSalesDocumentTypeIndexRoute
   '/finance/sales/returns/': typeof FinanceSalesReturnsIndexRoute
+  '/finance/purchases/$documentType/$documentId_/edit': typeof FinancePurchasesDocumentTypeDocumentIdEditLazyRoute
   '/finance/sales/$documentType/$documentId_/edit': typeof FinanceSalesDocumentTypeDocumentIdEditLazyRoute
   '/finance/sales/returns/$returnId_/edit': typeof FinanceSalesReturnsReturnIdEditLazyRoute
 }
@@ -471,13 +537,18 @@ export interface FileRouteTypes {
     | '/master-data/'
     | '/report/'
     | '/finance/general-ledger/setup'
+    | '/finance/purchases/'
     | '/finance/sales/'
+    | '/finance/purchases/$documentType/$documentId'
+    | '/finance/purchases/$documentType/new'
     | '/finance/sales/$documentType/$documentId'
     | '/finance/sales/$documentType/new'
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
+    | '/finance/purchases/$documentType/'
     | '/finance/sales/$documentType/'
     | '/finance/sales/returns/'
+    | '/finance/purchases/$documentType/$documentId/edit'
     | '/finance/sales/$documentType/$documentId/edit'
     | '/finance/sales/returns/$returnId/edit'
   fileRoutesByTo: FileRoutesByTo
@@ -508,13 +579,18 @@ export interface FileRouteTypes {
     | '/master-data'
     | '/report'
     | '/finance/general-ledger/setup'
+    | '/finance/purchases'
     | '/finance/sales'
+    | '/finance/purchases/$documentType/$documentId'
+    | '/finance/purchases/$documentType/new'
     | '/finance/sales/$documentType/$documentId'
     | '/finance/sales/$documentType/new'
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
+    | '/finance/purchases/$documentType'
     | '/finance/sales/$documentType'
     | '/finance/sales/returns'
+    | '/finance/purchases/$documentType/$documentId/edit'
     | '/finance/sales/$documentType/$documentId/edit'
     | '/finance/sales/returns/$returnId/edit'
   id:
@@ -545,13 +621,18 @@ export interface FileRouteTypes {
     | '/master-data/'
     | '/report/'
     | '/finance/general-ledger/setup'
+    | '/finance/purchases/'
     | '/finance/sales/'
+    | '/finance/purchases/$documentType/$documentId'
+    | '/finance/purchases/$documentType/new'
     | '/finance/sales/$documentType/$documentId'
     | '/finance/sales/$documentType/new'
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
+    | '/finance/purchases/$documentType/'
     | '/finance/sales/$documentType/'
     | '/finance/sales/returns/'
+    | '/finance/purchases/$documentType/$documentId_/edit'
     | '/finance/sales/$documentType/$documentId_/edit'
     | '/finance/sales/returns/$returnId_/edit'
   fileRoutesById: FileRoutesById
@@ -582,13 +663,18 @@ export interface RootRouteChildren {
   FinanceIndexRoute: typeof FinanceIndexRoute
   MasterDataIndexRoute: typeof MasterDataIndexRoute
   ReportIndexRoute: typeof ReportIndexRoute
+  FinancePurchasesIndexRoute: typeof FinancePurchasesIndexRoute
   FinanceSalesIndexRoute: typeof FinanceSalesIndexRoute
+  FinancePurchasesDocumentTypeDocumentIdLazyRoute: typeof FinancePurchasesDocumentTypeDocumentIdLazyRoute
+  FinancePurchasesDocumentTypeNewLazyRoute: typeof FinancePurchasesDocumentTypeNewLazyRoute
   FinanceSalesDocumentTypeDocumentIdLazyRoute: typeof FinanceSalesDocumentTypeDocumentIdLazyRoute
   FinanceSalesDocumentTypeNewLazyRoute: typeof FinanceSalesDocumentTypeNewLazyRoute
   FinanceSalesReturnsReturnIdLazyRoute: typeof FinanceSalesReturnsReturnIdLazyRoute
   FinanceSalesReturnsNewLazyRoute: typeof FinanceSalesReturnsNewLazyRoute
+  FinancePurchasesDocumentTypeIndexRoute: typeof FinancePurchasesDocumentTypeIndexRoute
   FinanceSalesDocumentTypeIndexRoute: typeof FinanceSalesDocumentTypeIndexRoute
   FinanceSalesReturnsIndexRoute: typeof FinanceSalesReturnsIndexRoute
+  FinancePurchasesDocumentTypeDocumentIdEditLazyRoute: typeof FinancePurchasesDocumentTypeDocumentIdEditLazyRoute
   FinanceSalesDocumentTypeDocumentIdEditLazyRoute: typeof FinanceSalesDocumentTypeDocumentIdEditLazyRoute
   FinanceSalesReturnsReturnIdEditLazyRoute: typeof FinanceSalesReturnsReturnIdEditLazyRoute
 }
@@ -777,6 +863,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceSalesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/purchases/': {
+      id: '/finance/purchases/'
+      path: '/finance/purchases'
+      fullPath: '/finance/purchases/'
+      preLoaderRoute: typeof FinancePurchasesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/finance/general-ledger/setup': {
       id: '/finance/general-ledger/setup'
       path: '/setup'
@@ -796,6 +889,13 @@ declare module '@tanstack/react-router' {
       path: '/finance/sales/$documentType'
       fullPath: '/finance/sales/$documentType/'
       preLoaderRoute: typeof FinanceSalesDocumentTypeIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance/purchases/$documentType/': {
+      id: '/finance/purchases/$documentType/'
+      path: '/finance/purchases/$documentType'
+      fullPath: '/finance/purchases/$documentType/'
+      preLoaderRoute: typeof FinancePurchasesDocumentTypeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/finance/sales/returns/new': {
@@ -826,6 +926,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceSalesDocumentTypeDocumentIdLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/purchases/$documentType/new': {
+      id: '/finance/purchases/$documentType/new'
+      path: '/finance/purchases/$documentType/new'
+      fullPath: '/finance/purchases/$documentType/new'
+      preLoaderRoute: typeof FinancePurchasesDocumentTypeNewLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance/purchases/$documentType/$documentId': {
+      id: '/finance/purchases/$documentType/$documentId'
+      path: '/finance/purchases/$documentType/$documentId'
+      fullPath: '/finance/purchases/$documentType/$documentId'
+      preLoaderRoute: typeof FinancePurchasesDocumentTypeDocumentIdLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/finance/sales/returns/$returnId_/edit': {
       id: '/finance/sales/returns/$returnId_/edit'
       path: '/finance/sales/returns/$returnId/edit'
@@ -838,6 +952,13 @@ declare module '@tanstack/react-router' {
       path: '/finance/sales/$documentType/$documentId/edit'
       fullPath: '/finance/sales/$documentType/$documentId/edit'
       preLoaderRoute: typeof FinanceSalesDocumentTypeDocumentIdEditLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance/purchases/$documentType/$documentId_/edit': {
+      id: '/finance/purchases/$documentType/$documentId_/edit'
+      path: '/finance/purchases/$documentType/$documentId/edit'
+      fullPath: '/finance/purchases/$documentType/$documentId/edit'
+      preLoaderRoute: typeof FinancePurchasesDocumentTypeDocumentIdEditLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -884,14 +1005,23 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceIndexRoute: FinanceIndexRoute,
   MasterDataIndexRoute: MasterDataIndexRoute,
   ReportIndexRoute: ReportIndexRoute,
+  FinancePurchasesIndexRoute: FinancePurchasesIndexRoute,
   FinanceSalesIndexRoute: FinanceSalesIndexRoute,
+  FinancePurchasesDocumentTypeDocumentIdLazyRoute:
+    FinancePurchasesDocumentTypeDocumentIdLazyRoute,
+  FinancePurchasesDocumentTypeNewLazyRoute:
+    FinancePurchasesDocumentTypeNewLazyRoute,
   FinanceSalesDocumentTypeDocumentIdLazyRoute:
     FinanceSalesDocumentTypeDocumentIdLazyRoute,
   FinanceSalesDocumentTypeNewLazyRoute: FinanceSalesDocumentTypeNewLazyRoute,
   FinanceSalesReturnsReturnIdLazyRoute: FinanceSalesReturnsReturnIdLazyRoute,
   FinanceSalesReturnsNewLazyRoute: FinanceSalesReturnsNewLazyRoute,
+  FinancePurchasesDocumentTypeIndexRoute:
+    FinancePurchasesDocumentTypeIndexRoute,
   FinanceSalesDocumentTypeIndexRoute: FinanceSalesDocumentTypeIndexRoute,
   FinanceSalesReturnsIndexRoute: FinanceSalesReturnsIndexRoute,
+  FinancePurchasesDocumentTypeDocumentIdEditLazyRoute:
+    FinancePurchasesDocumentTypeDocumentIdEditLazyRoute,
   FinanceSalesDocumentTypeDocumentIdEditLazyRoute:
     FinanceSalesDocumentTypeDocumentIdEditLazyRoute,
   FinanceSalesReturnsReturnIdEditLazyRoute:

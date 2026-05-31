@@ -30,6 +30,8 @@ export const backupDatabase = async () => {
       salesInvoicePayments: await db.salesInvoicePayments.toArray(),
       salesReturns: await db.salesReturns.toArray(),
       salesReturnItems: await db.salesReturnItems.toArray(),
+      purchaseDocuments: await db.purchaseDocuments.toArray(),
+      purchaseDocumentItems: await db.purchaseDocumentItems.toArray(),
       chartOfAccounts: await db.chartOfAccounts.toArray(),
       financeAccountMappings: await db.financeAccountMappings.toArray(),
       accountingProfileSetting: await db.accountingProfileSetting.toArray(),
@@ -39,7 +41,7 @@ export const backupDatabase = async () => {
       journalEntryLines: await db.journalEntryLines.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 8,
+      version: 9,
       timestamp: new Date().toISOString(),
     };
 
@@ -64,7 +66,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -105,6 +107,8 @@ export const restoreDatabase = async (file: File) => {
           db.salesInvoicePayments,
           db.salesReturns,
           db.salesReturnItems,
+          db.purchaseDocuments,
+          db.purchaseDocumentItems,
           db.chartOfAccounts,
           db.financeAccountMappings,
           db.accountingProfileSetting,
@@ -137,6 +141,8 @@ export const restoreDatabase = async (file: File) => {
           await db.salesInvoicePayments.clear();
           await db.salesReturns.clear();
           await db.salesReturnItems.clear();
+          await db.purchaseDocuments.clear();
+          await db.purchaseDocumentItems.clear();
           await db.chartOfAccounts.clear();
           await db.financeAccountMappings.clear();
           await db.accountingProfileSetting.clear();
@@ -173,6 +179,8 @@ export const restoreDatabase = async (file: File) => {
           if (data.salesInvoicePayments?.length) await db.salesInvoicePayments.bulkAdd(data.salesInvoicePayments);
           if (data.salesReturns?.length) await db.salesReturns.bulkAdd(data.salesReturns);
           if (data.salesReturnItems?.length) await db.salesReturnItems.bulkAdd(data.salesReturnItems);
+          if (data.purchaseDocuments?.length) await db.purchaseDocuments.bulkAdd(data.purchaseDocuments);
+          if (data.purchaseDocumentItems?.length) await db.purchaseDocumentItems.bulkAdd(data.purchaseDocumentItems);
           if (data.chartOfAccounts?.length) await db.chartOfAccounts.bulkAdd(data.chartOfAccounts);
           if (data.financeAccountMappings?.length) await db.financeAccountMappings.bulkAdd(data.financeAccountMappings);
           if (data.accountingProfileSetting?.length) await db.accountingProfileSetting.bulkAdd(data.accountingProfileSetting);

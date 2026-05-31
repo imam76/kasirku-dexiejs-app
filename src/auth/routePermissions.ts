@@ -21,6 +21,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/finance/chart-of-accounts': 'FINANCE_ACCESS',
   '/finance/general-ledger': 'FINANCE_ACCESS',
   '/finance/sales': 'FINANCE_ACCESS',
+  '/finance/purchases': 'FINANCE_ACCESS',
   '/finance/sales/returns': 'SALES_RETURN_MANAGE',
   '/settings': 'SETTINGS_ACCESS',
   '/profit': 'PROFIT_VIEW',

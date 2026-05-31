@@ -85,6 +85,14 @@ export type SalesDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type SalesInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 export type SalesInvoicePaymentRecordStatus = 'ACTIVE' | 'VOIDED';
 export type SalesDocumentMarginBasis = 'BEFORE_TAX' | 'AFTER_TAX';
+export type PurchaseDocumentType =
+  | 'PURCHASE_REQUEST'
+  | 'REQUEST_FOR_QUOTATION'
+  | 'PURCHASE_ORDER'
+  | 'PURCHASE_RECEIPT'
+  | 'PURCHASE_INVOICE';
+export type PurchaseDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
+export type PurchaseInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 export type ReceivableAgingBucket =
   | 'CURRENT'
   | 'OVERDUE_1_30'
@@ -351,6 +359,83 @@ export interface SalesDocumentItem {
   is_price_edited?: boolean;
   price_edited_by?: string;
   price_edited_at?: string;
+  created_at: string;
+}
+
+export interface PurchaseDocument {
+  id: string;
+  document_number: string;
+  type: PurchaseDocumentType;
+  status: PurchaseDocumentStatus;
+  contact_id?: string;
+  supplier_name?: string;
+  supplier_phone?: string;
+  supplier_email?: string;
+  supplier_address?: string;
+  supplier_company_name?: string;
+  supplier_tax_number?: string;
+  department_id?: string;
+  department_code?: string;
+  department_name?: string;
+  project_id?: string;
+  project_code?: string;
+  project_name?: string;
+  document_date: string;
+  required_date?: string;
+  quotation_due_date?: string;
+  due_date?: string;
+  warehouse_name?: string;
+  source_document_id?: string;
+  source_document_number?: string;
+  source_document_type?: PurchaseDocumentType;
+  subtotal_amount?: number;
+  discount_amount?: number;
+  tax_id?: string;
+  tax_name?: string;
+  tax_code?: string;
+  tax_rate?: number;
+  tax_calculation_mode?: TaxCalculationMode;
+  tax_amount?: number;
+  total_amount?: number;
+  payment_status?: PurchaseInvoicePaymentStatus;
+  paid_amount?: number;
+  paid_at?: string;
+  payment_method?: PaymentMethod;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  finance_transaction_id?: string;
+  notes?: string;
+  issued_at?: string;
+  voided_at?: string;
+  void_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PurchaseDocumentItem {
+  id: string;
+  document_id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  unit: ProductUnit;
+  quantity: number;
+  ordered_quantity?: number;
+  received_quantity?: number;
+  price?: number;
+  discount_type?: PromoType;
+  discount_value?: number;
+  discount_amount?: number;
+  tax_id?: string;
+  tax_name?: string;
+  tax_code?: string;
+  tax_rate?: number;
+  tax_calculation_mode?: TaxCalculationMode;
+  tax_base_amount?: number;
+  tax_amount?: number;
+  subtotal?: number;
+  total_amount?: number;
   created_at: string;
 }
 

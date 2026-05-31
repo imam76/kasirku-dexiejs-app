@@ -41,6 +41,7 @@ import {
   Scale,
   Settings,
   SettingsIcon,
+  ShoppingBag,
   ShoppingCart,
   Sun,
   Users,
@@ -203,6 +204,7 @@ const RootLayout = () => {
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
         { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
         { to: '/finance/sales', label: t('nav.finance.sales'), icon: FileText },
+        { to: '/finance/purchases', label: t('nav.finance.purchases'), icon: ShoppingBag },
       ],
     },
     {
