@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react';
 import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic, Select, Row, Col, Divider, Empty } from 'antd';
 import { useFinance } from '@/hooks/useFinance';
+import { useCashBankTransfer } from '@/hooks/useCashBankTransfer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import CashBankTransferModal from '@/view/finance/CashBankTransferModal';
+import type { CashBankTransferFormData } from '@/lib/validations/cashBankTransfer';
 import {
   ArrowUpCircle,
   ArrowDownCircle,
@@ -14,12 +17,13 @@ import {
   Plus,
   Minus,
   Banknote,
+  ArrowLeftRight,
   TrendingUp,
   TrendingDown,
   LayoutDashboard,
   CreditCard
 } from 'lucide-react';
-import { FinanceTransaction, FinanceTransactionType } from '@/types';
+import { ChartOfAccount, FinanceTransaction, FinanceTransactionType, PaymentMethod } from '@/types';
 import {
   FINANCE_CATEGORIES,
   getFinanceTransactionBusinessType,
@@ -30,13 +34,25 @@ const { Option } = Select;
 
 export default function FinanceManagement() {
   const { balance, transactions, isLoading, addTransaction, isAdding, recalculate, isRecalculating } = useFinance();
+  const { cashBankAccounts, recordTransfer, isRecordingTransfer } = useCashBankTransfer();
   const { t } = useI18n();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [modalType, setModalType] = useState<FinanceTransactionType>('INCOME');
   const [accountFilter, setAccountFilter] = useState<string>('ALL');
   const [accountTypeFilter, setAccountTypeFilter] = useState<string>('ALL');
   const [form] = Form.useForm();
   const isMobile = useIsMobile();
+
+  const getDefaultCashAccountId = (paymentMethod: PaymentMethod) => {
+    const preferredId = paymentMethod === 'NON_TUNAI' ? 'bank' : 'cash';
+    const preferredCode = paymentMethod === 'NON_TUNAI' ? '1020' : '1010';
+    const preferredAccount = cashBankAccounts.find((account) => (
+      account.id === preferredId || account.code === preferredCode
+    ));
+
+    return preferredAccount?.id ?? cashBankAccounts[0]?.id;
+  };
 
   const summary = useMemo(() => {
     return transactions.reduce((acc, t) => {
@@ -71,6 +87,13 @@ export default function FinanceManagement() {
 
     return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
   }, [transactions]);
+
+  const cashBankAccountOptions = useMemo(() => (
+    cashBankAccounts.map((account: ChartOfAccount) => ({
+      value: account.id,
+      label: `${account.code} - ${account.name}`,
+    }))
+  ), [cashBankAccounts]);
 
   const accountTypeSummary = useMemo(() => {
     return filteredTransactions.reduce<Record<string, number>>((acc, transaction) => {
@@ -127,7 +150,14 @@ export default function FinanceManagement() {
       .sort((left, right) => left.label.localeCompare(right.label));
   }, [transactions]);
 
-  const handleAddTransaction = async (values: { amount: number; category: string; description: string }) => {
+  const handleAddTransaction = async (values: {
+    amount: number;
+    category: string;
+    description: string;
+    payment_method: PaymentMethod;
+    payment_channel?: string;
+    cash_account_id?: string;
+  }) => {
     try {
       await addTransaction({
         type: modalType,
@@ -140,9 +170,19 @@ export default function FinanceManagement() {
     }
   };
 
+  const handleCashBankTransfer = async (values: CashBankTransferFormData) => {
+    await recordTransfer(values);
+    setIsTransferModalOpen(false);
+  };
+
   const openModal = (type: FinanceTransactionType) => {
     setModalType(type);
     setIsModalOpen(true);
+    form.setFieldsValue({
+      payment_method: 'TUNAI',
+      cash_account_id: getDefaultCashAccountId('TUNAI'),
+      payment_channel: undefined,
+    });
 
     // Set default category based on type
     if (type === 'OPENING_BALANCE') {
@@ -152,6 +192,12 @@ export default function FinanceManagement() {
     } else if (type === 'EXPENSE') {
       form.setFieldsValue({ category: FINANCE_CATEGORIES.OPERATIONAL, description: '' });
     }
+  };
+
+  const handlePaymentMethodChange = (paymentMethod: PaymentMethod) => {
+    form.setFieldsValue({
+      cash_account_id: getDefaultCashAccountId(paymentMethod),
+    });
   };
 
   const getFinanceTypeMeta = (transaction: Pick<FinanceTransaction, 'type' | 'category'>) => {
@@ -186,6 +232,16 @@ export default function FinanceManagement() {
     };
   };
 
+  const getTransferDirectionTag = (transaction: FinanceTransaction) => {
+    if (!transaction.transfer_group_id || !transaction.transfer_direction) return null;
+
+    return (
+      <Tag color={transaction.transfer_direction === 'OUT' ? 'orange' : 'cyan'} className="m-0">
+        {transaction.transfer_direction === 'OUT' ? t('finance.transferOut') : t('finance.transferIn')}
+      </Tag>
+    );
+  };
+
   const columns = [
     {
       title: t('finance.date'),
@@ -214,12 +270,15 @@ export default function FinanceManagement() {
         const { color, icon, label } = getFinanceTypeMeta(record);
 
         return (
-          <Tag color={color}>
-            <div className="flex items-center gap-1.5">
-              {icon}
-              {label}
-            </div>
-          </Tag>
+          <div className="flex flex-col items-start gap-1">
+            <Tag color={color} className="m-0">
+              <div className="flex items-center gap-1.5">
+                {icon}
+                {label}
+              </div>
+            </Tag>
+            {getTransferDirectionTag(record)}
+          </div>
         );
       },
       width: 140,
@@ -275,6 +334,12 @@ export default function FinanceManagement() {
               onClick={() => openModal('OPENING_BALANCE')}
             >
               {t('finance.balanceCapital')}
+            </Button>
+            <Button
+              icon={<ArrowLeftRight size={16} />}
+              onClick={() => setIsTransferModalOpen(true)}
+            >
+              {t('finance.transfer')}
             </Button>
             <Button
               type="primary"
@@ -382,7 +447,7 @@ export default function FinanceManagement() {
       {
         isMobile &&
         <Row gutter={[12, 12]}>
-          <Col xs={6} sm={6} md={6}>
+          <Col xs={8} sm={8} md={8}>
             <Button
               onClick={() => recalculate()}
               loading={isRecalculating}
@@ -393,7 +458,7 @@ export default function FinanceManagement() {
             </Button>
           </Col>
 
-          <Col xs={6} sm={6} md={6}>
+          <Col xs={8} sm={8} md={8}>
             <Button
               onClick={() => openModal('OPENING_BALANCE')}
               className="h-16 flex flex-col items-center justify-center w-full"
@@ -403,7 +468,17 @@ export default function FinanceManagement() {
             </Button>
           </Col>
 
-          <Col xs={6} sm={6} md={6}>
+          <Col xs={8} sm={8} md={8}>
+            <Button
+              onClick={() => setIsTransferModalOpen(true)}
+              className="h-16 flex flex-col items-center justify-center w-full"
+            >
+              <ArrowLeftRight size={18} />
+              <span className="text-[10px] mt-1">{t('finance.transfer')}</span>
+            </Button>
+          </Col>
+
+          <Col xs={8} sm={8} md={8}>
             <Button
               type="primary"
               onClick={() => openModal('INCOME')}
@@ -414,7 +489,7 @@ export default function FinanceManagement() {
             </Button>
           </Col>
 
-          <Col xs={6} sm={6} md={6}>
+          <Col xs={8} sm={8} md={8}>
             <Button
               danger
               type="primary"
@@ -544,6 +619,14 @@ export default function FinanceManagement() {
                             ? `${transaction.account_code} - ${transaction.account_name}`
                             : t('finance.unmappedAccount')}
                         </Tag>
+                        {transaction.transfer_group_id && transaction.transfer_direction && (
+                          <Tag
+                            color={transaction.transfer_direction === 'OUT' ? 'orange' : 'cyan'}
+                            className="w-fit m-0 text-[10px] px-1.5 py-0"
+                          >
+                            {transaction.transfer_direction === 'OUT' ? t('finance.transferOut') : t('finance.transferIn')}
+                          </Tag>
+                        )}
                       </div>
                       <div className="text-right">
                         <div className={`text-sm font-bold ${businessType === 'EXPENSE' ? 'text-red-600' : 'text-green-600'}`}>
@@ -586,6 +669,14 @@ export default function FinanceManagement() {
           />
         )}
       </Card>
+
+      <CashBankTransferModal
+        open={isTransferModalOpen}
+        onCancel={() => setIsTransferModalOpen(false)}
+        accounts={cashBankAccounts}
+        onSubmit={handleCashBankTransfer}
+        submitting={isRecordingTransfer}
+      />
 
       <Modal
         title={
@@ -655,6 +746,37 @@ export default function FinanceManagement() {
                 )}
               </Select>
             )}
+          </Form.Item>
+
+          <Form.Item
+            name="payment_method"
+            label={t('checkout.method')}
+            rules={[{ required: true, message: t('salesDocuments.validation.required', { field: t('checkout.method') }) }]}
+          >
+            <Select
+              onChange={handlePaymentMethodChange}
+              options={[
+                { value: 'TUNAI', label: t('payment.cash') },
+                { value: 'NON_TUNAI', label: t('payment.nonCash') },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="cash_account_id"
+            label={t('finance.cashAccount')}
+            rules={[{ required: true, message: t('finance.cashAccountRequired') }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('finance.cashAccountPlaceholder')}
+              options={cashBankAccountOptions}
+            />
+          </Form.Item>
+
+          <Form.Item name="payment_channel" label={t('finance.paymentChannel')}>
+            <Input placeholder={t('finance.paymentChannelPlaceholder')} />
           </Form.Item>
 
           <Form.Item

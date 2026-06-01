@@ -6,7 +6,7 @@ import {
 } from '@/constants/finance';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
-import type { FinanceTransaction, FinanceTransactionType } from '@/types';
+import type { FinanceTransaction, FinanceTransactionType, PaymentMethod } from '@/types';
 import { getCashOrBankAccountForPayment } from '@/services/generalLedgerService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { isTransactionActive } from '@/utils/transactions';
@@ -16,6 +16,9 @@ interface AddFinanceTransactionInput {
   category: string;
   amount: number;
   description: string;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
+  cash_account_id?: string;
 }
 
 export const addFinanceTransaction = async ({
@@ -23,6 +26,9 @@ export const addFinanceTransaction = async ({
   category,
   amount,
   description,
+  payment_method,
+  payment_channel,
+  cash_account_id,
 }: AddFinanceTransactionInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
@@ -38,7 +44,8 @@ export const addFinanceTransaction = async ({
   let newProfitBalance = currentProfitAmount;
   const affectsProfit = isProfitAffectingFinanceTransaction(normalizedType, category);
   const accountSnapshot = await getFinanceAccountSnapshotForCategory(category);
-  const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
+  const paymentMethod = payment_method ?? 'TUNAI';
+  const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, cash_account_id);
 
   if (normalizedType === 'INCOME' || normalizedType === 'OPENING_BALANCE') {
     newBalance += amount;
@@ -69,7 +76,8 @@ export const addFinanceTransaction = async ({
       amount,
       description,
       created_at: now,
-      payment_method: 'TUNAI',
+      payment_method: paymentMethod,
+      payment_channel,
       cash_account_id: cashAccount.id,
       cash_account_code: cashAccount.code,
       cash_account_name: cashAccount.name,

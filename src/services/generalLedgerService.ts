@@ -31,6 +31,7 @@ const SOURCE_EVENTS = {
   SALES_INVOICE_PAYMENT_VOIDED: 'SALES_INVOICE_PAYMENT_VOIDED',
   SALES_RETURN_ISSUED: 'SALES_RETURN_ISSUED',
   PURCHASE_INVOICE_PAYMENT_POSTED: 'PURCHASE_INVOICE_PAYMENT_POSTED',
+  CASH_BANK_TRANSFER_POSTED: 'CASH_BANK_TRANSFER_POSTED',
   OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
   MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
 } as const;
@@ -885,6 +886,33 @@ export const reversePurchaseInvoicePaymentRecordJournal = async (
     source_id: payment.id,
     source_event: SOURCE_EVENTS.PURCHASE_INVOICE_PAYMENT_POSTED,
     reason,
+  });
+};
+
+export const postCashBankTransferJournal = async (input: {
+  transferGroupId: string;
+  transferDate: string;
+  amount: number;
+  fromAccount: ChartOfAccount;
+  toAccount: ChartOfAccount;
+  description?: string;
+}) => {
+  if (!await isGeneralLedgerPostingEnabled(input.transferDate)) return undefined;
+
+  const amount = amountOrZero(input.amount);
+  if (amount <= 0) return undefined;
+
+  return postBalancedJournalEntry({
+    source_type: 'CASH_BANK_TRANSFER',
+    source_id: input.transferGroupId,
+    source_number: input.transferGroupId,
+    source_event: SOURCE_EVENTS.CASH_BANK_TRANSFER_POSTED,
+    entry_date: input.transferDate,
+    description: input.description ?? `Transfer kas/bank ${input.fromAccount.code} ke ${input.toAccount.code}`,
+    lines: [
+      createDebitLine(input.toAccount, amount, 'Kas/bank bertambah dari transfer internal'),
+      createCreditLine(input.fromAccount, amount, 'Kas/bank berkurang karena transfer internal'),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
   });
 };
 

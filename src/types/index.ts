@@ -857,6 +857,7 @@ export type JournalSourceType =
   | 'SALES_RETURN'
   | 'ACCOUNTS_PAYABLE'
   | 'PURCHASE_INVOICE_PAYMENT'
+  | 'CASH_BANK_TRANSFER'
   | 'MANUAL_JOURNAL'
   | 'OPENING_BALANCE';
 
@@ -1058,6 +1059,9 @@ export interface FinanceTransaction {
   cash_account_id?: string;
   cash_account_code?: string;
   cash_account_name?: string;
+  transfer_group_id?: string;
+  transfer_direction?: 'OUT' | 'IN';
+  reversal_of_transfer_group_id?: string;
 }
 
 export interface FinanceBalance {
