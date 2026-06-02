@@ -441,6 +441,22 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(32).stores({
+      authUsers: 'id, role, is_active, sync_status, created_at'
+    }).upgrade(async (tx) => {
+      const authUsers = await tx.table<AuthUser, string>('authUsers').toArray();
+      const authUsersWithoutSyncStatus = authUsers
+        .filter((user) => !user.sync_status)
+        .map((user) => ({
+          ...user,
+          sync_status: 'pending' as const,
+        }));
+
+      if (authUsersWithoutSyncStatus.length > 0) {
+        await tx.table<AuthUser, string>('authUsers').bulkPut(authUsersWithoutSyncStatus);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

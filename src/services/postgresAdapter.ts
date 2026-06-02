@@ -1,5 +1,29 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ProductUnit, ProductUnitMapping, StockMutationSourceType, WholesalePrice } from '@/types';
+import type { ProductUnit, ProductUnitMapping, StockMutationSourceType, UserRole, WholesalePrice } from '@/types';
+
+export interface RemoteAuthUserDto {
+  id: string;
+  name: string;
+  role: UserRole;
+  pin_hash: string;
+  pin_salt: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteActivityLogDto {
+  id: string;
+  user_id?: string | null;
+  user_name?: string | null;
+  role?: UserRole | null;
+  action: string;
+  entity: string;
+  entity_id?: string | null;
+  description: string;
+  created_at: string;
+}
 
 export interface RemoteDepartmentDto {
   id: string;
@@ -127,6 +151,35 @@ export const postgresAdapter = {
   async healthCheck() {
     if (!isTauriRuntime()) return false;
     return invoke<boolean>('postgres_health_check');
+  },
+};
+
+export const authUserPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteAuthUserDto[]>('postgres_list_auth_users');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAuthUserDto | null>('postgres_get_auth_user', { id });
+  },
+
+  async upsert(input: RemoteAuthUserDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAuthUserDto>('postgres_upsert_auth_user', { input });
+  },
+};
+
+export const activityLogPostgresAdapter = {
+  async list(limit = 200) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteActivityLogDto[]>('postgres_list_activity_logs', { limit });
+  },
+
+  async upsert(input: RemoteActivityLogDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteActivityLogDto>('postgres_upsert_activity_log', { input });
   },
 };
 

@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { mergeRemoteAuthUsersIntoDexie } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
 import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
@@ -6,6 +7,8 @@ import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
 import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
 import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
 import {
+  activityLogPostgresAdapter,
+  authUserPostgresAdapter,
   contactPostgresAdapter,
   departmentPostgresAdapter,
   isTauriRuntime,
@@ -14,6 +17,8 @@ import {
   stockMutationPostgresAdapter,
   taxPostgresAdapter,
   warehousePostgresAdapter,
+  type RemoteActivityLogDto,
+  type RemoteAuthUserDto,
   type RemoteContactDto,
   type RemoteDepartmentDto,
   type RemoteProductDto,
@@ -22,9 +27,11 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { Contact, Department, Product, Project, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, Department, Product, Project, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
+const ACTIVITY_LOG_ENTITY = 'activityLogs';
+const AUTH_USER_ENTITY = 'authUsers';
 const CONTACT_ENTITY = 'contacts';
 const DEPARTMENT_ENTITY = 'departments';
 const PRODUCT_ENTITY = 'products';
@@ -42,6 +49,29 @@ const getErrorMessage = (error: unknown) => (
 const normalizeRemoteNumber = (value: number | undefined) => (
   typeof value === 'number' && Number.isFinite(value) ? value : 0
 );
+
+const mapActivityLogToRemoteDto = (log: ActivityLog): RemoteActivityLogDto => ({
+  id: log.id,
+  user_id: log.user_id,
+  user_name: log.user_name,
+  role: log.role,
+  action: log.action,
+  entity: log.entity,
+  entity_id: log.entity_id,
+  description: log.description,
+  created_at: log.created_at,
+});
+
+const mapAuthUserToRemoteDto = (user: AuthUser): RemoteAuthUserDto => ({
+  id: user.id,
+  name: user.name,
+  role: user.role,
+  pin_hash: user.pin_hash,
+  pin_salt: user.pin_salt,
+  is_active: user.is_active,
+  created_at: user.created_at,
+  updated_at: user.updated_at,
+});
 
 const mapContactToRemoteDto = (contact: Contact): RemoteContactDto => ({
   id: contact.id,
@@ -170,6 +200,35 @@ const isRemoteContactDto = (payload: unknown): payload is RemoteContactDto => {
   );
 };
 
+const isRemoteActivityLogDto = (payload: unknown): payload is RemoteActivityLogDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteActivityLogDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.action === 'string' &&
+    typeof candidate.entity === 'string' &&
+    typeof candidate.description === 'string' &&
+    typeof candidate.created_at === 'string'
+  );
+};
+
+const isRemoteAuthUserDto = (payload: unknown): payload is RemoteAuthUserDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteAuthUserDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.role === 'string' &&
+    typeof candidate.pin_hash === 'string' &&
+    typeof candidate.pin_salt === 'string' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteDepartmentDto = (payload: unknown): payload is RemoteDepartmentDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -274,6 +333,17 @@ const updateContactSyncMetadata = async (
   await db.contacts.update(contactId, syncMetadata);
 };
 
+const updateAuthUserSyncMetadata = async (
+  userId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<AuthUser, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentUser = await db.authUsers.get(userId);
+  if (!currentUser || currentUser.updated_at !== sourceUpdatedAt) return;
+
+  await db.authUsers.update(userId, syncMetadata);
+};
+
 const updateDepartmentSyncMetadata = async (
   departmentId: string,
   sourceUpdatedAt: string,
@@ -354,6 +424,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     updated_at: now,
   });
 
+  if (queueItem.entity === AUTH_USER_ENTITY && isRemoteAuthUserDto(queueItem.payload)) {
+    await updateAuthUserSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === CONTACT_ENTITY && isRemoteContactDto(queueItem.payload)) {
     await updateContactSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -395,6 +472,30 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
       sync_error: errorMessage,
     });
   }
+};
+
+const processActivityLogQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Activity log sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteActivityLogDto(queueItem.payload)) {
+    throw new Error('Payload activity log sync queue tidak valid.');
+  }
+
+  return activityLogPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processAuthUserQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Auth user sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteAuthUserDto(queueItem.payload)) {
+    throw new Error('Payload auth user sync queue tidak valid.');
+  }
+
+  return authUserPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processContactQueueItem = async (queueItem: SyncQueueItem) => {
@@ -494,6 +595,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
   });
 
   try {
+    let remoteActivityLog: RemoteActivityLogDto | null = null;
+    let remoteAuthUser: RemoteAuthUserDto | null = null;
     let remoteContact: RemoteContactDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
@@ -502,7 +605,11 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteTax: RemoteTaxDto | null = null;
     let remoteWarehouse: RemoteWarehouseDto | null = null;
 
-    if (currentQueueItem.entity === CONTACT_ENTITY) {
+    if (currentQueueItem.entity === ACTIVITY_LOG_ENTITY) {
+      remoteActivityLog = await processActivityLogQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === AUTH_USER_ENTITY) {
+      remoteAuthUser = await processAuthUserQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === CONTACT_ENTITY) {
       remoteContact = await processContactQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === DEPARTMENT_ENTITY) {
       remoteDepartment = await processDepartmentQueueItem(currentQueueItem);
@@ -613,6 +720,23 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
 
     const syncedAt = new Date().toISOString();
 
+    if (remoteActivityLog && isRemoteActivityLogDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      return;
+    }
+
+    if (remoteAuthUser && isRemoteAuthUserDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateAuthUserSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteAuthUser.updated_at,
+      });
+      await mergeRemoteAuthUsersIntoDexie([remoteAuthUser], syncedAt);
+      return;
+    }
+
     if (remoteContact && isRemoteContactDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateContactSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
@@ -718,6 +842,71 @@ export const processPendingSyncQueue = async (limit = SYNC_QUEUE_BATCH_SIZE) => 
   const pendingQueueCount = await db.syncQueue.where('status').equals('pending').count();
   if (pendingQueueCount > 0) {
     void processPendingSyncQueue(limit);
+  }
+};
+
+export const enqueueActivityLogSync = async (log: ActivityLog) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ACTIVITY_LOG_ENTITY,
+    entity_id: log.id,
+    operation: 'create',
+    payload: mapActivityLogToRemoteDto(log),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueAuthUserSync = async (
+  user: AuthUser,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: AUTH_USER_ENTITY,
+    entity_id: user.id,
+    operation,
+    payload: mapAuthUserToRemoteDto(user),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingAuthUsersForSync = async () => {
+  const authUsers = (await db.authUsers.toArray())
+    .filter((user) => user.sync_status === 'pending' || user.sync_status === 'failed');
+
+  for (const user of authUsers) {
+    const existingQueueItem = (await db.syncQueue
+      .where('entity')
+      .equals(AUTH_USER_ENTITY)
+      .toArray())
+      .find((queueItem) => (
+        queueItem.entity_id === user.id &&
+        queueItem.status !== 'synced' &&
+        isRemoteAuthUserDto(queueItem.payload) &&
+        queueItem.payload.updated_at === user.updated_at
+      ));
+
+    if (!existingQueueItem) {
+      await enqueueAuthUserSync(user, 'update');
+    }
   }
 };
 

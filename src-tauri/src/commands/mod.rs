@@ -1,3 +1,4 @@
+pub mod auth_commands;
 pub mod contact_commands;
 pub mod department_commands;
 pub mod postgres_health;

@@ -145,6 +145,10 @@ export interface AuthUser {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: AuthUserSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface AuthSession {
@@ -235,6 +239,7 @@ export interface Warehouse {
 }
 
 export type EntitySyncStatus = 'pending' | 'synced' | 'failed';
+export type AuthUserSyncStatus = EntitySyncStatus;
 export type ContactSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;

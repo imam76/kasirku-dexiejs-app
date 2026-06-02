@@ -1,6 +1,8 @@
 import { db } from '@/lib/db';
 import type { ActivityLog, AuthUser, Permission, UserRole } from '@/types';
 import { hasPermission } from './permissions';
+import { refreshAuthUsersFromPostgres } from './authReadService';
+import { enqueueActivityLogSync, enqueueAuthUserSync } from '@/services/syncQueueService';
 
 const SESSION_STORAGE_KEY = 'kasirku-auth-session-id';
 const PIN_HASH_ALGORITHM = 'SHA-256';
@@ -75,6 +77,12 @@ export const verifyPin = async (pin: string, hash: string, salt: string): Promis
 
 const normalizeName = (name: string) => name.trim();
 
+const withPendingAuthUserSync = (user: AuthUser): AuthUser => ({
+  ...user,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 const assertValidName = (name: string) => {
   if (normalizeName(name).length < 2) {
     throw new Error('Nama user minimal 2 karakter.');
@@ -139,6 +147,12 @@ const requireActivityLogAccess = async () => {
 };
 
 export const ensureDefaultOwner = async (): Promise<void> => {
+  try {
+    await refreshAuthUsersFromPostgres();
+  } catch (error) {
+    console.error('Failed to refresh auth users from PostgreSQL', error);
+  }
+
   const activeOwner = await db.authUsers
     .where('role')
     .equals('OWNER')
@@ -168,7 +182,7 @@ export const createOwnerUser = async (input: { name: string; pin: string }): Pro
 
   const now = new Date().toISOString();
   const { hash, salt } = await createPinHash(input.pin);
-  const owner: AuthUser = {
+  const owner: AuthUser = withPendingAuthUserSync({
     id: crypto.randomUUID(),
     name: input.name,
     role: 'OWNER',
@@ -177,9 +191,10 @@ export const createOwnerUser = async (input: { name: string; pin: string }): Pro
     is_active: true,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.authUsers.add(owner);
+  await enqueueAuthUserSync(owner, 'create');
   await writeActivityLog({
     user: owner,
     action: 'AUTH_OWNER_CREATED',
@@ -201,7 +216,7 @@ export const createAuthUser = async (input: CreateAuthUserInput): Promise<AuthUs
 
   const now = new Date().toISOString();
   const { hash, salt } = await createPinHash(input.pin);
-  const user: AuthUser = {
+  const user: AuthUser = withPendingAuthUserSync({
     id: crypto.randomUUID(),
     name,
     role: input.role,
@@ -210,9 +225,10 @@ export const createAuthUser = async (input: CreateAuthUserInput): Promise<AuthUs
     is_active: true,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.authUsers.add(user);
+  await enqueueAuthUserSync(user, 'create');
   await writeActivityLog({
     user: actor,
     action: 'AUTH_USER_CREATED',
@@ -239,10 +255,13 @@ export const updateAuthUser = async (input: UpdateAuthUserInput): Promise<AuthUs
     await assertAnotherActiveOwnerExists(targetUser.id);
   }
 
+  const updatedAt = new Date().toISOString();
   await db.authUsers.update(targetUser.id, {
     name,
     role: input.role,
-    updated_at: new Date().toISOString(),
+    updated_at: updatedAt,
+    sync_status: 'pending',
+    sync_error: undefined,
   });
 
   const updatedUser = await db.authUsers.get(targetUser.id);
@@ -250,6 +269,7 @@ export const updateAuthUser = async (input: UpdateAuthUserInput): Promise<AuthUs
     throw new Error('User tidak ditemukan setelah diperbarui.');
   }
 
+  await enqueueAuthUserSync(updatedUser, 'update');
   await writeActivityLog({
     user: actor,
     action: 'AUTH_USER_UPDATED',
@@ -273,12 +293,21 @@ export const resetAuthUserPin = async (input: ResetAuthUserPinInput): Promise<vo
   await assertPinAvailable(input.pin, targetUser.id);
 
   const { hash, salt } = await createPinHash(input.pin);
+  const updatedAt = new Date().toISOString();
   await db.authUsers.update(targetUser.id, {
     pin_hash: hash,
     pin_salt: salt,
-    updated_at: new Date().toISOString(),
+    updated_at: updatedAt,
+    sync_status: 'pending',
+    sync_error: undefined,
   });
 
+  const updatedUser = await db.authUsers.get(targetUser.id);
+  if (!updatedUser) {
+    throw new Error('User tidak ditemukan setelah PIN diperbarui.');
+  }
+
+  await enqueueAuthUserSync(updatedUser, 'update');
   await writeActivityLog({
     user: actor,
     action: 'AUTH_USER_PIN_RESET',
@@ -304,15 +333,24 @@ export const setAuthUserActive = async (userId: string, isActive: boolean): Prom
     await assertAnotherActiveOwnerExists(targetUser.id);
   }
 
+  const updatedAt = new Date().toISOString();
   await db.authUsers.update(targetUser.id, {
     is_active: isActive,
-    updated_at: new Date().toISOString(),
+    updated_at: updatedAt,
+    sync_status: 'pending',
+    sync_error: undefined,
   });
 
   if (!isActive) {
     await db.authSessions.where('user_id').equals(targetUser.id).delete();
   }
 
+  const updatedUser = await db.authUsers.get(targetUser.id);
+  if (!updatedUser) {
+    throw new Error('User tidak ditemukan setelah status diperbarui.');
+  }
+
+  await enqueueAuthUserSync(updatedUser, 'update');
   await writeActivityLog({
     user: actor,
     action: isActive ? 'AUTH_USER_ENABLED' : 'AUTH_USER_DISABLED',
@@ -430,6 +468,9 @@ export const writeActivityLog = async (input: ActivityLogInput): Promise<void> =
   };
 
   await db.activityLogs.add(log);
+  setTimeout(() => {
+    void enqueueActivityLogSync(log);
+  }, 0);
 };
 
 export const requireRolePermission = (role: UserRole | undefined, permission: Permission) => {

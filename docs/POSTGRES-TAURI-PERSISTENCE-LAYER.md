@@ -770,9 +770,11 @@ Last write wins berdasarkan updated_at
 Implementasi pilot saat ini:
 
 - `postgres_upsert_department`, `postgres_upsert_project`, `postgres_upsert_tax`, `postgres_upsert_contact`, `postgres_upsert_warehouse`, dan `postgres_upsert_product` hanya menimpa row PostgreSQL jika `EXCLUDED.updated_at >= updated_at` row existing.
+- `postgres_upsert_auth_user` mengikuti pola yang sama untuk user master: local update dikirim lewat sync queue, lalu remote terbaru di-merge kembali ke Dexie.
 - Jika payload lokal kalah dari row remote yang lebih baru, repository mengembalikan row remote dan frontend me-merge hasilnya kembali ke Dexie.
 - Read refresh dari PostgreSQL tetap tidak menimpa data lokal dengan `sync_status = "pending"` atau `"failed"`.
 - `stock_mutations` tidak memakai last write wins. Mutasi stok disimpan sebagai event append-only yang idempotent; retry sync dengan `id` yang sama tidak menambah/mengurangi stok dua kali.
+- `activity_logs` juga append-only dan idempotent berdasarkan `id`; tidak ada operasi edit/delete activity log.
 
 Namun untuk entity penting seperti stock, finance transaction, journal, sales invoice, dan purchase invoice, jangan hanya mengandalkan last write wins.
 
@@ -822,6 +824,9 @@ Implementasi saat ini:
 - `postgres_upsert_stock_mutation` bersifat idempotent: insert event baru akan mengubah `products.stock`, sedangkan retry dengan event yang sama hanya mengembalikan event existing.
 - Workflow yang sudah mengirim event mutasi stok: POS checkout, void POS transaction, issue/void Sales Delivery, issue/void Purchase Receipt, issue/void Purchase Return, issue/void Sales Return restock, dan Shopping Note.
 - Sales documents dan purchase documents secara penuh belum dipindahkan ke PostgreSQL pada fase ini. Yang disinkronkan baru event mutasi stoknya, bukan header/item dokumen, payment, status history, atau journal dokumen.
+- `auth_users` dan `activity_logs` sudah masuk untuk persiapan multi-user: migration PostgreSQL, Rust DTO/repository/command, frontend adapter, sync queue, read refresh, dan merge Dexie.
+- `auth_sessions` tetap lokal Dexie dan tidak disinkronkan ke PostgreSQL karena session adalah state per device.
+- `activity_logs` dikirim sebagai event append-only dan juga direfresh dari PostgreSQL agar Activity Log Viewer dapat melihat log dari device lain saat runtime Tauri online.
 - Finance transaction dan journal/general ledger tetap belum dipindahkan ke PostgreSQL. Bagian itu masuk fase berikutnya karena perlu transaction boundary, conflict rule, audit, dan status/version rule yang lebih ketat.
 
 Alasan urutan:
@@ -867,6 +872,8 @@ Contoh query:
 ```sql
 SELECT * FROM departments ORDER BY name ASC;
 SELECT * FROM stock_mutations ORDER BY occurred_at DESC;
+SELECT id, name, role, is_active, updated_at FROM auth_users ORDER BY created_at DESC;
+SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 200;
 ```
 
 ## Fase 19 - Hal yang Perlu Dihindari
@@ -878,6 +885,7 @@ SELECT * FROM stock_mutations ORDER BY occurred_at DESC;
 - Jangan membuat query SQL dari string input user tanpa parameter binding.
 - Jangan memindahkan kalkulasi finance/stok ke Rust sebelum domain rule stabil.
 - Jangan menyamakan mutasi stok transaksi dengan sync master `products.stock` berbasis last write wins. Gunakan event idempotent/append-only agar retry sync tidak menggandakan stok.
+- Jangan menyinkronkan `authSessions` ke PostgreSQL. Session login harus tetap lokal per device; yang disinkronkan adalah `auth_users` dan `activity_logs`.
 - Jangan memulai dari entity yang punya banyak side effect.
 - Jangan menganggap `localhost` selalu benar untuk semua target. Untuk Android/mobile, `localhost` mengarah ke device, bukan host laptop. Gunakan host yang bisa dijangkau device atau tunda fitur PostgreSQL untuk target mobile sampai arsitektur server siap.
 

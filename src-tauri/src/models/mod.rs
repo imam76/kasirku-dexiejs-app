@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod contact;
 pub mod department;
 pub mod product;

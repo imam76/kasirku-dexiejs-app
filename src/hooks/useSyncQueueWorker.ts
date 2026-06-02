@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
+import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
-import { processPendingSyncQueue } from '@/services/syncQueueService';
+import { enqueuePendingAuthUsersForSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
 
@@ -11,7 +12,10 @@ export const useSyncQueueWorker = () => {
   useEffect(() => {
     const syncWhenOnline = async () => {
       try {
+        await enqueuePendingAuthUsersForSync();
         await processPendingSyncQueue();
+        await refreshAuthUsersFromPostgres();
+        await refreshActivityLogsFromPostgres();
         await refreshDepartmentsFromPostgres();
         await refreshProjectsFromPostgres();
         await refreshTaxesFromPostgres();

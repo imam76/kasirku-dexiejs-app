@@ -1,3 +1,4 @@
+pub mod auth_repository;
 pub mod contact_repository;
 pub mod department_repository;
 pub mod product_repository;
