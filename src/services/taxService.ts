@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { taxSchema } from '@/lib/validations/tax';
+import { enqueueTaxSync } from '@/services/syncQueueService';
 import type { Tax, TaxCalculationMode, TaxRateType } from '@/types';
 
 export interface TaxUpsertInput {
@@ -36,17 +37,30 @@ const sanitizeTaxInput = (input: TaxUpsertInput): SanitizedTaxInput => {
   };
 };
 
-const clearOtherDefaultTaxes = async (taxId: string) => {
+const withPendingSync = (tax: Tax): Tax => ({
+  ...tax,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
+const clearOtherDefaultTaxes = async (taxId: string, updatedAt = new Date().toISOString()): Promise<Tax[]> => {
   const defaultTaxes = await db.taxes
     .where('is_default')
     .equals(1)
     .and((tax) => tax.id !== taxId)
     .toArray();
 
-  await Promise.all(defaultTaxes.map((tax) => db.taxes.update(tax.id, {
+  const clearedTaxes = defaultTaxes.map((tax) => withPendingSync({
+    ...tax,
     is_default: false,
-    updated_at: new Date().toISOString(),
-  })));
+    updated_at: updatedAt,
+  }));
+
+  if (clearedTaxes.length > 0) {
+    await db.taxes.bulkPut(clearedTaxes);
+  }
+
+  return clearedTaxes;
 };
 
 export const createTax = async (input: TaxUpsertInput): Promise<Tax> => {
@@ -55,17 +69,18 @@ export const createTax = async (input: TaxUpsertInput): Promise<Tax> => {
 
   const sanitizedInput = sanitizeTaxInput(input);
   const now = new Date().toISOString();
-  const tax: Tax = {
+  const tax: Tax = withPendingSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
     is_default: sanitizedInput.is_active ? sanitizedInput.is_default : false,
     created_at: now,
     updated_at: now,
-  };
+  });
+  let clearedDefaultTaxes: Tax[] = [];
 
   await db.transaction('rw', db.taxes, async () => {
     if (tax.is_default) {
-      await clearOtherDefaultTaxes(tax.id);
+      clearedDefaultTaxes = await clearOtherDefaultTaxes(tax.id, now);
     }
     await db.taxes.add(tax);
   });
@@ -77,6 +92,10 @@ export const createTax = async (input: TaxUpsertInput): Promise<Tax> => {
     entity_id: tax.id,
     description: `${currentUser?.name ?? 'User'} membuat tax ${tax.name}.`,
   });
+  for (const clearedTax of clearedDefaultTaxes) {
+    await enqueueTaxSync(clearedTax, 'update');
+  }
+  await enqueueTaxSync(tax, 'create');
 
   return tax;
 };
@@ -91,16 +110,17 @@ export const updateTax = async (id: string, input: TaxUpsertInput): Promise<Tax>
   }
 
   const sanitizedInput = sanitizeTaxInput(input);
-  const updatedTax: Tax = {
+  const updatedTax: Tax = withPendingSync({
     ...existingTax,
     ...sanitizedInput,
     is_default: sanitizedInput.is_active ? sanitizedInput.is_default : false,
     updated_at: new Date().toISOString(),
-  };
+  });
+  let clearedDefaultTaxes: Tax[] = [];
 
   await db.transaction('rw', db.taxes, async () => {
     if (updatedTax.is_default) {
-      await clearOtherDefaultTaxes(id);
+      clearedDefaultTaxes = await clearOtherDefaultTaxes(id, updatedTax.updated_at);
     }
     await db.taxes.put(updatedTax);
   });
@@ -112,6 +132,10 @@ export const updateTax = async (id: string, input: TaxUpsertInput): Promise<Tax>
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memperbarui tax ${updatedTax.name}.`,
   });
+  for (const clearedTax of clearedDefaultTaxes) {
+    await enqueueTaxSync(clearedTax, 'update');
+  }
+  await enqueueTaxSync(updatedTax, 'update');
 
   return updatedTax;
 };
@@ -125,12 +149,12 @@ export const archiveTax = async (id: string): Promise<Tax> => {
     throw new Error('Tax tidak ditemukan.');
   }
 
-  const archivedTax: Tax = {
+  const archivedTax: Tax = withPendingSync({
     ...tax,
     is_active: false,
     is_default: false,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.taxes.put(archivedTax);
   await writeActivityLog({
@@ -140,6 +164,7 @@ export const archiveTax = async (id: string): Promise<Tax> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan tax ${tax.name}.`,
   });
+  await enqueueTaxSync(archivedTax, 'delete');
 
   return archivedTax;
 };
@@ -153,11 +178,11 @@ export const restoreTax = async (id: string): Promise<Tax> => {
     throw new Error('Tax tidak ditemukan.');
   }
 
-  const restoredTax: Tax = {
+  const restoredTax: Tax = withPendingSync({
     ...tax,
     is_active: true,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.taxes.put(restoredTax);
   await writeActivityLog({
@@ -167,6 +192,7 @@ export const restoreTax = async (id: string): Promise<Tax> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan tax ${tax.name}.`,
   });
+  await enqueueTaxSync(restoredTax, 'update');
 
   return restoredTax;
 };
@@ -183,14 +209,15 @@ export const setDefaultTax = async (id: string): Promise<Tax> => {
     throw new Error('Tax nonaktif tidak bisa dijadikan default.');
   }
 
-  const defaultTax: Tax = {
+  const defaultTax: Tax = withPendingSync({
     ...tax,
     is_default: true,
     updated_at: new Date().toISOString(),
-  };
+  });
+  let clearedDefaultTaxes: Tax[] = [];
 
   await db.transaction('rw', db.taxes, async () => {
-    await clearOtherDefaultTaxes(id);
+    clearedDefaultTaxes = await clearOtherDefaultTaxes(id, defaultTax.updated_at);
     await db.taxes.put(defaultTax);
   });
 
@@ -201,6 +228,10 @@ export const setDefaultTax = async (id: string): Promise<Tax> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} menjadikan tax ${tax.name} sebagai default.`,
   });
+  for (const clearedTax of clearedDefaultTaxes) {
+    await enqueueTaxSync(clearedTax, 'update');
+  }
+  await enqueueTaxSync(defaultTax, 'update');
 
   return defaultTax;
 };

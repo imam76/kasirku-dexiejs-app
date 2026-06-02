@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { projectSchema } from '@/lib/validations/project';
+import { enqueueProjectSync } from '@/services/syncQueueService';
 import type { Project, ProjectStatus } from '@/types';
 
 export interface ProjectUpsertInput {
@@ -52,6 +53,12 @@ const assertProjectCodeAvailable = async (code: string | undefined, excludeProje
   }
 };
 
+const withPendingSync = (project: Project): Project => ({
+  ...project,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 export const createProject = async (input: ProjectUpsertInput): Promise<Project> => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
@@ -60,12 +67,12 @@ export const createProject = async (input: ProjectUpsertInput): Promise<Project>
   await assertProjectCodeAvailable(sanitizedInput.code);
 
   const now = new Date().toISOString();
-  const project: Project = {
+  const project: Project = withPendingSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.projects.add(project);
   await writeActivityLog({
@@ -75,6 +82,7 @@ export const createProject = async (input: ProjectUpsertInput): Promise<Project>
     entity_id: project.id,
     description: `${currentUser?.name ?? 'User'} membuat project ${project.name}.`,
   });
+  await enqueueProjectSync(project, 'create');
 
   return project;
 };
@@ -91,11 +99,11 @@ export const updateProject = async (id: string, input: ProjectUpsertInput): Prom
   const sanitizedInput = sanitizeProjectInput(input);
   await assertProjectCodeAvailable(sanitizedInput.code, id);
 
-  const updatedProject: Project = {
+  const updatedProject: Project = withPendingSync({
     ...existingProject,
     ...sanitizedInput,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.projects.put(updatedProject);
   await writeActivityLog({
@@ -105,6 +113,7 @@ export const updateProject = async (id: string, input: ProjectUpsertInput): Prom
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memperbarui project ${updatedProject.name}.`,
   });
+  await enqueueProjectSync(updatedProject, 'update');
 
   return updatedProject;
 };
@@ -118,11 +127,11 @@ export const archiveProject = async (id: string): Promise<Project> => {
     throw new Error('Project tidak ditemukan.');
   }
 
-  const archivedProject: Project = {
+  const archivedProject: Project = withPendingSync({
     ...project,
     is_active: false,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.projects.put(archivedProject);
   await writeActivityLog({
@@ -132,6 +141,7 @@ export const archiveProject = async (id: string): Promise<Project> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan project ${project.name}.`,
   });
+  await enqueueProjectSync(archivedProject, 'delete');
 
   return archivedProject;
 };
@@ -147,11 +157,11 @@ export const restoreProject = async (id: string): Promise<Project> => {
 
   await assertProjectCodeAvailable(project.code, id);
 
-  const restoredProject: Project = {
+  const restoredProject: Project = withPendingSync({
     ...project,
     is_active: true,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.projects.put(restoredProject);
   await writeActivityLog({
@@ -161,6 +171,7 @@ export const restoreProject = async (id: string): Promise<Project> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan project ${project.name}.`,
   });
+  await enqueueProjectSync(restoredProject, 'update');
 
   return restoredProject;
 };

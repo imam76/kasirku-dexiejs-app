@@ -222,7 +222,10 @@ export interface Warehouse {
   updated_at: string;
 }
 
-export type DepartmentSyncStatus = 'pending' | 'synced' | 'failed';
+export type EntitySyncStatus = 'pending' | 'synced' | 'failed';
+export type DepartmentSyncStatus = EntitySyncStatus;
+export type ProjectSyncStatus = EntitySyncStatus;
+export type TaxSyncStatus = EntitySyncStatus;
 
 export interface Department {
   id: string;
@@ -255,6 +258,10 @@ export interface Project {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: ProjectSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface Tax {
@@ -271,6 +278,10 @@ export interface Tax {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: TaxSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface SalesDocument {

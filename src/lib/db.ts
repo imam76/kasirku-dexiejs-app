@@ -369,6 +369,38 @@ export class KasirkuDB extends Dexie {
       syncQueue: 'id, entity, entity_id, operation, status, created_at, updated_at'
     });
 
+    this.version(29).stores({
+      projects: 'id, name, code, status, contact_id, department_id, is_active, sync_status, start_date, end_date, created_at'
+    }).upgrade(async (tx) => {
+      const projects = await tx.table<Project, string>('projects').toArray();
+      const projectsWithoutSyncStatus = projects
+        .filter((project) => !project.sync_status)
+        .map((project) => ({
+          ...project,
+          sync_status: 'pending' as const,
+        }));
+
+      if (projectsWithoutSyncStatus.length > 0) {
+        await tx.table<Project, string>('projects').bulkPut(projectsWithoutSyncStatus);
+      }
+    });
+
+    this.version(30).stores({
+      taxes: 'id, name, code, rate_type, calculation_mode, is_default, is_active, sync_status, effective_from, effective_to, created_at'
+    }).upgrade(async (tx) => {
+      const taxes = await tx.table<Tax, string>('taxes').toArray();
+      const taxesWithoutSyncStatus = taxes
+        .filter((tax) => !tax.sync_status)
+        .map((tax) => ({
+          ...tax,
+          sync_status: 'pending' as const,
+        }));
+
+      if (taxesWithoutSyncStatus.length > 0) {
+        await tx.table<Tax, string>('taxes').bulkPut(taxesWithoutSyncStatus);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
