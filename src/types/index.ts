@@ -69,6 +69,8 @@ export interface Product {
 export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
 export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 export type TransactionStatus = 'COMPLETED' | 'VOIDED';
+export type SyncQueueOperation = 'create' | 'update' | 'delete';
+export type SyncQueueStatus = 'pending' | 'processing' | 'synced' | 'failed';
 export type UserRole = 'OWNER' | 'ADMIN' | 'KASIR' | 'GUDANG';
 export type PromoType = 'percent' | 'fixed';
 export type PromoAppliesTo = 'all' | 'product' | 'category';
@@ -160,6 +162,19 @@ export interface ActivityLog {
   created_at: string;
 }
 
+export interface SyncQueueItem {
+  id: string;
+  entity: string;
+  entity_id: string;
+  operation: SyncQueueOperation;
+  payload: unknown;
+  status: SyncQueueStatus;
+  attempts: number;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Promo {
   id: string;
   name: string;
@@ -207,6 +222,8 @@ export interface Warehouse {
   updated_at: string;
 }
 
+export type DepartmentSyncStatus = 'pending' | 'synced' | 'failed';
+
 export interface Department {
   id: string;
   name: string;
@@ -215,6 +232,10 @@ export interface Department {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: DepartmentSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface Project {

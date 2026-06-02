@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, Promo, Contact, Department, Project, Tax, Warehouse, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
@@ -64,6 +64,7 @@ export class KasirkuDB extends Dexie {
   authUsers!: Table<AuthUser>;
   authSessions!: Table<AuthSession>;
   activityLogs!: Table<ActivityLog>;
+  syncQueue!: Table<SyncQueueItem>;
   promos!: Table<Promo>;
   contacts!: Table<Contact>;
   departments!: Table<Department>;
@@ -346,6 +347,26 @@ export class KasirkuDB extends Dexie {
       if (payments.length > 0) {
         await tx.table<PurchaseInvoicePayment, string>('purchaseInvoicePayments').bulkAdd(payments);
       }
+    });
+
+    this.version(27).stores({
+      departments: 'id, name, code, is_active, sync_status, created_at'
+    }).upgrade(async (tx) => {
+      const departments = await tx.table<Department, string>('departments').toArray();
+      const departmentsWithoutSyncStatus = departments
+        .filter((department) => !department.sync_status)
+        .map((department) => ({
+          ...department,
+          sync_status: 'pending' as const,
+        }));
+
+      if (departmentsWithoutSyncStatus.length > 0) {
+        await tx.table<Department, string>('departments').bulkPut(departmentsWithoutSyncStatus);
+      }
+    });
+
+    this.version(28).stores({
+      syncQueue: 'id, entity, entity_id, operation, status, created_at, updated_at'
     });
 
     this.on('populate', async () => {

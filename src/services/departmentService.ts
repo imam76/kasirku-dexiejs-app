@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { departmentSchema } from '@/lib/validations/department';
+import { enqueueDepartmentSync } from '@/services/syncQueueService';
 import type { Department } from '@/types';
 
 export interface DepartmentUpsertInput {
@@ -36,6 +37,12 @@ const assertDepartmentCodeAvailable = async (code: string | undefined, excludeDe
   }
 };
 
+const withPendingSync = (department: Department): Department => ({
+  ...department,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 export const createDepartment = async (input: DepartmentUpsertInput): Promise<Department> => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
@@ -44,12 +51,12 @@ export const createDepartment = async (input: DepartmentUpsertInput): Promise<De
   await assertDepartmentCodeAvailable(sanitizedInput.code);
 
   const now = new Date().toISOString();
-  const department: Department = {
+  const department: Department = withPendingSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.departments.add(department);
   await writeActivityLog({
@@ -59,6 +66,7 @@ export const createDepartment = async (input: DepartmentUpsertInput): Promise<De
     entity_id: department.id,
     description: `${currentUser?.name ?? 'User'} membuat department ${department.name}.`,
   });
+  await enqueueDepartmentSync(department, 'create');
 
   return department;
 };
@@ -75,11 +83,11 @@ export const updateDepartment = async (id: string, input: DepartmentUpsertInput)
   const sanitizedInput = sanitizeDepartmentInput(input);
   await assertDepartmentCodeAvailable(sanitizedInput.code, id);
 
-  const updatedDepartment: Department = {
+  const updatedDepartment: Department = withPendingSync({
     ...existingDepartment,
     ...sanitizedInput,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.departments.put(updatedDepartment);
   await writeActivityLog({
@@ -89,6 +97,7 @@ export const updateDepartment = async (id: string, input: DepartmentUpsertInput)
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memperbarui department ${updatedDepartment.name}.`,
   });
+  await enqueueDepartmentSync(updatedDepartment, 'update');
 
   return updatedDepartment;
 };
@@ -102,11 +111,11 @@ export const archiveDepartment = async (id: string): Promise<Department> => {
     throw new Error('Department tidak ditemukan.');
   }
 
-  const archivedDepartment: Department = {
+  const archivedDepartment: Department = withPendingSync({
     ...department,
     is_active: false,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.departments.put(archivedDepartment);
   await writeActivityLog({
@@ -116,6 +125,7 @@ export const archiveDepartment = async (id: string): Promise<Department> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan department ${department.name}.`,
   });
+  await enqueueDepartmentSync(archivedDepartment, 'delete');
 
   return archivedDepartment;
 };
@@ -131,11 +141,11 @@ export const restoreDepartment = async (id: string): Promise<Department> => {
 
   await assertDepartmentCodeAvailable(department.code, id);
 
-  const restoredDepartment: Department = {
+  const restoredDepartment: Department = withPendingSync({
     ...department,
     is_active: true,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.departments.put(restoredDepartment);
   await writeActivityLog({
@@ -145,6 +155,7 @@ export const restoreDepartment = async (id: string): Promise<Department> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan department ${department.name}.`,
   });
+  await enqueueDepartmentSync(restoredDepartment, 'update');
 
   return restoredDepartment;
 };

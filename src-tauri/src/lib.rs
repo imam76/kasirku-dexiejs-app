@@ -2,6 +2,8 @@
 mod bluetooth_printer;
 mod commands;
 mod db;
+mod models;
+mod repositories;
 
 use tauri::Manager;
 
@@ -27,6 +29,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            commands::department_commands::postgres_list_departments,
+            commands::department_commands::postgres_get_department,
+            commands::department_commands::postgres_upsert_department,
+            commands::department_commands::postgres_delete_department,
             commands::postgres_health::postgres_health_check,
             bluetooth_printer::list_bluetooth_printers,
             bluetooth_printer::test_print_bluetooth,

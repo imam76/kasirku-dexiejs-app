@@ -704,6 +704,13 @@ Saat aplikasi online:
   - UI tetap membaca dari Dexie
 ```
 
+Implementasi pilot saat ini:
+
+- `departments` tetap dibaca UI dari Dexie.
+- `refreshDepartmentsFromPostgres()` mengambil data PostgreSQL lalu merge ke Dexie.
+- Data lokal dengan `sync_status = "pending"` atau `"failed"` tidak ditimpa oleh remote read.
+- Worker aplikasi memproses sync queue lebih dulu, lalu menjalankan refresh read dari PostgreSQL saat runtime Tauri online.
+
 Tahap lebih matang:
 
 ```txt
@@ -736,6 +743,13 @@ SET deleted_at = NOW(), updated_at = NOW()
 WHERE id = $1;
 ```
 
+Implementasi pilot saat ini:
+
+- Migration awal `departments` sudah memiliki `deleted_at`, jadi database baru langsung memakai soft delete.
+- `postgres_delete_department` menjalankan `UPDATE ... SET deleted_at = NOW(), updated_at = NOW()`.
+- Archive department di frontend tetap menandai Dexie sebagai `is_active = false`, lalu mengirim operasi queue `delete` ke PostgreSQL agar remote memakai soft delete.
+- Restore department mengirim upsert dengan `deleted_at = NULL` sehingga row PostgreSQL bisa aktif kembali jika timestamp lokal menang.
+
 Alasan:
 
 - Data historis masih bisa dipulihkan.
@@ -751,6 +765,12 @@ Untuk fase awal, gunakan aturan sederhana:
 ```txt
 Last write wins berdasarkan updated_at
 ```
+
+Implementasi pilot saat ini:
+
+- `postgres_upsert_department` hanya menimpa row PostgreSQL jika `EXCLUDED.updated_at >= departments.updated_at`.
+- Jika payload lokal kalah dari row remote yang lebih baru, repository mengembalikan row remote dan frontend me-merge hasilnya kembali ke Dexie.
+- Read refresh dari PostgreSQL tetap tidak menimpa data lokal dengan `sync_status = "pending"` atau `"failed"`.
 
 Namun untuk entity penting seperti stock, finance transaction, journal, sales invoice, dan purchase invoice, jangan hanya mengandalkan last write wins.
 
