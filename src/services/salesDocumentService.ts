@@ -9,11 +9,11 @@ import {
   postSalesInvoiceIssuedJournal,
   reverseSalesInvoiceJournal,
 } from '@/services/generalLedgerService';
+import { enqueueSalesDocumentBundleSync } from '@/services/syncQueueService';
 import type {
   PaymentMethod,
   SalesDocument,
   SalesDocumentItem,
-  SalesDocumentStatus,
   SalesDocumentType,
   StockMutation,
   AuthUser,
@@ -230,6 +230,33 @@ const applyPaymentStatusBehavior = <T extends Partial<SalesDocument>>(
   return nextDocument as T;
 };
 
+const withCreatedSalesDocumentSync = (
+  document: SalesDocument,
+  actor: AuthUser | null,
+): SalesDocument => ({
+  ...document,
+  version: 1,
+  created_by: actor?.id,
+  created_by_name: actor?.name,
+  updated_by: actor?.id,
+  updated_by_name: actor?.name,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
+const withUpdatedSalesDocumentSync = (
+  document: SalesDocument,
+  previousDocument: SalesDocument,
+  actor: AuthUser | null,
+): SalesDocument => ({
+  ...document,
+  version: Math.max(1, Number(previousDocument.version ?? 1)) + 1,
+  updated_by: actor?.id,
+  updated_by_name: actor?.name,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 export const createSalesDocument = async ({ document, items }: SalesDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
@@ -257,7 +284,7 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     taxCode: snapshot.tax_code,
     config,
   });
-  const nextDocument = applyPaymentStatusBehavior({
+  const nextDocument = withCreatedSalesDocumentSync(applyPaymentStatusBehavior({
     id: documentId,
     document_number: documentNumber,
     type: document.type,
@@ -268,7 +295,7 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     updated_at: createdAt,
     ...snapshot,
     ...total,
-  } satisfies SalesDocument, config);
+  } satisfies SalesDocument, config), currentUser);
   const products = await db.products.toArray();
   validateSalesDocument({ document: nextDocument, items: calculatedItems, config, products });
 
@@ -283,6 +310,8 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
       description: `${currentUser?.name ?? 'User'} membuat ${config.title} ${nextDocument.document_number}.`,
     });
   });
+
+  await enqueueSalesDocumentBundleSync(nextDocument, calculatedItems, 'create');
 
   return { document: nextDocument, items: calculatedItems };
 };
@@ -313,7 +342,7 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     taxCode: snapshot.tax_code,
     config,
   });
-  const nextDocument = applyPaymentStatusBehavior({
+  const nextDocument = withUpdatedSalesDocumentSync(applyPaymentStatusBehavior({
     ...existing,
     ...snapshot,
     ...total,
@@ -322,7 +351,7 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     status: existing.status,
     document_number: existing.document_number,
     updated_at: updatedAt,
-  } satisfies SalesDocument, config);
+  } satisfies SalesDocument, config), existing, currentUser);
   const products = await db.products.toArray();
   validateSalesDocument({ document: nextDocument, items: calculatedItems, config, products });
 
@@ -338,6 +367,8 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
       description: `${currentUser?.name ?? 'User'} mengubah ${config.title} ${nextDocument.document_number}.`,
     });
   });
+
+  await enqueueSalesDocumentBundleSync(nextDocument, calculatedItems, 'update');
 
   return { document: nextDocument, items: calculatedItems };
 };
@@ -355,24 +386,19 @@ export const issueSalesDocument = async (id: string) => {
   validateSalesDocument({ document, items, config, products });
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  const issuedDocument: SalesDocument = withUpdatedSalesDocumentSync({
+    ...document,
+    status: 'ISSUED',
+    issued_at: now,
+    updated_at: now,
+  }, document, currentUser);
 
   await db.transaction('rw', salesDocumentTables, async () => {
-    const issuedDocument: SalesDocument = {
-      ...document,
-      status: 'ISSUED',
-      issued_at: now,
-      updated_at: now,
-    };
-
     if (config.behavior.affectsStock) {
       stockMutations = await reduceDeliveryStock(issuedDocument, items, currentUser, now);
     }
 
-    await db.salesDocuments.update(id, {
-      status: 'ISSUED' satisfies SalesDocumentStatus,
-      issued_at: now,
-      updated_at: now,
-    });
+    await db.salesDocuments.put(issuedDocument);
     if (document.type === 'SALES_INVOICE') {
       await postSalesInvoiceIssuedJournal(issuedDocument);
     }
@@ -386,6 +412,7 @@ export const issueSalesDocument = async (id: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  await enqueueSalesDocumentBundleSync(issuedDocument, items, 'update');
 };
 
 export const convertSalesDocument = async (sourceId: string, targetType: SalesDocumentType) => {
@@ -418,7 +445,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     taxCode: source.tax_code,
     config: targetConfig,
   });
-  const targetDocument = applyPaymentStatusBehavior({
+  const targetDocument = withCreatedSalesDocumentSync(applyPaymentStatusBehavior({
     ...source,
     id: targetId,
     document_number: documentNumber,
@@ -434,19 +461,24 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     issued_at: undefined,
     voided_at: undefined,
     void_reason: undefined,
+    sync_error: undefined,
+    last_synced_at: undefined,
+    remote_updated_at: undefined,
     created_at: createdAt,
     updated_at: createdAt,
     ...discountAccountSnapshot,
     ...total,
-  } satisfies SalesDocument, targetConfig);
+  } satisfies SalesDocument, targetConfig), currentUser);
+  const convertedSourceDocument = withUpdatedSalesDocumentSync({
+    ...source,
+    status: 'CONVERTED',
+    updated_at: createdAt,
+  }, source, currentUser);
 
   await db.transaction('rw', salesDocumentTables, async () => {
     await db.salesDocuments.add(targetDocument);
     await db.salesDocumentItems.bulkAdd(calculatedItems);
-    await db.salesDocuments.update(sourceId, {
-      status: 'CONVERTED',
-      updated_at: createdAt,
-    });
+    await db.salesDocuments.put(convertedSourceDocument);
     await writeActivityLog({
       user: currentUser,
       action: 'SALES_DOCUMENT_CONVERTED',
@@ -455,6 +487,9 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
       description: `${currentUser?.name ?? 'User'} convert ${source.document_number} menjadi ${targetDocument.document_number}.`,
     });
   });
+
+  await enqueueSalesDocumentBundleSync(convertedSourceDocument, sourceItems, 'update');
+  await enqueueSalesDocumentBundleSync(targetDocument, calculatedItems, 'create');
 
   return { document: targetDocument, items: calculatedItems };
 };
@@ -486,18 +521,20 @@ export const voidSalesDocument = async (id: string, reason: string) => {
   const items = await db.salesDocumentItems.where('document_id').equals(id).toArray();
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  const voidedDocument = withUpdatedSalesDocumentSync({
+    ...document,
+    status: 'VOIDED',
+    voided_at: now,
+    void_reason: normalizedReason,
+    updated_at: now,
+  }, document, currentUser);
 
   await db.transaction('rw', salesDocumentTables, async () => {
     if (document.type === 'SALES_DELIVERY' && document.status === 'ISSUED') {
       stockMutations = await restoreDeliveryStock(document, items, currentUser, now, normalizedReason);
     }
 
-    await db.salesDocuments.update(id, {
-      status: 'VOIDED',
-      voided_at: now,
-      void_reason: normalizedReason,
-      updated_at: now,
-    });
+    await db.salesDocuments.put(voidedDocument);
     if (document.type === 'SALES_INVOICE' && document.status === 'ISSUED') {
       await reverseSalesInvoiceJournal(document, `Pembalikan jurnal invoice ${document.document_number}: ${normalizedReason}`);
     }
@@ -511,6 +548,7 @@ export const voidSalesDocument = async (id: string, reason: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  await enqueueSalesDocumentBundleSync(voidedDocument, items, 'update');
 };
 
 export const recalculateSalesInvoicePaymentStatus = async (invoiceId: string) => {

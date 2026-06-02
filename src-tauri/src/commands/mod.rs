@@ -4,6 +4,7 @@ pub mod department_commands;
 pub mod postgres_health;
 pub mod product_commands;
 pub mod project_commands;
+pub mod sales_document_commands;
 pub mod stock_mutation_commands;
 pub mod tax_commands;
 pub mod warehouse_commands;

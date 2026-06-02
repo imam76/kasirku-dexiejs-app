@@ -4,7 +4,8 @@ import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
-import { enqueuePendingAuthUsersForSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
+import { enqueuePendingAuthUsersForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
 
@@ -13,6 +14,7 @@ export const useSyncQueueWorker = () => {
     const syncWhenOnline = async () => {
       try {
         await enqueuePendingAuthUsersForSync();
+        await enqueuePendingSalesDocumentsForSync();
         await processPendingSyncQueue();
         await refreshAuthUsersFromPostgres();
         await refreshActivityLogsFromPostgres();
@@ -22,6 +24,7 @@ export const useSyncQueueWorker = () => {
         await refreshContactsFromPostgres();
         await refreshWarehousesFromPostgres();
         await refreshProductsFromPostgres();
+        await refreshSalesDocumentsFromPostgres();
       } catch (error) {
         console.error('Failed to refresh PostgreSQL read data', error);
       }
