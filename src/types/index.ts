@@ -244,6 +244,7 @@ export type ContactSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;
 export type ProjectSyncStatus = EntitySyncStatus;
+export type PurchaseDocumentSyncStatus = EntitySyncStatus;
 export type SalesDocumentSyncStatus = EntitySyncStatus;
 export type TaxSyncStatus = EntitySyncStatus;
 export type WarehouseSyncStatus = EntitySyncStatus;
@@ -499,8 +500,17 @@ export interface PurchaseDocument {
   issued_at?: string;
   voided_at?: string;
   void_reason?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
   created_at: string;
   updated_at: string;
+  sync_status?: PurchaseDocumentSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface PurchaseInvoicePayment {

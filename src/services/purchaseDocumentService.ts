@@ -4,7 +4,6 @@ import { db } from '@/lib/db';
 import type {
   PurchaseDocument,
   PurchaseDocumentItem,
-  PurchaseDocumentStatus,
   PurchaseDocumentType,
   StockMutation,
   AuthUser,
@@ -14,6 +13,7 @@ import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getD
 import { getPurchasePrice } from '@/utils/pricing';
 import { getPurchaseReceiptStockQuantity } from '@/utils/purchaseDocuments/calculatePurchaseDocumentStockImpact';
 import { recalculatePurchaseInvoicePaymentsForReturnSource } from '@/services/accountsPayableService';
+import { enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
 import { createPurchaseDocumentNumber } from '@/utils/purchaseDocuments/createPurchaseDocumentNumber';
 import {
   createPurchaseDepartmentSnapshot,
@@ -143,6 +143,33 @@ const applyConfigBehavior = <T extends Partial<PurchaseDocument>>(
   delete nextDocument.finance_transaction_id;
   return nextDocument as T;
 };
+
+const withCreatedPurchaseDocumentSync = (
+  document: PurchaseDocument,
+  actor: AuthUser | null,
+): PurchaseDocument => ({
+  ...document,
+  version: 1,
+  created_by: actor?.id,
+  created_by_name: actor?.name,
+  updated_by: actor?.id,
+  updated_by_name: actor?.name,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
+const withUpdatedPurchaseDocumentSync = (
+  document: PurchaseDocument,
+  previousDocument: PurchaseDocument,
+  actor: AuthUser | null,
+): PurchaseDocument => ({
+  ...document,
+  version: Math.max(1, Number(previousDocument.version ?? 1)) + 1,
+  updated_by: actor?.id,
+  updated_by_name: actor?.name,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
 
 const assertDraft = (document: PurchaseDocument) => {
   if (document.status !== 'DRAFT') {
@@ -350,7 +377,7 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
   const documentNumber = document.document_number || await createPurchaseDocumentNumber(config.numberPrefix, now);
   const normalizedItems = normalizeDocumentItems(items, documentId, createdAt);
   const { items: calculatedItems, ...total } = await calculatePurchaseTotal(normalizedItems, snapshot, config);
-  const nextDocument = applyConfigBehavior({
+  const nextDocument = withCreatedPurchaseDocumentSync(applyConfigBehavior({
     id: documentId,
     document_number: documentNumber,
     type: document.type,
@@ -361,7 +388,7 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
     updated_at: createdAt,
     ...snapshot,
     ...total,
-  } satisfies PurchaseDocument, config);
+  } satisfies PurchaseDocument, config), currentUser);
   const products = await db.products.toArray();
   validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products });
 
@@ -376,6 +403,8 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
       description: `${currentUser?.name ?? 'User'} membuat ${config.title} ${nextDocument.document_number}.`,
     });
   });
+
+  await enqueuePurchaseDocumentBundleSync(nextDocument, calculatedItems, 'create');
 
   return { document: nextDocument, items: calculatedItems };
 };
@@ -395,7 +424,7 @@ export const updatePurchaseDocument = async (id: string, { document, items }: Pu
   );
   const normalizedItems = normalizeDocumentItems(items, id, existing.created_at);
   const { items: calculatedItems, ...total } = await calculatePurchaseTotal(normalizedItems, snapshot, config);
-  const nextDocument = applyConfigBehavior({
+  const nextDocument = withUpdatedPurchaseDocumentSync(applyConfigBehavior({
     ...existing,
     ...snapshot,
     ...total,
@@ -404,7 +433,7 @@ export const updatePurchaseDocument = async (id: string, { document, items }: Pu
     status: existing.status,
     document_number: existing.document_number,
     updated_at: updatedAt,
-  } satisfies PurchaseDocument, config);
+  } satisfies PurchaseDocument, config), existing, currentUser);
   const products = await db.products.toArray();
   validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products });
 
@@ -420,6 +449,8 @@ export const updatePurchaseDocument = async (id: string, { document, items }: Pu
       description: `${currentUser?.name ?? 'User'} mengubah ${config.title} ${nextDocument.document_number}.`,
     });
   });
+
+  await enqueuePurchaseDocumentBundleSync(nextDocument, calculatedItems, 'update');
 
   return { document: nextDocument, items: calculatedItems };
 };
@@ -437,22 +468,26 @@ export const issuePurchaseDocument = async (id: string) => {
   validatePurchaseDocument({ document, items, config, products, mode: 'issue' });
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  const issuedDocument = withUpdatedPurchaseDocumentSync({
+    ...document,
+    status: 'ISSUED',
+    issued_at: now,
+    updated_at: now,
+    ...(document.type === 'PURCHASE_INVOICE'
+      ? { payment_status: document.payment_status ?? 'UNPAID', paid_amount: document.paid_amount ?? 0 }
+      : {}),
+  }, document, currentUser);
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (config.behavior.affectsStock) {
       if (document.type === 'PURCHASE_RETURN') {
-        stockMutations = await removePurchaseReturnStock(document, items, currentUser, now);
+        stockMutations = await removePurchaseReturnStock(issuedDocument, items, currentUser, now);
       } else {
-        stockMutations = await addReceiptStock(document, items, currentUser, now);
+        stockMutations = await addReceiptStock(issuedDocument, items, currentUser, now);
       }
     }
 
-    await db.purchaseDocuments.update(id, {
-      status: 'ISSUED' satisfies PurchaseDocumentStatus,
-      issued_at: now,
-      updated_at: now,
-      ...(document.type === 'PURCHASE_INVOICE' ? { payment_status: document.payment_status ?? 'UNPAID', paid_amount: document.paid_amount ?? 0 } : {}),
-    });
+    await db.purchaseDocuments.put(issuedDocument);
     await writeActivityLog({
       user: currentUser,
       action: 'PURCHASE_DOCUMENT_ISSUED',
@@ -463,6 +498,7 @@ export const issuePurchaseDocument = async (id: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  await enqueuePurchaseDocumentBundleSync(issuedDocument, items, 'update');
 
   if (document.type === 'PURCHASE_RETURN') {
     await recalculatePurchaseInvoicePaymentsForReturnSource(document.source_document_id);
@@ -506,7 +542,7 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
   }), targetId, createdAt);
   const snapshot = applyConfigBehavior(source, targetConfig);
   const { items: calculatedItems, ...total } = await calculatePurchaseTotal(targetItems, snapshot, targetConfig);
-  const targetDocument = applyConfigBehavior({
+  const targetDocument = withCreatedPurchaseDocumentSync(applyConfigBehavior({
     ...source,
     id: targetId,
     document_number: documentNumber,
@@ -522,20 +558,27 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
     issued_at: undefined,
     voided_at: undefined,
     void_reason: undefined,
+    sync_error: undefined,
+    last_synced_at: undefined,
+    remote_updated_at: undefined,
     created_at: createdAt,
     updated_at: createdAt,
     ...discountAccountSnapshot,
     ...total,
-  } satisfies PurchaseDocument, targetConfig);
+  } satisfies PurchaseDocument, targetConfig), currentUser);
+  const convertedSourceDocument = nonClosingConversionTargets.has(targetType)
+    ? null
+    : withUpdatedPurchaseDocumentSync({
+      ...source,
+      status: 'CONVERTED',
+      updated_at: createdAt,
+    }, source, currentUser);
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     await db.purchaseDocuments.add(targetDocument);
     await db.purchaseDocumentItems.bulkAdd(calculatedItems);
-    if (!nonClosingConversionTargets.has(targetType)) {
-      await db.purchaseDocuments.update(sourceId, {
-        status: 'CONVERTED',
-        updated_at: createdAt,
-      });
+    if (convertedSourceDocument) {
+      await db.purchaseDocuments.put(convertedSourceDocument);
     }
     await writeActivityLog({
       user: currentUser,
@@ -545,6 +588,11 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
       description: `${currentUser?.name ?? 'User'} convert ${source.document_number} menjadi ${targetDocument.document_number}.`,
     });
   });
+
+  if (convertedSourceDocument) {
+    await enqueuePurchaseDocumentBundleSync(convertedSourceDocument, sourceItems, 'update');
+  }
+  await enqueuePurchaseDocumentBundleSync(targetDocument, calculatedItems, 'create');
 
   return { document: targetDocument, items: calculatedItems };
 };
@@ -569,6 +617,13 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   const items = await db.purchaseDocumentItems.where('document_id').equals(id).toArray();
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  const voidedDocument = withUpdatedPurchaseDocumentSync({
+    ...document,
+    status: 'VOIDED',
+    voided_at: now,
+    void_reason: normalizedReason,
+    updated_at: now,
+  }, document, currentUser);
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (document.type === 'PURCHASE_RECEIPT' && document.status === 'ISSUED') {
@@ -577,12 +632,7 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
       stockMutations = await restorePurchaseReturnStock(document, items, currentUser, now, normalizedReason);
     }
 
-    await db.purchaseDocuments.update(id, {
-      status: 'VOIDED',
-      voided_at: now,
-      void_reason: normalizedReason,
-      updated_at: now,
-    });
+    await db.purchaseDocuments.put(voidedDocument);
     await writeActivityLog({
       user: currentUser,
       action: 'PURCHASE_DOCUMENT_VOIDED',
@@ -593,6 +643,7 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  await enqueuePurchaseDocumentBundleSync(voidedDocument, items, 'update');
 
   if (document.type === 'PURCHASE_RETURN') {
     await recalculatePurchaseInvoicePaymentsForReturnSource(document.source_document_id);

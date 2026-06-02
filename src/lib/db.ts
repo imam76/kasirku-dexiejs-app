@@ -474,6 +474,23 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(34).stores({
+      purchaseDocuments: 'id, document_number, type, status, contact_id, supplier_name, document_date, due_date, payment_status, source_document_id, project_id, department_id, tax_id, sync_status, updated_at, created_at'
+    }).upgrade(async (tx) => {
+      const purchaseDocuments = await tx.table<PurchaseDocument, string>('purchaseDocuments').toArray();
+      const purchaseDocumentsWithoutSyncStatus = purchaseDocuments
+        .filter((document) => !document.sync_status || !document.version)
+        .map((document) => ({
+          ...document,
+          version: document.version ?? 1,
+          sync_status: document.sync_status ?? 'pending' as const,
+        }));
+
+      if (purchaseDocumentsWithoutSyncStatus.length > 0) {
+        await tx.table<PurchaseDocument, string>('purchaseDocuments').bulkPut(purchaseDocumentsWithoutSyncStatus);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

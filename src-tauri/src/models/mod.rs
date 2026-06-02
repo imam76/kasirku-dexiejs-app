@@ -3,6 +3,7 @@ pub mod contact;
 pub mod department;
 pub mod product;
 pub mod project;
+pub mod purchase_document;
 pub mod sales_document;
 pub mod stock_mutation;
 pub mod tax;

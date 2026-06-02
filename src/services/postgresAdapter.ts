@@ -4,6 +4,9 @@ import type {
   ProductUnit,
   ProductUnitMapping,
   PromoType,
+  PurchaseDocumentStatus,
+  PurchaseDocumentType,
+  PurchaseInvoicePaymentStatus,
   SalesDocumentStatus,
   SalesDocumentType,
   SalesInvoicePaymentStatus,
@@ -254,6 +257,100 @@ export interface RemoteSalesDocumentBundleDto {
   items: RemoteSalesDocumentItemDto[];
 }
 
+export interface RemotePurchaseDocumentDto {
+  id: string;
+  document_number: string;
+  type: PurchaseDocumentType;
+  status: PurchaseDocumentStatus;
+  contact_id?: string | null;
+  supplier_name: string;
+  supplier_phone?: string | null;
+  supplier_email?: string | null;
+  supplier_address?: string | null;
+  supplier_company_name?: string | null;
+  supplier_tax_number?: string | null;
+  department_id?: string | null;
+  department_code?: string | null;
+  department_name?: string | null;
+  project_id?: string | null;
+  project_code?: string | null;
+  project_name?: string | null;
+  document_date: string;
+  required_date?: string | null;
+  quotation_due_date?: string | null;
+  due_date?: string | null;
+  warehouse_id?: string | null;
+  warehouse_code?: string | null;
+  warehouse_name?: string | null;
+  source_document_id?: string | null;
+  source_document_number?: string | null;
+  source_document_type?: PurchaseDocumentType | null;
+  subtotal_amount?: number | null;
+  discount_type?: PromoType | null;
+  discount_value?: number | null;
+  discount_amount?: number | null;
+  discount_account_id?: string | null;
+  discount_account_code?: string | null;
+  discount_account_name?: string | null;
+  tax_id?: string | null;
+  tax_name?: string | null;
+  tax_code?: string | null;
+  tax_rate?: number | null;
+  tax_calculation_mode?: TaxCalculationMode | null;
+  tax_amount?: number | null;
+  total_amount?: number | null;
+  payment_status?: PurchaseInvoicePaymentStatus | null;
+  paid_amount?: number | null;
+  paid_at?: string | null;
+  payment_method?: PaymentMethod | null;
+  cash_account_id?: string | null;
+  cash_account_code?: string | null;
+  cash_account_name?: string | null;
+  finance_transaction_id?: string | null;
+  notes?: string | null;
+  issued_at?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemotePurchaseDocumentItemDto {
+  id: string;
+  document_id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string | null;
+  unit: ProductUnit;
+  quantity: number;
+  ordered_quantity?: number | null;
+  received_quantity?: number | null;
+  price?: number | null;
+  discount_type?: PromoType | null;
+  discount_value?: number | null;
+  discount_amount?: number | null;
+  tax_id?: string | null;
+  tax_name?: string | null;
+  tax_code?: string | null;
+  tax_rate?: number | null;
+  tax_calculation_mode?: TaxCalculationMode | null;
+  tax_base_amount?: number | null;
+  tax_amount?: number | null;
+  subtotal?: number | null;
+  total_amount?: number | null;
+  created_at: string;
+}
+
+export interface RemotePurchaseDocumentBundleDto {
+  document: RemotePurchaseDocumentDto;
+  items: RemotePurchaseDocumentItemDto[];
+}
+
 export const isTauriRuntime = () =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -456,5 +553,22 @@ export const salesDocumentPostgresAdapter = {
   async upsert(input: RemoteSalesDocumentBundleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteSalesDocumentBundleDto>('postgres_upsert_sales_document_bundle', { input });
+  },
+};
+
+export const purchaseDocumentPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemotePurchaseDocumentBundleDto[]>('postgres_list_purchase_document_bundles');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePurchaseDocumentBundleDto | null>('postgres_get_purchase_document_bundle', { id });
+  },
+
+  async upsert(input: RemotePurchaseDocumentBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePurchaseDocumentBundleDto>('postgres_upsert_purchase_document_bundle', { input });
   },
 };

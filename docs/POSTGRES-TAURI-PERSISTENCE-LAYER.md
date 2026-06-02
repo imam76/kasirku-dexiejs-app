@@ -825,7 +825,8 @@ Implementasi saat ini:
 - Workflow yang sudah mengirim event mutasi stok: POS checkout, void POS transaction, issue/void Sales Delivery, issue/void Purchase Receipt, issue/void Purchase Return, issue/void Sales Return restock, dan Shopping Note.
 - Sales documents sudah mulai masuk sebagai entity transaksi pertama: header `sales_documents` dan line item `sales_document_items` disinkronkan sebagai satu bundle lewat queue, read refresh, `version`, actor metadata, dan optimistic concurrency berdasarkan `version` + `updated_at`.
 - Workflow sales document yang sudah mengirim bundle header/item: create draft, update draft, issue, convert, dan void. Side effect stok tetap lewat `stock_mutations`, sedangkan journal dan payment ledger tetap belum dipindahkan ke PostgreSQL.
-- Purchase documents secara penuh belum dipindahkan ke PostgreSQL pada fase ini. Yang disinkronkan untuk purchases baru event mutasi stoknya, bukan header/item dokumen, payment, status history, atau journal dokumen.
+- Purchase documents sudah masuk setelah sales documents: header `purchase_documents` dan line item `purchase_document_items` disinkronkan sebagai satu bundle lewat queue, read refresh, `version`, actor metadata, dan optimistic concurrency berdasarkan `version` + `updated_at`.
+- Workflow purchase document yang sudah mengirim bundle header/item: create draft, update draft, issue, convert, dan void. Side effect stok tetap lewat `stock_mutations`, sedangkan payment ledger AP, finance transaction, dan journal tetap belum dipindahkan ke PostgreSQL.
 - `auth_users` dan `activity_logs` sudah masuk untuk persiapan multi-user: migration PostgreSQL, Rust DTO/repository/command, frontend adapter, sync queue, read refresh, dan merge Dexie.
 - `auth_sessions` tetap lokal Dexie dan tidak disinkronkan ke PostgreSQL karena session adalah state per device.
 - `activity_logs` dikirim sebagai event append-only dan juga direfresh dari PostgreSQL agar Activity Log Viewer dapat melihat log dari device lain saat runtime Tauri online.
@@ -878,6 +879,8 @@ SELECT id, name, role, is_active, updated_at FROM auth_users ORDER BY created_at
 SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 200;
 SELECT id, document_number, type, status, version, updated_at FROM sales_documents ORDER BY created_at DESC;
 SELECT id, document_id, product_name, quantity, total_amount FROM sales_document_items ORDER BY created_at DESC;
+SELECT id, document_number, type, status, version, updated_at FROM purchase_documents ORDER BY created_at DESC;
+SELECT id, document_id, product_name, quantity, total_amount FROM purchase_document_items ORDER BY created_at DESC;
 ```
 
 ## Fase 19 - Hal yang Perlu Dihindari

@@ -3,9 +3,10 @@ import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres } from '@
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
+import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
-import { enqueuePendingAuthUsersForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { enqueuePendingAuthUsersForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
 
@@ -14,6 +15,7 @@ export const useSyncQueueWorker = () => {
     const syncWhenOnline = async () => {
       try {
         await enqueuePendingAuthUsersForSync();
+        await enqueuePendingPurchaseDocumentsForSync();
         await enqueuePendingSalesDocumentsForSync();
         await processPendingSyncQueue();
         await refreshAuthUsersFromPostgres();
@@ -24,6 +26,7 @@ export const useSyncQueueWorker = () => {
         await refreshContactsFromPostgres();
         await refreshWarehousesFromPostgres();
         await refreshProductsFromPostgres();
+        await refreshPurchaseDocumentsFromPostgres();
         await refreshSalesDocumentsFromPostgres();
       } catch (error) {
         console.error('Failed to refresh PostgreSQL read data', error);

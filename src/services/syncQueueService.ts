@@ -3,6 +3,7 @@ import { mergeRemoteAuthUsersIntoDexie } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
 import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
+import { mergeRemotePurchaseDocumentBundlesIntoDexie } from '@/services/purchaseDocumentReadService';
 import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
 import { mergeRemoteSalesDocumentBundlesIntoDexie } from '@/services/salesDocumentReadService';
 import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
@@ -14,6 +15,7 @@ import {
   departmentPostgresAdapter,
   isTauriRuntime,
   productPostgresAdapter,
+  purchaseDocumentPostgresAdapter,
   projectPostgresAdapter,
   salesDocumentPostgresAdapter,
   stockMutationPostgresAdapter,
@@ -24,6 +26,9 @@ import {
   type RemoteContactDto,
   type RemoteDepartmentDto,
   type RemoteProductDto,
+  type RemotePurchaseDocumentBundleDto,
+  type RemotePurchaseDocumentDto,
+  type RemotePurchaseDocumentItemDto,
   type RemoteProjectDto,
   type RemoteSalesDocumentBundleDto,
   type RemoteSalesDocumentDto,
@@ -32,7 +37,7 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, Department, Product, Project, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, Department, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const ACTIVITY_LOG_ENTITY = 'activityLogs';
@@ -41,6 +46,7 @@ const CONTACT_ENTITY = 'contacts';
 const DEPARTMENT_ENTITY = 'departments';
 const PRODUCT_ENTITY = 'products';
 const PROJECT_ENTITY = 'projects';
+const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
 const SALES_DOCUMENT_ENTITY = 'salesDocuments';
 const STOCK_MUTATION_ENTITY = 'stockMutations';
 const TAX_ENTITY = 'taxes';
@@ -265,6 +271,103 @@ const mapSalesDocumentBundleToRemoteDto = (
   items: items.map(mapSalesDocumentItemToRemoteDto),
 });
 
+const mapPurchaseDocumentToRemoteDto = (document: PurchaseDocument): RemotePurchaseDocumentDto => ({
+  id: document.id,
+  document_number: document.document_number,
+  type: document.type,
+  status: document.status,
+  contact_id: document.contact_id,
+  supplier_name: document.supplier_name ?? '',
+  supplier_phone: document.supplier_phone,
+  supplier_email: document.supplier_email,
+  supplier_address: document.supplier_address,
+  supplier_company_name: document.supplier_company_name,
+  supplier_tax_number: document.supplier_tax_number,
+  department_id: document.department_id,
+  department_code: document.department_code,
+  department_name: document.department_name,
+  project_id: document.project_id,
+  project_code: document.project_code,
+  project_name: document.project_name,
+  document_date: document.document_date,
+  required_date: document.required_date,
+  quotation_due_date: document.quotation_due_date,
+  due_date: document.due_date,
+  warehouse_id: document.warehouse_id,
+  warehouse_code: document.warehouse_code,
+  warehouse_name: document.warehouse_name,
+  source_document_id: document.source_document_id,
+  source_document_number: document.source_document_number,
+  source_document_type: document.source_document_type,
+  subtotal_amount: document.subtotal_amount,
+  discount_type: document.discount_type,
+  discount_value: document.discount_value,
+  discount_amount: document.discount_amount,
+  discount_account_id: document.discount_account_id,
+  discount_account_code: document.discount_account_code,
+  discount_account_name: document.discount_account_name,
+  tax_id: document.tax_id,
+  tax_name: document.tax_name,
+  tax_code: document.tax_code,
+  tax_rate: document.tax_rate,
+  tax_calculation_mode: document.tax_calculation_mode,
+  tax_amount: document.tax_amount,
+  total_amount: document.total_amount,
+  payment_status: document.payment_status,
+  paid_amount: document.paid_amount,
+  paid_at: document.paid_at,
+  payment_method: document.payment_method,
+  cash_account_id: document.cash_account_id,
+  cash_account_code: document.cash_account_code,
+  cash_account_name: document.cash_account_name,
+  finance_transaction_id: document.finance_transaction_id,
+  notes: document.notes,
+  issued_at: document.issued_at,
+  voided_at: document.voided_at,
+  void_reason: document.void_reason,
+  version: document.version ?? 1,
+  created_by: document.created_by,
+  created_by_name: document.created_by_name,
+  updated_by: document.updated_by,
+  updated_by_name: document.updated_by_name,
+  created_at: document.created_at,
+  updated_at: document.updated_at,
+});
+
+const mapPurchaseDocumentItemToRemoteDto = (item: PurchaseDocumentItem): RemotePurchaseDocumentItemDto => ({
+  id: item.id,
+  document_id: item.document_id,
+  product_id: item.product_id,
+  product_name: item.product_name,
+  sku: item.sku,
+  unit: item.unit,
+  quantity: item.quantity,
+  ordered_quantity: item.ordered_quantity,
+  received_quantity: item.received_quantity,
+  price: item.price,
+  discount_type: item.discount_type,
+  discount_value: item.discount_value,
+  discount_amount: item.discount_amount,
+  tax_id: item.tax_id,
+  tax_name: item.tax_name,
+  tax_code: item.tax_code,
+  tax_rate: item.tax_rate,
+  tax_calculation_mode: item.tax_calculation_mode,
+  tax_base_amount: item.tax_base_amount,
+  tax_amount: item.tax_amount,
+  subtotal: item.subtotal,
+  total_amount: item.total_amount,
+  created_at: item.created_at,
+});
+
+const mapPurchaseDocumentBundleToRemoteDto = (
+  document: PurchaseDocument,
+  items: PurchaseDocumentItem[],
+): RemotePurchaseDocumentBundleDto => ({
+  document: mapPurchaseDocumentToRemoteDto(document),
+  items: items.map(mapPurchaseDocumentItemToRemoteDto),
+});
+
 const mapTaxToRemoteDto = (tax: Tax): RemoteTaxDto => ({
   id: tax.id,
   code: tax.code,
@@ -444,6 +547,51 @@ const isRemoteSalesDocumentBundleDto = (
   );
 };
 
+const isRemotePurchaseDocumentDto = (payload: unknown): payload is RemotePurchaseDocumentDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePurchaseDocumentDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.document_number === 'string' &&
+    typeof candidate.type === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.supplier_name === 'string' &&
+    typeof candidate.document_date === 'string' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemotePurchaseDocumentItemDto = (payload: unknown): payload is RemotePurchaseDocumentItemDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePurchaseDocumentItemDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.document_id === 'string' &&
+    typeof candidate.product_id === 'string' &&
+    typeof candidate.product_name === 'string' &&
+    typeof candidate.unit === 'string' &&
+    typeof candidate.quantity === 'number' &&
+    typeof candidate.created_at === 'string'
+  );
+};
+
+const isRemotePurchaseDocumentBundleDto = (
+  payload: unknown,
+): payload is RemotePurchaseDocumentBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePurchaseDocumentBundleDto>;
+  return (
+    isRemotePurchaseDocumentDto(candidate.document) &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every(isRemotePurchaseDocumentItemDto)
+  );
+};
+
 const isRemoteTaxDto = (payload: unknown): payload is RemoteTaxDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -527,6 +675,17 @@ const updateProductSyncMetadata = async (
   if (!currentProduct || currentProduct.updated_at !== sourceUpdatedAt) return;
 
   await db.products.update(productId, syncMetadata);
+};
+
+const updatePurchaseDocumentSyncMetadata = async (
+  documentId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<PurchaseDocument, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentDocument = await db.purchaseDocuments.get(documentId);
+  if (!currentDocument || currentDocument.updated_at !== sourceUpdatedAt) return;
+
+  await db.purchaseDocuments.update(documentId, syncMetadata);
 };
 
 const updateSalesDocumentSyncMetadata = async (
@@ -617,6 +776,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === PRODUCT_ENTITY && isRemoteProductDto(queueItem.payload)) {
     await updateProductSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === PURCHASE_DOCUMENT_ENTITY && isRemotePurchaseDocumentBundleDto(queueItem.payload)) {
+    await updatePurchaseDocumentSyncMetadata(queueItem.entity_id, queueItem.payload.document.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -716,6 +882,18 @@ const processProductQueueItem = async (queueItem: SyncQueueItem) => {
   return productPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processPurchaseDocumentQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Purchase document sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemotePurchaseDocumentBundleDto(queueItem.payload)) {
+    throw new Error('Payload purchase document sync queue tidak valid.');
+  }
+
+  return purchaseDocumentPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processSalesDocumentQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Sales document sync queue tidak mendukung operasi delete.');
@@ -783,6 +961,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteDepartment: RemoteDepartmentDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
+    let remotePurchaseDocumentBundle: RemotePurchaseDocumentBundleDto | null = null;
     let remoteSalesDocumentBundle: RemoteSalesDocumentBundleDto | null = null;
     let remoteStockMutation: RemoteStockMutationDto | null = null;
     let remoteTax: RemoteTaxDto | null = null;
@@ -800,6 +979,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteProduct = await processProductQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
       remoteProject = await processProjectQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === PURCHASE_DOCUMENT_ENTITY) {
+      remotePurchaseDocumentBundle = await processPurchaseDocumentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === SALES_DOCUMENT_ENTITY) {
       remoteSalesDocumentBundle = await processSalesDocumentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === STOCK_MUTATION_ENTITY) {
@@ -967,6 +1148,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteProject.updated_at,
       });
       await mergeRemoteProjectsIntoDexie([remoteProject], syncedAt);
+      return;
+    }
+
+    if (remotePurchaseDocumentBundle && isRemotePurchaseDocumentBundleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updatePurchaseDocumentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.document.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remotePurchaseDocumentBundle.document.updated_at,
+      });
+      await mergeRemotePurchaseDocumentBundlesIntoDexie([remotePurchaseDocumentBundle], syncedAt);
       return;
     }
 
@@ -1221,6 +1414,55 @@ export const enqueueSalesDocumentBundleSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueuePurchaseDocumentBundleSync = async (
+  document: PurchaseDocument,
+  items: PurchaseDocumentItem[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: PURCHASE_DOCUMENT_ENTITY,
+    entity_id: document.id,
+    operation,
+    payload: mapPurchaseDocumentBundleToRemoteDto(document, items),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingPurchaseDocumentsForSync = async () => {
+  const purchaseDocuments = (await db.purchaseDocuments.toArray())
+    .filter((document) => document.sync_status === 'pending' || document.sync_status === 'failed');
+
+  const purchaseDocumentQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(PURCHASE_DOCUMENT_ENTITY)
+    .toArray();
+
+  for (const document of purchaseDocuments) {
+    const existingQueueItem = purchaseDocumentQueueItems.find((queueItem) => (
+      queueItem.entity_id === document.id &&
+      queueItem.status !== 'synced' &&
+      isRemotePurchaseDocumentBundleDto(queueItem.payload) &&
+      queueItem.payload.document.updated_at === document.updated_at &&
+      queueItem.payload.document.version === (document.version ?? 1)
+    ));
+
+    if (!existingQueueItem) {
+      const items = await db.purchaseDocumentItems.where('document_id').equals(document.id).toArray();
+      await enqueuePurchaseDocumentBundleSync(document, items, 'update');
+    }
+  }
 };
 
 export const enqueuePendingSalesDocumentsForSync = async () => {
