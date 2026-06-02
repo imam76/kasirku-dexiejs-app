@@ -772,6 +772,7 @@ Implementasi pilot saat ini:
 - `postgres_upsert_department`, `postgres_upsert_project`, `postgres_upsert_tax`, `postgres_upsert_contact`, `postgres_upsert_warehouse`, dan `postgres_upsert_product` hanya menimpa row PostgreSQL jika `EXCLUDED.updated_at >= updated_at` row existing.
 - Jika payload lokal kalah dari row remote yang lebih baru, repository mengembalikan row remote dan frontend me-merge hasilnya kembali ke Dexie.
 - Read refresh dari PostgreSQL tetap tidak menimpa data lokal dengan `sync_status = "pending"` atau `"failed"`.
+- `stock_mutations` tidak memakai last write wins. Mutasi stok disimpan sebagai event append-only yang idempotent; retry sync dengan `id` yang sama tidak menambah/mengurangi stok dua kali.
 
 Namun untuk entity penting seperti stock, finance transaction, journal, sales invoice, dan purchase invoice, jangan hanya mengandalkan last write wins.
 
@@ -817,7 +818,11 @@ Implementasi saat ini:
 - `taxes` menjadi entity Fase 17 berikutnya dengan pola yang sama, tetap memakai baseline single tax/document fallback yang sudah ada di aplikasi.
 - `contacts` sudah masuk sebagai master data lebih besar dengan pola yang sama: migration PostgreSQL, Rust DTO/repository/command, frontend adapter, sync metadata Dexie, sync queue, read refresh, soft delete, dan last-write-wins berdasarkan `updated_at`.
 - `warehouses` dan `products` sudah masuk sebagai master data produk/stok. `warehouses` mengikuti pola archive/restore seperti master data lain. `products` menyinkronkan master product dan nilai `stock` yang ada pada record product.
-- Mutasi stock dari transaksi sales/purchase/stock movement belum dipindahkan ke PostgreSQL pada fase ini. Bagian itu tetap masuk fase dokumen transaksi/stock mutation berikutnya karena perlu transaction boundary, conflict rule, dan audit yang lebih ketat.
+- Mutasi stock dasar sudah mulai masuk sebagai ledger PostgreSQL `stock_mutations`, dengan migration, Rust DTO/repository/command, frontend adapter, dan sync queue.
+- `postgres_upsert_stock_mutation` bersifat idempotent: insert event baru akan mengubah `products.stock`, sedangkan retry dengan event yang sama hanya mengembalikan event existing.
+- Workflow yang sudah mengirim event mutasi stok: POS checkout, void POS transaction, issue/void Sales Delivery, issue/void Purchase Receipt, issue/void Purchase Return, issue/void Sales Return restock, dan Shopping Note.
+- Sales documents dan purchase documents secara penuh belum dipindahkan ke PostgreSQL pada fase ini. Yang disinkronkan baru event mutasi stoknya, bukan header/item dokumen, payment, status history, atau journal dokumen.
+- Finance transaction dan journal/general ledger tetap belum dipindahkan ke PostgreSQL. Bagian itu masuk fase berikutnya karena perlu transaction boundary, conflict rule, audit, dan status/version rule yang lebih ketat.
 
 Alasan urutan:
 
@@ -861,6 +866,7 @@ Contoh query:
 
 ```sql
 SELECT * FROM departments ORDER BY name ASC;
+SELECT * FROM stock_mutations ORDER BY occurred_at DESC;
 ```
 
 ## Fase 19 - Hal yang Perlu Dihindari
@@ -871,6 +877,7 @@ SELECT * FROM departments ORDER BY name ASC;
 - Jangan menaruh semua command PostgreSQL di `lib.rs`.
 - Jangan membuat query SQL dari string input user tanpa parameter binding.
 - Jangan memindahkan kalkulasi finance/stok ke Rust sebelum domain rule stabil.
+- Jangan menyamakan mutasi stok transaksi dengan sync master `products.stock` berbasis last write wins. Gunakan event idempotent/append-only agar retry sync tidak menggandakan stok.
 - Jangan memulai dari entity yang punya banyak side effect.
 - Jangan menganggap `localhost` selalu benar untuk semua target. Untuk Android/mobile, `localhost` mengarah ke device, bukan host laptop. Gunakan host yang bisa dijangkau device atau tunda fitur PostgreSQL untuk target mobile sampai arsitektur server siap.
 

@@ -1,10 +1,11 @@
 import { db } from '@/lib/db';
-import type { Product, TransactionItem } from '@/types';
+import type { Product, StockMutation, TransactionItem } from '@/types';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
 import { reversePosSaleJournal } from '@/services/generalLedgerService';
+import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -37,6 +38,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   const now = new Date().toISOString();
   const normalizedReason = reason.trim() || 'Transaksi dibatalkan';
   let transactionNumber = transactionId;
+  const stockMutations: StockMutation[] = [];
 
   await db.transaction(
     'rw',
@@ -76,6 +78,23 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         await db.products.update(product.id, {
           stock: product.stock + returnedQuantity,
         });
+
+        if (returnedQuantity > 0) {
+          const sourceUnit = resolveTransactionItemUnit(item, product);
+          stockMutations.push(createStockMutation({
+            product,
+            sourceType: 'POS_TRANSACTION_VOID',
+            sourceId: transaction.id,
+            sourceNumber: transaction.transaction_number,
+            sourceLineId: item.id,
+            quantityDelta: returnedQuantity,
+            sourceQuantity: item.quantity,
+            sourceUnit,
+            reason: normalizedReason,
+            actor: currentUser,
+            occurredAt: now,
+          }));
+        }
       }
 
       await db.transactions.update(transactionId, {
@@ -124,6 +143,8 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       await reversePosSaleJournal(transaction, `Pembalikan jurnal POS ${transaction.transaction_number}: ${normalizedReason}`);
     },
   );
+
+  await enqueueStockMutations(stockMutations);
 
   await writeActivityLog({
     user: currentUser,

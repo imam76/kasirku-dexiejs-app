@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ProductUnit, ProductUnitMapping, WholesalePrice } from '@/types';
+import type { ProductUnit, ProductUnitMapping, StockMutationSourceType, WholesalePrice } from '@/types';
 
 export interface RemoteDepartmentDto {
   id: string;
@@ -94,6 +94,30 @@ export interface RemoteProductDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+}
+
+export interface RemoteStockMutationDto {
+  id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string | null;
+  warehouse_id?: string | null;
+  warehouse_code?: string | null;
+  warehouse_name?: string | null;
+  source_type: StockMutationSourceType;
+  source_id: string;
+  source_number?: string | null;
+  source_line_id: string;
+  quantity_delta: number;
+  unit: ProductUnit;
+  stock_unit: ProductUnit;
+  source_quantity?: number | null;
+  source_unit?: ProductUnit | null;
+  reason?: string | null;
+  actor_user_id?: string | null;
+  actor_user_name?: string | null;
+  occurred_at: string;
+  created_at: string;
 }
 
 export const isTauriRuntime = () =>
@@ -235,5 +259,22 @@ export const productPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteProductDto | null>('postgres_delete_product', { id });
+  },
+};
+
+export const stockMutationPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteStockMutationDto[]>('postgres_list_stock_mutations');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteStockMutationDto | null>('postgres_get_stock_mutation', { id });
+  },
+
+  async upsert(input: RemoteStockMutationDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteStockMutationDto>('postgres_upsert_stock_mutation', { input });
   },
 };

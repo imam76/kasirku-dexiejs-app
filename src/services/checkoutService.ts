@@ -1,12 +1,13 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, PaymentMethod, Transaction, TransactionItem } from '@/types';
+import type { CartItem, PaymentMethod, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemOriginalPrice, getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
 import { getCashOrBankAccountForPayment, postPosSaleJournal } from '@/services/generalLedgerService';
+import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -122,9 +123,18 @@ const recordFinanceIncome = async (transaction: Transaction, createdAt: string) 
   });
 };
 
-const reduceProductStock = async (cart: CartItem[]) => {
-  for (const item of cart) {
+const reduceProductStock = async (
+  cart: CartItem[],
+  transaction: Transaction,
+  transactionItems: TransactionItem[],
+  actor: AuthUser | null,
+  occurredAt: string,
+) => {
+  const stockMutations: StockMutation[] = [];
+
+  for (const [index, item] of cart.entries()) {
     const product = await db.products.get(item.product.id);
+    const transactionItem = transactionItems[index];
     if (!product) continue;
 
     const quantityInStockUnit = konversiSatuanProduk(
@@ -137,7 +147,24 @@ const reduceProductStock = async (cart: CartItem[]) => {
     await db.products.update(item.product.id, {
       stock: product.stock - quantityInStockUnit,
     });
+
+    if (transactionItem && quantityInStockUnit > 0) {
+      stockMutations.push(createStockMutation({
+        product,
+        sourceType: 'POS_TRANSACTION',
+        sourceId: transaction.id,
+        sourceNumber: transaction.transaction_number,
+        sourceLineId: transactionItem.id,
+        quantityDelta: -quantityInStockUnit,
+        sourceQuantity: item.quantity,
+        sourceUnit: item.unit,
+        actor,
+        occurredAt,
+      }));
+    }
   }
+
+  return stockMutations;
 };
 
 export const checkout = async ({
@@ -166,12 +193,13 @@ export const checkout = async ({
   const finalTotal = promoEvaluation.total_amount;
   const finalPayment = paymentMethod === 'NON_TUNAI' ? finalTotal : payment;
   const change = paymentMethod === 'NON_TUNAI' ? 0 : finalPayment - finalTotal;
+  let stockMutations: StockMutation[] = [];
 
   if (!Number.isFinite(finalPayment) || finalPayment < finalTotal) {
     throw new Error('Jumlah pembayaran tidak valid atau kurang.');
   }
 
-  return db.transaction(
+  const result = await db.transaction(
     'rw',
     [
       db.transactions,
@@ -212,7 +240,7 @@ export const checkout = async ({
       await recordProfit(transaction, items, createdAt);
       await recordFinanceIncome(transaction, createdAt);
       await postPosSaleJournal(transaction, items);
-      await reduceProductStock(cart);
+      stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
 
       for (const item of items.filter((item) => item.is_price_edited)) {
         await writeActivityLog({
@@ -227,4 +255,8 @@ export const checkout = async ({
       return { transaction, items };
     },
   );
+
+  await enqueueStockMutations(stockMutations);
+
+  return result;
 };

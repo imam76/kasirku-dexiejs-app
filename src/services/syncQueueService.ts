@@ -11,22 +11,25 @@ import {
   isTauriRuntime,
   productPostgresAdapter,
   projectPostgresAdapter,
+  stockMutationPostgresAdapter,
   taxPostgresAdapter,
   warehousePostgresAdapter,
   type RemoteContactDto,
   type RemoteDepartmentDto,
   type RemoteProductDto,
   type RemoteProjectDto,
+  type RemoteStockMutationDto,
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { Contact, Department, Product, Project, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { Contact, Department, Product, Project, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const CONTACT_ENTITY = 'contacts';
 const DEPARTMENT_ENTITY = 'departments';
 const PRODUCT_ENTITY = 'products';
 const PROJECT_ENTITY = 'projects';
+const STOCK_MUTATION_ENTITY = 'stockMutations';
 const TAX_ENTITY = 'taxes';
 const WAREHOUSE_ENTITY = 'warehouses';
 
@@ -99,6 +102,30 @@ const mapProductToRemoteDto = (product: Product): RemoteProductDto => ({
   unit_mappings: product.unit_mappings,
   created_at: product.created_at,
   updated_at: product.updated_at,
+});
+
+const mapStockMutationToRemoteDto = (mutation: StockMutation): RemoteStockMutationDto => ({
+  id: mutation.id,
+  product_id: mutation.product_id,
+  product_name: mutation.product_name,
+  sku: mutation.sku,
+  warehouse_id: mutation.warehouse_id,
+  warehouse_code: mutation.warehouse_code,
+  warehouse_name: mutation.warehouse_name,
+  source_type: mutation.source_type,
+  source_id: mutation.source_id,
+  source_number: mutation.source_number,
+  source_line_id: mutation.source_line_id,
+  quantity_delta: mutation.quantity_delta,
+  unit: mutation.unit,
+  stock_unit: mutation.stock_unit,
+  source_quantity: mutation.source_quantity,
+  source_unit: mutation.source_unit,
+  reason: mutation.reason,
+  actor_user_id: mutation.actor_user_id,
+  actor_user_name: mutation.actor_user_name,
+  occurred_at: mutation.occurred_at,
+  created_at: mutation.created_at,
 });
 
 const mapTaxToRemoteDto = (tax: Tax): RemoteTaxDto => ({
@@ -184,6 +211,25 @@ const isRemoteProductDto = (payload: unknown): payload is RemoteProductDto => {
     typeof candidate.stock === 'number' &&
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteStockMutationDto = (payload: unknown): payload is RemoteStockMutationDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteStockMutationDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.product_id === 'string' &&
+    typeof candidate.product_name === 'string' &&
+    typeof candidate.source_type === 'string' &&
+    typeof candidate.source_id === 'string' &&
+    typeof candidate.source_line_id === 'string' &&
+    typeof candidate.quantity_delta === 'number' &&
+    typeof candidate.unit === 'string' &&
+    typeof candidate.stock_unit === 'string' &&
+    typeof candidate.occurred_at === 'string' &&
+    typeof candidate.created_at === 'string'
   );
 };
 
@@ -399,6 +445,18 @@ const processProductQueueItem = async (queueItem: SyncQueueItem) => {
   return productPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processStockMutationQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Stock mutation sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteStockMutationDto(queueItem.payload)) {
+    throw new Error('Payload stock mutation sync queue tidak valid.');
+  }
+
+  return stockMutationPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processTaxQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     return taxPostgresAdapter.delete(queueItem.entity_id);
@@ -440,6 +498,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteDepartment: RemoteDepartmentDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
+    let remoteStockMutation: RemoteStockMutationDto | null = null;
     let remoteTax: RemoteTaxDto | null = null;
     let remoteWarehouse: RemoteWarehouseDto | null = null;
 
@@ -451,6 +510,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteProduct = await processProductQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
       remoteProject = await processProjectQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === STOCK_MUTATION_ENTITY) {
+      remoteStockMutation = await processStockMutationQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === TAX_ENTITY) {
       remoteTax = await processTaxQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === WAREHOUSE_ENTITY) {
@@ -600,6 +661,11 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       return;
     }
 
+    if (remoteStockMutation && isRemoteStockMutationDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      return;
+    }
+
     if (remoteTax && isRemoteTaxDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateTaxSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
@@ -735,6 +801,26 @@ export const enqueueProductSync = async (
     entity_id: product.id,
     operation,
     payload: mapProductToRemoteDto(product),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueStockMutationSync = async (mutation: StockMutation) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: STOCK_MUTATION_ENTITY,
+    entity_id: mutation.id,
+    operation: 'create',
+    payload: mapStockMutationToRemoteDto(mutation),
     status: 'pending',
     attempts: 0,
     created_at: now,

@@ -15,6 +15,8 @@ import type {
   SalesDocumentItem,
   SalesDocumentStatus,
   SalesDocumentType,
+  StockMutation,
+  AuthUser,
 } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
@@ -28,6 +30,7 @@ import {
   createWarehouseSnapshot,
 } from '@/utils/salesDocuments/createSalesDocumentSnapshots';
 import { validateSalesDocument } from '@/utils/salesDocuments/validateSalesDocument';
+import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 
 export interface SalesDocumentUpsertInput {
   document: Partial<SalesDocument>;
@@ -113,7 +116,20 @@ const normalizeDocumentItems = (
   created_at: item.created_at || createdAt,
 }));
 
-const reduceDeliveryStock = async (items: SalesDocumentItem[]) => {
+const getSalesDocumentWarehouse = (document: SalesDocument) => ({
+  id: document.warehouse_id,
+  code: document.warehouse_code,
+  name: document.warehouse_name,
+});
+
+const reduceDeliveryStock = async (
+  document: SalesDocument,
+  items: SalesDocumentItem[],
+  actor: AuthUser | null,
+  occurredAt: string,
+) => {
+  const stockMutations: StockMutation[] = [];
+
   for (const item of items) {
     const product = await db.products.get(item.product_id);
     if (!product) continue;
@@ -123,10 +139,36 @@ const reduceDeliveryStock = async (items: SalesDocumentItem[]) => {
     await db.products.update(product.id, {
       stock: product.stock - quantityInStockUnit,
     });
+
+    if (quantityInStockUnit > 0) {
+      stockMutations.push(createStockMutation({
+        product,
+        warehouse: getSalesDocumentWarehouse(document),
+        sourceType: 'SALES_DELIVERY',
+        sourceId: document.id,
+        sourceNumber: document.document_number,
+        sourceLineId: item.id,
+        quantityDelta: -quantityInStockUnit,
+        sourceQuantity: quantity,
+        sourceUnit: item.unit,
+        actor,
+        occurredAt,
+      }));
+    }
   }
+
+  return stockMutations;
 };
 
-const restoreDeliveryStock = async (items: SalesDocumentItem[]) => {
+const restoreDeliveryStock = async (
+  document: SalesDocument,
+  items: SalesDocumentItem[],
+  actor: AuthUser | null,
+  occurredAt: string,
+  reason: string,
+) => {
+  const stockMutations: StockMutation[] = [];
+
   for (const item of items) {
     const product = await db.products.get(item.product_id);
     if (!product) continue;
@@ -136,7 +178,26 @@ const restoreDeliveryStock = async (items: SalesDocumentItem[]) => {
     await db.products.update(product.id, {
       stock: product.stock + quantityInStockUnit,
     });
+
+    if (quantityInStockUnit > 0) {
+      stockMutations.push(createStockMutation({
+        product,
+        warehouse: getSalesDocumentWarehouse(document),
+        sourceType: 'SALES_DELIVERY_VOID',
+        sourceId: document.id,
+        sourceNumber: document.document_number,
+        sourceLineId: item.id,
+        quantityDelta: quantityInStockUnit,
+        sourceQuantity: quantity,
+        sourceUnit: item.unit,
+        reason,
+        actor,
+        occurredAt,
+      }));
+    }
   }
+
+  return stockMutations;
 };
 
 const assertDraft = (document: SalesDocument) => {
@@ -293,6 +354,7 @@ export const issueSalesDocument = async (id: string) => {
   const products = await db.products.toArray();
   validateSalesDocument({ document, items, config, products });
   const now = new Date().toISOString();
+  let stockMutations: StockMutation[] = [];
 
   await db.transaction('rw', salesDocumentTables, async () => {
     const issuedDocument: SalesDocument = {
@@ -303,7 +365,7 @@ export const issueSalesDocument = async (id: string) => {
     };
 
     if (config.behavior.affectsStock) {
-      await reduceDeliveryStock(items);
+      stockMutations = await reduceDeliveryStock(issuedDocument, items, currentUser, now);
     }
 
     await db.salesDocuments.update(id, {
@@ -322,6 +384,8 @@ export const issueSalesDocument = async (id: string) => {
       description: `${currentUser?.name ?? 'User'} menerbitkan ${config.title} ${document.document_number}.`,
     });
   });
+
+  await enqueueStockMutations(stockMutations);
 };
 
 export const convertSalesDocument = async (sourceId: string, targetType: SalesDocumentType) => {
@@ -421,10 +485,11 @@ export const voidSalesDocument = async (id: string, reason: string) => {
 
   const items = await db.salesDocumentItems.where('document_id').equals(id).toArray();
   const now = new Date().toISOString();
+  let stockMutations: StockMutation[] = [];
 
   await db.transaction('rw', salesDocumentTables, async () => {
     if (document.type === 'SALES_DELIVERY' && document.status === 'ISSUED') {
-      await restoreDeliveryStock(items);
+      stockMutations = await restoreDeliveryStock(document, items, currentUser, now, normalizedReason);
     }
 
     await db.salesDocuments.update(id, {
@@ -444,6 +509,8 @@ export const voidSalesDocument = async (id: string, reason: string) => {
       description: `${currentUser?.name ?? 'User'} membatalkan ${document.document_number}. Alasan: ${normalizedReason}`,
     });
   });
+
+  await enqueueStockMutations(stockMutations);
 };
 
 export const recalculateSalesInvoicePaymentStatus = async (invoiceId: string) => {

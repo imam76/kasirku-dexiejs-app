@@ -6,8 +6,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
-import type { Product, ShoppingNoteItem } from '@/types';
+import type { Product, ShoppingNoteItem, StockMutation } from '@/types';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
+import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 
 export const useShoppingNote = () => {
   const { message } = App.useApp();
@@ -93,10 +94,12 @@ export const useShoppingNote = () => {
 
     try {
       const now = new Date().toISOString();
+      const shoppingNoteId = crypto.randomUUID();
+      const stockMutations: StockMutation[] = [];
 
       await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
         await db.shoppingNotes.add({
-          id: crypto.randomUUID(),
+          id: shoppingNoteId,
           created_at: now,
           items,
           total_shopping: totalShopping,
@@ -123,6 +126,19 @@ export const useShoppingNote = () => {
 
           await db.products.update(product.id, productUpdate);
 
+          if (quantityInStockUnit > 0) {
+            stockMutations.push(createStockMutation({
+              product,
+              sourceType: 'SHOPPING_NOTE',
+              sourceId: shoppingNoteId,
+              sourceLineId: item.id,
+              quantityDelta: quantityInStockUnit,
+              sourceQuantity: item.quantity,
+              sourceUnit: item.unit,
+              occurredAt: now,
+            }));
+          }
+
           await recordStockPurchase({
             productId: product.id,
             productName: product.name,
@@ -135,6 +151,8 @@ export const useShoppingNote = () => {
           });
         }
       });
+
+      await enqueueStockMutations(stockMutations);
 
       message.success('Belanja stok berhasil disimpan');
       setItems([]);

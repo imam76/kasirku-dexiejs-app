@@ -12,6 +12,8 @@ import type {
   SalesReturnSourceType,
   SalesReturnStatus,
   SalesReturnableSource,
+  StockMutation,
+  AuthUser,
 } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { konversiSatuanProduk } from '@/utils/pricing';
@@ -30,6 +32,7 @@ import { getSalesReturnStockPolicy, type SalesReturnStockPolicy } from '@/utils/
 import { mapSalesReturnSourceItem } from '@/utils/salesReturns/mapSalesReturnSourceItem';
 import { validateSalesReturn } from '@/utils/salesReturns/validateSalesReturn';
 import type { SalesReturnSourceChain } from '@/utils/salesReturns/resolveSalesReturnSourceChain';
+import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 
 export interface SalesReturnItemInput {
   source_item_id: string;
@@ -334,9 +337,15 @@ const normalizeItemsForSourcePolicy = (
 };
 
 const applyRestockEffect = async (
+  salesReturn: SalesReturn,
   items: SalesReturnItem[],
   direction: 1 | -1,
+  actor: AuthUser | null,
+  occurredAt: string,
+  reason?: string,
 ) => {
+  const stockMutations: StockMutation[] = [];
+
   for (const item of items) {
     const restockQuantity = Number(item.restock_quantity || 0);
     if (restockQuantity <= 0) continue;
@@ -353,7 +362,23 @@ const applyRestockEffect = async (
     }
 
     await db.products.update(product.id, { stock: nextStock });
+
+    stockMutations.push(createStockMutation({
+      product,
+      sourceType: direction === 1 ? 'SALES_RETURN' : 'SALES_RETURN_VOID',
+      sourceId: salesReturn.id,
+      sourceNumber: salesReturn.return_number,
+      sourceLineId: item.id,
+      quantityDelta: direction * stockQuantity,
+      sourceQuantity: restockQuantity,
+      sourceUnit: item.unit,
+      reason,
+      actor,
+      occurredAt,
+    }));
   }
+
+  return stockMutations;
 };
 
 const createRefundFinanceTransaction = async (
@@ -533,9 +558,10 @@ export const issueSalesReturn = async (id: string) => {
   });
 
   const now = new Date().toISOString();
+  let stockMutations: StockMutation[] = [];
 
   await db.transaction('rw', salesReturnTables, async () => {
-    await applyRestockEffect(items, 1);
+    stockMutations = await applyRestockEffect(salesReturn, items, 1, currentUser, now);
     const financeTransactionId = await createRefundFinanceTransaction(salesReturn, now);
     const issuedSalesReturn: SalesReturn = {
       ...salesReturn,
@@ -571,6 +597,8 @@ export const issueSalesReturn = async (id: string) => {
       description: `${currentUser?.name ?? 'User'} menerbitkan retur ${salesReturn.return_number} untuk ${salesReturn.source_number}.`,
     });
   });
+
+  await enqueueStockMutations(stockMutations);
 };
 
 export const voidSalesReturn = async (id: string, reason: string) => {
@@ -587,11 +615,12 @@ export const voidSalesReturn = async (id: string, reason: string) => {
 
   const items = await db.salesReturnItems.where('return_id').equals(id).toArray();
   const now = new Date().toISOString();
+  let stockMutations: StockMutation[] = [];
 
   await db.transaction('rw', salesReturnTables, async () => {
     let reversalFinanceTransactionId = salesReturn.reversal_finance_transaction_id;
     if (salesReturn.status === 'ISSUED') {
-      await applyRestockEffect(items, -1);
+      stockMutations = await applyRestockEffect(salesReturn, items, -1, currentUser, now, normalizedReason);
       reversalFinanceTransactionId = await reverseRefundFinanceTransaction(salesReturn, now);
       await reverseSalesReturnJournal(salesReturn, `Pembalikan jurnal retur ${salesReturn.return_number}: ${normalizedReason}`);
       await applyPosProfitReversal(salesReturn, items, now, -1);
@@ -615,6 +644,8 @@ export const voidSalesReturn = async (id: string, reason: string) => {
       description: `${currentUser?.name ?? 'User'} membatalkan retur ${salesReturn.return_number}. Source ${salesReturn.source_number}. Alasan: ${normalizedReason}`,
     });
   });
+
+  await enqueueStockMutations(stockMutations);
 };
 
 export const listReturnableSalesDocumentSources = async () => {

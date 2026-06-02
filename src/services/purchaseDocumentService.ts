@@ -6,6 +6,8 @@ import type {
   PurchaseDocumentItem,
   PurchaseDocumentStatus,
   PurchaseDocumentType,
+  StockMutation,
+  AuthUser,
 } from '@/types';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
@@ -21,6 +23,7 @@ import {
   createSupplierSnapshot,
 } from '@/utils/purchaseDocuments/createPurchaseDocumentSnapshots';
 import { validatePurchaseDocument } from '@/utils/purchaseDocuments/validatePurchaseDocument';
+import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 
 export interface PurchaseDocumentUpsertInput {
   document: Partial<PurchaseDocument>;
@@ -147,7 +150,20 @@ const assertDraft = (document: PurchaseDocument) => {
   }
 };
 
-const addReceiptStock = async (items: PurchaseDocumentItem[]) => {
+const getPurchaseDocumentWarehouse = (document: PurchaseDocument) => ({
+  id: document.warehouse_id,
+  code: document.warehouse_code,
+  name: document.warehouse_name,
+});
+
+const addReceiptStock = async (
+  document: PurchaseDocument,
+  items: PurchaseDocumentItem[],
+  actor: AuthUser | null,
+  occurredAt: string,
+) => {
+  const stockMutations: StockMutation[] = [];
+
   for (const item of items) {
     const product = await db.products.get(item.product_id);
     if (!product) continue;
@@ -155,12 +171,38 @@ const addReceiptStock = async (items: PurchaseDocumentItem[]) => {
     const quantityInStockUnit = getPurchaseReceiptStockQuantity(item, product);
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) + quantityInStockUnit,
-      updated_at: new Date().toISOString(),
+      updated_at: occurredAt,
     });
+
+    if (quantityInStockUnit > 0) {
+      stockMutations.push(createStockMutation({
+        product,
+        warehouse: getPurchaseDocumentWarehouse(document),
+        sourceType: 'PURCHASE_RECEIPT',
+        sourceId: document.id,
+        sourceNumber: document.document_number,
+        sourceLineId: item.id,
+        quantityDelta: quantityInStockUnit,
+        sourceQuantity: item.received_quantity ?? item.quantity,
+        sourceUnit: item.unit,
+        actor,
+        occurredAt,
+      }));
+    }
   }
+
+  return stockMutations;
 };
 
-const restoreReceiptStock = async (items: PurchaseDocumentItem[]) => {
+const restoreReceiptStock = async (
+  document: PurchaseDocument,
+  items: PurchaseDocumentItem[],
+  actor: AuthUser | null,
+  occurredAt: string,
+  reason: string,
+) => {
+  const stockMutations: StockMutation[] = [];
+
   for (const item of items) {
     const product = await db.products.get(item.product_id);
     if (!product) continue;
@@ -168,12 +210,38 @@ const restoreReceiptStock = async (items: PurchaseDocumentItem[]) => {
     const quantityInStockUnit = getPurchaseReceiptStockQuantity(item, product);
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) - quantityInStockUnit,
-      updated_at: new Date().toISOString(),
+      updated_at: occurredAt,
     });
+
+    if (quantityInStockUnit > 0) {
+      stockMutations.push(createStockMutation({
+        product,
+        warehouse: getPurchaseDocumentWarehouse(document),
+        sourceType: 'PURCHASE_RECEIPT_VOID',
+        sourceId: document.id,
+        sourceNumber: document.document_number,
+        sourceLineId: item.id,
+        quantityDelta: -quantityInStockUnit,
+        sourceQuantity: item.received_quantity ?? item.quantity,
+        sourceUnit: item.unit,
+        reason,
+        actor,
+        occurredAt,
+      }));
+    }
   }
+
+  return stockMutations;
 };
 
-const removePurchaseReturnStock = async (items: PurchaseDocumentItem[]) => {
+const removePurchaseReturnStock = async (
+  document: PurchaseDocument,
+  items: PurchaseDocumentItem[],
+  actor: AuthUser | null,
+  occurredAt: string,
+) => {
+  const stockMutations: StockMutation[] = [];
+
   for (const item of items) {
     const product = await db.products.get(item.product_id);
     if (!product) continue;
@@ -181,12 +249,38 @@ const removePurchaseReturnStock = async (items: PurchaseDocumentItem[]) => {
     const quantityInStockUnit = getPurchaseReceiptStockQuantity(item, product);
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) - quantityInStockUnit,
-      updated_at: new Date().toISOString(),
+      updated_at: occurredAt,
     });
+
+    if (quantityInStockUnit > 0) {
+      stockMutations.push(createStockMutation({
+        product,
+        warehouse: getPurchaseDocumentWarehouse(document),
+        sourceType: 'PURCHASE_RETURN',
+        sourceId: document.id,
+        sourceNumber: document.document_number,
+        sourceLineId: item.id,
+        quantityDelta: -quantityInStockUnit,
+        sourceQuantity: item.received_quantity ?? item.quantity,
+        sourceUnit: item.unit,
+        actor,
+        occurredAt,
+      }));
+    }
   }
+
+  return stockMutations;
 };
 
-const restorePurchaseReturnStock = async (items: PurchaseDocumentItem[]) => {
+const restorePurchaseReturnStock = async (
+  document: PurchaseDocument,
+  items: PurchaseDocumentItem[],
+  actor: AuthUser | null,
+  occurredAt: string,
+  reason: string,
+) => {
+  const stockMutations: StockMutation[] = [];
+
   for (const item of items) {
     const product = await db.products.get(item.product_id);
     if (!product) continue;
@@ -194,9 +288,28 @@ const restorePurchaseReturnStock = async (items: PurchaseDocumentItem[]) => {
     const quantityInStockUnit = getPurchaseReceiptStockQuantity(item, product);
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) + quantityInStockUnit,
-      updated_at: new Date().toISOString(),
+      updated_at: occurredAt,
     });
+
+    if (quantityInStockUnit > 0) {
+      stockMutations.push(createStockMutation({
+        product,
+        warehouse: getPurchaseDocumentWarehouse(document),
+        sourceType: 'PURCHASE_RETURN_VOID',
+        sourceId: document.id,
+        sourceNumber: document.document_number,
+        sourceLineId: item.id,
+        quantityDelta: quantityInStockUnit,
+        sourceQuantity: item.received_quantity ?? item.quantity,
+        sourceUnit: item.unit,
+        reason,
+        actor,
+        occurredAt,
+      }));
+    }
   }
+
+  return stockMutations;
 };
 
 const calculatePurchaseTotal = async (
@@ -323,13 +436,14 @@ export const issuePurchaseDocument = async (id: string) => {
   const products = await db.products.toArray();
   validatePurchaseDocument({ document, items, config, products, mode: 'issue' });
   const now = new Date().toISOString();
+  let stockMutations: StockMutation[] = [];
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (config.behavior.affectsStock) {
       if (document.type === 'PURCHASE_RETURN') {
-        await removePurchaseReturnStock(items);
+        stockMutations = await removePurchaseReturnStock(document, items, currentUser, now);
       } else {
-        await addReceiptStock(items);
+        stockMutations = await addReceiptStock(document, items, currentUser, now);
       }
     }
 
@@ -347,6 +461,8 @@ export const issuePurchaseDocument = async (id: string) => {
       description: `${currentUser?.name ?? 'User'} menerbitkan ${config.title} ${document.document_number}.`,
     });
   });
+
+  await enqueueStockMutations(stockMutations);
 
   if (document.type === 'PURCHASE_RETURN') {
     await recalculatePurchaseInvoicePaymentsForReturnSource(document.source_document_id);
@@ -452,12 +568,13 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
 
   const items = await db.purchaseDocumentItems.where('document_id').equals(id).toArray();
   const now = new Date().toISOString();
+  let stockMutations: StockMutation[] = [];
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (document.type === 'PURCHASE_RECEIPT' && document.status === 'ISSUED') {
-      await restoreReceiptStock(items);
+      stockMutations = await restoreReceiptStock(document, items, currentUser, now, normalizedReason);
     } else if (document.type === 'PURCHASE_RETURN' && document.status === 'ISSUED') {
-      await restorePurchaseReturnStock(items);
+      stockMutations = await restorePurchaseReturnStock(document, items, currentUser, now, normalizedReason);
     }
 
     await db.purchaseDocuments.update(id, {
@@ -474,6 +591,8 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
       description: `${currentUser?.name ?? 'User'} membatalkan ${document.document_number}. Alasan: ${normalizedReason}`,
     });
   });
+
+  await enqueueStockMutations(stockMutations);
 
   if (document.type === 'PURCHASE_RETURN') {
     await recalculatePurchaseInvoicePaymentsForReturnSource(document.source_document_id);

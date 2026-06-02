@@ -778,6 +778,43 @@ export interface StockPurchase {
   updated_at: string;
 }
 
+export type StockMutationSourceType =
+  | 'POS_TRANSACTION'
+  | 'POS_TRANSACTION_VOID'
+  | 'SALES_DELIVERY'
+  | 'SALES_DELIVERY_VOID'
+  | 'PURCHASE_RECEIPT'
+  | 'PURCHASE_RECEIPT_VOID'
+  | 'PURCHASE_RETURN'
+  | 'PURCHASE_RETURN_VOID'
+  | 'SALES_RETURN'
+  | 'SALES_RETURN_VOID'
+  | 'SHOPPING_NOTE';
+
+export interface StockMutation {
+  id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  warehouse_id?: string;
+  warehouse_code?: string;
+  warehouse_name?: string;
+  source_type: StockMutationSourceType;
+  source_id: string;
+  source_number?: string;
+  source_line_id: string;
+  quantity_delta: number;
+  unit: ProductUnit;
+  stock_unit: ProductUnit;
+  source_quantity?: number;
+  source_unit?: ProductUnit;
+  reason?: string;
+  actor_user_id?: string;
+  actor_user_name?: string;
+  occurred_at: string;
+  created_at: string;
+}
+
 export interface CartItem {
   product: Product;
   quantity: number;
