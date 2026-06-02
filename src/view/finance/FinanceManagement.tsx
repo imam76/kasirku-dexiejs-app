@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic, Select, Row, Col, Divider, Empty } from 'antd';
+import { Table, Button, Card, Tag, Typography, Statistic, Select, Row, Col, Divider, Empty } from 'antd';
 import { useFinance } from '@/hooks/useFinance';
 import { useCashBankTransfer } from '@/hooks/useCashBankTransfer';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -8,7 +8,9 @@ import type { TranslationKey } from '@/i18n/messages';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import CashBankTransferModal from '@/view/finance/CashBankTransferModal';
+import FinanceTransactionModal from '@/view/finance/FinanceTransactionModal';
 import type { CashBankTransferFormData } from '@/lib/validations/cashBankTransfer';
+import type { FinanceTransactionFormValues } from '@/view/finance/FinanceTransactionModal';
 import {
   ArrowUpCircle,
   ArrowDownCircle,
@@ -23,14 +25,13 @@ import {
   LayoutDashboard,
   CreditCard
 } from 'lucide-react';
-import { ChartOfAccount, FinanceTransaction, FinanceTransactionType, PaymentMethod } from '@/types';
+import { FinanceTransaction, FinanceTransactionType } from '@/types';
 import {
   FINANCE_CATEGORIES,
   getFinanceTransactionBusinessType,
 } from '@/constants/finance';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 export default function FinanceManagement() {
   const { balance, transactions, isLoading, addTransaction, isAdding, recalculate, isRecalculating } = useFinance();
@@ -41,18 +42,7 @@ export default function FinanceManagement() {
   const [modalType, setModalType] = useState<FinanceTransactionType>('INCOME');
   const [accountFilter, setAccountFilter] = useState<string>('ALL');
   const [accountTypeFilter, setAccountTypeFilter] = useState<string>('ALL');
-  const [form] = Form.useForm();
   const isMobile = useIsMobile();
-
-  const getDefaultCashAccountId = (paymentMethod: PaymentMethod) => {
-    const preferredId = paymentMethod === 'NON_TUNAI' ? 'bank' : 'cash';
-    const preferredCode = paymentMethod === 'NON_TUNAI' ? '1020' : '1010';
-    const preferredAccount = cashBankAccounts.find((account) => (
-      account.id === preferredId || account.code === preferredCode
-    ));
-
-    return preferredAccount?.id ?? cashBankAccounts[0]?.id;
-  };
 
   const summary = useMemo(() => {
     return transactions.reduce((acc, t) => {
@@ -87,13 +77,6 @@ export default function FinanceManagement() {
 
     return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
   }, [transactions]);
-
-  const cashBankAccountOptions = useMemo(() => (
-    cashBankAccounts.map((account: ChartOfAccount) => ({
-      value: account.id,
-      label: `${account.code} - ${account.name}`,
-    }))
-  ), [cashBankAccounts]);
 
   const accountTypeSummary = useMemo(() => {
     return filteredTransactions.reduce<Record<string, number>>((acc, transaction) => {
@@ -150,24 +133,12 @@ export default function FinanceManagement() {
       .sort((left, right) => left.label.localeCompare(right.label));
   }, [transactions]);
 
-  const handleAddTransaction = async (values: {
-    amount: number;
-    category: string;
-    description: string;
-    payment_method: PaymentMethod;
-    payment_channel?: string;
-    cash_account_id?: string;
-  }) => {
-    try {
-      await addTransaction({
-        type: modalType,
-        ...values
-      });
-      setIsModalOpen(false);
-      form.resetFields();
-    } catch {
-      // Error handled in hook
-    }
+  const handleAddTransaction = async (values: FinanceTransactionFormValues) => {
+    await addTransaction({
+      type: modalType,
+      ...values,
+    });
+    setIsModalOpen(false);
   };
 
   const handleCashBankTransfer = async (values: CashBankTransferFormData) => {
@@ -178,26 +149,6 @@ export default function FinanceManagement() {
   const openModal = (type: FinanceTransactionType) => {
     setModalType(type);
     setIsModalOpen(true);
-    form.setFieldsValue({
-      payment_method: 'TUNAI',
-      cash_account_id: getDefaultCashAccountId('TUNAI'),
-      payment_channel: undefined,
-    });
-
-    // Set default category based on type
-    if (type === 'OPENING_BALANCE') {
-      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPENING_BALANCE, description: t('finance.defaultOpeningDescription') });
-    } else if (type === 'INCOME') {
-      form.setFieldsValue({ category: FINANCE_CATEGORIES.OTHER, description: '' });
-    } else if (type === 'EXPENSE') {
-      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPERATIONAL, description: '' });
-    }
-  };
-
-  const handlePaymentMethodChange = (paymentMethod: PaymentMethod) => {
-    form.setFieldsValue({
-      cash_account_id: getDefaultCashAccountId(paymentMethod),
-    });
   };
 
   const getFinanceTypeMeta = (transaction: Pick<FinanceTransaction, 'type' | 'category'>) => {
@@ -678,138 +629,14 @@ export default function FinanceManagement() {
         submitting={isRecordingTransfer}
       />
 
-      <Modal
-        title={
-          modalType === 'OPENING_BALANCE' ? t('finance.addBalanceCapital') :
-            modalType === 'INCOME' ? t('finance.addManualIncome') :
-              t('finance.recordExpense')
-        }
+      <FinanceTransactionModal
         open={isModalOpen}
+        type={modalType}
+        accounts={cashBankAccounts}
         onCancel={() => setIsModalOpen(false)}
-        footer={null}
-        destroyOnClose
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleAddTransaction}
-          className="mt-4"
-        >
-          <Form.Item
-            name="amount"
-            label={t('finance.amount')}
-            rules={[
-              { required: true, message: t('finance.amountRequired') },
-              { type: 'number', min: 1, message: t('finance.amountMin') }
-            ]}
-          >
-            <InputNumber
-              inputMode='numeric'
-              style={{ width: '100%' }}
-              formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
-              placeholder="0"
-              size="large"
-              autoFocus
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="category"
-            label={t('finance.category')}
-            rules={[{ required: true, message: t('finance.categoryRequired') }]}
-          >
-            {modalType === 'OPENING_BALANCE' ? (
-              <Select showSearch placeholder={t('finance.balanceSourcePlaceholder')}>
-                <Option value={FINANCE_CATEGORIES.OPENING_BALANCE}>{t('finance.category.SALDO_AWAL')}</Option>
-                <Option value={FINANCE_CATEGORIES.CAPITAL_ADDITION}>{t('finance.category.TAMBAHAN_MODAL')}</Option>
-                <Option value={FINANCE_CATEGORIES.DEPOSIT}>{t('finance.category.DEPOSIT')}</Option>
-                <Option value={FINANCE_CATEGORIES.LOAN}>{t('finance.category.PINJAMAN')}</Option>
-              </Select>
-            ) : (
-              <Select showSearch allowClear placeholder={t('finance.categoryPlaceholder')}>
-                {modalType === 'INCOME' ? (
-                  <>
-                    <Option value={FINANCE_CATEGORIES.OTHER}>{t('finance.category.LAINNYA')}</Option>
-                    <Option value={FINANCE_CATEGORIES.SERVICE}>{t('finance.category.LAYANAN')}</Option>
-                    <Option value={FINANCE_CATEGORIES.BONUS_GRANT}>{t('finance.category.BONUS')}</Option>
-                  </>
-                ) : (
-                  <>
-                    <Option value={FINANCE_CATEGORIES.STOCK_PURCHASE}>{t('finance.category.stockPurchaseOption')}</Option>
-                    <Option value={FINANCE_CATEGORIES.OPERATIONAL}>{t('finance.category.operationalOption')}</Option>
-                    <Option value="GAJI">{t('finance.category.GAJI')}</Option>
-                    <Option value="PERLENGKAPAN">{t('finance.category.PERLENGKAPAN')}</Option>
-                    <Option value="MAKAN">{t('finance.category.MAKAN')}</Option>
-                    <Option value="TRANSPORT">{t('finance.category.TRANSPORT')}</Option>
-                  </>
-                )}
-              </Select>
-            )}
-          </Form.Item>
-
-          <Form.Item
-            name="payment_method"
-            label={t('checkout.method')}
-            rules={[{ required: true, message: t('salesDocuments.validation.required', { field: t('checkout.method') }) }]}
-          >
-            <Select
-              onChange={handlePaymentMethodChange}
-              options={[
-                { value: 'TUNAI', label: t('payment.cash') },
-                { value: 'NON_TUNAI', label: t('payment.nonCash') },
-              ]}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="cash_account_id"
-            label={t('finance.cashAccount')}
-            rules={[{ required: true, message: t('finance.cashAccountRequired') }]}
-          >
-            <Select
-              showSearch
-              optionFilterProp="label"
-              placeholder={t('finance.cashAccountPlaceholder')}
-              options={cashBankAccountOptions}
-            />
-          </Form.Item>
-
-          <Form.Item name="payment_channel" label={t('finance.paymentChannel')}>
-            <Input placeholder={t('finance.paymentChannelPlaceholder')} />
-          </Form.Item>
-
-          <Form.Item
-            name="description"
-            label={t('finance.description')}
-            rules={[{ required: true, message: t('finance.descriptionRequired') }]}
-          >
-            <Input.TextArea
-              placeholder={
-                modalType === 'OPENING_BALANCE' ? t('finance.descriptionOpeningPlaceholder') :
-                  modalType === 'INCOME' ? t('finance.descriptionIncomePlaceholder') :
-                    t('finance.descriptionExpensePlaceholder')
-              }
-              rows={3}
-            />
-          </Form.Item>
-
-          <div className="flex justify-end gap-2 mt-6">
-            <Button onClick={() => setIsModalOpen(false)}>
-              {t('stock.form.cancel')}
-            </Button>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={isAdding}
-              danger={modalType === 'EXPENSE'}
-              className={modalType === 'INCOME' ? 'bg-green-600 hover:bg-green-700 border-none' : ''}
-            >
-              {t('finance.saveTransaction')}
-            </Button>
-          </div>
-        </Form>
-      </Modal>
+        onSubmit={handleAddTransaction}
+        submitting={isAdding}
+      />
     </div>
   );
 }
