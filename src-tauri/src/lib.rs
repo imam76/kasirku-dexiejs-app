@@ -1,5 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod bluetooth_printer;
+mod commands;
+mod db;
+
+use tauri::Manager;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -15,8 +19,15 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_share::init())
         .plugin(bluetooth_printer::init())
+        .setup(|app| {
+            let pool: db::PgPoolState = tauri::async_runtime::block_on(db::create_pg_pool())?;
+            tauri::async_runtime::block_on(sqlx::migrate!("./migrations").run(&pool))?;
+            app.manage(pool);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
+            commands::postgres_health::postgres_health_check,
             bluetooth_printer::list_bluetooth_printers,
             bluetooth_printer::test_print_bluetooth,
             bluetooth_printer::print_receipt_bluetooth
