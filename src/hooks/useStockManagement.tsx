@@ -5,6 +5,7 @@ import { createStockSchema, type StockFormData } from '@/lib/validations/stock';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
+import { enqueueProductSync } from '@/services/syncQueueService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import type { Product, ProductUnit } from '@/types';
@@ -17,6 +18,12 @@ export type { StockFormData };
 type ProductUpsertData = Omit<Product, 'id' | 'created_at' | 'updated_at' | 'stock'> & {
   stock?: number;
 };
+
+const withPendingSync = (product: Product): Product => ({
+  ...product,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
 
 export const useStockManagement = () => {
   const queryClient = useQueryClient();
@@ -70,6 +77,7 @@ export const useStockManagement = () => {
       const now = new Date().toISOString();
       let productId = editingId ?? '';
       const isEdit = Boolean(editingId);
+      let syncedProduct: Product | null = null;
 
       const unitMappings = normalizeProductUnitMappings({
         purchase_unit: productData.purchase_unit || 'pcs',
@@ -106,19 +114,28 @@ export const useStockManagement = () => {
       }
 
       await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
-        if (editingId) {
-          productId = editingId;
+        if (isEdit) {
+          productId = editingId!;
+          const existingProduct = await db.products.get(productId);
+          if (!existingProduct) {
+            throw new Error('Produk tidak ditemukan.');
+          }
+
           // Update product
-          await db.products.update(editingId, {
+          const updatedProduct: Product = withPendingSync({
+            ...existingProduct,
             ...cleanData,
+            stock: cleanData.stock ?? existingProduct.stock,
             updated_at: now,
           });
+          await db.products.put(updatedProduct);
+          syncedProduct = updatedProduct;
 
           // Record purchase if stock was added
           if (purchase_quantity > 0) {
             const totalCost = cleanData.purchase_price * purchase_quantity;
             await recordStockPurchase({
-              productId: editingId,
+              productId,
               productName: cleanData.name,
               sku: cleanData.sku,
               quantity: purchase_quantity,
@@ -132,15 +149,16 @@ export const useStockManagement = () => {
           // Create new product
           const newId = crypto.randomUUID();
           productId = newId;
-          const newProduct: Product = {
+          const newProduct: Product = withPendingSync({
             id: newId,
             ...cleanData,
             stock: cleanData.stock ?? 0, // Ensure stock is set for new product
             created_at: now,
             updated_at: now,
-          };
+          });
 
           await db.products.add(newProduct);
+          syncedProduct = newProduct;
 
           // Record initial purchase if stock was added
           if (purchase_quantity > 0) {
@@ -158,6 +176,10 @@ export const useStockManagement = () => {
           }
         }
       });
+
+      if (syncedProduct) {
+        await enqueueProductSync(syncedProduct, isEdit ? 'update' : 'create');
+      }
 
       await writeActivityLog({
         user: currentUser,
@@ -184,6 +206,11 @@ export const useStockManagement = () => {
       const currentUser = await getCurrentSessionUser();
       requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
       const product = await db.products.get(id);
+      const now = new Date().toISOString();
+      const deletedProduct = product ? withPendingSync({
+        ...product,
+        updated_at: now,
+      }) : null;
 
       await db.products.delete(id);
 
@@ -194,6 +221,9 @@ export const useStockManagement = () => {
         entity_id: id,
         description: `${currentUser?.name ?? 'User'} menghapus produk ${product?.name ?? id}.`,
       });
+      if (deletedProduct) {
+        await enqueueProductSync(deletedProduct, 'delete');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -207,6 +237,7 @@ export const useStockManagement = () => {
       const now = new Date().toISOString();
       let createdCount = 0;
       let updatedCount = 0;
+      const productsToSync: Array<{ product: Product; operation: 'create' | 'update' }> = [];
 
       await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
         for (const item of items) {
@@ -256,10 +287,13 @@ export const useStockManagement = () => {
 
           if (existing) {
             updatedCount += 1;
-            await db.products.update(existing.id, {
+            const updatedProduct: Product = withPendingSync({
+              ...existing,
               ...cleanData,
               updated_at: now,
             });
+            await db.products.put(updatedProduct);
+            productsToSync.push({ product: updatedProduct, operation: 'update' });
 
             if (purchase_quantity > 0) {
               const totalCost = cleanData.purchase_price * purchase_quantity;
@@ -277,14 +311,15 @@ export const useStockManagement = () => {
           } else {
             createdCount += 1;
             const newId = item.id && item.id.length > 0 ? item.id : crypto.randomUUID();
-            const newProduct: Product = {
+            const newProduct: Product = withPendingSync({
               id: newId,
               ...cleanData,
               created_at: now,
               updated_at: now,
-            };
+            });
 
             await db.products.add(newProduct);
+            productsToSync.push({ product: newProduct, operation: 'create' });
 
             if (purchase_quantity > 0) {
               const totalCost = cleanData.purchase_price * purchase_quantity;
@@ -309,6 +344,9 @@ export const useStockManagement = () => {
         entity: 'products',
         description: `${currentUser?.name ?? 'User'} mengimpor ${items.length} baris produk dari CSV. Produk baru: ${createdCount}, diperbarui: ${updatedCount}.`,
       });
+      for (const { product, operation } of productsToSync) {
+        await enqueueProductSync(product, operation);
+      }
     },
     onSuccess: (_data, items) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });

@@ -1,28 +1,59 @@
 import { db } from '@/lib/db';
+import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
+import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
 import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
 import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
+import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
 import {
+  contactPostgresAdapter,
   departmentPostgresAdapter,
   isTauriRuntime,
+  productPostgresAdapter,
   projectPostgresAdapter,
   taxPostgresAdapter,
+  warehousePostgresAdapter,
+  type RemoteContactDto,
   type RemoteDepartmentDto,
+  type RemoteProductDto,
   type RemoteProjectDto,
   type RemoteTaxDto,
+  type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { Department, Project, SyncQueueItem, SyncQueueOperation, Tax } from '@/types';
+import type { Contact, Department, Product, Project, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
+const CONTACT_ENTITY = 'contacts';
 const DEPARTMENT_ENTITY = 'departments';
+const PRODUCT_ENTITY = 'products';
 const PROJECT_ENTITY = 'projects';
 const TAX_ENTITY = 'taxes';
+const WAREHOUSE_ENTITY = 'warehouses';
 
 let isProcessingSyncQueue = false;
 
 const getErrorMessage = (error: unknown) => (
   error instanceof Error ? error.message : String(error)
 );
+
+const normalizeRemoteNumber = (value: number | undefined) => (
+  typeof value === 'number' && Number.isFinite(value) ? value : 0
+);
+
+const mapContactToRemoteDto = (contact: Contact): RemoteContactDto => ({
+  id: contact.id,
+  name: contact.name,
+  contact_type: contact.contact_type,
+  phone: contact.phone,
+  email: contact.email,
+  address: contact.address,
+  company_name: contact.company_name,
+  tax_number: contact.tax_number,
+  notes: contact.notes,
+  is_active: contact.is_active,
+  created_at: contact.created_at,
+  updated_at: contact.updated_at,
+});
 
 const mapDepartmentToRemoteDto = (department: Department): RemoteDepartmentDto => ({
   id: department.id,
@@ -53,6 +84,23 @@ const mapProjectToRemoteDto = (project: Project): RemoteProjectDto => ({
   updated_at: project.updated_at,
 });
 
+const mapProductToRemoteDto = (product: Product): RemoteProductDto => ({
+  id: product.id,
+  name: product.name,
+  category: product.category,
+  purchase_unit: product.purchase_unit,
+  selling_unit: product.selling_unit,
+  purchase_price: normalizeRemoteNumber(product.purchase_price),
+  selling_price: normalizeRemoteNumber(product.selling_price),
+  stock: normalizeRemoteNumber(product.stock),
+  sku: product.sku,
+  wholesale_prices: product.wholesale_prices,
+  sellable_units: product.sellable_units,
+  unit_mappings: product.unit_mappings,
+  created_at: product.created_at,
+  updated_at: product.updated_at,
+});
+
 const mapTaxToRemoteDto = (tax: Tax): RemoteTaxDto => ({
   id: tax.id,
   code: tax.code,
@@ -68,6 +116,32 @@ const mapTaxToRemoteDto = (tax: Tax): RemoteTaxDto => ({
   created_at: tax.created_at,
   updated_at: tax.updated_at,
 });
+
+const mapWarehouseToRemoteDto = (warehouse: Warehouse): RemoteWarehouseDto => ({
+  id: warehouse.id,
+  code: warehouse.code,
+  name: warehouse.name,
+  address: warehouse.address,
+  phone: warehouse.phone,
+  notes: warehouse.notes,
+  is_active: warehouse.is_active,
+  created_at: warehouse.created_at,
+  updated_at: warehouse.updated_at,
+});
+
+const isRemoteContactDto = (payload: unknown): payload is RemoteContactDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteContactDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.contact_type === 'string' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
 
 const isRemoteDepartmentDto = (payload: unknown): payload is RemoteDepartmentDto => {
   if (!payload || typeof payload !== 'object') return false;
@@ -96,6 +170,23 @@ const isRemoteProjectDto = (payload: unknown): payload is RemoteProjectDto => {
   );
 };
 
+const isRemoteProductDto = (payload: unknown): payload is RemoteProductDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteProductDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.purchase_unit === 'string' &&
+    typeof candidate.selling_unit === 'string' &&
+    typeof candidate.purchase_price === 'number' &&
+    typeof candidate.selling_price === 'number' &&
+    typeof candidate.stock === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteTaxDto = (payload: unknown): payload is RemoteTaxDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -111,6 +202,30 @@ const isRemoteTaxDto = (payload: unknown): payload is RemoteTaxDto => {
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'
   );
+};
+
+const isRemoteWarehouseDto = (payload: unknown): payload is RemoteWarehouseDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteWarehouseDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const updateContactSyncMetadata = async (
+  contactId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Contact, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentContact = await db.contacts.get(contactId);
+  if (!currentContact || currentContact.updated_at !== sourceUpdatedAt) return;
+
+  await db.contacts.update(contactId, syncMetadata);
 };
 
 const updateDepartmentSyncMetadata = async (
@@ -135,6 +250,17 @@ const updateProjectSyncMetadata = async (
   await db.projects.update(projectId, syncMetadata);
 };
 
+const updateProductSyncMetadata = async (
+  productId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Product, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentProduct = await db.products.get(productId);
+  if (!currentProduct || currentProduct.updated_at !== sourceUpdatedAt) return;
+
+  await db.products.update(productId, syncMetadata);
+};
+
 const updateTaxSyncMetadata = async (
   taxId: string,
   sourceUpdatedAt: string,
@@ -144,6 +270,17 @@ const updateTaxSyncMetadata = async (
   if (!currentTax || currentTax.updated_at !== sourceUpdatedAt) return;
 
   await db.taxes.update(taxId, syncMetadata);
+};
+
+const updateWarehouseSyncMetadata = async (
+  warehouseId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Warehouse, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentWarehouse = await db.warehouses.get(warehouseId);
+  if (!currentWarehouse || currentWarehouse.updated_at !== sourceUpdatedAt) return;
+
+  await db.warehouses.update(warehouseId, syncMetadata);
 };
 
 const markQueueItemPending = async (queueItemId: string) => {
@@ -171,6 +308,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     updated_at: now,
   });
 
+  if (queueItem.entity === CONTACT_ENTITY && isRemoteContactDto(queueItem.payload)) {
+    await updateContactSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === DEPARTMENT_ENTITY && isRemoteDepartmentDto(queueItem.payload)) {
     await updateDepartmentSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -185,12 +329,38 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === PRODUCT_ENTITY && isRemoteProductDto(queueItem.payload)) {
+    await updateProductSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === TAX_ENTITY && isRemoteTaxDto(queueItem.payload)) {
     await updateTaxSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
   }
+
+  if (queueItem.entity === WAREHOUSE_ENTITY && isRemoteWarehouseDto(queueItem.payload)) {
+    await updateWarehouseSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+};
+
+const processContactQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return contactPostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemoteContactDto(queueItem.payload)) {
+    throw new Error('Payload contact sync queue tidak valid.');
+  }
+
+  return contactPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processDepartmentQueueItem = async (queueItem: SyncQueueItem) => {
@@ -217,6 +387,18 @@ const processProjectQueueItem = async (queueItem: SyncQueueItem) => {
   return projectPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processProductQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return productPostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemoteProductDto(queueItem.payload)) {
+    throw new Error('Payload product sync queue tidak valid.');
+  }
+
+  return productPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processTaxQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     return taxPostgresAdapter.delete(queueItem.entity_id);
@@ -227,6 +409,18 @@ const processTaxQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return taxPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processWarehouseQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return warehousePostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemoteWarehouseDto(queueItem.payload)) {
+    throw new Error('Payload gudang sync queue tidak valid.');
+  }
+
+  return warehousePostgresAdapter.upsert(queueItem.payload);
 };
 
 const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
@@ -242,18 +436,43 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
   });
 
   try {
+    let remoteContact: RemoteContactDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
+    let remoteProduct: RemoteProductDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
     let remoteTax: RemoteTaxDto | null = null;
+    let remoteWarehouse: RemoteWarehouseDto | null = null;
 
-    if (currentQueueItem.entity === DEPARTMENT_ENTITY) {
+    if (currentQueueItem.entity === CONTACT_ENTITY) {
+      remoteContact = await processContactQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === DEPARTMENT_ENTITY) {
       remoteDepartment = await processDepartmentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === PRODUCT_ENTITY) {
+      remoteProduct = await processProductQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
       remoteProject = await processProjectQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === TAX_ENTITY) {
       remoteTax = await processTaxQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === WAREHOUSE_ENTITY) {
+      remoteWarehouse = await processWarehouseQueueItem(currentQueueItem);
     } else {
       throw new Error(`Entity sync queue tidak didukung: ${currentQueueItem.entity}`);
+    }
+
+    if (
+      currentQueueItem.entity === CONTACT_ENTITY &&
+      !remoteContact &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteContactDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateContactSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+      });
+      return;
     }
 
     if (
@@ -265,6 +484,33 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       const syncedAt = new Date().toISOString();
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateDepartmentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+      });
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === PRODUCT_ENTITY &&
+      !remoteProduct &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteProductDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === PROJECT_ENTITY &&
+      !remoteProject &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteProjectDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateProjectSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
         sync_status: 'synced',
         sync_error: undefined,
         last_synced_at: syncedAt,
@@ -289,14 +535,14 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     }
 
     if (
-      currentQueueItem.entity === PROJECT_ENTITY &&
-      !remoteProject &&
+      currentQueueItem.entity === WAREHOUSE_ENTITY &&
+      !remoteWarehouse &&
       currentQueueItem.operation === 'delete' &&
-      isRemoteProjectDto(currentQueueItem.payload)
+      isRemoteWarehouseDto(currentQueueItem.payload)
     ) {
       const syncedAt = new Date().toISOString();
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
-      await updateProjectSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+      await updateWarehouseSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
         sync_status: 'synced',
         sync_error: undefined,
         last_synced_at: syncedAt,
@@ -305,6 +551,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     }
 
     const syncedAt = new Date().toISOString();
+
+    if (remoteContact && isRemoteContactDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateContactSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteContact.updated_at,
+      });
+      await mergeRemoteContactsIntoDexie([remoteContact], syncedAt);
+      return;
+    }
 
     if (remoteDepartment && isRemoteDepartmentDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
@@ -315,6 +573,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteDepartment.updated_at,
       });
       await mergeRemoteDepartmentsIntoDexie([remoteDepartment], syncedAt);
+      return;
+    }
+
+    if (remoteProduct && isRemoteProductDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateProductSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteProduct.updated_at,
+      });
+      await mergeRemoteProductsIntoDexie([remoteProduct], syncedAt);
       return;
     }
 
@@ -339,6 +609,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteTax.updated_at,
       });
       await mergeRemoteTaxesIntoDexie([remoteTax], syncedAt);
+      return;
+    }
+
+    if (remoteWarehouse && isRemoteWarehouseDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateWarehouseSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteWarehouse.updated_at,
+      });
+      await mergeRemoteWarehousesIntoDexie([remoteWarehouse], syncedAt);
       return;
     }
 
@@ -371,6 +653,29 @@ export const processPendingSyncQueue = async (limit = SYNC_QUEUE_BATCH_SIZE) => 
   if (pendingQueueCount > 0) {
     void processPendingSyncQueue(limit);
   }
+};
+
+export const enqueueContactSync = async (
+  contact: Contact,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: CONTACT_ENTITY,
+    entity_id: contact.id,
+    operation,
+    payload: mapContactToRemoteDto(contact),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
 };
 
 export const enqueueDepartmentSync = async (
@@ -419,6 +724,29 @@ export const enqueueProjectSync = async (
   return queueItem;
 };
 
+export const enqueueProductSync = async (
+  product: Product,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: PRODUCT_ENTITY,
+    entity_id: product.id,
+    operation,
+    payload: mapProductToRemoteDto(product),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueueTaxSync = async (
   tax: Tax,
   operation: SyncQueueOperation,
@@ -430,6 +758,29 @@ export const enqueueTaxSync = async (
     entity_id: tax.id,
     operation,
     payload: mapTaxToRemoteDto(tax),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueWarehouseSync = async (
+  warehouse: Warehouse,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: WAREHOUSE_ENTITY,
+    entity_id: warehouse.id,
+    operation,
+    payload: mapWarehouseToRemoteDto(warehouse),
     status: 'pending',
     attempts: 0,
     created_at: now,

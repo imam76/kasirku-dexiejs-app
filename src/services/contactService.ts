@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { contactSchema } from '@/lib/validations/contact';
+import { enqueueContactSync } from '@/services/syncQueueService';
 import type { Contact, ContactType } from '@/types';
 
 export interface ContactUpsertInput {
@@ -24,17 +25,23 @@ const sanitizeContactInput = (input: ContactUpsertInput): Required<Pick<ContactU
   };
 };
 
+const withPendingSync = (contact: Contact): Contact => ({
+  ...contact,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 export const createContact = async (input: ContactUpsertInput): Promise<Contact> => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
 
   const now = new Date().toISOString();
-  const contact: Contact = {
+  const contact: Contact = withPendingSync({
     id: crypto.randomUUID(),
     ...sanitizeContactInput(input),
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.contacts.add(contact);
   await writeActivityLog({
@@ -44,6 +51,7 @@ export const createContact = async (input: ContactUpsertInput): Promise<Contact>
     entity_id: contact.id,
     description: `${currentUser?.name ?? 'User'} membuat contact ${contact.name}.`,
   });
+  await enqueueContactSync(contact, 'create');
 
   return contact;
 };
@@ -57,11 +65,11 @@ export const updateContact = async (id: string, input: ContactUpsertInput): Prom
     throw new Error('Contact tidak ditemukan.');
   }
 
-  const updatedContact: Contact = {
+  const updatedContact: Contact = withPendingSync({
     ...existingContact,
     ...sanitizeContactInput(input),
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.contacts.put(updatedContact);
   await writeActivityLog({
@@ -71,6 +79,7 @@ export const updateContact = async (id: string, input: ContactUpsertInput): Prom
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memperbarui contact ${updatedContact.name}.`,
   });
+  await enqueueContactSync(updatedContact, 'update');
 
   return updatedContact;
 };
@@ -84,11 +93,11 @@ export const archiveContact = async (id: string): Promise<Contact> => {
     throw new Error('Contact tidak ditemukan.');
   }
 
-  const archivedContact = {
+  const archivedContact: Contact = withPendingSync({
     ...contact,
     is_active: false,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.contacts.put(archivedContact);
   await writeActivityLog({
@@ -98,6 +107,7 @@ export const archiveContact = async (id: string): Promise<Contact> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan contact ${contact.name}.`,
   });
+  await enqueueContactSync(archivedContact, 'delete');
 
   return archivedContact;
 };
@@ -111,11 +121,11 @@ export const restoreContact = async (id: string): Promise<Contact> => {
     throw new Error('Contact tidak ditemukan.');
   }
 
-  const restoredContact = {
+  const restoredContact: Contact = withPendingSync({
     ...contact,
     is_active: true,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.contacts.put(restoredContact);
   await writeActivityLog({
@@ -125,6 +135,7 @@ export const restoreContact = async (id: string): Promise<Contact> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan contact ${contact.name}.`,
   });
+  await enqueueContactSync(restoredContact, 'update');
 
   return restoredContact;
 };

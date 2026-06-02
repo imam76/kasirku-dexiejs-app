@@ -64,6 +64,10 @@ export interface Product {
   unit_mappings?: ProductUnitMapping[]; // Product-specific conversions, e.g. 1 dus = 24 pcs
   created_at: string;
   updated_at: string;
+  sync_status?: ProductSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
@@ -208,6 +212,10 @@ export interface Contact {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: ContactSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface Warehouse {
@@ -220,12 +228,19 @@ export interface Warehouse {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: WarehouseSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export type EntitySyncStatus = 'pending' | 'synced' | 'failed';
+export type ContactSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
+export type ProductSyncStatus = EntitySyncStatus;
 export type ProjectSyncStatus = EntitySyncStatus;
 export type TaxSyncStatus = EntitySyncStatus;
+export type WarehouseSyncStatus = EntitySyncStatus;
 
 export interface Department {
   id: string;

@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { warehouseSchema } from '@/lib/validations/warehouse';
+import { enqueueWarehouseSync } from '@/services/syncQueueService';
 import type { Warehouse } from '@/types';
 
 export interface WarehouseUpsertInput {
@@ -23,17 +24,23 @@ const sanitizeWarehouseInput = (
   };
 };
 
+const withPendingSync = (warehouse: Warehouse): Warehouse => ({
+  ...warehouse,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 export const createWarehouse = async (input: WarehouseUpsertInput): Promise<Warehouse> => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
 
   const now = new Date().toISOString();
-  const warehouse: Warehouse = {
+  const warehouse: Warehouse = withPendingSync({
     id: crypto.randomUUID(),
     ...sanitizeWarehouseInput(input),
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.warehouses.add(warehouse);
   await writeActivityLog({
@@ -43,6 +50,7 @@ export const createWarehouse = async (input: WarehouseUpsertInput): Promise<Ware
     entity_id: warehouse.id,
     description: `${currentUser?.name ?? 'User'} membuat gudang ${warehouse.name}.`,
   });
+  await enqueueWarehouseSync(warehouse, 'create');
 
   return warehouse;
 };
@@ -56,11 +64,11 @@ export const updateWarehouse = async (id: string, input: WarehouseUpsertInput): 
     throw new Error('Gudang tidak ditemukan.');
   }
 
-  const updatedWarehouse: Warehouse = {
+  const updatedWarehouse: Warehouse = withPendingSync({
     ...existingWarehouse,
     ...sanitizeWarehouseInput(input),
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.warehouses.put(updatedWarehouse);
   await writeActivityLog({
@@ -70,6 +78,7 @@ export const updateWarehouse = async (id: string, input: WarehouseUpsertInput): 
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memperbarui gudang ${updatedWarehouse.name}.`,
   });
+  await enqueueWarehouseSync(updatedWarehouse, 'update');
 
   return updatedWarehouse;
 };
@@ -83,11 +92,11 @@ export const archiveWarehouse = async (id: string): Promise<Warehouse> => {
     throw new Error('Gudang tidak ditemukan.');
   }
 
-  const archivedWarehouse = {
+  const archivedWarehouse: Warehouse = withPendingSync({
     ...warehouse,
     is_active: false,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.warehouses.put(archivedWarehouse);
   await writeActivityLog({
@@ -97,6 +106,7 @@ export const archiveWarehouse = async (id: string): Promise<Warehouse> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan gudang ${warehouse.name}.`,
   });
+  await enqueueWarehouseSync(archivedWarehouse, 'delete');
 
   return archivedWarehouse;
 };
@@ -110,11 +120,11 @@ export const restoreWarehouse = async (id: string): Promise<Warehouse> => {
     throw new Error('Gudang tidak ditemukan.');
   }
 
-  const restoredWarehouse = {
+  const restoredWarehouse: Warehouse = withPendingSync({
     ...warehouse,
     is_active: true,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.warehouses.put(restoredWarehouse);
   await writeActivityLog({
@@ -124,6 +134,7 @@ export const restoreWarehouse = async (id: string): Promise<Warehouse> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan gudang ${warehouse.name}.`,
   });
+  await enqueueWarehouseSync(restoredWarehouse, 'update');
 
   return restoredWarehouse;
 };

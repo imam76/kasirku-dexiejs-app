@@ -706,8 +706,8 @@ Saat aplikasi online:
 
 Implementasi pilot saat ini:
 
-- `departments`, `projects`, dan `taxes` tetap dibaca UI dari Dexie.
-- `refreshDepartmentsFromPostgres()`, `refreshProjectsFromPostgres()`, dan `refreshTaxesFromPostgres()` mengambil data PostgreSQL lalu merge ke Dexie.
+- `departments`, `projects`, `taxes`, `contacts`, `warehouses`, dan `products` tetap dibaca UI dari Dexie.
+- `refreshDepartmentsFromPostgres()`, `refreshProjectsFromPostgres()`, `refreshTaxesFromPostgres()`, `refreshContactsFromPostgres()`, `refreshWarehousesFromPostgres()`, dan `refreshProductsFromPostgres()` mengambil data PostgreSQL lalu merge ke Dexie.
 - Data lokal dengan `sync_status = "pending"` atau `"failed"` tidak ditimpa oleh remote read.
 - Worker aplikasi memproses sync queue lebih dulu, lalu menjalankan refresh read dari PostgreSQL saat runtime Tauri online.
 
@@ -745,10 +745,11 @@ WHERE id = $1;
 
 Implementasi pilot saat ini:
 
-- Migration awal `departments`, migration `projects`, dan migration `taxes` sudah memiliki `deleted_at`, jadi database baru langsung memakai soft delete.
-- `postgres_delete_department`, `postgres_delete_project`, dan `postgres_delete_tax` menjalankan `UPDATE ... SET deleted_at = NOW(), updated_at = NOW()`.
+- Migration awal `departments`, migration `projects`, migration `taxes`, dan migration `contacts`/`warehouses`/`products` sudah memiliki `deleted_at`, jadi database baru langsung memakai soft delete.
+- `postgres_delete_department`, `postgres_delete_project`, `postgres_delete_tax`, `postgres_delete_contact`, `postgres_delete_warehouse`, dan `postgres_delete_product` menjalankan `UPDATE ... SET deleted_at = NOW(), updated_at = NOW()`.
 - Archive di frontend tetap menandai Dexie sebagai `is_active = false`, lalu mengirim operasi queue `delete` ke PostgreSQL agar remote memakai soft delete.
 - Restore mengirim upsert dengan `deleted_at = NULL` sehingga row PostgreSQL bisa aktif kembali jika timestamp lokal menang.
+- Untuk `products`, Dexie masih memakai hard delete lokal sesuai workflow stock saat ini; queue tetap membawa snapshot product sebelum delete agar PostgreSQL bisa melakukan soft delete.
 
 Alasan:
 
@@ -768,7 +769,7 @@ Last write wins berdasarkan updated_at
 
 Implementasi pilot saat ini:
 
-- `postgres_upsert_department`, `postgres_upsert_project`, dan `postgres_upsert_tax` hanya menimpa row PostgreSQL jika `EXCLUDED.updated_at >= updated_at` row existing.
+- `postgres_upsert_department`, `postgres_upsert_project`, `postgres_upsert_tax`, `postgres_upsert_contact`, `postgres_upsert_warehouse`, dan `postgres_upsert_product` hanya menimpa row PostgreSQL jika `EXCLUDED.updated_at >= updated_at` row existing.
 - Jika payload lokal kalah dari row remote yang lebih baru, repository mengembalikan row remote dan frontend me-merge hasilnya kembali ke Dexie.
 - Read refresh dari PostgreSQL tetap tidak menimpa data lokal dengan `sync_status = "pending"` atau `"failed"`.
 
@@ -814,7 +815,9 @@ Implementasi saat ini:
 - `departments` sudah menjadi pilot pertama untuk health check, CRUD, queue, read refresh, soft delete, dan conflict resolution awal.
 - `projects` menjadi entity Fase 17 pertama setelah departments dengan pola yang sama: migration PostgreSQL, Rust DTO/repository/command, frontend adapter, sync metadata Dexie, sync queue, read refresh, soft delete, dan last-write-wins berdasarkan `updated_at`.
 - `taxes` menjadi entity Fase 17 berikutnya dengan pola yang sama, tetap memakai baseline single tax/document fallback yang sudah ada di aplikasi.
-- Entity berikutnya di roadmap tetap `contacts`, sebelum masuk produk/stok dan dokumen transaksi.
+- `contacts` sudah masuk sebagai master data lebih besar dengan pola yang sama: migration PostgreSQL, Rust DTO/repository/command, frontend adapter, sync metadata Dexie, sync queue, read refresh, soft delete, dan last-write-wins berdasarkan `updated_at`.
+- `warehouses` dan `products` sudah masuk sebagai master data produk/stok. `warehouses` mengikuti pola archive/restore seperti master data lain. `products` menyinkronkan master product dan nilai `stock` yang ada pada record product.
+- Mutasi stock dari transaksi sales/purchase/stock movement belum dipindahkan ke PostgreSQL pada fase ini. Bagian itu tetap masuk fase dokumen transaksi/stock mutation berikutnya karena perlu transaction boundary, conflict rule, dan audit yang lebih ketat.
 
 Alasan urutan:
 

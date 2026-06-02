@@ -401,6 +401,46 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(31).stores({
+      contacts: 'id, name, contact_type, phone, email, is_active, sync_status, created_at',
+      warehouses: 'id, name, code, is_active, sync_status, created_at',
+      products: 'id, name, sku, category, sync_status, created_at'
+    }).upgrade(async (tx) => {
+      const contacts = await tx.table<Contact, string>('contacts').toArray();
+      const contactsWithoutSyncStatus = contacts
+        .filter((contact) => !contact.sync_status)
+        .map((contact) => ({
+          ...contact,
+          sync_status: 'pending' as const,
+        }));
+
+      const warehouses = await tx.table<Warehouse, string>('warehouses').toArray();
+      const warehousesWithoutSyncStatus = warehouses
+        .filter((warehouse) => !warehouse.sync_status)
+        .map((warehouse) => ({
+          ...warehouse,
+          sync_status: 'pending' as const,
+        }));
+
+      const products = await tx.table<Product, string>('products').toArray();
+      const productsWithoutSyncStatus = products
+        .filter((product) => !product.sync_status)
+        .map((product) => ({
+          ...product,
+          sync_status: 'pending' as const,
+        }));
+
+      if (contactsWithoutSyncStatus.length > 0) {
+        await tx.table<Contact, string>('contacts').bulkPut(contactsWithoutSyncStatus);
+      }
+      if (warehousesWithoutSyncStatus.length > 0) {
+        await tx.table<Warehouse, string>('warehouses').bulkPut(warehousesWithoutSyncStatus);
+      }
+      if (productsWithoutSyncStatus.length > 0) {
+        await tx.table<Product, string>('products').bulkPut(productsWithoutSyncStatus);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
