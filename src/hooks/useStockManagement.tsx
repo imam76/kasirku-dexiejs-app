@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createStockSchema, type StockFormData } from '@/lib/validations/stock';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { enqueueProductSync } from '@/services/syncQueueService';
@@ -61,13 +62,12 @@ export const useStockManagement = () => {
     formState: { errors },
   } = form;
 
-  // Fetch products query
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => {
-      return await db.products.orderBy('created_at').reverse().toArray();
-    },
-  });
+  const liveProducts = useLiveQuery(
+    () => db.products.orderBy('created_at').reverse().toArray(),
+    [],
+  );
+  const products = liveProducts ?? [];
+  const isLoading = liveProducts === undefined;
 
   // Upsert (add/update) mutation
   const upsertMutation = useMutation({

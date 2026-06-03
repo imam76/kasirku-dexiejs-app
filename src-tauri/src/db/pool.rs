@@ -123,8 +123,7 @@ impl From<sqlx::Error> for PostgresCommandError {
 pub async fn create_pg_pool() -> Result<PgPool, PostgresInitError> {
     load_env();
 
-    let database_url =
-        env::var("DATABASE_URL").map_err(|_| PostgresInitError::DatabaseUrlMissing)?;
+    let database_url = read_database_url()?;
 
     PgPoolOptions::new()
         .max_connections(5)
@@ -137,4 +136,16 @@ pub async fn create_pg_pool() -> Result<PgPool, PostgresInitError> {
 fn load_env() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let _ = dotenvy::from_path(manifest_dir.join(".env"));
+}
+
+fn read_database_url() -> Result<String, PostgresInitError> {
+    env::var("DATABASE_URL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            option_env!("KASIRKU_DATABASE_URL")
+                .map(str::to_string)
+                .filter(|value| !value.trim().is_empty())
+        })
+        .ok_or(PostgresInitError::DatabaseUrlMissing)
 }

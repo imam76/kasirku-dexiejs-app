@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { shoppingItemSchema, type ShoppingItemFormData } from '@/lib/validations/shopping';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { getCurrentSessionUser } from '@/auth/authService';
@@ -17,12 +18,12 @@ export const useShoppingNote = () => {
   const queryClient = useQueryClient();
   const [items, setItems] = useState<ShoppingNoteItem[]>([]);
 
-  const { data: products = [], isLoading: isProductsLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => {
-      return await db.products.orderBy('name').toArray();
-    },
-  });
+  const liveProducts = useLiveQuery(
+    () => db.products.orderBy('name').toArray(),
+    [],
+  );
+  const products = liveProducts ?? [];
+  const isProductsLoading = liveProducts === undefined;
 
   const {
     control,

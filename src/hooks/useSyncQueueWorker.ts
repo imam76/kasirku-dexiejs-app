@@ -26,20 +26,24 @@ export const useSyncQueueWorker = () => {
         await processPendingSyncQueue();
 
         const postgresHealth = await postgresAdapter.healthCheck();
+        console.info('[PostgreSQL sync] health check', postgresHealth);
         if (!postgresHealth.available) return;
 
-        await refreshAuthUsersFromPostgres();
-        await refreshActivityLogsFromPostgres();
-        await refreshDepartmentsFromPostgres();
-        await refreshProjectsFromPostgres();
-        await refreshTaxesFromPostgres();
-        await refreshContactsFromPostgres();
-        await refreshWarehousesFromPostgres();
-        await refreshProductsFromPostgres();
-        await refreshFinanceTransactionsFromPostgres();
-        await refreshJournalEntriesFromPostgres();
-        await refreshPurchaseDocumentsFromPostgres();
-        await refreshSalesDocumentsFromPostgres();
+        const refreshResults = {
+          authUsers: await refreshAuthUsersFromPostgres(),
+          activityLogs: await refreshActivityLogsFromPostgres(),
+          departments: await refreshDepartmentsFromPostgres(),
+          projects: await refreshProjectsFromPostgres(),
+          taxes: await refreshTaxesFromPostgres(),
+          contacts: await refreshContactsFromPostgres(),
+          warehouses: await refreshWarehousesFromPostgres(),
+          products: await refreshProductsFromPostgres(),
+          financeTransactions: await refreshFinanceTransactionsFromPostgres(),
+          journalEntries: await refreshJournalEntriesFromPostgres(),
+          purchaseDocuments: await refreshPurchaseDocumentsFromPostgres(),
+          salesDocuments: await refreshSalesDocumentsFromPostgres(),
+        };
+        console.info('[PostgreSQL sync] read refresh completed', refreshResults);
       } catch (error) {
         console.error('Failed to refresh PostgreSQL read data', error);
       }
