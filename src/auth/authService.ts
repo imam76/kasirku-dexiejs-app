@@ -404,7 +404,10 @@ export const loginWithPin = async (pin: string): Promise<AuthUser> => {
 
 export const logout = async (): Promise<void> => {
   const sessionId = getActiveSessionId();
-  const currentUser = await getCurrentSessionUser();
+  const currentUser = await getCurrentSessionUser({
+    touchSession: false,
+    cleanupInvalidSession: false,
+  });
 
   if (sessionId) {
     await db.authSessions.delete(sessionId);

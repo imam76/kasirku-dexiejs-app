@@ -186,7 +186,17 @@ const RootLayout = () => {
       okType: 'danger',
       cancelText: t('common.cancel'),
       onOk: async () => {
-        await logout()
+        try {
+          navigate({ to: '/' })
+          await logout()
+        } catch (error) {
+          console.error('Logout failed:', error)
+          notification.error({
+            message: t('root.logoutFailedTitle'),
+            description: error instanceof Error ? error.message : t('root.logoutFailedDescription'),
+            placement: 'bottomRight',
+          })
+        }
       },
     })
   }
