@@ -60,7 +60,7 @@ export default function SalesReturnsManagement() {
       title: t('salesReturns.field.returnNumber'),
       dataIndex: 'return_number',
       render: (value: string, record) => (
-        <Link to="/finance/sales/returns/$returnId" params={{ returnId: record.id }}>
+        <Link to="/sales/returns/$returnId" params={{ returnId: record.id }}>
           {value}
         </Link>
       ),
@@ -104,7 +104,7 @@ export default function SalesReturnsManagement() {
       fixed: 'right',
       width: 110,
       render: (_, record) => (
-        <Link to="/finance/sales/returns/$returnId" params={{ returnId: record.id }}>
+        <Link to="/sales/returns/$returnId" params={{ returnId: record.id }}>
           <Button size="small" icon={<Eye size={14} />}>
             {t('salesReturns.detail')}
           </Button>
@@ -121,10 +121,10 @@ export default function SalesReturnsManagement() {
           <Text type="secondary">{t('salesReturns.subtitle')}</Text>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/finance/sales">
+          <Link to="/sales">
             <Button icon={<ArrowLeft size={16} />}>{t('salesDocuments.backToSalesMenu')}</Button>
           </Link>
-          <Link to="/finance/sales/returns/new">
+          <Link to="/sales/returns/new">
             <Button type="primary" icon={<Plus size={16} />}>{t('salesReturns.new')}</Button>
           </Link>
         </div>

@@ -249,7 +249,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
           {canEdit && (
             <Button
               onClick={() => navigate({
-                to: '/finance/sales/$documentType/$documentId/edit',
+                to: '/sales/$documentType/$documentId/edit',
                 params: { documentType: getSalesDocumentTypePathSegment(document.type), documentId: document.id },
               })}
             >
@@ -271,7 +271,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               onClick={async () => {
                 const result = await convertDocument({ sourceId: document.id, targetType });
                 navigate({
-                  to: '/finance/sales/$documentType/$documentId',
+                  to: '/sales/$documentType/$documentId',
                   params: {
                     documentType: getSalesDocumentTypePathSegment(result.document.type),
                     documentId: result.document.id,
@@ -288,7 +288,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
             <Button
               icon={<RotateCcw size={16} />}
               onClick={() => navigate({
-                to: '/finance/sales/returns/new',
+                to: '/sales/returns/new',
                 search: { sourceType: document.type, sourceId: document.id },
               })}
             >

@@ -81,14 +81,14 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
         onCancel={() => {
           if (!document) {
             navigate({
-              to: '/finance/purchases/$documentType',
+              to: '/purchases/$documentType',
               params: { documentType: getPurchaseDocumentTypePathSegment(documentType) },
             });
             return;
           }
 
           navigate({
-            to: '/finance/purchases/$documentType/$documentId',
+            to: '/purchases/$documentType/$documentId',
             params: { documentType: getPurchaseDocumentTypePathSegment(document.type), documentId: document.id },
           });
         }}
@@ -97,7 +97,7 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
             ? await updateDocument({ id: document.id, input })
             : await createDocument(input);
           navigate({
-            to: '/finance/purchases/$documentType/$documentId',
+            to: '/purchases/$documentType/$documentId',
             params: {
               documentType: getPurchaseDocumentTypePathSegment(result.document.type),
               documentId: result.document.id,

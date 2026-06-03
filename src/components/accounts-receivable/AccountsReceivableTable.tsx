@@ -51,7 +51,7 @@ export function AccountsReceivableTable({
       width: 170,
       render: (value: string, record) => (
         <Link
-          to="/finance/sales/$documentType/$documentId"
+          to="/sales/$documentType/$documentId"
           params={{
             documentType: getSalesDocumentTypePathSegment('SALES_INVOICE'),
             documentId: record.sales_document_id,
@@ -150,7 +150,7 @@ export function AccountsReceivableTable({
             {t('accountsReceivable.recordPayment')}
           </Button>
           <Link
-            to="/finance/sales/$documentType/$documentId"
+            to="/sales/$documentType/$documentId"
             params={{
               documentType: getSalesDocumentTypePathSegment('SALES_INVOICE'),
               documentId: record.sales_document_id,

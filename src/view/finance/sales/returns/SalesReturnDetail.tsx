@@ -79,7 +79,7 @@ export default function SalesReturnDetail({ returnId }: SalesReturnDetailProps) 
 
   const sourceLink = salesReturn.source_document_type ? (
     <Link
-      to="/finance/sales/$documentType/$documentId"
+      to="/sales/$documentType/$documentId"
       params={{
         documentType: getSalesDocumentTypePathSegment(salesReturn.source_document_type),
         documentId: salesReturn.source_id,
@@ -170,14 +170,14 @@ export default function SalesReturnDetail({ returnId }: SalesReturnDetailProps) 
           <Text type="secondary">{t('salesReturns.detailSubtitle')}</Text>
         </div>
         <Space wrap>
-          <Link to="/finance/sales/returns">
+          <Link to="/sales/returns">
             <Button icon={<ArrowLeft size={16} />}>{t('salesReturns.backToList')}</Button>
           </Link>
           {salesReturn.status === 'DRAFT' && (
             <>
               <Button
                 icon={<Edit size={16} />}
-                onClick={() => navigate({ to: '/finance/sales/returns/$returnId/edit', params: { returnId: salesReturn.id } })}
+                onClick={() => navigate({ to: '/sales/returns/$returnId/edit', params: { returnId: salesReturn.id } })}
               >
                 {t('salesReturns.editDraft')}
               </Button>

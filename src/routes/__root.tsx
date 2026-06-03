@@ -1,5 +1,5 @@
 import FeedbackModal from '@/components/FeedbackModal'
-import { AppWorkflowTour } from '@/components/AppWorkflowTour'
+// import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
 import { useAuth } from '@/auth/useAuth'
@@ -30,7 +30,7 @@ import {
   FileText,
   FolderKanban,
   History,
-  HelpCircle,
+  // HelpCircle,
   Home,
   Languages,
   ListTree,
@@ -179,6 +179,8 @@ const RootLayout = () => {
   const navLinks: NavLink[] = [
     { to: '/', label: t('nav.home'), icon: Home },
     { to: '/transaction', label: t('nav.transaction'), icon: ShoppingCart },
+    { to: '/sales', label: t('nav.sales'), icon: FileText },
+    { to: '/purchases', label: t('nav.purchases'), icon: ShoppingBag },
     {
       label: t('nav.masterData'),
       icon: Database,
@@ -207,8 +209,6 @@ const RootLayout = () => {
         { to: '/finance/payables', label: t('nav.finance.payables'), icon: CreditCard },
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
         { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
-        { to: '/finance/sales', label: t('nav.finance.sales'), icon: FileText },
-        { to: '/finance/purchases', label: t('nav.finance.purchases'), icon: ShoppingBag },
       ],
     },
     {
@@ -351,7 +351,7 @@ const RootLayout = () => {
               <Languages size={18} />
               <span className="leading-none">{locale === 'id' ? 'EN' : 'ID'}</span>
             </button>
-            <AppWorkflowTour>
+            {/* <AppWorkflowTour>
               {(startTour) => (
                 <button
                   onClick={startTour}
@@ -362,7 +362,7 @@ const RootLayout = () => {
                   <HelpCircle size={20} />
                 </button>
               )}
-            </AppWorkflowTour>
+            </AppWorkflowTour> */}
             {can('SETTINGS_ACCESS') && (
               <button
                 onClick={() => navigate({ to: '/settings' })}

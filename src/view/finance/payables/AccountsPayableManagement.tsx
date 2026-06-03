@@ -260,7 +260,7 @@ export default function AccountsPayableManagement() {
       width: 170,
       render: (value: string, record) => (
         <Link
-          to="/finance/purchases/$documentType/$documentId"
+          to="/purchases/$documentType/$documentId"
           params={{
             documentType: getPurchaseDocumentTypePathSegment('PURCHASE_INVOICE'),
             documentId: record.purchase_document_id,
@@ -355,7 +355,7 @@ export default function AccountsPayableManagement() {
             {t('accountsPayable.recordPayment')}
           </Button>
           <Link
-            to="/finance/purchases/$documentType/$documentId"
+            to="/purchases/$documentType/$documentId"
             params={{
               documentType: getPurchaseDocumentTypePathSegment('PURCHASE_INVOICE'),
               documentId: record.purchase_document_id,

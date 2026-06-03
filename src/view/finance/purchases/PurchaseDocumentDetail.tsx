@@ -181,7 +181,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
           {canEdit && (
             <Button
               onClick={() => navigate({
-                to: '/finance/purchases/$documentType/$documentId/edit',
+                to: '/purchases/$documentType/$documentId/edit',
                 params: { documentType: getPurchaseDocumentTypePathSegment(document.type), documentId: document.id },
               })}
             >
@@ -203,7 +203,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
               onClick={async () => {
                 const result = await convertDocument({ sourceId: document.id, targetType });
                 navigate({
-                  to: '/finance/purchases/$documentType/$documentId',
+                  to: '/purchases/$documentType/$documentId',
                   params: {
                     documentType: getPurchaseDocumentTypePathSegment(result.document.type),
                     documentId: result.document.id,

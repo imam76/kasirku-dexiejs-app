@@ -6,6 +6,7 @@ import {
   HistoryOutlined,
   ProductOutlined,
   SettingOutlined,
+  ShoppingOutlined,
   ShoppingCartOutlined
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
@@ -58,6 +59,8 @@ function Index() {
 
   const menuItems: HomeMenuItem[] = [
     { to: '/transaction', label: t('home.menu.cashier'), icon: ShoppingCartOutlined, color: 'text-blue-600', desc: t('home.menu.cashierDesc') },
+    { to: '/sales', label: t('nav.sales'), icon: FileTextOutlined, color: 'text-indigo-600', desc: t('home.menu.salesDesc') },
+    { to: '/purchases', label: t('nav.purchases'), icon: ShoppingOutlined, color: 'text-teal-600', desc: t('home.menu.purchasesDesc') },
     { to: '/master-data', label: t('nav.masterData'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.masterDataDesc') },
     { to: '/finance', label: t('nav.finance'), icon: BankOutlined, color: 'text-red-600', desc: t('home.menu.financeDesc') },
     { to: '/shopping-note', label: t('home.menu.shoppingNote'), icon: AccountBookOutlined, color: 'text-yellow-600', desc: t('home.menu.shoppingNoteDesc') },

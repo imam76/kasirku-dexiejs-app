@@ -108,7 +108,7 @@ function SalesDocumentMenuGrid({ documents, returnCount }: { documents: SalesDoc
       {salesDocumentMenuItems.map((item) => (
         <Link
           key={item.type}
-          to="/finance/sales/$documentType"
+          to="/sales/$documentType"
           params={{ documentType: getSalesDocumentTypePathSegment(item.type) }}
           className="
             relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
@@ -146,7 +146,7 @@ function SalesDocumentMenuGrid({ documents, returnCount }: { documents: SalesDoc
         </Link>
       ))}
       <Link
-        to="/finance/sales/returns"
+        to="/sales/returns"
         className="
           relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
           rounded-[10px] border border-gray-100 bg-white p-3 text-center
@@ -229,7 +229,7 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
       dataIndex: 'document_number',
       render: (value: string, record) => (
         <Link
-          to="/finance/sales/$documentType/$documentId"
+          to="/sales/$documentType/$documentId"
           params={{ documentType: getSalesDocumentTypePathSegment(record.type), documentId: record.id }}
         >
           {value}
@@ -276,7 +276,7 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
       width: 110,
       render: (_, record) => (
         <Link
-          to="/finance/sales/$documentType/$documentId"
+          to="/sales/$documentType/$documentId"
           params={{ documentType: getSalesDocumentTypePathSegment(record.type), documentId: record.id }}
         >
           <Button size="small" icon={<Eye size={14} />}>
@@ -297,13 +297,13 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
           <Text type="secondary">{t('salesDocuments.typePageSubtitle', { type: t(config.titleKey) })}</Text>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/finance/sales">
+          <Link to="/sales">
             <Button icon={<ArrowLeft size={16} />}>
               {t('salesDocuments.backToSalesMenu')}
             </Button>
           </Link>
           <Link
-            to="/finance/sales/$documentType/new"
+            to="/sales/$documentType/new"
             params={{ documentType: documentPathSegment }}
           >
             <Button type="primary" icon={<Plus size={16} />}>

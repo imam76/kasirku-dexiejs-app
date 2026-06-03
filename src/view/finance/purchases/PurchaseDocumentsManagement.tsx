@@ -114,7 +114,7 @@ function PurchaseDocumentMenuGrid({ documents }: { documents: PurchaseDocument[]
       {purchaseDocumentMenuItems.map((item) => (
         <Link
           key={item.type}
-          to="/finance/purchases/$documentType"
+          to="/purchases/$documentType"
           params={{ documentType: getPurchaseDocumentTypePathSegment(item.type) }}
           className="
             relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
@@ -224,7 +224,7 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
       dataIndex: 'document_number',
       render: (value: string, record) => (
         <Link
-          to="/finance/purchases/$documentType/$documentId"
+          to="/purchases/$documentType/$documentId"
           params={{ documentType: getPurchaseDocumentTypePathSegment(record.type), documentId: record.id }}
         >
           {value}
@@ -272,7 +272,7 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
       width: 110,
       render: (_, record) => (
         <Link
-          to="/finance/purchases/$documentType/$documentId"
+          to="/purchases/$documentType/$documentId"
           params={{ documentType: getPurchaseDocumentTypePathSegment(record.type), documentId: record.id }}
         >
           <Button size="small" icon={<Eye size={14} />}>
@@ -293,13 +293,13 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
           <Text type="secondary">{t('purchaseDocuments.typePageSubtitle', { type: t(config.titleKey) })}</Text>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/finance/purchases">
+          <Link to="/purchases">
             <Button icon={<ArrowLeft size={16} />}>
               {t('purchaseDocuments.backToPurchasesMenu')}
             </Button>
           </Link>
           <Link
-            to="/finance/purchases/$documentType/new"
+            to="/purchases/$documentType/new"
             params={{ documentType: documentPathSegment }}
           >
             <Button type="primary" icon={<Plus size={16} />}>

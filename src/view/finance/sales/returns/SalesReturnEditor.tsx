@@ -77,18 +77,18 @@ export default function SalesReturnEditor({ returnId, sourceType, sourceId }: Sa
         submitting={isSubmitting}
         onCancel={() => {
           if (salesReturn) {
-            navigate({ to: '/finance/sales/returns/$returnId', params: { returnId: salesReturn.id } });
+            navigate({ to: '/sales/returns/$returnId', params: { returnId: salesReturn.id } });
             return;
           }
 
-          navigate({ to: '/finance/sales/returns' });
+          navigate({ to: '/sales/returns' });
         }}
         onSubmit={async (input) => {
           const result = salesReturn
             ? await updateReturn({ id: salesReturn.id, input })
             : await createReturn(input);
 
-          navigate({ to: '/finance/sales/returns/$returnId', params: { returnId: result.salesReturn.id } });
+          navigate({ to: '/sales/returns/$returnId', params: { returnId: result.salesReturn.id } });
         }}
       />
     </div>

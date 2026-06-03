@@ -81,14 +81,14 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
         onCancel={() => {
           if (!document) {
             navigate({
-              to: '/finance/sales/$documentType',
+              to: '/sales/$documentType',
               params: { documentType: getSalesDocumentTypePathSegment(documentType) },
             });
             return;
           }
 
           navigate({
-            to: '/finance/sales/$documentType/$documentId',
+            to: '/sales/$documentType/$documentId',
             params: { documentType: getSalesDocumentTypePathSegment(document.type), documentId: document.id },
           });
         }}
@@ -97,7 +97,7 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
             ? await updateDocument({ id: document.id, input })
             : await createDocument(input);
           navigate({
-            to: '/finance/sales/$documentType/$documentId',
+            to: '/sales/$documentType/$documentId',
             params: {
               documentType: getSalesDocumentTypePathSegment(result.document.type),
               documentId: result.document.id,
