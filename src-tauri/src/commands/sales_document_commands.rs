@@ -1,34 +1,34 @@
 use crate::{
-    models::sales_document::SalesDocumentBundleDto, repositories::sales_document_repository,
+    db::{PostgresCommandResult, PostgresState},
+    models::sales_document::SalesDocumentBundleDto,
+    repositories::sales_document_repository,
 };
-use sqlx::PgPool;
 use tauri::State;
 
 #[tauri::command]
 pub async fn postgres_list_sales_document_bundles(
-    pool: State<'_, PgPool>,
-) -> Result<Vec<SalesDocumentBundleDto>, String> {
-    sales_document_repository::list_sales_document_bundles(&pool)
-        .await
-        .map_err(|error| error.to_string())
+    state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> PostgresCommandResult<Vec<SalesDocumentBundleDto>> {
+    let pool = state.pool()?;
+    Ok(sales_document_repository::list_sales_document_bundles(pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_get_sales_document_bundle(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     id: String,
-) -> Result<Option<SalesDocumentBundleDto>, String> {
-    sales_document_repository::get_sales_document_bundle(&pool, id)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<Option<SalesDocumentBundleDto>> {
+    let pool = state.pool()?;
+    Ok(sales_document_repository::get_sales_document_bundle(pool, id).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_upsert_sales_document_bundle(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     input: SalesDocumentBundleDto,
-) -> Result<SalesDocumentBundleDto, String> {
-    sales_document_repository::upsert_sales_document_bundle(&pool, input)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<SalesDocumentBundleDto> {
+    let pool = state.pool()?;
+    Ok(sales_document_repository::upsert_sales_document_bundle(pool, input).await?)
 }

@@ -8,7 +8,8 @@ import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
-import { enqueuePendingAuthUsersForSync, enqueuePendingFinanceTransactionsForSync, enqueuePendingJournalEntriesForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { postgresAdapter } from '@/services/postgresAdapter';
+import { enqueuePendingAuthUsersForSync, enqueuePendingFinanceTransactionsForSync, enqueuePendingJournalEntriesForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue, recoverStaleProcessingSyncQueueItems } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
 
@@ -16,12 +17,17 @@ export const useSyncQueueWorker = () => {
   useEffect(() => {
     const syncWhenOnline = async () => {
       try {
+        await recoverStaleProcessingSyncQueueItems();
         await enqueuePendingAuthUsersForSync();
         await enqueuePendingFinanceTransactionsForSync();
         await enqueuePendingJournalEntriesForSync();
         await enqueuePendingPurchaseDocumentsForSync();
         await enqueuePendingSalesDocumentsForSync();
         await processPendingSyncQueue();
+
+        const postgresHealth = await postgresAdapter.healthCheck();
+        if (!postgresHealth.available) return;
+
         await refreshAuthUsersFromPostgres();
         await refreshActivityLogsFromPostgres();
         await refreshDepartmentsFromPostgres();

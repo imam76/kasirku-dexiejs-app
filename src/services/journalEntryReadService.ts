@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import {
+  isPostgresUnavailableError,
   isTauriRuntime,
   journalEntryPostgresAdapter,
   type RemoteJournalEntryBundleDto,
@@ -38,6 +39,7 @@ const VALID_JOURNAL_SOURCE_TYPES: JournalSourceType[] = [
   'OPENING_BALANCE',
 ];
 const VALID_ACCOUNT_TYPES: AccountType[] = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'CONTRA_REVENUE', 'EXPENSE'];
+const POSTGRES_JOURNAL_ENTRY_REFRESH_LIMIT = 200;
 
 let isRefreshingJournalEntriesFromPostgres = false;
 
@@ -117,6 +119,48 @@ const hasLocalUnsyncedChanges = (entry: JournalEntry) => (
 const toTimestamp = (value: string) => {
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
+  if (!candidate) return current;
+  if (!current) return candidate;
+
+  const currentTimestamp = toTimestamp(current);
+  const candidateTimestamp = toTimestamp(candidate);
+
+  if (currentTimestamp !== null && candidateTimestamp !== null) {
+    return candidateTimestamp > currentTimestamp ? candidate : current;
+  }
+
+  return candidate > current ? candidate : current;
+};
+
+const getLatestLocalRemoteUpdatedAt = async () => {
+  const entries = await db.journalEntries.toArray();
+
+  return entries.reduce<string | undefined>((latest, entry) => {
+    const remoteUpdatedAt = entry.remote_updated_at
+      ?? (entry.sync_status === 'synced' ? entry.updated_at : undefined);
+    return getLaterUpdatedAt(latest, remoteUpdatedAt);
+  }, undefined);
+};
+
+const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteJournalEntryBundleDto[]) => (
+  remoteBundles.reduce<string | undefined>(
+    (latest, bundle) => getLaterUpdatedAt(latest, bundle.entry.updated_at),
+    undefined,
+  )
+);
+
+const addJournalEntryReadSyncResult = (
+  aggregate: JournalEntryReadSyncResult,
+  next: JournalEntryReadSyncResult,
+) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.deleted += next.deleted;
+  aggregate.skipped += next.skipped;
 };
 
 const shouldApplyRemoteJournalEntry = (
@@ -202,8 +246,36 @@ export const refreshJournalEntriesFromPostgres = async (): Promise<JournalEntryR
 
   isRefreshingJournalEntriesFromPostgres = true;
   try {
-    const remoteBundles = await journalEntryPostgresAdapter.list();
-    return mergeRemoteJournalEntryBundlesIntoDexie(remoteBundles);
+    const aggregate = { ...EMPTY_JOURNAL_ENTRY_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalRemoteUpdatedAt();
+
+    while (true) {
+      const remoteBundles = await journalEntryPostgresAdapter.list({
+        updatedAfter,
+        limit: POSTGRES_JOURNAL_ENTRY_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteJournalEntryBundlesIntoDexie(remoteBundles);
+      addJournalEntryReadSyncResult(aggregate, result);
+
+      if (remoteBundles.length < POSTGRES_JOURNAL_ENTRY_REFRESH_LIMIT) {
+        break;
+      }
+
+      const nextUpdatedAfter = getLatestRemoteBundleUpdatedAt(remoteBundles);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
+        break;
+      }
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) {
+      return { ...EMPTY_JOURNAL_ENTRY_READ_SYNC_RESULT };
+    }
+
+    throw error;
   } finally {
     isRefreshingJournalEntriesFromPostgres = false;
   }

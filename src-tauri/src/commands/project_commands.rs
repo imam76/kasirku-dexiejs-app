@@ -1,40 +1,41 @@
-use crate::{models::project::ProjectDto, repositories::project_repository};
-use sqlx::PgPool;
+use crate::{
+    db::{PostgresCommandResult, PostgresState},
+    models::project::ProjectDto,
+    repositories::project_repository,
+};
 use tauri::State;
 
 #[tauri::command]
-pub async fn postgres_list_projects(pool: State<'_, PgPool>) -> Result<Vec<ProjectDto>, String> {
-    project_repository::list_projects(&pool)
-        .await
-        .map_err(|error| error.to_string())
+pub async fn postgres_list_projects(
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<Vec<ProjectDto>> {
+    let pool = state.pool()?;
+    Ok(project_repository::list_projects(pool).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_get_project(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     id: String,
-) -> Result<Option<ProjectDto>, String> {
-    project_repository::get_project(&pool, id)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<Option<ProjectDto>> {
+    let pool = state.pool()?;
+    Ok(project_repository::get_project(pool, id).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_upsert_project(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     input: ProjectDto,
-) -> Result<ProjectDto, String> {
-    project_repository::upsert_project(&pool, input)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<ProjectDto> {
+    let pool = state.pool()?;
+    Ok(project_repository::upsert_project(pool, input).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_delete_project(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     id: String,
-) -> Result<Option<ProjectDto>, String> {
-    project_repository::delete_project(&pool, id)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<Option<ProjectDto>> {
+    let pool = state.pool()?;
+    Ok(project_repository::delete_project(pool, id).await?)
 }

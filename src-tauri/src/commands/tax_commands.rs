@@ -1,37 +1,41 @@
-use crate::{models::tax::TaxDto, repositories::tax_repository};
-use sqlx::PgPool;
+use crate::{
+    db::{PostgresCommandResult, PostgresState},
+    models::tax::TaxDto,
+    repositories::tax_repository,
+};
 use tauri::State;
 
 #[tauri::command]
-pub async fn postgres_list_taxes(pool: State<'_, PgPool>) -> Result<Vec<TaxDto>, String> {
-    tax_repository::list_taxes(&pool)
-        .await
-        .map_err(|error| error.to_string())
+pub async fn postgres_list_taxes(
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<Vec<TaxDto>> {
+    let pool = state.pool()?;
+    Ok(tax_repository::list_taxes(pool).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_get_tax(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     id: String,
-) -> Result<Option<TaxDto>, String> {
-    tax_repository::get_tax(&pool, id)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<Option<TaxDto>> {
+    let pool = state.pool()?;
+    Ok(tax_repository::get_tax(pool, id).await?)
 }
 
 #[tauri::command]
-pub async fn postgres_upsert_tax(pool: State<'_, PgPool>, input: TaxDto) -> Result<TaxDto, String> {
-    tax_repository::upsert_tax(&pool, input)
-        .await
-        .map_err(|error| error.to_string())
+pub async fn postgres_upsert_tax(
+    state: State<'_, PostgresState>,
+    input: TaxDto,
+) -> PostgresCommandResult<TaxDto> {
+    let pool = state.pool()?;
+    Ok(tax_repository::upsert_tax(pool, input).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_delete_tax(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     id: String,
-) -> Result<Option<TaxDto>, String> {
-    tax_repository::delete_tax(&pool, id)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<Option<TaxDto>> {
+    let pool = state.pool()?;
+    Ok(tax_repository::delete_tax(pool, id).await?)
 }

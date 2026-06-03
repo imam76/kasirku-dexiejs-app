@@ -18,6 +18,7 @@ import {
   financeTransactionPostgresAdapter,
   isTauriRuntime,
   journalEntryPostgresAdapter,
+  postgresAdapter,
   productPostgresAdapter,
   purchaseDocumentPostgresAdapter,
   projectPostgresAdapter,
@@ -48,6 +49,8 @@ import {
 import type { ActivityLog, AuthUser, Contact, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
+const SYNC_QUEUE_MAX_ATTEMPTS = 3;
+const SYNC_QUEUE_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
 const ACTIVITY_LOG_ENTITY = 'activityLogs';
 const AUTH_USER_ENTITY = 'authUsers';
 const CONTACT_ENTITY = 'contacts';
@@ -65,12 +68,25 @@ const WAREHOUSE_ENTITY = 'warehouses';
 let isProcessingSyncQueue = false;
 
 const getErrorMessage = (error: unknown) => (
-  error instanceof Error ? error.message : String(error)
+  error instanceof Error
+    ? error.message
+    : (
+        error &&
+        typeof error === 'object' &&
+        typeof (error as { message?: unknown }).message === 'string'
+      )
+        ? (error as { message: string }).message
+        : String(error)
 );
 
 const normalizeRemoteNumber = (value: number | undefined) => (
   typeof value === 'number' && Number.isFinite(value) ? value : 0
 );
+
+const isPostgresAvailableForSync = async () => {
+  const health = await postgresAdapter.healthCheck();
+  return health.available;
+};
 
 const mapActivityLogToRemoteDto = (log: ActivityLog): RemoteActivityLogDto => ({
   id: log.id,
@@ -1150,6 +1166,52 @@ const processWarehouseQueueItem = async (queueItem: SyncQueueItem) => {
   return warehousePostgresAdapter.upsert(queueItem.payload);
 };
 
+export const recoverStaleProcessingSyncQueueItems = async () => {
+  if (!isTauriRuntime()) {
+    return {
+      recovered: 0,
+      failed: 0,
+    };
+  }
+
+  const staleBefore = Date.now() - SYNC_QUEUE_PROCESSING_TIMEOUT_MS;
+  const processingQueueItems = await db.syncQueue
+    .where('status')
+    .equals('processing')
+    .toArray();
+  const staleQueueItems = processingQueueItems.filter((queueItem) => {
+    const updatedAt = Date.parse(queueItem.updated_at);
+    return Number.isNaN(updatedAt) || updatedAt <= staleBefore;
+  });
+  const now = new Date().toISOString();
+  let recovered = 0;
+  let failed = 0;
+
+  await Promise.all(staleQueueItems.map((queueItem) => {
+    const shouldRetry = queueItem.attempts < SYNC_QUEUE_MAX_ATTEMPTS;
+    if (shouldRetry) {
+      recovered += 1;
+      return db.syncQueue.update(queueItem.id, {
+        status: 'pending',
+        error_message: 'Recovered stale processing queue item.',
+        updated_at: now,
+      });
+    }
+
+    failed += 1;
+    return db.syncQueue.update(queueItem.id, {
+      status: 'failed',
+      error_message: 'Exceeded maximum sync queue attempts after stale processing recovery.',
+      updated_at: now,
+    });
+  }));
+
+  return {
+    recovered,
+    failed,
+  };
+};
+
 const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
   const currentQueueItem = await db.syncQueue.get(queueItem.id);
   if (!currentQueueItem || currentQueueItem.status !== 'pending') return;
@@ -1454,6 +1516,11 @@ export const processPendingSyncQueue = async (limit = SYNC_QUEUE_BATCH_SIZE) => 
 
   isProcessingSyncQueue = true;
   try {
+    await recoverStaleProcessingSyncQueueItems();
+
+    const isPostgresAvailable = await isPostgresAvailableForSync();
+    if (!isPostgresAvailable) return;
+
     const pendingQueueItems = (await db.syncQueue
       .where('status')
       .equals('pending')

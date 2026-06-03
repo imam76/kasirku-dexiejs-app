@@ -429,13 +429,53 @@ export interface RemoteJournalEntryBundleDto {
   lines: RemoteJournalEntryLineDto[];
 }
 
+export type PostgresHealthStatus = 'available' | 'unconfigured' | 'unreachable' | 'migration_failed';
+
+export interface PostgresHealth {
+  available: boolean;
+  status: PostgresHealthStatus;
+  message?: string | null;
+}
+
+export interface PostgresCommandError {
+  code: string;
+  status?: PostgresHealthStatus | null;
+  message: string;
+}
+
+export interface PostgresListOptions {
+  updatedAfter?: string;
+  limit?: number;
+}
+
 export const isTauriRuntime = () =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
+export const isPostgresUnavailableError = (error: unknown): error is PostgresCommandError => (
+  Boolean(error) &&
+  typeof error === 'object' &&
+  (error as Partial<PostgresCommandError>).code === 'postgres_unavailable'
+);
+
 export const postgresAdapter = {
   async healthCheck() {
-    if (!isTauriRuntime()) return false;
-    return invoke<boolean>('postgres_health_check');
+    if (!isTauriRuntime()) {
+      return {
+        available: false,
+        status: 'unconfigured',
+        message: 'Tauri runtime is not available.',
+      } satisfies PostgresHealth;
+    }
+
+    try {
+      return await invoke<PostgresHealth>('postgres_health_check');
+    } catch {
+      return {
+        available: false,
+        status: 'unreachable',
+        message: 'PostgreSQL health check failed.',
+      } satisfies PostgresHealth;
+    }
   },
 };
 
@@ -618,9 +658,12 @@ export const stockMutationPostgresAdapter = {
 };
 
 export const salesDocumentPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteSalesDocumentBundleDto[]>('postgres_list_sales_document_bundles');
+    return invoke<RemoteSalesDocumentBundleDto[]>('postgres_list_sales_document_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -669,9 +712,12 @@ export const financeTransactionPostgresAdapter = {
 };
 
 export const journalEntryPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteJournalEntryBundleDto[]>('postgres_list_journal_entry_bundles');
+    return invoke<RemoteJournalEntryBundleDto[]>('postgres_list_journal_entry_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {

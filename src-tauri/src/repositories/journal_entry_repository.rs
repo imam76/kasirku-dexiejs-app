@@ -1,5 +1,6 @@
 use crate::models::journal_entry::{JournalEntryBundleDto, JournalEntryDto, JournalEntryLineDto};
 use sqlx::{PgPool, Postgres, Transaction};
+use std::collections::HashMap;
 
 macro_rules! journal_entry_select {
     () => {
@@ -55,17 +56,39 @@ macro_rules! journal_entry_line_select {
 
 pub async fn list_journal_entry_bundles(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<JournalEntryBundleDto>, sqlx::Error> {
+    let limit = limit.unwrap_or(200).clamp(1, 500);
     let entries = sqlx::query_as::<_, JournalEntryDto>(concat!(
         journal_entry_select!(),
-        " ORDER BY entry_date DESC, created_at DESC"
+        r#"
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at ASC, entry_date ASC, created_at ASC, id ASC
+        LIMIT $2
+        "#
     ))
+    .bind(updated_after)
+    .bind(limit)
     .fetch_all(pool)
     .await?;
 
+    let entry_ids = entries
+        .iter()
+        .map(|entry| entry.id.clone())
+        .collect::<Vec<_>>();
+    let lines = list_journal_entry_lines_for_entries(pool, entry_ids).await?;
+    let mut lines_by_entry_id = HashMap::<String, Vec<JournalEntryLineDto>>::new();
+    for line in lines {
+        lines_by_entry_id
+            .entry(line.journal_entry_id.clone())
+            .or_default()
+            .push(line);
+    }
+
     let mut bundles = Vec::with_capacity(entries.len());
     for entry in entries {
-        let lines = list_journal_entry_lines(pool, &entry.id).await?;
+        let lines = lines_by_entry_id.remove(&entry.id).unwrap_or_default();
         bundles.push(JournalEntryBundleDto { entry, lines });
     }
 
@@ -123,6 +146,23 @@ async fn list_journal_entry_lines(
         " WHERE journal_entry_id = $1 ORDER BY created_at ASC, id ASC"
     ))
     .bind(entry_id)
+    .fetch_all(pool)
+    .await
+}
+
+async fn list_journal_entry_lines_for_entries(
+    pool: &PgPool,
+    entry_ids: Vec<String>,
+) -> Result<Vec<JournalEntryLineDto>, sqlx::Error> {
+    if entry_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    sqlx::query_as::<_, JournalEntryLineDto>(concat!(
+        journal_entry_line_select!(),
+        " WHERE journal_entry_id = ANY($1) ORDER BY journal_entry_id ASC, created_at ASC, id ASC"
+    ))
+    .bind(entry_ids)
     .fetch_all(pool)
     .await
 }

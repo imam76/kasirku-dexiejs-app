@@ -1,42 +1,41 @@
-use crate::{models::department::DepartmentDto, repositories::department_repository};
-use sqlx::PgPool;
+use crate::{
+    db::{PostgresCommandResult, PostgresState},
+    models::department::DepartmentDto,
+    repositories::department_repository,
+};
 use tauri::State;
 
 #[tauri::command]
 pub async fn postgres_list_departments(
-    pool: State<'_, PgPool>,
-) -> Result<Vec<DepartmentDto>, String> {
-    department_repository::list_departments(&pool)
-        .await
-        .map_err(|error| error.to_string())
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<Vec<DepartmentDto>> {
+    let pool = state.pool()?;
+    Ok(department_repository::list_departments(pool).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_get_department(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     id: String,
-) -> Result<Option<DepartmentDto>, String> {
-    department_repository::get_department(&pool, id)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<Option<DepartmentDto>> {
+    let pool = state.pool()?;
+    Ok(department_repository::get_department(pool, id).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_upsert_department(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     input: DepartmentDto,
-) -> Result<DepartmentDto, String> {
-    department_repository::upsert_department(&pool, input)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<DepartmentDto> {
+    let pool = state.pool()?;
+    Ok(department_repository::upsert_department(pool, input).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_delete_department(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     id: String,
-) -> Result<Option<DepartmentDto>, String> {
-    department_repository::delete_department(&pool, id)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<Option<DepartmentDto>> {
+    let pool = state.pool()?;
+    Ok(department_repository::delete_department(pool, id).await?)
 }

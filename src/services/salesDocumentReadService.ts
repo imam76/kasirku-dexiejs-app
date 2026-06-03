@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import {
+  isPostgresUnavailableError,
   isTauriRuntime,
   salesDocumentPostgresAdapter,
   type RemoteSalesDocumentBundleDto,
@@ -50,6 +51,7 @@ const VALID_PAYMENT_STATUSES: SalesInvoicePaymentStatus[] = ['UNPAID', 'PARTIAL'
 const VALID_PROMO_TYPES: PromoType[] = ['percent', 'fixed'];
 const VALID_TAX_CALCULATION_MODES: TaxCalculationMode[] = ['EXCLUSIVE', 'INCLUSIVE'];
 const VALID_PAYMENT_METHODS: PaymentMethod[] = ['TUNAI', 'NON_TUNAI'];
+const POSTGRES_SALES_DOCUMENT_REFRESH_LIMIT = 200;
 
 let isRefreshingSalesDocumentsFromPostgres = false;
 
@@ -206,6 +208,47 @@ const toTimestamp = (value: string) => {
   return Number.isNaN(timestamp) ? null : timestamp;
 };
 
+const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
+  if (!candidate) return current;
+  if (!current) return candidate;
+
+  const currentTimestamp = toTimestamp(current);
+  const candidateTimestamp = toTimestamp(candidate);
+
+  if (currentTimestamp !== null && candidateTimestamp !== null) {
+    return candidateTimestamp > currentTimestamp ? candidate : current;
+  }
+
+  return candidate > current ? candidate : current;
+};
+
+const getLatestLocalRemoteUpdatedAt = async () => {
+  const documents = await db.salesDocuments.toArray();
+
+  return documents.reduce<string | undefined>((latest, document) => {
+    const remoteUpdatedAt = document.remote_updated_at
+      ?? (document.sync_status === 'synced' ? document.updated_at : undefined);
+    return getLaterUpdatedAt(latest, remoteUpdatedAt);
+  }, undefined);
+};
+
+const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteSalesDocumentBundleDto[]) => (
+  remoteBundles.reduce<string | undefined>(
+    (latest, bundle) => getLaterUpdatedAt(latest, bundle.document.updated_at),
+    undefined,
+  )
+);
+
+const addSalesDocumentReadSyncResult = (
+  aggregate: SalesDocumentReadSyncResult,
+  next: SalesDocumentReadSyncResult,
+) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.skipped += next.skipped;
+};
+
 const shouldApplyRemoteSalesDocument = (
   localDocument: SalesDocument | undefined,
   remoteDocument: RemoteSalesDocumentDto,
@@ -278,8 +321,36 @@ export const refreshSalesDocumentsFromPostgres = async (): Promise<SalesDocument
 
   isRefreshingSalesDocumentsFromPostgres = true;
   try {
-    const remoteBundles = await salesDocumentPostgresAdapter.list();
-    return mergeRemoteSalesDocumentBundlesIntoDexie(remoteBundles);
+    const aggregate = { ...EMPTY_SALES_DOCUMENT_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalRemoteUpdatedAt();
+
+    while (true) {
+      const remoteBundles = await salesDocumentPostgresAdapter.list({
+        updatedAfter,
+        limit: POSTGRES_SALES_DOCUMENT_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteSalesDocumentBundlesIntoDexie(remoteBundles);
+      addSalesDocumentReadSyncResult(aggregate, result);
+
+      if (remoteBundles.length < POSTGRES_SALES_DOCUMENT_REFRESH_LIMIT) {
+        break;
+      }
+
+      const nextUpdatedAfter = getLatestRemoteBundleUpdatedAt(remoteBundles);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
+        break;
+      }
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) {
+      return { ...EMPTY_SALES_DOCUMENT_READ_SYNC_RESULT };
+    }
+
+    throw error;
   } finally {
     isRefreshingSalesDocumentsFromPostgres = false;
   }

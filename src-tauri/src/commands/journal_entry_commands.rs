@@ -1,32 +1,34 @@
-use crate::{models::journal_entry::JournalEntryBundleDto, repositories::journal_entry_repository};
-use sqlx::PgPool;
+use crate::{
+    db::{PostgresCommandResult, PostgresState},
+    models::journal_entry::JournalEntryBundleDto,
+    repositories::journal_entry_repository,
+};
 use tauri::State;
 
 #[tauri::command]
 pub async fn postgres_list_journal_entry_bundles(
-    pool: State<'_, PgPool>,
-) -> Result<Vec<JournalEntryBundleDto>, String> {
-    journal_entry_repository::list_journal_entry_bundles(&pool)
-        .await
-        .map_err(|error| error.to_string())
+    state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> PostgresCommandResult<Vec<JournalEntryBundleDto>> {
+    let pool = state.pool()?;
+    Ok(journal_entry_repository::list_journal_entry_bundles(pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_get_journal_entry_bundle(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     id: String,
-) -> Result<Option<JournalEntryBundleDto>, String> {
-    journal_entry_repository::get_journal_entry_bundle(&pool, id)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<Option<JournalEntryBundleDto>> {
+    let pool = state.pool()?;
+    Ok(journal_entry_repository::get_journal_entry_bundle(pool, id).await?)
 }
 
 #[tauri::command]
 pub async fn postgres_upsert_journal_entry_bundle(
-    pool: State<'_, PgPool>,
+    state: State<'_, PostgresState>,
     input: JournalEntryBundleDto,
-) -> Result<JournalEntryBundleDto, String> {
-    journal_entry_repository::upsert_journal_entry_bundle(&pool, input)
-        .await
-        .map_err(|error| error.to_string())
+) -> PostgresCommandResult<JournalEntryBundleDto> {
+    let pool = state.pool()?;
+    Ok(journal_entry_repository::upsert_journal_entry_bundle(pool, input).await?)
 }

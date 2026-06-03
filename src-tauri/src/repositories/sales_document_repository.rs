@@ -2,6 +2,7 @@ use crate::models::sales_document::{
     SalesDocumentBundleDto, SalesDocumentDto, SalesDocumentItemDto,
 };
 use sqlx::{PgPool, Postgres, Transaction};
+use std::collections::HashMap;
 
 macro_rules! sales_document_select {
     () => {
@@ -110,17 +111,41 @@ macro_rules! sales_document_item_select {
 
 pub async fn list_sales_document_bundles(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<SalesDocumentBundleDto>, sqlx::Error> {
+    let limit = limit.unwrap_or(200).clamp(1, 500);
     let documents = sqlx::query_as::<_, SalesDocumentDto>(concat!(
         sales_document_select!(),
-        " ORDER BY created_at DESC"
+        r#"
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at ASC, created_at ASC, id ASC
+        LIMIT $2
+        "#
     ))
+    .bind(updated_after)
+    .bind(limit)
     .fetch_all(pool)
     .await?;
 
+    let document_ids = documents
+        .iter()
+        .map(|document| document.id.clone())
+        .collect::<Vec<_>>();
+    let items = list_sales_document_items_for_documents(pool, document_ids).await?;
+    let mut items_by_document_id = HashMap::<String, Vec<SalesDocumentItemDto>>::new();
+    for item in items {
+        items_by_document_id
+            .entry(item.document_id.clone())
+            .or_default()
+            .push(item);
+    }
+
     let mut bundles = Vec::with_capacity(documents.len());
     for document in documents {
-        let items = list_sales_document_items(pool, &document.id).await?;
+        let items = items_by_document_id
+            .remove(&document.id)
+            .unwrap_or_default();
         bundles.push(SalesDocumentBundleDto { document, items });
     }
 
@@ -178,6 +203,23 @@ async fn list_sales_document_items(
         " WHERE document_id = $1 ORDER BY created_at ASC, id ASC"
     ))
     .bind(document_id)
+    .fetch_all(pool)
+    .await
+}
+
+async fn list_sales_document_items_for_documents(
+    pool: &PgPool,
+    document_ids: Vec<String>,
+) -> Result<Vec<SalesDocumentItemDto>, sqlx::Error> {
+    if document_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    sqlx::query_as::<_, SalesDocumentItemDto>(concat!(
+        sales_document_item_select!(),
+        " WHERE document_id = ANY($1) ORDER BY document_id ASC, created_at ASC, id ASC"
+    ))
+    .bind(document_ids)
     .fetch_all(pool)
     .await
 }
