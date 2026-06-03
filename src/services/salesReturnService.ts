@@ -591,7 +591,7 @@ export const issueSalesReturn = async (id: string) => {
       source_stock_document_number: source.source_stock_document_number,
       updated_at: now,
     });
-    await postSalesReturnIssuedJournal(issuedSalesReturn, items);
+    await postSalesReturnIssuedJournal(issuedSalesReturn, items, currentUser);
     if (salesReturn.source_type === 'SALES_INVOICE') {
       await recalculateSalesInvoicePaymentStatus(salesReturn.source_id);
     }
@@ -633,7 +633,7 @@ export const voidSalesReturn = async (id: string, reason: string) => {
       stockMutations = await applyRestockEffect(salesReturn, items, -1, currentUser, now, normalizedReason);
       reversalFinanceTransaction = await reverseRefundFinanceTransaction(salesReturn, now, currentUser);
       reversalFinanceTransactionId = reversalFinanceTransaction?.id;
-      await reverseSalesReturnJournal(salesReturn, `Pembalikan jurnal retur ${salesReturn.return_number}: ${normalizedReason}`);
+      await reverseSalesReturnJournal(salesReturn, `Pembalikan jurnal retur ${salesReturn.return_number}: ${normalizedReason}`, currentUser);
       await applyPosProfitReversal(salesReturn, items, now, -1);
     }
 

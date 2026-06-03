@@ -3,6 +3,7 @@ import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '
 import type {
   AccountNormalBalance,
   AccountType,
+  AuthUser,
   ChartOfAccount,
   InventoryAccountingPolicy,
   JournalEntry,
@@ -19,6 +20,11 @@ import type {
   Transaction,
   TransactionItem,
 } from '@/types';
+import {
+  scheduleJournalEntryBundleSync,
+  withPendingJournalEntrySync,
+  withUpdatedJournalEntrySync,
+} from '@/services/journalEntrySyncService';
 import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
 
 const JOURNAL_TOLERANCE = 0.01;
@@ -72,6 +78,7 @@ interface PostJournalEntryInput {
   entry_date: string;
   description: string;
   lines: JournalLineDraft[];
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
 }
 
 interface OpeningBalanceLineInput {
@@ -90,6 +97,7 @@ interface CreateJournalEntryInput {
   description: string;
   reversed_entry_id?: string;
   lines: NormalizedJournalLine[];
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
 }
 
 export interface JournalEntryWithLines extends JournalEntry {
@@ -359,11 +367,12 @@ const createPostedJournalEntry = async ({
   description,
   reversed_entry_id,
   lines,
+  actor,
 }: CreateJournalEntryInput): Promise<JournalEntry> => {
   const { totalDebit, totalCredit } = assertBalancedLines(lines);
   const now = new Date().toISOString();
   const entryId = crypto.randomUUID();
-  const entry: JournalEntry = {
+  const entry: JournalEntry = withPendingJournalEntrySync({
     id: entryId,
     entry_number: await createJournalEntryNumber(entry_date),
     entry_date,
@@ -379,7 +388,7 @@ const createPostedJournalEntry = async ({
     reversed_entry_id,
     created_at: now,
     updated_at: now,
-  };
+  }, actor, now);
   const entryLines: JournalEntryLine[] = lines.map((line) => ({
     id: crypto.randomUUID(),
     journal_entry_id: entryId,
@@ -389,6 +398,7 @@ const createPostedJournalEntry = async ({
 
   await db.journalEntries.add(entry);
   await db.journalEntryLines.bulkAdd(entryLines);
+  scheduleJournalEntryBundleSync(entry.id, 'create');
 
   return entry;
 };
@@ -397,6 +407,7 @@ const reverseJournalEntry = async (
   entry: JournalEntry,
   reason: string,
   entryDate: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
 ) => {
   const existingReversal = await db.journalEntries
     .where('reversed_entry_id')
@@ -432,13 +443,16 @@ const reverseJournalEntry = async (
     description: reason,
     reversed_entry_id: entry.id,
     lines: reversalLines,
+    actor,
   });
 
-  await db.journalEntries.update(entry.id, {
+  const updatedEntry = withUpdatedJournalEntrySync({
+    ...entry,
     status: 'REVERSED',
     reversed_entry_id: reversal.id,
-    updated_at: new Date().toISOString(),
-  });
+  }, actor);
+  await db.journalEntries.put(updatedEntry);
+  scheduleJournalEntryBundleSync(updatedEntry.id, 'update');
 
   return reversal;
 };
@@ -466,6 +480,7 @@ export const postBalancedJournalEntry = async (input: PostJournalEntryInput) => 
         existingEntry,
         `Pembalikan jurnal ${existingEntry.entry_number} karena source berubah.`,
         input.entry_date,
+        input.actor,
       );
     }
 
@@ -479,12 +494,14 @@ export const reverseJournalEntriesForSource = async ({
   source_event,
   reason,
   entry_date,
+  actor,
 }: {
   source_type: JournalSourceType;
   source_id: string;
   source_event?: string;
   reason: string;
   entry_date?: string;
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
 }) => {
   const reversalDate = entry_date ?? new Date().toISOString();
   if (!await isGeneralLedgerPostingEnabled(reversalDate)) {
@@ -505,7 +522,7 @@ export const reverseJournalEntriesForSource = async ({
 
   await db.transaction('rw', [db.journalEntries, db.journalEntryLines], async () => {
     for (const entry of entries) {
-      reversals.push(await reverseJournalEntry(entry, reason, reversalDate));
+      reversals.push(await reverseJournalEntry(entry, reason, reversalDate, actor));
     }
   });
 
@@ -573,6 +590,7 @@ export const postOpeningBalanceJournal = async ({
       entry_date: normalizedCutoffDate,
       description: `Opening balance General Ledger per ${normalizedCutoffDate.slice(0, 10)}`,
       lines: normalizedLines,
+      actor: currentUser,
     });
 
     await db.generalLedgerSetting.put({
@@ -619,6 +637,7 @@ export const postManualJournal = async ({
     source_event: SOURCE_EVENTS.MANUAL_JOURNAL_POSTED,
     entry_date,
     description,
+    actor: currentUser,
     lines: lines.map((line) => {
       const account = accountById.get(line.account_id);
       if (!account) {
@@ -659,7 +678,11 @@ const getSalesReturnRestockCost = (items: SalesReturnItem[]) => {
   }, 0));
 };
 
-export const postPosSaleJournal = async (transaction: Transaction, items: TransactionItem[] = []) => {
+export const postPosSaleJournal = async (
+  transaction: Transaction,
+  items: TransactionItem[] = [],
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
   if (transaction.status === 'VOIDED') return undefined;
   if (!await isGeneralLedgerPostingEnabled(transaction.created_at)) return undefined;
 
@@ -694,19 +717,28 @@ export const postPosSaleJournal = async (transaction: Transaction, items: Transa
     entry_date: transaction.created_at,
     description: `Penjualan POS ${transaction.transaction_number}`,
     lines,
+    actor,
   });
 };
 
-export const reversePosSaleJournal = async (transaction: Transaction, reason: string) => {
+export const reversePosSaleJournal = async (
+  transaction: Transaction,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
   return reverseJournalEntriesForSource({
     source_type: 'POS_TRANSACTION',
     source_id: transaction.id,
     source_event: SOURCE_EVENTS.POS_SALE_POSTED,
     reason,
+    actor,
   });
 };
 
-export const postStockPurchaseJournal = async (purchase: StockPurchase) => {
+export const postStockPurchaseJournal = async (
+  purchase: StockPurchase,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
   if (!await isGeneralLedgerPostingEnabled(purchase.created_at)) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
@@ -727,10 +759,14 @@ export const postStockPurchaseJournal = async (purchase: StockPurchase) => {
       createDebitLine(inventoryAccount, amount, 'Persediaan bertambah dari pembelian stok'),
       createCreditLine(cashAccount, amount, 'Pembayaran pembelian stok'),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
   });
 };
 
-export const postSalesInvoiceIssuedJournal = async (document: SalesDocument) => {
+export const postSalesInvoiceIssuedJournal = async (
+  document: SalesDocument,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
   if (document.type !== 'SALES_INVOICE' || document.status === 'VOIDED') return undefined;
   const entryDate = document.issued_at ?? document.document_date;
   if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
@@ -773,10 +809,14 @@ export const postSalesInvoiceIssuedJournal = async (document: SalesDocument) => 
     entry_date: entryDate,
     description: `Sales invoice ${document.document_number} diterbitkan`,
     lines,
+    actor,
   });
 };
 
-export const postSalesInvoicePaymentJournal = async (document: SalesDocument) => {
+export const postSalesInvoicePaymentJournal = async (
+  document: SalesDocument,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
   if (document.type !== 'SALES_INVOICE' || document.status === 'VOIDED') return undefined;
   const entryDate = document.paid_at ?? new Date().toISOString();
   if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
@@ -788,6 +828,7 @@ export const postSalesInvoicePaymentJournal = async (document: SalesDocument) =>
       source_id: document.id,
       source_event: SOURCE_EVENTS.SALES_INVOICE_PAYMENT_POSTED,
       reason: `Pembalikan jurnal pembayaran invoice ${document.document_number}`,
+      actor,
     });
   }
 
@@ -806,12 +847,14 @@ export const postSalesInvoicePaymentJournal = async (document: SalesDocument) =>
       createDebitLine(cashAccount, amount, 'Kas diterima dari pembayaran invoice', document.department_id, document.project_id),
       createCreditLine(receivableAccount, amount, 'Pelunasan piutang sales invoice', document.department_id, document.project_id),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
   });
 };
 
 export const postSalesInvoicePaymentRecordJournal = async (
   document: SalesDocument,
   payment: SalesInvoicePayment,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
 ) => {
   if (document.type !== 'SALES_INVOICE' || document.status === 'VOIDED' || payment.status !== 'ACTIVE') return undefined;
   if (!await isGeneralLedgerPostingEnabled(payment.paid_at)) return undefined;
@@ -834,24 +877,28 @@ export const postSalesInvoicePaymentRecordJournal = async (
       createDebitLine(cashAccount, amount, 'Kas diterima dari pembayaran invoice', document.department_id, document.project_id),
       createCreditLine(receivableAccount, amount, 'Pelunasan piutang sales invoice', document.department_id, document.project_id),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
   });
 };
 
 export const reverseSalesInvoicePaymentRecordJournal = async (
   payment: SalesInvoicePayment,
   reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
 ) => {
   return reverseJournalEntriesForSource({
     source_type: 'SALES_INVOICE_PAYMENT',
     source_id: payment.id,
     source_event: SOURCE_EVENTS.SALES_INVOICE_PAYMENT_POSTED,
     reason,
+    actor,
   });
 };
 
 export const postPurchaseInvoicePaymentRecordJournal = async (
   document: PurchaseDocument,
   payment: PurchaseInvoicePayment,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
 ) => {
   if (document.type !== 'PURCHASE_INVOICE' || document.status === 'VOIDED' || payment.status !== 'ACTIVE') return undefined;
   if (!await isGeneralLedgerPostingEnabled(payment.paid_at)) return undefined;
@@ -874,18 +921,21 @@ export const postPurchaseInvoicePaymentRecordJournal = async (
       createDebitLine(payableAccount, amount, 'Pelunasan hutang purchase invoice', document.department_id, document.project_id),
       createCreditLine(cashAccount, amount, 'Kas keluar untuk pembayaran purchase invoice', document.department_id, document.project_id),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
   });
 };
 
 export const reversePurchaseInvoicePaymentRecordJournal = async (
   payment: PurchaseInvoicePayment,
   reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
 ) => {
   return reverseJournalEntriesForSource({
     source_type: 'PURCHASE_INVOICE_PAYMENT',
     source_id: payment.id,
     source_event: SOURCE_EVENTS.PURCHASE_INVOICE_PAYMENT_POSTED,
     reason,
+    actor,
   });
 };
 
@@ -896,6 +946,7 @@ export const postCashBankTransferJournal = async (input: {
   fromAccount: ChartOfAccount;
   toAccount: ChartOfAccount;
   description?: string;
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
 }) => {
   if (!await isGeneralLedgerPostingEnabled(input.transferDate)) return undefined;
 
@@ -913,19 +964,29 @@ export const postCashBankTransferJournal = async (input: {
       createDebitLine(input.toAccount, amount, 'Kas/bank bertambah dari transfer internal'),
       createCreditLine(input.fromAccount, amount, 'Kas/bank berkurang karena transfer internal'),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor: input.actor,
   });
 };
 
-export const reverseSalesInvoiceJournal = async (document: SalesDocument, reason: string) => {
+export const reverseSalesInvoiceJournal = async (
+  document: SalesDocument,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
   return reverseJournalEntriesForSource({
     source_type: 'SALES_INVOICE',
     source_id: document.id,
     source_event: SOURCE_EVENTS.SALES_INVOICE_ISSUED,
     reason,
+    actor,
   });
 };
 
-export const postSalesReturnIssuedJournal = async (salesReturn: SalesReturn, items: SalesReturnItem[] = []) => {
+export const postSalesReturnIssuedJournal = async (
+  salesReturn: SalesReturn,
+  items: SalesReturnItem[] = [],
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
   if (salesReturn.status === 'VOIDED' || salesReturn.resolution === 'NO_FINANCE') return undefined;
   const entryDate = salesReturn.issued_at ?? salesReturn.document_date;
   if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
@@ -981,15 +1042,21 @@ export const postSalesReturnIssuedJournal = async (salesReturn: SalesReturn, ite
     entry_date: entryDate,
     description: `Retur penjualan ${salesReturn.return_number}`,
     lines,
+    actor,
   });
 };
 
-export const reverseSalesReturnJournal = async (salesReturn: SalesReturn, reason: string) => {
+export const reverseSalesReturnJournal = async (
+  salesReturn: SalesReturn,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
   return reverseJournalEntriesForSource({
     source_type: 'SALES_RETURN',
     source_id: salesReturn.id,
     source_event: SOURCE_EVENTS.SALES_RETURN_ISSUED,
     reason,
+    actor,
   });
 };
 

@@ -131,13 +131,11 @@ pub async fn get_sales_document_bundle(
     pool: &PgPool,
     id: String,
 ) -> Result<Option<SalesDocumentBundleDto>, sqlx::Error> {
-    let document = sqlx::query_as::<_, SalesDocumentDto>(concat!(
-        sales_document_select!(),
-        " WHERE id = $1"
-    ))
-    .bind(id)
-    .fetch_optional(pool)
-    .await?;
+    let document =
+        sqlx::query_as::<_, SalesDocumentDto>(concat!(sales_document_select!(), " WHERE id = $1"))
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
 
     if let Some(document) = document {
         let items = list_sales_document_items(pool, &document.id).await?;
@@ -201,13 +199,10 @@ async fn get_sales_document_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     document_id: &str,
 ) -> Result<Option<SalesDocumentDto>, sqlx::Error> {
-    sqlx::query_as::<_, SalesDocumentDto>(concat!(
-        sales_document_select!(),
-        " WHERE id = $1"
-    ))
-    .bind(document_id)
-    .fetch_optional(&mut **tx)
-    .await
+    sqlx::query_as::<_, SalesDocumentDto>(concat!(sales_document_select!(), " WHERE id = $1"))
+        .bind(document_id)
+        .fetch_optional(&mut **tx)
+        .await
 }
 
 async fn upsert_sales_document(

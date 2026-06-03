@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
   FinanceTransactionType,
+  JournalEntryStatus,
+  JournalSourceType,
   PaymentMethod,
   ProductUnit,
   ProductUnitMapping,
@@ -382,6 +384,51 @@ export interface RemoteFinanceTransactionDto {
   deleted_at?: string | null;
 }
 
+export interface RemoteJournalEntryDto {
+  id: string;
+  entry_number: string;
+  entry_date: string;
+  status: JournalEntryStatus;
+  source_type: JournalSourceType;
+  source_id?: string | null;
+  source_number?: string | null;
+  source_event?: string | null;
+  description: string;
+  total_debit: number;
+  total_credit: number;
+  posted_at?: string | null;
+  voided_at?: string | null;
+  reversed_entry_id?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteJournalEntryLineDto {
+  id: string;
+  journal_entry_id: string;
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: AccountType;
+  debit: number;
+  credit: number;
+  description?: string | null;
+  department_id?: string | null;
+  project_id?: string | null;
+  created_at: string;
+}
+
+export interface RemoteJournalEntryBundleDto {
+  entry: RemoteJournalEntryDto;
+  lines: RemoteJournalEntryLineDto[];
+}
+
 export const isTauriRuntime = () =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -618,5 +665,22 @@ export const financeTransactionPostgresAdapter = {
   async upsert(input: RemoteFinanceTransactionDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteFinanceTransactionDto>('postgres_upsert_finance_transaction', { input });
+  },
+};
+
+export const journalEntryPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteJournalEntryBundleDto[]>('postgres_list_journal_entry_bundles');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteJournalEntryBundleDto | null>('postgres_get_journal_entry_bundle', { id });
+  },
+
+  async upsert(input: RemoteJournalEntryBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteJournalEntryBundleDto>('postgres_upsert_journal_entry_bundle', { input });
   },
 };

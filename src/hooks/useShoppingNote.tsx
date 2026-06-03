@@ -5,6 +5,7 @@ import { shoppingItemSchema, type ShoppingItemFormData } from '@/lib/validations
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
+import { getCurrentSessionUser } from '@/auth/authService';
 import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
 import type { FinanceTransaction, Product, ShoppingNoteItem, StockMutation } from '@/types';
@@ -95,6 +96,7 @@ export const useShoppingNote = () => {
 
     try {
       const now = new Date().toISOString();
+      const currentUser = await getCurrentSessionUser();
       const shoppingNoteId = crypto.randomUUID();
       const stockMutations: StockMutation[] = [];
       const financeTransactionsToSync: FinanceTransaction[] = [];
@@ -150,6 +152,7 @@ export const useShoppingNote = () => {
             totalCost,
             description: `Belanja Stok: ${product.name} (${item.quantity} ${item.unit})`,
             createdAt: now,
+            actor: currentUser,
           });
           financeTransactionsToSync.push(purchaseResult.financeTransaction);
         }

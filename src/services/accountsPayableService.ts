@@ -285,7 +285,7 @@ export const recordPurchaseInvoicePayment = async (
     await db.financeTransactions.add(financeTransaction);
     await db.purchaseInvoicePayments.add(payment);
 
-    const journalEntry = await postPurchaseInvoicePaymentRecordJournal(document as PurchaseDocument, payment);
+    const journalEntry = await postPurchaseInvoicePaymentRecordJournal(document as PurchaseDocument, payment, currentUser);
     if (journalEntry) {
       savedPayment = {
         ...payment,
@@ -374,7 +374,7 @@ export const voidPurchaseInvoicePayment = async (paymentId: string, reason: stri
     }
 
     const reversalEntries = payment.journal_entry_id
-      ? await reversePurchaseInvoicePaymentRecordJournal(payment, `Void pembayaran purchase invoice ${payment.document_number}: ${normalizedReason}`)
+      ? await reversePurchaseInvoicePaymentRecordJournal(payment, `Void pembayaran purchase invoice ${payment.document_number}: ${normalizedReason}`, currentUser)
       : [];
     reversalJournalEntryId = reversalEntries[0]?.id;
 

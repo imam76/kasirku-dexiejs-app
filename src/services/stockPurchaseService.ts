@@ -1,6 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { FinanceTransaction, StockPurchase } from '@/types';
+import type { AuthUser, FinanceTransaction, StockPurchase } from '@/types';
 import { withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCashOrBankAccountForPayment, postStockPurchaseJournal } from '@/services/generalLedgerService';
@@ -14,6 +14,7 @@ interface RecordStockPurchaseInput {
   totalCost: number;
   description: string;
   createdAt: string;
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
 }
 
 export interface RecordStockPurchaseResult {
@@ -30,6 +31,7 @@ export const recordStockPurchase = async ({
   totalCost,
   description,
   createdAt,
+  actor,
 }: RecordStockPurchaseInput): Promise<RecordStockPurchaseResult> => {
   const purchase: StockPurchase = {
     id: crypto.randomUUID(),
@@ -80,7 +82,7 @@ export const recordStockPurchase = async ({
     }, undefined, createdAt);
     await db.financeTransactions.add(financeTransaction);
 
-    await postStockPurchaseJournal(purchase);
+    await postStockPurchaseJournal(purchase, actor);
   });
 
   if (!financeTransaction) {

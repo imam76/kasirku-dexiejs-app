@@ -509,6 +509,25 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(36).stores({
+      journalEntries: 'id, entry_number, entry_date, status, source_type, source_id, source_event, reversed_entry_id, sync_status, updated_at, created_at',
+      journalEntryLines: 'id, journal_entry_id, account_id, account_code, account_type, created_at'
+    }).upgrade(async (tx) => {
+      const journalEntries = await tx.table<JournalEntry, string>('journalEntries').toArray();
+      const journalEntriesWithoutSyncStatus = journalEntries
+        .filter((entry) => !entry.sync_status || !entry.version || !entry.updated_at)
+        .map((entry) => ({
+          ...entry,
+          version: entry.version ?? 1,
+          updated_at: entry.updated_at ?? entry.created_at,
+          sync_status: entry.sync_status ?? 'pending' as const,
+        }));
+
+      if (journalEntriesWithoutSyncStatus.length > 0) {
+        await tx.table<JournalEntry, string>('journalEntries').bulkPut(journalEntriesWithoutSyncStatus);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

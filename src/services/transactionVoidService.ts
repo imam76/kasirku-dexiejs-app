@@ -151,7 +151,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         updated_at: now,
       });
 
-      await reversePosSaleJournal(transaction, `Pembalikan jurnal POS ${transaction.transaction_number}: ${normalizedReason}`);
+      await reversePosSaleJournal(transaction, `Pembalikan jurnal POS ${transaction.transaction_number}: ${normalizedReason}`, currentUser);
     },
   );
 

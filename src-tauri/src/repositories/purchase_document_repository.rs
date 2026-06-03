@@ -197,13 +197,10 @@ async fn get_purchase_document_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     document_id: &str,
 ) -> Result<Option<PurchaseDocumentDto>, sqlx::Error> {
-    sqlx::query_as::<_, PurchaseDocumentDto>(concat!(
-        purchase_document_select!(),
-        " WHERE id = $1"
-    ))
-    .bind(document_id)
-    .fetch_optional(&mut **tx)
-    .await
+    sqlx::query_as::<_, PurchaseDocumentDto>(concat!(purchase_document_select!(), " WHERE id = $1"))
+        .bind(document_id)
+        .fetch_optional(&mut **tx)
+        .await
 }
 
 async fn upsert_purchase_document(

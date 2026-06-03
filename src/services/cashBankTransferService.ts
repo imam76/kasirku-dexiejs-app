@@ -130,6 +130,7 @@ export const recordCashBankTransfer = async (
       fromAccount,
       toAccount,
       description,
+      actor: currentUser,
     });
     await writeActivityLog({
       user: currentUser,
@@ -252,6 +253,7 @@ export const voidCashBankTransfer = async (
       fromAccount: toAccount,
       toAccount: fromAccount,
       description,
+      actor: currentUser,
     });
     await writeActivityLog({
       user: currentUser,

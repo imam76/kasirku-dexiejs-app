@@ -3,6 +3,7 @@ import { mergeRemoteAuthUsersIntoDexie } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
 import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
+import { mergeRemoteJournalEntryBundlesIntoDexie } from '@/services/journalEntryReadService';
 import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
 import { mergeRemotePurchaseDocumentBundlesIntoDexie } from '@/services/purchaseDocumentReadService';
 import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
@@ -16,6 +17,7 @@ import {
   departmentPostgresAdapter,
   financeTransactionPostgresAdapter,
   isTauriRuntime,
+  journalEntryPostgresAdapter,
   productPostgresAdapter,
   purchaseDocumentPostgresAdapter,
   projectPostgresAdapter,
@@ -28,6 +30,9 @@ import {
   type RemoteContactDto,
   type RemoteDepartmentDto,
   type RemoteFinanceTransactionDto,
+  type RemoteJournalEntryBundleDto,
+  type RemoteJournalEntryDto,
+  type RemoteJournalEntryLineDto,
   type RemoteProductDto,
   type RemotePurchaseDocumentBundleDto,
   type RemotePurchaseDocumentDto,
@@ -40,7 +45,7 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, Department, FinanceTransaction, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const ACTIVITY_LOG_ENTITY = 'activityLogs';
@@ -48,6 +53,7 @@ const AUTH_USER_ENTITY = 'authUsers';
 const CONTACT_ENTITY = 'contacts';
 const DEPARTMENT_ENTITY = 'departments';
 const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
+const JOURNAL_ENTRY_ENTITY = 'journalEntries';
 const PRODUCT_ENTITY = 'products';
 const PROJECT_ENTITY = 'projects';
 const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
@@ -201,6 +207,54 @@ const mapFinanceTransactionToRemoteDto = (transaction: FinanceTransaction): Remo
   created_at: transaction.created_at,
   updated_at: transaction.updated_at ?? transaction.created_at,
   deleted_at: transaction.deleted_at,
+});
+
+const mapJournalEntryToRemoteDto = (entry: JournalEntry): RemoteJournalEntryDto => ({
+  id: entry.id,
+  entry_number: entry.entry_number,
+  entry_date: entry.entry_date,
+  status: entry.status,
+  source_type: entry.source_type,
+  source_id: entry.source_id,
+  source_number: entry.source_number,
+  source_event: entry.source_event,
+  description: entry.description,
+  total_debit: normalizeRemoteNumber(entry.total_debit),
+  total_credit: normalizeRemoteNumber(entry.total_credit),
+  posted_at: entry.posted_at,
+  voided_at: entry.voided_at,
+  reversed_entry_id: entry.reversed_entry_id,
+  version: entry.version ?? 1,
+  created_by: entry.created_by,
+  created_by_name: entry.created_by_name,
+  updated_by: entry.updated_by,
+  updated_by_name: entry.updated_by_name,
+  created_at: entry.created_at,
+  updated_at: entry.updated_at,
+  deleted_at: entry.deleted_at,
+});
+
+const mapJournalEntryLineToRemoteDto = (line: JournalEntryLine): RemoteJournalEntryLineDto => ({
+  id: line.id,
+  journal_entry_id: line.journal_entry_id,
+  account_id: line.account_id,
+  account_code: line.account_code,
+  account_name: line.account_name,
+  account_type: line.account_type,
+  debit: normalizeRemoteNumber(line.debit),
+  credit: normalizeRemoteNumber(line.credit),
+  description: line.description,
+  department_id: line.department_id,
+  project_id: line.project_id,
+  created_at: line.created_at,
+});
+
+const mapJournalEntryBundleToRemoteDto = (
+  entry: JournalEntry,
+  lines: JournalEntryLine[],
+): RemoteJournalEntryBundleDto => ({
+  entry: mapJournalEntryToRemoteDto(entry),
+  lines: lines.map(mapJournalEntryLineToRemoteDto),
 });
 
 const mapSalesDocumentToRemoteDto = (document: SalesDocument): RemoteSalesDocumentDto => ({
@@ -551,6 +605,55 @@ const isRemoteFinanceTransactionDto = (payload: unknown): payload is RemoteFinan
   );
 };
 
+const isRemoteJournalEntryDto = (payload: unknown): payload is RemoteJournalEntryDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteJournalEntryDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.entry_number === 'string' &&
+    typeof candidate.entry_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.source_type === 'string' &&
+    typeof candidate.description === 'string' &&
+    typeof candidate.total_debit === 'number' &&
+    typeof candidate.total_credit === 'number' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteJournalEntryLineDto = (payload: unknown): payload is RemoteJournalEntryLineDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteJournalEntryLineDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.journal_entry_id === 'string' &&
+    typeof candidate.account_id === 'string' &&
+    typeof candidate.account_code === 'string' &&
+    typeof candidate.account_name === 'string' &&
+    typeof candidate.account_type === 'string' &&
+    typeof candidate.debit === 'number' &&
+    typeof candidate.credit === 'number' &&
+    typeof candidate.created_at === 'string'
+  );
+};
+
+const isRemoteJournalEntryBundleDto = (
+  payload: unknown,
+): payload is RemoteJournalEntryBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteJournalEntryBundleDto>;
+  return (
+    isRemoteJournalEntryDto(candidate.entry) &&
+    Array.isArray(candidate.lines) &&
+    candidate.lines.every(isRemoteJournalEntryLineDto)
+  );
+};
+
 const isRemoteSalesDocumentDto = (payload: unknown): payload is RemoteSalesDocumentDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -715,6 +818,17 @@ const updateFinanceTransactionSyncMetadata = async (
   await db.financeTransactions.update(transactionId, syncMetadata);
 };
 
+const updateJournalEntrySyncMetadata = async (
+  entryId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<JournalEntry, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentEntry = await db.journalEntries.get(entryId);
+  if (!currentEntry || currentEntry.updated_at !== sourceUpdatedAt) return;
+
+  await db.journalEntries.update(entryId, syncMetadata);
+};
+
 const updateProjectSyncMetadata = async (
   projectId: string,
   sourceUpdatedAt: string,
@@ -834,6 +948,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === JOURNAL_ENTRY_ENTITY && isRemoteJournalEntryBundleDto(queueItem.payload)) {
+    await updateJournalEntrySyncMetadata(queueItem.entity_id, queueItem.payload.entry.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === PROJECT_ENTITY && isRemoteProjectDto(queueItem.payload)) {
     await updateProjectSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -931,6 +1052,18 @@ const processFinanceTransactionQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return financeTransactionPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processJournalEntryQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Journal entry sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteJournalEntryBundleDto(queueItem.payload)) {
+    throw new Error('Payload journal entry sync queue tidak valid.');
+  }
+
+  return journalEntryPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processProjectQueueItem = async (queueItem: SyncQueueItem) => {
@@ -1035,6 +1168,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteContact: RemoteContactDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
     let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
+    let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
     let remotePurchaseDocumentBundle: RemotePurchaseDocumentBundleDto | null = null;
@@ -1053,6 +1187,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteDepartment = await processDepartmentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FINANCE_TRANSACTION_ENTITY) {
       remoteFinanceTransaction = await processFinanceTransactionQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === JOURNAL_ENTRY_ENTITY) {
+      remoteJournalEntryBundle = await processJournalEntryQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PRODUCT_ENTITY) {
       remoteProduct = await processProductQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
@@ -1214,6 +1350,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteFinanceTransaction.updated_at,
       });
       await mergeRemoteFinanceTransactionsIntoDexie([remoteFinanceTransaction], syncedAt);
+      return;
+    }
+
+    if (remoteJournalEntryBundle && isRemoteJournalEntryBundleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateJournalEntrySyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.entry.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteJournalEntryBundle.entry.updated_at,
+      });
+      await mergeRemoteJournalEntryBundlesIntoDexie([remoteJournalEntryBundle], syncedAt);
       return;
     }
 
@@ -1480,6 +1628,55 @@ export const enqueuePendingFinanceTransactionsForSync = async () => {
 
     if (!existingQueueItem) {
       await enqueueFinanceTransactionSync(transaction, 'update');
+    }
+  }
+};
+
+export const enqueueJournalEntryBundleSync = async (
+  entry: JournalEntry,
+  lines: JournalEntryLine[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: JOURNAL_ENTRY_ENTITY,
+    entity_id: entry.id,
+    operation,
+    payload: mapJournalEntryBundleToRemoteDto(entry, lines),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingJournalEntriesForSync = async () => {
+  const journalEntries = (await db.journalEntries.toArray())
+    .filter((entry) => entry.sync_status === 'pending' || entry.sync_status === 'failed');
+
+  const journalEntryQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(JOURNAL_ENTRY_ENTITY)
+    .toArray();
+
+  for (const entry of journalEntries) {
+    const existingQueueItem = journalEntryQueueItems.find((queueItem) => (
+      queueItem.entity_id === entry.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteJournalEntryBundleDto(queueItem.payload) &&
+      queueItem.payload.entry.updated_at === entry.updated_at &&
+      queueItem.payload.entry.version === (entry.version ?? 1)
+    ));
+
+    if (!existingQueueItem) {
+      const lines = await db.journalEntryLines.where('journal_entry_id').equals(entry.id).toArray();
+      await enqueueJournalEntryBundleSync(entry, lines, 'update');
     }
   }
 };

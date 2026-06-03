@@ -145,6 +145,7 @@ export const useStockManagement = () => {
               totalCost,
               description: t('stock.purchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
               createdAt: now,
+              actor: currentUser,
             });
             financeTransactionsToSync.push(purchaseResult.financeTransaction);
           }
@@ -175,6 +176,7 @@ export const useStockManagement = () => {
               totalCost,
               description: t('stock.initialPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
               createdAt: now,
+              actor: currentUser,
             });
             financeTransactionsToSync.push(purchaseResult.financeTransaction);
           }
@@ -314,6 +316,7 @@ export const useStockManagement = () => {
                 totalCost,
                 description: t('stock.importPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
                 createdAt: now,
+                actor: currentUser,
               });
               financeTransactionsToSync.push(purchaseResult.financeTransaction);
             }
@@ -341,6 +344,7 @@ export const useStockManagement = () => {
                 totalCost,
                 description: t('stock.importInitialPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
                 createdAt: now,
+                actor: currentUser,
               });
               financeTransactionsToSync.push(purchaseResult.financeTransaction);
             }

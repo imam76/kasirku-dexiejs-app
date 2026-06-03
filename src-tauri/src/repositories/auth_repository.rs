@@ -70,7 +70,10 @@ async fn get_auth_user_including_deleted(
     .await
 }
 
-pub async fn upsert_auth_user(pool: &PgPool, input: AuthUserDto) -> Result<AuthUserDto, sqlx::Error> {
+pub async fn upsert_auth_user(
+    pool: &PgPool,
+    input: AuthUserDto,
+) -> Result<AuthUserDto, sqlx::Error> {
     let user_id = input.id.clone();
     let upserted_user = sqlx::query_as::<_, AuthUserDto>(
         r#"

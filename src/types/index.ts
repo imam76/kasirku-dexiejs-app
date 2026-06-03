@@ -249,6 +249,7 @@ export type SalesDocumentSyncStatus = EntitySyncStatus;
 export type TaxSyncStatus = EntitySyncStatus;
 export type WarehouseSyncStatus = EntitySyncStatus;
 export type FinanceTransactionSyncStatus = EntitySyncStatus;
+export type JournalEntrySyncStatus = EntitySyncStatus;
 
 export interface Department {
   id: string;
@@ -1080,8 +1081,18 @@ export interface JournalEntry {
   posted_at?: string;
   voided_at?: string;
   reversed_entry_id?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string;
+  sync_status?: JournalEntrySyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface JournalEntryLine {

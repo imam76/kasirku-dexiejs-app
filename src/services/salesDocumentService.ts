@@ -400,7 +400,7 @@ export const issueSalesDocument = async (id: string) => {
 
     await db.salesDocuments.put(issuedDocument);
     if (document.type === 'SALES_INVOICE') {
-      await postSalesInvoiceIssuedJournal(issuedDocument);
+      await postSalesInvoiceIssuedJournal(issuedDocument, currentUser);
     }
     await writeActivityLog({
       user: currentUser,
@@ -536,7 +536,7 @@ export const voidSalesDocument = async (id: string, reason: string) => {
 
     await db.salesDocuments.put(voidedDocument);
     if (document.type === 'SALES_INVOICE' && document.status === 'ISSUED') {
-      await reverseSalesInvoiceJournal(document, `Pembalikan jurnal invoice ${document.document_number}: ${normalizedReason}`);
+      await reverseSalesInvoiceJournal(document, `Pembalikan jurnal invoice ${document.document_number}: ${normalizedReason}`, currentUser);
     }
     await writeActivityLog({
       user: currentUser,

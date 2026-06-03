@@ -3,11 +3,12 @@ import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres } from '@
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
+import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
-import { enqueuePendingAuthUsersForSync, enqueuePendingFinanceTransactionsForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { enqueuePendingAuthUsersForSync, enqueuePendingFinanceTransactionsForSync, enqueuePendingJournalEntriesForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
 
@@ -17,6 +18,7 @@ export const useSyncQueueWorker = () => {
       try {
         await enqueuePendingAuthUsersForSync();
         await enqueuePendingFinanceTransactionsForSync();
+        await enqueuePendingJournalEntriesForSync();
         await enqueuePendingPurchaseDocumentsForSync();
         await enqueuePendingSalesDocumentsForSync();
         await processPendingSyncQueue();
@@ -29,6 +31,7 @@ export const useSyncQueueWorker = () => {
         await refreshWarehousesFromPostgres();
         await refreshProductsFromPostgres();
         await refreshFinanceTransactionsFromPostgres();
+        await refreshJournalEntriesFromPostgres();
         await refreshPurchaseDocumentsFromPostgres();
         await refreshSalesDocumentsFromPostgres();
       } catch (error) {
