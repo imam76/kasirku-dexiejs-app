@@ -11,7 +11,12 @@ interface LoginFormValues {
   pin: string;
 }
 
-export const Login = () => {
+interface LoginProps {
+  registrationAvailable?: boolean;
+  onRegister?: () => void;
+}
+
+export const Login = ({ registrationAvailable = false, onRegister }: LoginProps) => {
   const { message } = App.useApp();
   const { login } = useAuth();
   const [form] = Form.useForm<LoginFormValues>();
@@ -29,6 +34,7 @@ export const Login = () => {
       message.error(error instanceof Error ? error.message : 'Login gagal.');
     }
   };
+  const canLogin = activeUsers.length > 0;
 
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center px-4 py-8">
@@ -42,7 +48,7 @@ export const Login = () => {
         </div>
       </div>
 
-      {activeUsers.length > 0 && (
+      {canLogin ? (
         <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
           <Text type="secondary" className="block text-xs uppercase">
             User aktif
@@ -55,30 +61,47 @@ export const Login = () => {
             ))}
           </div>
         </div>
+      ) : (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <Text strong className="block text-sm text-amber-900">
+            Belum ada user aktif.
+          </Text>
+          <Text className="mt-1 block text-sm text-amber-800">
+            Buat Owner pertama lewat halaman register sebelum masuk ke aplikasi.
+          </Text>
+        </div>
       )}
 
-      <Form<LoginFormValues>
-        form={form}
-        layout="vertical"
-        onFinish={handleSubmit}
-        requiredMark={false}
-      >
-        <Form.Item
-          label="PIN"
-          name="pin"
-          rules={[
-            { required: true, message: 'PIN wajib diisi.' },
-            { min: 4, message: 'PIN minimal 4 digit.' },
-            { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
-          ]}
+      {canLogin && (
+        <Form<LoginFormValues>
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmit}
+          requiredMark={false}
         >
-          <Input.Password size="large" inputMode="numeric" autoFocus placeholder="Masukkan PIN" />
-        </Form.Item>
+          <Form.Item
+            label="PIN"
+            name="pin"
+            rules={[
+              { required: true, message: 'PIN wajib diisi.' },
+              { min: 4, message: 'PIN minimal 4 digit.' },
+              { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
+            ]}
+          >
+            <Input.Password size="large" inputMode="numeric" autoFocus placeholder="Masukkan PIN" />
+          </Form.Item>
 
-        <Button type="primary" htmlType="submit" size="large" block>
-          Masuk
+          <Button type="primary" htmlType="submit" size="large" block>
+            Masuk
+          </Button>
+        </Form>
+      )}
+
+      {registrationAvailable && (
+        <Button type={canLogin ? 'default' : 'primary'} size="large" block className={canLogin ? 'mt-3' : ''} onClick={onRegister}>
+          Register Owner Pertama
         </Button>
-      </Form>
+      )}
     </div>
   );
 };

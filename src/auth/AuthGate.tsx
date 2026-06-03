@@ -1,6 +1,6 @@
 import { Spin } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { hasActiveOwner } from './authService';
 import { useAuth } from './useAuth';
 import { Login } from '@/view/auth/Login';
@@ -13,6 +13,7 @@ interface AuthGateProps {
 export const AuthGate = ({ children }: AuthGateProps) => {
   const { currentUser, isLoading } = useAuth();
   const hasOwner = useLiveQuery(() => hasActiveOwner(), [], null);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   if (isLoading || hasOwner === null) {
     return (
@@ -22,13 +23,27 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     );
   }
 
+  if (currentUser) {
+    return <>{children}</>;
+  }
+
   if (!hasOwner) {
-    return <SetupOwner />;
+    if (authMode === 'register') {
+      return (
+        <SetupOwner
+          onBackToLogin={() => setAuthMode('login')}
+          onComplete={() => setAuthMode('login')}
+        />
+      );
+    }
+
+    return (
+      <Login
+        registrationAvailable
+        onRegister={() => setAuthMode('register')}
+      />
+    );
   }
 
-  if (!currentUser) {
-    return <Login />;
-  }
-
-  return <>{children}</>;
+  return <Login />;
 };

@@ -16,7 +16,7 @@ import { setConversionRegistry } from '@/utils/pricing'
 import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { Button, Layout, Menu, Result, notification } from 'antd'
+import { App, Button, Layout, Menu, Result, notification } from 'antd'
 import {
   BadgePercent,
   Banknote,
@@ -34,6 +34,7 @@ import {
   Home,
   Languages,
   ListTree,
+  LogOut,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -76,7 +77,8 @@ const RootLayout = () => {
   const location = useLocation()
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
-  const { can, currentUser } = useAuth()
+  const { can, currentUser, logout } = useAuth()
+  const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
@@ -174,6 +176,19 @@ const RootLayout = () => {
     } else {
       navigate({ to: '/' })
     }
+  }
+
+  const handleLogoutClick = () => {
+    modal.confirm({
+      title: t('root.logoutConfirmTitle'),
+      content: t('root.logoutConfirmContent', { name: currentUser?.name ?? t('root.currentUserFallback') }),
+      okText: t('root.logout'),
+      okType: 'danger',
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        await logout()
+      },
+    })
   }
 
   const navLinks: NavLink[] = [
@@ -373,6 +388,14 @@ const RootLayout = () => {
                 <SettingsIcon size={20} />
               </button>
             )}
+            <button
+              onClick={handleLogoutClick}
+              className="p-2 rounded-full text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none dark:hover:bg-red-950/40 dark:hover:text-red-300"
+              aria-label={t('root.logout')}
+              title={t('root.logout')}
+            >
+              <LogOut size={20} />
+            </button>
           </div>
         </div>
       </nav>

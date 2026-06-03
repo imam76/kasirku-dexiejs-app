@@ -1,5 +1,5 @@
 import { App, Button, Form, Input, Typography } from 'antd';
-import { ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { createOwnerUser } from '@/auth/authService';
 import { useAuth } from '@/auth/useAuth';
 
@@ -13,9 +13,10 @@ interface SetupOwnerFormValues {
 
 interface SetupOwnerProps {
   onComplete?: () => void;
+  onBackToLogin?: () => void;
 }
 
-export const SetupOwner = ({ onComplete }: SetupOwnerProps) => {
+export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
   const { message } = App.useApp();
   const { login } = useAuth();
   const [form] = Form.useForm<SetupOwnerFormValues>();
@@ -46,7 +47,7 @@ export const SetupOwner = ({ onComplete }: SetupOwnerProps) => {
           <ShieldCheck size={24} />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Setup Owner</h1>
+          <h1 className="text-xl font-semibold text-gray-900">Register Owner</h1>
           <Text type="secondary">Buat akses utama untuk toko ini.</Text>
         </div>
       </div>
@@ -95,6 +96,17 @@ export const SetupOwner = ({ onComplete }: SetupOwnerProps) => {
         <Button type="primary" htmlType="submit" size="large" block>
           Simpan Owner
         </Button>
+
+        {onBackToLogin && (
+          <Button
+            type="link"
+            icon={<ArrowLeft size={16} />}
+            onClick={onBackToLogin}
+            block
+          >
+            Kembali ke Login
+          </Button>
+        )}
       </Form>
     </div>
   );
