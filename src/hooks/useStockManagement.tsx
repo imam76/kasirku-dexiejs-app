@@ -6,9 +6,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { enqueueProductSync } from '@/services/syncQueueService';
+import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
-import type { Product, ProductUnit } from '@/types';
+import type { FinanceTransaction, Product, ProductUnit } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
@@ -78,6 +79,7 @@ export const useStockManagement = () => {
       let productId = editingId ?? '';
       const isEdit = Boolean(editingId);
       let syncedProduct: Product | null = null;
+      const financeTransactionsToSync: FinanceTransaction[] = [];
 
       const unitMappings = normalizeProductUnitMappings({
         purchase_unit: productData.purchase_unit || 'pcs',
@@ -134,7 +136,7 @@ export const useStockManagement = () => {
           // Record purchase if stock was added
           if (purchase_quantity > 0) {
             const totalCost = cleanData.purchase_price * purchase_quantity;
-            await recordStockPurchase({
+            const purchaseResult = await recordStockPurchase({
               productId,
               productName: cleanData.name,
               sku: cleanData.sku,
@@ -144,6 +146,7 @@ export const useStockManagement = () => {
               description: t('stock.purchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
               createdAt: now,
             });
+            financeTransactionsToSync.push(purchaseResult.financeTransaction);
           }
         } else {
           // Create new product
@@ -163,7 +166,7 @@ export const useStockManagement = () => {
           // Record initial purchase if stock was added
           if (purchase_quantity > 0) {
             const totalCost = cleanData.purchase_price * purchase_quantity;
-            await recordStockPurchase({
+            const purchaseResult = await recordStockPurchase({
               productId: newId,
               productName: cleanData.name,
               sku: cleanData.sku,
@@ -173,12 +176,16 @@ export const useStockManagement = () => {
               description: t('stock.initialPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
               createdAt: now,
             });
+            financeTransactionsToSync.push(purchaseResult.financeTransaction);
           }
         }
       });
 
       if (syncedProduct) {
         await enqueueProductSync(syncedProduct, isEdit ? 'update' : 'create');
+      }
+      if (financeTransactionsToSync.length > 0) {
+        await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
       }
 
       await writeActivityLog({
@@ -238,6 +245,7 @@ export const useStockManagement = () => {
       let createdCount = 0;
       let updatedCount = 0;
       const productsToSync: Array<{ product: Product; operation: 'create' | 'update' }> = [];
+      const financeTransactionsToSync: FinanceTransaction[] = [];
 
       await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
         for (const item of items) {
@@ -297,7 +305,7 @@ export const useStockManagement = () => {
 
             if (purchase_quantity > 0) {
               const totalCost = cleanData.purchase_price * purchase_quantity;
-              await recordStockPurchase({
+              const purchaseResult = await recordStockPurchase({
                 productId: existing.id,
                 productName: cleanData.name,
                 sku: cleanData.sku,
@@ -307,6 +315,7 @@ export const useStockManagement = () => {
                 description: t('stock.importPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
                 createdAt: now,
               });
+              financeTransactionsToSync.push(purchaseResult.financeTransaction);
             }
           } else {
             createdCount += 1;
@@ -323,7 +332,7 @@ export const useStockManagement = () => {
 
             if (purchase_quantity > 0) {
               const totalCost = cleanData.purchase_price * purchase_quantity;
-              await recordStockPurchase({
+              const purchaseResult = await recordStockPurchase({
                 productId: newId,
                 productName: cleanData.name,
                 sku: cleanData.sku,
@@ -333,6 +342,7 @@ export const useStockManagement = () => {
                 description: t('stock.importInitialPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
                 createdAt: now,
               });
+              financeTransactionsToSync.push(purchaseResult.financeTransaction);
             }
           }
         }
@@ -346,6 +356,9 @@ export const useStockManagement = () => {
       });
       for (const { product, operation } of productsToSync) {
         await enqueueProductSync(product, operation);
+      }
+      if (financeTransactionsToSync.length > 0) {
+        await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
       }
     },
     onSuccess: (_data, items) => {

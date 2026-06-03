@@ -8,6 +8,11 @@ import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import type { FinanceTransaction, FinanceTransactionType, PaymentMethod } from '@/types';
 import { getCashOrBankAccountForPayment } from '@/services/generalLedgerService';
+import {
+  enqueueFinanceTransactionsSync,
+  withDeletedFinanceTransactionSync,
+  withPendingFinanceTransactionSync,
+} from '@/services/financeTransactionSyncService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { isTransactionActive } from '@/utils/transactions';
 
@@ -60,6 +65,7 @@ export const addFinanceTransaction = async ({
   }
 
   let transactionId = '';
+  let financeTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', [db.financeBalance, db.financeTransactions, db.profitBalance, db.profitLogs], async () => {
     await db.financeBalance.put({
@@ -69,7 +75,7 @@ export const addFinanceTransaction = async ({
     });
 
     transactionId = crypto.randomUUID();
-    await db.financeTransactions.add({
+    financeTransaction = withPendingFinanceTransactionSync({
       id: transactionId,
       type: normalizedType,
       category,
@@ -82,7 +88,8 @@ export const addFinanceTransaction = async ({
       cash_account_code: cashAccount.code,
       cash_account_name: cashAccount.name,
       ...accountSnapshot,
-    });
+    }, currentUser, now);
+    await db.financeTransactions.add(financeTransaction);
 
     if (affectsProfit) {
       await db.profitBalance.put({
@@ -103,6 +110,10 @@ export const addFinanceTransaction = async ({
     }
   });
 
+  if (financeTransaction) {
+    await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  }
+
   await writeActivityLog({
     user: currentUser,
     action: 'FINANCE_TRANSACTION_CREATED',
@@ -115,6 +126,9 @@ export const addFinanceTransaction = async ({
 export const recalculateFinance = async () => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  const now = new Date().toISOString();
+  const deletedAutoTransactions: FinanceTransaction[] = [];
+  const newAutoTransactions: FinanceTransaction[] = [];
 
   await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases, db.chartOfAccounts, db.financeAccountMappings], async () => {
     const autoCategories = [
@@ -122,20 +136,28 @@ export const recalculateFinance = async () => {
       FINANCE_CATEGORIES.AUTO_COGS,
       FINANCE_CATEGORIES.STOCK_PURCHASE,
     ];
-    await db.financeTransactions
+    const existingAutoTransactions = await db.financeTransactions
       .where('category')
       .anyOf(autoCategories)
       .filter((transaction) => !!transaction.reference_id)
-      .delete();
+      .toArray();
+
+    if (existingAutoTransactions.length > 0) {
+      deletedAutoTransactions.push(
+        ...existingAutoTransactions.map((transaction) => (
+          withDeletedFinanceTransactionSync(transaction, currentUser, now)
+        )),
+      );
+      await db.financeTransactions.bulkDelete(existingAutoTransactions.map((transaction) => transaction.id));
+    }
 
     const posTransactions = (await db.transactions.toArray()).filter(isTransactionActive);
     const stockPurchases = await db.stockPurchases.toArray();
-    const newAutoTransactions: FinanceTransaction[] = [];
 
     for (const transaction of posTransactions) {
       const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES);
       const cashAccount = await getCashOrBankAccountForPayment(transaction.payment_method);
-      newAutoTransactions.push({
+      newAutoTransactions.push(withPendingFinanceTransactionSync({
         id: crypto.randomUUID(),
         type: 'INCOME',
         category: FINANCE_CATEGORIES.SALES,
@@ -148,13 +170,13 @@ export const recalculateFinance = async () => {
         cash_account_code: cashAccount.code,
         cash_account_name: cashAccount.name,
         ...accountSnapshot,
-      });
+      }, currentUser, now));
     }
 
     for (const stockPurchase of stockPurchases) {
       const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE);
       const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
-      newAutoTransactions.push({
+      newAutoTransactions.push(withPendingFinanceTransactionSync({
         id: crypto.randomUUID(),
         type: 'EXPENSE',
         category: FINANCE_CATEGORIES.STOCK_PURCHASE,
@@ -167,7 +189,7 @@ export const recalculateFinance = async () => {
         cash_account_code: cashAccount.code,
         cash_account_name: cashAccount.name,
         ...accountSnapshot,
-      });
+      }, currentUser, now));
     }
 
     if (newAutoTransactions.length > 0) {
@@ -190,9 +212,16 @@ export const recalculateFinance = async () => {
     await db.financeBalance.put({
       id: 'current',
       amount: runningBalance,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     });
   });
+
+  if (deletedAutoTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(deletedAutoTransactions, 'delete');
+  }
+  if (newAutoTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(newAutoTransactions, 'create');
+  }
 
   await writeActivityLog({
     user: currentUser,

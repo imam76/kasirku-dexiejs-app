@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod contact;
 pub mod department;
+pub mod finance_transaction;
 pub mod product;
 pub mod project;
 pub mod purchase_document;

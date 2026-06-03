@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { mergeRemoteAuthUsersIntoDexie } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
+import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
 import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
 import { mergeRemotePurchaseDocumentBundlesIntoDexie } from '@/services/purchaseDocumentReadService';
 import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
@@ -13,6 +14,7 @@ import {
   authUserPostgresAdapter,
   contactPostgresAdapter,
   departmentPostgresAdapter,
+  financeTransactionPostgresAdapter,
   isTauriRuntime,
   productPostgresAdapter,
   purchaseDocumentPostgresAdapter,
@@ -25,6 +27,7 @@ import {
   type RemoteAuthUserDto,
   type RemoteContactDto,
   type RemoteDepartmentDto,
+  type RemoteFinanceTransactionDto,
   type RemoteProductDto,
   type RemotePurchaseDocumentBundleDto,
   type RemotePurchaseDocumentDto,
@@ -37,13 +40,14 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, Department, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, Department, FinanceTransaction, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const ACTIVITY_LOG_ENTITY = 'activityLogs';
 const AUTH_USER_ENTITY = 'authUsers';
 const CONTACT_ENTITY = 'contacts';
 const DEPARTMENT_ENTITY = 'departments';
+const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
 const PRODUCT_ENTITY = 'products';
 const PROJECT_ENTITY = 'projects';
 const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
@@ -168,6 +172,35 @@ const mapStockMutationToRemoteDto = (mutation: StockMutation): RemoteStockMutati
   actor_user_name: mutation.actor_user_name,
   occurred_at: mutation.occurred_at,
   created_at: mutation.created_at,
+});
+
+const mapFinanceTransactionToRemoteDto = (transaction: FinanceTransaction): RemoteFinanceTransactionDto => ({
+  id: transaction.id,
+  type: transaction.type,
+  category: transaction.category,
+  amount: normalizeRemoteNumber(transaction.amount),
+  description: transaction.description,
+  reference_id: transaction.reference_id,
+  account_id: transaction.account_id,
+  account_code: transaction.account_code,
+  account_name: transaction.account_name,
+  account_type: transaction.account_type,
+  payment_method: transaction.payment_method,
+  payment_channel: transaction.payment_channel,
+  cash_account_id: transaction.cash_account_id,
+  cash_account_code: transaction.cash_account_code,
+  cash_account_name: transaction.cash_account_name,
+  transfer_group_id: transaction.transfer_group_id,
+  transfer_direction: transaction.transfer_direction,
+  reversal_of_transfer_group_id: transaction.reversal_of_transfer_group_id,
+  version: transaction.version ?? 1,
+  created_by: transaction.created_by,
+  created_by_name: transaction.created_by_name,
+  updated_by: transaction.updated_by,
+  updated_by_name: transaction.updated_by_name,
+  created_at: transaction.created_at,
+  updated_at: transaction.updated_at ?? transaction.created_at,
+  deleted_at: transaction.deleted_at,
 });
 
 const mapSalesDocumentToRemoteDto = (document: SalesDocument): RemoteSalesDocumentDto => ({
@@ -502,6 +535,22 @@ const isRemoteStockMutationDto = (payload: unknown): payload is RemoteStockMutat
   );
 };
 
+const isRemoteFinanceTransactionDto = (payload: unknown): payload is RemoteFinanceTransactionDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteFinanceTransactionDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.type === 'string' &&
+    typeof candidate.category === 'string' &&
+    typeof candidate.amount === 'number' &&
+    typeof candidate.description === 'string' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteSalesDocumentDto = (payload: unknown): payload is RemoteSalesDocumentDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -655,6 +704,17 @@ const updateDepartmentSyncMetadata = async (
   await db.departments.update(departmentId, syncMetadata);
 };
 
+const updateFinanceTransactionSyncMetadata = async (
+  transactionId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<FinanceTransaction, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentTransaction = await db.financeTransactions.get(transactionId);
+  if (!currentTransaction || (currentTransaction.updated_at ?? currentTransaction.created_at) !== sourceUpdatedAt) return;
+
+  await db.financeTransactions.update(transactionId, syncMetadata);
+};
+
 const updateProjectSyncMetadata = async (
   projectId: string,
   sourceUpdatedAt: string,
@@ -767,6 +827,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === FINANCE_TRANSACTION_ENTITY && isRemoteFinanceTransactionDto(queueItem.payload)) {
+    await updateFinanceTransactionSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === PROJECT_ENTITY && isRemoteProjectDto(queueItem.payload)) {
     await updateProjectSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -856,6 +923,14 @@ const processDepartmentQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return departmentPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processFinanceTransactionQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteFinanceTransactionDto(queueItem.payload)) {
+    throw new Error('Payload finance transaction sync queue tidak valid.');
+  }
+
+  return financeTransactionPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processProjectQueueItem = async (queueItem: SyncQueueItem) => {
@@ -959,6 +1034,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteAuthUser: RemoteAuthUserDto | null = null;
     let remoteContact: RemoteContactDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
+    let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
     let remotePurchaseDocumentBundle: RemotePurchaseDocumentBundleDto | null = null;
@@ -975,6 +1051,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteContact = await processContactQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === DEPARTMENT_ENTITY) {
       remoteDepartment = await processDepartmentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === FINANCE_TRANSACTION_ENTITY) {
+      remoteFinanceTransaction = await processFinanceTransactionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PRODUCT_ENTITY) {
       remoteProduct = await processProductQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
@@ -1124,6 +1202,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteDepartment.updated_at,
       });
       await mergeRemoteDepartmentsIntoDexie([remoteDepartment], syncedAt);
+      return;
+    }
+
+    if (remoteFinanceTransaction && isRemoteFinanceTransactionDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateFinanceTransactionSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteFinanceTransaction.updated_at,
+      });
+      await mergeRemoteFinanceTransactionsIntoDexie([remoteFinanceTransaction], syncedAt);
       return;
     }
 
@@ -1344,6 +1434,54 @@ export const enqueueDepartmentSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueueFinanceTransactionSync = async (
+  transaction: FinanceTransaction,
+  operation: Extract<SyncQueueOperation, 'create' | 'update' | 'delete'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: FINANCE_TRANSACTION_ENTITY,
+    entity_id: transaction.id,
+    operation,
+    payload: mapFinanceTransactionToRemoteDto(transaction),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingFinanceTransactionsForSync = async () => {
+  const financeTransactions = (await db.financeTransactions.toArray())
+    .filter((transaction) => transaction.sync_status === 'pending' || transaction.sync_status === 'failed');
+
+  const financeTransactionQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(FINANCE_TRANSACTION_ENTITY)
+    .toArray();
+
+  for (const transaction of financeTransactions) {
+    const sourceUpdatedAt = transaction.updated_at ?? transaction.created_at;
+    const existingQueueItem = financeTransactionQueueItems.find((queueItem) => (
+      queueItem.entity_id === transaction.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteFinanceTransactionDto(queueItem.payload) &&
+      queueItem.payload.updated_at === sourceUpdatedAt &&
+      queueItem.payload.version === (transaction.version ?? 1)
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueFinanceTransactionSync(transaction, 'update');
+    }
+  }
 };
 
 export const enqueueProjectSync = async (

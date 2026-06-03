@@ -1,6 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, PaymentMethod, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
+import type { CartItem, FinanceTransaction, PaymentMethod, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemOriginalPrice, getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
@@ -8,6 +8,7 @@ import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
 import { getCashOrBankAccountForPayment, postPosSaleJournal } from '@/services/generalLedgerService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -96,7 +97,11 @@ const recordProfit = async (
   });
 };
 
-const recordFinanceIncome = async (transaction: Transaction, createdAt: string) => {
+const recordFinanceIncome = async (
+  transaction: Transaction,
+  createdAt: string,
+  actor?: AuthUser | null,
+) => {
   const currentFinanceBalance = await db.financeBalance.get('current');
   const newFinanceBalance = (currentFinanceBalance?.amount || 0) + transaction.total_amount;
   const cashAccount = await getCashOrBankAccountForPayment(transaction.payment_method);
@@ -107,7 +112,7 @@ const recordFinanceIncome = async (transaction: Transaction, createdAt: string) 
     updated_at: createdAt,
   });
 
-  await db.financeTransactions.add({
+  const financeTransaction = withPendingFinanceTransactionSync({
     id: crypto.randomUUID(),
     type: 'INCOME',
     category: FINANCE_CATEGORIES.SALES,
@@ -120,7 +125,10 @@ const recordFinanceIncome = async (transaction: Transaction, createdAt: string) 
     cash_account_code: cashAccount.code,
     cash_account_name: cashAccount.name,
     ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES),
-  });
+  }, actor, createdAt);
+  await db.financeTransactions.add(financeTransaction);
+
+  return financeTransaction;
 };
 
 const reduceProductStock = async (
@@ -194,6 +202,7 @@ export const checkout = async ({
   const finalPayment = paymentMethod === 'NON_TUNAI' ? finalTotal : payment;
   const change = paymentMethod === 'NON_TUNAI' ? 0 : finalPayment - finalTotal;
   let stockMutations: StockMutation[] = [];
+  let financeTransaction: FinanceTransaction | undefined;
 
   if (!Number.isFinite(finalPayment) || finalPayment < finalTotal) {
     throw new Error('Jumlah pembayaran tidak valid atau kurang.');
@@ -238,7 +247,7 @@ export const checkout = async ({
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);
       await recordProfit(transaction, items, createdAt);
-      await recordFinanceIncome(transaction, createdAt);
+      financeTransaction = await recordFinanceIncome(transaction, createdAt, currentUser);
       await postPosSaleJournal(transaction, items);
       stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
 
@@ -257,6 +266,9 @@ export const checkout = async ({
   );
 
   await enqueueStockMutations(stockMutations);
+  if (financeTransaction) {
+    await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  }
 
   return result;
 };

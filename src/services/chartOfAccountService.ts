@@ -19,6 +19,7 @@ import {
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { chartOfAccountSchema } from '@/lib/validations/chartOfAccount';
+import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { getGeneralLedgerReadiness } from '@/utils/accounting/getGeneralLedgerReadiness';
 import type {
   AccountingModuleCode,
@@ -28,6 +29,7 @@ import type {
   ChartOfAccountTemplateLine,
   EnabledModule,
   FinanceAccountMapping,
+  FinanceTransaction,
   GeneralLedgerSetting,
   IndustryExtensionCode,
 } from '@/types';
@@ -907,6 +909,7 @@ export const backfillFinanceTransactionAccountSnapshots = async () => {
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const now = new Date().toISOString();
   let updatedCount = 0;
+  const updatedFinanceTransactions: FinanceTransaction[] = [];
 
   await db.transaction('rw', [db.financeTransactions], async () => {
     for (const transaction of transactions) {
@@ -916,15 +919,24 @@ export const backfillFinanceTransactionAccountSnapshots = async () => {
       const account = accountById.get(mapping.account_id);
       if (!account || !account.is_active || !account.is_postable) continue;
 
-      await db.financeTransactions.update(transaction.id, {
+      const updatedTransaction = withPendingFinanceTransactionSync({
+        ...transaction,
         account_id: account.id,
         account_code: account.code,
         account_name: account.name,
         account_type: account.type,
-      });
+        version: Math.max(1, Number(transaction.version ?? 1)) + 1,
+      }, currentUser, now);
+
+      await db.financeTransactions.put(updatedTransaction);
+      updatedFinanceTransactions.push(updatedTransaction);
       updatedCount += 1;
     }
   });
+
+  if (updatedFinanceTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(updatedFinanceTransactions, 'update');
+  }
 
   await writeActivityLog({
     user: currentUser,

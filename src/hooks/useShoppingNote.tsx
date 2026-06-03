@@ -5,8 +5,9 @@ import { shoppingItemSchema, type ShoppingItemFormData } from '@/lib/validations
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
+import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
-import type { Product, ShoppingNoteItem, StockMutation } from '@/types';
+import type { FinanceTransaction, Product, ShoppingNoteItem, StockMutation } from '@/types';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 
@@ -96,6 +97,7 @@ export const useShoppingNote = () => {
       const now = new Date().toISOString();
       const shoppingNoteId = crypto.randomUUID();
       const stockMutations: StockMutation[] = [];
+      const financeTransactionsToSync: FinanceTransaction[] = [];
 
       await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
         await db.shoppingNotes.add({
@@ -139,7 +141,7 @@ export const useShoppingNote = () => {
             }));
           }
 
-          await recordStockPurchase({
+          const purchaseResult = await recordStockPurchase({
             productId: product.id,
             productName: product.name,
             sku: product.sku,
@@ -149,10 +151,14 @@ export const useShoppingNote = () => {
             description: `Belanja Stok: ${product.name} (${item.quantity} ${item.unit})`,
             createdAt: now,
           });
+          financeTransactionsToSync.push(purchaseResult.financeTransaction);
         }
       });
 
       await enqueueStockMutations(stockMutations);
+      if (financeTransactionsToSync.length > 0) {
+        await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
+      }
 
       message.success('Belanja stok berhasil disimpan');
       setItems([]);

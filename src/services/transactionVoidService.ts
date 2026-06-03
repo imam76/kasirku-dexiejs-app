@@ -1,11 +1,12 @@
 import { db } from '@/lib/db';
-import type { Product, StockMutation, TransactionItem } from '@/types';
+import type { FinanceTransaction, Product, StockMutation, TransactionItem } from '@/types';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
 import { reversePosSaleJournal } from '@/services/generalLedgerService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -39,6 +40,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   const normalizedReason = reason.trim() || 'Transaksi dibatalkan';
   let transactionNumber = transactionId;
   const stockMutations: StockMutation[] = [];
+  const deletedFinanceTransactions: FinanceTransaction[] = [];
 
   await db.transaction(
     'rw',
@@ -129,10 +131,19 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       const currentFinanceBalance = await db.financeBalance.get('current');
       const nextFinanceBalance = (currentFinanceBalance?.amount || 0) - transaction.total_amount;
 
-      await db.financeTransactions
+      const financeTransactionsToDelete = await db.financeTransactions
         .where('reference_id')
         .equals(transaction.id)
-        .delete();
+        .toArray();
+
+      if (financeTransactionsToDelete.length > 0) {
+        deletedFinanceTransactions.push(
+          ...financeTransactionsToDelete.map((financeTransaction) => (
+            withDeletedFinanceTransactionSync(financeTransaction, currentUser, now)
+          )),
+        );
+        await db.financeTransactions.bulkDelete(financeTransactionsToDelete.map((financeTransaction) => financeTransaction.id));
+      }
 
       await db.financeBalance.put({
         id: 'current',
@@ -145,6 +156,9 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   );
 
   await enqueueStockMutations(stockMutations);
+  if (deletedFinanceTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(deletedFinanceTransactions, 'delete');
+  }
 
   await writeActivityLog({
     user: currentUser,

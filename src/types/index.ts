@@ -248,6 +248,7 @@ export type PurchaseDocumentSyncStatus = EntitySyncStatus;
 export type SalesDocumentSyncStatus = EntitySyncStatus;
 export type TaxSyncStatus = EntitySyncStatus;
 export type WarehouseSyncStatus = EntitySyncStatus;
+export type FinanceTransactionSyncStatus = EntitySyncStatus;
 
 export interface Department {
   id: string;
@@ -1171,6 +1172,17 @@ export interface FinanceTransaction {
   transfer_group_id?: string;
   transfer_direction?: 'OUT' | 'IN';
   reversal_of_transfer_group_id?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  updated_at?: string;
+  deleted_at?: string;
+  sync_status?: FinanceTransactionSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface FinanceBalance {

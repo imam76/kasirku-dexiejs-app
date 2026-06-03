@@ -2,6 +2,7 @@ import { FINANCE_CATEGORIES, isProfitAffectingFinanceTransaction } from '@/const
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type { FinanceTransaction, ProfitLog, Transaction } from '@/types';
+import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { isTransactionVoided } from '@/utils/transactions';
 
@@ -27,6 +28,7 @@ export const withdrawProfit = async ({ amount, description }: WithdrawProfitInpu
   const currentFinanceAmount = currentFinanceBalance?.amount || 0;
   const newFinanceBalance = currentFinanceAmount - amount;
   let profitLogId = '';
+  let financeTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', [db.profitBalance, db.profitLogs, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings], async () => {
     await db.profitBalance.put({
@@ -52,7 +54,7 @@ export const withdrawProfit = async ({ amount, description }: WithdrawProfitInpu
       updated_at: now,
     });
 
-    await db.financeTransactions.add({
+    financeTransaction = withPendingFinanceTransactionSync({
       id: crypto.randomUUID(),
       type: 'EXPENSE',
       category: FINANCE_CATEGORIES.WITHDRAWAL,
@@ -60,8 +62,13 @@ export const withdrawProfit = async ({ amount, description }: WithdrawProfitInpu
       description: `Penarikan Saldo: ${description}`,
       created_at: now,
       ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.WITHDRAWAL),
-    });
+    }, currentUser, now);
+    await db.financeTransactions.add(financeTransaction);
   });
+
+  if (financeTransaction) {
+    await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  }
 
   await writeActivityLog({
     user: currentUser,

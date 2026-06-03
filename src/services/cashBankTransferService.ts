@@ -3,6 +3,7 @@ import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import { cashBankTransferSchema } from '@/lib/validations/cashBankTransfer';
 import { postCashBankTransferJournal } from '@/services/generalLedgerService';
+import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import type { ChartOfAccount, FinanceTransaction } from '@/types';
 
 export interface RecordCashBankTransferInput {
@@ -84,7 +85,7 @@ export const recordCashBankTransfer = async (
     }
 
     const description = createTransferDescription(fromAccount, toAccount, parsedInput.notes);
-    outTransaction = {
+    outTransaction = withPendingFinanceTransactionSync({
       id: outTransactionId,
       type: 'EXPENSE',
       category: FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
@@ -101,8 +102,8 @@ export const recordCashBankTransfer = async (
       account_type: fromAccount.type,
       transfer_group_id: transferGroupId,
       transfer_direction: 'OUT',
-    };
-    inTransaction = {
+    }, currentUser, transferDate);
+    inTransaction = withPendingFinanceTransactionSync({
       id: inTransactionId,
       type: 'INCOME',
       category: FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
@@ -119,7 +120,7 @@ export const recordCashBankTransfer = async (
       account_type: toAccount.type,
       transfer_group_id: transferGroupId,
       transfer_direction: 'IN',
-    };
+    }, currentUser, transferDate);
 
     await db.financeTransactions.bulkAdd([outTransaction, inTransaction]);
     await postCashBankTransferJournal({
@@ -142,6 +143,8 @@ export const recordCashBankTransfer = async (
   if (!outTransaction || !inTransaction) {
     throw new Error('Transfer kas/bank gagal dicatat.');
   }
+
+  await enqueueFinanceTransactionsSync([outTransaction, inTransaction], 'create');
 
   return { transferGroupId, outTransaction, inTransaction };
 };
@@ -202,7 +205,7 @@ export const voidCashBankTransfer = async (
     const toAccount = assertCashBankAccount(toAccountRecord, 'Akun tujuan transfer asal');
     const description = `Void transfer kas/bank ${transferGroupId}. ${cleanReason}`;
 
-    outReversal = {
+    outReversal = withPendingFinanceTransactionSync({
       id: crypto.randomUUID(),
       type: 'INCOME',
       category: FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
@@ -220,8 +223,8 @@ export const voidCashBankTransfer = async (
       transfer_group_id: reversalGroupId,
       transfer_direction: 'IN',
       reversal_of_transfer_group_id: transferGroupId,
-    };
-    inReversal = {
+    }, currentUser, now);
+    inReversal = withPendingFinanceTransactionSync({
       id: crypto.randomUUID(),
       type: 'EXPENSE',
       category: FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
@@ -239,7 +242,7 @@ export const voidCashBankTransfer = async (
       transfer_group_id: reversalGroupId,
       transfer_direction: 'OUT',
       reversal_of_transfer_group_id: transferGroupId,
-    };
+    }, currentUser, now);
 
     await db.financeTransactions.bulkAdd([outReversal, inReversal]);
     await postCashBankTransferJournal({
@@ -262,6 +265,8 @@ export const voidCashBankTransfer = async (
   if (!outReversal || !inReversal) {
     throw new Error('Void transfer kas/bank gagal dicatat.');
   }
+
+  await enqueueFinanceTransactionsSync([outReversal, inReversal], 'create');
 
   return {
     transferGroupId,

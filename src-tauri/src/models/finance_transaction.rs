@@ -1,0 +1,31 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct FinanceTransactionDto {
+    pub id: String,
+    pub r#type: String,
+    pub category: String,
+    pub amount: f64,
+    pub description: String,
+    pub reference_id: Option<String>,
+    pub account_id: Option<String>,
+    pub account_code: Option<String>,
+    pub account_name: Option<String>,
+    pub account_type: Option<String>,
+    pub payment_method: Option<String>,
+    pub payment_channel: Option<String>,
+    pub cash_account_id: Option<String>,
+    pub cash_account_code: Option<String>,
+    pub cash_account_name: Option<String>,
+    pub transfer_group_id: Option<String>,
+    pub transfer_direction: Option<String>,
+    pub reversal_of_transfer_group_id: Option<String>,
+    pub version: i32,
+    pub created_by: Option<String>,
+    pub created_by_name: Option<String>,
+    pub updated_by: Option<String>,
+    pub updated_by_name: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}

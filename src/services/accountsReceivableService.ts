@@ -7,8 +7,10 @@ import {
   postSalesInvoicePaymentRecordJournal,
   reverseSalesInvoicePaymentRecordJournal,
 } from '@/services/generalLedgerService';
+import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import type {
   AccountsReceivableRow,
+  FinanceTransaction,
   PaymentMethod,
   SalesDocument,
   SalesInvoicePayment,
@@ -246,6 +248,7 @@ export const recordSalesInvoicePayment = async (
     now,
   });
   let savedPayment = payment;
+  let financeTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', accountsReceivableTables, async () => {
     const currentFinanceBalance = await db.financeBalance.get('current');
@@ -254,7 +257,7 @@ export const recordSalesInvoicePayment = async (
       amount: roundCurrency(Number(currentFinanceBalance?.amount || 0) + amount),
       updated_at: now,
     });
-    await db.financeTransactions.add({
+    financeTransaction = withPendingFinanceTransactionSync({
       id: financeTransactionId,
       type: 'INCOME',
       category: FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT,
@@ -271,7 +274,8 @@ export const recordSalesInvoicePayment = async (
       account_code: cashAccount.code,
       account_name: cashAccount.name,
       account_type: cashAccount.type,
-    });
+    }, currentUser, now);
+    await db.financeTransactions.add(financeTransaction);
     await db.salesInvoicePayments.add(payment);
 
     const journalEntry = await postSalesInvoicePaymentRecordJournal(document as SalesDocument, payment);
@@ -302,6 +306,10 @@ export const recordSalesInvoicePayment = async (
     });
   });
 
+  if (financeTransaction) {
+    await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  }
+
   return savedPayment;
 };
 
@@ -326,6 +334,7 @@ export const voidSalesInvoicePayment = async (paymentId: string, reason: string)
   const now = new Date().toISOString();
   let reversalFinanceTransactionId: string | undefined;
   let reversalJournalEntryId: string | undefined;
+  let reversalFinanceTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', accountsReceivableTables, async () => {
     if (payment.finance_transaction_id) {
@@ -336,7 +345,7 @@ export const voidSalesInvoicePayment = async (paymentId: string, reason: string)
         amount: roundCurrency(Number(currentFinanceBalance?.amount || 0) - Number(payment.amount || 0)),
         updated_at: now,
       });
-      await db.financeTransactions.add({
+      reversalFinanceTransaction = withPendingFinanceTransactionSync({
         id: reversalFinanceTransactionId,
         type: 'EXPENSE',
         category: FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT,
@@ -353,7 +362,8 @@ export const voidSalesInvoicePayment = async (paymentId: string, reason: string)
         account_code: payment.cash_account_code,
         account_name: payment.cash_account_name,
         account_type: 'ASSET',
-      });
+      }, currentUser, now);
+      await db.financeTransactions.add(reversalFinanceTransaction);
     }
 
     const reversalEntries = payment.journal_entry_id
@@ -382,6 +392,10 @@ export const voidSalesInvoicePayment = async (paymentId: string, reason: string)
       description: `${currentUser?.name ?? 'User'} void pembayaran invoice ${payment.document_number}. Alasan: ${normalizedReason}`,
     });
   });
+
+  if (reversalFinanceTransaction) {
+    await enqueueFinanceTransactionsSync([reversalFinanceTransaction], 'create');
+  }
 
   return {
     ...payment,

@@ -826,11 +826,13 @@ Implementasi saat ini:
 - Sales documents sudah mulai masuk sebagai entity transaksi pertama: header `sales_documents` dan line item `sales_document_items` disinkronkan sebagai satu bundle lewat queue, read refresh, `version`, actor metadata, dan optimistic concurrency berdasarkan `version` + `updated_at`.
 - Workflow sales document yang sudah mengirim bundle header/item: create draft, update draft, issue, convert, dan void. Side effect stok tetap lewat `stock_mutations`, sedangkan journal dan payment ledger tetap belum dipindahkan ke PostgreSQL.
 - Purchase documents sudah masuk setelah sales documents: header `purchase_documents` dan line item `purchase_document_items` disinkronkan sebagai satu bundle lewat queue, read refresh, `version`, actor metadata, dan optimistic concurrency berdasarkan `version` + `updated_at`.
-- Workflow purchase document yang sudah mengirim bundle header/item: create draft, update draft, issue, convert, dan void. Side effect stok tetap lewat `stock_mutations`, sedangkan payment ledger AP, finance transaction, dan journal tetap belum dipindahkan ke PostgreSQL.
+- Workflow purchase document yang sudah mengirim bundle header/item: create draft, update draft, issue, convert, dan void. Side effect stok tetap lewat `stock_mutations`, sedangkan payment ledger AP dan journal tetap belum dipindahkan ke PostgreSQL.
 - `auth_users` dan `activity_logs` sudah masuk untuk persiapan multi-user: migration PostgreSQL, Rust DTO/repository/command, frontend adapter, sync queue, read refresh, dan merge Dexie.
 - `auth_sessions` tetap lokal Dexie dan tidak disinkronkan ke PostgreSQL karena session adalah state per device.
 - `activity_logs` dikirim sebagai event append-only dan juga direfresh dari PostgreSQL agar Activity Log Viewer dapat melihat log dari device lain saat runtime Tauri online.
-- Finance transaction dan journal/general ledger tetap belum dipindahkan ke PostgreSQL. Bagian itu masuk fase berikutnya karena perlu transaction boundary, conflict rule, audit, dan status/version rule yang lebih ketat.
+- Finance transactions sudah masuk sebagai Fase 17 poin 10: tabel PostgreSQL `finance_transactions`, Rust DTO/repository/command, frontend adapter, sync queue, read refresh ke Dexie, `version`, actor metadata, soft-delete tombstone, dan optimistic concurrency berdasarkan `version` + `updated_at`.
+- Workflow yang sudah mengirim finance transaction: manual income/expense/opening balance, recalculation finance untuk auto POS/stock purchase, POS checkout, void POS transaction, stock purchase dari Stock Management/Shopping Note/import, AR/AP invoice payment dan void payment, Sales Return refund/void refund, profit withdrawal, Cash & Bank transfer/void transfer, dan backfill snapshot akun COA.
+- `financeBalance` tetap agregat lokal Dexie yang direkalkulasi dari `financeTransactions` saat read refresh; journal/general ledger tetap belum dipindahkan ke PostgreSQL karena masuk poin berikutnya dengan boundary double-entry yang berbeda.
 
 Alasan urutan:
 

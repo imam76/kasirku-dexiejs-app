@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
+  AccountType,
+  FinanceTransactionType,
   PaymentMethod,
   ProductUnit,
   ProductUnitMapping,
@@ -351,6 +353,35 @@ export interface RemotePurchaseDocumentBundleDto {
   items: RemotePurchaseDocumentItemDto[];
 }
 
+export interface RemoteFinanceTransactionDto {
+  id: string;
+  type: FinanceTransactionType;
+  category: string;
+  amount: number;
+  description: string;
+  reference_id?: string | null;
+  account_id?: string | null;
+  account_code?: string | null;
+  account_name?: string | null;
+  account_type?: AccountType | null;
+  payment_method?: PaymentMethod | null;
+  payment_channel?: string | null;
+  cash_account_id?: string | null;
+  cash_account_code?: string | null;
+  cash_account_name?: string | null;
+  transfer_group_id?: string | null;
+  transfer_direction?: 'OUT' | 'IN' | null;
+  reversal_of_transfer_group_id?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
 export const isTauriRuntime = () =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -570,5 +601,22 @@ export const purchaseDocumentPostgresAdapter = {
   async upsert(input: RemotePurchaseDocumentBundleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemotePurchaseDocumentBundleDto>('postgres_upsert_purchase_document_bundle', { input });
+  },
+};
+
+export const financeTransactionPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteFinanceTransactionDto[]>('postgres_list_finance_transactions');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteFinanceTransactionDto | null>('postgres_get_finance_transaction', { id });
+  },
+
+  async upsert(input: RemoteFinanceTransactionDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteFinanceTransactionDto>('postgres_upsert_finance_transaction', { input });
   },
 };

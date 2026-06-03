@@ -1,6 +1,7 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { StockPurchase } from '@/types';
+import type { FinanceTransaction, StockPurchase } from '@/types';
+import { withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCashOrBankAccountForPayment, postStockPurchaseJournal } from '@/services/generalLedgerService';
 
@@ -15,6 +16,11 @@ interface RecordStockPurchaseInput {
   createdAt: string;
 }
 
+export interface RecordStockPurchaseResult {
+  purchase: StockPurchase;
+  financeTransaction: FinanceTransaction;
+}
+
 export const recordStockPurchase = async ({
   productId,
   productName,
@@ -24,7 +30,7 @@ export const recordStockPurchase = async ({
   totalCost,
   description,
   createdAt,
-}: RecordStockPurchaseInput): Promise<StockPurchase> => {
+}: RecordStockPurchaseInput): Promise<RecordStockPurchaseResult> => {
   const purchase: StockPurchase = {
     id: crypto.randomUUID(),
     product_id: productId,
@@ -36,6 +42,7 @@ export const recordStockPurchase = async ({
     created_at: createdAt,
     updated_at: createdAt,
   };
+  let financeTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', [
     db.stockPurchases,
@@ -57,7 +64,7 @@ export const recordStockPurchase = async ({
     });
     const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
 
-    await db.financeTransactions.add({
+    financeTransaction = withPendingFinanceTransactionSync({
       id: crypto.randomUUID(),
       type: 'EXPENSE',
       category: FINANCE_CATEGORIES.STOCK_PURCHASE,
@@ -70,10 +77,18 @@ export const recordStockPurchase = async ({
       cash_account_code: cashAccount.code,
       cash_account_name: cashAccount.name,
       ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE),
-    });
+    }, undefined, createdAt);
+    await db.financeTransactions.add(financeTransaction);
 
     await postStockPurchaseJournal(purchase);
   });
 
-  return purchase;
+  if (!financeTransaction) {
+    throw new Error('Finance transaction pembelian stok gagal dibuat.');
+  }
+
+  return {
+    purchase,
+    financeTransaction,
+  };
 };

@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
+import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
-import { enqueuePendingAuthUsersForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { enqueuePendingAuthUsersForSync, enqueuePendingFinanceTransactionsForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
 
@@ -15,6 +16,7 @@ export const useSyncQueueWorker = () => {
     const syncWhenOnline = async () => {
       try {
         await enqueuePendingAuthUsersForSync();
+        await enqueuePendingFinanceTransactionsForSync();
         await enqueuePendingPurchaseDocumentsForSync();
         await enqueuePendingSalesDocumentsForSync();
         await processPendingSyncQueue();
@@ -26,6 +28,7 @@ export const useSyncQueueWorker = () => {
         await refreshContactsFromPostgres();
         await refreshWarehousesFromPostgres();
         await refreshProductsFromPostgres();
+        await refreshFinanceTransactionsFromPostgres();
         await refreshPurchaseDocumentsFromPostgres();
         await refreshSalesDocumentsFromPostgres();
       } catch (error) {

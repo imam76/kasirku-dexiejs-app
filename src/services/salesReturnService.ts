@@ -14,6 +14,7 @@ import type {
   SalesReturnableSource,
   StockMutation,
   AuthUser,
+  FinanceTransaction,
 } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { konversiSatuanProduk } from '@/utils/pricing';
@@ -33,6 +34,7 @@ import { mapSalesReturnSourceItem } from '@/utils/salesReturns/mapSalesReturnSou
 import { validateSalesReturn } from '@/utils/salesReturns/validateSalesReturn';
 import type { SalesReturnSourceChain } from '@/utils/salesReturns/resolveSalesReturnSourceChain';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 
 export interface SalesReturnItemInput {
   source_item_id: string;
@@ -384,6 +386,7 @@ const applyRestockEffect = async (
 const createRefundFinanceTransaction = async (
   salesReturn: SalesReturn,
   now: string,
+  actor?: AuthUser | null,
 ) => {
   const refundAmount = Number(salesReturn.refund_amount || 0);
   if (salesReturn.resolution !== 'REFUND' || refundAmount <= 0) {
@@ -398,9 +401,8 @@ const createRefundFinanceTransaction = async (
   });
   const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
 
-  const financeTransactionId = crypto.randomUUID();
-  await db.financeTransactions.add({
-    id: financeTransactionId,
+  const financeTransaction = withPendingFinanceTransactionSync({
+    id: crypto.randomUUID(),
     type: 'EXPENSE',
     category: FINANCE_CATEGORIES.SALES_REFUND,
     amount: refundAmount,
@@ -412,14 +414,16 @@ const createRefundFinanceTransaction = async (
     cash_account_code: cashAccount.code,
     cash_account_name: cashAccount.name,
     ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES_REFUND),
-  });
+  }, actor, now);
+  await db.financeTransactions.add(financeTransaction);
 
-  return financeTransactionId;
+  return financeTransaction;
 };
 
 const reverseRefundFinanceTransaction = async (
   salesReturn: SalesReturn,
   now: string,
+  actor?: AuthUser | null,
 ) => {
   if (salesReturn.resolution !== 'REFUND') return undefined;
 
@@ -437,9 +441,8 @@ const reverseRefundFinanceTransaction = async (
   });
   const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
 
-  const reversalFinanceTransactionId = crypto.randomUUID();
-  await db.financeTransactions.add({
-    id: reversalFinanceTransactionId,
+  const reversalFinanceTransaction = withPendingFinanceTransactionSync({
+    id: crypto.randomUUID(),
     type: 'INCOME',
     category: FINANCE_CATEGORIES.SALES_REFUND,
     amount,
@@ -451,9 +454,10 @@ const reverseRefundFinanceTransaction = async (
     cash_account_code: cashAccount.code,
     cash_account_name: cashAccount.name,
     ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES_REFUND),
-  });
+  }, actor, now);
+  await db.financeTransactions.add(reversalFinanceTransaction);
 
-  return reversalFinanceTransactionId;
+  return reversalFinanceTransaction;
 };
 
 const applyPosProfitReversal = async (
@@ -559,10 +563,12 @@ export const issueSalesReturn = async (id: string) => {
 
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let financeTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', salesReturnTables, async () => {
     stockMutations = await applyRestockEffect(salesReturn, items, 1, currentUser, now);
-    const financeTransactionId = await createRefundFinanceTransaction(salesReturn, now);
+    financeTransaction = await createRefundFinanceTransaction(salesReturn, now, currentUser);
+    const financeTransactionId = financeTransaction?.id;
     const issuedSalesReturn: SalesReturn = {
       ...salesReturn,
       status: 'ISSUED',
@@ -599,6 +605,9 @@ export const issueSalesReturn = async (id: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  if (financeTransaction) {
+    await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  }
 };
 
 export const voidSalesReturn = async (id: string, reason: string) => {
@@ -616,12 +625,14 @@ export const voidSalesReturn = async (id: string, reason: string) => {
   const items = await db.salesReturnItems.where('return_id').equals(id).toArray();
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let reversalFinanceTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', salesReturnTables, async () => {
     let reversalFinanceTransactionId = salesReturn.reversal_finance_transaction_id;
     if (salesReturn.status === 'ISSUED') {
       stockMutations = await applyRestockEffect(salesReturn, items, -1, currentUser, now, normalizedReason);
-      reversalFinanceTransactionId = await reverseRefundFinanceTransaction(salesReturn, now);
+      reversalFinanceTransaction = await reverseRefundFinanceTransaction(salesReturn, now, currentUser);
+      reversalFinanceTransactionId = reversalFinanceTransaction?.id;
       await reverseSalesReturnJournal(salesReturn, `Pembalikan jurnal retur ${salesReturn.return_number}: ${normalizedReason}`);
       await applyPosProfitReversal(salesReturn, items, now, -1);
     }
@@ -646,6 +657,9 @@ export const voidSalesReturn = async (id: string, reason: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  if (reversalFinanceTransaction) {
+    await enqueueFinanceTransactionsSync([reversalFinanceTransaction], 'create');
+  }
 };
 
 export const listReturnableSalesDocumentSources = async () => {
