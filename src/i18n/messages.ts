@@ -209,6 +209,9 @@ export const messages = {
     'transaction.viewCart': 'Lihat Keranjang',
     'transaction.addedToCart': 'Ditambahkan: {name}',
     'transaction.productNotFound': 'Produk dengan SKU/barcode "{code}" tidak ditemukan.',
+    'transaction.desktopShortcutTitle': 'Shortcut desktop',
+    'transaction.shortcut.focusSearch': 'Fokus pencarian',
+    'transaction.shortcut.clearSearch': 'Bersihkan pencarian',
 
     'product.wholesale': 'Grosir',
     'product.stock': 'Stok',
@@ -1762,6 +1765,9 @@ export const messages = {
     'transaction.viewCart': 'View Cart',
     'transaction.addedToCart': 'Added: {name}',
     'transaction.productNotFound': 'Product with SKU/barcode "{code}" was not found.',
+    'transaction.desktopShortcutTitle': 'Desktop shortcuts',
+    'transaction.shortcut.focusSearch': 'Focus search',
+    'transaction.shortcut.clearSearch': 'Clear search',
 
     'product.wholesale': 'Wholesale',
     'product.stock': 'Stock',

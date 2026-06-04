@@ -2,7 +2,7 @@ import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Button, Input } from 'antd';
 import type { InputRef } from 'antd';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ScanLine } from 'lucide-react';
+import { Keyboard, ScanLine } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { formatCurrency } from '@/utils/formatters';
 import ProductList from '../components/ProductList';
@@ -47,6 +47,10 @@ export default function Transaction() {
 
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
+  const desktopShortcuts = [
+    { keys: ['/'], label: t('transaction.shortcut.focusSearch') },
+    { keys: ['Esc'], label: t('transaction.shortcut.clearSearch') },
+  ];
 
   const clearSearch = useCallback(() => {
     setSearchTerm('');
@@ -135,6 +139,31 @@ export default function Transaction() {
               >
                 {t('transaction.scanBarcode')}
               </Button>
+            </div>
+
+            <div className="mt-3 hidden flex-wrap items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs text-blue-900 lg:flex">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Keyboard size={15} />
+                <span>{t('transaction.desktopShortcutTitle')}</span>
+              </div>
+              {desktopShortcuts.map((shortcut) => (
+                <div
+                  key={shortcut.label}
+                  className="flex items-center gap-1.5 rounded-md bg-white px-2 py-1 shadow-sm ring-1 ring-blue-100"
+                >
+                  <span className="flex items-center gap-1">
+                    {shortcut.keys.map((key) => (
+                      <kbd
+                        key={key}
+                        className="min-w-6 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-center font-mono text-[11px] font-semibold leading-none text-blue-800"
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </span>
+                  <span className="font-medium">{shortcut.label}</span>
+                </div>
+              ))}
             </div>
           </div>
 
