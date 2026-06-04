@@ -21,7 +21,6 @@ import {
 import type { TranslationKey } from '@/i18n/messages';
 import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
-import { useSalesReturns } from '@/hooks/useSalesReturns';
 import type { SalesDocument, SalesDocumentStatus, SalesDocumentType } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
@@ -92,88 +91,96 @@ const hasPricing = (document: Pick<SalesDocument, 'type'>) => (
   getSalesDocumentConfig(document.type).behavior.hasPricing
 );
 
-const getDocumentCountByType = (documents: SalesDocument[]) => (
-  salesDocumentMenuItems.reduce((counts, item) => {
-    counts[item.type] = documents.filter((document) => document.type === item.type).length;
-    return counts;
-  }, {} as Record<SalesDocumentType, number>)
-);
-
-function SalesDocumentMenuGrid({ documents, returnCount }: { documents: SalesDocument[]; returnCount: number }) {
+function SalesDocumentMenuGrid() {
   const { t } = useI18n();
-  const documentCountByType = useMemo(() => getDocumentCountByType(documents), [documents]);
 
   return (
-    <div className="grid grid-cols-2 gap-[10px] sm:gap-[14px] lg:grid-cols-4 lg:gap-[22px]">
+    <div className="grid grid-cols-2 gap-[10px] sm:gap-[14px] lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]">
       {salesDocumentMenuItems.map((item) => (
         <Link
           key={item.type}
           to="/sales/$documentType"
           params={{ documentType: getSalesDocumentTypePathSegment(item.type) }}
           className="
-            relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
+            app-menu-card relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
             rounded-[10px] border border-gray-100 bg-white p-3 text-center
             transition-all duration-200 ease-out
             hover:-translate-y-[1px] hover:border-gray-200 hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
             sm:min-h-[188px] sm:rounded-[12px] sm:p-[18px]
-            lg:h-[192px] lg:rounded-[14px] lg:p-[22px]
+            lg:h-[192px] lg:w-[192px] lg:rounded-[14px] lg:p-[24px]
           "
         >
-          <span className="absolute right-3 top-3 rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-medium leading-[1.3] text-gray-500 sm:right-4 sm:top-4 sm:text-[11px]">
-            {documentCountByType[item.type]} {t('salesDocuments.menu.documents')}
-          </span>
+          <div className="app-menu-card__body flex flex-col items-center justify-center">
+            <div className={`mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] ${item.iconBackground} sm:h-11 sm:w-11 lg:h-12 lg:w-12`}>
+              <item.icon className={`${item.color} h-5 w-5 sm:h-6 sm:w-6`} />
+            </div>
 
-          <div className={`mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] ${item.iconBackground} sm:h-11 sm:w-11 lg:h-12 lg:w-12`}>
-            <item.icon className={`${item.color} h-5 w-5 sm:h-6 sm:w-6`} />
+            <div className={`text-[28px] font-semibold leading-none ${item.color} sm:text-[34px] lg:text-[38px]`}>
+              {item.code}
+            </div>
+
+            <h2 className="mt-2 text-[12px] font-medium leading-[1.3] text-gray-800 sm:text-[14px] lg:text-[15px]">
+              {t(item.labelKey)}
+            </h2>
+
+            <p className="app-menu-card__brief mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400 sm:text-[11px] sm:leading-[1.55] lg:hidden">
+              {t(item.descKey)}
+            </p>
+
+            <div className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
+              <span>{t('salesDocuments.menu.open')}</span>
+              <ArrowRight size={12} />
+            </div>
           </div>
 
-          <div className={`text-[28px] font-semibold leading-none ${item.color} sm:text-[34px] lg:text-[38px]`}>
-            {item.code}
-          </div>
-
-          <h2 className="mt-2 text-[12px] font-medium leading-[1.3] text-gray-800 sm:text-[14px] lg:text-[15px]">
-            {t(item.labelKey)}
-          </h2>
-
-          <p className="mt-1 hidden text-[11px] leading-[1.55] text-gray-400 sm:line-clamp-2 sm:block lg:text-[12px]">
-            {t(item.descKey)}
-          </p>
-
-          <div className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
-            <span>{t('salesDocuments.menu.open')}</span>
-            <ArrowRight size={12} />
+          <div className="app-menu-card__detail flex-col text-center">
+            <p className="text-[12px] leading-[1.55] text-gray-500">
+              {t(item.descKey)}
+            </p>
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400">
+              <span>{t('salesDocuments.menu.open')}</span>
+              <ArrowRight size={12} />
+            </div>
           </div>
         </Link>
       ))}
       <Link
         to="/sales/returns"
         className="
-          relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
+          app-menu-card relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
           rounded-[10px] border border-gray-100 bg-white p-3 text-center
           transition-all duration-200 ease-out
           hover:-translate-y-[1px] hover:border-gray-200 hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
           sm:min-h-[188px] sm:rounded-[12px] sm:p-[18px]
-          lg:h-[192px] lg:rounded-[14px] lg:p-[22px]
+          lg:h-[192px] lg:w-[192px] lg:rounded-[14px] lg:p-[24px]
         "
       >
-        <span className="absolute right-3 top-3 rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-medium leading-[1.3] text-gray-500 sm:right-4 sm:top-4 sm:text-[11px]">
-          {returnCount} {t('salesReturns.menu.documents')}
-        </span>
-        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] bg-rose-50 sm:h-11 sm:w-11 lg:h-12 lg:w-12">
-          <RotateCcw className="h-5 w-5 text-rose-600 sm:h-6 sm:w-6" />
+        <div className="app-menu-card__body flex flex-col items-center justify-center">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] bg-rose-50 sm:h-11 sm:w-11 lg:h-12 lg:w-12">
+            <RotateCcw className="h-5 w-5 text-rose-600 sm:h-6 sm:w-6" />
+          </div>
+          <div className="text-[28px] font-semibold leading-none text-rose-600 sm:text-[34px] lg:text-[38px]">
+            SR
+          </div>
+          <h2 className="mt-2 text-[12px] font-medium leading-[1.3] text-gray-800 sm:text-[14px] lg:text-[15px]">
+            {t('salesReturns.menu.title')}
+          </h2>
+          <p className="app-menu-card__brief mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400 sm:text-[11px] sm:leading-[1.55] lg:hidden">
+            {t('salesReturns.menu.desc')}
+          </p>
+          <div className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
+            <span>{t('salesDocuments.menu.open')}</span>
+            <ArrowRight size={12} />
+          </div>
         </div>
-        <div className="text-[28px] font-semibold leading-none text-rose-600 sm:text-[34px] lg:text-[38px]">
-          SR
-        </div>
-        <h2 className="mt-2 text-[12px] font-medium leading-[1.3] text-gray-800 sm:text-[14px] lg:text-[15px]">
-          {t('salesReturns.menu.title')}
-        </h2>
-        <p className="mt-1 hidden text-[11px] leading-[1.55] text-gray-400 sm:line-clamp-2 sm:block lg:text-[12px]">
-          {t('salesReturns.menu.desc')}
-        </p>
-        <div className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
-          <span>{t('salesDocuments.menu.open')}</span>
-          <ArrowRight size={12} />
+        <div className="app-menu-card__detail flex-col text-center">
+          <p className="text-[12px] leading-[1.55] text-gray-500">
+            {t('salesReturns.menu.desc')}
+          </p>
+          <div className="mt-3 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400">
+            <span>{t('salesDocuments.menu.open')}</span>
+            <ArrowRight size={12} />
+          </div>
         </div>
       </Link>
     </div>
@@ -182,8 +189,6 @@ function SalesDocumentMenuGrid({ documents, returnCount }: { documents: SalesDoc
 
 export default function SalesDocumentsManagement() {
   const { t } = useI18n();
-  const { documents } = useSalesDocuments();
-  const { salesReturns } = useSalesReturns();
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4">
@@ -192,7 +197,7 @@ export default function SalesDocumentsManagement() {
         <Text type="secondary">{t('salesDocuments.subtitle')}</Text>
       </div>
 
-      <SalesDocumentMenuGrid documents={documents} returnCount={salesReturns.length} />
+      <SalesDocumentMenuGrid />
     </div>
   );
 }

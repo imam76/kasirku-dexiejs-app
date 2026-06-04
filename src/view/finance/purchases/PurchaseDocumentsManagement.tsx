@@ -98,51 +98,51 @@ const hasPricing = (document: Pick<PurchaseDocument, 'type'>) => (
   getPurchaseDocumentConfig(document.type).behavior.hasPricing
 );
 
-const getDocumentCountByType = (documents: PurchaseDocument[]) => (
-  purchaseDocumentMenuItems.reduce((counts, item) => {
-    counts[item.type] = documents.filter((document) => document.type === item.type).length;
-    return counts;
-  }, {} as Record<PurchaseDocumentType, number>)
-);
-
-function PurchaseDocumentMenuGrid({ documents }: { documents: PurchaseDocument[] }) {
+function PurchaseDocumentMenuGrid() {
   const { t } = useI18n();
-  const documentCountByType = useMemo(() => getDocumentCountByType(documents), [documents]);
 
   return (
-    <div className="grid grid-cols-2 gap-[10px] sm:gap-[14px] lg:grid-cols-6 lg:gap-[18px]">
+    <div className="grid grid-cols-2 gap-[10px] sm:gap-[14px] lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]">
       {purchaseDocumentMenuItems.map((item) => (
         <Link
           key={item.type}
           to="/purchases/$documentType"
           params={{ documentType: getPurchaseDocumentTypePathSegment(item.type) }}
           className="
-            relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
+            app-menu-card relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
             rounded-[10px] border border-gray-100 bg-white p-3 text-center
             transition-all duration-200 ease-out
             hover:-translate-y-[1px] hover:border-gray-200 hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
             sm:min-h-[188px] sm:rounded-[12px] sm:p-[18px]
-            lg:h-[192px] lg:rounded-[14px] lg:p-[18px]
+            lg:h-[192px] lg:w-[192px] lg:rounded-[14px] lg:p-[24px]
           "
         >
-          <span className="absolute right-3 top-3 rounded-full bg-gray-50 px-2 py-0.5 text-[10px] font-medium leading-[1.3] text-gray-500 sm:right-4 sm:top-4 sm:text-[11px]">
-            {documentCountByType[item.type]} {t('purchaseDocuments.menu.documents')}
-          </span>
-          <div className={`mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] ${item.iconBackground} sm:h-11 sm:w-11 lg:h-12 lg:w-12`}>
-            <item.icon className={`${item.color} h-5 w-5 sm:h-6 sm:w-6`} />
+          <div className="app-menu-card__body flex flex-col items-center justify-center">
+            <div className={`mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] ${item.iconBackground} sm:h-11 sm:w-11 lg:h-12 lg:w-12`}>
+              <item.icon className={`${item.color} h-5 w-5 sm:h-6 sm:w-6`} />
+            </div>
+            <div className={`text-[28px] font-semibold leading-none ${item.color} sm:text-[34px] lg:text-[38px]`}>
+              {item.code}
+            </div>
+            <h2 className="mt-2 text-[12px] font-medium leading-[1.3] text-gray-800 sm:text-[14px] lg:text-[15px]">
+              {t(item.labelKey)}
+            </h2>
+            <p className="app-menu-card__brief mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400 sm:text-[11px] sm:leading-[1.55] lg:hidden">
+              {t(item.descKey)}
+            </p>
+            <div className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
+              <span>{t('purchaseDocuments.menu.open')}</span>
+              <ArrowRight size={12} />
+            </div>
           </div>
-          <div className={`text-[28px] font-semibold leading-none ${item.color} sm:text-[34px] lg:text-[38px]`}>
-            {item.code}
-          </div>
-          <h2 className="mt-2 text-[12px] font-medium leading-[1.3] text-gray-800 sm:text-[14px] lg:text-[15px]">
-            {t(item.labelKey)}
-          </h2>
-          <p className="mt-1 hidden text-[11px] leading-[1.55] text-gray-400 sm:line-clamp-2 sm:block lg:text-[12px]">
-            {t(item.descKey)}
-          </p>
-          <div className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
-            <span>{t('purchaseDocuments.menu.open')}</span>
-            <ArrowRight size={12} />
+          <div className="app-menu-card__detail flex-col text-center">
+            <p className="text-[12px] leading-[1.55] text-gray-500">
+              {t(item.descKey)}
+            </p>
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400">
+              <span>{t('purchaseDocuments.menu.open')}</span>
+              <ArrowRight size={12} />
+            </div>
           </div>
         </Link>
       ))}
@@ -154,21 +154,37 @@ function PurchaseFinanceActionGrid() {
   const { t } = useI18n();
 
   return (
-    <div className="grid grid-cols-1 gap-[10px] sm:grid-cols-2 sm:gap-[14px] lg:max-w-[380px]">
+    <div className="grid grid-cols-1 gap-[10px] sm:grid-cols-2 sm:gap-[14px] lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]">
       <Link
         to="/finance/payables"
         className="
-          flex min-h-[96px] items-center gap-3 rounded-[10px] border border-gray-100 bg-white p-4
+          app-menu-card relative flex min-h-[96px] items-center justify-center overflow-hidden rounded-[10px] border border-gray-100 bg-white p-4
           transition-all duration-200 ease-out hover:-translate-y-[1px] hover:border-gray-200
           hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
+          lg:h-[192px] lg:w-[192px] lg:flex-col lg:rounded-[14px] lg:p-[24px]
         "
       >
-        <span className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-emerald-50">
-          <CreditCard className="h-5 w-5 text-emerald-700" />
+        <span className="app-menu-card__body flex items-center gap-3 lg:flex-col lg:justify-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-emerald-50 lg:h-12 lg:w-12">
+            <CreditCard className="h-5 w-5 text-emerald-700" />
+          </span>
+          <span className="lg:text-center">
+            <span className="block text-sm font-semibold text-gray-900 lg:text-[15px] lg:font-medium lg:leading-[1.3]">{t('accountsPayable.title')}</span>
+            <span className="app-menu-card__brief mt-0.5 line-clamp-2 block text-xs leading-5 text-gray-500 lg:hidden">
+              {t('accountsPayable.shortDesc')}
+            </span>
+            <span className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3 lg:justify-center">
+              <span>{t('purchaseDocuments.menu.open')}</span>
+              <ArrowRight size={12} />
+            </span>
+          </span>
         </span>
-        <span>
-          <span className="block text-sm font-semibold text-gray-900">{t('accountsPayable.title')}</span>
-          <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-gray-500">{t('accountsPayable.shortDesc')}</span>
+        <span className="app-menu-card__detail flex-col text-center">
+          <span className="text-xs leading-5 text-gray-500">{t('accountsPayable.shortDesc')}</span>
+          <span className="mt-3 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400">
+            <span>{t('purchaseDocuments.menu.open')}</span>
+            <ArrowRight size={12} />
+          </span>
         </span>
       </Link>
     </div>
@@ -177,7 +193,6 @@ function PurchaseFinanceActionGrid() {
 
 export default function PurchaseDocumentsManagement() {
   const { t } = useI18n();
-  const { documents } = usePurchaseDocuments();
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4">
@@ -186,7 +201,7 @@ export default function PurchaseDocumentsManagement() {
         <Text type="secondary">{t('purchaseDocuments.subtitle')}</Text>
       </div>
 
-      <PurchaseDocumentMenuGrid documents={documents} />
+      <PurchaseDocumentMenuGrid />
       <PurchaseFinanceActionGrid />
     </div>
   );
