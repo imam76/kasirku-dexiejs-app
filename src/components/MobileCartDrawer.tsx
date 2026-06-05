@@ -12,7 +12,6 @@ interface MobileCartDrawerProps {
   cart: CartItemType[];
   updateQuantity: (id: string, quantity: number) => void;
   updateUnit: (id: string, unit: string) => void;
-  updateCustomPrice: (id: string, customPrice: number | undefined) => void;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
   total: number;
@@ -34,7 +33,6 @@ export default function MobileCartDrawer({
   cart,
   updateQuantity,
   updateUnit,
-  updateCustomPrice,
   removeFromCart,
   clearCart,
   total,
@@ -91,7 +89,6 @@ export default function MobileCartDrawer({
               item={item}
               updateQuantity={updateQuantity}
               updateUnit={updateUnit}
-              updateCustomPrice={updateCustomPrice}
               removeFromCart={removeFromCart}
             />
           ))}

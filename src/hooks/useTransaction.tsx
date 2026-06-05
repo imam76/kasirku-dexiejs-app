@@ -10,14 +10,12 @@ import { getCartItemPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { checkout } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
-import { useAuth } from '@/auth/useAuth';
 import { evaluatePromos, getActivePromos } from '@/services/promoService';
 
 export const useTransaction = () => {
   const queryClient = useQueryClient();
   const { modal, message } = App.useApp();
   const { t } = useI18n();
-  const { currentUser } = useAuth();
   const {
     products,
     cart,
@@ -34,7 +32,6 @@ export const useTransaction = () => {
     setShowPayment,
     addToCart: storeAddToCart,
     updateQuantity: storeUpdateQuantity,
-    updateCustomPrice: storeUpdateCustomPrice,
     removeFromCart,
     reset,
   } = useTransactionStore();
@@ -126,10 +123,6 @@ export const useTransaction = () => {
     if (!result.success && result.error) {
       showTransactionError(result.error);
     }
-  };
-
-  const updateCustomPrice = (productId: string, customPrice: number | undefined) => {
-    storeUpdateCustomPrice(productId, customPrice, currentUser?.name);
   };
 
   const handleCheckout = async () => {
@@ -228,7 +221,6 @@ export const useTransaction = () => {
     addToCart,
     updateQuantity,
     updateUnit,
-    updateCustomPrice,
     removeFromCart,
     calculateSubtotal,
     calculateTotal,

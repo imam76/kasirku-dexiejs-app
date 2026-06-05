@@ -2,9 +2,9 @@ import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
 import type { CartItem, FinanceTransaction, PaymentMethod, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
-import { getCartItemOriginalPrice, getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
+import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
 import { getCashOrBankAccountForPayment, postPosSaleJournal } from '@/services/generalLedgerService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
@@ -29,14 +29,12 @@ const createTransactionItems = (
   promoEvaluation: PromoEvaluationResult,
 ): TransactionItem[] => {
   return cart.map((item, index) => {
-    const originalPrice = getCartItemOriginalPrice(item);
     const promoLine = promoEvaluation.lines[index];
     const priceBeforeDiscount = promoLine?.price_before_discount ?? getCartItemPrice(item);
     const subtotalBeforeDiscount = promoLine?.subtotal_before_discount ?? priceBeforeDiscount * item.quantity;
     const discountAmount = promoLine?.discount_amount ?? 0;
     const sellingPrice = promoLine?.final_unit_price ?? priceBeforeDiscount;
     const finalSubtotal = promoLine?.final_subtotal ?? sellingPrice * item.quantity;
-    const isPriceEdited = item.custom_price !== undefined;
     const normalizedPurchasePrice = normalisasiHargaProduk(
       item.product.purchase_price,
       item.product,
@@ -52,10 +50,7 @@ const createTransactionItems = (
       product_name: item.product.name,
       price: sellingPrice,
       selling_price: sellingPrice,
-      original_price: isPriceEdited ? originalPrice : undefined,
-      is_price_edited: isPriceEdited,
-      price_edited_by: item.price_edited_by,
-      price_edited_at: item.price_edited_at,
+      is_price_edited: false,
       purchase_price: normalizedPurchasePrice,
       unit: item.unit,
       ...unitSnapshot,
@@ -182,10 +177,6 @@ export const checkout = async ({
   voucherCode,
 }: CheckoutInput): Promise<CheckoutResult> => {
   const currentUser = await getCurrentSessionUser();
-  const hasEditedPrice = cart.some((item) => item.custom_price !== undefined);
-  if (hasEditedPrice) {
-    requireRolePermission(currentUser?.role, 'TRANSACTION_EDIT_PRICE');
-  }
 
   const now = new Date();
   const transactionId = crypto.randomUUID();
@@ -218,7 +209,6 @@ export const checkout = async ({
       db.profitBalance,
       db.financeTransactions,
       db.financeBalance,
-      db.activityLogs,
       db.chartOfAccounts,
       db.financeAccountMappings,
       db.enabledModules,
@@ -250,16 +240,6 @@ export const checkout = async ({
       financeTransaction = await recordFinanceIncome(transaction, createdAt, currentUser);
       await postPosSaleJournal(transaction, items, currentUser);
       stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
-
-      for (const item of items.filter((item) => item.is_price_edited)) {
-        await writeActivityLog({
-          user: currentUser,
-          action: 'TRANSACTION_EDIT_PRICE',
-          entity: 'transactionItems',
-          entity_id: item.id,
-          description: `${currentUser?.name ?? 'User'} mengubah harga item ${item.product_name} dari Rp ${item.original_price ?? item.price} menjadi Rp ${item.price} di transaksi ${transaction.transaction_number}.`,
-        });
-      }
 
       return { transaction, items };
     },

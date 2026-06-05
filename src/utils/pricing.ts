@@ -167,5 +167,5 @@ export const getCartItemOriginalPrice = (item: CartItem): number => {
 };
 
 export const getCartItemPrice = (item: CartItem): number => {
-  return item.custom_price ?? getCartItemOriginalPrice(item);
+  return getCartItemOriginalPrice(item);
 };

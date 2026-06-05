@@ -973,10 +973,6 @@ export interface CartItem {
   product: Product;
   quantity: number;
   unit: ProductUnit; // Satuan yang dipilih (default product.selling_unit)
-  custom_price?: number;
-  original_price?: number;
-  price_edited_by?: string;
-  price_edited_at?: string;
 }
 
 export interface BluetoothPrinterDevice {
