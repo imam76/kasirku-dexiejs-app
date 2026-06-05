@@ -36,7 +36,7 @@ export const ActivityLogViewer = () => {
       key: 'user',
       width: 180,
       render: (_value: unknown, log) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{log.user_name ?? '-'}</Text>
           {log.role && <Text type="secondary">{ROLE_LABEL[log.role as UserRole]}</Text>}
         </Space>
@@ -54,7 +54,7 @@ export const ActivityLogViewer = () => {
       key: 'entity',
       width: 180,
       render: (_value: unknown, log) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{log.entity}</Text>
           {log.entity_id && <Text type="secondary">{log.entity_id}</Text>}
         </Space>

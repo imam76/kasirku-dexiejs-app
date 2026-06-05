@@ -21,7 +21,7 @@ export default function DepartmentTable({ departments, onEdit, onArchive, onRest
       dataIndex: 'name',
       key: 'name',
       render: (name: string, department) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           {department.code && <Text type="secondary">{department.code}</Text>}
         </Space>

@@ -176,7 +176,7 @@ export const UserManagement = () => {
       dataIndex: 'name',
       key: 'name',
       render: (name: string, user) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           {user.id === currentUser?.id && <Text type="secondary">Sedang login</Text>}
         </Space>

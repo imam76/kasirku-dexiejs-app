@@ -32,7 +32,7 @@ export default function CurrencyTable({
       dataIndex: 'code',
       key: 'code',
       render: (_value: string, currency) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Space size={6}>
             <Text strong>{currency.code}</Text>
             {currency.is_base ? <Tag color="blue">{t('currencies.base')}</Tag> : null}
@@ -55,7 +55,7 @@ export default function CurrencyTable({
         if (!rate) return '-';
 
         return (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Text>{currency.code === 'IDR' ? '1' : `Rp ${formatCurrency(rate.middle_rate)}`}</Text>
             <Text type="secondary" className="text-xs">
               {rate.rate_date} - {t(`currencies.source.${rate.source}`)}

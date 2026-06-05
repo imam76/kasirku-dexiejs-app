@@ -132,7 +132,7 @@ export default function AgingReport() {
   };
 
   const renderAging = (value: ReceivableAgingBucket, overdueDays: number) => (
-    <Space size={4} direction="vertical">
+    <Space size={4} orientation="vertical">
       <Tag color={agingColors[value]}>{t(agingLabelKeys[value])}</Tag>
       {overdueDays > 0 && (
         <span className="text-[11px] text-gray-500">

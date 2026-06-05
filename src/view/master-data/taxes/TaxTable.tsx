@@ -29,7 +29,7 @@ export default function TaxTable({ taxes, onEdit, onArchive, onRestore, onSetDef
       dataIndex: 'name',
       key: 'name',
       render: (name: string, tax) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           {tax.code && <Text type="secondary">{tax.code}</Text>}
         </Space>

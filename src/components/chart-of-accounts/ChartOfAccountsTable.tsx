@@ -43,7 +43,7 @@ export default function ChartOfAccountsTable({
       dataIndex: 'name',
       key: 'name',
       render: (name: string, account) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{name}</Text>
           {account.description && <Text type="secondary">{account.description}</Text>}
         </Space>

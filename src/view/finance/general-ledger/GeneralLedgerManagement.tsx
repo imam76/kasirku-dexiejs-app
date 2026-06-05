@@ -164,7 +164,7 @@ export default function GeneralLedgerManagement() {
       title: t('generalLedger.journal.source'),
       key: 'source',
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{record.source_number || record.source_id || '-'}</Text>
           <Text type="secondary" className="text-xs">{record.source_type}</Text>
         </Space>
@@ -385,7 +385,7 @@ export default function GeneralLedgerManagement() {
             showIcon
             title={t('generalLedger.notReadyTitle')}
             description={(
-              <Space direction="vertical" size={4}>
+              <Space orientation="vertical" size={4}>
                 {readiness.checks.map((check) => (
                   <Text key={check.key} type={check.passed ? 'secondary' : 'danger'}>
                     {check.passed ? 'OK' : '!'} {check.message}

@@ -322,7 +322,7 @@ export default function FinanceAccountMappingPanel({
           showIcon
           title={t('coa.mapping.healthTitle')}
           description={(
-            <Space direction="vertical" size={2}>
+            <Space orientation="vertical" size={2}>
               <Text>{t('coa.mapping.unmappedCategories', { count: unmappedCategories.length })}</Text>
               <Text>{t('coa.mapping.inactiveMappings', { count: mappingHealth.inactiveMappings.length })}</Text>
               <Text>{t('coa.mapping.nonPostableMappings', { count: mappingHealth.nonPostableMappings.length })}</Text>

@@ -195,7 +195,7 @@ export default function PromoManagement() {
       dataIndex: 'name',
       key: 'name',
       render: (name: string, promo) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           {promo.voucher_code && <Text type="secondary">Voucher: {promo.voucher_code}</Text>}
         </Space>
@@ -226,7 +226,7 @@ export default function PromoManagement() {
       title: 'Syarat',
       key: 'requirements',
       render: (_value: unknown, promo) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text type="secondary">Qty: {promo.min_qty ?? '-'}</Text>
           <Text type="secondary">Total: {promo.min_total ? `Rp ${formatCurrency(promo.min_total)}` : '-'}</Text>
         </Space>
