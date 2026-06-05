@@ -27,7 +27,7 @@ const SALES_RETURN_RELATED_QUERY_KEYS = [
   'balanceSheet',
   'profitBalance',
   'profitLogs',
-  'salesReport',
+  'posSalesReport',
   'transactionDetailReport',
 ];
 

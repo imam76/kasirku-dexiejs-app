@@ -12,7 +12,7 @@ import {
 import { filterActiveTransactions } from '@/utils/transactions';
 import type { SoldItemSummary } from '@/utils/salesUnits';
 
-interface SalesReportData {
+interface PosSalesReportData {
   transactions: Transaction[];
   totalRevenue: number;
   totalDiscount: number;
@@ -87,15 +87,15 @@ interface TransactionDetailReportData {
   averageMargin: number;
 }
 
-export const useSalesReport = (
+export const usePosSalesReport = (
   startDate?: string,
   endDate?: string,
   paymentMethod?: string,
   categories?: string[]
 ) => {
   return useQuery({
-    queryKey: ['salesReport', startDate, endDate, paymentMethod, categories],
-    queryFn: async (): Promise<SalesReportData> => {
+    queryKey: ['posSalesReport', startDate, endDate, paymentMethod, categories],
+    queryFn: async (): Promise<PosSalesReportData> => {
       let collection = db.transactions.orderBy('created_at').reverse();
 
       if (startDate && endDate) {

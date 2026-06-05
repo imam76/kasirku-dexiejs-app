@@ -78,7 +78,7 @@ export const useHistory = () => {
       queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
       queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
       queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
-      queryClient.invalidateQueries({ queryKey: ['salesReport'] });
+      queryClient.invalidateQueries({ queryKey: ['posSalesReport'] });
       queryClient.invalidateQueries({ queryKey: ['transactionDetailReport'] });
       queryClient.invalidateQueries({ queryKey: ['expenseReport'] });
     },

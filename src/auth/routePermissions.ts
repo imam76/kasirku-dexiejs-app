@@ -32,6 +32,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/settings': 'SETTINGS_ACCESS',
   '/profit': 'PROFIT_VIEW',
   '/report': ['CASHIER_ACCESS', 'STOCK_PURCHASE_ACCESS', 'FINANCE_ACCESS'],
+  '/report/pos-sales-report': 'CASHIER_ACCESS',
   '/report/sales-report': 'CASHIER_ACCESS',
   '/report/transaction-detail-report': 'CASHIER_ACCESS',
   '/report/purchase-report': 'STOCK_PURCHASE_ACCESS',

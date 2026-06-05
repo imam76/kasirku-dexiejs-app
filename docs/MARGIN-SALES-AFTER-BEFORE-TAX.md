@@ -181,7 +181,7 @@ Rekomendasi default: mulai dari `localStorage` dulu karena pilihan ini hanya mem
 ## Fase 5 - Report Sales Document
 
 1. Margin Sales Document ditampilkan di area laporan, bukan di detail dokumen.
-2. Jangan campur langsung ke `useSalesReport()` POS tanpa keputusan eksplisit, karena report POS saat ini membaca `transactions` dan `transactionItems`.
+2. Jangan campur langsung ke `usePosSalesReport()` tanpa keputusan eksplisit, karena report POS saat ini membaca `transactions` dan `transactionItems`.
 3. Buat helper/query khusus untuk Sales Document terlebih dahulu, misalnya:
 
 ```txt

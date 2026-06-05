@@ -298,7 +298,7 @@ File yang mungkin diubah:
 - `src/view/finance/sales/SalesDocumentDetail.tsx`
 - `src/hooks/useReports.tsx`
 - `src/routes/report/*`
-- `src/view/SalesReport.tsx`
+- `src/view/PosSalesReport.tsx`
 - `docs/MARGIN-SALES-AFTER-BEFORE-TAX.md`
 
 Acceptance:

@@ -129,7 +129,7 @@ function Index() {
 "
     >
       <div className="max-w-[974px] mx-auto">
-        {/* Today's Sales Widget */}
+        {/* Today's POS Sales Widget */}
         <div
           className="
             mb-5
@@ -139,7 +139,7 @@ function Index() {
           "
         >
           <Link
-            to="/report/sales-report"
+            to="/report/pos-sales-report"
             className="
               group relative block overflow-hidden bg-white border border-gray-100 rounded-[10px]
               px-4 py-4 transition-all duration-200 ease-out

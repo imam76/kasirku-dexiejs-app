@@ -1,7 +1,7 @@
 export { useStockManagement } from '@/hooks/useStockManagement';
 export { useTransaction } from '@/hooks/useTransaction';
 export { useHistory } from '@/hooks/useHistory';
-export { useSalesReport, usePurchaseReport } from '@/hooks/useReports';
+export { usePosSalesReport, usePurchaseReport } from '@/hooks/useReports';
 export { useProfit } from '@/hooks/useProfit';
 export { useBluetoothPrinter } from '@/hooks/useBluetoothPrinter';
 export { useIsMobile } from '@/hooks/useIsMobile';

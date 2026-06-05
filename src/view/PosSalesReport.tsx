@@ -1,4 +1,4 @@
-import { useSalesReport } from '@/hooks/useReports';
+import { usePosSalesReport } from '@/hooks/useReports';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
@@ -14,13 +14,13 @@ import { useState } from 'react';
 import ExportActions from '@/components/ExportActions';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { Loading } from '../components/Loading';
-import DesktopSalesTable from './sales-report/DesktopSalesTable';
-import MobileSalesList from './sales-report/MobileSalesList';
-import TopProductsTable from './sales-report/TopProductsTable';
+import DesktopSalesTable from './pos-sales-report/DesktopSalesTable';
+import MobileSalesList from './pos-sales-report/MobileSalesList';
+import TopProductsTable from './pos-sales-report/TopProductsTable';
 
 const { Title, Text } = Typography;
 
-export default function SalesReport() {
+export default function PosSalesReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
   const { can } = useAuth();
@@ -39,14 +39,14 @@ export default function SalesReport() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const categoryOptions = getProductCategoryOptions(t);
 
-  const { data, isLoading, error, refetch } = useSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
+  const { data, isLoading, error, refetch } = usePosSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
 
   const handleExportPDF = async (target: ExportTarget = 'auto') => {
     if (!data) return;
 
     try {
       const exported = await exportPdf({
-        filename: `laporan-penjualan-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
+        filename: `laporan-penjualan-pos-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
         target,
         build: (doc) => {
           const period = `${t('report.period')} ${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`;
@@ -56,7 +56,7 @@ export default function SalesReport() {
           doc.setFont('helvetica', 'bold');
           doc.text('Kasirku', 105, 18, { align: 'center' });
           doc.setFontSize(13);
-          doc.text(t('report.sales.title'), 105, 30, { align: 'center' });
+          doc.text(t('report.posSales.title'), 105, 30, { align: 'center' });
           doc.setFontSize(11);
           doc.setFont('helvetica', 'normal');
           doc.text(period, 105, 41, { align: 'center' });
@@ -114,10 +114,10 @@ export default function SalesReport() {
       });
 
       if (!exported) return;
-      message.success(t('report.sales.exportPdfSuccess'));
+      message.success(t('report.posSales.exportPdfSuccess'));
     } catch (error) {
-      console.error('Failed to export sales PDF:', error);
-      message.error(t('report.sales.exportPdfFailed'));
+      console.error('Failed to export POS sales PDF:', error);
+      message.error(t('report.posSales.exportPdfFailed'));
     }
   };
 
@@ -196,15 +196,15 @@ export default function SalesReport() {
       ];
 
       const exported = await exportCsv({
-        filename: `laporan-penjualan-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
+        filename: `laporan-penjualan-pos-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
         rows: csvRows,
         target,
       });
       if (!exported) return;
-      message.success(t('report.sales.exportSuccess'));
+      message.success(t('report.posSales.exportSuccess'));
     } catch (error) {
-      console.error('Failed to export sales report:', error);
-      message.error(t('report.sales.exportFailed'));
+      console.error('Failed to export POS sales report:', error);
+      message.error(t('report.posSales.exportFailed'));
     }
   };
 
@@ -287,8 +287,8 @@ export default function SalesReport() {
     <div className="p-4 sm:p-6 bg-[#FDFDFD] min-h-screen">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <Title level={4} className="!mb-1 !font-bold text-gray-900">{t('report.sales.title')}</Title>
-          <p className="text-gray-500 text-xs sm:text-sm">{t('report.sales.subtitle')}</p>
+          <Title level={4} className="!mb-1 !font-bold text-gray-900">{t('report.posSales.title')}</Title>
+          <p className="text-gray-500 text-xs sm:text-sm">{t('report.posSales.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
