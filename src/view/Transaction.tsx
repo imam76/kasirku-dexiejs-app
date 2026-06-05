@@ -15,7 +15,6 @@ export default function Transaction() {
   const { message } = App.useApp();
   const { t } = useI18n();
   const {
-    products,
     cart,
     searchTerm,
     paymentAmount,
@@ -23,10 +22,12 @@ export default function Transaction() {
     voucherCode,
     showPayment,
     filteredProducts,
+    productPagination,
     promoPreview,
     addToCart,
     updateQuantity,
     updateUnit,
+    findProductByScannedCode,
     removeFromCart,
     calculateTotal,
     handleCheckout,
@@ -88,8 +89,8 @@ export default function Transaction() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [clearSearch, focusSearch, searchTerm]);
 
-  const handleScan = useCallback((text: string) => {
-    const match = products.find((p) => (p.sku || '').trim().toLowerCase() === text.toLowerCase());
+  const handleScan = useCallback(async (text: string) => {
+    const match = await findProductByScannedCode(text);
 
     if (match) {
       addToCart(match);
@@ -97,7 +98,7 @@ export default function Transaction() {
     } else {
       message.error(t('transaction.productNotFound', { code: text }));
     }
-  }, [products, addToCart, message, t]);
+  }, [addToCart, findProductByScannedCode, message, t]);
 
   return (
     <div className="p-4 sm:p-6">
@@ -170,6 +171,7 @@ export default function Transaction() {
             products={filteredProducts}
             cart={cart}
             addToCart={addToCart}
+            pagination={productPagination}
           />
         </div>
 

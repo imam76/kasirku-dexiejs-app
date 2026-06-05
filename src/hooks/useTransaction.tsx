@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
@@ -11,6 +11,12 @@ import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { checkout } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
 import { evaluatePromos, getActivePromos } from '@/services/promoService';
+
+const TRANSACTION_PRODUCT_PAGE_SIZE = 12;
+const EMPTY_TRANSACTION_PRODUCT_PAGE = {
+  products: [] as Product[],
+  total: 0,
+};
 
 export const useTransaction = () => {
   const queryClient = useQueryClient();
@@ -35,29 +41,77 @@ export const useTransaction = () => {
     removeFromCart,
     reset,
   } = useTransactionStore();
-
-  const liveProducts = useLiveQuery(
-    () => db.products.orderBy('name').toArray(),
-    [],
-    [],
-  );
+  const [productPage, setProductPage] = useState(1);
+  const productSearchTerm = searchTerm.trim().toLowerCase();
 
   useEffect(() => {
-    setProducts(liveProducts);
-  }, [liveProducts, setProducts]);
+    setProductPage(1);
+  }, [productSearchTerm]);
+
+  const productPageResult = useLiveQuery(
+    async () => {
+      if (productSearchTerm) {
+        const matchedProducts = await db.products
+          .orderBy('name')
+          .filter((product) => (
+            product.name.toLowerCase().includes(productSearchTerm) ||
+            (product.sku?.toLowerCase() || '').includes(productSearchTerm)
+          ))
+          .toArray();
+
+        return {
+          products: matchedProducts,
+          total: matchedProducts.length,
+        };
+      }
+
+      const offset = (productPage - 1) * TRANSACTION_PRODUCT_PAGE_SIZE;
+      const [total, pageProducts] = await Promise.all([
+        db.products.count(),
+        db.products
+          .orderBy('name')
+          .offset(offset)
+          .limit(TRANSACTION_PRODUCT_PAGE_SIZE)
+          .toArray(),
+      ]);
+
+      return {
+        products: pageProducts,
+        total,
+      };
+    },
+    [productPage, productSearchTerm],
+    EMPTY_TRANSACTION_PRODUCT_PAGE,
+  );
+  const productTotal = productPageResult.total;
+
+  useEffect(() => {
+    setProducts(productPageResult.products);
+  }, [productPageResult.products, setProducts]);
+
+  useEffect(() => {
+    if (productSearchTerm) return;
+
+    const lastPage = Math.max(1, Math.ceil(productTotal / TRANSACTION_PRODUCT_PAGE_SIZE));
+    if (productPage > lastPage) {
+      setProductPage(lastPage);
+    }
+  }, [productPage, productSearchTerm, productTotal]);
 
   const { data: activePromos = [] } = useQuery({
     queryKey: ['activePromos'],
     queryFn: () => getActivePromos(new Date()),
   });
 
-  const filteredProducts = useMemo(() => {
-    return products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.sku?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-    );
-  }, [products, searchTerm]);
+  const filteredProducts = products;
+  const productPagination = productSearchTerm
+    ? undefined
+    : {
+        currentPage: productPage,
+        pageSize: TRANSACTION_PRODUCT_PAGE_SIZE,
+        total: productTotal,
+        onChange: setProductPage,
+      };
 
   const calculateSubtotal = useCallback(() => {
     return cart.reduce((sum, item) => sum + getCartItemPrice(item) * item.quantity, 0);
@@ -124,6 +178,15 @@ export const useTransaction = () => {
       showTransactionError(result.error);
     }
   };
+
+  const findProductByScannedCode = useCallback(async (scanCode: string) => {
+    const normalizedScanCode = scanCode.trim().toLowerCase();
+    if (!normalizedScanCode) return undefined;
+
+    return db.products
+      .filter((product) => (product.sku || '').trim().toLowerCase() === normalizedScanCode)
+      .first();
+  }, []);
 
   const handleCheckout = async () => {
     const total = promoPreview.total_amount;
@@ -217,10 +280,12 @@ export const useTransaction = () => {
     voucherCode,
     showPayment,
     filteredProducts,
+    productPagination,
     promoPreview,
     addToCart,
     updateQuantity,
     updateUnit,
+    findProductByScannedCode,
     removeFromCart,
     calculateSubtotal,
     calculateTotal,
