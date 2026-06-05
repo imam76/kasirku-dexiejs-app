@@ -12,7 +12,7 @@ import { checkout } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
 import { evaluatePromos, getActivePromos } from '@/services/promoService';
 
-const TRANSACTION_PRODUCT_PAGE_SIZE = 12;
+const TRANSACTION_PRODUCT_PAGE_SIZE = 9;
 const EMPTY_TRANSACTION_PRODUCT_PAGE = {
   products: [] as Product[],
   total: 0,

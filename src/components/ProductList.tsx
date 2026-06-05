@@ -23,7 +23,7 @@ export default function ProductList({ products, cart, addToCart, pagination }: P
 
   return (
     <div className="space-y-4 pb-24 lg:pb-0">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         {products.map((product) => {
           const pricePerSellingUnit = getPrice(product, 1);
           const cartItem = cart.find((item) => item.product.id === product.id);

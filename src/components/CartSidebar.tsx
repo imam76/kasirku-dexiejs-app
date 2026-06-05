@@ -45,14 +45,17 @@ export default function CartSidebar({
   const { t } = useI18n();
 
   return (
-    <div className="hidden lg:block lg:col-span-1" data-tour="transaction-desktop-cart">
-      <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200 sticky top-6">
-        <div className="flex justify-between items-center mb-4">
+    <div className="hidden lg:contents">
+      <div
+        className="sticky top-6 flex max-h-[calc(100vh-3rem)] min-h-[24rem] flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-md"
+        data-tour="transaction-desktop-cart"
+      >
+        <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold text-gray-800">{t('cart.title')}</h3>
           {cart.length > 0 && (
             <button
               onClick={clearCart}
-              className="text-red-500 hover:text-red-700 text-sm font-medium transition-colors flex items-center gap-1"
+              className="flex shrink-0 items-center gap-1 text-sm font-medium text-red-500 transition-colors hover:text-red-700"
             >
               <Trash2 size={14} />
               {t('cart.clear')}
@@ -60,7 +63,7 @@ export default function CartSidebar({
           )}
         </div>
 
-        <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           {cart.map((item) => (
             <CartItem
               key={item.product.id}
@@ -74,8 +77,11 @@ export default function CartSidebar({
             <p className="text-center text-gray-500 py-8">{t('cart.empty')}</p>
           )}
         </div>
+      </div>
 
-        {cart.length > 0 && (
+      {cart.length > 0 && (
+        <div className="sticky top-6 h-fit rounded-lg border border-gray-200 bg-white p-4 shadow-md">
+          <h3 className="mb-4 text-lg font-semibold text-gray-800">{t('payment.pay')}</h3>
           <CartSummary
             total={total}
             showPayment={showPayment}
@@ -89,8 +95,8 @@ export default function CartSidebar({
             setVoucherCode={setVoucherCode}
             handleCheckout={handleCheckout}
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

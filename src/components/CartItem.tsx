@@ -33,9 +33,9 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
 
   return (
     <div className="flex flex-col p-3 bg-gray-50 rounded-lg gap-2">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="font-medium text-gray-800">{item.product.name}</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 font-medium text-gray-800">{item.product.name}</p>
           <div className="flex items-center gap-2">
             <p className="text-sm text-gray-600">
               Rp {formatCurrency(currentPrice)} / {item.unit}
@@ -47,7 +47,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
         </div>
         <button
           onClick={() => removeFromCart(item.product.id)}
-          className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors ml-2"
+          className="shrink-0 rounded p-1 text-red-600 transition-colors hover:bg-red-100"
         >
           <Trash2 size={16} />
         </button>

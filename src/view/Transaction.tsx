@@ -104,8 +104,8 @@ export default function Transaction() {
     <div className="p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">{t('transaction.title')}</h2>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(360px,1fr)_minmax(280px,300px)_minmax(280px,300px)] xl:grid-cols-[minmax(0,1fr)_minmax(300px,320px)_minmax(300px,320px)] 2xl:grid-cols-[minmax(0,1fr)_340px_340px]">
+        <div id="product-list" className="min-w-0">
           <div className="bg-white rounded-lg shadow-md p-4 mb-4 border border-gray-200">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
               <Input
