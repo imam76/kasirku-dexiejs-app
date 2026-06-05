@@ -42,6 +42,7 @@ export interface AccountsPayableFilters {
   dueDateTo?: string;
   invoiceDateFrom?: string;
   invoiceDateTo?: string;
+  asOfDate?: string;
 }
 
 export interface PurchaseInvoicePaymentSummary {
@@ -209,6 +210,7 @@ export const listAccountsPayableRows = async (
     documents,
     payments,
     returnCreditByInvoiceId: await getIssuedPurchaseReturnCreditByInvoiceId(),
+    asOfDate: filters.asOfDate,
   });
 
   return filterPayableRows(rows, filters);

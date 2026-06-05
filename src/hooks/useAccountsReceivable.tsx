@@ -104,7 +104,10 @@ export const useAccountsReceivable = (filters: AccountsReceivableFilters = {}) =
     returnSummariesByInvoiceId: {},
   });
 
-  const allRows = useMemo(() => buildReceivableRows(receivableData), [receivableData]);
+  const allRows = useMemo(() => buildReceivableRows({
+    ...receivableData,
+    asOfDate: filters.asOfDate,
+  }), [filters.asOfDate, receivableData]);
   const receivableRows = useMemo(() => filterReceivableRows(allRows, filters), [allRows, filters]);
   const summary = useMemo<AccountsReceivableSummary>(() => {
     const paidInPeriod = receivableData.payments

@@ -43,6 +43,7 @@ export interface AccountsReceivableFilters {
   dueDateTo?: string;
   invoiceDateFrom?: string;
   invoiceDateTo?: string;
+  asOfDate?: string;
 }
 
 export interface SalesInvoicePaymentSummary {
@@ -200,6 +201,7 @@ export const listAccountsReceivableRows = async (
     documents,
     payments,
     returnSummariesByInvoiceId: Object.fromEntries(returnSummaryEntries),
+    asOfDate: filters.asOfDate,
   });
 
   return filterReceivableRows(rows, filters);

@@ -1,7 +1,8 @@
 import {
   FileExcelOutlined,
   FileSearchOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  ReconciliationOutlined
 } from '@ant-design/icons'
 import { useI18n } from '@/hooks/useI18n'
 import { Link, createFileRoute } from '@tanstack/react-router'
@@ -21,6 +22,7 @@ function Laporan() {
     { to: '/report/transaction-detail-report', label: t('report.index.detailShort'), icon: FileSearchOutlined, color: 'text-blue-600', desc: t('report.index.detailDesc') },
     { to: '/report/purchase-report', label: t('report.index.purchaseShort'), icon: FileExcelOutlined, color: 'text-teal-600', desc: t('report.index.purchaseDesc') },
     { to: '/report/expense-report', label: t('report.index.expenseShort'), icon: FileExcelOutlined, color: 'text-red-600', desc: t('report.index.expenseDesc') },
+    { to: '/report/aging-report', label: t('report.index.agingShort'), icon: ReconciliationOutlined, color: 'text-emerald-600', desc: t('report.index.agingDesc') },
   ].filter((item) => canAccessPath(currentUser?.role, item.to))
 
   return (

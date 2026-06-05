@@ -15,13 +15,15 @@ const { Text } = Typography;
 interface PayablePaymentHistoryProps {
   payments: PurchaseInvoicePayment[];
   loading?: boolean;
-  onVoidPayment: (paymentId: string, reason: string) => Promise<void>;
+  onVoidPayment?: (paymentId: string, reason: string) => Promise<void>;
+  allowVoid?: boolean;
 }
 
 export function PayablePaymentHistory({
   payments,
   loading,
   onVoidPayment,
+  allowVoid = true,
 }: PayablePaymentHistoryProps) {
   const { t } = useI18n();
   const renderPaymentAmount = (payment: PurchaseInvoicePayment) => {
@@ -41,6 +43,7 @@ export function PayablePaymentHistory({
   };
 
   const handleVoid = (payment: PurchaseInvoicePayment) => {
+    if (!onVoidPayment) return;
     let voidReason = '';
 
     Modal.confirm({
@@ -146,7 +149,7 @@ export function PayablePaymentHistory({
         </div>
       ),
     },
-    {
+    ...(allowVoid ? [{
       title: '',
       key: 'action',
       fixed: 'right',
@@ -162,7 +165,7 @@ export function PayablePaymentHistory({
           {t('accountsPayable.voidPayment')}
         </Button>
       ),
-    },
+    } as ColumnsType<PurchaseInvoicePayment>[number]] : []),
   ];
 
   if (payments.length === 0) {

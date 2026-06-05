@@ -4,12 +4,25 @@ import dayjs from '@/lib/dayjs';
 import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product } from '@/types';
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
+import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
+import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
+import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
+import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
 import {
   aggregateSoldItems,
   createEmptySoldItemSummary,
   resolveTransactionItemUnit,
 } from '@/utils/salesUnits';
 import { filterActiveTransactions } from '@/utils/transactions';
+import type {
+  AccountsPayableRow,
+  AccountsReceivableRow,
+  PurchaseInvoicePayment,
+  PurchaseInvoicePaymentStatus,
+  ReceivableAgingBucket,
+  SalesInvoicePayment,
+  SalesInvoicePaymentStatus,
+} from '@/types';
 import type { SoldItemSummary } from '@/utils/salesUnits';
 
 interface PosSalesReportData {
@@ -49,6 +62,105 @@ interface ExpenseReportData {
   totalExpense: number;
   breakdown: Record<string, number>;
 }
+
+export interface AccountsAgingReportFilters {
+  search?: string;
+  paymentStatus?: SalesInvoicePaymentStatus | PurchaseInvoicePaymentStatus | 'ALL';
+  agingBucket?: ReceivableAgingBucket | 'ALL';
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  invoiceDateFrom?: string;
+  invoiceDateTo?: string;
+  asOfDate?: string;
+}
+
+export interface AccountsAgingReportSummary {
+  invoice_count: number;
+  open_invoice_count: number;
+  overdue_invoice_count: number;
+  total_outstanding: number;
+  total_current: number;
+  total_overdue: number;
+  paid_in_period: number;
+}
+
+interface AccountsAgingReportData {
+  receivableRows: AccountsReceivableRow[];
+  payableRows: AccountsPayableRow[];
+  salesInvoicePayments: SalesInvoicePayment[];
+  purchaseInvoicePayments: PurchaseInvoicePayment[];
+  receivableSummary: AccountsAgingReportSummary;
+  payableSummary: AccountsAgingReportSummary;
+  totalReceivable: number;
+  totalPayable: number;
+  netReceivablePayable: number;
+  totalOverdue: number;
+}
+
+const createEmptyAgingSummary = (): AccountsAgingReportSummary => ({
+  invoice_count: 0,
+  open_invoice_count: 0,
+  overdue_invoice_count: 0,
+  total_outstanding: 0,
+  total_current: 0,
+  total_overdue: 0,
+  paid_in_period: 0,
+});
+
+const isDateKeyInRange = (value: string, from?: string, to?: string) => {
+  const dateKey = value.slice(0, 10);
+  return (!from || dateKey >= from) && (!to || dateKey <= to);
+};
+
+const matchesAccountsAgingFilters = (
+  row: Pick<AccountsReceivableRow, 'document_number' | 'document_date' | 'due_date' | 'payment_status' | 'aging_bucket'>,
+  filters: AccountsAgingReportFilters,
+  searchableValues: string[],
+) => {
+  const query = filters.search?.trim().toLowerCase();
+  const matchesSearch = !query || searchableValues.some((value) => value.toLowerCase().includes(query));
+  const matchesPaymentStatus = !filters.paymentStatus ||
+    filters.paymentStatus === 'ALL' ||
+    row.payment_status === filters.paymentStatus;
+  const matchesAging = !filters.agingBucket ||
+    filters.agingBucket === 'ALL' ||
+    row.aging_bucket === filters.agingBucket;
+  const matchesDueDateFrom = !filters.dueDateFrom || (row.due_date && row.due_date >= filters.dueDateFrom);
+  const matchesDueDateTo = !filters.dueDateTo || (row.due_date && row.due_date <= filters.dueDateTo);
+  const matchesInvoiceDateFrom = !filters.invoiceDateFrom || row.document_date >= filters.invoiceDateFrom;
+  const matchesInvoiceDateTo = !filters.invoiceDateTo || row.document_date <= filters.invoiceDateTo;
+
+  return matchesSearch &&
+    matchesPaymentStatus &&
+    matchesAging &&
+    matchesDueDateFrom &&
+    matchesDueDateTo &&
+    matchesInvoiceDateFrom &&
+    matchesInvoiceDateTo;
+};
+
+const summarizeAgingRows = <TRow extends { balance_due: number; aging_bucket: ReceivableAgingBucket }>(
+  rows: TRow[],
+  paidInPeriod: number,
+): AccountsAgingReportSummary => (
+  rows.reduce<AccountsAgingReportSummary>((acc, row) => {
+    acc.invoice_count += 1;
+    if (row.balance_due > 0) {
+      acc.open_invoice_count += 1;
+      acc.total_outstanding += row.balance_due;
+    }
+    if (row.aging_bucket === 'CURRENT') {
+      acc.total_current += row.balance_due;
+    } else if (row.balance_due > 0) {
+      acc.overdue_invoice_count += 1;
+      acc.total_overdue += row.balance_due;
+    }
+    return acc;
+  }, {
+    ...createEmptyAgingSummary(),
+    paid_in_period: paidInPeriod,
+  })
+);
 
 export interface TransactionDetailReportRow {
   key: string;
@@ -225,6 +337,89 @@ export const useProductCategories = () => {
     queryFn: async () => {
       // Return hardcoded categories from constants as the source of truth
       return PRODUCT_CATEGORIES.map(cat => cat.value);
+    },
+  });
+};
+
+export const useAccountsAgingReport = (filters: AccountsAgingReportFilters = {}) => {
+  return useQuery({
+    queryKey: ['accountsAgingReport', filters],
+    queryFn: async (): Promise<AccountsAgingReportData> => {
+      const [salesDocuments, purchaseDocuments, purchaseReturnCreditByInvoiceId] = await Promise.all([
+        db.salesDocuments.where('type').equals('SALES_INVOICE').toArray(),
+        db.purchaseDocuments.where('type').equals('PURCHASE_INVOICE').toArray(),
+        getIssuedPurchaseReturnCreditByInvoiceId(),
+      ]);
+
+      const salesInvoiceIds = salesDocuments.map((document) => document.id);
+      const purchaseInvoiceIds = purchaseDocuments.map((document) => document.id);
+      const [salesInvoicePayments, purchaseInvoicePayments, salesReturnSummaryEntries] = await Promise.all([
+        salesInvoiceIds.length > 0
+          ? db.salesInvoicePayments.where('sales_document_id').anyOf(salesInvoiceIds).toArray()
+          : Promise.resolve([]),
+        purchaseInvoiceIds.length > 0
+          ? db.purchaseInvoicePayments.where('purchase_document_id').anyOf(purchaseInvoiceIds).toArray()
+          : Promise.resolve([]),
+        Promise.all(
+          salesDocuments.map(async (document) => {
+            if (document.status !== 'ISSUED') return [document.id, undefined] as const;
+            const summary = await getIssuedReturnSummaryForSource('SALES_INVOICE', document.id);
+            return [document.id, summary] as const;
+          }),
+        ),
+      ]);
+
+      const receivableRows = buildReceivableRows({
+        documents: salesDocuments,
+        payments: salesInvoicePayments,
+        returnSummariesByInvoiceId: Object.fromEntries(salesReturnSummaryEntries),
+        asOfDate: filters.asOfDate,
+      }).filter((row) => matchesAccountsAgingFilters(row, filters, [
+        row.document_number,
+        row.customer_name,
+      ]));
+
+      const payableRows = buildPayableRows({
+        documents: purchaseDocuments,
+        payments: purchaseInvoicePayments,
+        returnCreditByInvoiceId: purchaseReturnCreditByInvoiceId,
+        asOfDate: filters.asOfDate,
+      }).filter((row) => matchesAccountsAgingFilters(row, filters, [
+        row.document_number,
+        row.supplier_name,
+      ]));
+
+      const visibleSalesInvoiceIds = new Set(receivableRows.map((row) => row.sales_document_id));
+      const visiblePurchaseInvoiceIds = new Set(payableRows.map((row) => row.purchase_document_id));
+      const filteredSalesPayments = salesInvoicePayments
+        .filter((payment) => visibleSalesInvoiceIds.has(payment.sales_document_id))
+        .sort((left, right) => right.paid_at.localeCompare(left.paid_at));
+      const filteredPurchasePayments = purchaseInvoicePayments
+        .filter((payment) => visiblePurchaseInvoiceIds.has(payment.purchase_document_id))
+        .sort((left, right) => right.paid_at.localeCompare(left.paid_at));
+      const receivablePaidInPeriod = filteredSalesPayments
+        .filter((payment) => payment.status === 'ACTIVE')
+        .filter((payment) => isDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
+        .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const payablePaidInPeriod = filteredPurchasePayments
+        .filter((payment) => payment.status === 'ACTIVE')
+        .filter((payment) => isDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
+        .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const receivableSummary = summarizeAgingRows(receivableRows, receivablePaidInPeriod);
+      const payableSummary = summarizeAgingRows(payableRows, payablePaidInPeriod);
+
+      return {
+        receivableRows,
+        payableRows,
+        salesInvoicePayments: filteredSalesPayments,
+        purchaseInvoicePayments: filteredPurchasePayments,
+        receivableSummary,
+        payableSummary,
+        totalReceivable: receivableSummary.total_outstanding,
+        totalPayable: payableSummary.total_outstanding,
+        netReceivablePayable: receivableSummary.total_outstanding - payableSummary.total_outstanding,
+        totalOverdue: receivableSummary.total_overdue + payableSummary.total_overdue,
+      };
     },
   });
 };

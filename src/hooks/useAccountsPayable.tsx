@@ -97,7 +97,10 @@ export const useAccountsPayable = (filters: AccountsPayableFilters = {}) => {
     returnCreditByInvoiceId: {},
   });
 
-  const allRows = useMemo(() => buildPayableRows(payableData), [payableData]);
+  const allRows = useMemo(() => buildPayableRows({
+    ...payableData,
+    asOfDate: filters.asOfDate,
+  }), [filters.asOfDate, payableData]);
   const payableRows = useMemo(() => filterPayableRows(allRows, filters), [allRows, filters]);
   const summary = useMemo<AccountsPayableSummary>(() => {
     const paidInPeriod = payableData.payments
