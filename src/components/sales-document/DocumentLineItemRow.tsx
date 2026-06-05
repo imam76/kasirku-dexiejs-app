@@ -4,8 +4,11 @@ import { Button, InputNumber, Select } from 'antd';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { SalesDocumentItem } from '@/types';
-import type { DocumentCurrencySnapshot } from '@/utils/documentCurrency';
-import { formatCurrency } from '@/utils/formatters';
+import {
+  formatDocumentCurrencyAmount,
+  toDocumentCurrencyAmount,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 import { DocumentLineItemExpandedFields } from './DocumentLineItemExpandedFields';
 
 interface Option {
@@ -19,7 +22,6 @@ export interface DocumentLineItemRowProps {
   productOptions: Option[];
   unitOptions: Option[];
   taxOptions: Option[];
-  currencyOptions: Option[];
   documentCurrencySnapshot: DocumentCurrencySnapshot;
   isExpanded: boolean;
   hasPricing: boolean;
@@ -39,7 +41,6 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
   productOptions,
   unitOptions,
   taxOptions,
-  currencyOptions,
   documentCurrencySnapshot,
   isExpanded,
   hasPricing,
@@ -54,6 +55,7 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
 }, ref) => {
   const { t } = useI18n();
   const displayedItem = calculatedItem ?? item;
+  const displayedSubtotal = toDocumentCurrencyAmount(displayedItem.subtotal, documentCurrencySnapshot);
 
   return (
     <div
@@ -101,7 +103,7 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
         />
         {hasPricing && (
           <div className="truncate text-right text-sm font-medium text-gray-700">
-            Rp {formatCurrency(displayedItem.subtotal || 0)}
+            {formatDocumentCurrencyAmount(displayedSubtotal, documentCurrencySnapshot)}
           </div>
         )}
         {hasPricing && (
@@ -126,7 +128,6 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
           item={item}
           calculatedItem={calculatedItem}
           taxOptions={taxOptions}
-          currencyOptions={currencyOptions}
           documentCurrencySnapshot={documentCurrencySnapshot}
           onUpdateItem={onUpdateItem}
         />
@@ -143,7 +144,6 @@ export const DocumentLineItemRow = memo(DocumentLineItemRowBase, (prev, next) =>
   prev.productOptions === next.productOptions &&
   prev.unitOptions === next.unitOptions &&
   prev.taxOptions === next.taxOptions &&
-  prev.currencyOptions === next.currencyOptions &&
   prev.documentCurrencySnapshot === next.documentCurrencySnapshot &&
   prev.isExpanded === next.isExpanded &&
   prev.hasPricing === next.hasPricing &&

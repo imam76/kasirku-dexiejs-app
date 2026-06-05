@@ -1,5 +1,6 @@
 import { BASE_CURRENCY_CODE, BASE_CURRENCY_NAME, DEFAULT_EXCHANGE_RATE } from '@/constants/currencies';
 import type { Currency, CurrencyRate, CurrencyRateBasis, CurrencyRateSource } from '@/types';
+import { formatCurrency } from '@/utils/formatters';
 
 export interface DocumentCurrencySnapshot {
   currency_code: string;
@@ -62,6 +63,34 @@ export const toForeignAmount = (baseAmount?: number | null, exchangeRate?: numbe
   roundCurrency(Number(baseAmount || 0) / normalizeExchangeRate(exchangeRate))
 );
 
+export const toBaseCurrencyAmount = (
+  documentCurrencyAmount?: number | null,
+  snapshot?: { currency_code?: string | null; exchange_rate?: number | null },
+) => (
+  isBaseCurrency(snapshot?.currency_code)
+    ? roundCurrency(Number(documentCurrencyAmount || 0))
+    : toBaseAmount(documentCurrencyAmount, snapshot?.exchange_rate)
+);
+
+export const toDocumentCurrencyAmount = (
+  baseAmount?: number | null,
+  snapshot?: { currency_code?: string | null; exchange_rate?: number | null },
+) => (
+  isBaseCurrency(snapshot?.currency_code)
+    ? roundCurrency(Number(baseAmount || 0))
+    : toForeignAmount(baseAmount, snapshot?.exchange_rate)
+);
+
+export const formatDocumentCurrencyAmount = (
+  amount?: number | null,
+  snapshot?: { currency_code?: string | null; currency_symbol?: string | null },
+) => {
+  const currencyCode = normalizeCurrencyCode(snapshot?.currency_code);
+  const prefix = snapshot?.currency_symbol || currencyCode;
+
+  return `${prefix} ${formatCurrency(Number(amount || 0))}`;
+};
+
 export const buildDocumentCurrencySnapshot = (
   currency?: Currency,
   rate?: CurrencyRate,
@@ -123,8 +152,8 @@ export const applyCurrencySnapshotToLineItem = <TItem extends DocumentCurrencyLi
   snapshot: DocumentCurrencySnapshot,
   options: { preferForeignPrice?: boolean } = {},
 ): TItem => {
-  const exchangeRate = normalizeExchangeRate(item.exchange_rate ?? snapshot.exchange_rate);
-  const currencyCode = normalizeCurrencyCode(item.currency_code ?? snapshot.currency_code);
+  const exchangeRate = normalizeExchangeRate(snapshot.exchange_rate);
+  const currencyCode = normalizeCurrencyCode(snapshot.currency_code);
   const foreignPrice = options.preferForeignPrice && item.foreign_price !== undefined
     ? Number(item.foreign_price || 0)
     : toForeignAmount(item.price, exchangeRate);
@@ -136,9 +165,9 @@ export const applyCurrencySnapshotToLineItem = <TItem extends DocumentCurrencyLi
     ...item,
     currency_code: currencyCode,
     exchange_rate: exchangeRate,
-    exchange_rate_source: item.exchange_rate_source ?? snapshot.exchange_rate_source,
-    exchange_rate_basis: item.exchange_rate_basis ?? snapshot.exchange_rate_basis,
-    exchange_rate_date: item.exchange_rate_date ?? snapshot.exchange_rate_date,
+    exchange_rate_source: snapshot.exchange_rate_source,
+    exchange_rate_basis: snapshot.exchange_rate_basis,
+    exchange_rate_date: snapshot.exchange_rate_date,
     price,
     foreign_price: roundCurrency(foreignPrice),
   };
@@ -148,15 +177,15 @@ export const applyForeignAmountsToLineItem = <TItem extends DocumentCurrencyLine
   item: TItem,
   snapshot: DocumentCurrencySnapshot,
 ): TItem => {
-  const exchangeRate = normalizeExchangeRate(item.exchange_rate ?? snapshot.exchange_rate);
+  const exchangeRate = normalizeExchangeRate(snapshot.exchange_rate);
 
   return {
     ...item,
-    currency_code: normalizeCurrencyCode(item.currency_code ?? snapshot.currency_code),
+    currency_code: normalizeCurrencyCode(snapshot.currency_code),
     exchange_rate: exchangeRate,
-    exchange_rate_source: item.exchange_rate_source ?? snapshot.exchange_rate_source,
-    exchange_rate_basis: item.exchange_rate_basis ?? snapshot.exchange_rate_basis,
-    exchange_rate_date: item.exchange_rate_date ?? snapshot.exchange_rate_date,
+    exchange_rate_source: snapshot.exchange_rate_source,
+    exchange_rate_basis: snapshot.exchange_rate_basis,
+    exchange_rate_date: snapshot.exchange_rate_date,
     foreign_price: item.foreign_price ?? toForeignAmount(item.price, exchangeRate),
     foreign_discount_amount: toForeignAmount(item.discount_amount, exchangeRate),
     foreign_tax_base_amount: toForeignAmount(item.tax_base_amount, exchangeRate),

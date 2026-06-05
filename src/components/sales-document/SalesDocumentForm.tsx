@@ -15,7 +15,6 @@ import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocument
 import {
   applyCurrencySnapshotToLineItem,
   normalizeCurrencyCode,
-  normalizeExchangeRate,
   snapshotFromDocumentInput,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
@@ -206,20 +205,15 @@ export const SalesDocumentForm = ({
     const previousCode = normalizeCurrencyCode(previousCurrencyCode);
 
     setValue('items', items.map((item) => {
-      const itemCurrencyCode = normalizeCurrencyCode(item.currency_code);
-      const shouldInheritHeader = !item.currency_code || itemCurrencyCode === previousCode;
-
-      if (!shouldInheritHeader) return item;
-
       return applyCurrencySnapshotToLineItem({
         ...item,
         currency_code: snapshot.currency_code,
-        exchange_rate: normalizeExchangeRate(snapshot.exchange_rate),
+        exchange_rate: snapshot.exchange_rate,
         exchange_rate_source: snapshot.exchange_rate_source,
         exchange_rate_basis: snapshot.exchange_rate_basis,
         exchange_rate_date: snapshot.exchange_rate_date,
       }, snapshot, {
-        preferForeignPrice: itemCurrencyCode === snapshot.currency_code && item.foreign_price !== undefined,
+        preferForeignPrice: previousCode === snapshot.currency_code && item.foreign_price !== undefined,
       });
     }), { shouldDirty: true, shouldValidate: true });
   }, [items, setValue]);
@@ -284,7 +278,6 @@ export const SalesDocumentForm = ({
         calculatedItems={total.items}
         products={products}
         taxes={taxes}
-        currencies={currencies}
         documentCurrencySnapshot={documentCurrencySnapshot}
         onChange={handleItemsChange}
       />
@@ -292,6 +285,7 @@ export const SalesDocumentForm = ({
         config={config}
         control={control}
         total={total}
+        documentCurrencySnapshot={documentCurrencySnapshot}
         taxes={taxes}
         discountType={discountType}
         discountValue={discountValue}

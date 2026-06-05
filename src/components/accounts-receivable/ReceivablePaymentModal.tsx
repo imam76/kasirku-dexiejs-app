@@ -7,6 +7,11 @@ import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import type { AccountsReceivableRow, PaymentMethod } from '@/types';
 import type { RecordSalesInvoicePaymentInput } from '@/services/accountsReceivableService';
+import {
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
+  toDocumentCurrencyAmount,
+} from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 const { Text } = Typography;
@@ -50,11 +55,26 @@ export function ReceivablePaymentModal({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [paymentAccounts]);
+  const renderMoney = (value: number, row: AccountsReceivableRow, foreignValue?: number, className = 'font-semibold') => {
+    const displayValue = foreignValue ?? toDocumentCurrencyAmount(value, row);
+    const isForeign = !isBaseCurrency(row.currency_code);
+
+    return (
+      <div className={className}>
+        {formatDocumentCurrencyAmount(displayValue, row)}
+        {isForeign && (
+          <div className="text-xs font-normal text-gray-500">
+            Rp {formatCurrency(value || 0)}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (!open || !row) return;
     form.setFieldsValue({
-      amount: row.balance_due,
+      amount: row.foreign_balance_due ?? row.balance_due,
       paid_at: dayjs(),
       payment_method: 'TUNAI',
       cash_account_id: undefined,
@@ -98,11 +118,11 @@ export function ReceivablePaymentModal({
             </div>
             <div>
               <Text type="secondary">{t('accountsReceivable.totalInvoice')}</Text>
-              <div className="font-semibold">Rp {formatCurrency(row.total_amount)}</div>
+              {renderMoney(row.total_amount, row, row.foreign_total_amount)}
             </div>
             <div>
               <Text type="secondary">{t('accountsReceivable.balanceDue')}</Text>
-              <div className="font-semibold text-rose-700">Rp {formatCurrency(row.balance_due)}</div>
+              {renderMoney(row.balance_due, row, row.foreign_balance_due, 'font-semibold text-rose-700')}
             </div>
             {row.due_date && (
               <div>
@@ -112,7 +132,7 @@ export function ReceivablePaymentModal({
             )}
             <div>
               <Text type="secondary">{t('accountsReceivable.creditNote')}</Text>
-              <div className="font-semibold">Rp {formatCurrency(row.return_credit_amount)}</div>
+              {renderMoney(row.return_credit_amount, row, row.foreign_return_credit_amount)}
             </div>
           </div>
         </div>
@@ -128,7 +148,7 @@ export function ReceivablePaymentModal({
               validator: async (_, value) => {
                 const amount = Number(value || 0);
                 if (amount <= 0) throw new Error(t('finance.amountMin'));
-                if (row && amount > row.balance_due + 0.01) {
+                if (row && amount > (row.foreign_balance_due ?? row.balance_due) + 0.01) {
                   throw new Error(t('accountsReceivable.error.amountExceedsBalance'));
                 }
               },
@@ -137,7 +157,7 @@ export function ReceivablePaymentModal({
         >
           <InputNumber
             min={1}
-            max={row?.balance_due}
+            max={row?.foreign_balance_due ?? row?.balance_due}
             style={{ width: '100%' }}
             placeholder="0"
           />

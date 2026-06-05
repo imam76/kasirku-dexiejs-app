@@ -13,6 +13,11 @@ import { db } from '@/lib/db';
 import type { AccountsPayableRow, PaymentMethod, PurchaseInvoicePaymentStatus, ReceivableAgingBucket } from '@/types';
 import type { RecordPurchaseInvoicePaymentInput } from '@/services/accountsPayableService';
 import type { TranslationKey } from '@/i18n/messages';
+import {
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
+  toDocumentCurrencyAmount,
+} from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { purchaseInvoicePaymentStatusLabelKeys } from '@/utils/purchaseDocuments/i18n';
 
@@ -38,6 +43,27 @@ const paymentStatusColors: Record<PurchaseInvoicePaymentStatus, string> = {
   UNPAID: 'red',
   PARTIAL: 'gold',
   PAID: 'green',
+};
+
+const renderPayableMoney = (
+  value: number,
+  row: AccountsPayableRow,
+  foreignValue?: number,
+  className = 'font-semibold',
+) => {
+  const displayValue = foreignValue ?? toDocumentCurrencyAmount(value, row);
+  const isForeign = !isBaseCurrency(row.currency_code);
+
+  return (
+    <span className={className}>
+      {formatDocumentCurrencyAmount(displayValue, row)}
+      {isForeign && (
+        <span className="block text-xs font-normal text-gray-500">
+          Rp {formatCurrency(value || 0)}
+        </span>
+      )}
+    </span>
+  );
 };
 
 interface PayablePaymentFormValues {
@@ -130,7 +156,7 @@ function PayablePaymentModal({
   useEffect(() => {
     if (!open || !row) return;
     form.setFieldsValue({
-      amount: row.balance_due,
+      amount: row.foreign_balance_due ?? row.balance_due,
       paid_at: dayjs(),
       payment_method: 'TUNAI',
       cash_account_id: undefined,
@@ -174,15 +200,15 @@ function PayablePaymentModal({
             </div>
             <div>
               <Text type="secondary">{t('accountsPayable.totalInvoice')}</Text>
-              <div className="font-semibold">Rp {formatCurrency(row.total_amount)}</div>
+              {renderPayableMoney(row.total_amount, row, row.foreign_total_amount)}
             </div>
             <div>
               <Text type="secondary">{t('accountsPayable.balanceDue')}</Text>
-              <div className="font-semibold text-rose-700">Rp {formatCurrency(row.balance_due)}</div>
+              {renderPayableMoney(row.balance_due, row, row.foreign_balance_due, 'font-semibold text-rose-700')}
             </div>
             <div>
               <Text type="secondary">{t('accountsPayable.debitNote')}</Text>
-              <div className="font-semibold">Rp {formatCurrency(row.return_credit_amount)}</div>
+              {renderPayableMoney(row.return_credit_amount, row, row.foreign_return_credit_amount)}
             </div>
           </div>
         </div>
@@ -198,14 +224,14 @@ function PayablePaymentModal({
               validator: async (_, value) => {
                 const amount = Number(value || 0);
                 if (amount <= 0) throw new Error(t('finance.amountMin'));
-                if (row && amount > row.balance_due + 0.01) {
+                if (row && amount > (row.foreign_balance_due ?? row.balance_due) + 0.01) {
                   throw new Error(t('accountsPayable.error.amountExceedsBalance'));
                 }
               },
             },
           ]}
         >
-          <InputNumber min={1} max={row?.balance_due} style={{ width: '100%' }} placeholder="0" />
+          <InputNumber min={1} max={row?.foreign_balance_due ?? row?.balance_due} style={{ width: '100%' }} placeholder="0" />
         </Form.Item>
         <Form.Item
           name="paid_at"
@@ -303,31 +329,34 @@ export default function AccountsPayableManagement() {
       dataIndex: 'total_amount',
       align: 'right',
       width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
+      render: (value: number, record) => renderPayableMoney(value, record, record.foreign_total_amount),
     },
     {
       title: t('accountsPayable.paidAmount'),
       dataIndex: 'paid_amount',
       align: 'right',
       width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
+      render: (value: number, record) => renderPayableMoney(value, record, record.foreign_paid_amount),
     },
     {
       title: t('accountsPayable.debitNote'),
       dataIndex: 'return_credit_amount',
       align: 'right',
       width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
+      render: (value: number, record) => renderPayableMoney(value, record, record.foreign_return_credit_amount),
     },
     {
       title: t('accountsPayable.balanceDue'),
       dataIndex: 'balance_due',
       align: 'right',
       width: 150,
-      render: (value: number) => (
-        <span className={value > 0 ? 'font-semibold text-rose-700' : 'font-semibold text-emerald-700'}>
-          Rp {formatCurrency(value || 0)}
-        </span>
+      render: (value: number, record) => (
+        renderPayableMoney(
+          value,
+          record,
+          record.foreign_balance_due,
+          value > 0 ? 'font-semibold text-rose-700' : 'font-semibold text-emerald-700',
+        )
       ),
     },
     {

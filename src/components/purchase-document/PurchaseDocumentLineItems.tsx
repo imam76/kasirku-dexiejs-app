@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from 'antd';
 import { Plus } from 'lucide-react';
-import type { Currency, Product, PurchaseDocumentItem, Tax } from '@/types';
+import type { Product, PurchaseDocumentItem, Tax } from '@/types';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import { getPurchasePrice } from '@/utils/pricing';
@@ -10,8 +10,6 @@ import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/creat
 import { mapProductToPurchaseDocumentItem } from '@/utils/purchaseDocuments/mapProductToPurchaseDocumentItem';
 import {
   applyCurrencySnapshotToLineItem,
-  normalizeCurrencyCode,
-  normalizeExchangeRate,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
 import { PurchaseLineItemsVirtualTable } from './PurchaseLineItemsVirtualTable';
@@ -23,7 +21,6 @@ interface PurchaseDocumentLineItemsProps {
   calculatedItems: PurchaseDocumentItem[];
   products: Product[];
   taxes: Tax[];
-  currencies: Currency[];
   documentCurrencySnapshot: DocumentCurrencySnapshot;
   onChange: (items: PurchaseDocumentItem[]) => void;
 }
@@ -49,7 +46,6 @@ export const PurchaseDocumentLineItems = ({
   calculatedItems,
   products,
   taxes,
-  currencies,
   documentCurrencySnapshot,
   onChange,
 }: PurchaseDocumentLineItemsProps) => {
@@ -82,26 +78,6 @@ export const PurchaseDocumentLineItems = ({
     })),
     [taxes],
   );
-  const currencyOptions = useMemo(
-    () => {
-      const sourceCurrencies = currencies.length > 0
-        ? currencies
-        : [{
-          code: 'IDR',
-          name: 'Rupiah Indonesia',
-          is_active: true,
-        } as Currency];
-
-      return sourceCurrencies
-      .filter((currency) => currency.is_active || currency.code === 'IDR')
-      .map((currency) => ({
-        value: currency.code,
-        label: `${currency.code} - ${currency.name}`,
-      }));
-    },
-    [currencies],
-  );
-
   const unitOptionsByProductId = useMemo(
     () => new Map(products.map((product) => [
       product.id,
@@ -154,17 +130,8 @@ export const PurchaseDocumentLineItems = ({
 
       if (!shouldRecalculateCurrency) return mergedItem;
 
-      const itemSnapshot = {
-        ...documentCurrencySnapshot,
-        currency_code: normalizeCurrencyCode(mergedItem.currency_code ?? documentCurrencySnapshot.currency_code),
-        exchange_rate: normalizeExchangeRate(mergedItem.exchange_rate ?? documentCurrencySnapshot.exchange_rate),
-        exchange_rate_source: mergedItem.exchange_rate_source ?? documentCurrencySnapshot.exchange_rate_source,
-        exchange_rate_basis: mergedItem.exchange_rate_basis ?? documentCurrencySnapshot.exchange_rate_basis,
-        exchange_rate_date: mergedItem.exchange_rate_date ?? documentCurrencySnapshot.exchange_rate_date,
-      };
-
-      return applyCurrencySnapshotToLineItem(mergedItem, itemSnapshot, {
-        preferForeignPrice: patch.foreign_price !== undefined || patch.exchange_rate !== undefined,
+      return applyCurrencySnapshotToLineItem(mergedItem, documentCurrencySnapshot, {
+        preferForeignPrice: patch.foreign_price !== undefined,
       });
     }));
   }, [config.behavior.hasPricing, documentCurrencySnapshot, onChange, productsById]);
@@ -240,7 +207,6 @@ export const PurchaseDocumentLineItems = ({
         unitOptionsByUnit={unitOptionsByUnit}
         emptyUnitOptions={emptyUnitOptions}
         taxOptions={taxOptions}
-        currencyOptions={currencyOptions}
         documentCurrencySnapshot={documentCurrencySnapshot}
         expandedRowKeySet={expandedRowKeySet}
         expandedRowSignature={expandedRowSignature}

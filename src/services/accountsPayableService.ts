@@ -19,6 +19,11 @@ import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
 import { createPayablePaymentSnapshot } from '@/utils/accountsPayable/createPayablePaymentSnapshot';
 import { validatePayablePayment } from '@/utils/accountsPayable/validatePayablePayment';
 import { calculateInvoiceBalance, roundCurrency } from '@/utils/invoiceBalance/calculateInvoiceBalance';
+import {
+  snapshotFromDocumentInput,
+  toBaseCurrencyAmount,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 
 export interface RecordPurchaseInvoicePaymentInput {
   amount: number;
@@ -220,13 +225,20 @@ export const recordPurchaseInvoicePayment = async (
   const activePayments = await getActivePayments(invoiceId);
   const returnCreditByInvoiceId = await getIssuedPurchaseReturnCreditByInvoiceId();
   const activePaymentAmount = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const documentCurrencySnapshot = document
+    ? snapshotFromDocumentInput(document, undefined, document.document_date)
+    : undefined;
   const currentBalance = calculateInvoiceBalance({
     invoiceTotal: Number(document?.total_amount || 0),
     activePaymentAmount,
     returnCreditAmount: document ? returnCreditByInvoiceId[document.id] || 0 : 0,
     dueDate: document?.due_date,
   });
-  const amount = roundCurrency(Number(input.amount || 0));
+  const foreignAmount = roundCurrency(Number(input.amount || 0));
+  const amount = roundCurrency(toBaseCurrencyAmount(
+    foreignAmount,
+    documentCurrencySnapshot as DocumentCurrencySnapshot | undefined,
+  ));
 
   validatePayablePayment({
     document,
@@ -244,6 +256,7 @@ export const recordPurchaseInvoicePayment = async (
     id: paymentId,
     document: document as PurchaseDocument,
     amount,
+    foreignAmount,
     paidAt,
     paymentMethod,
     paymentChannel: input.payment_channel,

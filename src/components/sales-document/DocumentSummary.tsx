@@ -10,6 +10,13 @@ import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import type { PromoType, SalesDocument, Tax } from '@/types';
 import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
+import {
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
+  toBaseCurrencyAmount,
+  toDocumentCurrencyAmount,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 import { formatCurrency } from '@/utils/formatters';
 import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
@@ -18,6 +25,7 @@ interface DocumentSummaryProps {
   config: SalesDocumentConfig;
   control: Control<SalesDocumentFormValues>;
   total: Pick<SalesDocument, 'subtotal_amount' | 'discount_amount' | 'tax_amount' | 'total_amount'>;
+  documentCurrencySnapshot: DocumentCurrencySnapshot;
   taxes: Tax[];
   discountType: PromoType;
   discountValue: number;
@@ -30,6 +38,7 @@ export const DocumentSummary = ({
   config,
   control,
   total,
+  documentCurrencySnapshot,
   taxes,
   discountType,
   discountValue,
@@ -56,6 +65,25 @@ export const DocumentSummary = ({
     () => getDefaultDocumentDiscountAccount('sales', discountAccounts),
     [discountAccounts],
   );
+  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const displayedDiscountValue = discountType === 'fixed'
+    ? toDocumentCurrencyAmount(discountValue, documentCurrencySnapshot)
+    : discountValue;
+  const renderMoney = (amount?: number, className = 'font-medium text-gray-900') => (
+    <span className="text-right">
+      <span className={className}>
+        {formatDocumentCurrencyAmount(
+          toDocumentCurrencyAmount(amount, documentCurrencySnapshot),
+          documentCurrencySnapshot,
+        )}
+      </span>
+      {isForeignCurrency && (
+        <span className="block text-[11px] font-normal text-gray-400">
+          Rp {formatCurrency(amount || 0)}
+        </span>
+      )}
+    </span>
+  );
 
   if (!config.behavior.hasPricing) return null;
 
@@ -64,7 +92,7 @@ export const DocumentSummary = ({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-4">
           <span className="text-sm text-gray-500">{t('salesDocuments.field.subtotal')}</span>
-          <span className="font-medium text-gray-900">Rp {formatCurrency(total.subtotal_amount || 0)}</span>
+          {renderMoney(total.subtotal_amount)}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <span className="text-sm text-gray-500">{t('salesDocuments.field.documentDiscount')}</span>
@@ -82,9 +110,11 @@ export const DocumentSummary = ({
               min={0}
               max={discountType === 'percent' ? 100 : undefined}
               className="w-full sm:w-32"
-              value={discountValue}
+              value={displayedDiscountValue}
               addonAfter={discountType === 'percent' ? '%' : undefined}
-              onChange={(value) => onDiscountValueChange(Number(value || 0))}
+              onChange={(value) => onDiscountValueChange(discountType === 'fixed'
+                ? toBaseCurrencyAmount(Number(value || 0), documentCurrencySnapshot)
+                : Number(value || 0))}
             />
             <Tooltip title={t('salesDocuments.field.discountAccount')}>
               <Button
@@ -98,7 +128,7 @@ export const DocumentSummary = ({
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-sm text-gray-500">{t('salesDocuments.field.discountAmount')}</span>
-          <span className="font-medium text-gray-900">Rp {formatCurrency(total.discount_amount || 0)}</span>
+          {renderMoney(total.discount_amount)}
         </div>
         <Controller
           name="discount_account_id"
@@ -146,13 +176,13 @@ export const DocumentSummary = ({
             </div>
             <div className="flex items-center justify-between gap-4">
               <span className="text-sm text-gray-500">{t('salesDocuments.field.tax')}</span>
-              <span className="font-medium text-gray-900">Rp {formatCurrency(total.tax_amount || 0)}</span>
+              {renderMoney(total.tax_amount)}
             </div>
           </>
         )}
         <div className="flex items-center justify-between gap-4 border-t border-gray-100 pt-3">
           <span className="text-sm font-medium text-gray-700">{t('salesDocuments.field.total')}</span>
-          <span className="text-lg font-semibold text-gray-900">Rp {formatCurrency(total.total_amount || 0)}</span>
+          {renderMoney(total.total_amount, 'text-lg font-semibold text-gray-900')}
         </div>
       </div>
     </Card>

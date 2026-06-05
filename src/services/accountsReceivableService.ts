@@ -20,6 +20,11 @@ import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableR
 import { calculateReceivableBalance } from '@/utils/accountsReceivable/calculateReceivableBalance';
 import { createInvoicePaymentSnapshot } from '@/utils/accountsReceivable/createInvoicePaymentSnapshot';
 import { validateInvoicePayment } from '@/utils/accountsReceivable/validateInvoicePayment';
+import {
+  snapshotFromDocumentInput,
+  toBaseCurrencyAmount,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 
 export interface RecordSalesInvoicePaymentInput {
   amount: number;
@@ -213,13 +218,20 @@ export const recordSalesInvoicePayment = async (
     ? await getIssuedReturnSummaryForSource('SALES_INVOICE', document.id)
     : undefined;
   const activePaymentAmount = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const documentCurrencySnapshot = document
+    ? snapshotFromDocumentInput(document, undefined, document.document_date)
+    : undefined;
   const currentBalance = calculateReceivableBalance({
     invoiceTotal: Number(document?.total_amount || 0),
     activePaymentAmount,
     returnCreditAmount: Number(returnSummary?.credit_amount || 0),
     dueDate: document?.due_date,
   });
-  const amount = roundCurrency(Number(input.amount || 0));
+  const foreignAmount = roundCurrency(Number(input.amount || 0));
+  const amount = roundCurrency(toBaseCurrencyAmount(
+    foreignAmount,
+    documentCurrencySnapshot as DocumentCurrencySnapshot | undefined,
+  ));
 
   validateInvoicePayment({
     document,
@@ -237,6 +249,7 @@ export const recordSalesInvoicePayment = async (
     id: paymentId,
     document: document as SalesDocument,
     amount,
+    foreignAmount,
     paidAt,
     paymentMethod,
     paymentChannel: input.payment_channel,

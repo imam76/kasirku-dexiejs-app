@@ -19,6 +19,12 @@ import type {
   PurchaseDocumentType,
   PurchaseInvoicePaymentStatus,
 } from '@/types';
+import {
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
+  snapshotFromDocumentInput,
+  toDocumentCurrencyAmount,
+} from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { purchaseDocumentStatusLabelKeys, purchaseInvoicePaymentStatusLabelKeys } from '@/utils/purchaseDocuments/i18n';
 
@@ -45,7 +51,7 @@ const getDocumentDiscountLabel = (document: PurchaseDocument) => {
     return `${formatCurrency(discountValue)}%`;
   }
 
-  return `Rp ${formatCurrency(discountValue)}`;
+  return formatDocumentCurrencyAmount(toDocumentCurrencyAmount(discountValue, document), document);
 };
 
 interface PurchaseDocumentDetailProps {
@@ -136,6 +142,21 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
       {t(purchaseInvoicePaymentStatusLabelKeys[document.payment_status])}
     </span>
   ) : '-';
+  const documentCurrencySnapshot = snapshotFromDocumentInput(document, undefined, document.document_date);
+  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const renderMoney = (amount?: number, foreignAmount?: number, className = 'font-bold') => (
+    <span className={className}>
+      {formatDocumentCurrencyAmount(
+        foreignAmount ?? toDocumentCurrencyAmount(amount, documentCurrencySnapshot),
+        documentCurrencySnapshot,
+      )}
+      {isForeignCurrency && (
+        <span className="block text-[11px] font-normal text-gray-500">
+          Rp {formatCurrency(amount || 0)}
+        </span>
+      )}
+    </span>
+  );
 
   const handleVoid = () => {
     let voidReason = '';
@@ -256,7 +277,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                   {t('purchaseDocuments.field.total')}
                 </div>
                 <div className="mt-1 text-2xl font-extrabold text-gray-950">
-                  Rp {formatCurrency(document.total_amount || 0)}
+                  {renderMoney(document.total_amount || 0, document.foreign_total_amount, 'text-2xl font-extrabold text-gray-950')}
                 </div>
               </div>
             ) : (
@@ -393,8 +414,8 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                       {item.sku ? `${item.sku} · ` : ''}
                       {item.quantity} {item.unit}
                       {item.received_quantity !== undefined ? ` · ${t('purchaseDocuments.field.receivedQuantity')}: ${item.received_quantity}` : ''}
-                      {config.behavior.hasPricing ? ` · ${t('purchaseDocuments.field.discount')}: Rp ${formatCurrency(item.discount_amount || 0)}` : ''}
-                      {config.behavior.hasTax ? ` · ${t('purchaseDocuments.field.tax')}: Rp ${formatCurrency(item.tax_amount || 0)}` : ''}
+                      {config.behavior.hasPricing ? ` · ${t('purchaseDocuments.field.discount')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.discount_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
+                      {config.behavior.hasTax ? ` · ${t('purchaseDocuments.field.tax')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.tax_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
                     </div>
                   </td>
                   <td className="px-3 py-3 text-right align-top text-gray-700">{item.quantity}</td>
@@ -402,12 +423,14 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                     <td className="px-3 py-3 text-right align-top text-gray-700">{item.received_quantity ?? '-'}</td>
                   )}
                   {config.behavior.hasPricing && (
-                    <td className="px-3 py-3 text-right align-top text-gray-700">Rp {formatCurrency(item.price || 0)}</td>
+                    <td className="px-3 py-3 text-right align-top text-gray-700">
+                      {renderMoney(item.price || 0, item.foreign_price, 'font-medium')}
+                    </td>
                   )}
                   <td className="px-3 py-3 text-right align-top text-gray-700">{item.unit}</td>
                   {config.behavior.hasPricing && (
                     <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
-                      Rp {formatCurrency(item.subtotal || 0)}
+                      {renderMoney(item.subtotal || 0, item.foreign_subtotal, 'font-semibold text-gray-950')}
                     </td>
                   )}
                 </tr>
@@ -421,7 +444,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
             <div className="w-full max-w-[280px]">
               <div className="flex justify-between py-1.5 text-[13px]">
                 <span className="text-gray-500">{t('purchaseDocuments.field.subtotal')}</span>
-                <span className="font-medium text-gray-700">Rp {formatCurrency(document.subtotal_amount || 0)}</span>
+                {renderMoney(document.subtotal_amount || 0, document.foreign_subtotal_amount, 'font-medium text-gray-700')}
               </div>
               <div className="flex justify-between py-1.5 text-[13px]">
                 <span className="text-gray-500">{t('purchaseDocuments.field.documentDiscount')}</span>
@@ -437,18 +460,18 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
               )}
               <div className="flex justify-between py-1.5 text-[13px]">
                 <span className="text-gray-500">{t('purchaseDocuments.field.discountAmount')}</span>
-                <span className="font-medium text-gray-400">Rp {formatCurrency(document.discount_amount || 0)}</span>
+                {renderMoney(document.discount_amount || 0, document.foreign_discount_amount, 'font-medium text-gray-400')}
               </div>
               {config.behavior.hasTax && (
                 <div className="flex justify-between py-1.5 text-[13px]">
                   <span className="text-gray-500">{t('purchaseDocuments.field.tax')}</span>
-                  <span className="font-medium text-gray-400">Rp {formatCurrency(document.tax_amount || 0)}</span>
+                  {renderMoney(document.tax_amount || 0, document.foreign_tax_amount, 'font-medium text-gray-400')}
                 </div>
               )}
               <div className="my-2 h-px bg-gray-200" />
               <div className="flex justify-between rounded-lg px-3.5 py-3" style={{ backgroundColor: config.theme.accent }}>
                 <span className="text-sm font-bold text-white/85">{t('purchaseDocuments.field.total')}</span>
-                <span className="text-[17px] font-extrabold text-white">Rp {formatCurrency(document.total_amount || 0)}</span>
+                {renderMoney(document.total_amount || 0, document.foreign_total_amount, 'text-[17px] font-extrabold text-white')}
               </div>
             </div>
           </div>

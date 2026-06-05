@@ -6,6 +6,11 @@ import { getSalesDocumentTypePathSegment } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import type { AccountsReceivableRow, ReceivableAgingBucket, SalesInvoicePaymentStatus } from '@/types';
+import {
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
+  toDocumentCurrencyAmount,
+} from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 
@@ -43,6 +48,26 @@ export function AccountsReceivableTable({
   onRecordPayment,
 }: AccountsReceivableTableProps) {
   const { t } = useI18n();
+  const renderMoney = (
+    value: number,
+    record: AccountsReceivableRow,
+    foreignValue?: number,
+    highlight?: string,
+  ) => {
+    const displayValue = foreignValue ?? toDocumentCurrencyAmount(value, record);
+    const isForeign = !isBaseCurrency(record.currency_code);
+
+    return (
+      <span className={highlight}>
+        {formatDocumentCurrencyAmount(displayValue, record)}
+        {isForeign && (
+          <span className="block text-[11px] font-normal text-gray-400">
+            Rp {formatCurrency(value || 0)}
+          </span>
+        )}
+      </span>
+    );
+  };
   const columns: ColumnsType<AccountsReceivableRow> = [
     {
       title: t('accountsReceivable.invoiceNumber'),
@@ -98,31 +123,32 @@ export function AccountsReceivableTable({
       dataIndex: 'total_amount',
       align: 'right',
       width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
+      render: (value: number, record) => renderMoney(value, record, record.foreign_total_amount),
     },
     {
       title: t('accountsReceivable.paidAmount'),
       dataIndex: 'paid_amount',
       align: 'right',
       width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
+      render: (value: number, record) => renderMoney(value, record, record.foreign_paid_amount),
     },
     {
       title: t('accountsReceivable.creditNote'),
       dataIndex: 'return_credit_amount',
       align: 'right',
       width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
+      render: (value: number, record) => renderMoney(value, record, record.foreign_return_credit_amount),
     },
     {
       title: t('accountsReceivable.balanceDue'),
       dataIndex: 'balance_due',
       align: 'right',
       width: 150,
-      render: (value: number) => (
-        <span className={value > 0 ? 'font-semibold text-rose-700' : 'font-semibold text-emerald-700'}>
-          Rp {formatCurrency(value || 0)}
-        </span>
+      render: (value: number, record) => renderMoney(
+        value,
+        record,
+        record.foreign_balance_due,
+        value > 0 ? 'font-semibold text-rose-700' : 'font-semibold text-emerald-700',
       ),
     },
     {

@@ -11,6 +11,11 @@ import type { TranslationKey } from '@/i18n/messages';
 import { useI18n } from '@/hooks/useI18n';
 import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
 import type { PurchaseDocument, PurchaseDocumentStatus, PurchaseDocumentType } from '@/types';
+import {
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
+  toDocumentCurrencyAmount,
+} from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { purchaseDocumentStatusLabelKeys, purchaseInvoicePaymentStatusLabelKeys } from '@/utils/purchaseDocuments/i18n';
 
@@ -21,6 +26,22 @@ const statusColor: Record<PurchaseDocumentStatus, string> = {
   ISSUED: 'blue',
   CONVERTED: 'green',
   VOIDED: 'red',
+};
+
+const renderDocumentTotal = (document: PurchaseDocument) => {
+  const displayValue = document.foreign_total_amount ?? toDocumentCurrencyAmount(document.total_amount, document);
+  const isForeign = !isBaseCurrency(document.currency_code);
+
+  return (
+    <span>
+      {formatDocumentCurrencyAmount(displayValue, document)}
+      {isForeign && (
+        <span className="block text-xs text-gray-500">
+          Rp {formatCurrency(document.total_amount || 0)}
+        </span>
+      )}
+    </span>
+  );
 };
 
 type PurchaseDocumentMenuItem = {
@@ -276,7 +297,7 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
       dataIndex: 'total_amount',
       align: 'right' as const,
       render: (value: number | undefined, record: PurchaseDocument) => (
-        hasPricing(record) && value !== undefined ? `Rp ${formatCurrency(value)}` : '-'
+        hasPricing(record) && value !== undefined ? renderDocumentTotal(record) : '-'
       ),
       width: 150,
     }] : []),

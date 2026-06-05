@@ -18,9 +18,12 @@ import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDo
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import {
   applyCurrencySnapshotToLineItem,
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
   normalizeCurrencyCode,
-  normalizeExchangeRate,
   snapshotFromDocumentInput,
+  toBaseCurrencyAmount,
+  toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
 import { formatCurrency } from '@/utils/formatters';
@@ -238,6 +241,25 @@ export const PurchaseDocumentForm = ({
     }),
     [config, discountType, discountValue, items, taxCalculationMode, taxCode, taxId, taxName, taxRate, taxes],
   );
+  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const displayedDiscountValue = discountType === 'fixed'
+    ? toDocumentCurrencyAmount(discountValue, documentCurrencySnapshot)
+    : discountValue;
+  const renderMoney = useCallback((amount?: number, className = 'font-medium text-gray-900') => (
+    <span className="text-right">
+      <span className={className}>
+        {formatDocumentCurrencyAmount(
+          toDocumentCurrencyAmount(amount, documentCurrencySnapshot),
+          documentCurrencySnapshot,
+        )}
+      </span>
+      {isForeignCurrency && (
+        <span className="block text-[11px] font-normal text-gray-400">
+          Rp {formatCurrency(amount || 0)}
+        </span>
+      )}
+    </span>
+  ), [documentCurrencySnapshot, isForeignCurrency]);
 
   const handleItemsChange = useCallback((nextItems: PurchaseDocumentItem[]) => {
     setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
@@ -246,20 +268,15 @@ export const PurchaseDocumentForm = ({
     const previousCode = normalizeCurrencyCode(previousCurrencyCode);
 
     setValue('items', items.map((item) => {
-      const itemCurrencyCode = normalizeCurrencyCode(item.currency_code);
-      const shouldInheritHeader = !item.currency_code || itemCurrencyCode === previousCode;
-
-      if (!shouldInheritHeader) return item;
-
       return applyCurrencySnapshotToLineItem({
         ...item,
         currency_code: snapshot.currency_code,
-        exchange_rate: normalizeExchangeRate(snapshot.exchange_rate),
+        exchange_rate: snapshot.exchange_rate,
         exchange_rate_source: snapshot.exchange_rate_source,
         exchange_rate_basis: snapshot.exchange_rate_basis,
         exchange_rate_date: snapshot.exchange_rate_date,
       }, snapshot, {
-        preferForeignPrice: itemCurrencyCode === snapshot.currency_code && item.foreign_price !== undefined,
+        preferForeignPrice: previousCode === snapshot.currency_code && item.foreign_price !== undefined,
       });
     }), { shouldDirty: true, shouldValidate: true });
   }, [items, setValue]);
@@ -514,7 +531,6 @@ export const PurchaseDocumentForm = ({
         calculatedItems={total.items}
         products={products}
         taxes={taxes}
-        currencies={currencies}
         documentCurrencySnapshot={documentCurrencySnapshot}
         onChange={handleItemsChange}
       />
@@ -524,7 +540,7 @@ export const PurchaseDocumentForm = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-gray-500">{t('purchaseDocuments.field.subtotal')}</span>
-              <span className="font-medium text-gray-900">Rp {formatCurrency(total.subtotal_amount || 0)}</span>
+              {renderMoney(total.subtotal_amount)}
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <span className="text-sm text-gray-500">{t('purchaseDocuments.field.documentDiscount')}</span>
@@ -542,9 +558,15 @@ export const PurchaseDocumentForm = ({
                   min={0}
                   max={discountType === 'percent' ? 100 : undefined}
                   className="w-full sm:w-32"
-                  value={Number(discountValue || 0)}
+                  value={Number(displayedDiscountValue || 0)}
                   addonAfter={discountType === 'percent' ? '%' : undefined}
-                  onChange={(value) => setValue('discount_value', Number(value || 0), { shouldDirty: true, shouldValidate: true })}
+                  onChange={(value) => setValue(
+                    'discount_value',
+                    discountType === 'fixed'
+                      ? toBaseCurrencyAmount(Number(value || 0), documentCurrencySnapshot)
+                      : Number(value || 0),
+                    { shouldDirty: true, shouldValidate: true },
+                  )}
                 />
                 <Tooltip title={t('purchaseDocuments.field.discountAccount')}>
                   <Button
@@ -558,7 +580,7 @@ export const PurchaseDocumentForm = ({
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-gray-500">{t('purchaseDocuments.field.discountAmount')}</span>
-              <span className="font-medium text-gray-900">Rp {formatCurrency(total.discount_amount || 0)}</span>
+              {renderMoney(total.discount_amount)}
             </div>
             <Controller
               name="discount_account_id"
@@ -603,13 +625,13 @@ export const PurchaseDocumentForm = ({
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-gray-500">{t('purchaseDocuments.field.tax')}</span>
-                  <span className="font-medium text-gray-900">Rp {formatCurrency(total.tax_amount || 0)}</span>
+                  {renderMoney(total.tax_amount)}
                 </div>
               </>
             )}
             <div className="flex items-center justify-between gap-4 border-t border-gray-100 pt-3">
               <span className="text-sm font-medium text-gray-700">{t('purchaseDocuments.field.total')}</span>
-              <span className="text-lg font-semibold text-gray-900">Rp {formatCurrency(total.total_amount || 0)}</span>
+              {renderMoney(total.total_amount, 'text-lg font-semibold text-gray-900')}
             </div>
           </div>
         </Card>

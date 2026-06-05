@@ -18,7 +18,6 @@ interface PurchaseLineItemsVirtualTableProps {
   unitOptionsByUnit: Map<string, Option[]>;
   emptyUnitOptions: Option[];
   taxOptions: Option[];
-  currencyOptions: Option[];
   documentCurrencySnapshot: DocumentCurrencySnapshot;
   expandedRowKeySet: Set<string>;
   expandedRowSignature: string;
@@ -42,7 +41,6 @@ export const PurchaseLineItemsVirtualTable = ({
   unitOptionsByUnit,
   emptyUnitOptions,
   taxOptions,
-  currencyOptions,
   documentCurrencySnapshot,
   expandedRowKeySet,
   expandedRowSignature,
@@ -162,7 +160,6 @@ export const PurchaseLineItemsVirtualTable = ({
                       productOptions={productOptions}
                       unitOptions={unitOptionsByProductId.get(item.product_id) ?? unitOptionsByUnit.get(item.unit) ?? emptyUnitOptions}
                       taxOptions={taxOptions}
-                      currencyOptions={currencyOptions}
                       documentCurrencySnapshot={documentCurrencySnapshot}
                       isExpanded={expandedRowKeySet.has(item.id)}
                       hasPricing={hasPricing}

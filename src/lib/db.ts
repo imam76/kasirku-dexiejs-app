@@ -50,6 +50,43 @@ const buildAccountingSeed = (now: string) => {
   };
 };
 
+const roundCurrencyValue = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+const getPaymentForeignAmount = (
+  amount: number,
+  document: Pick<SalesDocument | PurchaseDocument, 'currency_code' | 'exchange_rate'>,
+) => {
+  const currencyCode = document.currency_code ?? BASE_CURRENCY_CODE;
+  const exchangeRate = Number(document.exchange_rate || 1);
+
+  if (currencyCode === BASE_CURRENCY_CODE) return roundCurrencyValue(amount);
+  return roundCurrencyValue(amount / (exchangeRate > 0 ? exchangeRate : 1));
+};
+
+const buildPaymentCurrencySnapshot = (
+  document: Pick<
+    SalesDocument | PurchaseDocument,
+    | 'currency_code'
+    | 'currency_name'
+    | 'currency_symbol'
+    | 'base_currency_code'
+    | 'exchange_rate'
+    | 'exchange_rate_source'
+    | 'exchange_rate_basis'
+    | 'exchange_rate_date'
+    | 'document_date'
+  >,
+) => ({
+  currency_code: document.currency_code ?? BASE_CURRENCY_CODE,
+  currency_name: document.currency_name ?? 'Rupiah Indonesia',
+  currency_symbol: document.currency_symbol ?? 'Rp',
+  base_currency_code: document.base_currency_code ?? BASE_CURRENCY_CODE,
+  exchange_rate: document.exchange_rate ?? 1,
+  exchange_rate_source: document.exchange_rate_source ?? 'SYSTEM' as const,
+  exchange_rate_basis: document.exchange_rate_basis ?? 'MID' as const,
+  exchange_rate_date: document.exchange_rate_date ?? document.document_date,
+});
+
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
   transactions!: Table<Transaction>;
@@ -639,6 +676,50 @@ export class KasirkuDB extends Dexie {
 
       if (purchaseItemsWithoutCurrency.length > 0) {
         await tx.table<PurchaseDocumentItem, string>('purchaseDocumentItems').bulkPut(purchaseItemsWithoutCurrency);
+      }
+    });
+
+    this.version(38).stores({}).upgrade(async (tx) => {
+      const salesDocuments = await tx.table<SalesDocument, string>('salesDocuments').toArray();
+      const salesDocumentById = new Map(salesDocuments.map((document) => [document.id, document]));
+      const salesPayments = await tx.table<SalesInvoicePayment, string>('salesInvoicePayments').toArray();
+      const salesPaymentsWithCurrency = salesPayments
+        .filter((payment) => !payment.currency_code || payment.foreign_amount === undefined)
+        .map((payment) => {
+          const document = salesDocumentById.get(payment.sales_document_id);
+          if (!document) return payment;
+          const amount = Number(payment.amount || 0);
+
+          return {
+            ...payment,
+            ...buildPaymentCurrencySnapshot(document),
+            foreign_amount: payment.foreign_amount ?? getPaymentForeignAmount(amount, document),
+          };
+        });
+
+      if (salesPaymentsWithCurrency.length > 0) {
+        await tx.table<SalesInvoicePayment, string>('salesInvoicePayments').bulkPut(salesPaymentsWithCurrency);
+      }
+
+      const purchaseDocuments = await tx.table<PurchaseDocument, string>('purchaseDocuments').toArray();
+      const purchaseDocumentById = new Map(purchaseDocuments.map((document) => [document.id, document]));
+      const purchasePayments = await tx.table<PurchaseInvoicePayment, string>('purchaseInvoicePayments').toArray();
+      const purchasePaymentsWithCurrency = purchasePayments
+        .filter((payment) => !payment.currency_code || payment.foreign_amount === undefined)
+        .map((payment) => {
+          const document = purchaseDocumentById.get(payment.purchase_document_id);
+          if (!document) return payment;
+          const amount = Number(payment.amount || 0);
+
+          return {
+            ...payment,
+            ...buildPaymentCurrencySnapshot(document),
+            foreign_amount: payment.foreign_amount ?? getPaymentForeignAmount(amount, document),
+          };
+        });
+
+      if (purchasePaymentsWithCurrency.length > 0) {
+        await tx.table<PurchaseInvoicePayment, string>('purchaseInvoicePayments').bulkPut(purchasePaymentsWithCurrency);
       }
     });
 

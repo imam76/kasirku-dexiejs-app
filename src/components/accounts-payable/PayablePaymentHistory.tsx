@@ -3,6 +3,11 @@ import { Ban } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import { useI18n } from '@/hooks/useI18n';
 import type { PurchaseInvoicePayment } from '@/types';
+import {
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
+  toDocumentCurrencyAmount,
+} from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 const { Text } = Typography;
@@ -19,6 +24,21 @@ export function PayablePaymentHistory({
   onVoidPayment,
 }: PayablePaymentHistoryProps) {
   const { t } = useI18n();
+  const renderPaymentAmount = (payment: PurchaseInvoicePayment) => {
+    const displayAmount = payment.foreign_amount ?? toDocumentCurrencyAmount(payment.amount, payment);
+    const isForeign = !isBaseCurrency(payment.currency_code);
+
+    return (
+      <span className={payment.status === 'VOIDED' ? 'line-through text-gray-400' : 'font-semibold'}>
+        {formatDocumentCurrencyAmount(displayAmount, payment)}
+        {isForeign && (
+          <span className="block text-xs font-normal text-gray-500">
+            Rp {formatCurrency(payment.amount || 0)}
+          </span>
+        )}
+      </span>
+    );
+  };
 
   const handleVoid = (payment: PurchaseInvoicePayment) => {
     let voidReason = '';
@@ -29,7 +49,10 @@ export function PayablePaymentHistory({
         <div className="space-y-3">
           <Text type="secondary">
             {t('accountsPayable.voidConfirmContent', {
-              amount: `Rp ${formatCurrency(payment.amount)}`,
+              amount: formatDocumentCurrencyAmount(
+                payment.foreign_amount ?? toDocumentCurrencyAmount(payment.amount, payment),
+                payment,
+              ),
               invoice: payment.document_number,
             })}
           </Text>
@@ -66,11 +89,7 @@ export function PayablePaymentHistory({
       dataIndex: 'amount',
       align: 'right',
       width: 150,
-      render: (value: number, record) => (
-        <span className={record.status === 'VOIDED' ? 'line-through text-gray-400' : 'font-semibold'}>
-          Rp {formatCurrency(value || 0)}
-        </span>
-      ),
+      render: (_value: number, record) => renderPaymentAmount(record),
     },
     {
       title: t('checkout.method'),

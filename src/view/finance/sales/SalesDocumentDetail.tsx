@@ -24,6 +24,12 @@ import type {
   SalesDocumentType,
   SalesInvoicePaymentStatus,
 } from '@/types';
+import {
+  formatDocumentCurrencyAmount,
+  isBaseCurrency,
+  snapshotFromDocumentInput,
+  toDocumentCurrencyAmount,
+} from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { calculateReceivableBalance } from '@/utils/accountsReceivable/calculateReceivableBalance';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
@@ -51,7 +57,7 @@ const getDocumentDiscountLabel = (document: SalesDocument) => {
     return `${formatCurrency(discountValue)}%`;
   }
 
-  return `Rp ${formatCurrency(discountValue)}`;
+  return formatDocumentCurrencyAmount(toDocumentCurrencyAmount(discountValue, document), document);
 };
 
 interface SalesDocumentDetailProps {
@@ -147,6 +153,12 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const activePaymentAmount = invoicePayments
     .filter((payment) => payment.status === 'ACTIVE')
     .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const documentCurrencySnapshot = snapshotFromDocumentInput(document, undefined, document.document_date);
+  const activeForeignPaymentAmount = invoicePayments
+    .filter((payment) => payment.status === 'ACTIVE')
+    .reduce((sum, payment) => (
+      sum + Number(payment.foreign_amount ?? toDocumentCurrencyAmount(payment.amount, documentCurrencySnapshot) ?? 0)
+    ), 0);
   const issuedCreditAmount = Number(returnSummary?.credit_amount || 0);
   const receivableCalculation = calculateReceivableBalance({
     invoiceTotal: Number(document.total_amount || 0),
@@ -165,10 +177,22 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       customer_name: document.customer_name,
       document_date: document.document_date,
       due_date: document.due_date,
+      currency_code: documentCurrencySnapshot.currency_code,
+      currency_name: documentCurrencySnapshot.currency_name,
+      currency_symbol: documentCurrencySnapshot.currency_symbol,
+      base_currency_code: documentCurrencySnapshot.base_currency_code,
+      exchange_rate: documentCurrencySnapshot.exchange_rate,
+      exchange_rate_source: documentCurrencySnapshot.exchange_rate_source,
+      exchange_rate_basis: documentCurrencySnapshot.exchange_rate_basis,
+      exchange_rate_date: documentCurrencySnapshot.exchange_rate_date,
       total_amount: Number(document.total_amount || 0),
+      foreign_total_amount: document.foreign_total_amount ?? toDocumentCurrencyAmount(document.total_amount, documentCurrencySnapshot),
       paid_amount: receivableCalculation.paid_amount,
+      foreign_paid_amount: activeForeignPaymentAmount,
       return_credit_amount: receivableCalculation.return_credit_amount,
+      foreign_return_credit_amount: toDocumentCurrencyAmount(receivableCalculation.return_credit_amount, documentCurrencySnapshot),
       balance_due: receivableCalculation.balance_due,
+      foreign_balance_due: toDocumentCurrencyAmount(receivableCalculation.balance_due, documentCurrencySnapshot),
       payment_status: receivableCalculation.payment_status,
       aging_bucket: receivableCalculation.aging_bucket,
       overdue_days: receivableCalculation.overdue_days,
@@ -204,6 +228,20 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
       {t(salesInvoicePaymentStatusLabelKeys[effectivePaymentStatus])}
     </span>
   ) : '-';
+  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const renderMoney = (amount?: number, foreignAmount?: number, className = 'font-bold') => (
+    <span className={className}>
+      {formatDocumentCurrencyAmount(
+        foreignAmount ?? toDocumentCurrencyAmount(amount, documentCurrencySnapshot),
+        documentCurrencySnapshot,
+      )}
+      {isForeignCurrency && (
+        <span className="block text-[11px] font-normal text-gray-500">
+          Rp {formatCurrency(amount || 0)}
+        </span>
+      )}
+    </span>
+  );
 
   const handleVoid = () => {
     let voidReason = '';
@@ -344,7 +382,11 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                   {config.behavior.hasPaymentStatus ? 'Balance Due' : t('salesDocuments.field.total')}
                 </div>
                 <div className="mt-1 text-2xl font-extrabold text-gray-950">
-                  Rp {formatCurrency(config.behavior.hasPaymentStatus ? balanceDue : document.total_amount || 0)}
+                  {renderMoney(
+                    config.behavior.hasPaymentStatus ? balanceDue : document.total_amount || 0,
+                    config.behavior.hasPaymentStatus ? receivableRow?.foreign_balance_due : document.foreign_total_amount,
+                    'text-2xl font-extrabold text-gray-950',
+                  )}
                 </div>
               </div>
             ) : (
@@ -450,7 +492,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                   {t('accountsReceivable.balanceDue')}
                 </div>
                 <div className="text-lg font-bold text-rose-700">
-                  Rp {formatCurrency(receivableRow?.balance_due || 0)}
+                  {renderMoney(receivableRow?.balance_due || 0, receivableRow?.foreign_balance_due, 'text-lg font-bold text-rose-700')}
                 </div>
               </div>
               <Button
@@ -477,27 +519,27 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
             <div className="grid gap-2 text-[13px] text-rose-950 md:grid-cols-6">
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesDocuments.field.grossInvoice')}</div>
-                <div className="font-bold">Rp {formatCurrency(document.total_amount || 0)}</div>
+                <div>{renderMoney(document.total_amount || 0, document.foreign_total_amount)}</div>
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesDocuments.field.paidAmount')}</div>
-                <div className="font-bold">Rp {formatCurrency(receivableCalculation.paid_amount)}</div>
+                <div>{renderMoney(receivableCalculation.paid_amount, activeForeignPaymentAmount)}</div>
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.summary.totalReturn')}</div>
-                <div className="font-bold">Rp {formatCurrency(returnSummary?.total_amount || 0)}</div>
+                <div>{renderMoney(returnSummary?.total_amount || 0)}</div>
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.field.creditAmount')}</div>
-                <div className="font-bold">Rp {formatCurrency(returnSummary?.credit_amount || 0)}</div>
+                <div>{renderMoney(returnSummary?.credit_amount || 0)}</div>
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesReturns.field.refundAmount')}</div>
-                <div className="font-bold">Rp {formatCurrency(returnSummary?.refund_amount || 0)}</div>
+                <div>{renderMoney(returnSummary?.refund_amount || 0)}</div>
               </div>
               <div>
                 <div className="text-[11px] font-semibold uppercase text-rose-400">{t('salesDocuments.field.netBalanceDue')}</div>
-                <div className="font-bold">Rp {formatCurrency(balanceDue)}</div>
+                <div>{renderMoney(balanceDue, receivableRow?.foreign_balance_due)}</div>
               </div>
             </div>
           </div>
@@ -563,8 +605,8 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                       {item.sku ? `${item.sku} · ` : ''}
                       {item.quantity} {item.unit}
                       {item.delivered_quantity !== undefined ? ` · ${t('salesDocuments.field.deliveredQuantity')}: ${item.delivered_quantity}` : ''}
-                      {config.behavior.hasPricing ? ` · ${t('salesDocuments.field.discount')}: Rp ${formatCurrency(item.discount_amount || 0)}` : ''}
-                      {config.behavior.hasTax ? ` · ${t('salesDocuments.field.tax')}: Rp ${formatCurrency(item.tax_amount || 0)}` : ''}
+                      {config.behavior.hasPricing ? ` · ${t('salesDocuments.field.discount')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.discount_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
+                      {config.behavior.hasTax ? ` · ${t('salesDocuments.field.tax')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.tax_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
                     </div>
                   </td>
                   <td className="px-3 py-3 text-right align-top text-gray-700">{item.quantity}</td>
@@ -572,12 +614,14 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                     <td className="px-3 py-3 text-right align-top text-gray-700">{item.delivered_quantity ?? '-'}</td>
                   )}
                   {config.behavior.hasPricing && (
-                    <td className="px-3 py-3 text-right align-top text-gray-700">Rp {formatCurrency(item.price || 0)}</td>
+                    <td className="px-3 py-3 text-right align-top text-gray-700">
+                      {renderMoney(item.price || 0, item.foreign_price, 'font-medium')}
+                    </td>
                   )}
                   <td className="px-3 py-3 text-right align-top text-gray-700">{item.unit}</td>
                   {config.behavior.hasPricing && (
                     <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
-                      Rp {formatCurrency(item.subtotal || 0)}
+                      {renderMoney(item.subtotal || 0, item.foreign_subtotal, 'font-semibold text-gray-950')}
                     </td>
                   )}
                 </tr>
@@ -591,12 +635,12 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
             <div className="w-full max-w-[280px]">
               <div className="flex justify-between py-1.5 text-[13px]">
                 <span className="text-gray-500">{t('salesDocuments.field.subtotal')}</span>
-                <span className="font-medium text-gray-700">Rp {formatCurrency(document.subtotal_amount || 0)}</span>
+                {renderMoney(document.subtotal_amount || 0, document.foreign_subtotal_amount, 'font-medium text-gray-700')}
               </div>
               <div className="flex justify-between py-1.5 text-[13px]">
                 <span className="text-gray-500">{t('salesDocuments.field.documentDiscount')}</span>
                 <span className="font-medium text-gray-400">
-                  {getDocumentDiscountLabel(document)} · Rp {formatCurrency(document.discount_amount || 0)}
+                  {getDocumentDiscountLabel(document)} · {formatDocumentCurrencyAmount(toDocumentCurrencyAmount(document.discount_amount, documentCurrencySnapshot), documentCurrencySnapshot)}
                 </span>
               </div>
               {document.discount_account_code && document.discount_account_name && (
@@ -609,30 +653,30 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               )}
               <div className="flex justify-between py-1.5 text-[13px]">
                 <span className="text-gray-500">{t('salesDocuments.field.discountAmount')}</span>
-                <span className="font-medium text-gray-400">Rp {formatCurrency(document.discount_amount || 0)}</span>
+                {renderMoney(document.discount_amount || 0, document.foreign_discount_amount, 'font-medium text-gray-400')}
               </div>
               {config.behavior.hasTax && (
                 <div className="flex justify-between py-1.5 text-[13px]">
                   <span className="text-gray-500">{t('salesDocuments.field.tax')}</span>
-                  <span className="font-medium text-gray-400">Rp {formatCurrency(document.tax_amount || 0)}</span>
+                  {renderMoney(document.tax_amount || 0, document.foreign_tax_amount, 'font-medium text-gray-400')}
                 </div>
               )}
               {config.behavior.hasPaymentStatus && (
                 <div className="flex justify-between py-1.5 text-[13px]">
                   <span className="text-gray-500">{t('salesDocuments.field.paidAmount')}</span>
-                  <span className="font-medium text-green-700">Rp {formatCurrency(receivableCalculation.paid_amount)}</span>
+                  {renderMoney(receivableCalculation.paid_amount, activeForeignPaymentAmount, 'font-medium text-green-700')}
                 </div>
               )}
               {config.behavior.hasPaymentStatus && issuedCreditAmount > 0 && (
                 <div className="flex justify-between py-1.5 text-[13px]">
                   <span className="text-gray-500">{t('salesReturns.field.creditAmount')}</span>
-                  <span className="font-medium text-rose-700">Rp {formatCurrency(issuedCreditAmount)}</span>
+                  {renderMoney(issuedCreditAmount, undefined, 'font-medium text-rose-700')}
                 </div>
               )}
               <div className="my-2 h-px bg-gray-200" />
               <div className="flex justify-between rounded-lg px-3.5 py-3" style={{ backgroundColor: config.theme.accent }}>
                 <span className="text-sm font-bold text-white/85">{t('salesDocuments.field.total')}</span>
-                <span className="text-[17px] font-extrabold text-white">Rp {formatCurrency(document.total_amount || 0)}</span>
+                {renderMoney(document.total_amount || 0, document.foreign_total_amount, 'text-[17px] font-extrabold text-white')}
               </div>
             </div>
           </div>

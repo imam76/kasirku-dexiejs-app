@@ -35,6 +35,7 @@ import {
   applyCurrencySnapshotToLineItem,
   applyForeignAmountsToLineItem,
   getForeignDocumentTotals,
+  isBaseCurrency,
   normalizeCurrencyCode,
   snapshotFromDocumentInput,
   type DocumentCurrencySnapshot,
@@ -137,7 +138,7 @@ const normalizeDocumentItems = (
   foreign_subtotal: item.foreign_subtotal === undefined ? undefined : Number(item.foreign_subtotal),
   foreign_total_amount: item.foreign_total_amount === undefined ? undefined : Number(item.foreign_total_amount),
   created_at: item.created_at || createdAt,
-}, documentCurrency, { preferForeignPrice: item.foreign_price !== undefined }));
+}, documentCurrency, { preferForeignPrice: item.foreign_price !== undefined && !isBaseCurrency(documentCurrency.currency_code) }));
 
 const getSalesDocumentWarehouse = (document: SalesDocument) => ({
   id: document.warehouse_id,

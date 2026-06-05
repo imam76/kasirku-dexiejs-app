@@ -1,11 +1,9 @@
 import { Button, InputNumber, Select } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
 import type { PromoType, SalesDocumentItem } from '@/types';
-import { BASE_CURRENCY_CODE } from '@/constants/currencies';
 import {
-  normalizeCurrencyCode,
-  normalizeExchangeRate,
-  toForeignAmount,
+  isBaseCurrency,
+  toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
 import { formatCurrency } from '@/utils/formatters';
@@ -19,7 +17,6 @@ interface DocumentLineItemExpandedFieldsProps {
   item: SalesDocumentItem;
   calculatedItem?: SalesDocumentItem;
   taxOptions: Option[];
-  currencyOptions: Option[];
   documentCurrencySnapshot: DocumentCurrencySnapshot;
   onUpdateItem: (itemId: string, patch: Partial<SalesDocumentItem>) => void;
 }
@@ -39,16 +36,16 @@ export const DocumentLineItemExpandedFields = ({
   item,
   calculatedItem,
   taxOptions,
-  currencyOptions,
   documentCurrencySnapshot,
   onUpdateItem,
 }: DocumentLineItemExpandedFieldsProps) => {
   const { t } = useI18n();
   const displayedItem = calculatedItem ?? item;
   const isPriceEdited = Boolean(item.is_price_edited && item.original_price !== undefined);
-  const itemCurrencyCode = normalizeCurrencyCode(item.currency_code ?? documentCurrencySnapshot.currency_code);
-  const itemExchangeRate = normalizeExchangeRate(item.exchange_rate ?? documentCurrencySnapshot.exchange_rate);
-  const isForeignCurrency = itemCurrencyCode !== BASE_CURRENCY_CODE;
+  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const displayedPrice = isForeignCurrency
+    ? item.foreign_price ?? toDocumentCurrencyAmount(item.price, documentCurrencySnapshot)
+    : item.price;
 
   return (
     <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-3">
@@ -70,59 +67,16 @@ export const DocumentLineItemExpandedFields = ({
           <InputNumber
             min={0}
             className={expandedFieldControlClassName}
-            value={item.price}
-            onChange={(value) => onUpdateItem(item.id, { price: Number(value || 0) })}
+            value={displayedPrice}
+            onChange={(value) => onUpdateItem(item.id, isForeignCurrency
+              ? { foreign_price: Number(value || 0) }
+              : { price: Number(value || 0) })}
           />
           {isPriceEdited && (
             <p className="mt-1 text-xs text-amber-700">
               {t('salesDocuments.systemPrice', { price: formatCurrency(item.original_price || 0) })}
             </p>
           )}
-        </div>
-        <div>
-          <div className={expandedFieldLabelClassName}>{t('documents.currencyOverride')}</div>
-          <Select
-            className={expandedFieldControlClassName}
-            value={itemCurrencyCode}
-            options={currencyOptions}
-            onChange={(currencyCode: string) => onUpdateItem(item.id, {
-              currency_code: currencyCode,
-              exchange_rate: currencyCode === BASE_CURRENCY_CODE ? 1 : itemExchangeRate,
-              exchange_rate_source: currencyCode === BASE_CURRENCY_CODE ? 'SYSTEM' : 'MANUAL',
-              exchange_rate_basis: 'MID',
-              exchange_rate_date: item.exchange_rate_date ?? documentCurrencySnapshot.exchange_rate_date,
-            })}
-          />
-        </div>
-        <div>
-          <div className={expandedFieldLabelClassName}>{t('documents.foreignPrice')}</div>
-          <InputNumber
-            min={0}
-            className={expandedFieldControlClassName}
-            disabled={!isForeignCurrency}
-            value={isForeignCurrency ? item.foreign_price ?? toForeignAmount(item.price, itemExchangeRate) : item.price}
-            onChange={(value) => onUpdateItem(item.id, {
-              foreign_price: Number(value || 0),
-              exchange_rate: itemExchangeRate,
-              exchange_rate_source: 'MANUAL',
-              exchange_rate_basis: 'MID',
-            })}
-          />
-        </div>
-        <div>
-          <div className={expandedFieldLabelClassName}>{t('documents.exchangeRate')}</div>
-          <InputNumber
-            min={isForeignCurrency ? 0.000001 : 1}
-            className={expandedFieldControlClassName}
-            disabled={!isForeignCurrency}
-            value={itemExchangeRate}
-            formatter={(value) => formatCurrency(Number(value || 0))}
-            onChange={(value) => onUpdateItem(item.id, {
-              exchange_rate: Number(value || 1),
-              exchange_rate_source: 'MANUAL',
-              exchange_rate_basis: 'MID',
-            })}
-          />
         </div>
         <div>
           <div className={expandedFieldLabelClassName}>{t('salesDocuments.field.discount')}</div>

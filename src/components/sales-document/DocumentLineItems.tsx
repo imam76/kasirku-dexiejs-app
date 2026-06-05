@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from 'antd';
 import { Plus } from 'lucide-react';
-import type { Currency, Product, SalesDocumentItem, Tax } from '@/types';
+import type { Product, SalesDocumentItem, Tax } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { getPrice, normalisasiHargaProduk } from '@/utils/pricing';
@@ -11,8 +11,7 @@ import { mapProductToSalesDocumentItem } from '@/utils/salesDocuments/mapProduct
 import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import {
   applyCurrencySnapshotToLineItem,
-  normalizeCurrencyCode,
-  normalizeExchangeRate,
+  toBaseCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
 import { DocumentLineItemsVirtualTable } from './DocumentLineItemsVirtualTable';
@@ -24,7 +23,6 @@ interface DocumentLineItemsProps {
   calculatedItems: SalesDocumentItem[];
   products: Product[];
   taxes: Tax[];
-  currencies: Currency[];
   documentCurrencySnapshot: DocumentCurrencySnapshot;
   onChange: (items: SalesDocumentItem[]) => void;
 }
@@ -61,7 +59,6 @@ export const DocumentLineItems = ({
   calculatedItems,
   products,
   taxes,
-  currencies,
   documentCurrencySnapshot,
   onChange,
 }: DocumentLineItemsProps) => {
@@ -94,26 +91,6 @@ export const DocumentLineItems = ({
     })),
     [t, taxes],
   );
-  const currencyOptions = useMemo(
-    () => {
-      const sourceCurrencies = currencies.length > 0
-        ? currencies
-        : [{
-          code: 'IDR',
-          name: 'Rupiah Indonesia',
-          is_active: true,
-        } as Currency];
-
-      return sourceCurrencies
-      .filter((currency) => currency.is_active || currency.code === 'IDR')
-      .map((currency) => ({
-        value: currency.code,
-        label: `${currency.code} - ${currency.name}`,
-      }));
-    },
-    [currencies],
-  );
-
   const unitOptionsByProductId = useMemo(
     () => new Map(products.map((product) => [
       product.id,
@@ -183,6 +160,17 @@ export const DocumentLineItems = ({
             is_price_edited: isPriceEdited || undefined,
             price_edited_at: isPriceEdited ? new Date().toISOString() : undefined,
           };
+        } else if (patch.foreign_price !== undefined) {
+          const price = toBaseCurrencyAmount(Number(patch.foreign_price || 0), documentCurrencySnapshot);
+          const originalPrice = getPrice(product, getItemPricingQuantity(item, patch), patch.unit ?? item.unit);
+          const isPriceEdited = price !== originalPrice;
+
+          nextPatch = {
+            ...nextPatch,
+            original_price: isPriceEdited ? originalPrice : undefined,
+            is_price_edited: isPriceEdited || undefined,
+            price_edited_at: isPriceEdited ? new Date().toISOString() : undefined,
+          };
         }
       }
 
@@ -196,17 +184,8 @@ export const DocumentLineItems = ({
 
       if (!shouldRecalculateCurrency) return mergedItem;
 
-      const itemSnapshot = {
-        ...documentCurrencySnapshot,
-        currency_code: normalizeCurrencyCode(mergedItem.currency_code ?? documentCurrencySnapshot.currency_code),
-        exchange_rate: normalizeExchangeRate(mergedItem.exchange_rate ?? documentCurrencySnapshot.exchange_rate),
-        exchange_rate_source: mergedItem.exchange_rate_source ?? documentCurrencySnapshot.exchange_rate_source,
-        exchange_rate_basis: mergedItem.exchange_rate_basis ?? documentCurrencySnapshot.exchange_rate_basis,
-        exchange_rate_date: mergedItem.exchange_rate_date ?? documentCurrencySnapshot.exchange_rate_date,
-      };
-
-      return applyCurrencySnapshotToLineItem(mergedItem, itemSnapshot, {
-        preferForeignPrice: patch.foreign_price !== undefined || patch.exchange_rate !== undefined,
+      return applyCurrencySnapshotToLineItem(mergedItem, documentCurrencySnapshot, {
+        preferForeignPrice: patch.foreign_price !== undefined,
       });
     }));
   }, [config.behavior.hasPricing, documentCurrencySnapshot, onChange, productsById]);
@@ -280,7 +259,6 @@ export const DocumentLineItems = ({
         unitOptionsByUnit={unitOptionsByUnit}
         emptyUnitOptions={emptyUnitOptions}
         taxOptions={taxOptions}
-        currencyOptions={currencyOptions}
         documentCurrencySnapshot={documentCurrencySnapshot}
         expandedRowKeySet={expandedRowKeySet}
         expandedRowSignature={expandedRowSignature}
