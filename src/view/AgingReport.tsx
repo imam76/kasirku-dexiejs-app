@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { App, Button, Card, DatePicker, Empty, Input, Modal, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { App, Button, Card, Empty, Input, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { Dayjs } from 'dayjs';
 import { FileExcelOutlined } from '@ant-design/icons';
-import { AlertCircle, Eye, History, RefreshCw, Search, Scale, Wallet, X } from 'lucide-react';
+import { AlertCircle, RefreshCw, Search, Scale, SlidersHorizontal, Wallet, X } from 'lucide-react';
 import ExportActions from '@/components/ExportActions';
 import { Loading } from '@/components/Loading';
-import { PayablePaymentHistory } from '@/components/accounts-payable/PayablePaymentHistory';
-import { ReceivablePaymentHistory } from '@/components/accounts-receivable/ReceivablePaymentHistory';
+import {
+  AgingReportFilterModal,
+  type AgingReportAdvancedFilters,
+} from '@/components/report/AgingReportFilterModal';
 import { getPurchaseDocumentTypePathSegment } from '@/configs/purchase-document';
 import { getSalesDocumentTypePathSegment } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
@@ -35,9 +36,6 @@ import { salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n'
 const { Text, Title } = Typography;
 
 type AgingTab = 'receivable' | 'payable';
-type HistoryTarget =
-  | { type: 'receivable'; row: AccountsReceivableRow }
-  | { type: 'payable'; row: AccountsPayableRow };
 type CurrencyAmountSnapshot = {
   currency_code?: string;
   exchange_rate?: number;
@@ -75,39 +73,42 @@ const moneyForExport = (
   return `${row.currency_code || ''} ${displayValue} / Rp ${value}`;
 };
 
+const createDefaultAdvancedFilters = (): AgingReportAdvancedFilters => ({
+  asOfDate: dayjs.tz().format('YYYY-MM-DD'),
+  paymentStatus: 'ALL',
+  agingBucket: 'ALL',
+});
+
+const countActiveAdvancedFilters = (filters: AgingReportAdvancedFilters) => {
+  const today = dayjs.tz().format('YYYY-MM-DD');
+
+  return [
+    filters.asOfDate !== today,
+    filters.paymentStatus !== 'ALL',
+    filters.agingBucket !== 'ALL',
+    Boolean(filters.invoiceDateFrom || filters.invoiceDateTo),
+    Boolean(filters.dueDateFrom || filters.dueDateTo),
+  ].filter(Boolean).length;
+};
+
 export default function AgingReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<AgingTab>('receivable');
   const [searchText, setSearchText] = useState('');
-  const [asOfDate, setAsOfDate] = useState<Dayjs>(dayjs.tz());
-  const [invoiceRange, setInvoiceRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
-  const [dueRange, setDueRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<AccountsAgingReportFilters['paymentStatus']>('ALL');
-  const [agingBucket, setAgingBucket] = useState<AccountsAgingReportFilters['agingBucket']>('ALL');
-  const [historyTarget, setHistoryTarget] = useState<HistoryTarget | null>(null);
+  const [advancedFilters, setAdvancedFilters] = useState<AgingReportAdvancedFilters>(() => createDefaultAdvancedFilters());
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const filters = useMemo<AccountsAgingReportFilters>(() => ({
     search: searchText,
-    paymentStatus,
-    agingBucket,
-    asOfDate: asOfDate.format('YYYY-MM-DD'),
-    invoiceDateFrom: invoiceRange?.[0]?.format('YYYY-MM-DD'),
-    invoiceDateTo: invoiceRange?.[1]?.format('YYYY-MM-DD'),
-    dueDateFrom: dueRange?.[0]?.format('YYYY-MM-DD'),
-    dueDateTo: dueRange?.[1]?.format('YYYY-MM-DD'),
-  }), [agingBucket, asOfDate, dueRange, invoiceRange, paymentStatus, searchText]);
+    ...advancedFilters,
+  }), [advancedFilters, searchText]);
 
   const { data, isLoading, error, refetch } = useAccountsAgingReport(filters);
+  const activeFilterCount = useMemo(() => countActiveAdvancedFilters(advancedFilters), [advancedFilters]);
 
   const receivableRows = data?.receivableRows ?? [];
   const payableRows = data?.payableRows ?? [];
-  const selectedReceivablePayments = historyTarget?.type === 'receivable'
-    ? (data?.salesInvoicePayments ?? []).filter((payment) => payment.sales_document_id === historyTarget.row.sales_document_id)
-    : [];
-  const selectedPayablePayments = historyTarget?.type === 'payable'
-    ? (data?.purchaseInvoicePayments ?? []).filter((payment) => payment.purchase_document_id === historyTarget.row.purchase_document_id)
-    : [];
 
   const renderMoney = (
     value: number,
@@ -143,11 +144,7 @@ export default function AgingReport() {
 
   const resetFilters = () => {
     setSearchText('');
-    setAsOfDate(dayjs.tz());
-    setInvoiceRange(null);
-    setDueRange(null);
-    setPaymentStatus('ALL');
-    setAgingBucket('ALL');
+    setAdvancedFilters(createDefaultAdvancedFilters());
   };
 
   const exportRows = async (target: ExportTarget = 'auto') => {
@@ -156,7 +153,7 @@ export default function AgingReport() {
     try {
       const summaryRows = [
         [t('report.aging.title')],
-        [`${t('report.aging.asOfDate')}: ${asOfDate.format('YYYY-MM-DD')}`],
+        [`${t('report.aging.asOfDate')}: ${advancedFilters.asOfDate}`],
         [`${t('report.printDate')} ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`],
         [],
         [t('report.aging.metric'), t('report.aging.receivable'), t('report.aging.payable')],
@@ -302,26 +299,6 @@ export default function AgingReport() {
         <Tag color={paymentStatusColors[value]}>{t(salesInvoicePaymentStatusLabelKeys[value])}</Tag>
       ),
     },
-    {
-      title: t('accountsReceivable.actions'),
-      key: 'actions',
-      fixed: 'right',
-      width: 140,
-      render: (_, record) => (
-        <Space>
-          <Button size="small" icon={<History size={14} />} onClick={() => setHistoryTarget({ type: 'receivable', row: record })} />
-          <Link
-            to="/sales/$documentType/$documentId"
-            params={{
-              documentType: getSalesDocumentTypePathSegment('SALES_INVOICE'),
-              documentId: record.sales_document_id,
-            }}
-          >
-            <Button size="small" icon={<Eye size={14} />} />
-          </Link>
-        </Space>
-      ),
-    },
   ];
 
   const payableColumns: ColumnsType<AccountsPayableRow> = [
@@ -356,26 +333,6 @@ export default function AgingReport() {
       width: 130,
       render: (value: PurchaseInvoicePaymentStatus) => (
         <Tag color={paymentStatusColors[value]}>{t(purchaseInvoicePaymentStatusLabelKeys[value])}</Tag>
-      ),
-    },
-    {
-      title: t('accountsPayable.actions'),
-      key: 'actions',
-      fixed: 'right',
-      width: 140,
-      render: (_, record) => (
-        <Space>
-          <Button size="small" icon={<History size={14} />} onClick={() => setHistoryTarget({ type: 'payable', row: record })} />
-          <Link
-            to="/purchases/$documentType/$documentId"
-            params={{
-              documentType: getPurchaseDocumentTypePathSegment('PURCHASE_INVOICE'),
-              documentId: record.purchase_document_id,
-            }}
-          >
-            <Button size="small" icon={<Eye size={14} />} />
-          </Link>
-        </Space>
       ),
     },
   ];
@@ -414,7 +371,7 @@ export default function AgingReport() {
       </div>
 
       <Card size="small">
-        <div className="grid gap-2 lg:grid-cols-[minmax(220px,1.2fr)_180px_220px_220px_170px_170px_auto]">
+        <div className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto]">
           <Input
             allowClear
             prefix={<Search size={14} />}
@@ -422,47 +379,11 @@ export default function AgingReport() {
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
           />
-          <DatePicker
-            allowClear={false}
-            value={asOfDate}
-            onChange={(value) => value && setAsOfDate(value)}
-            format="YYYY-MM-DD"
-            placeholder={t('report.aging.asOfDate')}
-          />
-          <DatePicker.RangePicker
-            value={invoiceRange}
-            onChange={setInvoiceRange}
-            format="YYYY-MM-DD"
-            placeholder={[t('accountsReceivable.invoiceDateFrom'), t('accountsReceivable.invoiceDateTo')]}
-          />
-          <DatePicker.RangePicker
-            value={dueRange}
-            onChange={setDueRange}
-            format="YYYY-MM-DD"
-            placeholder={[t('accountsReceivable.dueDateFrom'), t('accountsReceivable.dueDateTo')]}
-          />
-          <Select
-            value={paymentStatus}
-            onChange={setPaymentStatus}
-            options={[
-              { value: 'ALL', label: t('accountsReceivable.allPaymentStatuses') },
-              { value: 'UNPAID', label: t(salesInvoicePaymentStatusLabelKeys.UNPAID) },
-              { value: 'PARTIAL', label: t(salesInvoicePaymentStatusLabelKeys.PARTIAL) },
-              { value: 'PAID', label: t(salesInvoicePaymentStatusLabelKeys.PAID) },
-            ]}
-          />
-          <Select
-            value={agingBucket}
-            onChange={setAgingBucket}
-            options={[
-              { value: 'ALL', label: t('accountsReceivable.allAging') },
-              { value: 'CURRENT', label: t(agingLabelKeys.CURRENT) },
-              { value: 'OVERDUE_1_30', label: t(agingLabelKeys.OVERDUE_1_30) },
-              { value: 'OVERDUE_31_60', label: t(agingLabelKeys.OVERDUE_31_60) },
-              { value: 'OVERDUE_61_90', label: t(agingLabelKeys.OVERDUE_61_90) },
-              { value: 'OVERDUE_90_PLUS', label: t(agingLabelKeys.OVERDUE_90_PLUS) },
-            ]}
-          />
+          <Button icon={<SlidersHorizontal size={14} />} onClick={() => setIsFilterModalOpen(true)}>
+            {activeFilterCount > 0
+              ? t('report.aging.filterWithCount', { count: activeFilterCount })
+              : t('report.aging.filter')}
+          </Button>
           <Button icon={<X size={14} />} onClick={resetFilters}>
             {t('common.reset')}
           </Button>
@@ -540,26 +461,19 @@ export default function AgingReport() {
         />
       </Card>
 
-      <Modal
-        title={historyTarget ? `${t('report.aging.paymentHistory')} - ${historyTarget.row.document_number}` : t('report.aging.paymentHistory')}
-        open={Boolean(historyTarget)}
-        onCancel={() => setHistoryTarget(null)}
-        footer={null}
-        width={1100}
-        destroyOnClose
-      >
-        {historyTarget?.type === 'receivable' ? (
-          <ReceivablePaymentHistory
-            payments={selectedReceivablePayments}
-            allowVoid={false}
-          />
-        ) : historyTarget?.type === 'payable' ? (
-          <PayablePaymentHistory
-            payments={selectedPayablePayments}
-            allowVoid={false}
-          />
-        ) : null}
-      </Modal>
+      <AgingReportFilterModal
+        open={isFilterModalOpen}
+        value={advancedFilters}
+        onCancel={() => setIsFilterModalOpen(false)}
+        onReset={() => {
+          setAdvancedFilters(createDefaultAdvancedFilters());
+          setIsFilterModalOpen(false);
+        }}
+        onApply={(nextFilters) => {
+          setAdvancedFilters(nextFilters);
+          setIsFilterModalOpen(false);
+        }}
+      />
     </div>
   );
 }
