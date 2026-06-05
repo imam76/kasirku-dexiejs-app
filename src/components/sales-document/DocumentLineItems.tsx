@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from 'antd';
 import { Plus } from 'lucide-react';
-import type { Product, SalesDocumentItem, Tax } from '@/types';
+import type { Currency, Product, SalesDocumentItem, Tax } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { getPrice, normalisasiHargaProduk } from '@/utils/pricing';
@@ -9,6 +9,12 @@ import { getProductDocumentUnits } from '@/utils/productUnits';
 import { createEmptySalesDocumentItem } from '@/utils/salesDocuments/createEmptySalesDocumentItem';
 import { mapProductToSalesDocumentItem } from '@/utils/salesDocuments/mapProductToSalesDocumentItem';
 import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
+import {
+  applyCurrencySnapshotToLineItem,
+  normalizeCurrencyCode,
+  normalizeExchangeRate,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 import { DocumentLineItemsVirtualTable } from './DocumentLineItemsVirtualTable';
 
 interface DocumentLineItemsProps {
@@ -18,6 +24,8 @@ interface DocumentLineItemsProps {
   calculatedItems: SalesDocumentItem[];
   products: Product[];
   taxes: Tax[];
+  currencies: Currency[];
+  documentCurrencySnapshot: DocumentCurrencySnapshot;
   onChange: (items: SalesDocumentItem[]) => void;
 }
 
@@ -53,6 +61,8 @@ export const DocumentLineItems = ({
   calculatedItems,
   products,
   taxes,
+  currencies,
+  documentCurrencySnapshot,
   onChange,
 }: DocumentLineItemsProps) => {
   const { t } = useI18n();
@@ -83,6 +93,25 @@ export const DocumentLineItems = ({
       label: `${tax.name} (${tax.rate}%, ${t(taxCalculationModeLabelKeys[tax.calculation_mode])})`,
     })),
     [t, taxes],
+  );
+  const currencyOptions = useMemo(
+    () => {
+      const sourceCurrencies = currencies.length > 0
+        ? currencies
+        : [{
+          code: 'IDR',
+          name: 'Rupiah Indonesia',
+          is_active: true,
+        } as Currency];
+
+      return sourceCurrencies
+      .filter((currency) => currency.is_active || currency.code === 'IDR')
+      .map((currency) => ({
+        value: currency.code,
+        label: `${currency.code} - ${currency.name}`,
+      }));
+    },
+    [currencies],
   );
 
   const unitOptionsByProductId = useMemo(
@@ -157,14 +186,38 @@ export const DocumentLineItems = ({
         }
       }
 
-      return { ...item, ...nextPatch };
+      const mergedItem = { ...item, ...nextPatch };
+      const shouldRecalculateCurrency = (
+        nextPatch.price !== undefined ||
+        patch.foreign_price !== undefined ||
+        patch.exchange_rate !== undefined ||
+        patch.currency_code !== undefined
+      );
+
+      if (!shouldRecalculateCurrency) return mergedItem;
+
+      const itemSnapshot = {
+        ...documentCurrencySnapshot,
+        currency_code: normalizeCurrencyCode(mergedItem.currency_code ?? documentCurrencySnapshot.currency_code),
+        exchange_rate: normalizeExchangeRate(mergedItem.exchange_rate ?? documentCurrencySnapshot.exchange_rate),
+        exchange_rate_source: mergedItem.exchange_rate_source ?? documentCurrencySnapshot.exchange_rate_source,
+        exchange_rate_basis: mergedItem.exchange_rate_basis ?? documentCurrencySnapshot.exchange_rate_basis,
+        exchange_rate_date: mergedItem.exchange_rate_date ?? documentCurrencySnapshot.exchange_rate_date,
+      };
+
+      return applyCurrencySnapshotToLineItem(mergedItem, itemSnapshot, {
+        preferForeignPrice: patch.foreign_price !== undefined || patch.exchange_rate !== undefined,
+      });
     }));
-  }, [config.behavior.hasPricing, onChange, productsById]);
+  }, [config.behavior.hasPricing, documentCurrencySnapshot, onChange, productsById]);
 
   const addRow = useCallback(() => {
-    onChange([...itemsRef.current, createEmptySalesDocumentItem(documentId)]);
+    onChange([
+      ...itemsRef.current,
+      applyCurrencySnapshotToLineItem(createEmptySalesDocumentItem(documentId), documentCurrencySnapshot),
+    ]);
     setScrollToLastRequest((current) => current + 1);
-  }, [documentId, onChange]);
+  }, [documentCurrencySnapshot, documentId, onChange]);
 
   const selectProduct = useCallback((itemId: string, productId: string) => {
     const product = productsById.get(productId);
@@ -177,7 +230,7 @@ export const DocumentLineItems = ({
       const quantity = item.quantity || nextItem.quantity;
       const unit = nextItem.unit;
 
-      return {
+      return applyCurrencySnapshotToLineItem({
         ...nextItem,
         id: item.id,
         quantity,
@@ -188,9 +241,9 @@ export const DocumentLineItems = ({
         discount_value: item.discount_value ?? nextItem.discount_value,
         discount_amount: item.discount_amount ?? nextItem.discount_amount,
         created_at: item.created_at,
-      };
+      }, documentCurrencySnapshot);
     }));
-  }, [onChange, productsById]);
+  }, [documentCurrencySnapshot, onChange, productsById]);
 
   const removeItem = useCallback((itemId: string) => {
     setExpandedRowKeys((currentKeys) => currentKeys.filter((key) => key !== itemId));
@@ -227,6 +280,8 @@ export const DocumentLineItems = ({
         unitOptionsByUnit={unitOptionsByUnit}
         emptyUnitOptions={emptyUnitOptions}
         taxOptions={taxOptions}
+        currencyOptions={currencyOptions}
+        documentCurrencySnapshot={documentCurrencySnapshot}
         expandedRowKeySet={expandedRowKeySet}
         expandedRowSignature={expandedRowSignature}
         hasPricing={config.behavior.hasPricing}

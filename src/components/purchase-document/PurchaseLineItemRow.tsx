@@ -4,6 +4,7 @@ import { Button, InputNumber, Select } from 'antd';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { PurchaseDocumentItem } from '@/types';
+import type { DocumentCurrencySnapshot } from '@/utils/documentCurrency';
 import { formatCurrency } from '@/utils/formatters';
 import { PurchaseLineItemExpandedFields } from './PurchaseLineItemExpandedFields';
 
@@ -18,6 +19,8 @@ export interface PurchaseLineItemRowProps {
   productOptions: Option[];
   unitOptions: Option[];
   taxOptions: Option[];
+  currencyOptions: Option[];
+  documentCurrencySnapshot: DocumentCurrencySnapshot;
   isExpanded: boolean;
   hasPricing: boolean;
   isPurchaseReceipt: boolean;
@@ -36,6 +39,8 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
   productOptions,
   unitOptions,
   taxOptions,
+  currencyOptions,
+  documentCurrencySnapshot,
   isExpanded,
   hasPricing,
   isPurchaseReceipt,
@@ -118,6 +123,8 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
           item={item}
           calculatedItem={calculatedItem}
           taxOptions={taxOptions}
+          currencyOptions={currencyOptions}
+          documentCurrencySnapshot={documentCurrencySnapshot}
           onUpdateItem={onUpdateItem}
         />
       )}
@@ -133,6 +140,8 @@ export const PurchaseLineItemRow = memo(PurchaseLineItemRowBase, (prev, next) =>
   prev.productOptions === next.productOptions &&
   prev.unitOptions === next.unitOptions &&
   prev.taxOptions === next.taxOptions &&
+  prev.currencyOptions === next.currencyOptions &&
+  prev.documentCurrencySnapshot === next.documentCurrencySnapshot &&
   prev.isExpanded === next.isExpanded &&
   prev.hasPricing === next.hasPricing &&
   prev.isPurchaseReceipt === next.isPurchaseReceipt &&

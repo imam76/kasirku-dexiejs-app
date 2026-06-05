@@ -59,6 +59,9 @@ const MasterDataProductsLazyRouteImport = createFileRoute(
 const MasterDataDepartmentsLazyRouteImport = createFileRoute(
   '/master-data/departments',
 )()
+const MasterDataCurrenciesLazyRouteImport = createFileRoute(
+  '/master-data/currencies',
+)()
 const MasterDataContactsLazyRouteImport = createFileRoute(
   '/master-data/contacts',
 )()
@@ -270,6 +273,14 @@ const MasterDataDepartmentsLazyRoute =
     getParentRoute: () => rootRouteImport,
   } as any).lazy(() =>
     import('./routes/master-data/departments.lazy').then((d) => d.Route),
+  )
+const MasterDataCurrenciesLazyRoute =
+  MasterDataCurrenciesLazyRouteImport.update({
+    id: '/master-data/currencies',
+    path: '/master-data/currencies',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/master-data/currencies.lazy').then((d) => d.Route),
   )
 const MasterDataContactsLazyRoute = MasterDataContactsLazyRouteImport.update({
   id: '/master-data/contacts',
@@ -549,6 +560,7 @@ export interface FileRoutesByFullPath {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
+  '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
@@ -607,6 +619,7 @@ export interface FileRoutesByTo {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
+  '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
@@ -666,6 +679,7 @@ export interface FileRoutesById {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
+  '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
@@ -726,6 +740,7 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/receivables'
     | '/master-data/contacts'
+    | '/master-data/currencies'
     | '/master-data/departments'
     | '/master-data/products'
     | '/master-data/projects'
@@ -784,6 +799,7 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/receivables'
     | '/master-data/contacts'
+    | '/master-data/currencies'
     | '/master-data/departments'
     | '/master-data/products'
     | '/master-data/projects'
@@ -842,6 +858,7 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/receivables'
     | '/master-data/contacts'
+    | '/master-data/currencies'
     | '/master-data/departments'
     | '/master-data/products'
     | '/master-data/projects'
@@ -901,6 +918,7 @@ export interface RootRouteChildren {
   FinancePayablesLazyRoute: typeof FinancePayablesLazyRoute
   FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRoute
   MasterDataContactsLazyRoute: typeof MasterDataContactsLazyRoute
+  MasterDataCurrenciesLazyRoute: typeof MasterDataCurrenciesLazyRoute
   MasterDataDepartmentsLazyRoute: typeof MasterDataDepartmentsLazyRoute
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
   MasterDataProjectsLazyRoute: typeof MasterDataProjectsLazyRoute
@@ -1106,6 +1124,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data/departments'
       fullPath: '/master-data/departments'
       preLoaderRoute: typeof MasterDataDepartmentsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/master-data/currencies': {
+      id: '/master-data/currencies'
+      path: '/master-data/currencies'
+      fullPath: '/master-data/currencies'
+      preLoaderRoute: typeof MasterDataCurrenciesLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/master-data/contacts': {
@@ -1370,6 +1395,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinancePayablesLazyRoute: FinancePayablesLazyRoute,
   FinanceReceivablesLazyRoute: FinanceReceivablesLazyRoute,
   MasterDataContactsLazyRoute: MasterDataContactsLazyRoute,
+  MasterDataCurrenciesLazyRoute: MasterDataCurrenciesLazyRoute,
   MasterDataDepartmentsLazyRoute: MasterDataDepartmentsLazyRoute,
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
   MasterDataProjectsLazyRoute: MasterDataProjectsLazyRoute,

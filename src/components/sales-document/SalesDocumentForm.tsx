@@ -2,12 +2,23 @@ import { useCallback, useMemo } from 'react';
 import { Button } from 'antd';
 import { useForm, useWatch } from 'react-hook-form';
 import type { DefaultValues } from 'react-hook-form';
+import { useLiveQuery } from 'dexie-react-hooks';
 import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import type { Contact, Department, Product, Project, PromoType, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
+import { db } from '@/lib/db';
+import { BASE_CURRENCY_CODE, DEFAULT_EXCHANGE_RATE } from '@/constants/currencies';
+import { DocumentCurrencyFields } from '@/components/DocumentCurrencyFields';
+import type { Contact, CurrencyRate, Department, Product, Project, PromoType, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
+import {
+  applyCurrencySnapshotToLineItem,
+  normalizeCurrencyCode,
+  normalizeExchangeRate,
+  snapshotFromDocumentInput,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 import { DocumentHeader } from './DocumentHeader';
 import { DocumentLineItems } from './DocumentLineItems';
 import { DocumentSummary } from './DocumentSummary';
@@ -46,6 +57,14 @@ const toFormInitialValues = (
       discount_type: 'fixed',
       discount_value: 0,
       discount_amount: 0,
+      currency_code: BASE_CURRENCY_CODE,
+      currency_name: 'Rupiah Indonesia',
+      currency_symbol: 'Rp',
+      base_currency_code: BASE_CURRENCY_CODE,
+      exchange_rate: DEFAULT_EXCHANGE_RATE,
+      exchange_rate_source: 'SYSTEM',
+      exchange_rate_basis: 'MID',
+      exchange_rate_date: dayjs().format('YYYY-MM-DD'),
       items: [],
     };
 
@@ -115,6 +134,12 @@ export const SalesDocumentForm = ({
   });
   const watchedItems = useWatch({ control, name: 'items' });
   const items = useMemo(() => watchedItems ?? [], [watchedItems]);
+  const documentDate = useWatch({ control, name: 'document_date' });
+  const watchedCurrencyCode = useWatch({ control, name: 'currency_code' });
+  const watchedExchangeRate = useWatch({ control, name: 'exchange_rate' });
+  const watchedExchangeRateSource = useWatch({ control, name: 'exchange_rate_source' });
+  const watchedExchangeRateBasis = useWatch({ control, name: 'exchange_rate_basis' });
+  const watchedExchangeRateDate = useWatch({ control, name: 'exchange_rate_date' });
   const discountType = useWatch({ control, name: 'discount_type' }) ?? 'fixed';
   const discountValue = useWatch({ control, name: 'discount_value' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
@@ -128,6 +153,37 @@ export const SalesDocumentForm = ({
   const taxName = selectedTax?.name ?? initialTaxSnapshot?.tax_name;
   const taxCode = selectedTax?.code ?? initialTaxSnapshot?.tax_code;
   const documentId = initialData?.document?.id ?? 'draft';
+  const currencies = useLiveQuery(
+    () => db.currencies.orderBy('code').toArray(),
+    [],
+    [],
+  );
+  const currencyRates = useLiveQuery(
+    () => db.currencyRates.orderBy('rate_date').reverse().toArray(),
+    [],
+    [],
+  );
+  const latestRateByCurrency = useMemo(() => (
+    currencyRates.reduce<Record<string, CurrencyRate>>((acc, rate) => {
+      if (!acc[rate.currency_code]) acc[rate.currency_code] = rate;
+      return acc;
+    }, {})
+  ), [currencyRates]);
+  const documentCurrencySnapshot = useMemo<DocumentCurrencySnapshot>(() => snapshotFromDocumentInput({
+    currency_code: watchedCurrencyCode,
+    exchange_rate: watchedExchangeRate,
+    exchange_rate_source: watchedExchangeRateSource,
+    exchange_rate_basis: watchedExchangeRateBasis,
+    exchange_rate_date: watchedExchangeRateDate,
+  }, currencies.find((currency) => currency.code === normalizeCurrencyCode(watchedCurrencyCode)), dayjs.isDayjs(documentDate) ? documentDate.format('YYYY-MM-DD') : undefined), [
+    currencies,
+    documentDate,
+    watchedCurrencyCode,
+    watchedExchangeRate,
+    watchedExchangeRateBasis,
+    watchedExchangeRateDate,
+    watchedExchangeRateSource,
+  ]);
   const total = useMemo(
     () => calculateDocumentTotal({
       items,
@@ -146,6 +202,27 @@ export const SalesDocumentForm = ({
   const handleItemsChange = useCallback((nextItems: SalesDocumentItem[]) => {
     setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
   }, [setValue]);
+  const handleCurrencySnapshotChange = useCallback((snapshot: DocumentCurrencySnapshot, previousCurrencyCode?: string) => {
+    const previousCode = normalizeCurrencyCode(previousCurrencyCode);
+
+    setValue('items', items.map((item) => {
+      const itemCurrencyCode = normalizeCurrencyCode(item.currency_code);
+      const shouldInheritHeader = !item.currency_code || itemCurrencyCode === previousCode;
+
+      if (!shouldInheritHeader) return item;
+
+      return applyCurrencySnapshotToLineItem({
+        ...item,
+        currency_code: snapshot.currency_code,
+        exchange_rate: normalizeExchangeRate(snapshot.exchange_rate),
+        exchange_rate_source: snapshot.exchange_rate_source,
+        exchange_rate_basis: snapshot.exchange_rate_basis,
+        exchange_rate_date: snapshot.exchange_rate_date,
+      }, snapshot, {
+        preferForeignPrice: itemCurrencyCode === snapshot.currency_code && item.foreign_price !== undefined,
+      });
+    }), { shouldDirty: true, shouldValidate: true });
+  }, [items, setValue]);
   const handleTaxChange = useCallback((taxId?: string) => {
     const tax = taxes.find((candidate) => candidate.id === taxId);
 
@@ -190,6 +267,16 @@ export const SalesDocumentForm = ({
         projects={projects}
         warehouses={warehouses}
       />
+      {config.behavior.hasPricing && (
+        <DocumentCurrencyFields
+          control={control}
+          setValue={setValue}
+          currencies={currencies}
+          latestRateByCurrency={latestRateByCurrency}
+          documentDate={documentDate}
+          onSnapshotChange={handleCurrencySnapshotChange}
+        />
+      )}
       <DocumentLineItems
         config={config}
         documentId={documentId}
@@ -197,6 +284,8 @@ export const SalesDocumentForm = ({
         calculatedItems={total.items}
         products={products}
         taxes={taxes}
+        currencies={currencies}
+        documentCurrencySnapshot={documentCurrencySnapshot}
         onChange={handleItemsChange}
       />
       <DocumentSummary

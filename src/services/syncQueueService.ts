@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { mergeRemoteAuthUsersIntoDexie } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
+import { mergeRemoteCurrenciesIntoDexie, mergeRemoteCurrencyRatesIntoDexie } from '@/services/currencyReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
 import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
 import { mergeRemoteJournalEntryBundlesIntoDexie } from '@/services/journalEntryReadService';
@@ -14,6 +15,8 @@ import {
   activityLogPostgresAdapter,
   authUserPostgresAdapter,
   contactPostgresAdapter,
+  currencyPostgresAdapter,
+  currencyRatePostgresAdapter,
   departmentPostgresAdapter,
   financeTransactionPostgresAdapter,
   isTauriRuntime,
@@ -29,6 +32,8 @@ import {
   type RemoteActivityLogDto,
   type RemoteAuthUserDto,
   type RemoteContactDto,
+  type RemoteCurrencyDto,
+  type RemoteCurrencyRateDto,
   type RemoteDepartmentDto,
   type RemoteFinanceTransactionDto,
   type RemoteJournalEntryBundleDto,
@@ -46,7 +51,7 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -54,6 +59,8 @@ const SYNC_QUEUE_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
 const ACTIVITY_LOG_ENTITY = 'activityLogs';
 const AUTH_USER_ENTITY = 'authUsers';
 const CONTACT_ENTITY = 'contacts';
+const CURRENCY_ENTITY = 'currencies';
+const CURRENCY_RATE_ENTITY = 'currencyRates';
 const DEPARTMENT_ENTITY = 'departments';
 const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
 const JOURNAL_ENTRY_ENTITY = 'journalEntries';
@@ -300,10 +307,20 @@ const mapSalesDocumentToRemoteDto = (document: SalesDocument): RemoteSalesDocume
   source_document_id: document.source_document_id,
   source_document_number: document.source_document_number,
   source_document_type: document.source_document_type,
+  currency_code: document.currency_code,
+  currency_name: document.currency_name,
+  currency_symbol: document.currency_symbol,
+  base_currency_code: document.base_currency_code,
+  exchange_rate: document.exchange_rate,
+  exchange_rate_source: document.exchange_rate_source,
+  exchange_rate_basis: document.exchange_rate_basis,
+  exchange_rate_date: document.exchange_rate_date,
   subtotal_amount: document.subtotal_amount,
+  foreign_subtotal_amount: document.foreign_subtotal_amount,
   discount_type: document.discount_type,
   discount_value: document.discount_value,
   discount_amount: document.discount_amount,
+  foreign_discount_amount: document.foreign_discount_amount,
   discount_account_id: document.discount_account_id,
   discount_account_code: document.discount_account_code,
   discount_account_name: document.discount_account_name,
@@ -313,7 +330,9 @@ const mapSalesDocumentToRemoteDto = (document: SalesDocument): RemoteSalesDocume
   tax_rate: document.tax_rate,
   tax_calculation_mode: document.tax_calculation_mode,
   tax_amount: document.tax_amount,
+  foreign_tax_amount: document.foreign_tax_amount,
   total_amount: document.total_amount,
+  foreign_total_amount: document.foreign_total_amount,
   payment_status: document.payment_status,
   paid_amount: document.paid_amount,
   paid_at: document.paid_at,
@@ -346,18 +365,29 @@ const mapSalesDocumentItemToRemoteDto = (item: SalesDocumentItem): RemoteSalesDo
   ordered_quantity: item.ordered_quantity,
   delivered_quantity: item.delivered_quantity,
   price: item.price,
+  currency_code: item.currency_code,
+  exchange_rate: item.exchange_rate,
+  exchange_rate_source: item.exchange_rate_source,
+  exchange_rate_basis: item.exchange_rate_basis,
+  exchange_rate_date: item.exchange_rate_date,
+  foreign_price: item.foreign_price,
   discount_type: item.discount_type,
   discount_value: item.discount_value,
   discount_amount: item.discount_amount,
+  foreign_discount_amount: item.foreign_discount_amount,
   tax_id: item.tax_id,
   tax_name: item.tax_name,
   tax_code: item.tax_code,
   tax_rate: item.tax_rate,
   tax_calculation_mode: item.tax_calculation_mode,
   tax_base_amount: item.tax_base_amount,
+  foreign_tax_base_amount: item.foreign_tax_base_amount,
   tax_amount: item.tax_amount,
+  foreign_tax_amount: item.foreign_tax_amount,
   subtotal: item.subtotal,
+  foreign_subtotal: item.foreign_subtotal,
   total_amount: item.total_amount,
+  foreign_total_amount: item.foreign_total_amount,
   purchase_price: item.purchase_price,
   original_price: item.original_price,
   is_price_edited: item.is_price_edited,
@@ -402,10 +432,20 @@ const mapPurchaseDocumentToRemoteDto = (document: PurchaseDocument): RemotePurch
   source_document_id: document.source_document_id,
   source_document_number: document.source_document_number,
   source_document_type: document.source_document_type,
+  currency_code: document.currency_code,
+  currency_name: document.currency_name,
+  currency_symbol: document.currency_symbol,
+  base_currency_code: document.base_currency_code,
+  exchange_rate: document.exchange_rate,
+  exchange_rate_source: document.exchange_rate_source,
+  exchange_rate_basis: document.exchange_rate_basis,
+  exchange_rate_date: document.exchange_rate_date,
   subtotal_amount: document.subtotal_amount,
+  foreign_subtotal_amount: document.foreign_subtotal_amount,
   discount_type: document.discount_type,
   discount_value: document.discount_value,
   discount_amount: document.discount_amount,
+  foreign_discount_amount: document.foreign_discount_amount,
   discount_account_id: document.discount_account_id,
   discount_account_code: document.discount_account_code,
   discount_account_name: document.discount_account_name,
@@ -415,7 +455,9 @@ const mapPurchaseDocumentToRemoteDto = (document: PurchaseDocument): RemotePurch
   tax_rate: document.tax_rate,
   tax_calculation_mode: document.tax_calculation_mode,
   tax_amount: document.tax_amount,
+  foreign_tax_amount: document.foreign_tax_amount,
   total_amount: document.total_amount,
+  foreign_total_amount: document.foreign_total_amount,
   payment_status: document.payment_status,
   paid_amount: document.paid_amount,
   paid_at: document.paid_at,
@@ -448,18 +490,29 @@ const mapPurchaseDocumentItemToRemoteDto = (item: PurchaseDocumentItem): RemoteP
   ordered_quantity: item.ordered_quantity,
   received_quantity: item.received_quantity,
   price: item.price,
+  currency_code: item.currency_code,
+  exchange_rate: item.exchange_rate,
+  exchange_rate_source: item.exchange_rate_source,
+  exchange_rate_basis: item.exchange_rate_basis,
+  exchange_rate_date: item.exchange_rate_date,
+  foreign_price: item.foreign_price,
   discount_type: item.discount_type,
   discount_value: item.discount_value,
   discount_amount: item.discount_amount,
+  foreign_discount_amount: item.foreign_discount_amount,
   tax_id: item.tax_id,
   tax_name: item.tax_name,
   tax_code: item.tax_code,
   tax_rate: item.tax_rate,
   tax_calculation_mode: item.tax_calculation_mode,
   tax_base_amount: item.tax_base_amount,
+  foreign_tax_base_amount: item.foreign_tax_base_amount,
   tax_amount: item.tax_amount,
+  foreign_tax_amount: item.foreign_tax_amount,
   subtotal: item.subtotal,
+  foreign_subtotal: item.foreign_subtotal,
   total_amount: item.total_amount,
+  foreign_total_amount: item.foreign_total_amount,
   created_at: item.created_at,
 });
 
@@ -497,6 +550,33 @@ const mapWarehouseToRemoteDto = (warehouse: Warehouse): RemoteWarehouseDto => ({
   is_active: warehouse.is_active,
   created_at: warehouse.created_at,
   updated_at: warehouse.updated_at,
+});
+
+const mapCurrencyToRemoteDto = (currency: Currency): RemoteCurrencyDto => ({
+  id: currency.id,
+  code: currency.code,
+  name: currency.name,
+  symbol: currency.symbol,
+  decimal_places: currency.decimal_places,
+  is_base: currency.is_base,
+  is_active: currency.is_active,
+  created_at: currency.created_at,
+  updated_at: currency.updated_at,
+});
+
+const mapCurrencyRateToRemoteDto = (rate: CurrencyRate): RemoteCurrencyRateDto => ({
+  id: rate.id,
+  currency_code: rate.currency_code,
+  base_currency_code: rate.base_currency_code,
+  rate_date: rate.rate_date,
+  source: rate.source,
+  unit_amount: normalizeRemoteNumber(rate.unit_amount),
+  bi_buy_rate: rate.bi_buy_rate,
+  bi_sell_rate: rate.bi_sell_rate,
+  middle_rate: normalizeRemoteNumber(rate.middle_rate),
+  fetched_at: rate.fetched_at,
+  created_at: rate.created_at,
+  updated_at: rate.updated_at,
 });
 
 const isRemoteContactDto = (payload: unknown): payload is RemoteContactDto => {
@@ -790,6 +870,39 @@ const isRemoteWarehouseDto = (payload: unknown): payload is RemoteWarehouseDto =
   );
 };
 
+const isRemoteCurrencyDto = (payload: unknown): payload is RemoteCurrencyDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCurrencyDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.code === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.decimal_places === 'number' &&
+    typeof candidate.is_base === 'boolean' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteCurrencyRateDto = (payload: unknown): payload is RemoteCurrencyRateDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCurrencyRateDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.currency_code === 'string' &&
+    typeof candidate.base_currency_code === 'string' &&
+    typeof candidate.rate_date === 'string' &&
+    typeof candidate.source === 'string' &&
+    typeof candidate.unit_amount === 'number' &&
+    typeof candidate.middle_rate === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const updateContactSyncMetadata = async (
   contactId: string,
   sourceUpdatedAt: string,
@@ -911,6 +1024,28 @@ const updateWarehouseSyncMetadata = async (
   await db.warehouses.update(warehouseId, syncMetadata);
 };
 
+const updateCurrencySyncMetadata = async (
+  currencyId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Currency, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentCurrency = await db.currencies.get(currencyId);
+  if (!currentCurrency || currentCurrency.updated_at !== sourceUpdatedAt) return;
+
+  await db.currencies.update(currencyId, syncMetadata);
+};
+
+const updateCurrencyRateSyncMetadata = async (
+  rateId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CurrencyRate, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentRate = await db.currencyRates.get(rateId);
+  if (!currentRate || currentRate.updated_at !== sourceUpdatedAt) return;
+
+  await db.currencyRates.update(rateId, syncMetadata);
+};
+
 const markQueueItemPending = async (queueItemId: string) => {
   await db.syncQueue.update(queueItemId, {
     status: 'pending',
@@ -945,6 +1080,20 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === CONTACT_ENTITY && isRemoteContactDto(queueItem.payload)) {
     await updateContactSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === CURRENCY_ENTITY && isRemoteCurrencyDto(queueItem.payload)) {
+    await updateCurrencySyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === CURRENCY_RATE_ENTITY && isRemoteCurrencyRateDto(queueItem.payload)) {
+    await updateCurrencyRateSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -1048,6 +1197,30 @@ const processContactQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return contactPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCurrencyQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return currencyPostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemoteCurrencyDto(queueItem.payload)) {
+    throw new Error('Payload mata uang sync queue tidak valid.');
+  }
+
+  return currencyPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCurrencyRateQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return currencyRatePostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemoteCurrencyRateDto(queueItem.payload)) {
+    throw new Error('Payload kurs mata uang sync queue tidak valid.');
+  }
+
+  return currencyRatePostgresAdapter.upsert(queueItem.payload);
 };
 
 const processDepartmentQueueItem = async (queueItem: SyncQueueItem) => {
@@ -1228,6 +1401,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteActivityLog: RemoteActivityLogDto | null = null;
     let remoteAuthUser: RemoteAuthUserDto | null = null;
     let remoteContact: RemoteContactDto | null = null;
+    let remoteCurrency: RemoteCurrencyDto | null = null;
+    let remoteCurrencyRate: RemoteCurrencyRateDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
     let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
     let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
@@ -1245,6 +1420,10 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteAuthUser = await processAuthUserQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CONTACT_ENTITY) {
       remoteContact = await processContactQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === CURRENCY_ENTITY) {
+      remoteCurrency = await processCurrencyQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === CURRENCY_RATE_ENTITY) {
+      remoteCurrencyRate = await processCurrencyRateQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === DEPARTMENT_ENTITY) {
       remoteDepartment = await processDepartmentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FINANCE_TRANSACTION_ENTITY) {
@@ -1294,6 +1473,38 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       const syncedAt = new Date().toISOString();
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateDepartmentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+      });
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === CURRENCY_ENTITY &&
+      !remoteCurrency &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteCurrencyDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCurrencySyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+      });
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === CURRENCY_RATE_ENTITY &&
+      !remoteCurrencyRate &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteCurrencyRateDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCurrencyRateSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
         sync_status: 'synced',
         sync_error: undefined,
         last_synced_at: syncedAt,
@@ -1388,6 +1599,30 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteContact.updated_at,
       });
       await mergeRemoteContactsIntoDexie([remoteContact], syncedAt);
+      return;
+    }
+
+    if (remoteCurrency && isRemoteCurrencyDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCurrencySyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCurrency.updated_at,
+      });
+      await mergeRemoteCurrenciesIntoDexie([remoteCurrency], syncedAt);
+      return;
+    }
+
+    if (remoteCurrencyRate && isRemoteCurrencyRateDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCurrencyRateSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCurrencyRate.updated_at,
+      });
+      await mergeRemoteCurrencyRatesIntoDexie([remoteCurrencyRate], syncedAt);
       return;
     }
 
@@ -1616,6 +1851,52 @@ export const enqueueContactSync = async (
     entity_id: contact.id,
     operation,
     payload: mapContactToRemoteDto(contact),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueCurrencySync = async (
+  currency: Currency,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: CURRENCY_ENTITY,
+    entity_id: currency.id,
+    operation,
+    payload: mapCurrencyToRemoteDto(currency),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueCurrencyRateSync = async (
+  rate: CurrencyRate,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: CURRENCY_RATE_ENTITY,
+    entity_id: rate.id,
+    operation,
+    payload: mapCurrencyRateToRemoteDto(rate),
     status: 'pending',
     attempts: 0,
     created_at: now,

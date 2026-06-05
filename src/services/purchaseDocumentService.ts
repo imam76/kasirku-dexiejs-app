@@ -24,6 +24,14 @@ import {
 } from '@/utils/purchaseDocuments/createPurchaseDocumentSnapshots';
 import { validatePurchaseDocument } from '@/utils/purchaseDocuments/validatePurchaseDocument';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import {
+  applyCurrencySnapshotToLineItem,
+  applyForeignAmountsToLineItem,
+  getForeignDocumentTotals,
+  normalizeCurrencyCode,
+  snapshotFromDocumentInput,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 
 export interface PurchaseDocumentUpsertInput {
   document: Partial<PurchaseDocument>;
@@ -49,18 +57,21 @@ const allowedConversions: Record<PurchaseDocumentType, PurchaseDocumentType[]> =
 const nonClosingConversionTargets = new Set<PurchaseDocumentType>(['PURCHASE_RETURN']);
 
 const buildDocumentSnapshot = async (input: Partial<PurchaseDocument>): Promise<Partial<PurchaseDocument>> => {
-  const [contact, tax, department, project, warehouse, discountAccountSnapshot] = await Promise.all([
+  const [contact, tax, department, project, warehouse, currency, discountAccountSnapshot] = await Promise.all([
     input.contact_id ? db.contacts.get(input.contact_id) : undefined,
     input.tax_id ? db.taxes.get(input.tax_id) : undefined,
     input.department_id ? db.departments.get(input.department_id) : undefined,
     input.project_id ? db.projects.get(input.project_id) : undefined,
     input.warehouse_id ? db.warehouses.get(input.warehouse_id) : undefined,
+    db.currencies.get(normalizeCurrencyCode(input.currency_code)),
     getDocumentDiscountAccountSnapshot('purchase', input.discount_account_id),
   ]);
   const contactSnapshot = createSupplierSnapshot(contact);
+  const currencySnapshot = snapshotFromDocumentInput(input, currency, input.document_date);
 
   return {
     ...input,
+    ...currencySnapshot,
     ...contactSnapshot,
     ...createPurchaseTaxSnapshot(tax),
     ...createPurchaseDepartmentSnapshot(department),
@@ -75,7 +86,8 @@ const normalizeDocumentItems = (
   items: PurchaseDocumentItem[],
   documentId: string,
   createdAt: string,
-): PurchaseDocumentItem[] => items.map((item) => ({
+  documentCurrency: DocumentCurrencySnapshot,
+): PurchaseDocumentItem[] => items.map((item) => applyCurrencySnapshotToLineItem({
   ...item,
   id: item.id || crypto.randomUUID(),
   document_id: documentId,
@@ -95,8 +107,19 @@ const normalizeDocumentItems = (
   tax_amount: item.tax_amount === undefined ? undefined : Number(item.tax_amount),
   subtotal: item.subtotal === undefined ? undefined : Number(item.subtotal),
   total_amount: item.total_amount === undefined ? undefined : Number(item.total_amount),
+  currency_code: item.currency_code,
+  exchange_rate: item.exchange_rate === undefined ? undefined : Number(item.exchange_rate),
+  exchange_rate_source: item.exchange_rate_source,
+  exchange_rate_basis: item.exchange_rate_basis,
+  exchange_rate_date: item.exchange_rate_date,
+  foreign_price: item.foreign_price === undefined ? undefined : Number(item.foreign_price),
+  foreign_discount_amount: item.foreign_discount_amount === undefined ? undefined : Number(item.foreign_discount_amount),
+  foreign_tax_base_amount: item.foreign_tax_base_amount === undefined ? undefined : Number(item.foreign_tax_base_amount),
+  foreign_tax_amount: item.foreign_tax_amount === undefined ? undefined : Number(item.foreign_tax_amount),
+  foreign_subtotal: item.foreign_subtotal === undefined ? undefined : Number(item.foreign_subtotal),
+  foreign_total_amount: item.foreign_total_amount === undefined ? undefined : Number(item.foreign_total_amount),
   created_at: item.created_at || createdAt,
-}));
+}, documentCurrency, { preferForeignPrice: item.foreign_price !== undefined }));
 
 const applyConfigBehavior = <T extends Partial<PurchaseDocument>>(
   document: T,
@@ -375,8 +398,12 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
   const documentId = crypto.randomUUID();
   const snapshot = applyConfigBehavior(await buildDocumentSnapshot(document), config);
   const documentNumber = document.document_number || await createPurchaseDocumentNumber(config.numberPrefix, now);
-  const normalizedItems = normalizeDocumentItems(items, documentId, createdAt);
+  const normalizedItems = normalizeDocumentItems(items, documentId, createdAt, snapshot as DocumentCurrencySnapshot);
   const { items: calculatedItems, ...total } = await calculatePurchaseTotal(normalizedItems, snapshot, config);
+  const calculatedItemsWithFx = calculatedItems.map((item) => (
+    applyForeignAmountsToLineItem(item, snapshot as DocumentCurrencySnapshot)
+  ));
+  const foreignTotal = getForeignDocumentTotals(total, snapshot as DocumentCurrencySnapshot);
   const nextDocument = withCreatedPurchaseDocumentSync(applyConfigBehavior({
     id: documentId,
     document_number: documentNumber,
@@ -388,13 +415,14 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
     updated_at: createdAt,
     ...snapshot,
     ...total,
+    ...foreignTotal,
   } satisfies PurchaseDocument, config), currentUser);
   const products = await db.products.toArray();
-  validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products });
+  validatePurchaseDocument({ document: nextDocument, items: calculatedItemsWithFx, config, products });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     await db.purchaseDocuments.add(nextDocument);
-    await db.purchaseDocumentItems.bulkAdd(calculatedItems);
+    await db.purchaseDocumentItems.bulkAdd(calculatedItemsWithFx);
     await writeActivityLog({
       user: currentUser,
       action: 'PURCHASE_DOCUMENT_CREATED',
@@ -404,9 +432,9 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
     });
   });
 
-  await enqueuePurchaseDocumentBundleSync(nextDocument, calculatedItems, 'create');
+  await enqueuePurchaseDocumentBundleSync(nextDocument, calculatedItemsWithFx, 'create');
 
-  return { document: nextDocument, items: calculatedItems };
+  return { document: nextDocument, items: calculatedItemsWithFx };
 };
 
 export const updatePurchaseDocument = async (id: string, { document, items }: PurchaseDocumentUpsertInput) => {
@@ -422,12 +450,17 @@ export const updatePurchaseDocument = async (id: string, { document, items }: Pu
     await buildDocumentSnapshot({ ...existing, ...document, type: existing.type }),
     config,
   );
-  const normalizedItems = normalizeDocumentItems(items, id, existing.created_at);
+  const normalizedItems = normalizeDocumentItems(items, id, existing.created_at, snapshot as DocumentCurrencySnapshot);
   const { items: calculatedItems, ...total } = await calculatePurchaseTotal(normalizedItems, snapshot, config);
+  const calculatedItemsWithFx = calculatedItems.map((item) => (
+    applyForeignAmountsToLineItem(item, snapshot as DocumentCurrencySnapshot)
+  ));
+  const foreignTotal = getForeignDocumentTotals(total, snapshot as DocumentCurrencySnapshot);
   const nextDocument = withUpdatedPurchaseDocumentSync(applyConfigBehavior({
     ...existing,
     ...snapshot,
     ...total,
+    ...foreignTotal,
     id,
     type: existing.type,
     status: existing.status,
@@ -435,12 +468,12 @@ export const updatePurchaseDocument = async (id: string, { document, items }: Pu
     updated_at: updatedAt,
   } satisfies PurchaseDocument, config), existing, currentUser);
   const products = await db.products.toArray();
-  validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products });
+  validatePurchaseDocument({ document: nextDocument, items: calculatedItemsWithFx, config, products });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     await db.purchaseDocuments.put(nextDocument);
     await db.purchaseDocumentItems.where('document_id').equals(id).delete();
-    await db.purchaseDocumentItems.bulkAdd(calculatedItems);
+    await db.purchaseDocumentItems.bulkAdd(calculatedItemsWithFx);
     await writeActivityLog({
       user: currentUser,
       action: 'PURCHASE_DOCUMENT_UPDATED',
@@ -450,9 +483,9 @@ export const updatePurchaseDocument = async (id: string, { document, items }: Pu
     });
   });
 
-  await enqueuePurchaseDocumentBundleSync(nextDocument, calculatedItems, 'update');
+  await enqueuePurchaseDocumentBundleSync(nextDocument, calculatedItemsWithFx, 'update');
 
-  return { document: nextDocument, items: calculatedItems };
+  return { document: nextDocument, items: calculatedItemsWithFx };
 };
 
 export const issuePurchaseDocument = async (id: string) => {
@@ -526,6 +559,7 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
   const productById = new Map(products.map((product) => [product.id, product]));
   const documentNumber = await createPurchaseDocumentNumber(targetConfig.numberPrefix, now);
   const discountAccountSnapshot = await getDocumentDiscountAccountSnapshot('purchase', source.discount_account_id);
+  const sourceCurrencySnapshot = snapshotFromDocumentInput(source, undefined, source.document_date);
   const targetItems = normalizeDocumentItems(sourceItems.map((item) => {
     const product = productById.get(item.product_id);
 
@@ -539,9 +573,11 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
         ? item.price ?? (product ? getPurchasePrice(product, item.unit) : 0)
         : undefined,
     };
-  }), targetId, createdAt);
+  }), targetId, createdAt, sourceCurrencySnapshot);
   const snapshot = applyConfigBehavior(source, targetConfig);
   const { items: calculatedItems, ...total } = await calculatePurchaseTotal(targetItems, snapshot, targetConfig);
+  const calculatedItemsWithFx = calculatedItems.map((item) => applyForeignAmountsToLineItem(item, sourceCurrencySnapshot));
+  const foreignTotal = getForeignDocumentTotals(total, sourceCurrencySnapshot);
   const targetDocument = withCreatedPurchaseDocumentSync(applyConfigBehavior({
     ...source,
     id: targetId,
@@ -565,6 +601,7 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
     updated_at: createdAt,
     ...discountAccountSnapshot,
     ...total,
+    ...foreignTotal,
   } satisfies PurchaseDocument, targetConfig), currentUser);
   const convertedSourceDocument = nonClosingConversionTargets.has(targetType)
     ? null
@@ -576,7 +613,7 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     await db.purchaseDocuments.add(targetDocument);
-    await db.purchaseDocumentItems.bulkAdd(calculatedItems);
+    await db.purchaseDocumentItems.bulkAdd(calculatedItemsWithFx);
     if (convertedSourceDocument) {
       await db.purchaseDocuments.put(convertedSourceDocument);
     }
@@ -592,9 +629,9 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
   if (convertedSourceDocument) {
     await enqueuePurchaseDocumentBundleSync(convertedSourceDocument, sourceItems, 'update');
   }
-  await enqueuePurchaseDocumentBundleSync(targetDocument, calculatedItems, 'create');
+  await enqueuePurchaseDocumentBundleSync(targetDocument, calculatedItemsWithFx, 'create');
 
-  return { document: targetDocument, items: calculatedItems };
+  return { document: targetDocument, items: calculatedItemsWithFx };
 };
 
 export const voidPurchaseDocument = async (id: string, reason: string) => {

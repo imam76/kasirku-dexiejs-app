@@ -31,6 +31,14 @@ import {
 } from '@/utils/salesDocuments/createSalesDocumentSnapshots';
 import { validateSalesDocument } from '@/utils/salesDocuments/validateSalesDocument';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import {
+  applyCurrencySnapshotToLineItem,
+  applyForeignAmountsToLineItem,
+  getForeignDocumentTotals,
+  normalizeCurrencyCode,
+  snapshotFromDocumentInput,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 
 export interface SalesDocumentUpsertInput {
   document: Partial<SalesDocument>;
@@ -63,17 +71,20 @@ const salesDocumentTables = [
 ];
 
 const buildDocumentSnapshot = async (input: Partial<SalesDocument>): Promise<Partial<SalesDocument>> => {
-  const [contact, tax, department, project, warehouse, discountAccountSnapshot] = await Promise.all([
+  const [contact, tax, department, project, warehouse, currency, discountAccountSnapshot] = await Promise.all([
     input.contact_id ? db.contacts.get(input.contact_id) : undefined,
     input.tax_id ? db.taxes.get(input.tax_id) : undefined,
     input.department_id ? db.departments.get(input.department_id) : undefined,
     input.project_id ? db.projects.get(input.project_id) : undefined,
     input.warehouse_id ? db.warehouses.get(input.warehouse_id) : undefined,
+    db.currencies.get(normalizeCurrencyCode(input.currency_code)),
     getDocumentDiscountAccountSnapshot('sales', input.discount_account_id),
   ]);
+  const currencySnapshot = snapshotFromDocumentInput(input, currency, input.document_date);
 
   return {
     ...input,
+    ...currencySnapshot,
     ...createContactSnapshot(contact),
     ...createTaxSnapshot(tax),
     ...createDepartmentSnapshot(department),
@@ -88,7 +99,8 @@ const normalizeDocumentItems = (
   items: SalesDocumentItem[],
   documentId: string,
   createdAt: string,
-): SalesDocumentItem[] => items.map((item) => ({
+  documentCurrency: DocumentCurrencySnapshot,
+): SalesDocumentItem[] => items.map((item) => applyCurrencySnapshotToLineItem({
   ...item,
   id: item.id || crypto.randomUUID(),
   document_id: documentId,
@@ -113,8 +125,19 @@ const normalizeDocumentItems = (
   is_price_edited: item.is_price_edited || undefined,
   price_edited_by: item.price_edited_by,
   price_edited_at: item.price_edited_at,
+  currency_code: item.currency_code,
+  exchange_rate: item.exchange_rate === undefined ? undefined : Number(item.exchange_rate),
+  exchange_rate_source: item.exchange_rate_source,
+  exchange_rate_basis: item.exchange_rate_basis,
+  exchange_rate_date: item.exchange_rate_date,
+  foreign_price: item.foreign_price === undefined ? undefined : Number(item.foreign_price),
+  foreign_discount_amount: item.foreign_discount_amount === undefined ? undefined : Number(item.foreign_discount_amount),
+  foreign_tax_base_amount: item.foreign_tax_base_amount === undefined ? undefined : Number(item.foreign_tax_base_amount),
+  foreign_tax_amount: item.foreign_tax_amount === undefined ? undefined : Number(item.foreign_tax_amount),
+  foreign_subtotal: item.foreign_subtotal === undefined ? undefined : Number(item.foreign_subtotal),
+  foreign_total_amount: item.foreign_total_amount === undefined ? undefined : Number(item.foreign_total_amount),
   created_at: item.created_at || createdAt,
-}));
+}, documentCurrency, { preferForeignPrice: item.foreign_price !== undefined }));
 
 const getSalesDocumentWarehouse = (document: SalesDocument) => ({
   id: document.warehouse_id,
@@ -271,7 +294,7 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
   const documentId = crypto.randomUUID();
   const snapshot = applyPaymentStatusBehavior(await buildDocumentSnapshot(document), config);
   const documentNumber = document.document_number || await createSalesDocumentNumber(config.numberPrefix, now);
-  const normalizedItems = normalizeDocumentItems(items, documentId, createdAt);
+  const normalizedItems = normalizeDocumentItems(items, documentId, createdAt, snapshot as DocumentCurrencySnapshot);
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: normalizedItems,
     discountType: snapshot.discount_type,
@@ -284,6 +307,10 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     taxCode: snapshot.tax_code,
     config,
   });
+  const calculatedItemsWithFx = calculatedItems.map((item) => (
+    applyForeignAmountsToLineItem(item, snapshot as DocumentCurrencySnapshot)
+  ));
+  const foreignTotal = getForeignDocumentTotals(total, snapshot as DocumentCurrencySnapshot);
   const nextDocument = withCreatedSalesDocumentSync(applyPaymentStatusBehavior({
     id: documentId,
     document_number: documentNumber,
@@ -295,13 +322,14 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     updated_at: createdAt,
     ...snapshot,
     ...total,
+    ...foreignTotal,
   } satisfies SalesDocument, config), currentUser);
   const products = await db.products.toArray();
-  validateSalesDocument({ document: nextDocument, items: calculatedItems, config, products });
+  validateSalesDocument({ document: nextDocument, items: calculatedItemsWithFx, config, products });
 
   await db.transaction('rw', salesDocumentTables, async () => {
     await db.salesDocuments.add(nextDocument);
-    await db.salesDocumentItems.bulkAdd(calculatedItems);
+    await db.salesDocumentItems.bulkAdd(calculatedItemsWithFx);
     await writeActivityLog({
       user: currentUser,
       action: 'SALES_DOCUMENT_CREATED',
@@ -311,9 +339,9 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     });
   });
 
-  await enqueueSalesDocumentBundleSync(nextDocument, calculatedItems, 'create');
+  await enqueueSalesDocumentBundleSync(nextDocument, calculatedItemsWithFx, 'create');
 
-  return { document: nextDocument, items: calculatedItems };
+  return { document: nextDocument, items: calculatedItemsWithFx };
 };
 
 export const updateSalesDocument = async (id: string, { document, items }: SalesDocumentUpsertInput) => {
@@ -329,7 +357,7 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     await buildDocumentSnapshot({ ...existing, ...document, type: existing.type }),
     config,
   );
-  const normalizedItems = normalizeDocumentItems(items, id, existing.created_at);
+  const normalizedItems = normalizeDocumentItems(items, id, existing.created_at, snapshot as DocumentCurrencySnapshot);
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: normalizedItems,
     discountType: snapshot.discount_type,
@@ -342,10 +370,15 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     taxCode: snapshot.tax_code,
     config,
   });
+  const calculatedItemsWithFx = calculatedItems.map((item) => (
+    applyForeignAmountsToLineItem(item, snapshot as DocumentCurrencySnapshot)
+  ));
+  const foreignTotal = getForeignDocumentTotals(total, snapshot as DocumentCurrencySnapshot);
   const nextDocument = withUpdatedSalesDocumentSync(applyPaymentStatusBehavior({
     ...existing,
     ...snapshot,
     ...total,
+    ...foreignTotal,
     id,
     type: existing.type,
     status: existing.status,
@@ -353,12 +386,12 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     updated_at: updatedAt,
   } satisfies SalesDocument, config), existing, currentUser);
   const products = await db.products.toArray();
-  validateSalesDocument({ document: nextDocument, items: calculatedItems, config, products });
+  validateSalesDocument({ document: nextDocument, items: calculatedItemsWithFx, config, products });
 
   await db.transaction('rw', salesDocumentTables, async () => {
     await db.salesDocuments.put(nextDocument);
     await db.salesDocumentItems.where('document_id').equals(id).delete();
-    await db.salesDocumentItems.bulkAdd(calculatedItems);
+    await db.salesDocumentItems.bulkAdd(calculatedItemsWithFx);
     await writeActivityLog({
       user: currentUser,
       action: 'SALES_DOCUMENT_UPDATED',
@@ -368,9 +401,9 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     });
   });
 
-  await enqueueSalesDocumentBundleSync(nextDocument, calculatedItems, 'update');
+  await enqueueSalesDocumentBundleSync(nextDocument, calculatedItemsWithFx, 'update');
 
-  return { document: nextDocument, items: calculatedItems };
+  return { document: nextDocument, items: calculatedItemsWithFx };
 };
 
 export const issueSalesDocument = async (id: string) => {
@@ -428,11 +461,12 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
   const sourceItems = await db.salesDocumentItems.where('document_id').equals(sourceId).toArray();
   const documentNumber = await createSalesDocumentNumber(targetConfig.numberPrefix, now);
   const discountAccountSnapshot = await getDocumentDiscountAccountSnapshot('sales', source.discount_account_id);
+  const sourceCurrencySnapshot = snapshotFromDocumentInput(source, undefined, source.document_date);
   const targetItems = normalizeDocumentItems(sourceItems.map((item) => ({
     ...item,
     id: crypto.randomUUID(),
     document_id: targetId,
-  })), targetId, createdAt);
+  })), targetId, createdAt, sourceCurrencySnapshot);
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: targetItems,
     discountType: source.discount_type,
@@ -445,6 +479,8 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     taxCode: source.tax_code,
     config: targetConfig,
   });
+  const calculatedItemsWithFx = calculatedItems.map((item) => applyForeignAmountsToLineItem(item, sourceCurrencySnapshot));
+  const foreignTotal = getForeignDocumentTotals(total, sourceCurrencySnapshot);
   const targetDocument = withCreatedSalesDocumentSync(applyPaymentStatusBehavior({
     ...source,
     id: targetId,
@@ -468,6 +504,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     updated_at: createdAt,
     ...discountAccountSnapshot,
     ...total,
+    ...foreignTotal,
   } satisfies SalesDocument, targetConfig), currentUser);
   const convertedSourceDocument = withUpdatedSalesDocumentSync({
     ...source,
@@ -477,7 +514,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
 
   await db.transaction('rw', salesDocumentTables, async () => {
     await db.salesDocuments.add(targetDocument);
-    await db.salesDocumentItems.bulkAdd(calculatedItems);
+    await db.salesDocumentItems.bulkAdd(calculatedItemsWithFx);
     await db.salesDocuments.put(convertedSourceDocument);
     await writeActivityLog({
       user: currentUser,
@@ -489,9 +526,9 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
   });
 
   await enqueueSalesDocumentBundleSync(convertedSourceDocument, sourceItems, 'update');
-  await enqueueSalesDocumentBundleSync(targetDocument, calculatedItems, 'create');
+  await enqueueSalesDocumentBundleSync(targetDocument, calculatedItemsWithFx, 'create');
 
-  return { document: targetDocument, items: calculatedItems };
+  return { document: targetDocument, items: calculatedItemsWithFx };
 };
 
 export const voidSalesDocument = async (id: string, reason: string) => {

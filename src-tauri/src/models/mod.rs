@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod contact;
+pub mod currency;
 pub mod department;
 pub mod finance_transaction;
 pub mod journal_entry;

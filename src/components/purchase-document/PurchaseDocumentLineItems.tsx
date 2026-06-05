@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from 'antd';
 import { Plus } from 'lucide-react';
-import type { Product, PurchaseDocumentItem, Tax } from '@/types';
+import type { Currency, Product, PurchaseDocumentItem, Tax } from '@/types';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import { getPurchasePrice } from '@/utils/pricing';
 import { getProductDocumentUnits } from '@/utils/productUnits';
 import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/createEmptyPurchaseDocumentItem';
 import { mapProductToPurchaseDocumentItem } from '@/utils/purchaseDocuments/mapProductToPurchaseDocumentItem';
+import {
+  applyCurrencySnapshotToLineItem,
+  normalizeCurrencyCode,
+  normalizeExchangeRate,
+  type DocumentCurrencySnapshot,
+} from '@/utils/documentCurrency';
 import { PurchaseLineItemsVirtualTable } from './PurchaseLineItemsVirtualTable';
 
 interface PurchaseDocumentLineItemsProps {
@@ -17,6 +23,8 @@ interface PurchaseDocumentLineItemsProps {
   calculatedItems: PurchaseDocumentItem[];
   products: Product[];
   taxes: Tax[];
+  currencies: Currency[];
+  documentCurrencySnapshot: DocumentCurrencySnapshot;
   onChange: (items: PurchaseDocumentItem[]) => void;
 }
 
@@ -41,6 +49,8 @@ export const PurchaseDocumentLineItems = ({
   calculatedItems,
   products,
   taxes,
+  currencies,
+  documentCurrencySnapshot,
   onChange,
 }: PurchaseDocumentLineItemsProps) => {
   const { t } = useI18n();
@@ -71,6 +81,25 @@ export const PurchaseDocumentLineItems = ({
       label: `${tax.name} (${tax.rate}%)`,
     })),
     [taxes],
+  );
+  const currencyOptions = useMemo(
+    () => {
+      const sourceCurrencies = currencies.length > 0
+        ? currencies
+        : [{
+          code: 'IDR',
+          name: 'Rupiah Indonesia',
+          is_active: true,
+        } as Currency];
+
+      return sourceCurrencies
+      .filter((currency) => currency.is_active || currency.code === 'IDR')
+      .map((currency) => ({
+        value: currency.code,
+        label: `${currency.code} - ${currency.name}`,
+      }));
+    },
+    [currencies],
   );
 
   const unitOptionsByProductId = useMemo(
@@ -115,14 +144,38 @@ export const PurchaseDocumentLineItems = ({
         };
       }
 
-      return { ...item, ...nextPatch };
+      const mergedItem = { ...item, ...nextPatch };
+      const shouldRecalculateCurrency = (
+        nextPatch.price !== undefined ||
+        patch.foreign_price !== undefined ||
+        patch.exchange_rate !== undefined ||
+        patch.currency_code !== undefined
+      );
+
+      if (!shouldRecalculateCurrency) return mergedItem;
+
+      const itemSnapshot = {
+        ...documentCurrencySnapshot,
+        currency_code: normalizeCurrencyCode(mergedItem.currency_code ?? documentCurrencySnapshot.currency_code),
+        exchange_rate: normalizeExchangeRate(mergedItem.exchange_rate ?? documentCurrencySnapshot.exchange_rate),
+        exchange_rate_source: mergedItem.exchange_rate_source ?? documentCurrencySnapshot.exchange_rate_source,
+        exchange_rate_basis: mergedItem.exchange_rate_basis ?? documentCurrencySnapshot.exchange_rate_basis,
+        exchange_rate_date: mergedItem.exchange_rate_date ?? documentCurrencySnapshot.exchange_rate_date,
+      };
+
+      return applyCurrencySnapshotToLineItem(mergedItem, itemSnapshot, {
+        preferForeignPrice: patch.foreign_price !== undefined || patch.exchange_rate !== undefined,
+      });
     }));
-  }, [config.behavior.hasPricing, onChange, productsById]);
+  }, [config.behavior.hasPricing, documentCurrencySnapshot, onChange, productsById]);
 
   const addRow = useCallback(() => {
-    onChange([...itemsRef.current, createEmptyPurchaseDocumentItem(documentId)]);
+    onChange([
+      ...itemsRef.current,
+      applyCurrencySnapshotToLineItem(createEmptyPurchaseDocumentItem(documentId), documentCurrencySnapshot),
+    ]);
     setScrollToLastRequest((current) => current + 1);
-  }, [documentId, onChange]);
+  }, [documentCurrencySnapshot, documentId, onChange]);
 
   const selectProduct = useCallback((itemId: string, productId: string) => {
     const product = productsById.get(productId);
@@ -135,7 +188,7 @@ export const PurchaseDocumentLineItems = ({
       const quantity = item.quantity || nextItem.quantity;
       const unit = nextItem.unit;
 
-      return {
+      return applyCurrencySnapshotToLineItem({
         ...nextItem,
         id: item.id,
         quantity,
@@ -148,9 +201,9 @@ export const PurchaseDocumentLineItems = ({
         discount_value: item.discount_value ?? nextItem.discount_value,
         discount_amount: item.discount_amount ?? nextItem.discount_amount,
         created_at: item.created_at,
-      };
+      }, documentCurrencySnapshot);
     }));
-  }, [config.behavior.hasPricing, config.type, onChange, productsById]);
+  }, [config.behavior.hasPricing, config.type, documentCurrencySnapshot, onChange, productsById]);
 
   const removeItem = useCallback((itemId: string) => {
     setExpandedRowKeys((currentKeys) => currentKeys.filter((key) => key !== itemId));
@@ -187,6 +240,8 @@ export const PurchaseDocumentLineItems = ({
         unitOptionsByUnit={unitOptionsByUnit}
         emptyUnitOptions={emptyUnitOptions}
         taxOptions={taxOptions}
+        currencyOptions={currencyOptions}
+        documentCurrencySnapshot={documentCurrencySnapshot}
         expandedRowKeySet={expandedRowKeySet}
         expandedRowSignature={expandedRowSignature}
         hasPricing={config.behavior.hasPricing}

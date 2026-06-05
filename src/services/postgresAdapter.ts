@@ -8,6 +8,8 @@ import type {
   ProductUnit,
   ProductUnitMapping,
   PromoType,
+  CurrencyRateBasis,
+  CurrencyRateSource,
   PurchaseDocumentStatus,
   PurchaseDocumentType,
   PurchaseInvoicePaymentStatus,
@@ -121,6 +123,44 @@ export interface RemoteWarehouseDto {
   deleted_at?: string | null;
 }
 
+export interface RemoteCurrencyDto {
+  id: string;
+  code: string;
+  name: string;
+  symbol?: string | null;
+  decimal_places: number;
+  is_base: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteCurrencyRateDto {
+  id: string;
+  currency_code: string;
+  base_currency_code: string;
+  rate_date: string;
+  source: CurrencyRateSource;
+  unit_amount: number;
+  bi_buy_rate?: number | null;
+  bi_sell_rate?: number | null;
+  middle_rate: number;
+  fetched_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface BiKursTransaksiRateDto {
+  currency_code: string;
+  rate_date: string;
+  unit_amount: number;
+  bi_buy_rate: number;
+  bi_sell_rate: number;
+  middle_rate: number;
+}
+
 export interface RemoteProductDto {
   id: string;
   name: string;
@@ -190,10 +230,20 @@ export interface RemoteSalesDocumentDto {
   source_document_id?: string | null;
   source_document_number?: string | null;
   source_document_type?: SalesDocumentType | null;
+  currency_code?: string | null;
+  currency_name?: string | null;
+  currency_symbol?: string | null;
+  base_currency_code?: string | null;
+  exchange_rate?: number | null;
+  exchange_rate_source?: CurrencyRateSource | null;
+  exchange_rate_basis?: CurrencyRateBasis | null;
+  exchange_rate_date?: string | null;
   subtotal_amount?: number | null;
+  foreign_subtotal_amount?: number | null;
   discount_type?: PromoType | null;
   discount_value?: number | null;
   discount_amount?: number | null;
+  foreign_discount_amount?: number | null;
   discount_account_id?: string | null;
   discount_account_code?: string | null;
   discount_account_name?: string | null;
@@ -203,7 +253,9 @@ export interface RemoteSalesDocumentDto {
   tax_rate?: number | null;
   tax_calculation_mode?: TaxCalculationMode | null;
   tax_amount?: number | null;
+  foreign_tax_amount?: number | null;
   total_amount?: number | null;
+  foreign_total_amount?: number | null;
   payment_status?: SalesInvoicePaymentStatus | null;
   paid_amount?: number | null;
   paid_at?: string | null;
@@ -236,18 +288,29 @@ export interface RemoteSalesDocumentItemDto {
   ordered_quantity?: number | null;
   delivered_quantity?: number | null;
   price?: number | null;
+  currency_code?: string | null;
+  exchange_rate?: number | null;
+  exchange_rate_source?: CurrencyRateSource | null;
+  exchange_rate_basis?: CurrencyRateBasis | null;
+  exchange_rate_date?: string | null;
+  foreign_price?: number | null;
   discount_type?: PromoType | null;
   discount_value?: number | null;
   discount_amount?: number | null;
+  foreign_discount_amount?: number | null;
   tax_id?: string | null;
   tax_name?: string | null;
   tax_code?: string | null;
   tax_rate?: number | null;
   tax_calculation_mode?: TaxCalculationMode | null;
   tax_base_amount?: number | null;
+  foreign_tax_base_amount?: number | null;
   tax_amount?: number | null;
+  foreign_tax_amount?: number | null;
   subtotal?: number | null;
+  foreign_subtotal?: number | null;
   total_amount?: number | null;
+  foreign_total_amount?: number | null;
   purchase_price?: number | null;
   original_price?: number | null;
   is_price_edited?: boolean | null;
@@ -289,10 +352,20 @@ export interface RemotePurchaseDocumentDto {
   source_document_id?: string | null;
   source_document_number?: string | null;
   source_document_type?: PurchaseDocumentType | null;
+  currency_code?: string | null;
+  currency_name?: string | null;
+  currency_symbol?: string | null;
+  base_currency_code?: string | null;
+  exchange_rate?: number | null;
+  exchange_rate_source?: CurrencyRateSource | null;
+  exchange_rate_basis?: CurrencyRateBasis | null;
+  exchange_rate_date?: string | null;
   subtotal_amount?: number | null;
+  foreign_subtotal_amount?: number | null;
   discount_type?: PromoType | null;
   discount_value?: number | null;
   discount_amount?: number | null;
+  foreign_discount_amount?: number | null;
   discount_account_id?: string | null;
   discount_account_code?: string | null;
   discount_account_name?: string | null;
@@ -302,7 +375,9 @@ export interface RemotePurchaseDocumentDto {
   tax_rate?: number | null;
   tax_calculation_mode?: TaxCalculationMode | null;
   tax_amount?: number | null;
+  foreign_tax_amount?: number | null;
   total_amount?: number | null;
+  foreign_total_amount?: number | null;
   payment_status?: PurchaseInvoicePaymentStatus | null;
   paid_amount?: number | null;
   paid_at?: string | null;
@@ -335,18 +410,29 @@ export interface RemotePurchaseDocumentItemDto {
   ordered_quantity?: number | null;
   received_quantity?: number | null;
   price?: number | null;
+  currency_code?: string | null;
+  exchange_rate?: number | null;
+  exchange_rate_source?: CurrencyRateSource | null;
+  exchange_rate_basis?: CurrencyRateBasis | null;
+  exchange_rate_date?: string | null;
+  foreign_price?: number | null;
   discount_type?: PromoType | null;
   discount_value?: number | null;
   discount_amount?: number | null;
+  foreign_discount_amount?: number | null;
   tax_id?: string | null;
   tax_name?: string | null;
   tax_code?: string | null;
   tax_rate?: number | null;
   tax_calculation_mode?: TaxCalculationMode | null;
   tax_base_amount?: number | null;
+  foreign_tax_base_amount?: number | null;
   tax_amount?: number | null;
+  foreign_tax_amount?: number | null;
   subtotal?: number | null;
+  foreign_subtotal?: number | null;
   total_amount?: number | null;
+  foreign_total_amount?: number | null;
   created_at: string;
 }
 
@@ -615,6 +701,59 @@ export const warehousePostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteWarehouseDto | null>('postgres_delete_warehouse', { id });
+  },
+};
+
+export const currencyPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCurrencyDto[]>('postgres_list_currencies');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCurrencyDto | null>('postgres_get_currency', { id });
+  },
+
+  async upsert(input: RemoteCurrencyDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCurrencyDto>('postgres_upsert_currency', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCurrencyDto | null>('postgres_delete_currency', { id });
+  },
+};
+
+export const currencyRatePostgresAdapter = {
+  async list(options: { baseCurrencyCode?: string } = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCurrencyRateDto[]>('postgres_list_currency_rates', {
+      baseCurrencyCode: options.baseCurrencyCode,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCurrencyRateDto | null>('postgres_get_currency_rate', { id });
+  },
+
+  async upsert(input: RemoteCurrencyRateDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCurrencyRateDto>('postgres_upsert_currency_rate', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCurrencyRateDto | null>('postgres_delete_currency_rate', { id });
+  },
+};
+
+export const biKursAdapter = {
+  async fetchKursTransaksi(input: { currencyCode: string; startDate: string; endDate: string }) {
+    if (!isTauriRuntime()) return [];
+    return invoke<BiKursTransaksiRateDto[]>('fetch_bi_kurs_transaksi', input);
   },
 };
 

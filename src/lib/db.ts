@@ -1,8 +1,9 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, Currency, CurrencyRate, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
+import { BASE_CURRENCY_CODE, buildBaseCurrency, buildBaseCurrencyRate } from '@/constants/currencies';
 
 const buildAccountingSeed = (now: string) => {
   const accounts: ChartOfAccount[] = DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
@@ -71,6 +72,8 @@ export class KasirkuDB extends Dexie {
   projects!: Table<Project>;
   taxes!: Table<Tax>;
   warehouses!: Table<Warehouse>;
+  currencies!: Table<Currency>;
+  currencyRates!: Table<CurrencyRate>;
   salesDocuments!: Table<SalesDocument>;
   salesDocumentItems!: Table<SalesDocumentItem>;
   salesInvoicePayments!: Table<SalesInvoicePayment>;
@@ -528,10 +531,123 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(37).stores({
+      currencies: 'id, code, name, is_base, is_active, sync_status, updated_at, created_at',
+      currencyRates: 'id, currency_code, base_currency_code, rate_date, source, sync_status, updated_at, created_at',
+      salesDocuments: 'id, document_number, type, status, contact_id, customer_name, document_date, due_date, payment_status, source_document_id, project_id, department_id, tax_id, currency_code, sync_status, updated_at, created_at',
+      salesDocumentItems: 'id, document_id, product_id, currency_code',
+      purchaseDocuments: 'id, document_number, type, status, contact_id, supplier_name, document_date, due_date, payment_status, source_document_id, project_id, department_id, tax_id, currency_code, sync_status, updated_at, created_at',
+      purchaseDocumentItems: 'id, document_id, product_id, currency_code'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const currencyTable = tx.table<Currency, string>('currencies');
+      const currencyRateTable = tx.table<CurrencyRate, string>('currencyRates');
+
+      if (!await currencyTable.get(BASE_CURRENCY_CODE)) {
+        await currencyTable.put(buildBaseCurrency(now));
+      }
+
+      if (await currencyRateTable.where('currency_code').equals(BASE_CURRENCY_CODE).count() === 0) {
+        await currencyRateTable.put(buildBaseCurrencyRate(now));
+      }
+
+      const salesDocuments = await tx.table<SalesDocument, string>('salesDocuments').toArray();
+      const salesDocumentsWithoutCurrency = salesDocuments
+        .filter((document) => !document.currency_code || !document.exchange_rate)
+        .map((document) => ({
+          ...document,
+          currency_code: document.currency_code ?? BASE_CURRENCY_CODE,
+          currency_name: document.currency_name ?? 'Rupiah Indonesia',
+          currency_symbol: document.currency_symbol ?? 'Rp',
+          base_currency_code: document.base_currency_code ?? BASE_CURRENCY_CODE,
+          exchange_rate: document.exchange_rate ?? 1,
+          exchange_rate_source: document.exchange_rate_source ?? 'SYSTEM' as const,
+          exchange_rate_basis: document.exchange_rate_basis ?? 'MID' as const,
+          exchange_rate_date: document.exchange_rate_date ?? document.document_date,
+          foreign_subtotal_amount: document.foreign_subtotal_amount ?? document.subtotal_amount,
+          foreign_discount_amount: document.foreign_discount_amount ?? document.discount_amount,
+          foreign_tax_amount: document.foreign_tax_amount ?? document.tax_amount,
+          foreign_total_amount: document.foreign_total_amount ?? document.total_amount,
+        }));
+
+      if (salesDocumentsWithoutCurrency.length > 0) {
+        await tx.table<SalesDocument, string>('salesDocuments').bulkPut(salesDocumentsWithoutCurrency);
+      }
+
+      const salesItems = await tx.table<SalesDocumentItem, string>('salesDocumentItems').toArray();
+      const salesItemsWithoutCurrency = salesItems
+        .filter((item) => !item.currency_code || !item.exchange_rate)
+        .map((item) => ({
+          ...item,
+          currency_code: item.currency_code ?? BASE_CURRENCY_CODE,
+          exchange_rate: item.exchange_rate ?? 1,
+          exchange_rate_source: item.exchange_rate_source ?? 'SYSTEM' as const,
+          exchange_rate_basis: item.exchange_rate_basis ?? 'MID' as const,
+          exchange_rate_date: item.exchange_rate_date ?? item.created_at.slice(0, 10),
+          foreign_price: item.foreign_price ?? item.price,
+          foreign_discount_amount: item.foreign_discount_amount ?? item.discount_amount,
+          foreign_tax_base_amount: item.foreign_tax_base_amount ?? item.tax_base_amount,
+          foreign_tax_amount: item.foreign_tax_amount ?? item.tax_amount,
+          foreign_subtotal: item.foreign_subtotal ?? item.subtotal,
+          foreign_total_amount: item.foreign_total_amount ?? item.total_amount,
+        }));
+
+      if (salesItemsWithoutCurrency.length > 0) {
+        await tx.table<SalesDocumentItem, string>('salesDocumentItems').bulkPut(salesItemsWithoutCurrency);
+      }
+
+      const purchaseDocuments = await tx.table<PurchaseDocument, string>('purchaseDocuments').toArray();
+      const purchaseDocumentsWithoutCurrency = purchaseDocuments
+        .filter((document) => !document.currency_code || !document.exchange_rate)
+        .map((document) => ({
+          ...document,
+          currency_code: document.currency_code ?? BASE_CURRENCY_CODE,
+          currency_name: document.currency_name ?? 'Rupiah Indonesia',
+          currency_symbol: document.currency_symbol ?? 'Rp',
+          base_currency_code: document.base_currency_code ?? BASE_CURRENCY_CODE,
+          exchange_rate: document.exchange_rate ?? 1,
+          exchange_rate_source: document.exchange_rate_source ?? 'SYSTEM' as const,
+          exchange_rate_basis: document.exchange_rate_basis ?? 'MID' as const,
+          exchange_rate_date: document.exchange_rate_date ?? document.document_date,
+          foreign_subtotal_amount: document.foreign_subtotal_amount ?? document.subtotal_amount,
+          foreign_discount_amount: document.foreign_discount_amount ?? document.discount_amount,
+          foreign_tax_amount: document.foreign_tax_amount ?? document.tax_amount,
+          foreign_total_amount: document.foreign_total_amount ?? document.total_amount,
+        }));
+
+      if (purchaseDocumentsWithoutCurrency.length > 0) {
+        await tx.table<PurchaseDocument, string>('purchaseDocuments').bulkPut(purchaseDocumentsWithoutCurrency);
+      }
+
+      const purchaseItems = await tx.table<PurchaseDocumentItem, string>('purchaseDocumentItems').toArray();
+      const purchaseItemsWithoutCurrency = purchaseItems
+        .filter((item) => !item.currency_code || !item.exchange_rate)
+        .map((item) => ({
+          ...item,
+          currency_code: item.currency_code ?? BASE_CURRENCY_CODE,
+          exchange_rate: item.exchange_rate ?? 1,
+          exchange_rate_source: item.exchange_rate_source ?? 'SYSTEM' as const,
+          exchange_rate_basis: item.exchange_rate_basis ?? 'MID' as const,
+          exchange_rate_date: item.exchange_rate_date ?? item.created_at.slice(0, 10),
+          foreign_price: item.foreign_price ?? item.price,
+          foreign_discount_amount: item.foreign_discount_amount ?? item.discount_amount,
+          foreign_tax_base_amount: item.foreign_tax_base_amount ?? item.tax_base_amount,
+          foreign_tax_amount: item.foreign_tax_amount ?? item.tax_amount,
+          foreign_subtotal: item.foreign_subtotal ?? item.subtotal,
+          foreign_total_amount: item.foreign_total_amount ?? item.total_amount,
+        }));
+
+      if (purchaseItemsWithoutCurrency.length > 0) {
+        await tx.table<PurchaseDocumentItem, string>('purchaseDocumentItems').bulkPut(purchaseItemsWithoutCurrency);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
       const now = new Date().toISOString();
+      await this.currencies.put(buildBaseCurrency(now));
+      await this.currencyRates.put(buildBaseCurrencyRate(now));
       const seed = buildAccountingSeed(now);
       await this.chartOfAccounts.bulkPut(seed.accounts);
       await this.financeAccountMappings.bulkPut(seed.mappings);

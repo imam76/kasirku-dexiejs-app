@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useI18n } from '@/hooks/useI18n';
 import type { PurchaseDocumentItem } from '@/types';
+import type { DocumentCurrencySnapshot } from '@/utils/documentCurrency';
 import { PurchaseLineItemRow } from './PurchaseLineItemRow';
 
 interface Option {
@@ -17,6 +18,8 @@ interface PurchaseLineItemsVirtualTableProps {
   unitOptionsByUnit: Map<string, Option[]>;
   emptyUnitOptions: Option[];
   taxOptions: Option[];
+  currencyOptions: Option[];
+  documentCurrencySnapshot: DocumentCurrencySnapshot;
   expandedRowKeySet: Set<string>;
   expandedRowSignature: string;
   hasPricing: boolean;
@@ -39,6 +42,8 @@ export const PurchaseLineItemsVirtualTable = ({
   unitOptionsByUnit,
   emptyUnitOptions,
   taxOptions,
+  currencyOptions,
+  documentCurrencySnapshot,
   expandedRowKeySet,
   expandedRowSignature,
   hasPricing,
@@ -157,6 +162,8 @@ export const PurchaseLineItemsVirtualTable = ({
                       productOptions={productOptions}
                       unitOptions={unitOptionsByProductId.get(item.product_id) ?? unitOptionsByUnit.get(item.unit) ?? emptyUnitOptions}
                       taxOptions={taxOptions}
+                      currencyOptions={currencyOptions}
+                      documentCurrencySnapshot={documentCurrencySnapshot}
                       isExpanded={expandedRowKeySet.has(item.id)}
                       hasPricing={hasPricing}
                       isPurchaseReceipt={isPurchaseReceipt}

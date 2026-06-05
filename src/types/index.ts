@@ -82,6 +82,8 @@ export type ContactType = 'CUSTOMER' | 'SUPPLIER' | 'CUSTOMER_SUPPLIER' | 'OTHER
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type TaxRateType = 'PERCENTAGE';
 export type TaxCalculationMode = 'EXCLUSIVE' | 'INCLUSIVE';
+export type CurrencyRateSource = 'BI_KURS_TRANSAKSI' | 'MANUAL' | 'SYSTEM';
+export type CurrencyRateBasis = 'MID';
 export type SalesDocumentType =
   | 'SALES_QUOTATION'
   | 'SALES_ORDER'
@@ -250,6 +252,43 @@ export type TaxSyncStatus = EntitySyncStatus;
 export type WarehouseSyncStatus = EntitySyncStatus;
 export type FinanceTransactionSyncStatus = EntitySyncStatus;
 export type JournalEntrySyncStatus = EntitySyncStatus;
+export type CurrencySyncStatus = EntitySyncStatus;
+export type CurrencyRateSyncStatus = EntitySyncStatus;
+
+export interface Currency {
+  id: string;
+  code: string;
+  name: string;
+  symbol?: string;
+  decimal_places: number;
+  is_base: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: CurrencySyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CurrencyRate {
+  id: string;
+  currency_code: string;
+  base_currency_code: string;
+  rate_date: string;
+  source: CurrencyRateSource;
+  unit_amount: number;
+  bi_buy_rate?: number;
+  bi_sell_rate?: number;
+  middle_rate: number;
+  fetched_at?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: CurrencyRateSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
 
 export interface Department {
   id: string;
@@ -335,10 +374,20 @@ export interface SalesDocument {
   source_document_id?: string;
   source_document_number?: string;
   source_document_type?: SalesDocumentType;
+  currency_code?: string;
+  currency_name?: string;
+  currency_symbol?: string;
+  base_currency_code?: string;
+  exchange_rate?: number;
+  exchange_rate_source?: CurrencyRateSource;
+  exchange_rate_basis?: CurrencyRateBasis;
+  exchange_rate_date?: string;
   subtotal_amount?: number;
+  foreign_subtotal_amount?: number;
   discount_type?: PromoType;
   discount_value?: number;
   discount_amount?: number;
+  foreign_discount_amount?: number;
   discount_account_id?: string;
   discount_account_code?: string;
   discount_account_name?: string;
@@ -348,7 +397,9 @@ export interface SalesDocument {
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
   tax_amount?: number;
+  foreign_tax_amount?: number;
   total_amount?: number;
+  foreign_total_amount?: number;
   payment_status?: SalesInvoicePaymentStatus;
   paid_amount?: number;
   paid_at?: string;
@@ -428,18 +479,29 @@ export interface SalesDocumentItem {
   ordered_quantity?: number;
   delivered_quantity?: number;
   price?: number;
+  currency_code?: string;
+  exchange_rate?: number;
+  exchange_rate_source?: CurrencyRateSource;
+  exchange_rate_basis?: CurrencyRateBasis;
+  exchange_rate_date?: string;
+  foreign_price?: number;
   discount_type?: PromoType;
   discount_value?: number;
   discount_amount?: number;
+  foreign_discount_amount?: number;
   tax_id?: string;
   tax_name?: string;
   tax_code?: string;
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
   tax_base_amount?: number;
+  foreign_tax_base_amount?: number;
   tax_amount?: number;
+  foreign_tax_amount?: number;
   subtotal?: number;
+  foreign_subtotal?: number;
   total_amount?: number;
+  foreign_total_amount?: number;
   purchase_price?: number;
   original_price?: number;
   is_price_edited?: boolean;
@@ -476,10 +538,20 @@ export interface PurchaseDocument {
   source_document_id?: string;
   source_document_number?: string;
   source_document_type?: PurchaseDocumentType;
+  currency_code?: string;
+  currency_name?: string;
+  currency_symbol?: string;
+  base_currency_code?: string;
+  exchange_rate?: number;
+  exchange_rate_source?: CurrencyRateSource;
+  exchange_rate_basis?: CurrencyRateBasis;
+  exchange_rate_date?: string;
   subtotal_amount?: number;
+  foreign_subtotal_amount?: number;
   discount_type?: PromoType;
   discount_value?: number;
   discount_amount?: number;
+  foreign_discount_amount?: number;
   discount_account_id?: string;
   discount_account_code?: string;
   discount_account_name?: string;
@@ -489,7 +561,9 @@ export interface PurchaseDocument {
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
   tax_amount?: number;
+  foreign_tax_amount?: number;
   total_amount?: number;
+  foreign_total_amount?: number;
   payment_status?: PurchaseInvoicePaymentStatus;
   paid_amount?: number;
   paid_at?: string;
@@ -569,18 +643,29 @@ export interface PurchaseDocumentItem {
   ordered_quantity?: number;
   received_quantity?: number;
   price?: number;
+  currency_code?: string;
+  exchange_rate?: number;
+  exchange_rate_source?: CurrencyRateSource;
+  exchange_rate_basis?: CurrencyRateBasis;
+  exchange_rate_date?: string;
+  foreign_price?: number;
   discount_type?: PromoType;
   discount_value?: number;
   discount_amount?: number;
+  foreign_discount_amount?: number;
   tax_id?: string;
   tax_name?: string;
   tax_code?: string;
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
   tax_base_amount?: number;
+  foreign_tax_base_amount?: number;
   tax_amount?: number;
+  foreign_tax_amount?: number;
   subtotal?: number;
+  foreign_subtotal?: number;
   total_amount?: number;
+  foreign_total_amount?: number;
   created_at: string;
 }
 

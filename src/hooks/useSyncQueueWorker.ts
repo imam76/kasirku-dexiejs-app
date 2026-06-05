@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
+import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
@@ -37,6 +38,8 @@ export const useSyncQueueWorker = () => {
           taxes: await refreshTaxesFromPostgres(),
           contacts: await refreshContactsFromPostgres(),
           warehouses: await refreshWarehousesFromPostgres(),
+          currencies: await refreshCurrenciesFromPostgres(),
+          currencyRates: await refreshCurrencyRatesFromPostgres(),
           products: await refreshProductsFromPostgres(),
           financeTransactions: await refreshFinanceTransactionsFromPostgres(),
           journalEntries: await refreshJournalEntriesFromPostgres(),

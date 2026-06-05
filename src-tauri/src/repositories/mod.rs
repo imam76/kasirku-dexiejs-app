@@ -1,5 +1,6 @@
 pub mod auth_repository;
 pub mod contact_repository;
+pub mod currency_repository;
 pub mod department_repository;
 pub mod finance_transaction_repository;
 pub mod journal_entry_repository;

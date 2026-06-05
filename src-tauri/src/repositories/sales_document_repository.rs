@@ -34,10 +34,20 @@ macro_rules! sales_document_select {
             source_document_id,
             source_document_number,
             source_document_type,
+            currency_code,
+            currency_name,
+            currency_symbol,
+            base_currency_code,
+            exchange_rate,
+            exchange_rate_source,
+            exchange_rate_basis,
+            exchange_rate_date,
             subtotal_amount,
+            foreign_subtotal_amount,
             discount_type,
             discount_value,
             discount_amount,
+            foreign_discount_amount,
             discount_account_id,
             discount_account_code,
             discount_account_name,
@@ -47,7 +57,9 @@ macro_rules! sales_document_select {
             tax_rate,
             tax_calculation_mode,
             tax_amount,
+            foreign_tax_amount,
             total_amount,
+            foreign_total_amount,
             payment_status,
             paid_amount,
             paid_at,
@@ -86,18 +98,29 @@ macro_rules! sales_document_item_select {
             ordered_quantity,
             delivered_quantity,
             price,
+            currency_code,
+            exchange_rate,
+            exchange_rate_source,
+            exchange_rate_basis,
+            exchange_rate_date,
+            foreign_price,
             discount_type,
             discount_value,
             discount_amount,
+            foreign_discount_amount,
             tax_id,
             tax_name,
             tax_code,
             tax_rate,
             tax_calculation_mode,
             tax_base_amount,
+            foreign_tax_base_amount,
             tax_amount,
+            foreign_tax_amount,
             subtotal,
+            foreign_subtotal,
             total_amount,
+            foreign_total_amount,
             purchase_price,
             original_price,
             is_price_edited,
@@ -312,7 +335,19 @@ async fn upsert_sales_document(
             updated_by,
             updated_by_name,
             created_at,
-            updated_at
+            updated_at,
+            currency_code,
+            currency_name,
+            currency_symbol,
+            base_currency_code,
+            exchange_rate,
+            exchange_rate_source,
+            exchange_rate_basis,
+            exchange_rate_date,
+            foreign_subtotal_amount,
+            foreign_discount_amount,
+            foreign_tax_amount,
+            foreign_total_amount
         )
         VALUES (
             $1,
@@ -373,7 +408,19 @@ async fn upsert_sales_document(
             $56,
             $57,
             $58::TIMESTAMPTZ,
-            $59::TIMESTAMPTZ
+            $59::TIMESTAMPTZ,
+            $60,
+            $61,
+            $62,
+            $63,
+            $64,
+            $65,
+            $66,
+            $67,
+            $68,
+            $69,
+            $70,
+            $71
         )
         ON CONFLICT (id) DO UPDATE SET
             document_number = EXCLUDED.document_number,
@@ -430,7 +477,19 @@ async fn upsert_sales_document(
             version = EXCLUDED.version,
             updated_by = EXCLUDED.updated_by,
             updated_by_name = EXCLUDED.updated_by_name,
-            updated_at = EXCLUDED.updated_at
+            updated_at = EXCLUDED.updated_at,
+            currency_code = EXCLUDED.currency_code,
+            currency_name = EXCLUDED.currency_name,
+            currency_symbol = EXCLUDED.currency_symbol,
+            base_currency_code = EXCLUDED.base_currency_code,
+            exchange_rate = EXCLUDED.exchange_rate,
+            exchange_rate_source = EXCLUDED.exchange_rate_source,
+            exchange_rate_basis = EXCLUDED.exchange_rate_basis,
+            exchange_rate_date = EXCLUDED.exchange_rate_date,
+            foreign_subtotal_amount = EXCLUDED.foreign_subtotal_amount,
+            foreign_discount_amount = EXCLUDED.foreign_discount_amount,
+            foreign_tax_amount = EXCLUDED.foreign_tax_amount,
+            foreign_total_amount = EXCLUDED.foreign_total_amount
         WHERE
             EXCLUDED.version > sales_documents.version OR
             (
@@ -496,7 +555,19 @@ async fn upsert_sales_document(
             updated_by,
             updated_by_name,
             created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            updated_at::TEXT AS updated_at,
+            currency_code,
+            currency_name,
+            currency_symbol,
+            base_currency_code,
+            exchange_rate,
+            exchange_rate_source,
+            exchange_rate_basis,
+            exchange_rate_date,
+            foreign_subtotal_amount,
+            foreign_discount_amount,
+            foreign_tax_amount,
+            foreign_total_amount
         "#,
     )
     .bind(input.id)
@@ -558,6 +629,18 @@ async fn upsert_sales_document(
     .bind(input.updated_by_name)
     .bind(input.created_at)
     .bind(input.updated_at)
+    .bind(input.currency_code)
+    .bind(input.currency_name)
+    .bind(input.currency_symbol)
+    .bind(input.base_currency_code)
+    .bind(input.exchange_rate)
+    .bind(input.exchange_rate_source)
+    .bind(input.exchange_rate_basis)
+    .bind(input.exchange_rate_date)
+    .bind(input.foreign_subtotal_amount)
+    .bind(input.foreign_discount_amount)
+    .bind(input.foreign_tax_amount)
+    .bind(input.foreign_total_amount)
     .fetch_optional(&mut **tx)
     .await
 }
@@ -603,7 +686,18 @@ async fn replace_sales_document_items(
                 is_price_edited,
                 price_edited_by,
                 price_edited_at,
-                created_at
+                created_at,
+                currency_code,
+                exchange_rate,
+                exchange_rate_source,
+                exchange_rate_basis,
+                exchange_rate_date,
+                foreign_price,
+                foreign_discount_amount,
+                foreign_tax_base_amount,
+                foreign_tax_amount,
+                foreign_subtotal,
+                foreign_total_amount
             )
             VALUES (
                 $1,
@@ -633,7 +727,18 @@ async fn replace_sales_document_items(
                 $25,
                 $26,
                 $27::TIMESTAMPTZ,
-                $28::TIMESTAMPTZ
+                $28::TIMESTAMPTZ,
+                $29,
+                $30,
+                $31,
+                $32,
+                $33,
+                $34,
+                $35,
+                $36,
+                $37,
+                $38,
+                $39
             )
             "#,
         )
@@ -665,6 +770,17 @@ async fn replace_sales_document_items(
         .bind(item.price_edited_by)
         .bind(item.price_edited_at)
         .bind(item.created_at)
+        .bind(item.currency_code)
+        .bind(item.exchange_rate)
+        .bind(item.exchange_rate_source)
+        .bind(item.exchange_rate_basis)
+        .bind(item.exchange_rate_date)
+        .bind(item.foreign_price)
+        .bind(item.foreign_discount_amount)
+        .bind(item.foreign_tax_base_amount)
+        .bind(item.foreign_tax_amount)
+        .bind(item.foreign_subtotal)
+        .bind(item.foreign_total_amount)
         .execute(&mut **tx)
         .await?;
     }
