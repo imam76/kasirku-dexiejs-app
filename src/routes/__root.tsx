@@ -247,6 +247,7 @@ const RootLayout = () => {
         { to: '/koperasi/simpanan', label: t('nav.cooperative.savings'), icon: WalletCards },
         { to: '/koperasi/pinjaman', label: t('nav.cooperative.loans'), icon: Banknote },
         { to: '/koperasi/angsuran', label: t('nav.cooperative.installments'), icon: ReceiptText },
+        { to: '/koperasi/laporan', label: t('nav.cooperative.reports'), icon: FileText },
       ],
     },
     {

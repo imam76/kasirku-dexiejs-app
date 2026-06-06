@@ -115,6 +115,8 @@ export interface GeneralLedgerReportFilters {
   startDate?: string;
   endDate?: string;
   accountId?: string;
+  sourceTypes?: JournalSourceType[];
+  sourceEvents?: string[];
 }
 
 export interface TrialBalanceRow {
@@ -1272,7 +1274,13 @@ const normalizeFilterDate = (value?: string, endOfDay = false) => {
 const entryMatchesFilters = (entry: JournalEntry, filters: GeneralLedgerReportFilters) => {
   const start = normalizeFilterDate(filters.startDate);
   const end = normalizeFilterDate(filters.endDate, true);
-  return (!start || entry.entry_date >= start) && (!end || entry.entry_date <= end);
+  const matchesDate = (!start || entry.entry_date >= start) && (!end || entry.entry_date <= end);
+  const matchesSourceType = !filters.sourceTypes?.length || filters.sourceTypes.includes(entry.source_type);
+  const matchesSourceEvent = !filters.sourceEvents?.length || (
+    Boolean(entry.source_event) && filters.sourceEvents.includes(entry.source_event as string)
+  );
+
+  return matchesDate && matchesSourceType && matchesSourceEvent;
 };
 
 export const getJournalEntriesWithLines = async (
