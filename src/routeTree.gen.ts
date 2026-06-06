@@ -73,6 +73,8 @@ const MasterDataContactsLazyRouteImport = createFileRoute(
   '/master-data/contacts',
 )()
 const KoperasiSimpananLazyRouteImport = createFileRoute('/koperasi/simpanan')()
+const KoperasiPinjamanLazyRouteImport = createFileRoute('/koperasi/pinjaman')()
+const KoperasiAngsuranLazyRouteImport = createFileRoute('/koperasi/angsuran')()
 const KoperasiAnggotaLazyRouteImport = createFileRoute('/koperasi/anggota')()
 const FinanceReceivablesLazyRouteImport = createFileRoute(
   '/finance/receivables',
@@ -324,6 +326,20 @@ const KoperasiSimpananLazyRoute = KoperasiSimpananLazyRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
   import('./routes/koperasi/simpanan.lazy').then((d) => d.Route),
+)
+const KoperasiPinjamanLazyRoute = KoperasiPinjamanLazyRouteImport.update({
+  id: '/koperasi/pinjaman',
+  path: '/koperasi/pinjaman',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/koperasi/pinjaman.lazy').then((d) => d.Route),
+)
+const KoperasiAngsuranLazyRoute = KoperasiAngsuranLazyRouteImport.update({
+  id: '/koperasi/angsuran',
+  path: '/koperasi/angsuran',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/koperasi/angsuran.lazy').then((d) => d.Route),
 )
 const KoperasiAnggotaLazyRoute = KoperasiAnggotaLazyRouteImport.update({
   id: '/koperasi/anggota',
@@ -603,6 +619,8 @@ export interface FileRoutesByFullPath {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
+  '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
+  '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
@@ -667,6 +685,8 @@ export interface FileRoutesByTo {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
+  '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
+  '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
@@ -732,6 +752,8 @@ export interface FileRoutesById {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
+  '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
+  '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
@@ -798,6 +820,8 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/receivables'
     | '/koperasi/anggota'
+    | '/koperasi/angsuran'
+    | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
     | '/master-data/contacts'
     | '/master-data/currencies'
@@ -862,6 +886,8 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/receivables'
     | '/koperasi/anggota'
+    | '/koperasi/angsuran'
+    | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
     | '/master-data/contacts'
     | '/master-data/currencies'
@@ -926,6 +952,8 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/receivables'
     | '/koperasi/anggota'
+    | '/koperasi/angsuran'
+    | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
     | '/master-data/contacts'
     | '/master-data/currencies'
@@ -991,6 +1019,8 @@ export interface RootRouteChildren {
   FinancePayablesLazyRoute: typeof FinancePayablesLazyRoute
   FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRoute
   KoperasiAnggotaLazyRoute: typeof KoperasiAnggotaLazyRoute
+  KoperasiAngsuranLazyRoute: typeof KoperasiAngsuranLazyRoute
+  KoperasiPinjamanLazyRoute: typeof KoperasiPinjamanLazyRoute
   KoperasiSimpananLazyRoute: typeof KoperasiSimpananLazyRoute
   MasterDataContactsLazyRoute: typeof MasterDataContactsLazyRoute
   MasterDataCurrenciesLazyRoute: typeof MasterDataCurrenciesLazyRoute
@@ -1244,6 +1274,20 @@ declare module '@tanstack/react-router' {
       path: '/koperasi/simpanan'
       fullPath: '/koperasi/simpanan'
       preLoaderRoute: typeof KoperasiSimpananLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/pinjaman': {
+      id: '/koperasi/pinjaman'
+      path: '/koperasi/pinjaman'
+      fullPath: '/koperasi/pinjaman'
+      preLoaderRoute: typeof KoperasiPinjamanLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/angsuran': {
+      id: '/koperasi/angsuran'
+      path: '/koperasi/angsuran'
+      fullPath: '/koperasi/angsuran'
+      preLoaderRoute: typeof KoperasiAngsuranLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/koperasi/anggota': {
@@ -1508,6 +1552,8 @@ const rootRouteChildren: RootRouteChildren = {
   FinancePayablesLazyRoute: FinancePayablesLazyRoute,
   FinanceReceivablesLazyRoute: FinanceReceivablesLazyRoute,
   KoperasiAnggotaLazyRoute: KoperasiAnggotaLazyRoute,
+  KoperasiAngsuranLazyRoute: KoperasiAngsuranLazyRoute,
+  KoperasiPinjamanLazyRoute: KoperasiPinjamanLazyRoute,
   KoperasiSimpananLazyRoute: KoperasiSimpananLazyRoute,
   MasterDataContactsLazyRoute: MasterDataContactsLazyRoute,
   MasterDataCurrenciesLazyRoute: MasterDataCurrenciesLazyRoute,

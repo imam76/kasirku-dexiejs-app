@@ -791,6 +791,46 @@ export class KasirkuDB extends Dexie {
       cooperativeMemberSavingBalances: 'id, member_id, member_number, saving_type, updated_at'
     });
 
+    this.version(42).stores({}).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+      const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
+      const accounts = await chartOfAccounts.toArray();
+      const accountCodes = new Set(accounts.map((account) => account.code));
+      const accountIds = new Set(accounts.map((account) => account.id));
+      const missingAccounts = seed.accounts.filter((account) => {
+        return !accountCodes.has(account.code) && !accountIds.has(account.id);
+      });
+
+      if (missingAccounts.length > 0) {
+        await chartOfAccounts.bulkPut(missingAccounts);
+      }
+
+      const mappings = await financeAccountMappings.toArray();
+      const mappingKeys = new Set(mappings.map((mapping) => mapping.key));
+      const missingMappings = seed.mappings.filter((mapping) => !mappingKeys.has(mapping.key));
+
+      if (missingMappings.length > 0) {
+        await financeAccountMappings.bulkPut(missingMappings);
+      }
+    });
+
+    this.version(43).stores({
+      cooperativeLoanPayments: 'id, payment_number, payment_type, loan_id, installment_id, payment_date, status, finance_transaction_id, journal_entry_id, reversal_of_payment_id, created_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
+      const mappings = await financeAccountMappings.toArray();
+      const mappingKeys = new Set(mappings.map((mapping) => mapping.key));
+      const missingMappings = seed.mappings.filter((mapping) => !mappingKeys.has(mapping.key));
+
+      if (missingMappings.length > 0) {
+        await financeAccountMappings.bulkPut(missingMappings);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

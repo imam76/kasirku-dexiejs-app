@@ -5,6 +5,8 @@ import type {
   AccountType,
   AuthUser,
   ChartOfAccount,
+  CooperativeLoan,
+  CooperativeLoanPayment,
   CooperativeSavingTransaction,
   InventoryAccountingPolicy,
   JournalEntry,
@@ -41,6 +43,8 @@ const SOURCE_EVENTS = {
   CASH_BANK_TRANSFER_POSTED: 'CASH_BANK_TRANSFER_POSTED',
   COOPERATIVE_SAVING_DEPOSIT_POSTED: 'COOPERATIVE_SAVING_DEPOSIT_POSTED',
   COOPERATIVE_SAVING_WITHDRAWAL_POSTED: 'COOPERATIVE_SAVING_WITHDRAWAL_POSTED',
+  COOPERATIVE_LOAN_DISBURSED: 'COOPERATIVE_LOAN_DISBURSED',
+  COOPERATIVE_LOAN_PAYMENT_POSTED: 'COOPERATIVE_LOAN_PAYMENT_POSTED',
   OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
   MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
 } as const;
@@ -162,6 +166,9 @@ const ACCOUNT_CANDIDATES = {
   salesReturn: { ids: ['sales-return', 'template-sales-return'], codes: ['4020', '4100'] },
   salesDiscount: { ids: ['sales-discount', 'template-sales-discount'], codes: ['4030', '4110'] },
   cooperativeMemberSavings: { ids: ['cooperative-member-savings'], codes: ['2300'] },
+  cooperativeLoanReceivable: { ids: ['cooperative-loan-receivable'], codes: ['1120'] },
+  cooperativeLoanInterestIncome: { ids: ['cooperative-loan-interest-income'], codes: ['4040'] },
+  cooperativeLoanPenaltyIncome: { ids: ['cooperative-loan-penalty-income'], codes: ['4050'] },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
 } satisfies Record<string, AccountCandidate>;
 
@@ -1042,6 +1049,122 @@ export const reverseCooperativeSavingTransactionJournal = async (
     source_type: 'COOPERATIVE_SAVING',
     source_id: transaction.id,
     source_event: sourceEvent,
+    reason,
+    entry_date: entryDate,
+    actor,
+  });
+};
+
+export const postCooperativeLoanDisbursementJournal = async (
+  loan: CooperativeLoan,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (loan.status !== 'DISBURSED') return undefined;
+  if (!loan.disbursed_at) return undefined;
+  if (!await isGeneralLedgerPostingEnabled(loan.disbursed_at)) return undefined;
+
+  const amount = amountOrZero(loan.principal_amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cashAccount = loan.cash_account_id
+    ? accounts.find((account) => account.id === loan.cash_account_id)
+    : getPostableAccount(accounts, getCashAccountCandidate(loan.payment_method), 'Kas/Bank');
+
+  if (!cashAccount) {
+    throw new Error('Akun kas/bank pencairan pinjaman tidak ditemukan.');
+  }
+  if (cashAccount.type !== 'ASSET' || !cashAccount.is_active || !cashAccount.is_postable) {
+    throw new Error('Akun kas/bank pencairan pinjaman harus bertipe aset, aktif, dan postable.');
+  }
+
+  const receivableAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.cooperativeLoanReceivable,
+    'Piutang Pinjaman Anggota',
+  );
+
+  return postBalancedJournalEntry({
+    source_type: 'COOPERATIVE_LOAN',
+    source_id: loan.id,
+    source_number: loan.loan_number,
+    source_event: SOURCE_EVENTS.COOPERATIVE_LOAN_DISBURSED,
+    entry_date: loan.disbursed_at,
+    description: `Pencairan pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
+    lines: [
+      createDebitLine(receivableAccount, amount, 'Piutang pinjaman anggota bertambah'),
+      createCreditLine(cashAccount, amount, 'Kas/bank berkurang karena pencairan pinjaman anggota'),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const postCooperativeLoanPaymentJournal = async (
+  payment: CooperativeLoanPayment,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (payment.status !== 'POSTED') return undefined;
+  if (payment.payment_type === 'REVERSAL' || payment.reversal_of_payment_id) return undefined;
+  if (!await isGeneralLedgerPostingEnabled(payment.payment_date)) return undefined;
+
+  const amount = amountOrZero(payment.amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cashAccount = payment.cash_account_id
+    ? accounts.find((account) => account.id === payment.cash_account_id)
+    : getPostableAccount(accounts, getCashAccountCandidate(payment.payment_method), 'Kas/Bank');
+
+  if (!cashAccount) {
+    throw new Error('Akun kas/bank pembayaran angsuran tidak ditemukan.');
+  }
+  if (cashAccount.type !== 'ASSET' || !cashAccount.is_active || !cashAccount.is_postable) {
+    throw new Error('Akun kas/bank pembayaran angsuran harus bertipe aset, aktif, dan postable.');
+  }
+
+  const receivableAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.cooperativeLoanReceivable,
+    'Piutang Pinjaman Anggota',
+  );
+  const interestIncomeAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.cooperativeLoanInterestIncome,
+    'Pendapatan Bunga Pinjaman Anggota',
+  );
+  const penaltyIncomeAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.cooperativeLoanPenaltyIncome,
+    'Pendapatan Denda Pinjaman Anggota',
+  );
+
+  return postBalancedJournalEntry({
+    source_type: 'COOPERATIVE_LOAN',
+    source_id: payment.id,
+    source_number: payment.payment_number,
+    source_event: SOURCE_EVENTS.COOPERATIVE_LOAN_PAYMENT_POSTED,
+    entry_date: payment.payment_date,
+    description: `Pembayaran angsuran ${payment.payment_number} untuk ${payment.loan_number}`,
+    lines: [
+      createDebitLine(cashAccount, amount, 'Kas/bank bertambah dari pembayaran angsuran'),
+      createCreditLine(receivableAccount, payment.principal_amount, 'Piutang pinjaman anggota berkurang'),
+      createCreditLine(interestIncomeAccount, payment.interest_amount, 'Pendapatan bunga pinjaman anggota'),
+      createCreditLine(penaltyIncomeAccount, payment.penalty_amount, 'Pendapatan denda pinjaman anggota'),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const reverseCooperativeLoanPaymentJournal = async (
+  payment: CooperativeLoanPayment,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  entryDate?: string,
+) => {
+  return reverseJournalEntriesForSource({
+    source_type: 'COOPERATIVE_LOAN',
+    source_id: payment.id,
+    source_event: SOURCE_EVENTS.COOPERATIVE_LOAN_PAYMENT_POSTED,
     reason,
     entry_date: entryDate,
     actor,

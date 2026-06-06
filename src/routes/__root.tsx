@@ -245,6 +245,8 @@ const RootLayout = () => {
         { to: '/koperasi', label: t('nav.cooperative.overview'), icon: Home },
         { to: '/koperasi/anggota', label: t('nav.cooperative.members'), icon: Users },
         { to: '/koperasi/simpanan', label: t('nav.cooperative.savings'), icon: WalletCards },
+        { to: '/koperasi/pinjaman', label: t('nav.cooperative.loans'), icon: Banknote },
+        { to: '/koperasi/angsuran', label: t('nav.cooperative.installments'), icon: ReceiptText },
       ],
     },
     {

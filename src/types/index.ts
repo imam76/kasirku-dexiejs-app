@@ -1098,6 +1098,7 @@ export type CooperativeLoanStatus =
   | 'PAID_OFF'
   | 'REVERSED';
 export type CooperativeLoanInstallmentStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+export type CooperativeLoanPaymentType = 'PAYMENT' | 'REVERSAL';
 export type CooperativeLoanPaymentStatus = 'POSTED' | 'REVERSED';
 
 export interface CooperativeMember {
@@ -1191,15 +1192,20 @@ export interface CooperativeLoan {
   approved_at?: string;
   approved_by?: string;
   approved_by_name?: string;
+  approval_notes?: string;
   rejected_at?: string;
   rejected_by?: string;
   rejected_by_name?: string;
+  rejection_reason?: string;
   disbursed_at?: string;
   cash_account_id?: string;
   cash_account_code?: string;
   cash_account_name?: string;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
   finance_transaction_id?: string;
   journal_entry_id?: string;
+  disbursement_notes?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -1241,6 +1247,7 @@ export interface CooperativeLoanInstallment {
 export interface CooperativeLoanPayment {
   id: string;
   payment_number: string;
+  payment_type?: CooperativeLoanPaymentType;
   loan_id: string;
   loan_number: string;
   installment_id?: string;
@@ -1256,9 +1263,16 @@ export interface CooperativeLoanPayment {
   cash_account_id?: string;
   cash_account_code?: string;
   cash_account_name?: string;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
   finance_transaction_id?: string;
   journal_entry_id?: string;
   reversal_of_payment_id?: string;
+  reversal_payment_id?: string;
+  reversal_finance_transaction_id?: string;
+  reversal_journal_entry_id?: string;
+  reversed_at?: string;
+  reversal_reason?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -1295,6 +1309,7 @@ export type JournalSourceType =
   | 'PURCHASE_INVOICE_PAYMENT'
   | 'CASH_BANK_TRANSFER'
   | 'COOPERATIVE_SAVING'
+  | 'COOPERATIVE_LOAN'
   | 'MANUAL_JOURNAL'
   | 'OPENING_BALANCE';
 

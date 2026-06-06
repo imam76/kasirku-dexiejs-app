@@ -1,4 +1,4 @@
-import { TeamOutlined, WalletOutlined } from '@ant-design/icons';
+import { BankOutlined, CreditCardOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { Empty } from 'antd';
 import { canAccessPath } from '@/auth/routePermissions';
@@ -34,6 +34,20 @@ function Cooperative() {
       icon: WalletOutlined,
       color: 'text-blue-600',
       desc: t('cooperative.index.savingsDesc'),
+    },
+    {
+      to: '/koperasi/pinjaman',
+      label: t('nav.cooperative.loans'),
+      icon: BankOutlined,
+      color: 'text-violet-600',
+      desc: t('cooperative.index.loansDesc'),
+    },
+    {
+      to: '/koperasi/angsuran',
+      label: t('nav.cooperative.installments'),
+      icon: CreditCardOutlined,
+      color: 'text-cyan-700',
+      desc: t('cooperative.index.installmentsDesc'),
     },
   ].filter((item) => canAccessPath(currentUser?.role, item.to));
 
