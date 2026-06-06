@@ -254,6 +254,12 @@ export type FinanceTransactionSyncStatus = EntitySyncStatus;
 export type JournalEntrySyncStatus = EntitySyncStatus;
 export type CurrencySyncStatus = EntitySyncStatus;
 export type CurrencyRateSyncStatus = EntitySyncStatus;
+export type CooperativeMemberSyncStatus = EntitySyncStatus;
+export type CooperativeSavingTransactionSyncStatus = EntitySyncStatus;
+export type CooperativeMemberSavingBalanceSyncStatus = EntitySyncStatus;
+export type CooperativeLoanSyncStatus = EntitySyncStatus;
+export type CooperativeLoanInstallmentSyncStatus = EntitySyncStatus;
+export type CooperativeLoanPaymentSyncStatus = EntitySyncStatus;
 
 export interface Currency {
   id: string;
@@ -407,6 +413,7 @@ export interface SalesDocument {
   cash_account_id?: string;
   cash_account_code?: string;
   cash_account_name?: string;
+  payment_channel?: string;
   finance_transaction_id?: string;
   notes?: string;
   issued_at?: string;
@@ -1078,6 +1085,201 @@ export interface ProfitBalance {
   updated_at: string;
 }
 
+export type CooperativeMemberStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+export type CooperativeSavingType = 'POKOK' | 'WAJIB' | 'SUKARELA';
+export type CooperativeSavingTransactionType = 'DEPOSIT' | 'WITHDRAWAL' | 'REVERSAL';
+export type CooperativeSavingTransactionStatus = 'POSTED' | 'REVERSED';
+export type CooperativeLoanStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'DISBURSED'
+  | 'PAID_OFF'
+  | 'REVERSED';
+export type CooperativeLoanInstallmentStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+export type CooperativeLoanPaymentStatus = 'POSTED' | 'REVERSED';
+
+export interface CooperativeMember {
+  id: string;
+  member_number: string;
+  name: string;
+  identity_number?: string;
+  phone?: string;
+  address?: string;
+  join_date: string;
+  status: CooperativeMemberStatus;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  sync_status?: CooperativeMemberSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CooperativeSavingTransaction {
+  id: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  saving_type: CooperativeSavingType;
+  transaction_type: CooperativeSavingTransactionType;
+  amount: number;
+  transaction_date: string;
+  status: CooperativeSavingTransactionStatus;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
+  finance_transaction_id?: string;
+  journal_entry_id?: string;
+  reversal_of_transaction_id?: string;
+  reversal_transaction_id?: string;
+  reversal_finance_transaction_id?: string;
+  reversal_journal_entry_id?: string;
+  reversed_at?: string;
+  reversal_reason?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  sync_status?: CooperativeSavingTransactionSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CooperativeMemberSavingBalance {
+  id: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  saving_type: CooperativeSavingType;
+  balance: number;
+  updated_at: string;
+  sync_status?: CooperativeMemberSavingBalanceSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CooperativeLoan {
+  id: string;
+  loan_number: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  principal_amount: number;
+  interest_rate_per_month: number;
+  tenor_months: number;
+  total_interest_amount: number;
+  total_payable_amount: number;
+  outstanding_principal_amount: number;
+  outstanding_interest_amount: number;
+  outstanding_penalty_amount: number;
+  status: CooperativeLoanStatus;
+  application_date: string;
+  approved_at?: string;
+  approved_by?: string;
+  approved_by_name?: string;
+  rejected_at?: string;
+  rejected_by?: string;
+  rejected_by_name?: string;
+  disbursed_at?: string;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  finance_transaction_id?: string;
+  journal_entry_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  sync_status?: CooperativeLoanSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CooperativeLoanInstallment {
+  id: string;
+  loan_id: string;
+  loan_number: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  installment_number: number;
+  due_date: string;
+  principal_amount: number;
+  interest_amount: number;
+  penalty_amount: number;
+  paid_principal_amount: number;
+  paid_interest_amount: number;
+  paid_penalty_amount: number;
+  status: CooperativeLoanInstallmentStatus;
+  paid_at?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: CooperativeLoanInstallmentSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CooperativeLoanPayment {
+  id: string;
+  payment_number: string;
+  loan_id: string;
+  loan_number: string;
+  installment_id?: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  amount: number;
+  principal_amount: number;
+  interest_amount: number;
+  penalty_amount: number;
+  payment_date: string;
+  status: CooperativeLoanPaymentStatus;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  finance_transaction_id?: string;
+  journal_entry_id?: string;
+  reversal_of_payment_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  sync_status?: CooperativeLoanPaymentSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CooperativeSettings {
+  id: 'default';
+  default_interest_rate_per_month?: number;
+  default_tenor_months?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export type FinanceTransactionType = 'INCOME' | 'EXPENSE' | 'OPENING_BALANCE';
 
 export type JournalEntryStatus = 'DRAFT' | 'POSTED' | 'VOIDED' | 'REVERSED';
@@ -1092,6 +1294,7 @@ export type JournalSourceType =
   | 'ACCOUNTS_PAYABLE'
   | 'PURCHASE_INVOICE_PAYMENT'
   | 'CASH_BANK_TRANSFER'
+  | 'COOPERATIVE_SAVING'
   | 'MANUAL_JOURNAL'
   | 'OPENING_BALANCE';
 

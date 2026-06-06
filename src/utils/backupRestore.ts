@@ -44,9 +44,16 @@ export const backupDatabase = async () => {
       generalLedgerSetting: await db.generalLedgerSetting.toArray(),
       journalEntries: await db.journalEntries.toArray(),
       journalEntryLines: await db.journalEntryLines.toArray(),
+      cooperativeMembers: await db.cooperativeMembers.toArray(),
+      cooperativeSavingTransactions: await db.cooperativeSavingTransactions.toArray(),
+      cooperativeMemberSavingBalances: await db.cooperativeMemberSavingBalances.toArray(),
+      cooperativeLoans: await db.cooperativeLoans.toArray(),
+      cooperativeLoanInstallments: await db.cooperativeLoanInstallments.toArray(),
+      cooperativeLoanPayments: await db.cooperativeLoanPayments.toArray(),
+      cooperativeSettings: await db.cooperativeSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 11,
+      version: 12,
       timestamp: new Date().toISOString(),
     };
 
@@ -71,7 +78,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeSettings', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -125,6 +132,13 @@ export const restoreDatabase = async (file: File) => {
           db.generalLedgerSetting,
           db.journalEntries,
           db.journalEntryLines,
+          db.cooperativeMembers,
+          db.cooperativeSavingTransactions,
+          db.cooperativeMemberSavingBalances,
+          db.cooperativeLoans,
+          db.cooperativeLoanInstallments,
+          db.cooperativeLoanPayments,
+          db.cooperativeSettings,
           db.authUsers,
           db.authSessions,
           db.activityLogs,
@@ -163,6 +177,13 @@ export const restoreDatabase = async (file: File) => {
           await db.generalLedgerSetting.clear();
           await db.journalEntries.clear();
           await db.journalEntryLines.clear();
+          await db.cooperativeMembers.clear();
+          await db.cooperativeSavingTransactions.clear();
+          await db.cooperativeMemberSavingBalances.clear();
+          await db.cooperativeLoans.clear();
+          await db.cooperativeLoanInstallments.clear();
+          await db.cooperativeLoanPayments.clear();
+          await db.cooperativeSettings.clear();
           await db.authSessions.clear();
 
           if (hasAuthUsersPayload) {
@@ -205,6 +226,21 @@ export const restoreDatabase = async (file: File) => {
           if (data.generalLedgerSetting?.length) await db.generalLedgerSetting.bulkAdd(data.generalLedgerSetting);
           if (data.journalEntries?.length) await db.journalEntries.bulkAdd(data.journalEntries);
           if (data.journalEntryLines?.length) await db.journalEntryLines.bulkAdd(data.journalEntryLines);
+          if (data.cooperativeMembers?.length) await db.cooperativeMembers.bulkAdd(data.cooperativeMembers);
+          if (data.cooperativeSavingTransactions?.length) await db.cooperativeSavingTransactions.bulkAdd(data.cooperativeSavingTransactions);
+          if (data.cooperativeMemberSavingBalances?.length) await db.cooperativeMemberSavingBalances.bulkAdd(data.cooperativeMemberSavingBalances);
+          if (data.cooperativeLoans?.length) await db.cooperativeLoans.bulkAdd(data.cooperativeLoans);
+          if (data.cooperativeLoanInstallments?.length) await db.cooperativeLoanInstallments.bulkAdd(data.cooperativeLoanInstallments);
+          if (data.cooperativeLoanPayments?.length) await db.cooperativeLoanPayments.bulkAdd(data.cooperativeLoanPayments);
+          if (data.cooperativeSettings?.length) await db.cooperativeSettings.bulkAdd(data.cooperativeSettings);
+          if (!data.cooperativeSettings?.length) {
+            const now = new Date().toISOString();
+            await db.cooperativeSettings.put({
+              id: 'default',
+              created_at: now,
+              updated_at: now,
+            });
+          }
           if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
           if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
         });

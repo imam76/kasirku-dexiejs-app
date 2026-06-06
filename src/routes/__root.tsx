@@ -48,6 +48,7 @@ import {
   Sun,
   Users,
   Warehouse,
+  WalletCards,
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -234,6 +235,16 @@ const RootLayout = () => {
         { to: '/finance/payables', label: t('nav.finance.payables'), icon: CreditCard },
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
         { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
+      ],
+    },
+    {
+      label: t('nav.cooperative'),
+      icon: Building2,
+      key: 'cooperative-group',
+      children: [
+        { to: '/koperasi', label: t('nav.cooperative.overview'), icon: Home },
+        { to: '/koperasi/anggota', label: t('nav.cooperative.members'), icon: Users },
+        { to: '/koperasi/simpanan', label: t('nav.cooperative.savings'), icon: WalletCards },
       ],
     },
     {

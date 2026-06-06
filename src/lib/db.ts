@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, Currency, CurrencyRate, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, Currency, CurrencyRate, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine, CooperativeMember, CooperativeSavingTransaction, CooperativeMemberSavingBalance, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeSettings } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
@@ -126,6 +126,13 @@ export class KasirkuDB extends Dexie {
   generalLedgerSetting!: Table<GeneralLedgerSetting>;
   journalEntries!: Table<JournalEntry>;
   journalEntryLines!: Table<JournalEntryLine>;
+  cooperativeMembers!: Table<CooperativeMember>;
+  cooperativeSavingTransactions!: Table<CooperativeSavingTransaction>;
+  cooperativeMemberSavingBalances!: Table<CooperativeMemberSavingBalance>;
+  cooperativeLoans!: Table<CooperativeLoan>;
+  cooperativeLoanInstallments!: Table<CooperativeLoanInstallment>;
+  cooperativeLoanPayments!: Table<CooperativeLoanPayment>;
+  cooperativeSettings!: Table<CooperativeSettings>;
 
   constructor() {
     super('KasirkuDB');
@@ -723,6 +730,67 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(39).stores({
+      cooperativeMembers: 'id, member_number, status, sync_status, updated_at, created_at',
+      cooperativeSavingTransactions: 'id, member_id, saving_type, transaction_type, status, transaction_date, finance_transaction_id, journal_entry_id, created_at',
+      cooperativeMemberSavingBalances: 'id, member_id, saving_type, updated_at',
+      cooperativeLoans: 'id, loan_number, member_id, status, application_date, disbursed_at, sync_status, updated_at, created_at',
+      cooperativeLoanInstallments: 'id, loan_id, due_date, status, installment_number, updated_at, created_at',
+      cooperativeLoanPayments: 'id, payment_number, loan_id, installment_id, payment_date, status, finance_transaction_id, journal_entry_id, created_at',
+      cooperativeSettings: 'id, updated_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+      const accounts = await chartOfAccounts.toArray();
+      const accountCodes = new Set(accounts.map((account) => account.code));
+      const accountIds = new Set(accounts.map((account) => account.id));
+      const missingAccounts = seed.accounts.filter((account) => {
+        return !accountCodes.has(account.code) && !accountIds.has(account.id);
+      });
+
+      if (missingAccounts.length > 0) {
+        await chartOfAccounts.bulkPut(missingAccounts);
+      }
+
+      await tx.table<CooperativeSettings, string>('cooperativeSettings').put({
+        id: 'default',
+        created_at: now,
+        updated_at: now,
+      });
+    });
+
+    this.version(40).stores({
+      cooperativeSavingTransactions: 'id, member_id, saving_type, transaction_type, status, transaction_date, finance_transaction_id, journal_entry_id, reversal_of_transaction_id, created_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const seed = buildAccountingSeed(now);
+      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+      const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
+      const accounts = await chartOfAccounts.toArray();
+      const accountCodes = new Set(accounts.map((account) => account.code));
+      const accountIds = new Set(accounts.map((account) => account.id));
+      const missingAccounts = seed.accounts.filter((account) => {
+        return !accountCodes.has(account.code) && !accountIds.has(account.id);
+      });
+
+      if (missingAccounts.length > 0) {
+        await chartOfAccounts.bulkPut(missingAccounts);
+      }
+
+      const mappings = await financeAccountMappings.toArray();
+      const mappingKeys = new Set(mappings.map((mapping) => mapping.key));
+      const missingMappings = seed.mappings.filter((mapping) => !mappingKeys.has(mapping.key));
+
+      if (missingMappings.length > 0) {
+        await financeAccountMappings.bulkPut(missingMappings);
+      }
+    });
+
+    this.version(41).stores({
+      cooperativeMemberSavingBalances: 'id, member_id, member_number, saving_type, updated_at'
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
@@ -735,6 +803,11 @@ export class KasirkuDB extends Dexie {
       await this.accountingProfileSetting.put(seed.profileSetting);
       await this.enabledModules.bulkPut(seed.enabledModules);
       await this.generalLedgerSetting.put(seed.generalLedgerSetting);
+      await this.cooperativeSettings.put({
+        id: 'default',
+        created_at: now,
+        updated_at: now,
+      });
     });
   }
 }

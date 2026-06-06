@@ -5,6 +5,7 @@ import type {
   AccountType,
   AuthUser,
   ChartOfAccount,
+  CooperativeSavingTransaction,
   InventoryAccountingPolicy,
   JournalEntry,
   JournalEntryLine,
@@ -38,6 +39,8 @@ const SOURCE_EVENTS = {
   SALES_RETURN_ISSUED: 'SALES_RETURN_ISSUED',
   PURCHASE_INVOICE_PAYMENT_POSTED: 'PURCHASE_INVOICE_PAYMENT_POSTED',
   CASH_BANK_TRANSFER_POSTED: 'CASH_BANK_TRANSFER_POSTED',
+  COOPERATIVE_SAVING_DEPOSIT_POSTED: 'COOPERATIVE_SAVING_DEPOSIT_POSTED',
+  COOPERATIVE_SAVING_WITHDRAWAL_POSTED: 'COOPERATIVE_SAVING_WITHDRAWAL_POSTED',
   OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
   MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
 } as const;
@@ -158,6 +161,7 @@ const ACCOUNT_CANDIDATES = {
   salesInvoiceRevenue: { ids: ['sales-invoice-revenue', 'template-sales-invoice-revenue'], codes: ['4010', '4020'] },
   salesReturn: { ids: ['sales-return', 'template-sales-return'], codes: ['4020', '4100'] },
   salesDiscount: { ids: ['sales-discount', 'template-sales-discount'], codes: ['4030', '4110'] },
+  cooperativeMemberSavings: { ids: ['cooperative-member-savings'], codes: ['2300'] },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
 } satisfies Record<string, AccountCandidate>;
 
@@ -965,6 +969,82 @@ export const postCashBankTransferJournal = async (input: {
       createCreditLine(input.fromAccount, amount, 'Kas/bank berkurang karena transfer internal'),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
     actor: input.actor,
+  });
+};
+
+const getCooperativeSavingSourceEvent = (transaction: CooperativeSavingTransaction) => {
+  if (transaction.transaction_type === 'DEPOSIT') {
+    return SOURCE_EVENTS.COOPERATIVE_SAVING_DEPOSIT_POSTED;
+  }
+  if (transaction.transaction_type === 'WITHDRAWAL') {
+    return SOURCE_EVENTS.COOPERATIVE_SAVING_WITHDRAWAL_POSTED;
+  }
+
+  return undefined;
+};
+
+export const postCooperativeSavingTransactionJournal = async (
+  transaction: CooperativeSavingTransaction,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (transaction.status !== 'POSTED') return undefined;
+  if (transaction.transaction_type !== 'DEPOSIT' && transaction.transaction_type !== 'WITHDRAWAL') return undefined;
+  if (!await isGeneralLedgerPostingEnabled(transaction.transaction_date)) return undefined;
+
+  const amount = amountOrZero(transaction.amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cashAccount = transaction.cash_account_id
+    ? accounts.find((account) => account.id === transaction.cash_account_id)
+    : getPostableAccount(accounts, getCashAccountCandidate(transaction.payment_method), 'Kas/Bank');
+
+  if (!cashAccount) {
+    throw new Error('Akun kas/bank simpanan tidak ditemukan.');
+  }
+  if (cashAccount.type !== 'ASSET' || !cashAccount.is_active || !cashAccount.is_postable) {
+    throw new Error('Akun kas/bank simpanan harus bertipe aset, aktif, dan postable.');
+  }
+
+  const savingAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeMemberSavings, 'Simpanan Anggota');
+  const lines = transaction.transaction_type === 'DEPOSIT'
+    ? [
+        createDebitLine(cashAccount, amount, 'Kas/bank bertambah dari setoran simpanan anggota'),
+        createCreditLine(savingAccount, amount, 'Kewajiban simpanan anggota bertambah'),
+      ]
+    : [
+        createDebitLine(savingAccount, amount, 'Kewajiban simpanan anggota berkurang'),
+        createCreditLine(cashAccount, amount, 'Kas/bank berkurang karena penarikan simpanan anggota'),
+      ];
+
+  return postBalancedJournalEntry({
+    source_type: 'COOPERATIVE_SAVING',
+    source_id: transaction.id,
+    source_number: transaction.member_number,
+    source_event: getCooperativeSavingSourceEvent(transaction),
+    entry_date: transaction.transaction_date,
+    description: `${transaction.transaction_type === 'DEPOSIT' ? 'Setoran' : 'Penarikan'} simpanan ${transaction.saving_type} ${transaction.member_number} - ${transaction.member_name}`,
+    lines: lines.filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const reverseCooperativeSavingTransactionJournal = async (
+  transaction: CooperativeSavingTransaction,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  entryDate?: string,
+) => {
+  const sourceEvent = getCooperativeSavingSourceEvent(transaction);
+  if (!sourceEvent) return [];
+
+  return reverseJournalEntriesForSource({
+    source_type: 'COOPERATIVE_SAVING',
+    source_id: transaction.id,
+    source_event: sourceEvent,
+    reason,
+    entry_date: entryDate,
+    actor,
   });
 };
 
