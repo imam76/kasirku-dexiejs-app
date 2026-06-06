@@ -9,12 +9,29 @@ import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import dayjs from '@/lib/dayjs';
 import type {
+  CooperativeCashBankReportRow,
+  CooperativeInstallmentReportRow,
   CooperativeLedgerRow,
+  CooperativeLoanPaymentReportRow,
+  CooperativeLoanReportRow,
+  CooperativeMemberReportRow,
   CooperativeOverdueReportRow,
+  CooperativeReconciliationKey,
+  CooperativeReconciliationRow,
+  CooperativeSavingBalanceReportRow,
+  CooperativeSavingMutationReportRow,
 } from '@/services/cooperativeReportService';
 import type { JournalEntryWithLines } from '@/services/generalLedgerService';
 import type {
   CooperativeLoanInstallmentStatus,
+  CooperativeLoanPaymentStatus,
+  CooperativeLoanPaymentType,
+  CooperativeLoanStatus,
+  CooperativeMemberStatus,
+  CooperativeSavingTransactionStatus,
+  CooperativeSavingTransactionType,
+  CooperativeSavingType,
+  FinanceTransactionType,
   JournalEntryLine,
   JournalEntryStatus,
   JournalSourceType,
@@ -28,6 +45,72 @@ const journalStatusColor: Record<JournalEntryStatus, string> = {
   POSTED: 'green',
   VOIDED: 'red',
   REVERSED: 'orange',
+};
+
+const memberStatusColor: Record<CooperativeMemberStatus, string> = {
+  ACTIVE: 'green',
+  INACTIVE: 'default',
+  SUSPENDED: 'orange',
+};
+
+const memberStatusLabelKey: Record<CooperativeMemberStatus, TranslationKey> = {
+  ACTIVE: 'cooperative.members.status.active',
+  INACTIVE: 'cooperative.members.status.inactive',
+  SUSPENDED: 'cooperative.members.status.suspended',
+};
+
+const savingTypeColor: Record<CooperativeSavingType, string> = {
+  POKOK: 'blue',
+  WAJIB: 'purple',
+  SUKARELA: 'green',
+};
+
+const savingTypeLabelKey: Record<CooperativeSavingType, TranslationKey> = {
+  POKOK: 'cooperative.savings.type.pokok',
+  WAJIB: 'cooperative.savings.type.wajib',
+  SUKARELA: 'cooperative.savings.type.sukarela',
+};
+
+const savingTransactionTypeColor: Record<CooperativeSavingTransactionType, string> = {
+  DEPOSIT: 'green',
+  WITHDRAWAL: 'red',
+  REVERSAL: 'orange',
+};
+
+const savingTransactionTypeLabelKey: Record<CooperativeSavingTransactionType, TranslationKey> = {
+  DEPOSIT: 'cooperative.savings.transactionType.deposit',
+  WITHDRAWAL: 'cooperative.savings.transactionType.withdrawal',
+  REVERSAL: 'cooperative.savings.transactionType.reversal',
+};
+
+const savingStatusColor: Record<CooperativeSavingTransactionStatus, string> = {
+  POSTED: 'green',
+  REVERSED: 'red',
+};
+
+const savingStatusLabelKey: Record<CooperativeSavingTransactionStatus, TranslationKey> = {
+  POSTED: 'cooperative.savings.status.posted',
+  REVERSED: 'cooperative.savings.status.reversed',
+};
+
+const loanStatusColor: Record<CooperativeLoanStatus, string> = {
+  DRAFT: 'default',
+  SUBMITTED: 'blue',
+  APPROVED: 'green',
+  REJECTED: 'red',
+  DISBURSED: 'purple',
+  PAID_OFF: 'cyan',
+  REVERSED: 'orange',
+};
+
+const loanStatusLabelKey: Record<CooperativeLoanStatus, TranslationKey> = {
+  DRAFT: 'cooperative.loans.status.draft',
+  SUBMITTED: 'cooperative.loans.status.submitted',
+  APPROVED: 'cooperative.loans.status.approved',
+  REJECTED: 'cooperative.loans.status.rejected',
+  DISBURSED: 'cooperative.loans.status.disbursed',
+  PAID_OFF: 'cooperative.loans.status.paidOff',
+  REVERSED: 'cooperative.loans.status.reversed',
 };
 
 const installmentStatusColor: Record<CooperativeLoanInstallmentStatus, string> = {
@@ -44,18 +127,72 @@ const installmentStatusLabelKey: Record<CooperativeLoanInstallmentStatus, Transl
   OVERDUE: 'cooperative.loans.installmentStatus.overdue',
 };
 
+const paymentStatusColor: Record<CooperativeLoanPaymentStatus, string> = {
+  POSTED: 'green',
+  REVERSED: 'red',
+};
+
+const paymentStatusLabelKey: Record<CooperativeLoanPaymentStatus, TranslationKey> = {
+  POSTED: 'cooperative.installments.paymentStatus.posted',
+  REVERSED: 'cooperative.installments.paymentStatus.reversed',
+};
+
+const paymentTypeLabelKey: Record<CooperativeLoanPaymentType, TranslationKey> = {
+  PAYMENT: 'cooperative.installments.paymentType.payment',
+  REVERSAL: 'cooperative.installments.paymentType.reversal',
+};
+
+const financeTypeColor: Record<FinanceTransactionType, string> = {
+  INCOME: 'green',
+  EXPENSE: 'red',
+  OPENING_BALANCE: 'blue',
+};
+
+const reconciliationLabelKey: Record<CooperativeReconciliationKey, TranslationKey> = {
+  SAVING_BALANCE: 'cooperative.reports.reconciliation.savingBalance',
+  LOAN_OUTSTANDING: 'cooperative.reports.reconciliation.loanOutstanding',
+  FINANCE_TRANSACTION: 'cooperative.reports.reconciliation.financeTransaction',
+  JOURNAL_ENTRY: 'cooperative.reports.reconciliation.journalEntry',
+};
+
 const getSignedAmountClass = (value: number) => (
   value < 0 ? 'text-red-600' : 'text-gray-900'
 );
 
 const money = (value: number) => `Rp ${formatCurrency(value || 0)}`;
 
+const idText = (value?: string) => value || '-';
+
+const MemberLink = ({
+  memberNumber,
+  memberName,
+}: {
+  memberNumber: string;
+  memberName: string;
+}) => (
+  <Link to="/koperasi/anggota" className="font-medium text-blue-600 hover:text-blue-700">
+    {memberNumber} - {memberName}
+  </Link>
+);
+
+const LoanLink = ({
+  loanNumber,
+  to = '/koperasi/pinjaman',
+}: {
+  loanNumber: string;
+  to?: '/koperasi/pinjaman' | '/koperasi/angsuran';
+}) => (
+  <Link to={to} className="font-medium text-blue-600 hover:text-blue-700">
+    {loanNumber}
+  </Link>
+);
+
 const CooperativeSourceLink = ({
   sourceType,
   sourceEvent,
   sourceNumber,
 }: {
-  sourceType: JournalSourceType;
+  sourceType?: JournalSourceType;
   sourceEvent?: string;
   sourceNumber?: string;
 }) => {
@@ -70,7 +207,11 @@ const CooperativeSourceLink = ({
     return <Link to="/koperasi/angsuran" className={className}>{label}</Link>;
   }
 
-  return <Link to="/koperasi/pinjaman" className={className}>{label}</Link>;
+  if (sourceType === 'COOPERATIVE_LOAN') {
+    return <Link to="/koperasi/pinjaman" className={className}>{label}</Link>;
+  }
+
+  return <Text type="secondary">-</Text>;
 };
 
 export default function CooperativeReportManagement() {
@@ -91,14 +232,545 @@ export default function CooperativeReportManagement() {
   const isLoading = reportQuery.isLoading || reportQuery.isFetching;
   const accounts = data?.accounts ?? [];
   const selectedAccount = data?.selectedAccount;
+  const summary = data?.summary;
   const overdueSummary = data?.overdueReport.summary;
   const incomeStatement = data?.incomeStatement;
   const balanceSheet = data?.balanceSheet;
+  const reconciliation = data?.reconciliation;
 
   const accountOptions = accounts.map((account) => ({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   }));
+
+  const reconciliationColumns: ColumnsType<CooperativeReconciliationRow> = [
+    {
+      title: t('cooperative.reports.table.check'),
+      dataIndex: 'key',
+      key: 'key',
+      render: (key: CooperativeReconciliationKey) => t(reconciliationLabelKey[key]),
+    },
+    {
+      title: t('cooperative.reports.table.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: CooperativeReconciliationRow['status']) => (
+        <Tag color={status === 'OK' ? 'green' : 'orange'}>{t(status === 'OK' ? 'cooperative.reports.reconciliation.ok' : 'cooperative.reports.reconciliation.warning')}</Tag>
+      ),
+      width: 130,
+    },
+    {
+      title: t('cooperative.reports.table.mismatchCount'),
+      dataIndex: 'mismatch_count',
+      key: 'mismatch_count',
+      align: 'right',
+      width: 150,
+    },
+    {
+      title: t('cooperative.reports.table.expected'),
+      dataIndex: 'expected_amount',
+      key: 'expected_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.actual'),
+      dataIndex: 'actual_amount',
+      key: 'actual_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.difference'),
+      dataIndex: 'difference_amount',
+      key: 'difference_amount',
+      align: 'right',
+      render: (value: number) => <Text className={getSignedAmountClass(value)}>{money(value)}</Text>,
+      width: 170,
+    },
+  ];
+
+  const memberColumns: ColumnsType<CooperativeMemberReportRow> = [
+    {
+      title: t('cooperative.reports.table.member'),
+      key: 'member',
+      render: (_value, record) => <MemberLink memberNumber={record.member_number} memberName={record.name} />,
+    },
+    {
+      title: t('cooperative.reports.table.joinDate'),
+      dataIndex: 'join_date',
+      key: 'join_date',
+      render: (value: string) => formatDate(value),
+      width: 150,
+    },
+    {
+      title: t('cooperative.reports.table.phone'),
+      dataIndex: 'phone',
+      key: 'phone',
+      render: idText,
+      width: 150,
+    },
+    {
+      title: t('cooperative.reports.table.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: CooperativeMemberStatus) => <Tag color={memberStatusColor[status]}>{t(memberStatusLabelKey[status])}</Tag>,
+      width: 130,
+    },
+    {
+      title: t('cooperative.reports.table.savingBalance'),
+      dataIndex: 'saving_balance',
+      key: 'saving_balance',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.activeLoans'),
+      dataIndex: 'active_loan_count',
+      key: 'active_loan_count',
+      align: 'right',
+      width: 140,
+    },
+    {
+      title: t('cooperative.reports.table.loanOutstanding'),
+      dataIndex: 'outstanding_loan_amount',
+      key: 'outstanding_loan_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 180,
+    },
+  ];
+
+  const savingBalanceColumns: ColumnsType<CooperativeSavingBalanceReportRow> = [
+    {
+      title: t('cooperative.reports.table.member'),
+      key: 'member',
+      render: (_value, record) => <MemberLink memberNumber={record.member_number} memberName={record.member_name} />,
+      width: 260,
+    },
+    {
+      title: t('cooperative.reports.table.savingType'),
+      dataIndex: 'saving_type',
+      key: 'saving_type',
+      render: (savingType: CooperativeSavingType) => (
+        <Tag color={savingTypeColor[savingType]}>{t(savingTypeLabelKey[savingType])}</Tag>
+      ),
+      width: 140,
+    },
+    {
+      title: t('cooperative.reports.table.balance'),
+      dataIndex: 'balance',
+      key: 'balance',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.expected'),
+      dataIndex: 'expected_balance',
+      key: 'expected_balance',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.difference'),
+      dataIndex: 'difference_amount',
+      key: 'difference_amount',
+      align: 'right',
+      render: (value: number) => <Text className={getSignedAmountClass(value)}>{money(value)}</Text>,
+      width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.updatedAt'),
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      render: (value: string) => formatDate(value),
+      width: 170,
+    },
+  ];
+
+  const savingMutationColumns: ColumnsType<CooperativeSavingMutationReportRow> = [
+    {
+      title: t('cooperative.reports.table.date'),
+      dataIndex: 'transaction_date',
+      key: 'transaction_date',
+      render: (value: string) => formatDate(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.reports.table.member'),
+      key: 'member',
+      render: (_value, record) => <MemberLink memberNumber={record.member_number} memberName={record.member_name} />,
+      width: 260,
+    },
+    {
+      title: t('cooperative.reports.table.savingType'),
+      dataIndex: 'saving_type',
+      key: 'saving_type',
+      render: (savingType: CooperativeSavingType) => (
+        <Tag color={savingTypeColor[savingType]}>{t(savingTypeLabelKey[savingType])}</Tag>
+      ),
+      width: 140,
+    },
+    {
+      title: t('cooperative.reports.table.type'),
+      dataIndex: 'transaction_type',
+      key: 'transaction_type',
+      render: (transactionType: CooperativeSavingTransactionType) => (
+        <Tag color={savingTransactionTypeColor[transactionType]}>{t(savingTransactionTypeLabelKey[transactionType])}</Tag>
+      ),
+      width: 140,
+    },
+    {
+      title: t('cooperative.reports.table.amount'),
+      dataIndex: 'amount',
+      key: 'amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.reports.table.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: CooperativeSavingTransactionStatus) => (
+        <Tag color={savingStatusColor[status]}>{t(savingStatusLabelKey[status])}</Tag>
+      ),
+      width: 130,
+    },
+    {
+      title: t('cooperative.reports.table.references'),
+      key: 'references',
+      render: (_value, record) => (
+        <Space orientation="vertical" size={0}>
+          <Text type="secondary">{t('cooperative.reports.table.finance')}: {idText(record.finance_transaction_id)}</Text>
+          <Text type="secondary">{t('cooperative.reports.table.journal')}: {idText(record.journal_entry_id)}</Text>
+        </Space>
+      ),
+      width: 260,
+    },
+  ];
+
+  const loanColumns: ColumnsType<CooperativeLoanReportRow> = [
+    {
+      title: t('cooperative.installments.table.loan'),
+      key: 'loan',
+      render: (_value, record) => (
+        <Space orientation="vertical" size={0}>
+          <LoanLink loanNumber={record.loan_number} />
+          <Text type="secondary">{formatDate(record.application_date)}</Text>
+        </Space>
+      ),
+      width: 190,
+    },
+    {
+      title: t('cooperative.reports.table.member'),
+      key: 'member',
+      render: (_value, record) => <MemberLink memberNumber={record.member_number} memberName={record.member_name} />,
+      width: 260,
+    },
+    {
+      title: t('cooperative.reports.table.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: CooperativeLoanStatus) => <Tag color={loanStatusColor[status]}>{t(loanStatusLabelKey[status])}</Tag>,
+      width: 130,
+    },
+    {
+      title: t('cooperative.reports.table.principal'),
+      dataIndex: 'principal_amount',
+      key: 'principal_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.totalPayable'),
+      dataIndex: 'total_payable_amount',
+      key: 'total_payable_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.loanOutstanding'),
+      dataIndex: 'outstanding_total_amount',
+      key: 'outstanding_total_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 180,
+    },
+    {
+      title: t('cooperative.reports.table.scheduleRemaining'),
+      dataIndex: 'installment_remaining_amount',
+      key: 'installment_remaining_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 190,
+    },
+    {
+      title: t('cooperative.reports.table.installments'),
+      key: 'installments',
+      align: 'right',
+      render: (_value, record) => `${record.paid_installment_count}/${record.installment_count}`,
+      width: 130,
+    },
+  ];
+
+  const installmentColumns: ColumnsType<CooperativeInstallmentReportRow> = [
+    {
+      title: t('cooperative.installments.table.dueDate'),
+      dataIndex: 'due_date',
+      key: 'due_date',
+      render: (value: string) => formatDate(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.installments.table.loan'),
+      key: 'loan',
+      render: (_value, record) => (
+        <Space orientation="vertical" size={0}>
+          <LoanLink loanNumber={record.loan_number} to="/koperasi/angsuran" />
+          <MemberLink memberNumber={record.member_number} memberName={record.member_name} />
+        </Space>
+      ),
+      width: 300,
+    },
+    {
+      title: t('cooperative.installments.table.installmentNo'),
+      dataIndex: 'installment_number',
+      key: 'installment_number',
+      align: 'right',
+      width: 100,
+    },
+    {
+      title: t('cooperative.installments.table.bill'),
+      dataIndex: 'bill_amount',
+      key: 'bill_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.installments.table.paid'),
+      dataIndex: 'paid_amount',
+      key: 'paid_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.installments.table.remaining'),
+      dataIndex: 'remaining_amount',
+      key: 'remaining_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.installments.table.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: CooperativeLoanInstallmentStatus) => (
+        <Tag color={installmentStatusColor[status]}>{t(installmentStatusLabelKey[status])}</Tag>
+      ),
+      width: 130,
+    },
+  ];
+
+  const loanPaymentColumns: ColumnsType<CooperativeLoanPaymentReportRow> = [
+    {
+      title: t('cooperative.installments.payments.paymentDate'),
+      dataIndex: 'payment_date',
+      key: 'payment_date',
+      render: (value: string) => formatDate(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.installments.payments.paymentNumber'),
+      dataIndex: 'payment_number',
+      key: 'payment_number',
+      render: (value: string, record) => (
+        <Space orientation="vertical" size={0}>
+          <Link to="/koperasi/angsuran" className="font-medium text-blue-600 hover:text-blue-700">{value}</Link>
+          {record.payment_type && <Text type="secondary">{t(paymentTypeLabelKey[record.payment_type])}</Text>}
+        </Space>
+      ),
+      width: 190,
+    },
+    {
+      title: t('cooperative.installments.table.loan'),
+      key: 'loan',
+      render: (_value, record) => (
+        <Space orientation="vertical" size={0}>
+          <LoanLink loanNumber={record.loan_number} to="/koperasi/angsuran" />
+          <MemberLink memberNumber={record.member_number} memberName={record.member_name} />
+        </Space>
+      ),
+      width: 300,
+    },
+    {
+      title: t('cooperative.installments.payments.amount'),
+      dataIndex: 'amount',
+      key: 'amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.installments.payments.allocation'),
+      key: 'allocation',
+      render: (_value, record) => (
+        <Space orientation="vertical" size={0}>
+          <Text>{t('cooperative.reports.table.principal')}: {money(record.principal_amount)}</Text>
+          <Text>{t('cooperative.reports.table.interest')}: {money(record.interest_amount)}</Text>
+          <Text>{t('cooperative.reports.table.penalty')}: {money(record.penalty_amount)}</Text>
+        </Space>
+      ),
+      width: 220,
+    },
+    {
+      title: t('cooperative.installments.payments.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: CooperativeLoanPaymentStatus) => (
+        <Tag color={paymentStatusColor[status]}>{t(paymentStatusLabelKey[status])}</Tag>
+      ),
+      width: 130,
+    },
+  ];
+
+  const overdueColumns: ColumnsType<CooperativeOverdueReportRow> = [
+    {
+      title: t('cooperative.installments.table.dueDate'),
+      dataIndex: 'due_date',
+      key: 'due_date',
+      render: (value: string) => formatDate(value),
+      width: 170,
+    },
+    {
+      title: t('cooperative.installments.table.loan'),
+      key: 'loan',
+      render: (_value, record) => (
+        <Space orientation="vertical" size={0}>
+          <LoanLink loanNumber={record.loan_number} to="/koperasi/angsuran" />
+          <MemberLink memberNumber={record.member_number} memberName={record.member_name} />
+        </Space>
+      ),
+      width: 280,
+    },
+    {
+      title: t('cooperative.installments.table.installmentNo'),
+      dataIndex: 'installment_number',
+      key: 'installment_number',
+      align: 'right',
+      width: 110,
+    },
+    {
+      title: t('cooperative.reports.overdue.daysOverdue'),
+      dataIndex: 'days_overdue',
+      key: 'days_overdue',
+      align: 'right',
+      render: (value: number) => t('cooperative.reports.overdue.days', { days: value }),
+      width: 140,
+    },
+    {
+      title: t('cooperative.reports.overdue.principal'),
+      dataIndex: 'remaining_principal_amount',
+      key: 'remaining_principal_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.reports.overdue.interest'),
+      dataIndex: 'remaining_interest_amount',
+      key: 'remaining_interest_amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.reports.overdue.penalty'),
+      dataIndex: 'remaining_penalty_amount',
+      key: 'remaining_penalty_amount',
+      align: 'right',
+      render: (value: number) => value > 0 ? money(value) : '-',
+      width: 160,
+    },
+    {
+      title: t('cooperative.reports.overdue.remainingTotal'),
+      dataIndex: 'remaining_total_amount',
+      key: 'remaining_total_amount',
+      align: 'right',
+      render: (value: number) => <Text strong>{money(value)}</Text>,
+      width: 170,
+    },
+    {
+      title: t('cooperative.installments.table.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: CooperativeLoanInstallmentStatus) => (
+        <Tag color={installmentStatusColor[status]}>{t(installmentStatusLabelKey[status])}</Tag>
+      ),
+      width: 140,
+    },
+  ];
+
+  const cashBankColumns: ColumnsType<CooperativeCashBankReportRow> = [
+    {
+      title: t('cooperative.reports.table.date'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (value: string) => formatDate(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.reports.table.category'),
+      dataIndex: 'category',
+      key: 'category',
+      width: 220,
+    },
+    {
+      title: t('cooperative.reports.table.description'),
+      dataIndex: 'description',
+      key: 'description',
+    },
+    {
+      title: t('cooperative.reports.table.cashAccount'),
+      key: 'cashAccount',
+      render: (_value, record) => record.cash_account_code && record.cash_account_name
+        ? `${record.cash_account_code} - ${record.cash_account_name}`
+        : '-',
+      width: 220,
+    },
+    {
+      title: t('cooperative.reports.table.type'),
+      dataIndex: 'type',
+      key: 'type',
+      render: (type: FinanceTransactionType) => <Tag color={financeTypeColor[type]}>{type}</Tag>,
+      width: 130,
+    },
+    {
+      title: t('cooperative.reports.table.amount'),
+      dataIndex: 'amount',
+      key: 'amount',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 160,
+    },
+    {
+      title: t('cooperative.reports.table.reference'),
+      dataIndex: 'reference_id',
+      key: 'reference_id',
+      render: idText,
+      width: 220,
+    },
+  ];
 
   const journalLineColumns: ColumnsType<JournalEntryLine> = [
     {
@@ -193,7 +865,7 @@ export default function CooperativeReportManagement() {
       title: t('generalLedger.journal.date'),
       dataIndex: 'entry_date',
       key: 'entry_date',
-      render: (value: string) => formatDate(value),
+      render: (value?: string) => value ? formatDate(value) : '-',
       width: 170,
     },
     {
@@ -201,6 +873,13 @@ export default function CooperativeReportManagement() {
       dataIndex: 'entry_number',
       key: 'entry_number',
       width: 170,
+    },
+    {
+      title: t('cooperative.reports.table.rowType'),
+      dataIndex: 'row_type',
+      key: 'row_type',
+      render: (rowType: CooperativeLedgerRow['row_type']) => t(`cooperative.reports.ledger.${rowType.toLowerCase()}` as TranslationKey),
+      width: 140,
     },
     {
       title: t('generalLedger.journal.source'),
@@ -218,6 +897,9 @@ export default function CooperativeReportManagement() {
       title: t('generalLedger.journal.description'),
       dataIndex: 'description',
       key: 'description',
+      render: (_value: string, record) => record.row_type === 'MOVEMENT'
+        ? record.description
+        : t(`cooperative.reports.ledger.${record.row_type.toLowerCase()}Description` as TranslationKey),
     },
     {
       title: t('generalLedger.debit'),
@@ -244,87 +926,6 @@ export default function CooperativeReportManagement() {
         <Text className={getSignedAmountClass(value)}>{money(value)}</Text>
       ),
       width: 190,
-    },
-  ];
-
-  const overdueColumns: ColumnsType<CooperativeOverdueReportRow> = [
-    {
-      title: t('cooperative.installments.table.dueDate'),
-      dataIndex: 'due_date',
-      key: 'due_date',
-      render: (value: string) => formatDate(value),
-      width: 170,
-    },
-    {
-      title: t('cooperative.installments.table.loan'),
-      key: 'loan',
-      render: (_value, record) => (
-        <Space orientation="vertical" size={0}>
-          <Link to="/koperasi/angsuran" className="font-medium text-blue-600 hover:text-blue-700">
-            {record.loan_number}
-          </Link>
-          <Link to="/koperasi/anggota" className="text-gray-500 hover:text-blue-600">
-            {record.member_number} - {record.member_name}
-          </Link>
-        </Space>
-      ),
-      width: 260,
-    },
-    {
-      title: t('cooperative.installments.table.installmentNo'),
-      dataIndex: 'installment_number',
-      key: 'installment_number',
-      align: 'right',
-      width: 110,
-    },
-    {
-      title: t('cooperative.reports.overdue.daysOverdue'),
-      dataIndex: 'days_overdue',
-      key: 'days_overdue',
-      align: 'right',
-      render: (value: number) => t('cooperative.reports.overdue.days', { days: value }),
-      width: 140,
-    },
-    {
-      title: t('cooperative.reports.overdue.principal'),
-      dataIndex: 'remaining_principal_amount',
-      key: 'remaining_principal_amount',
-      align: 'right',
-      render: (value: number) => money(value),
-      width: 160,
-    },
-    {
-      title: t('cooperative.reports.overdue.interest'),
-      dataIndex: 'remaining_interest_amount',
-      key: 'remaining_interest_amount',
-      align: 'right',
-      render: (value: number) => money(value),
-      width: 160,
-    },
-    {
-      title: t('cooperative.reports.overdue.penalty'),
-      dataIndex: 'remaining_penalty_amount',
-      key: 'remaining_penalty_amount',
-      align: 'right',
-      render: (value: number) => value > 0 ? money(value) : '-',
-      width: 160,
-    },
-    {
-      title: t('cooperative.reports.overdue.remainingTotal'),
-      dataIndex: 'remaining_total_amount',
-      key: 'remaining_total_amount',
-      align: 'right',
-      render: (value: number) => <Text strong>{money(value)}</Text>,
-      width: 170,
-    },
-    {
-      title: t('cooperative.installments.table.status'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: CooperativeLoanInstallmentStatus) => (
-        <Tag color={installmentStatusColor[status]}>{t(installmentStatusLabelKey[status])}</Tag>
-      ),
-      width: 140,
     },
   ];
 
@@ -372,7 +973,34 @@ export default function CooperativeReportManagement() {
         />
       )}
 
+      {reconciliation?.status === 'WARNING' && (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('cooperative.reports.reconciliation.warningMessage', { count: reconciliation.mismatch_count })}
+        />
+      )}
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="rounded-lg border border-gray-100 bg-white p-4">
+          <Statistic title={t('cooperative.reports.summary.activeMembers')} value={summary?.active_member_count ?? 0} />
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-white p-4">
+          <Statistic
+            title={t('cooperative.reports.summary.totalSavings')}
+            value={summary?.total_saving_balance ?? 0}
+            prefix="Rp"
+            formatter={(value) => formatCurrency(Number(value || 0))}
+          />
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-white p-4">
+          <Statistic
+            title={t('cooperative.reports.summary.loanOutstanding')}
+            value={summary?.outstanding_loan_amount ?? 0}
+            prefix="Rp"
+            formatter={(value) => formatCurrency(Number(value || 0))}
+          />
+        </div>
         <div className="rounded-lg border border-gray-100 bg-white p-4">
           <Statistic
             title={t('cooperative.reports.overdue.totalAmount')}
@@ -381,22 +1009,123 @@ export default function CooperativeReportManagement() {
             formatter={(value) => formatCurrency(Number(value || 0))}
           />
         </div>
-        <div className="rounded-lg border border-gray-100 bg-white p-4">
-          <Statistic title={t('cooperative.reports.overdue.installmentCount')} value={overdueSummary?.row_count ?? 0} />
-        </div>
-        <div className="rounded-lg border border-gray-100 bg-white p-4">
-          <Statistic title={t('cooperative.reports.overdue.loanCount')} value={overdueSummary?.loan_count ?? 0} />
-        </div>
-        <div className="rounded-lg border border-gray-100 bg-white p-4">
-          <Statistic
-            title={t('cooperative.reports.overdue.maxDays')}
-            value={overdueSummary?.max_days_overdue ?? 0}
-          />
-        </div>
       </div>
 
       <Tabs
         items={[
+          {
+            key: 'summary',
+            label: t('cooperative.reports.tabs.summary'),
+            children: (
+              <Space direction="vertical" className="w-full" size="middle">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <div className="rounded-lg border border-gray-100 bg-white p-4">
+                    <Statistic title={t('cooperative.reports.summary.members')} value={summary?.member_count ?? 0} />
+                  </div>
+                  <div className="rounded-lg border border-gray-100 bg-white p-4">
+                    <Statistic title={t('cooperative.reports.summary.activeLoans')} value={summary?.active_loan_count ?? 0} />
+                  </div>
+                  <div className="rounded-lg border border-gray-100 bg-white p-4">
+                    <Statistic
+                      title={t('cooperative.reports.summary.netCash')}
+                      value={summary?.net_cash_amount ?? 0}
+                      prefix="Rp"
+                      formatter={(value) => formatCurrency(Number(value || 0))}
+                    />
+                  </div>
+                  <div className="rounded-lg border border-gray-100 bg-white p-4">
+                    <Statistic
+                      title={t('cooperative.reports.reconciliation.title')}
+                      value={reconciliation?.mismatch_count ?? 0}
+                      suffix={t(reconciliation?.status === 'WARNING' ? 'cooperative.reports.reconciliation.warning' : 'cooperative.reports.reconciliation.ok')}
+                    />
+                  </div>
+                </div>
+                <Table
+                  dataSource={reconciliation?.rows ?? []}
+                  columns={reconciliationColumns}
+                  rowKey="key"
+                  loading={isLoading}
+                  pagination={false}
+                  scroll={{ x: 980 }}
+                />
+                <Table
+                  dataSource={data?.memberRows ?? []}
+                  columns={memberColumns}
+                  rowKey="id"
+                  loading={isLoading}
+                  scroll={{ x: 1180 }}
+                  locale={{ emptyText: t('cooperative.reports.empty.members') }}
+                />
+              </Space>
+            ),
+          },
+          {
+            key: 'savings',
+            label: t('cooperative.reports.tabs.savings'),
+            children: (
+              <Space direction="vertical" className="w-full" size="middle">
+                <Title level={4} className="!mb-0">{t('cooperative.reports.savings.balances')}</Title>
+                <Table
+                  dataSource={data?.savingBalanceRows ?? []}
+                  columns={savingBalanceColumns}
+                  rowKey="id"
+                  loading={isLoading}
+                  scroll={{ x: 1080 }}
+                  locale={{ emptyText: t('cooperative.reports.empty.savingBalances') }}
+                />
+                <Title level={4} className="!mb-0">{t('cooperative.reports.savings.mutations')}</Title>
+                <Table
+                  dataSource={data?.savingMutationRows ?? []}
+                  columns={savingMutationColumns}
+                  rowKey="id"
+                  loading={isLoading}
+                  scroll={{ x: 1420 }}
+                  locale={{ emptyText: t('cooperative.reports.empty.savingMutations') }}
+                />
+              </Space>
+            ),
+          },
+          {
+            key: 'loans',
+            label: t('cooperative.reports.tabs.loans'),
+            children: (
+              <Table
+                dataSource={data?.loanRows ?? []}
+                columns={loanColumns}
+                rowKey="id"
+                loading={isLoading}
+                scroll={{ x: 1380 }}
+                locale={{ emptyText: t('cooperative.reports.empty.loans') }}
+              />
+            ),
+          },
+          {
+            key: 'installments',
+            label: t('cooperative.reports.tabs.installments'),
+            children: (
+              <Space direction="vertical" className="w-full" size="middle">
+                <Title level={4} className="!mb-0">{t('cooperative.reports.installments.schedule')}</Title>
+                <Table
+                  dataSource={data?.installmentRows ?? []}
+                  columns={installmentColumns}
+                  rowKey="id"
+                  loading={isLoading}
+                  scroll={{ x: 1160 }}
+                  locale={{ emptyText: t('cooperative.reports.empty.installments') }}
+                />
+                <Title level={4} className="!mb-0">{t('cooperative.reports.installments.payments')}</Title>
+                <Table
+                  dataSource={data?.loanPaymentRows ?? []}
+                  columns={loanPaymentColumns}
+                  rowKey="id"
+                  loading={isLoading}
+                  scroll={{ x: 1260 }}
+                  locale={{ emptyText: t('cooperative.reports.empty.payments') }}
+                />
+              </Space>
+            ),
+          },
           {
             key: 'overdue',
             label: t('cooperative.reports.tabs.overdue'),
@@ -428,6 +1157,20 @@ export default function CooperativeReportManagement() {
                     <Table.Summary.Cell index={8} />
                   </Table.Summary.Row>
                 )}
+              />
+            ),
+          },
+          {
+            key: 'cash-bank',
+            label: t('cooperative.reports.tabs.cashBank'),
+            children: (
+              <Table
+                dataSource={data?.cashBankRows ?? []}
+                columns={cashBankColumns}
+                rowKey="id"
+                loading={isLoading}
+                scroll={{ x: 1280 }}
+                locale={{ emptyText: t('cooperative.reports.empty.cashBank') }}
               />
             ),
           },
@@ -464,7 +1207,7 @@ export default function CooperativeReportManagement() {
                 columns={ledgerColumns}
                 rowKey="id"
                 loading={isLoading}
-                scroll={{ x: 1080 }}
+                scroll={{ x: 1380 }}
               />
             ) : (
               <Alert type="info" showIcon message={t('cooperative.reports.ledger.selectAccount')} />
@@ -475,6 +1218,7 @@ export default function CooperativeReportManagement() {
             label: t('cooperative.reports.tabs.balanceSheet'),
             children: (
               <div className="rounded-lg border border-gray-100 bg-white p-4">
+                <Alert className="mb-3" type="info" showIcon message={t('cooperative.reports.balanceSheet.asOfNote')} />
                 <Descriptions bordered column={1}>
                   <Descriptions.Item label={t('generalLedger.balance.assets')}>
                     {money(balanceSheet?.assets ?? 0)}
