@@ -212,6 +212,7 @@ export const checkout = async ({
       db.chartOfAccounts,
       db.financeAccountMappings,
       db.enabledModules,
+      db.generalLedgerSetting,
       db.journalEntries,
       db.journalEntryLines,
     ],

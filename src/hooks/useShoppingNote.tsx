@@ -102,7 +102,7 @@ export const useShoppingNote = () => {
       const stockMutations: StockMutation[] = [];
       const financeTransactionsToSync: FinanceTransaction[] = [];
 
-      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
+      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
         await db.shoppingNotes.add({
           id: shoppingNoteId,
           created_at: now,

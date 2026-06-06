@@ -115,7 +115,7 @@ export const useStockManagement = () => {
         cleanData.stock = productData.stock;
       }
 
-      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
+      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
         if (isEdit) {
           productId = editingId!;
           const existingProduct = await db.products.get(productId);
@@ -249,7 +249,7 @@ export const useStockManagement = () => {
       const productsToSync: Array<{ product: Product; operation: 'create' | 'update' }> = [];
       const financeTransactionsToSync: FinanceTransaction[] = [];
 
-      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
+      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
         for (const item of items) {
           let existing = null;
           if (item.sku) {
