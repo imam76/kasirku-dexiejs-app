@@ -1,6 +1,6 @@
-import { App, Button, Drawer, Dropdown } from 'antd';
+import { App, Button, Card, Drawer, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
-import { Plus, Upload, Download, MoreVertical } from 'lucide-react';
+import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
 import type { Product } from '@/types';
@@ -156,7 +156,52 @@ export default function StockManagement() {
   };
 
   return (
-    <div className="p-3 sm:p-4 md:p-6">
+    <Card
+      className="shadow-md"
+      title={(
+        <div className="flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          {t('stock.title')}
+        </div>
+      )}
+      extra={(
+        <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 sm:hidden">
+            <Button
+              type="primary"
+              icon={<Plus size={16} />}
+              onClick={handleAddProduct}
+              data-tour="stock-add-product"
+            >
+              {t('stock.add')}
+            </Button>
+            <Button
+              aria-label={t('stock.actionMenuAria')}
+              icon={<MoreVertical size={18} />}
+              onClick={() => setIsActionDrawerOpen(true)}
+            />
+          </div>
+          <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
+            <Dropdown trigger={['click']} placement="bottomRight" menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}>
+              <Button icon={<Download size={16} />} disabled={products.length === 0}>
+                {t('stock.exportCsv')}
+              </Button>
+            </Dropdown>
+            <Button icon={<Upload size={16} />} onClick={handleImportClick} disabled={isImporting}>
+              {t('stock.importCsv')}
+            </Button>
+            <Button
+              type="primary"
+              icon={<Plus size={16} />}
+              onClick={handleAddProduct}
+              data-tour="stock-add-product"
+            >
+              {t('stock.add')}
+            </Button>
+          </div>
+        </div>
+      )}
+    >
       <input
         ref={fileInputRef}
         type="file"
@@ -164,59 +209,6 @@ export default function StockManagement() {
         className="hidden"
         onChange={handleImportSelected}
       />
-
-      <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6">
-        <h2 className="min-w-0 flex-1 text-lg font-bold text-gray-800 sm:text-xl md:text-2xl">{t('stock.title')}</h2>
-        <div className="flex shrink-0 items-center justify-end gap-2 sm:hidden">
-          <Button
-            type="primary"
-            size="large"
-            icon={<Plus size={18} />}
-            onClick={handleAddProduct}
-            data-tour="stock-add-product"
-            className="h-11 px-3 font-semibold"
-          >
-            {t('stock.add')}
-          </Button>
-          <Button
-            size="large"
-            aria-label={t('stock.actionMenuAria')}
-            icon={<MoreVertical size={20} />}
-            onClick={() => setIsActionDrawerOpen(true)}
-            className="h-11 w-11"
-          />
-        </div>
-        <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
-          <Dropdown trigger={['click']} placement="bottomRight" menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}>
-            <button
-              type="button"
-              disabled={products.length === 0}
-              className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm text-white transition-colors hover:bg-green-700 disabled:bg-green-400 sm:px-4 sm:py-2 sm:text-base"
-            >
-              <Download size={18} />
-              <span>{t('stock.exportCsv')}</span>
-            </button>
-          </Dropdown>
-          <button
-            type="button"
-            onClick={handleImportClick}
-            disabled={isImporting}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white transition-colors hover:bg-indigo-700 disabled:bg-indigo-400 sm:px-4 sm:py-2 sm:text-base"
-          >
-            <Upload size={18} />
-            <span>{t('stock.importCsv')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleAddProduct}
-            data-tour="stock-add-product"
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-base"
-          >
-            <Plus size={18} />
-            <span>{t('stock.addProduct')}</span>
-          </button>
-        </div>
-      </div>
 
       <Drawer
         title={t('stock.actions')}
@@ -295,6 +287,6 @@ export default function StockManagement() {
         onEdit={handleEditProduct}
         onDelete={handleDelete}
       />
-    </div>
+    </Card>
   );
 }
