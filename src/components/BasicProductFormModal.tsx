@@ -1,12 +1,15 @@
-import { Input, Modal, Typography } from 'antd';
-import { useState, useEffect } from 'react';
+import { Input, Modal, Select, Typography } from 'antd';
+import { useState, useEffect, useMemo } from 'react';
+import { useI18n } from '@/hooks/useI18n';
+import { getProductCategoryOptions } from '@/i18n/stock';
+import type { ProductCategory } from '@/types';
 
 const { Text } = Typography;
 
 interface BasicProductFormModalProps {
   open: boolean;
   onCancel: () => void;
-  onOk: (name: string, sku?: string) => void;
+  onOk: (name: string, sku?: string, category?: ProductCategory) => void;
   initialName?: string;
   initialSku?: string;
   unit: string;
@@ -22,13 +25,18 @@ export const BasicProductFormModal = ({
   unit,
   description = 'Produk akan dibuat sebagai entri dasar dan akan tersimpan permanen setelah Anda menyimpan dokumen ini.',
 }: BasicProductFormModalProps) => {
+  const { t } = useI18n();
   const [name, setName] = useState(initialName);
   const [sku, setSku] = useState(initialSku);
+  const [category, setCategory] = useState<ProductCategory>('non_consumable');
+
+  const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
 
   useEffect(() => {
     if (open) {
       setName(initialName);
       setSku(initialSku);
+      setCategory('non_consumable');
     }
   }, [open, initialName, initialSku]);
 
@@ -37,7 +45,7 @@ export const BasicProductFormModal = ({
       title="Buat Produk Baru (Entri Dasar)"
       open={open}
       onCancel={onCancel}
-      onOk={() => onOk(name, sku)}
+      onOk={() => onOk(name, sku, category)}
       okText="Buat"
       cancelText="Batal"
       destroyOnClose
@@ -63,6 +71,17 @@ export const BasicProductFormModal = ({
             value={sku}
             onChange={(e) => setSku(e.target.value)}
             placeholder="Scan / ketik barcode"
+          />
+        </div>
+
+        <div>
+          <div className="mb-1"><Text strong>Kategori</Text></div>
+          <Select
+            className="w-full"
+            value={category}
+            onChange={setCategory}
+            options={categoryOptions}
+            placeholder="Pilih kategori"
           />
         </div>
 

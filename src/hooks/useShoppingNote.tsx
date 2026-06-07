@@ -9,7 +9,7 @@ import { db } from '@/lib/db';
 import { getCurrentSessionUser } from '@/auth/authService';
 import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
-import type { FinanceTransaction, Product, ShoppingNoteItem, StockMutation } from '@/types';
+import type { FinanceTransaction, Product, ProductCategory, ShoppingNoteItem, StockMutation } from '@/types';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
@@ -17,6 +17,7 @@ import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 type CreateBasicProductInput = {
   name: string;
   sku?: string;
+  category?: ProductCategory;
   unit: string;
   purchasePrice?: number;
 };
@@ -97,6 +98,7 @@ export const useShoppingNote = () => {
       id,
       name,
       sku,
+      category: input.category || 'non_consumable',
       purchase_unit: unit,
       selling_unit: unit,
       purchase_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,

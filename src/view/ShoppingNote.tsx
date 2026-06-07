@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { Controller, useWatch } from 'react-hook-form';
 import { Table, Button, Input, InputNumber, Select, Card, Typography, Form, Row, Col, Modal, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Plus, Trash2, Save, History } from 'lucide-react';
+import { Save, History, Plus, Trash2 } from 'lucide-react';
 import { useShoppingNote } from '@/hooks/useShoppingNote';
-import { ShoppingNoteItem } from '@/types';
+import { useUnits } from '@/hooks/useUnits';
+import { ProductCategory, ShoppingNoteItem } from '@/types';
 import ShoppingNoteHistory from './ShoppingNoteHistory';
 import { getProductSellableUnits } from '@/utils/productUnits';
 import { BasicProductFormModal } from '@/components/BasicProductFormModal';
@@ -33,25 +34,32 @@ export default function ShoppingNote() {
     saveNote,
   } = useShoppingNote();
 
+  const { unitOptions: masterUnitOptions } = useUnits();
+
   const watchedUnit = useWatch({ control, name: 'unit' });
   const watchedUnitPrice = useWatch({ control, name: 'unit_price' });
 
-  const unitOptions = Array.from(
-    new Set([
-      'pcs',
-      'kg',
-      'gram',
-      'ons',
-      'box',
-      'dus',
-      'lusin',
-      'liter',
-      'meter',
-      'pack',
-      'roll',
-      ...products.flatMap((product) => [product.purchase_unit, ...getProductSellableUnits(product)]),
-    ])
-  ).filter(Boolean);
+  const unitOptions = useMemo(() => {
+    const masterUnitMap = new Map<string, string>();
+    for (const option of masterUnitOptions) {
+      masterUnitMap.set(option.value.toLowerCase(), option.label);
+    }
+
+    const uniqueUnitKeys = new Set([
+      ...Array.from(masterUnitMap.keys()),
+      ...products.flatMap((product) => [
+        product.purchase_unit?.toLowerCase(),
+        ...getProductSellableUnits(product).map((u) => u.toLowerCase()),
+      ]),
+    ]);
+
+    return Array.from(uniqueUnitKeys)
+      .filter(Boolean)
+      .map((unitKey) => ({
+        value: unitKey,
+        label: masterUnitMap.get(unitKey) || unitKey,
+      }));
+  }, [masterUnitOptions, products]);
 
   const pendingProductIds = useMemo(() => new Set(pendingProducts.map((product) => product.id)), [pendingProducts]);
 
@@ -75,13 +83,13 @@ export default function ShoppingNote() {
     setCreateProductOpen(true);
   };
 
-  const handleCreateProduct = (name: string, sku?: string) => {
+  const handleCreateProduct = (name: string, sku?: string, category?: ProductCategory) => {
     const unitPrice = Number(watchedUnitPrice ?? 0);
-    const currentUnit = watchedUnit || 'pcs';
     const id = createBasicProduct({
       name,
       sku: sku || undefined,
-      unit: currentUnit,
+      category,
+      unit: watchedUnit || 'pcs',
       purchasePrice: Number.isFinite(unitPrice) ? unitPrice : 0,
     });
     if (!id) return;
@@ -249,7 +257,7 @@ export default function ShoppingNote() {
                       control={control}
                       render={({ field }) => (
                         <Form.Item validateStatus={errors.unit ? 'error' : ''} help={errors.unit?.message} style={{ marginBottom: 0 }}>
-                          <Select {...field} size="large" options={unitOptions.map((u) => ({ value: u, label: u }))} />
+                          <Select {...field} size="large" options={unitOptions} />
                         </Form.Item>
                       )}
                     />

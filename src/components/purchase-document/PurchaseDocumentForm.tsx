@@ -11,7 +11,7 @@ import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import { DocumentDiscountSettingsModal } from '@/components/DocumentDiscountSettingsModal';
 import { db } from '@/lib/db';
-import type { Contact, Department, Product, Project, PromoType, PurchaseDocument, PurchaseDocumentItem, Tax, Warehouse } from '@/types';
+import type { Contact, Department, Product, ProductCategory, Project, PromoType, PurchaseDocument, PurchaseDocumentItem, Tax, Warehouse } from '@/types';
 import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { formatCurrency } from '@/utils/formatters';
@@ -160,11 +160,15 @@ export const PurchaseDocumentForm = ({
     setCreateProductOpen(true);
   }, []);
 
-  const handleCreateProductOk = useCallback((name: string, sku?: string) => {
+  const handleCreateProductOk = useCallback((name: string, sku?: string, category?: ProductCategory) => {
+    const activeItem = items.find((item) => item.id === activeLineId);
+    const unit = activeItem?.unit || 'pcs';
+
     const product = onCreateBasicProduct({
       name,
       sku,
-      unit: 'pcs', // Default unit for new products from PI
+      category,
+      unit,
     });
 
     if (product && activeLineId) {
@@ -588,7 +592,7 @@ export const PurchaseDocumentForm = ({
         onOk={handleCreateProductOk}
         initialName={newProductName}
         initialSku={newProductSku}
-        unit="pcs"
+        unit={items.find((item) => item.id === activeLineId)?.unit || 'pcs'}
       />
     </form>
   );

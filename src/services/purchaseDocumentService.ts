@@ -443,8 +443,9 @@ export const createPurchaseDocument = async ({ document, items, pendingProducts 
     ...snapshot,
     ...total,
   } satisfies PurchaseDocument, config), currentUser);
-  const products = await db.products.toArray();
-  validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products });
+  const liveProducts = await db.products.toArray();
+  const allProducts = [...liveProducts, ...(pendingProducts || [])];
+  validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products: allProducts });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (pendingProducts && pendingProducts.length > 0) {
@@ -511,8 +512,9 @@ export const updatePurchaseDocument = async (id: string, { document, items, pend
     document_number: existing.document_number,
     updated_at: updatedAt,
   } satisfies PurchaseDocument, config), existing, currentUser);
-  const products = await db.products.toArray();
-  validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products });
+  const liveProducts = await db.products.toArray();
+  const allProducts = [...liveProducts, ...(pendingProducts || [])];
+  validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products: allProducts });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (pendingProducts && pendingProducts.length > 0) {

@@ -12,11 +12,12 @@ import {
   voidPurchaseDocument,
   type PurchaseDocumentUpsertInput,
 } from '@/services/purchaseDocumentService';
-import type { Product, PurchaseDocument, PurchaseDocumentType } from '@/types';
+import type { Product, ProductCategory, PurchaseDocument, PurchaseDocumentType } from '@/types';
 
 type CreateBasicProductInput = {
   name: string;
   sku?: string;
+  category?: ProductCategory;
   unit: string;
   purchasePrice?: number;
 };
@@ -109,6 +110,7 @@ export const usePurchaseDocuments = () => {
       id,
       name,
       sku,
+      category: input.category || 'non_consumable',
       purchase_unit: unit,
       selling_unit: unit,
       purchase_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,
