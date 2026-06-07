@@ -299,14 +299,15 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
   ];
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <Title level={2} style={{ margin: 0 }}>
-            {menuItem ? `${menuItem.code} - ${t(config.titleKey)}` : t(config.titleKey)}
-          </Title>
-          <Text type="secondary">{t('purchaseDocuments.typePageSubtitle', { type: t(config.titleKey) })}</Text>
+    <Card
+      className="shadow-md"
+      title={(
+        <div className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          {menuItem ? `${t(config.titleKey)}` : t(config.titleKey)}
         </div>
+      )}
+      extra={(
         <div className="flex flex-wrap gap-2">
           <Link to="/purchases">
             <Button icon={<ArrowLeft size={16} />}>
@@ -322,16 +323,17 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
             </Button>
           </Link>
         </div>
-      </div>
+      )}
+    >
 
-      <Card size="small">
+      <div className="mb-4 grid grid-cols-1 gap-3">
         <Input
           allowClear
           placeholder={t('purchaseDocuments.searchPlaceholder')}
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
         />
-      </Card>
+      </div>
 
       <Table
         rowKey="id"
@@ -339,6 +341,6 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
         dataSource={filteredDocuments}
         scroll={{ x: true }}
       />
-    </div>
+    </Card>
   );
 }

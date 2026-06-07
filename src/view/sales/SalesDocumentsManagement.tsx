@@ -4,9 +4,9 @@ import { Link } from '@tanstack/react-router';
 import {
   ArrowLeft,
   ArrowRight,
+  FileText,
   ClipboardList,
   Eye,
-  FileText,
   Plus,
   ReceiptText,
   RotateCcw,
@@ -293,14 +293,15 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
   ];
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <Title level={2} style={{ margin: 0 }}>
-            {menuItem ? `${menuItem.code} - ${t(config.titleKey)}` : t(config.titleKey)}
-          </Title>
-          <Text type="secondary">{t('salesDocuments.typePageSubtitle', { type: t(config.titleKey) })}</Text>
+    <Card
+      className="shadow-md"
+      title={(
+        <div className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          {menuItem ? `${t(config.titleKey)}` : t(config.titleKey)}
         </div>
+      )}
+      extra={(
         <div className="flex flex-wrap gap-2">
           <Link to="/sales">
             <Button icon={<ArrowLeft size={16} />}>
@@ -316,16 +317,17 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
             </Button>
           </Link>
         </div>
-      </div>
+      )}
+    >
 
-      <Card size="small">
+      <div className="mb-4 grid grid-cols-1 gap-3">
         <Input
           allowClear
           placeholder={t('salesDocuments.searchPlaceholder')}
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
         />
-      </Card>
+      </div>
 
       <Table
         rowKey="id"
@@ -333,6 +335,6 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
         dataSource={filteredDocuments}
         scroll={{ x: true }}
       />
-    </div>
+    </Card>
   );
 }
