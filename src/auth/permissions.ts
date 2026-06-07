@@ -35,6 +35,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
   KASIR: [
     'CASHIER_ACCESS',
+    'TRANSACTION_VOID',
   ],
   GUDANG: [
     'STOCK_ACCESS',
