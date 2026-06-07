@@ -24,6 +24,9 @@ import {
 } from '@/utils/purchaseDocuments/createPurchaseDocumentSnapshots';
 import { validatePurchaseDocument } from '@/utils/purchaseDocuments/validatePurchaseDocument';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
+import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
+import { normalisasiHargaProduk } from '@/utils/pricing';
 
 export interface PurchaseDocumentUpsertInput {
   document: Partial<PurchaseDocument>;
@@ -35,6 +38,7 @@ const purchaseDocumentTables = [
   db.purchaseDocumentItems,
   db.products,
   db.activityLogs,
+  db.inventoryLots,
 ];
 
 const allowedConversions: Record<PurchaseDocumentType, PurchaseDocumentType[]> = {
@@ -202,6 +206,27 @@ const addReceiptStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Calculate cost per stock unit from item price in the document
+      const itemCostPerUnit = normalisasiHargaProduk(
+        item.price ?? 0,
+        product,
+        item.unit,
+        product.purchase_unit,
+      );
+
+      // Create a FIFO lot for this received batch
+      await addInventoryLot({
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        sourceType: 'PURCHASE_RECEIPT',
+        sourceId: document.id,
+        sourceLineId: item.id,
+        quantityReceived: quantityInStockUnit,
+        costPerUnit: itemCostPerUnit,
+        receivedAt: occurredAt,
+      });
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
@@ -241,6 +266,9 @@ const restoreReceiptStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Stock Out -> Consume FIFO lots to keep stock consistent
+      await consumeFifoLots(product.id, quantityInStockUnit);
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
@@ -280,6 +308,9 @@ const removePurchaseReturnStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Stock Out (Returned to supplier) -> Consume FIFO lots to keep stock consistent
+      await consumeFifoLots(product.id, quantityInStockUnit);
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
@@ -319,6 +350,27 @@ const restorePurchaseReturnStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Calculate cost per stock unit from item price in the return document
+      const itemCostPerUnit = normalisasiHargaProduk(
+        item.price ?? 0,
+        product,
+        item.unit,
+        product.purchase_unit,
+      );
+
+      // Create a FIFO lot for this cancelled return
+      await addInventoryLot({
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        sourceType: 'PURCHASE_RETURN_VOID',
+        sourceId: document.id,
+        sourceLineId: item.id,
+        quantityReceived: quantityInStockUnit,
+        costPerUnit: itemCostPerUnit,
+        receivedAt: occurredAt,
+      });
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),

@@ -9,6 +9,7 @@ import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/s
 import { getCashOrBankAccountForPayment, postPosSaleJournal } from '@/services/generalLedgerService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -22,13 +23,15 @@ export interface CheckoutResult {
   items: TransactionItem[];
 }
 
-const createTransactionItems = (
+const createTransactionItems = async (
   cart: CartItem[],
   transactionId: string,
   createdAt: string,
   promoEvaluation: PromoEvaluationResult,
-): TransactionItem[] => {
-  return cart.map((item, index) => {
+): Promise<TransactionItem[]> => {
+  const items: TransactionItem[] = [];
+
+  for (const [index, item] of cart.entries()) {
     const originalPrice = getCartItemOriginalPrice(item);
     const promoLine = promoEvaluation.lines[index];
     const priceBeforeDiscount = promoLine?.price_before_discount ?? getCartItemPrice(item);
@@ -37,15 +40,28 @@ const createTransactionItems = (
     const sellingPrice = promoLine?.final_unit_price ?? priceBeforeDiscount;
     const finalSubtotal = promoLine?.final_subtotal ?? sellingPrice * item.quantity;
     const isPriceEdited = item.custom_price !== undefined;
-    const normalizedPurchasePrice = normalisasiHargaProduk(
-      item.product.purchase_price,
-      item.product,
-      item.product.purchase_unit,
-      item.unit,
-    );
     const unitSnapshot = createSalesUnitSnapshot(item.unit, item.product);
 
-    return {
+    // Determine quantity in stock unit for FIFO consumption
+    const quantityInStockUnit = konversiSatuanProduk(
+      item.quantity,
+      item.product,
+      item.unit,
+      item.product.purchase_unit,
+    );
+
+    // Consume FIFO lots to get accurate HPP based on actual purchase batches
+    const fifoResult = await consumeFifoLots(item.product.id, quantityInStockUnit);
+
+    // weightedAvgCostPerUnit is in purchase_unit, normalize back to the selling unit
+    const normalizedPurchasePrice = normalisasiHargaProduk(
+      fifoResult.weightedAvgCostPerUnit,
+      item.product,
+      item.product.purchase_unit, // from unit
+      item.unit,                  // to selling unit
+    );
+
+    items.push({
       id: crypto.randomUUID(),
       transaction_id: transactionId,
       product_id: item.product.id,
@@ -64,10 +80,13 @@ const createTransactionItems = (
       subtotal_before_discount: subtotalBeforeDiscount,
       discount_amount: discountAmount,
       subtotal: finalSubtotal,
-      profit: finalSubtotal - normalizedPurchasePrice * item.quantity,
+      // profit uses totalCost directly (more accurate than price * qty when multiple lots are consumed)
+      profit: finalSubtotal - fifoResult.totalCost,
       created_at: createdAt,
-    };
-  });
+    });
+  }
+
+  return items;
 };
 
 const recordProfit = async (
@@ -224,6 +243,7 @@ export const checkout = async ({
       db.enabledModules,
       db.journalEntries,
       db.journalEntryLines,
+      db.inventoryLots,
     ],
     async () => {
       const transaction: Transaction = {
@@ -242,7 +262,7 @@ export const checkout = async ({
         created_at: createdAt,
       };
 
-      const items = createTransactionItems(cart, transactionId, createdAt, promoEvaluation);
+      const items = await createTransactionItems(cart, transactionId, createdAt, promoEvaluation);
 
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);

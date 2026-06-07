@@ -35,6 +35,7 @@ const SplatLazyRouteImport = createFileRoute('/$')()
 const ReportTransactionDetailReportLazyRouteImport = createFileRoute(
   '/report/transaction-detail-report',
 )()
+const ReportStockCardLazyRouteImport = createFileRoute('/report/stock-card')()
 const ReportSalesReportLazyRouteImport = createFileRoute(
   '/report/sales-report',
 )()
@@ -198,6 +199,13 @@ const ReportTransactionDetailReportLazyRoute =
       (d) => d.Route,
     ),
   )
+const ReportStockCardLazyRoute = ReportStockCardLazyRouteImport.update({
+  id: '/report/stock-card',
+  path: '/report/stock-card',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/report/stock-card.lazy').then((d) => d.Route),
+)
 const ReportSalesReportLazyRoute = ReportSalesReportLazyRouteImport.update({
   id: '/report/sales-report',
   path: '/report/sales-report',
@@ -559,6 +567,7 @@ export interface FileRoutesByFullPath {
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance/': typeof FinanceIndexRoute
   '/master-data/': typeof MasterDataIndexRoute
@@ -617,6 +626,7 @@ export interface FileRoutesByTo {
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance': typeof FinanceIndexRoute
   '/master-data': typeof MasterDataIndexRoute
@@ -676,6 +686,7 @@ export interface FileRoutesById {
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance/': typeof FinanceIndexRoute
   '/master-data/': typeof MasterDataIndexRoute
@@ -736,6 +747,7 @@ export interface FileRouteTypes {
     | '/report/expense-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance/'
     | '/master-data/'
@@ -794,6 +806,7 @@ export interface FileRouteTypes {
     | '/report/expense-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance'
     | '/master-data'
@@ -852,6 +865,7 @@ export interface FileRouteTypes {
     | '/report/expense-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance/'
     | '/master-data/'
@@ -911,6 +925,7 @@ export interface RootRouteChildren {
   ReportExpenseReportLazyRoute: typeof ReportExpenseReportLazyRoute
   ReportPurchaseReportLazyRoute: typeof ReportPurchaseReportLazyRoute
   ReportSalesReportLazyRoute: typeof ReportSalesReportLazyRoute
+  ReportStockCardLazyRoute: typeof ReportStockCardLazyRoute
   ReportTransactionDetailReportLazyRoute: typeof ReportTransactionDetailReportLazyRoute
   FinanceIndexRoute: typeof FinanceIndexRoute
   MasterDataIndexRoute: typeof MasterDataIndexRoute
@@ -1036,6 +1051,13 @@ declare module '@tanstack/react-router' {
       path: '/report/transaction-detail-report'
       fullPath: '/report/transaction-detail-report'
       preLoaderRoute: typeof ReportTransactionDetailReportLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report/stock-card': {
+      id: '/report/stock-card'
+      path: '/report/stock-card'
+      fullPath: '/report/stock-card'
+      preLoaderRoute: typeof ReportStockCardLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report/sales-report': {
@@ -1380,6 +1402,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportExpenseReportLazyRoute: ReportExpenseReportLazyRoute,
   ReportPurchaseReportLazyRoute: ReportPurchaseReportLazyRoute,
   ReportSalesReportLazyRoute: ReportSalesReportLazyRoute,
+  ReportStockCardLazyRoute: ReportStockCardLazyRoute,
   ReportTransactionDetailReportLazyRoute:
     ReportTransactionDetailReportLazyRoute,
   FinanceIndexRoute: FinanceIndexRoute,

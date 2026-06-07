@@ -18,7 +18,7 @@ import type {
   StockMutation,
   AuthUser,
 } from '@/types';
-import { konversiSatuanProduk } from '@/utils/pricing';
+import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { createSalesDocumentNumber } from '@/utils/salesDocuments/createSalesDocumentNumber';
@@ -31,6 +31,8 @@ import {
 } from '@/utils/salesDocuments/createSalesDocumentSnapshots';
 import { validateSalesDocument } from '@/utils/salesDocuments/validateSalesDocument';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
+import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
 
 export interface SalesDocumentUpsertInput {
   document: Partial<SalesDocument>;
@@ -60,6 +62,7 @@ const salesDocumentTables = [
   db.journalEntries,
   db.journalEntryLines,
   db.activityLogs,
+  db.inventoryLots,
 ];
 
 const buildDocumentSnapshot = async (input: Partial<SalesDocument>): Promise<Partial<SalesDocument>> => {
@@ -141,6 +144,9 @@ const reduceDeliveryStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Stock Out -> Consume FIFO lots to keep stock consistent
+      await consumeFifoLots(product.id, quantityInStockUnit);
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getSalesDocumentWarehouse(document),
@@ -180,6 +186,26 @@ const restoreDeliveryStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      const costPerStockUnit = normalisasiHargaProduk(
+        item.purchase_price ?? product.purchase_price ?? 0,
+        product,
+        item.unit,
+        product.purchase_unit,
+      );
+
+      // Stock In (Void delivery) -> Add FIFO lot
+      await addInventoryLot({
+        productId: product.id,
+        productName: product.name,
+        sku: item.sku || product.sku,
+        sourceType: 'SALES_DELIVERY_VOID',
+        sourceId: document.id,
+        sourceLineId: item.id,
+        quantityReceived: quantityInStockUnit,
+        costPerUnit: costPerStockUnit,
+        receivedAt: occurredAt,
+      });
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getSalesDocumentWarehouse(document),

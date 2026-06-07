@@ -12,6 +12,7 @@ import { recordStockPurchase } from '@/services/stockPurchaseService';
 import type { FinanceTransaction, Product, ShoppingNoteItem, StockMutation } from '@/types';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 
 export const useShoppingNote = () => {
   const { message } = App.useApp();
@@ -102,7 +103,7 @@ export const useShoppingNote = () => {
       const stockMutations: StockMutation[] = [];
       const financeTransactionsToSync: FinanceTransaction[] = [];
 
-      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
+      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines, db.inventoryLots], async () => {
         await db.shoppingNotes.add({
           id: shoppingNoteId,
           created_at: now,
@@ -125,11 +126,26 @@ export const useShoppingNote = () => {
             updated_at: now,
           };
 
+          // Update purchase_price as a UI reference for the next purchase form auto-fill.
+          // This does NOT affect HPP calculation — FIFO lots are used instead.
           if (product.purchase_price !== costPerStockUnit) {
             productUpdate.purchase_price = costPerStockUnit;
           }
 
           await db.products.update(product.id, productUpdate);
+
+          // Create a FIFO lot for this purchase batch
+          await addInventoryLot({
+            productId: product.id,
+            productName: product.name,
+            sku: product.sku,
+            sourceType: 'SHOPPING_NOTE',
+            sourceId: shoppingNoteId,
+            sourceLineId: item.id,
+            quantityReceived: quantityInStockUnit,
+            costPerUnit: costPerStockUnit,
+            receivedAt: now,
+          });
 
           if (quantityInStockUnit > 0) {
             stockMutations.push(createStockMutation({

@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine } from '@/types';
+import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine, InventoryLot } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
@@ -86,6 +86,7 @@ export class KasirkuDB extends Dexie {
   generalLedgerSetting!: Table<GeneralLedgerSetting>;
   journalEntries!: Table<JournalEntry>;
   journalEntryLines!: Table<JournalEntryLine>;
+  inventoryLots!: Table<InventoryLot>;
 
   constructor() {
     super('KasirkuDB');
@@ -525,6 +526,34 @@ export class KasirkuDB extends Dexie {
 
       if (journalEntriesWithoutSyncStatus.length > 0) {
         await tx.table<JournalEntry, string>('journalEntries').bulkPut(journalEntriesWithoutSyncStatus);
+      }
+    });
+
+    this.version(37).stores({
+      inventoryLots: 'id, product_id, quantity_remaining, received_at, source_type, created_at',
+    }).upgrade(async (tx) => {
+      // Create opening lots for all existing products with stock > 0
+      // so that FIFO can work correctly with pre-existing inventory
+      const now = new Date().toISOString();
+      const products = await tx.table<Product, string>('products').toArray();
+      const openingLots: InventoryLot[] = products
+        .filter((product) => Number(product.stock || 0) > 0 && Number(product.purchase_price || 0) > 0)
+        .map((product) => ({
+          id: crypto.randomUUID(),
+          product_id: product.id,
+          product_name: product.name,
+          sku: product.sku,
+          source_type: 'OPENING' as const,
+          quantity_received: Number(product.stock),
+          quantity_remaining: Number(product.stock),
+          cost_per_unit: Number(product.purchase_price),
+          received_at: product.created_at || now,
+          created_at: now,
+          updated_at: now,
+        }));
+
+      if (openingLots.length > 0) {
+        await tx.table<InventoryLot, string>('inventoryLots').bulkAdd(openingLots);
       }
     });
 
