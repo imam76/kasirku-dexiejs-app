@@ -32,7 +32,7 @@ interface PurchaseDocumentFormProps {
   warehouses: Warehouse[];
   products: Product[];
   onSubmit: (input: { document: Partial<PurchaseDocument>; items: PurchaseDocumentItem[] }) => Promise<void>;
-  onCreateBasicProduct: (input: { name: string; sku?: string; unit: string; purchasePrice?: number }) => Product | undefined;
+  onCreateBasicProduct: (input: { name: string; sku?: string; category?: ProductCategory; unit: string; purchasePrice?: number }) => Product | undefined;
   onCancel?: () => void;
   submitting?: boolean;
 }
@@ -163,12 +163,14 @@ export const PurchaseDocumentForm = ({
   const handleCreateProductOk = useCallback((name: string, sku?: string, category?: ProductCategory) => {
     const activeItem = items.find((item) => item.id === activeLineId);
     const unit = activeItem?.unit || 'pcs';
+    const purchasePrice = Number(activeItem?.price || 0);
 
     const product = onCreateBasicProduct({
       name,
       sku,
       category,
       unit,
+      purchasePrice,
     });
 
     if (product && activeLineId) {

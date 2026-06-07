@@ -87,6 +87,7 @@ export const usePurchaseDocuments = () => {
   const createBasicProduct = (input: CreateBasicProductInput) => {
     const name = input.name.trim();
     const sku = input.sku?.trim() || undefined;
+    const category = input.category;
     const unit = input.unit.trim() || 'pcs';
     const purchasePrice = Number(input.purchasePrice || 0);
 
@@ -110,7 +111,7 @@ export const usePurchaseDocuments = () => {
       id,
       name,
       sku,
-      category: input.category || 'non_consumable',
+      category,
       purchase_unit: unit,
       selling_unit: unit,
       purchase_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,

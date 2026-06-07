@@ -449,10 +449,11 @@ export const createPurchaseDocument = async ({ document, items, pendingProducts 
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (pendingProducts && pendingProducts.length > 0) {
-      const itemProductIds = new Set(items.map((item) => item.product_id));
-      const productsToCreate = pendingProducts.filter((product) => itemProductIds.has(product.id));
+      const itemsByProductId = new Map(items.map((item) => [item.product_id, item]));
+      const productsToCreate = pendingProducts.filter((product) => itemsByProductId.has(product.id));
 
       for (const product of productsToCreate) {
+        const item = itemsByProductId.get(product.id);
         const existing = await db.products.get(product.id);
         if (existing) continue;
 
@@ -465,6 +466,10 @@ export const createPurchaseDocument = async ({ document, items, pendingProducts 
 
         await db.products.add({
           ...product,
+          purchase_price: Number(item?.price ?? product.purchase_price),
+          selling_price: Number(item?.price ?? product.selling_price),
+          purchase_unit: item?.unit ?? product.purchase_unit,
+          selling_unit: item?.unit ?? product.selling_unit,
           created_at: createdAt,
           updated_at: createdAt,
         });
@@ -518,10 +523,11 @@ export const updatePurchaseDocument = async (id: string, { document, items, pend
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (pendingProducts && pendingProducts.length > 0) {
-      const itemProductIds = new Set(items.map((item) => item.product_id));
-      const productsToCreate = pendingProducts.filter((product) => itemProductIds.has(product.id));
+      const itemsByProductId = new Map(items.map((item) => [item.product_id, item]));
+      const productsToCreate = pendingProducts.filter((product) => itemsByProductId.has(product.id));
 
       for (const product of productsToCreate) {
+        const item = itemsByProductId.get(product.id);
         const existingProduct = await db.products.get(product.id);
         if (existingProduct) continue;
 
@@ -534,6 +540,10 @@ export const updatePurchaseDocument = async (id: string, { document, items, pend
 
         await db.products.add({
           ...product,
+          purchase_price: Number(item?.price ?? product.purchase_price),
+          selling_price: Number(item?.price ?? product.selling_price),
+          purchase_unit: item?.unit ?? product.purchase_unit,
+          selling_unit: item?.unit ?? product.selling_unit,
           created_at: updatedAt,
           updated_at: updatedAt,
         });

@@ -74,6 +74,7 @@ export const useShoppingNote = () => {
   const createBasicProduct = (input: CreateBasicProductInput) => {
     const name = input.name.trim();
     const sku = input.sku?.trim() || undefined;
+    const category = input.category;
     const unit = input.unit.trim() || 'pcs';
     const purchasePrice = Number(input.purchasePrice || 0);
 
@@ -98,7 +99,7 @@ export const useShoppingNote = () => {
       id,
       name,
       sku,
-      category: input.category || 'non_consumable',
+      category,
       purchase_unit: unit,
       selling_unit: unit,
       purchase_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,
@@ -200,10 +201,11 @@ export const useShoppingNote = () => {
         db.journalEntryLines,
         db.inventoryLots
       ], async () => {
-        const itemProductIds = new Set(items.map((item) => item.product_id));
-        const productsToCreate = pendingProducts.filter((product) => itemProductIds.has(product.id));
+        const itemsByProductId = new Map(items.map((item) => [item.product_id, item]));
+        const productsToCreate = pendingProducts.filter((product) => itemsByProductId.has(product.id));
 
         for (const product of productsToCreate) {
+          const item = itemsByProductId.get(product.id);
           const existing = await db.products.get(product.id);
           if (existing) continue;
 
@@ -216,6 +218,10 @@ export const useShoppingNote = () => {
 
           await db.products.add({
             ...product,
+            purchase_price: Number(item?.unit_price ?? product.purchase_price),
+            selling_price: Number(item?.unit_price ?? product.selling_price),
+            purchase_unit: item?.unit ?? product.purchase_unit,
+            selling_unit: item?.unit ?? product.selling_unit,
             created_at: now,
             updated_at: now,
           });

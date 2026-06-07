@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Controller, useWatch } from 'react-hook-form';
-import { Table, Button, Input, InputNumber, Select, Card, Typography, Form, Row, Col, Modal, Tag } from 'antd';
+import { Table, Button, InputNumber, Select, Card, Typography, Form, Row, Col, Modal, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Save, History, Plus, Trash2 } from 'lucide-react';
 import { useShoppingNote } from '@/hooks/useShoppingNote';
