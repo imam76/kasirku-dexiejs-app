@@ -317,30 +317,30 @@ export default function FinanceAccountMappingPanel({
         mappingHealth.inactiveMappings.length > 0 ||
         mappingHealth.nonPostableMappings.length > 0 ||
         mappingHealth.unmappedTransactionCount > 0) && (
-        <Alert
-          type="warning"
-          showIcon
-          title={t('coa.mapping.healthTitle')}
-          description={(
-            <Space direction="vertical" size={2}>
-              <Text>{t('coa.mapping.unmappedCategories', { count: unmappedCategories.length })}</Text>
-              <Text>{t('coa.mapping.inactiveMappings', { count: mappingHealth.inactiveMappings.length })}</Text>
-              <Text>{t('coa.mapping.nonPostableMappings', { count: mappingHealth.nonPostableMappings.length })}</Text>
-              <Text>{t('coa.mapping.unmappedTransactions', { count: mappingHealth.unmappedTransactionCount })}</Text>
-            </Space>
-          )}
-          action={(
-            <Button
-              size="small"
-              icon={<RefreshCw size={14} />}
-              loading={isBackfilling}
-              onClick={handleBackfill}
-            >
-              {t('coa.mapping.backfill')}
-            </Button>
-          )}
-        />
-      )}
+          <Alert
+            type="warning"
+            showIcon
+            title={t('coa.mapping.healthTitle')}
+            description={(
+              <Space orientation="vertical" size={2}>
+                <Text>{t('coa.mapping.unmappedCategories', { count: unmappedCategories.length })}</Text>
+                <Text>{t('coa.mapping.inactiveMappings', { count: mappingHealth.inactiveMappings.length })}</Text>
+                <Text>{t('coa.mapping.nonPostableMappings', { count: mappingHealth.nonPostableMappings.length })}</Text>
+                <Text>{t('coa.mapping.unmappedTransactions', { count: mappingHealth.unmappedTransactionCount })}</Text>
+              </Space>
+            )}
+            action={(
+              <Button
+                size="small"
+                icon={<RefreshCw size={14} />}
+                loading={isBackfilling}
+                onClick={handleBackfill}
+              >
+                {t('coa.mapping.backfill')}
+              </Button>
+            )}
+          />
+        )}
 
       <Table
         dataSource={categoryKeys.map((key) => ({ key }))}

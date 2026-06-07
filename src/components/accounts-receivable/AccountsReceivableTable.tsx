@@ -83,7 +83,7 @@ export function AccountsReceivableTable({
       dataIndex: 'aging_bucket',
       width: 150,
       render: (value: ReceivableAgingBucket, record) => (
-        <Space size={4} direction="vertical">
+        <Space size={4} orientation="vertical">
           <Tag color={agingColors[value]}>{t(agingLabelKeys[value])}</Tag>
           {record.overdue_days > 0 && (
             <span className="text-[11px] text-gray-500">

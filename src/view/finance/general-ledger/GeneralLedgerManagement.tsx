@@ -164,7 +164,7 @@ export default function GeneralLedgerManagement() {
       title: t('generalLedger.journal.source'),
       key: 'source',
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{record.source_number || record.source_id || '-'}</Text>
           <Text type="secondary" className="text-xs">{record.source_type}</Text>
         </Space>
@@ -385,7 +385,7 @@ export default function GeneralLedgerManagement() {
             showIcon
             title={t('generalLedger.notReadyTitle')}
             description={(
-              <Space direction="vertical" size={4}>
+              <Space orientation="vertical" size={4}>
                 {readiness.checks.map((check) => (
                   <Text key={check.key} type={check.passed ? 'secondary' : 'danger'}>
                     {check.passed ? 'OK' : '!'} {check.message}
@@ -535,35 +535,35 @@ export default function GeneralLedgerManagement() {
               label: t('generalLedger.tabs.balanceSheet'),
               children: (
                 <Card loading={balanceSheetQuery.isLoading}>
-                <Descriptions bordered column={1}>
-                  <Descriptions.Item label={t('generalLedger.balance.assets')}>
-                    Rp {formatCurrency(balanceSheet?.assets ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.balance.liabilities')}>
-                    Rp {formatCurrency(balanceSheet?.liabilities ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.balance.equity')}>
-                    Rp {formatCurrency(balanceSheet?.equity ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.balance.currentIncome')}>
-                    Rp {formatCurrency(balanceSheet?.current_period_income ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.balance.totalLiabilitiesAndEquity')}>
-                    Rp {formatCurrency(balanceSheet?.total_liabilities_and_equity ?? 0)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.balance.difference')}>
-                    <Text strong className={getSignedAmountClass(balanceSheet?.difference ?? 0)}>
-                      Rp {formatCurrency(balanceSheet?.difference ?? 0)}
-                    </Text>
-                  </Descriptions.Item>
-                </Descriptions>
-                {balanceSheet && !balanceSheet.is_balanced && (
-                  <Alert className="mt-3" type="error" showIcon title={t('generalLedger.balanceNotBalanced')} />
-                )}
-              </Card>
-            ),
-          },
-        ]}
+                  <Descriptions bordered column={1}>
+                    <Descriptions.Item label={t('generalLedger.balance.assets')}>
+                      Rp {formatCurrency(balanceSheet?.assets ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.balance.liabilities')}>
+                      Rp {formatCurrency(balanceSheet?.liabilities ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.balance.equity')}>
+                      Rp {formatCurrency(balanceSheet?.equity ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.balance.currentIncome')}>
+                      Rp {formatCurrency(balanceSheet?.current_period_income ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.balance.totalLiabilitiesAndEquity')}>
+                      Rp {formatCurrency(balanceSheet?.total_liabilities_and_equity ?? 0)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={t('generalLedger.balance.difference')}>
+                      <Text strong className={getSignedAmountClass(balanceSheet?.difference ?? 0)}>
+                        Rp {formatCurrency(balanceSheet?.difference ?? 0)}
+                      </Text>
+                    </Descriptions.Item>
+                  </Descriptions>
+                  {balanceSheet && !balanceSheet.is_balanced && (
+                    <Alert className="mt-3" type="error" showIcon title={t('generalLedger.balanceNotBalanced')} />
+                  )}
+                </Card>
+              ),
+            },
+          ]}
         />
       )}
 

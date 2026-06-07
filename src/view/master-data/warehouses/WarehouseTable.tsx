@@ -22,7 +22,7 @@ export default function WarehouseTable({ warehouses, onEdit, onArchive, onRestor
       dataIndex: 'name',
       key: 'name',
       render: (name: string, warehouse) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           {warehouse.code && <Text type="secondary">{warehouse.code}</Text>}
         </Space>

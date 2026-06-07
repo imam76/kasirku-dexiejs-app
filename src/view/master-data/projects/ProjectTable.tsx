@@ -29,7 +29,7 @@ export default function ProjectTable({ projects, onEdit, onArchive, onRestore }:
       dataIndex: 'name',
       key: 'name',
       render: (name: string, project) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           {project.code && <Text type="secondary">{project.code}</Text>}
         </Space>

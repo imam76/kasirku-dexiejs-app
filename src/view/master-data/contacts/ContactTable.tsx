@@ -27,7 +27,7 @@ export default function ContactTable({ contacts, onEdit, onArchive, onRestore }:
       dataIndex: 'name',
       key: 'name',
       render: (name: string, contact) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
           {contact.company_name && <Text type="secondary">{contact.company_name}</Text>}
         </Space>

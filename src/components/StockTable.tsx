@@ -469,134 +469,134 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th
-                  onClick={() => handleSort('sku')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    SKU
-                    {sortField === 'sku' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  onClick={() => handleSort('name')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {t('stock.productName')}
-                    {sortField === 'name' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('stock.category')}
-                </th>
-                <th
-                  onClick={() => handleSort('purchase_price')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {t('stock.purchasePrice')}
-                    {sortField === 'purchase_price' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  onClick={() => handleSort('selling_price')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {t('stock.sellingPrice')}
-                    {sortField === 'selling_price' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('stock.margin')}
-                </th>
-                <th
-                  onClick={() => handleSort('stock')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {t('product.stock')}
-                    {sortField === 'stock' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('stock.action')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedProducts.map((product) => {
-                const margin = product.selling_price - product.purchase_price;
-                const marginPercent = product.purchase_price > 0
-                  ? ((margin / product.purchase_price) * 100).toFixed(1)
-                  : '0';
-
-                return (
-                  <tr key={product.id} className="hover:bg-gray-50">
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.sku || '-'}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {product.name}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getProductCategoryLabel(product.category || 'non_consumable', t)}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      Rp {formatCurrency(product.purchase_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      Rp {formatCurrency(product.selling_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
-                      {product.selling_unit !== product.purchase_unit && (
-                        <div className="text-[10px] text-gray-400">
-                          (≈ Rp {formatCurrency(getPrice(product, 1))} / {product.selling_unit})
-                        </div>
+              <thead className="bg-gray-50">
+                <tr>
+                  <th
+                    onClick={() => handleSort('sku')}
+                    className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      SKU
+                      {sortField === 'sku' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                       )}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {marginPercent}%
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <span className={`px-2 py-1 rounded ${getStockStatusClass(product.stock)}`}>
-                        {product.stock} {product.purchase_unit}
-                      </span>
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => onEdit(product)}
-                          className="text-blue-600 hover:text-blue-800 transition-colors"
-                          title={t('stock.editTitle')}
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => onDelete(product.id)}
-                          className="text-red-600 hover:text-red-800 transition-colors"
-                          title={t('stock.deleteProductTitle')}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('name')}
+                    className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      {t('stock.productName')}
+                      {sortField === 'name' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {t('stock.category')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('purchase_price')}
+                    className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      {t('stock.purchasePrice')}
+                      {sortField === 'purchase_price' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('selling_price')}
+                    className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      {t('stock.sellingPrice')}
+                      {sortField === 'selling_price' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {t('stock.margin')}
+                  </th>
+                  <th
+                    onClick={() => handleSort('stock')}
+                    className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      {t('product.stock')}
+                      {sortField === 'stock' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {t('stock.action')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {paginatedProducts.map((product) => {
+                  const margin = product.selling_price - product.purchase_price;
+                  const marginPercent = product.purchase_price > 0
+                    ? ((margin / product.purchase_price) * 100).toFixed(1)
+                    : '0';
+
+                  return (
+                    <tr key={product.id} className="hover:bg-gray-50">
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {product.sku || '-'}
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {product.name}
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {getProductCategoryLabel(product.category || 'non_consumable', t)}
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        Rp {formatCurrency(product.purchase_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        Rp {formatCurrency(product.selling_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
+                        {product.selling_unit !== product.purchase_unit && (
+                          <div className="text-[10px] text-gray-400">
+                            (≈ Rp {formatCurrency(getPrice(product, 1))} / {product.selling_unit})
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {marginPercent}%
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span className={`px-2 py-1 rounded ${getStockStatusClass(product.stock)}`}>
+                          {product.stock} {product.purchase_unit}
+                        </span>
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => onEdit(product)}
+                            className="text-blue-600 hover:text-blue-800 transition-colors"
+                            title={t('stock.editTitle')}
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => onDelete(product.id)}
+                            className="text-red-600 hover:text-red-800 transition-colors"
+                            title={t('stock.deleteProductTitle')}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
           {paginatedProducts.length === 0 && (
             <div className="text-center py-8 text-gray-500">
