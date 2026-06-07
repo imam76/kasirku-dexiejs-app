@@ -4,6 +4,7 @@ import { CreditCard, Plus } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import {
   useCooperativeInstallments,
+  type CooperativeInstallmentMemberFilter,
   type CooperativeInstallmentStatusFilter,
   type CooperativeLoanPaymentStatusFilter,
 } from '@/hooks/useCooperativeInstallments';
@@ -25,6 +26,7 @@ export default function CooperativeInstallmentManagement() {
     filteredInstallments,
     payableInstallments,
     filteredPayments,
+    memberFilterOptions,
     paymentAccounts,
     loanById,
     payingInstallment,
@@ -33,6 +35,8 @@ export default function CooperativeInstallmentManagement() {
     setSelectedPayment,
     searchText,
     setSearchText,
+    memberFilter,
+    setMemberFilter,
     installmentStatusFilter,
     setInstallmentStatusFilter,
     paymentStatusFilter,
@@ -139,12 +143,22 @@ export default function CooperativeInstallmentManagement() {
         </Button>
       )}
     >
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_170px_170px]">
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)_170px_170px]">
         <Input.Search
           allowClear
           value={searchText}
           placeholder={t('cooperative.installments.searchPlaceholder')}
           onChange={(event) => setSearchText(event.target.value)}
+        />
+        <Select<CooperativeInstallmentMemberFilter>
+          showSearch
+          value={memberFilter}
+          onChange={setMemberFilter}
+          optionFilterProp="label"
+          options={[
+            { value: 'ALL', label: t('cooperative.installments.filter.allMembers') },
+            ...memberFilterOptions,
+          ]}
         />
         <Select<CooperativeInstallmentStatusFilter>
           value={installmentStatusFilter}

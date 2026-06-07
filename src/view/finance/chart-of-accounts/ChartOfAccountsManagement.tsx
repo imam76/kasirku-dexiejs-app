@@ -16,11 +16,14 @@ import type { TranslationKey } from '@/i18n/messages';
 import { accountTypeValues } from '@/lib/validations/chartOfAccount';
 import type { ChartOfAccount } from '@/types';
 
+type ChartOfAccountsTab = 'accounts' | 'mapping';
+
 export default function ChartOfAccountsManagement() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
   const [form] = Form.useForm<ChartOfAccountFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<ChartOfAccountsTab>('accounts');
   const {
     accounts,
     accountTree,
@@ -143,6 +146,8 @@ export default function ChartOfAccountsManagement() {
       loading={isLoading}
     >
       <Tabs
+        activeKey={activeTab}
+        onChange={(key) => setActiveTab(key as ChartOfAccountsTab)}
         items={[
           {
             key: 'accounts',

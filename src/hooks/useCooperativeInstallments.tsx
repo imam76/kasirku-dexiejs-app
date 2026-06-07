@@ -19,6 +19,16 @@ import type {
 
 export type CooperativeInstallmentStatusFilter = CooperativeLoanInstallmentStatus | 'DUE' | 'ALL';
 export type CooperativeLoanPaymentStatusFilter = CooperativeLoanPaymentStatus | 'ALL';
+export type CooperativeInstallmentMemberFilter = string;
+
+interface CooperativeInstallmentMemberOption {
+  value: string;
+  label: string;
+  memberNumber: string;
+  memberName: string;
+}
+
+type CooperativeInstallmentMemberSnapshot = Pick<CooperativeLoanInstallment, 'member_id' | 'member_number' | 'member_name'>;
 
 const COOPERATIVE_INSTALLMENT_RELATED_QUERY_KEYS = [
   'cooperativeLoans',
@@ -37,6 +47,7 @@ export const useCooperativeInstallments = () => {
   const [payingInstallment, setPayingInstallment] = useState<CooperativeLoanInstallment | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<CooperativeLoanPayment | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [memberFilter, setMemberFilter] = useState<CooperativeInstallmentMemberFilter>('ALL');
   const [installmentStatusFilter, setInstallmentStatusFilter] = useState<CooperativeInstallmentStatusFilter>('DUE');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<CooperativeLoanPaymentStatusFilter>('POSTED');
 
@@ -67,6 +78,27 @@ export const useCooperativeInstallments = () => {
 
   const loanById = useMemo(() => new Map(loans.map((loan) => [loan.id, loan])), [loans]);
 
+  const memberFilterOptions = useMemo(() => {
+    const memberById = new Map<string, CooperativeInstallmentMemberOption>();
+    const addMember = (member: CooperativeInstallmentMemberSnapshot) => {
+      if (!memberById.has(member.member_id)) {
+        memberById.set(member.member_id, {
+          value: member.member_id,
+          label: `${member.member_number} - ${member.member_name}`,
+          memberNumber: member.member_number,
+          memberName: member.member_name,
+        });
+      }
+    };
+
+    installments.forEach(addMember);
+    payments.forEach(addMember);
+
+    return Array.from(memberById.values()).sort((a, b) => (
+      a.memberNumber.localeCompare(b.memberNumber) || a.memberName.localeCompare(b.memberName)
+    ));
+  }, [installments, payments]);
+
   const payableInstallments = useMemo(() => (
     installments.filter((installment) => {
       const loan = loanById.get(installment.loan_id);
@@ -88,10 +120,11 @@ export const useCooperativeInstallments = () => {
         (installmentStatusFilter === 'DUE'
           ? installment.status !== 'PAID'
           : installment.status === installmentStatusFilter);
+      const matchesMember = memberFilter === 'ALL' || installment.member_id === memberFilter;
 
-      return matchesSearch && matchesStatus && (!loan || loan.status !== 'REVERSED');
+      return matchesSearch && matchesStatus && matchesMember && (!loan || loan.status !== 'REVERSED');
     });
-  }, [installmentStatusFilter, installments, loanById, searchText]);
+  }, [installmentStatusFilter, installments, loanById, memberFilter, searchText]);
 
   const filteredPayments = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -107,10 +140,11 @@ export const useCooperativeInstallments = () => {
         payment.reversal_reason,
       ].some((value) => value?.toLowerCase().includes(query));
       const matchesStatus = paymentStatusFilter === 'ALL' || payment.status === paymentStatusFilter;
+      const matchesMember = memberFilter === 'ALL' || payment.member_id === memberFilter;
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesMember;
     });
-  }, [paymentStatusFilter, payments, searchText]);
+  }, [memberFilter, paymentStatusFilter, payments, searchText]);
 
   const invalidate = () => {
     COOPERATIVE_INSTALLMENT_RELATED_QUERY_KEYS.forEach((queryKey) => {
@@ -134,6 +168,7 @@ export const useCooperativeInstallments = () => {
     payableInstallments,
     payments,
     filteredPayments,
+    memberFilterOptions,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
     loanById,
     payingInstallment,
@@ -142,6 +177,8 @@ export const useCooperativeInstallments = () => {
     setSelectedPayment,
     searchText,
     setSearchText,
+    memberFilter,
+    setMemberFilter,
     installmentStatusFilter,
     setInstallmentStatusFilter,
     paymentStatusFilter,
