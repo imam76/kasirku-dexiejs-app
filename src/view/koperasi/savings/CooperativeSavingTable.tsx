@@ -1,6 +1,7 @@
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Ban, Eye } from 'lucide-react';
+import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeSavingTransaction, CooperativeSavingTransactionStatus, CooperativeSavingTransactionType, CooperativeSavingType } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
@@ -139,6 +140,7 @@ export default function CooperativeSavingTable({
             type="text"
             icon={<Ban size={16} />}
             disabled={transaction.status !== 'POSTED' || transaction.transaction_type === 'REVERSAL'}
+            data-testid={`koperasi-saving-reverse-${transaction.id}`}
             onClick={() => onReverse(transaction)}
           >
             {t('cooperative.savings.reverse')}
@@ -154,6 +156,9 @@ export default function CooperativeSavingTable({
       columns={columns}
       rowKey="id"
       loading={loading}
+      onRow={(transaction) => ({
+        'data-testid': `koperasi-saving-row-${transaction.id}`,
+      } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
       scroll={{ x: 1200 }}
       locale={{ emptyText: t('cooperative.savings.empty') }}

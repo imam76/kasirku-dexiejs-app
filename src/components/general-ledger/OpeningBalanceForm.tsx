@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type HTMLAttributes } from 'react';
 import { App, Alert, Button, DatePicker, InputNumber, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
@@ -116,6 +116,7 @@ export default function OpeningBalanceForm({
           min={0}
           value={record.debit}
           disabled={isLocked}
+          data-testid={`gl-opening-balance-debit-${record.account.code}`}
           onChange={(value) => updateAmount(record.account.id, 'debit', value)}
         />
       ),
@@ -131,6 +132,7 @@ export default function OpeningBalanceForm({
           min={0}
           value={record.credit}
           disabled={isLocked}
+          data-testid={`gl-opening-balance-credit-${record.account.code}`}
           onChange={(value) => updateAmount(record.account.id, 'credit', value)}
         />
       ),
@@ -181,6 +183,9 @@ export default function OpeningBalanceForm({
         dataSource={rows}
         columns={columns}
         rowKey={(row) => row.account.id}
+        onRow={(row) => ({
+          'data-testid': `gl-opening-balance-row-${row.account.code}`,
+        } as unknown as HTMLAttributes<HTMLElement>)}
         pagination={{ pageSize: 8 }}
         scroll={{ x: 720 }}
         summary={() => (
@@ -207,6 +212,7 @@ export default function OpeningBalanceForm({
           type="primary"
           loading={isPosting}
           disabled={isLocked || !hasLines || !isBalanced || !cutoffDate}
+          data-testid="gl-opening-balance-post-button"
           onClick={handlePost}
         >
           {t('generalLedger.setup.postOpeningBalance')}

@@ -136,7 +136,12 @@ export default function CooperativeSavingManagement() {
         </div>
       )}
       extra={(
-        <Button type="primary" icon={<Plus size={16} />} onClick={openAddModal}>
+        <Button
+          type="primary"
+          icon={<Plus size={16} />}
+          data-testid="koperasi-saving-add-button"
+          onClick={openAddModal}
+        >
           {t('cooperative.savings.add')}
         </Button>
       )}

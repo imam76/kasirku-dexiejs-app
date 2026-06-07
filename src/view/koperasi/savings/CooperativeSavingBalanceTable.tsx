@@ -1,5 +1,6 @@
 import { Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeMemberSavingBalance, CooperativeSavingType } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
@@ -64,6 +65,9 @@ export default function CooperativeSavingBalanceTable({
       dataSource={balances}
       columns={columns}
       rowKey="id"
+      onRow={(balance) => ({
+        'data-testid': `koperasi-saving-balance-row-${balance.member_number}-${balance.saving_type}`,
+      } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
       scroll={{ x: true }}
       locale={{ emptyText: t('cooperative.savings.balanceEmpty') }}

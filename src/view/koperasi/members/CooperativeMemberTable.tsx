@@ -1,6 +1,7 @@
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Archive, Edit2, Eye, RotateCcw } from 'lucide-react';
+import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeMember, CooperativeMemberStatus } from '@/types';
 import { cooperativeMemberStatusOptions } from './memberOptions';
@@ -75,15 +76,31 @@ export default function CooperativeMemberTable({
           <Button type="text" icon={<Eye size={16} />} onClick={() => onView(member)}>
             {t('cooperative.members.view')}
           </Button>
-          <Button type="text" icon={<Edit2 size={16} />} onClick={() => onEdit(member)}>
+          <Button
+            type="text"
+            icon={<Edit2 size={16} />}
+            data-testid={`koperasi-member-edit-${member.member_number}`}
+            onClick={() => onEdit(member)}
+          >
             {t('cooperative.members.edit')}
           </Button>
           {member.status === 'ACTIVE' ? (
-            <Button danger type="text" icon={<Archive size={16} />} onClick={() => onArchive(member)}>
+            <Button
+              danger
+              type="text"
+              icon={<Archive size={16} />}
+              data-testid={`koperasi-member-archive-${member.member_number}`}
+              onClick={() => onArchive(member)}
+            >
               {t('cooperative.members.archive')}
             </Button>
           ) : (
-            <Button type="text" icon={<RotateCcw size={16} />} onClick={() => onRestore(member)}>
+            <Button
+              type="text"
+              icon={<RotateCcw size={16} />}
+              data-testid={`koperasi-member-restore-${member.member_number}`}
+              onClick={() => onRestore(member)}
+            >
               {t('cooperative.members.restore')}
             </Button>
           )}
@@ -97,6 +114,9 @@ export default function CooperativeMemberTable({
       dataSource={members}
       columns={columns}
       rowKey="id"
+      onRow={(member) => ({
+        'data-testid': `koperasi-member-row-${member.member_number}`,
+      } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
       scroll={{ x: true }}
       locale={{ emptyText: t('cooperative.members.empty') }}

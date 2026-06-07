@@ -1,6 +1,7 @@
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { CreditCard } from 'lucide-react';
+import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type {
   CooperativeLoan,
@@ -112,6 +113,7 @@ export default function CooperativeInstallmentTable({
             type="text"
             icon={<CreditCard size={16} />}
             disabled={installment.status === 'PAID' || loan?.status !== 'DISBURSED'}
+            data-testid={`koperasi-installment-pay-${installment.id}`}
             onClick={() => onPay(installment)}
           >
             {t('cooperative.installments.pay')}
@@ -127,6 +129,9 @@ export default function CooperativeInstallmentTable({
       columns={columns}
       rowKey="id"
       loading={loading}
+      onRow={(installment) => ({
+        'data-testid': `koperasi-installment-row-${installment.member_number}-${installment.installment_number}`,
+      } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
       scroll={{ x: 1200 }}
       locale={{ emptyText: t('cooperative.installments.empty') }}

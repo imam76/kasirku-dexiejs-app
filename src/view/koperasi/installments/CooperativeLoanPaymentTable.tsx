@@ -1,6 +1,7 @@
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Ban, Eye } from 'lucide-react';
+import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoanPayment, CooperativeLoanPaymentStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
@@ -128,6 +129,7 @@ export default function CooperativeLoanPaymentTable({
             type="text"
             icon={<Ban size={16} />}
             disabled={payment.status !== 'POSTED' || payment.payment_type === 'REVERSAL' || Boolean(payment.reversal_of_payment_id)}
+            data-testid={`koperasi-installment-payment-reverse-${payment.payment_number}`}
             onClick={() => onReverse(payment)}
           >
             {t('cooperative.installments.reverse')}
@@ -143,6 +145,9 @@ export default function CooperativeLoanPaymentTable({
       columns={columns}
       rowKey="id"
       loading={loading}
+      onRow={(payment) => ({
+        'data-testid': `koperasi-installment-payment-row-${payment.payment_number}`,
+      } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
       scroll={{ x: 1500 }}
       locale={{ emptyText: t('cooperative.installments.payments.empty') }}

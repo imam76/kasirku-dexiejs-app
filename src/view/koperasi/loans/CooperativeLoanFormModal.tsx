@@ -46,6 +46,7 @@ export default function CooperativeLoanFormModal({
       onCancel={onCancel}
       onOk={() => form.submit()}
       okText={t('cooperative.loans.submit')}
+      okButtonProps={{ 'data-testid': 'koperasi-loan-submit-button' }}
       confirmLoading={isSubmitting}
       destroyOnHidden
       forceRender
@@ -69,6 +70,7 @@ export default function CooperativeLoanFormModal({
               optionFilterProp="label"
               placeholder={t('cooperative.loans.form.memberPlaceholder')}
               options={memberOptions}
+              data-testid="koperasi-loan-member-select"
             />
           </Form.Item>
           <Form.Item
@@ -76,7 +78,7 @@ export default function CooperativeLoanFormModal({
             label={t('cooperative.loans.form.applicationDate')}
             rules={[{ required: true, message: t('cooperative.loans.validation.applicationDateRequired') }]}
           >
-            <DatePicker showTime className="w-full" />
+            <DatePicker showTime className="w-full" data-testid="koperasi-loan-application-date-input" />
           </Form.Item>
         </div>
 
@@ -95,6 +97,7 @@ export default function CooperativeLoanFormModal({
               formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
               placeholder="0"
+              data-testid="koperasi-loan-principal-input"
             />
           </Form.Item>
           <Form.Item
@@ -112,6 +115,7 @@ export default function CooperativeLoanFormModal({
               formatter={(value) => `${value ?? ''}%`}
               parser={(value) => value?.replace('%', '') as unknown as number}
               placeholder="0"
+              data-testid="koperasi-loan-interest-input"
             />
           </Form.Item>
           <Form.Item
@@ -122,7 +126,13 @@ export default function CooperativeLoanFormModal({
               { type: 'number', min: 1, message: t('cooperative.loans.validation.tenorMin') },
             ]}
           >
-            <InputNumber<number> min={1} precision={0} className="w-full" placeholder="12" />
+            <InputNumber<number>
+              min={1}
+              precision={0}
+              className="w-full"
+              placeholder="12"
+              data-testid="koperasi-loan-tenor-input"
+            />
           </Form.Item>
         </div>
 

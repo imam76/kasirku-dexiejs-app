@@ -177,7 +177,12 @@ export default function CooperativeLoanManagement() {
         </div>
       )}
       extra={(
-        <Button type="primary" icon={<Plus size={16} />} onClick={openAddModal}>
+        <Button
+          type="primary"
+          icon={<Plus size={16} />}
+          data-testid="koperasi-loan-add-button"
+          onClick={openAddModal}
+        >
           {t('cooperative.loans.add')}
         </Button>
       )}

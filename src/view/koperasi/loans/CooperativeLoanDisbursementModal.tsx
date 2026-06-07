@@ -48,6 +48,7 @@ export default function CooperativeLoanDisbursementModal({
       onCancel={onCancel}
       onOk={() => form.submit()}
       okText={t('cooperative.loans.disburse')}
+      okButtonProps={{ 'data-testid': 'koperasi-loan-disbursement-submit-button' }}
       confirmLoading={isSubmitting}
       destroyOnHidden
       forceRender
@@ -66,14 +67,14 @@ export default function CooperativeLoanDisbursementModal({
             label={t('cooperative.loans.form.disbursementDate')}
             rules={[{ required: true, message: t('cooperative.loans.validation.disbursementDateRequired') }]}
           >
-            <DatePicker showTime className="w-full" />
+            <DatePicker showTime className="w-full" data-testid="koperasi-loan-disbursement-date-input" />
           </Form.Item>
           <Form.Item
             name="first_due_date"
             label={t('cooperative.loans.form.firstDueDate')}
             rules={[{ required: true, message: t('cooperative.loans.validation.firstDueDateRequired') }]}
           >
-            <DatePicker className="w-full" />
+            <DatePicker className="w-full" data-testid="koperasi-loan-first-due-date-input" />
           </Form.Item>
         </div>
 
@@ -88,6 +89,7 @@ export default function CooperativeLoanDisbursementModal({
                 { value: 'TUNAI', label: t('payment.cash') },
                 { value: 'NON_TUNAI', label: t('payment.nonCash') },
               ]}
+              data-testid="koperasi-loan-disbursement-payment-method-select"
             />
           </Form.Item>
           <Form.Item name="cash_account_id" label={t('finance.cashAccount')}>

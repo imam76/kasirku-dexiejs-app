@@ -43,6 +43,7 @@ export default function CooperativeMemberFormModal({
       open={open}
       onCancel={onCancel}
       onOk={() => form.submit()}
+      okButtonProps={{ 'data-testid': 'koperasi-member-submit-button' }}
       confirmLoading={isSubmitting}
       destroyOnHidden
       forceRender
@@ -64,14 +65,20 @@ export default function CooperativeMemberFormModal({
               { max: 40, message: t('cooperative.members.validation.memberNumberMax') },
             ]}
           >
-            <Input placeholder={t('cooperative.members.form.memberNumberPlaceholder')} />
+            <Input
+              placeholder={t('cooperative.members.form.memberNumberPlaceholder')}
+              data-testid="koperasi-member-number-input"
+            />
           </Form.Item>
           <Form.Item
             name="name"
             label={t('cooperative.members.form.name')}
             rules={[{ required: true, whitespace: true, message: t('cooperative.members.validation.nameRequired') }]}
           >
-            <Input placeholder={t('cooperative.members.form.namePlaceholder')} />
+            <Input
+              placeholder={t('cooperative.members.form.namePlaceholder')}
+              data-testid="koperasi-member-name-input"
+            />
           </Form.Item>
           <Form.Item
             name="status"
@@ -88,18 +95,28 @@ export default function CooperativeMemberFormModal({
             label={t('cooperative.members.form.joinDate')}
             rules={[{ required: true, message: t('cooperative.members.validation.joinDateRequired') }]}
           >
-            <DatePicker className="w-full" />
+            <DatePicker className="w-full" data-testid="koperasi-member-join-date-input" />
           </Form.Item>
           <Form.Item name="identity_number" label={t('cooperative.members.form.identityNumber')}>
-            <Input placeholder={t('cooperative.members.form.identityNumberPlaceholder')} />
+            <Input
+              placeholder={t('cooperative.members.form.identityNumberPlaceholder')}
+              data-testid="koperasi-member-identity-input"
+            />
           </Form.Item>
           <Form.Item name="phone" label={t('cooperative.members.form.phone')}>
-            <Input placeholder={t('cooperative.members.form.phonePlaceholder')} />
+            <Input
+              placeholder={t('cooperative.members.form.phonePlaceholder')}
+              data-testid="koperasi-member-phone-input"
+            />
           </Form.Item>
         </div>
 
         <Form.Item name="address" label={t('cooperative.members.form.address')}>
-          <TextArea rows={3} placeholder={t('cooperative.members.form.addressPlaceholder')} />
+          <TextArea
+            rows={3}
+            placeholder={t('cooperative.members.form.addressPlaceholder')}
+            data-testid="koperasi-member-address-input"
+          />
         </Form.Item>
         <Form.Item name="notes" label={t('cooperative.members.form.notes')}>
           <TextArea rows={3} placeholder={t('cooperative.members.form.notesPlaceholder')} />

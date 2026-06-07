@@ -59,6 +59,7 @@ export default function CooperativeSavingFormModal({
       onCancel={onCancel}
       onOk={() => form.submit()}
       okText={t('cooperative.savings.save')}
+      okButtonProps={{ 'data-testid': 'koperasi-saving-submit-button' }}
       confirmLoading={isSubmitting}
       destroyOnHidden
       forceRender
@@ -82,6 +83,7 @@ export default function CooperativeSavingFormModal({
               optionFilterProp="label"
               placeholder={t('cooperative.savings.form.memberPlaceholder')}
               options={memberOptions}
+              data-testid="koperasi-saving-member-select"
             />
           </Form.Item>
           <Form.Item
@@ -89,7 +91,10 @@ export default function CooperativeSavingFormModal({
             label={t('cooperative.savings.form.transactionType')}
             rules={[{ required: true, message: t('cooperative.savings.validation.transactionTypeRequired') }]}
           >
-            <Select options={cooperativeSavingTransactionTypeOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))} />
+            <Select
+              options={cooperativeSavingTransactionTypeOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+              data-testid="koperasi-saving-transaction-type-select"
+            />
           </Form.Item>
         </div>
 
@@ -99,7 +104,10 @@ export default function CooperativeSavingFormModal({
             label={t('cooperative.savings.form.savingType')}
             rules={[{ required: true, message: t('cooperative.savings.validation.savingTypeRequired') }]}
           >
-            <Select options={cooperativeSavingTypeOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))} />
+            <Select
+              options={cooperativeSavingTypeOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+              data-testid="koperasi-saving-type-select"
+            />
           </Form.Item>
           <Form.Item
             name="amount"
@@ -115,6 +123,7 @@ export default function CooperativeSavingFormModal({
               formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
               placeholder="0"
+              data-testid="koperasi-saving-amount-input"
             />
           </Form.Item>
           <Form.Item
@@ -122,7 +131,7 @@ export default function CooperativeSavingFormModal({
             label={t('cooperative.savings.form.transactionDate')}
             rules={[{ required: true, message: t('cooperative.savings.validation.transactionDateRequired') }]}
           >
-            <DatePicker showTime className="w-full" />
+            <DatePicker showTime className="w-full" data-testid="koperasi-saving-date-input" />
           </Form.Item>
         </div>
 
@@ -137,6 +146,7 @@ export default function CooperativeSavingFormModal({
                 { value: 'TUNAI', label: t('payment.cash') },
                 { value: 'NON_TUNAI', label: t('payment.nonCash') },
               ]}
+              data-testid="koperasi-saving-payment-method-select"
             />
           </Form.Item>
           <Form.Item name="cash_account_id" label={t('finance.cashAccount')}>

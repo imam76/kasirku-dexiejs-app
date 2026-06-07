@@ -300,6 +300,7 @@ export default function FinanceAccountMappingPanel({
                     size="small"
                     checked={module.enabled}
                     loading={isUpdatingModule}
+                    data-testid={`accounting-module-${module.key.toLowerCase().replace(/_/g, '-')}-switch`}
                     onChange={(checked) => handleModuleChange(module.key, checked)}
                   />
                 ) : (

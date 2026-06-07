@@ -1,6 +1,7 @@
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Check, Eye, Send, X } from 'lucide-react';
+import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan, CooperativeLoanStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
@@ -112,6 +113,7 @@ export default function CooperativeLoanTable({
             type="text"
             icon={<Check size={16} />}
             disabled={loan.status !== 'SUBMITTED'}
+            data-testid={`koperasi-loan-approve-${loan.loan_number}`}
             onClick={() => onApprove(loan)}
           >
             {t('cooperative.loans.approve')}
@@ -121,6 +123,7 @@ export default function CooperativeLoanTable({
             type="text"
             icon={<X size={16} />}
             disabled={loan.status !== 'SUBMITTED'}
+            data-testid={`koperasi-loan-reject-${loan.loan_number}`}
             onClick={() => onReject(loan)}
           >
             {t('cooperative.loans.reject')}
@@ -129,6 +132,7 @@ export default function CooperativeLoanTable({
             type="text"
             icon={<Send size={16} />}
             disabled={loan.status !== 'APPROVED'}
+            data-testid={`koperasi-loan-disburse-${loan.loan_number}`}
             onClick={() => onDisburse(loan)}
           >
             {t('cooperative.loans.disburse')}
@@ -144,6 +148,9 @@ export default function CooperativeLoanTable({
       columns={columns}
       rowKey="id"
       loading={loading}
+      onRow={(loan) => ({
+        'data-testid': `koperasi-loan-row-${loan.member_number}`,
+      } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
       scroll={{ x: 1400 }}
       locale={{ emptyText: t('cooperative.loans.empty') }}

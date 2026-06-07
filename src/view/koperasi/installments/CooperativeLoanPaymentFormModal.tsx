@@ -64,6 +64,7 @@ export default function CooperativeLoanPaymentFormModal({
       onCancel={onCancel}
       onOk={() => form.submit()}
       okText={t('cooperative.installments.savePayment')}
+      okButtonProps={{ 'data-testid': 'koperasi-installment-payment-submit-button' }}
       confirmLoading={isSubmitting}
       destroyOnHidden
       forceRender
@@ -86,6 +87,7 @@ export default function CooperativeLoanPaymentFormModal({
             optionFilterProp="label"
             placeholder={t('cooperative.installments.form.installmentPlaceholder')}
             options={installmentOptions}
+            data-testid="koperasi-installment-select"
           />
         </Form.Item>
 
@@ -128,6 +130,7 @@ export default function CooperativeLoanPaymentFormModal({
               formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
               placeholder="0"
+              data-testid="koperasi-installment-payment-amount-input"
             />
           </Form.Item>
           <Form.Item
@@ -135,7 +138,7 @@ export default function CooperativeLoanPaymentFormModal({
             label={t('cooperative.installments.form.paymentDate')}
             rules={[{ required: true, message: t('cooperative.installments.validation.paymentDateRequired') }]}
           >
-            <DatePicker showTime className="w-full" />
+            <DatePicker showTime className="w-full" data-testid="koperasi-installment-payment-date-input" />
           </Form.Item>
         </div>
 
@@ -150,6 +153,7 @@ export default function CooperativeLoanPaymentFormModal({
                 { value: 'TUNAI', label: t('payment.cash') },
                 { value: 'NON_TUNAI', label: t('payment.nonCash') },
               ]}
+              data-testid="koperasi-installment-payment-method-select"
             />
           </Form.Item>
           <Form.Item name="cash_account_id" label={t('finance.cashAccount')}>

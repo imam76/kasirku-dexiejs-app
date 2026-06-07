@@ -123,7 +123,12 @@ export default function CooperativeMemberManagement() {
         </div>
       )}
       extra={(
-        <Button type="primary" icon={<Plus size={16} />} onClick={openAddModal}>
+        <Button
+          type="primary"
+          icon={<Plus size={16} />}
+          data-testid="koperasi-member-add-button"
+          onClick={openAddModal}
+        >
           {t('cooperative.members.add')}
         </Button>
       )}
