@@ -1,30 +1,40 @@
-import { useState } from 'react';
-import { Controller } from 'react-hook-form';
-import { Table, Button, InputNumber, Select, Card, Typography, Form, Row, Col, Modal, Tag } from 'antd';
+import { useMemo, useState } from 'react';
+import { Controller, useWatch } from 'react-hook-form';
+import { Table, Button, Input, InputNumber, Select, Card, Typography, Form, Row, Col, Modal, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Plus, Trash2, Save, History } from 'lucide-react';
 import { useShoppingNote } from '@/hooks/useShoppingNote';
 import { ShoppingNoteItem } from '@/types';
 import ShoppingNoteHistory from './ShoppingNoteHistory';
 import { getProductSellableUnits } from '@/utils/productUnits';
+import { BasicProductFormModal } from '@/components/BasicProductFormModal';
 
 const { Text } = Typography;
-const { Option } = Select;
 
 export default function ShoppingNote() {
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const [createProductOpen, setCreateProductOpen] = useState(false);
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductSku, setNewProductSku] = useState('');
+
   const {
     items,
     products,
+    pendingProducts,
     isProductsLoading,
     removeItem,
     totalShopping,
     control,
     handleSubmit,
     handleProductChange,
+    createBasicProduct,
     errors,
     saveNote,
   } = useShoppingNote();
+
+  const watchedUnit = useWatch({ control, name: 'unit' });
+  const watchedUnitPrice = useWatch({ control, name: 'unit_price' });
 
   const unitOptions = Array.from(
     new Set([
@@ -42,6 +52,43 @@ export default function ShoppingNote() {
       ...products.flatMap((product) => [product.purchase_unit, ...getProductSellableUnits(product)]),
     ])
   ).filter(Boolean);
+
+  const pendingProductIds = useMemo(() => new Set(pendingProducts.map((product) => product.id)), [pendingProducts]);
+
+  const productOptions = useMemo(() => {
+    return products.map((product) => {
+      const label = product.sku ? `${product.name} (${product.sku})` : product.name;
+      return {
+        value: product.id,
+        label: pendingProductIds.has(product.id) ? `${label} • entri dasar` : label,
+        name: product.name,
+        sku: product.sku,
+      };
+    });
+  }, [products, pendingProductIds]);
+
+  const openCreateFromSearch = () => {
+    const value = productSearch.trim();
+    const isBarcodeLike = /^\d{6,}$/.test(value);
+    setNewProductName(isBarcodeLike ? '' : value);
+    setNewProductSku(isBarcodeLike ? value : '');
+    setCreateProductOpen(true);
+  };
+
+  const handleCreateProduct = (name: string, sku?: string) => {
+    const unitPrice = Number(watchedUnitPrice ?? 0);
+    const currentUnit = watchedUnit || 'pcs';
+    const id = createBasicProduct({
+      name,
+      sku: sku || undefined,
+      unit: currentUnit,
+      purchasePrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+    });
+    if (!id) return;
+
+    setCreateProductOpen(false);
+    setProductSearch('');
+  };
 
   const columns: ColumnsType<ShoppingNoteItem> = [
     {
@@ -129,21 +176,33 @@ export default function ShoppingNote() {
                       <Form.Item validateStatus={errors.product_id ? 'error' : ''} help={errors.product_id?.message} style={{ marginBottom: 0 }}>
                         <Select
                           {...field}
-                          showSearch={{ optionFilterProp: 'children' }}
+                          showSearch
+                          optionFilterProp="label"
                           loading={isProductsLoading}
                           placeholder="Pilih produk"
                           size="large"
+                          onSearch={setProductSearch}
+                          searchValue={productSearch}
+                          filterOption={(input, option) => {
+                            const keyword = input.toLowerCase().trim();
+                            const name = String(option?.name || '').toLowerCase();
+                            const sku = String(option?.sku || '').toLowerCase();
+                            return name.includes(keyword) || sku.includes(keyword);
+                          }}
+                          notFoundContent={productSearch.trim().length > 0 ? (
+                            <div className="px-2 py-2">
+                              <div className="mb-2 text-sm text-gray-600">Produk tidak ditemukan</div>
+                              <Button type="primary" size="small" onMouseDown={(e) => e.preventDefault()} onClick={openCreateFromSearch}>
+                                Buat Produk Baru
+                              </Button>
+                            </div>
+                          ) : null}
                           onChange={(value) => {
                             field.onChange(value);
                             handleProductChange(value);
                           }}
-                        >
-                          {products.map((product) => (
-                            <Option key={product.id} value={product.id}>
-                              {product.name}{product.sku ? ` (${product.sku})` : ''}
-                            </Option>
-                          ))}
-                        </Select>
+                          options={productOptions}
+                        />
                       </Form.Item>
                     )}
                   />
@@ -190,11 +249,7 @@ export default function ShoppingNote() {
                       control={control}
                       render={({ field }) => (
                         <Form.Item validateStatus={errors.unit ? 'error' : ''} help={errors.unit?.message} style={{ marginBottom: 0 }}>
-                          <Select {...field} size="large">
-                            {unitOptions.map(u => (
-                              <Option key={u} value={u}>{u}</Option>
-                            ))}
-                          </Select>
+                          <Select {...field} size="large" options={unitOptions.map((u) => ({ value: u, label: u }))} />
                         </Form.Item>
                       )}
                     />
@@ -246,6 +301,15 @@ export default function ShoppingNote() {
       >
         <ShoppingNoteHistory />
       </Modal>
+
+      <BasicProductFormModal
+        open={createProductOpen}
+        onCancel={() => setCreateProductOpen(false)}
+        onOk={handleCreateProduct}
+        initialName={newProductName}
+        initialSku={newProductSku}
+        unit={watchedUnit || 'pcs'}
+      />
     </div>
   );
 }

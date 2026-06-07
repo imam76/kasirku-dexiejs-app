@@ -18,6 +18,7 @@ interface PurchaseDocumentLineItemsProps {
   products: Product[];
   taxes: Tax[];
   onChange: (items: PurchaseDocumentItem[]) => void;
+  onCreateProductRequest?: (lineId: string, search: string) => void;
 }
 
 const emptyUnitOptions: Array<{ value: string; label: string }> = [];
@@ -42,6 +43,7 @@ export const PurchaseDocumentLineItems = ({
   products,
   taxes,
   onChange,
+  onCreateProductRequest,
 }: PurchaseDocumentLineItemsProps) => {
   const { t } = useI18n();
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
@@ -196,6 +198,7 @@ export const PurchaseDocumentLineItems = ({
         onSelectProduct={selectProduct}
         onRemoveItem={removeItem}
         onToggleExpanded={toggleExpanded}
+        onCreateProductRequest={onCreateProductRequest}
       />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-gray-500">

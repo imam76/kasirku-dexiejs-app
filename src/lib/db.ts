@@ -557,6 +557,36 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(38).stores({
+      inventoryLots: 'id, product_id, quantity_remaining, received_at, source_type, created_at',
+    }).upgrade(async (tx) => {
+      const inventoryLots = tx.table<InventoryLot, string>('inventoryLots');
+      const existingLot = await inventoryLots.limit(1).toArray();
+      if (existingLot.length > 0) return;
+
+      const now = new Date().toISOString();
+      const products = await tx.table<Product, string>('products').toArray();
+      const openingLots: InventoryLot[] = products
+        .filter((product) => Number(product.stock || 0) > 0 && Number(product.purchase_price || 0) > 0)
+        .map((product) => ({
+          id: crypto.randomUUID(),
+          product_id: product.id,
+          product_name: product.name,
+          sku: product.sku,
+          source_type: 'OPENING' as const,
+          quantity_received: Number(product.stock),
+          quantity_remaining: Number(product.stock),
+          cost_per_unit: Number(product.purchase_price),
+          received_at: product.created_at || now,
+          created_at: now,
+          updated_at: now,
+        }));
+
+      if (openingLots.length > 0) {
+        await inventoryLots.bulkAdd(openingLots);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

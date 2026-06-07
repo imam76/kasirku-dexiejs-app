@@ -55,6 +55,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       db.financeTransactions,
       db.financeBalance,
       db.enabledModules,
+      db.generalLedgerSetting,
       db.journalEntries,
       db.journalEntryLines,
       db.inventoryLots,

@@ -1,4 +1,4 @@
-import { forwardRef, memo } from 'react';
+import { forwardRef, memo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, InputNumber, Select } from 'antd';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
@@ -28,26 +28,32 @@ export interface PurchaseLineItemRowProps {
   onSelectProduct: (itemId: string, productId: string) => void;
   onRemoveItem: (itemId: string) => void;
   onToggleExpanded: (itemId: string) => void;
+  onCreateProductRequest?: (lineId: string, search: string) => void;
 }
 
-const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowProps>(({
-  item,
-  calculatedItem,
-  productOptions,
-  unitOptions,
-  taxOptions,
-  isExpanded,
-  hasPricing,
-  isPurchaseReceipt,
-  gridTemplateColumns,
-  virtualIndex,
-  style,
-  onUpdateItem,
-  onSelectProduct,
-  onRemoveItem,
-  onToggleExpanded,
-}, ref) => {
+const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowProps>((
+  {
+    item,
+    calculatedItem,
+    productOptions,
+    unitOptions,
+    taxOptions,
+    isExpanded,
+    hasPricing,
+    isPurchaseReceipt,
+    gridTemplateColumns,
+    virtualIndex,
+    style,
+    onUpdateItem,
+    onSelectProduct,
+    onRemoveItem,
+    onToggleExpanded,
+    onCreateProductRequest,
+  },
+  ref
+) => {
   const { t } = useI18n();
+  const [productSearch, setProductSearch] = useState('');
   const displayedItem = calculatedItem ?? item;
 
   return (
@@ -67,7 +73,28 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
           placeholder={t('purchaseDocuments.placeholder.product')}
           value={item.product_id || undefined}
           options={productOptions}
-          onChange={(productId: string) => onSelectProduct(item.id, productId)}
+          onSearch={setProductSearch}
+          searchValue={productSearch}
+          notFoundContent={productSearch.trim().length > 0 ? (
+            <div className="px-2 py-2">
+              <div className="mb-2 text-sm text-gray-600">Produk tidak ditemukan</div>
+              <Button
+                type="primary"
+                size="small"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onCreateProductRequest?.(item.id, productSearch);
+                  setProductSearch('');
+                }}
+              >
+                Buat Produk Baru
+              </Button>
+            </div>
+          ) : null}
+          onChange={(productId: string) => {
+            onSelectProduct(item.id, productId);
+            setProductSearch('');
+          }}
         />
         <InputNumber
           min={0}
@@ -142,5 +169,6 @@ export const PurchaseLineItemRow = memo(PurchaseLineItemRowBase, (prev, next) =>
   prev.onUpdateItem === next.onUpdateItem &&
   prev.onSelectProduct === next.onSelectProduct &&
   prev.onRemoveItem === next.onRemoveItem &&
-  prev.onToggleExpanded === next.onToggleExpanded
+  prev.onToggleExpanded === next.onToggleExpanded &&
+  prev.onCreateProductRequest === next.onCreateProductRequest
 ));

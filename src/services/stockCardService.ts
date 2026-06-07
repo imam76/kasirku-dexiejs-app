@@ -1,5 +1,4 @@
 import { db } from '@/lib/db';
-import type { Product } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
 
 export interface StockCardRow {

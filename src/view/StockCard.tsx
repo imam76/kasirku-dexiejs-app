@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Typography, Select, DatePicker, Button, Table, Card, Empty } from 'antd';
-import { ReloadOutlined, FileTextOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '@ant-design/icons';
 import dayjs from '@/lib/dayjs';
-import { useI18n } from '@/hooks/useI18n';
 import { useStockManagement } from '@/hooks/useStockManagement';
 import { getStockCard } from '@/services/stockCardService';
 import { Loading } from '@/components/Loading';
@@ -11,7 +10,6 @@ import { Loading } from '@/components/Loading';
 const { Title } = Typography;
 
 export default function StockCard() {
-  const { t } = useI18n();
   const { products } = useStockManagement();
 
   const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined);

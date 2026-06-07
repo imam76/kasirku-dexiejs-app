@@ -2,6 +2,7 @@ import { getPurchaseDocumentConfig, type PurchaseDocumentConfig } from '@/config
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type {
+  Product,
   PurchaseDocument,
   PurchaseDocumentItem,
   PurchaseDocumentType,
@@ -31,6 +32,7 @@ import { normalisasiHargaProduk } from '@/utils/pricing';
 export interface PurchaseDocumentUpsertInput {
   document: Partial<PurchaseDocument>;
   items: PurchaseDocumentItem[];
+  pendingProducts?: Product[];
 }
 
 const purchaseDocumentTables = [
@@ -413,7 +415,7 @@ const calculatePurchaseTotal = async (
   });
 };
 
-export const createPurchaseDocument = async ({ document, items }: PurchaseDocumentUpsertInput) => {
+export const createPurchaseDocument = async ({ document, items, pendingProducts }: PurchaseDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
 
@@ -445,6 +447,29 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
   validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
+    if (pendingProducts && pendingProducts.length > 0) {
+      const itemProductIds = new Set(items.map((item) => item.product_id));
+      const productsToCreate = pendingProducts.filter((product) => itemProductIds.has(product.id));
+
+      for (const product of productsToCreate) {
+        const existing = await db.products.get(product.id);
+        if (existing) continue;
+
+        if (product.sku) {
+          const sameSku = await db.products.where('sku').equals(product.sku).first();
+          if (sameSku) {
+            throw new Error(`Barcode/SKU ${product.sku} sudah terdaftar pada produk lain`);
+          }
+        }
+
+        await db.products.add({
+          ...product,
+          created_at: createdAt,
+          updated_at: createdAt,
+        });
+      }
+    }
+
     await db.purchaseDocuments.add(nextDocument);
     await db.purchaseDocumentItems.bulkAdd(calculatedItems);
     await writeActivityLog({
@@ -461,7 +486,7 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
   return { document: nextDocument, items: calculatedItems };
 };
 
-export const updatePurchaseDocument = async (id: string, { document, items }: PurchaseDocumentUpsertInput) => {
+export const updatePurchaseDocument = async (id: string, { document, items, pendingProducts }: PurchaseDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const existing = await db.purchaseDocuments.get(id);
@@ -490,6 +515,29 @@ export const updatePurchaseDocument = async (id: string, { document, items }: Pu
   validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
+    if (pendingProducts && pendingProducts.length > 0) {
+      const itemProductIds = new Set(items.map((item) => item.product_id));
+      const productsToCreate = pendingProducts.filter((product) => itemProductIds.has(product.id));
+
+      for (const product of productsToCreate) {
+        const existingProduct = await db.products.get(product.id);
+        if (existingProduct) continue;
+
+        if (product.sku) {
+          const sameSku = await db.products.where('sku').equals(product.sku).first();
+          if (sameSku) {
+            throw new Error(`Barcode/SKU ${product.sku} sudah terdaftar pada produk lain`);
+          }
+        }
+
+        await db.products.add({
+          ...product,
+          created_at: updatedAt,
+          updated_at: updatedAt,
+        });
+      }
+    }
+
     await db.purchaseDocuments.put(nextDocument);
     await db.purchaseDocumentItems.where('document_id').equals(id).delete();
     await db.purchaseDocumentItems.bulkAdd(calculatedItems);
