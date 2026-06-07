@@ -1,0 +1,187 @@
+import { useEffect, useMemo } from 'react';
+import { DatePicker, Form, Input, InputNumber, Modal, Select, Typography } from 'antd';
+import type { Dayjs } from 'dayjs';
+import dayjs from '@/lib/dayjs';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { useI18n } from '@/hooks/useI18n';
+import { db } from '@/lib/db';
+import type { AccountsReceivableRow, PaymentMethod } from '@/types';
+import type { RecordSalesInvoicePaymentInput } from '@/services/accountsReceivableService';
+import { formatCurrency, formatDate } from '@/utils/formatters';
+
+const { Text } = Typography;
+
+interface ReceivablePaymentModalProps {
+  open: boolean;
+  row?: AccountsReceivableRow;
+  loading?: boolean;
+  onCancel: () => void;
+  onSubmit: (input: RecordSalesInvoicePaymentInput) => Promise<void>;
+}
+
+interface PaymentFormValues {
+  amount: number;
+  paid_at: Dayjs;
+  payment_method: PaymentMethod;
+  cash_account_id?: string;
+  payment_channel?: string;
+  notes?: string;
+}
+
+export function ReceivablePaymentModal({
+  open,
+  row,
+  loading,
+  onCancel,
+  onSubmit,
+}: ReceivablePaymentModalProps) {
+  const { t } = useI18n();
+  const [form] = Form.useForm<PaymentFormValues>();
+  const paymentAccounts = useLiveQuery(
+    () => db.chartOfAccounts
+      .where('type')
+      .equals('ASSET')
+      .filter((account) => account.is_active && account.is_postable)
+      .toArray(),
+    [],
+    [],
+  );
+  const accountOptions = useMemo(() => paymentAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.code} - ${account.name}`,
+  })), [paymentAccounts]);
+
+  useEffect(() => {
+    if (!open || !row) return;
+    form.setFieldsValue({
+      amount: row.balance_due,
+      paid_at: dayjs(),
+      payment_method: 'TUNAI',
+      cash_account_id: undefined,
+      payment_channel: undefined,
+      notes: undefined,
+    });
+  }, [form, open, row]);
+
+  const handleFinish = async (values: PaymentFormValues) => {
+    await onSubmit({
+      amount: Number(values.amount || 0),
+      paid_at: values.paid_at?.toISOString() ?? new Date().toISOString(),
+      payment_method: values.payment_method,
+      cash_account_id: values.cash_account_id,
+      payment_channel: values.payment_channel,
+      notes: values.notes,
+    });
+    form.resetFields();
+  };
+
+  return (
+    <Modal
+      title={t('accountsReceivable.recordPayment')}
+      open={open}
+      onCancel={onCancel}
+      okText={t('accountsReceivable.recordPayment')}
+      okButtonProps={{ loading, disabled: !row || row.balance_due <= 0 }}
+      onOk={() => form.submit()}
+      destroyOnClose
+    >
+      {row && (
+        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <Text type="secondary">{t('accountsReceivable.invoiceNumber')}</Text>
+              <div className="font-semibold">{row.document_number}</div>
+            </div>
+            <div>
+              <Text type="secondary">{t('accountsReceivable.customer')}</Text>
+              <div className="font-semibold">{row.customer_name}</div>
+            </div>
+            <div>
+              <Text type="secondary">{t('accountsReceivable.totalInvoice')}</Text>
+              <div className="font-semibold">Rp {formatCurrency(row.total_amount)}</div>
+            </div>
+            <div>
+              <Text type="secondary">{t('accountsReceivable.balanceDue')}</Text>
+              <div className="font-semibold text-rose-700">Rp {formatCurrency(row.balance_due)}</div>
+            </div>
+            {row.due_date && (
+              <div>
+                <Text type="secondary">{t('accountsReceivable.dueDate')}</Text>
+                <div className="font-semibold">{formatDate(row.due_date)}</div>
+              </div>
+            )}
+            <div>
+              <Text type="secondary">{t('accountsReceivable.creditNote')}</Text>
+              <div className="font-semibold">Rp {formatCurrency(row.return_credit_amount)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Form form={form} layout="vertical" onFinish={handleFinish}>
+        <Form.Item
+          name="amount"
+          label={t('accountsReceivable.paymentAmount')}
+          rules={[
+            { required: true, message: t('finance.amountRequired') },
+            {
+              validator: async (_, value) => {
+                const amount = Number(value || 0);
+                if (amount <= 0) throw new Error(t('finance.amountMin'));
+                if (row && amount > row.balance_due + 0.01) {
+                  throw new Error(t('accountsReceivable.error.amountExceedsBalance'));
+                }
+              },
+            },
+          ]}
+        >
+          <InputNumber
+            min={1}
+            max={row?.balance_due}
+            style={{ width: '100%' }}
+            placeholder="0"
+          />
+        </Form.Item>
+
+        <Form.Item
+          name="paid_at"
+          label={t('accountsReceivable.paymentDate')}
+          rules={[{ required: true, message: t('salesDocuments.validation.required', { field: t('accountsReceivable.paymentDate') }) }]}
+        >
+          <DatePicker showTime style={{ width: '100%' }} />
+        </Form.Item>
+
+        <Form.Item
+          name="payment_method"
+          label={t('checkout.method')}
+          rules={[{ required: true, message: t('salesDocuments.validation.required', { field: t('checkout.method') }) }]}
+        >
+          <Select
+            options={[
+              { value: 'TUNAI', label: t('payment.cash') },
+              { value: 'NON_TUNAI', label: t('payment.nonCash') },
+            ]}
+          />
+        </Form.Item>
+
+        <Form.Item name="cash_account_id" label={t('accountsReceivable.cashAccount')}>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('accountsReceivable.cashAccount')}
+            options={accountOptions}
+          />
+        </Form.Item>
+
+        <Form.Item name="payment_channel" label={t('accountsReceivable.paymentChannel')}>
+          <Input placeholder={t('accountsReceivable.paymentChannelPlaceholder')} />
+        </Form.Item>
+
+        <Form.Item name="notes" label={t('salesDocuments.field.notes')}>
+          <Input.TextArea rows={3} />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}

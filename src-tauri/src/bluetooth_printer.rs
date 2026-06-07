@@ -128,10 +128,7 @@ impl<R: Runtime> BluetoothPrinter<R> {
         }
     }
 
-    fn test_print(
-        &self,
-        printer: SelectedBluetoothPrinter,
-    ) -> Result<(), BluetoothPrinterError> {
+    fn test_print(&self, printer: SelectedBluetoothPrinter) -> Result<(), BluetoothPrinterError> {
         #[cfg(target_os = "android")]
         {
             return self

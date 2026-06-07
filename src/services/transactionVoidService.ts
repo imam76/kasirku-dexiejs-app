@@ -1,9 +1,12 @@
 import { db } from '@/lib/db';
-import type { Product, TransactionItem } from '@/types';
+import type { FinanceTransaction, Product, StockMutation, TransactionItem } from '@/types';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
+import { reversePosSaleJournal } from '@/services/generalLedgerService';
+import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -36,6 +39,8 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   const now = new Date().toISOString();
   const normalizedReason = reason.trim() || 'Transaksi dibatalkan';
   let transactionNumber = transactionId;
+  const stockMutations: StockMutation[] = [];
+  const deletedFinanceTransactions: FinanceTransaction[] = [];
 
   await db.transaction(
     'rw',
@@ -47,6 +52,9 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       db.profitBalance,
       db.financeTransactions,
       db.financeBalance,
+      db.enabledModules,
+      db.journalEntries,
+      db.journalEntryLines,
     ],
     async () => {
       const transaction = await db.transactions.get(transactionId);
@@ -72,6 +80,23 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         await db.products.update(product.id, {
           stock: product.stock + returnedQuantity,
         });
+
+        if (returnedQuantity > 0) {
+          const sourceUnit = resolveTransactionItemUnit(item, product);
+          stockMutations.push(createStockMutation({
+            product,
+            sourceType: 'POS_TRANSACTION_VOID',
+            sourceId: transaction.id,
+            sourceNumber: transaction.transaction_number,
+            sourceLineId: item.id,
+            quantityDelta: returnedQuantity,
+            sourceQuantity: item.quantity,
+            sourceUnit,
+            reason: normalizedReason,
+            actor: currentUser,
+            occurredAt: now,
+          }));
+        }
       }
 
       await db.transactions.update(transactionId, {
@@ -106,18 +131,34 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       const currentFinanceBalance = await db.financeBalance.get('current');
       const nextFinanceBalance = (currentFinanceBalance?.amount || 0) - transaction.total_amount;
 
-      await db.financeTransactions
+      const financeTransactionsToDelete = await db.financeTransactions
         .where('reference_id')
         .equals(transaction.id)
-        .delete();
+        .toArray();
+
+      if (financeTransactionsToDelete.length > 0) {
+        deletedFinanceTransactions.push(
+          ...financeTransactionsToDelete.map((financeTransaction) => (
+            withDeletedFinanceTransactionSync(financeTransaction, currentUser, now)
+          )),
+        );
+        await db.financeTransactions.bulkDelete(financeTransactionsToDelete.map((financeTransaction) => financeTransaction.id));
+      }
 
       await db.financeBalance.put({
         id: 'current',
         amount: nextFinanceBalance,
         updated_at: now,
       });
+
+      await reversePosSaleJournal(transaction, `Pembalikan jurnal POS ${transaction.transaction_number}: ${normalizedReason}`, currentUser);
     },
   );
+
+  await enqueueStockMutations(stockMutations);
+  if (deletedFinanceTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(deletedFinanceTransactions, 'delete');
+  }
 
   await writeActivityLog({
     user: currentUser,

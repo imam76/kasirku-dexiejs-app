@@ -72,14 +72,14 @@ export default function PrinterSettingsCard() {
         <Alert
           type="info"
           showIcon
-          message="Auto print receipt menggunakan printer thermal Bluetooth Classic/SPP di aplikasi native Android."
+          title="Auto print receipt menggunakan printer thermal Bluetooth Classic/SPP di aplikasi native Android."
         />
 
         {lastError && (
           <Alert
             type={lastError.code === 'UNSUPPORTED_PLATFORM' ? 'warning' : 'error'}
             showIcon
-            message={lastError.message}
+            title={lastError.message}
           />
         )}
 

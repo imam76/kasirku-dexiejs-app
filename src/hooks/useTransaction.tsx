@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { useTransactionStore, type TransactionError } from '@/store/transactionStore';
@@ -38,18 +39,15 @@ export const useTransaction = () => {
     reset,
   } = useTransactionStore();
 
-  const loadProducts = useCallback(async () => {
-    try {
-      const data = await db.products.orderBy('name').toArray();
-      setProducts(data);
-    } catch (error) {
-      console.error('Failed to load products:', error);
-    }
-  }, [setProducts]);
+  const liveProducts = useLiveQuery(
+    () => db.products.orderBy('name').toArray(),
+    [],
+    [],
+  );
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    setProducts(liveProducts);
+  }, [liveProducts, setProducts]);
 
   const { data: activePromos = [] } = useQuery({
     queryKey: ['activePromos'],
@@ -184,8 +182,11 @@ export const useTransaction = () => {
       });
 
       queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
+      queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
       reset();
-      loadProducts();
 
       void printReceiptAfterTransaction({ ...transaction, items })
         .then((result) => {

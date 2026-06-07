@@ -157,6 +157,11 @@ export const getPrice = (product: Product, quantity: number, unit?: ProductUnit)
   return normalisasiHargaProduk(priceInSellingUnit, product, product.selling_unit, targetUnit);
 };
 
+export const getPurchasePrice = (product: Product, unit?: ProductUnit): number => {
+  const targetUnit = unit || product.purchase_unit;
+  return normalisasiHargaProduk(product.purchase_price, product, product.purchase_unit, targetUnit);
+};
+
 export const getCartItemOriginalPrice = (item: CartItem): number => {
   return getPrice(item.product, item.quantity, item.unit);
 };

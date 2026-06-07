@@ -70,7 +70,7 @@ function Laporan() {
                 key={item.to}
                 to={item.to}
                 className="
-            flex flex-col items-center justify-center
+            app-menu-card flex flex-col items-center justify-center
             bg-white border border-gray-100 rounded-[10px]
             transition-all duration-200 ease-out
 
@@ -83,41 +83,53 @@ function Laporan() {
             hover:-translate-y-[1px]
           "
               >
-                {/* Icon */}
-                <div
-                  className="
+                <div className="app-menu-card__body flex flex-col items-center justify-center">
+                  {/* Icon */}
+                  <div
+                    className="
             mb-[6px]
             sm:mb-[10px]
             lg:mb-[12px]
           "
-                >
-                  <item.icon
-                    className={`
+                  >
+                    <item.icon
+                      className={`
                 ${item.color}
                 text-[24px]
                 sm:text-[30px]
                 lg:text-[34px]
               `}
-                  />
-                </div>
+                    />
+                  </div>
 
-                {/* Label */}
-                <h2
-                  className="
+                  {/* Label */}
+                  <h2
+                    className="
             text-[12px] font-medium text-gray-800 text-center leading-[1.3]
             sm:text-[14px] sm:mb-[6px]
             lg:text-[15px] lg:mb-[6px]
           "
-                >
-                  {item.label}
-                </h2>
+                  >
+                    {item.label}
+                  </h2>
 
-                {/* Desc */}
+                  {/* Desc */}
+                  <p
+                    className="
+            app-menu-card__brief
+            mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400
+            sm:text-[11px] sm:leading-[1.618]
+            lg:hidden
+          "
+                  >
+                    {item.desc}
+                  </p>
+                </div>
+
                 <p
                   className="
-            hidden
-            sm:block sm:text-[11px] sm:text-gray-400 sm:text-center sm:leading-[1.618] sm:line-clamp-2
-            lg:text-[12px]
+            app-menu-card__detail
+            text-center text-[12px] leading-[1.55] text-gray-500
           "
                 >
                   {item.desc}

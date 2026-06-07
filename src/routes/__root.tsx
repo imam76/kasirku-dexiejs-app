@@ -1,5 +1,5 @@
 import FeedbackModal from '@/components/FeedbackModal'
-import { AppWorkflowTour } from '@/components/AppWorkflowTour'
+// import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
 import { useAuth } from '@/auth/useAuth'
@@ -16,27 +16,38 @@ import { setConversionRegistry } from '@/utils/pricing'
 import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { Button, Layout, Menu, Result, notification } from 'antd'
+import { App, Button, Layout, Menu, Result, notification } from 'antd'
 import {
   BadgePercent,
   Banknote,
+  BookOpen,
   Box,
+  Building2,
   ClipboardList,
+  CreditCard,
   Database,
   DollarSign,
   FileText,
+  FolderKanban,
   History,
-  HelpCircle,
+  // HelpCircle,
   Home,
   Languages,
+  ListTree,
+  LogOut,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Percent,
+  ReceiptText,
   Scale,
   Settings,
   SettingsIcon,
+  ShoppingBag,
   ShoppingCart,
   Sun,
+  Users,
+  Warehouse,
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -66,7 +77,8 @@ const RootLayout = () => {
   const location = useLocation()
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
-  const { can, currentUser } = useAuth()
+  const { can, currentUser, logout } = useAuth()
+  const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
@@ -166,9 +178,34 @@ const RootLayout = () => {
     }
   }
 
+  const handleLogoutClick = () => {
+    modal.confirm({
+      title: t('root.logoutConfirmTitle'),
+      content: t('root.logoutConfirmContent', { name: currentUser?.name ?? t('root.currentUserFallback') }),
+      okText: t('root.logout'),
+      okType: 'danger',
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        try {
+          navigate({ to: '/' })
+          await logout()
+        } catch (error) {
+          console.error('Logout failed:', error)
+          notification.error({
+            message: t('root.logoutFailedTitle'),
+            description: error instanceof Error ? error.message : t('root.logoutFailedDescription'),
+            placement: 'bottomRight',
+          })
+        }
+      },
+    })
+  }
+
   const navLinks: NavLink[] = [
     { to: '/', label: t('nav.home'), icon: Home },
     { to: '/transaction', label: t('nav.transaction'), icon: ShoppingCart },
+    { to: '/sales', label: t('nav.sales'), icon: FileText },
+    { to: '/purchases', label: t('nav.purchases'), icon: ShoppingBag },
     {
       label: t('nav.masterData'),
       icon: Database,
@@ -176,13 +213,29 @@ const RootLayout = () => {
       children: [
         { to: '/master-data/products', label: t('nav.product'), icon: Box },
         { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
+        { to: '/master-data/contacts', label: t('nav.contacts'), icon: Users },
+        { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: Warehouse },
+        { to: '/master-data/departments', label: t('nav.departments'), icon: Building2 },
+        { to: '/master-data/projects', label: t('nav.projects'), icon: FolderKanban },
+        { to: '/master-data/taxes', label: t('nav.taxes'), icon: Percent },
         { to: '/master-data/units', label: t('nav.units'), icon: Scale, key: '/master-data/units#conversions', hash: 'conversions' },
         { to: '/master-data/units', label: t('nav.unit'), icon: Scale, key: '/master-data/units#units', hash: 'units' },
       ],
     },
     { to: '/shopping-note', label: t('nav.shoppingNote'), icon: ClipboardList },
     { to: '/history', label: t('nav.history'), icon: History },
-    { to: '/finance', label: t('nav.finance'), icon: Banknote },
+    {
+      label: t('nav.finance'),
+      icon: Banknote,
+      key: 'finance-group',
+      children: [
+        { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
+        { to: '/finance/receivables', label: t('nav.finance.receivables'), icon: ReceiptText },
+        { to: '/finance/payables', label: t('nav.finance.payables'), icon: CreditCard },
+        { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
+        { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
+      ],
+    },
     {
       label: t('nav.reports'),
       icon: FileText,
@@ -257,9 +310,12 @@ const RootLayout = () => {
 
         return true
       })
-  const selectedKey = location.pathname === '/master-data'
-    ? 'master-data-group'
-    : selectedLink ? getNavLeafKey(selectedLink) : '/'
+  const selectedKey = (() => {
+    if (location.pathname === '/master-data') return 'master-data-group'
+    if (location.pathname === '/finance') return 'finance-group'
+
+    return selectedLink ? getNavLeafKey(selectedLink) : '/'
+  })()
 
   const openKeys = filteredNavLinks
     .filter(isNavGroup)
@@ -320,7 +376,7 @@ const RootLayout = () => {
               <Languages size={18} />
               <span className="leading-none">{locale === 'id' ? 'EN' : 'ID'}</span>
             </button>
-            <AppWorkflowTour>
+            {/* <AppWorkflowTour>
               {(startTour) => (
                 <button
                   onClick={startTour}
@@ -331,7 +387,7 @@ const RootLayout = () => {
                   <HelpCircle size={20} />
                 </button>
               )}
-            </AppWorkflowTour>
+            </AppWorkflowTour> */}
             {can('SETTINGS_ACCESS') && (
               <button
                 onClick={() => navigate({ to: '/settings' })}
@@ -342,6 +398,14 @@ const RootLayout = () => {
                 <SettingsIcon size={20} />
               </button>
             )}
+            <button
+              onClick={handleLogoutClick}
+              className="p-2 rounded-full text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none dark:hover:bg-red-950/40 dark:hover:text-red-300"
+              aria-label={t('root.logout')}
+              title={t('root.logout')}
+            >
+              <LogOut size={20} />
+            </button>
           </div>
         </div>
       </nav>

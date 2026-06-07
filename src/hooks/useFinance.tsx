@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { App } from 'antd';
 import { addFinanceTransaction, recalculateFinance } from '@/services/financeService';
-import type { FinanceTransactionType } from '@/types';
+import type { FinanceTransactionType, PaymentMethod } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 
 export const useFinance = () => {
@@ -30,18 +30,27 @@ export const useFinance = () => {
       type, 
       category, 
       amount, 
-      description 
+      description,
+      payment_method,
+      payment_channel,
+      cash_account_id,
     }: { 
       type: FinanceTransactionType; 
       category: string; 
       amount: number; 
       description: string;
+      payment_method?: PaymentMethod;
+      payment_channel?: string;
+      cash_account_id?: string;
     }) => {
       await addFinanceTransaction({
         type,
         category,
         amount,
         description,
+        payment_method,
+        payment_channel,
+        cash_account_id,
       });
     },
     onSuccess: () => {

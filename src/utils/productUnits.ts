@@ -72,6 +72,15 @@ export const getProductSellableUnits = (product: ProductUnitShape) => {
   ]);
 };
 
+export const getProductDocumentUnits = (product: ProductUnitShape) => {
+  return uniqueUnits([
+    product.selling_unit,
+    product.purchase_unit,
+    ...(product.sellable_units || []),
+    ...normalizeProductUnitMappings(product).map((mapping) => mapping.unit),
+  ]);
+};
+
 export const buildSellableUnitsFromMappings = (product: ProductUnitShape) => {
   return getProductSellableUnits({
     ...product,

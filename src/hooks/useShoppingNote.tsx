@@ -2,24 +2,28 @@ import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { shoppingItemSchema, type ShoppingItemFormData } from '@/lib/validations/shopping';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
+import { getCurrentSessionUser } from '@/auth/authService';
+import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
-import type { Product, ShoppingNoteItem } from '@/types';
+import type { FinanceTransaction, Product, ShoppingNoteItem, StockMutation } from '@/types';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
+import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 
 export const useShoppingNote = () => {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [items, setItems] = useState<ShoppingNoteItem[]>([]);
 
-  const { data: products = [], isLoading: isProductsLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => {
-      return await db.products.orderBy('name').toArray();
-    },
-  });
+  const liveProducts = useLiveQuery(
+    () => db.products.orderBy('name').toArray(),
+    [],
+  );
+  const products = liveProducts ?? [];
+  const isProductsLoading = liveProducts === undefined;
 
   const {
     control,
@@ -93,10 +97,14 @@ export const useShoppingNote = () => {
 
     try {
       const now = new Date().toISOString();
+      const currentUser = await getCurrentSessionUser();
+      const shoppingNoteId = crypto.randomUUID();
+      const stockMutations: StockMutation[] = [];
+      const financeTransactionsToSync: FinanceTransaction[] = [];
 
-      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions], async () => {
+      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.journalEntries, db.journalEntryLines], async () => {
         await db.shoppingNotes.add({
-          id: crypto.randomUUID(),
+          id: shoppingNoteId,
           created_at: now,
           items,
           total_shopping: totalShopping,
@@ -123,7 +131,20 @@ export const useShoppingNote = () => {
 
           await db.products.update(product.id, productUpdate);
 
-          await recordStockPurchase({
+          if (quantityInStockUnit > 0) {
+            stockMutations.push(createStockMutation({
+              product,
+              sourceType: 'SHOPPING_NOTE',
+              sourceId: shoppingNoteId,
+              sourceLineId: item.id,
+              quantityDelta: quantityInStockUnit,
+              sourceQuantity: item.quantity,
+              sourceUnit: item.unit,
+              occurredAt: now,
+            }));
+          }
+
+          const purchaseResult = await recordStockPurchase({
             productId: product.id,
             productName: product.name,
             sku: product.sku,
@@ -132,9 +153,16 @@ export const useShoppingNote = () => {
             totalCost,
             description: `Belanja Stok: ${product.name} (${item.quantity} ${item.unit})`,
             createdAt: now,
+            actor: currentUser,
           });
+          financeTransactionsToSync.push(purchaseResult.financeTransaction);
         }
       });
+
+      await enqueueStockMutations(stockMutations);
+      if (financeTransactionsToSync.length > 0) {
+        await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
+      }
 
       message.success('Belanja stok berhasil disimpan');
       setItems([]);
@@ -143,6 +171,10 @@ export const useShoppingNote = () => {
       queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
       queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
+      queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
     } catch (error) {
       console.error('Failed to save stock shopping:', error);
       message.error(error instanceof Error ? error.message : 'Gagal menyimpan belanja stok');

@@ -1,0 +1,50 @@
+import type { SalesDocumentConfig } from './index';
+
+export const salesOrderConfig: SalesDocumentConfig = {
+  type: 'SALES_ORDER',
+  title: 'Sales Order',
+  titleKey: 'salesDocuments.type.salesOrder',
+  numberPrefix: 'SO',
+  theme: {
+    accent: '#2563EB',
+    accentDark: '#1D4ED8',
+    accentSoft: '#DBEAFE',
+    accentSubtle: '#EFF6FF',
+    accentShadow: 'rgba(37, 99, 235, .28)',
+  },
+  headerFields: [
+    { name: 'contact_id', labelKey: 'salesDocuments.field.customer', type: 'contact' },
+    { name: 'customer_name', labelKey: 'salesDocuments.field.customerName', type: 'text', required: true },
+    { name: 'document_date', labelKey: 'salesDocuments.field.documentDate', type: 'date', required: true },
+    { name: 'warehouse_id', labelKey: 'salesDocuments.field.warehouse', helperKey: 'salesDocuments.helper.warehouse.salesOrder', type: 'warehouse' },
+    { name: 'department_id', labelKey: 'salesDocuments.field.department', type: 'department' },
+    { name: 'project_id', labelKey: 'salesDocuments.field.project', type: 'project' },
+    { name: 'notes', labelKey: 'salesDocuments.field.notes', type: 'textarea' },
+  ],
+  lineItemColumns: [
+    { name: 'product_id', labelKey: 'salesDocuments.field.product' },
+    { name: 'quantity', labelKey: 'salesDocuments.field.quantity', editable: true },
+    { name: 'unit', labelKey: 'salesDocuments.field.unit', editable: true },
+    { name: 'price', labelKey: 'salesDocuments.field.price', editable: true },
+    { name: 'discount_amount', labelKey: 'salesDocuments.field.discount', editable: true },
+    { name: 'subtotal', labelKey: 'salesDocuments.field.subtotal' },
+  ],
+  summaryFields: [
+    { name: 'subtotal_amount', labelKey: 'salesDocuments.field.subtotal' },
+    { name: 'discount_amount', labelKey: 'salesDocuments.field.documentDiscount' },
+    { name: 'tax_amount', labelKey: 'salesDocuments.field.tax' },
+    { name: 'total_amount', labelKey: 'salesDocuments.field.total' },
+  ],
+  requiredFields: ['customer_name', 'document_date'],
+  behavior: {
+    affectsStock: false,
+    hasPricing: true,
+    hasTax: true,
+    hasDueDate: false,
+    hasPaymentStatus: false,
+    validateStock: false,
+    allowContactPicker: true,
+    allowDepartmentPicker: true,
+    allowProjectPicker: true,
+  },
+};

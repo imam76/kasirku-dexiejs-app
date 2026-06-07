@@ -1,0 +1,12 @@
+pub mod auth;
+pub mod contact;
+pub mod department;
+pub mod finance_transaction;
+pub mod journal_entry;
+pub mod product;
+pub mod project;
+pub mod purchase_document;
+pub mod sales_document;
+pub mod stock_mutation;
+pub mod tax;
+pub mod warehouse;

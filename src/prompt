@@ -1,0 +1,4 @@
+buat langkah langka implementasi fitur Transfer Antar Kas/Bank (kas transfer) secara rapih dan tersusun, step by step mengikuti standarisasi kode di project ini, jika ada form utamakan pakai RFH (sebagai ppengolah data) + component dari antd untuk ui + zod untuk validatornya.
+
+-jangan membuat struktur folder baru
+- tetap jaga SOC

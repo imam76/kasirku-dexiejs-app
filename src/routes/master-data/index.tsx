@@ -1,8 +1,13 @@
 import {
+  ApartmentOutlined,
+  ContactsOutlined,
   DollarOutlined,
+  PercentageOutlined,
   ProductOutlined,
+  ProjectOutlined,
   SettingOutlined,
   SwapOutlined,
+  ShopOutlined,
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
@@ -30,6 +35,11 @@ function MasterData() {
   const menuItems: MasterDataMenuItem[] = [
     { to: '/master-data/products', label: t('nav.product'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.menu.stockDesc'), tour: 'dashboard-stock' },
     { to: '/master-data/promos', label: t('nav.promos'), icon: DollarOutlined, color: 'text-rose-600', desc: t('home.promosDesc') },
+    { to: '/master-data/contacts', label: t('nav.contacts'), icon: ContactsOutlined, color: 'text-amber-600', desc: t('home.contactsDesc') },
+    { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: ShopOutlined, color: 'text-teal-600', desc: t('home.warehousesDesc') },
+    { to: '/master-data/departments', label: t('nav.departments'), icon: ApartmentOutlined, color: 'text-sky-600', desc: t('home.departmentsDesc') },
+    { to: '/master-data/projects', label: t('nav.projects'), icon: ProjectOutlined, color: 'text-violet-600', desc: t('home.projectsDesc') },
+    { to: '/master-data/taxes', label: t('nav.taxes'), icon: PercentageOutlined, color: 'text-orange-600', desc: t('home.taxesDesc') },
     { to: '/master-data/units', hash: 'conversions', label: t('nav.units'), icon: SwapOutlined, color: 'text-cyan-600', desc: t('home.unitConversionDesc') },
     { to: '/master-data/units', hash: 'units', label: t('nav.unit'), icon: SettingOutlined, color: 'text-indigo-600', desc: t('home.unitDesc') },
   ].filter((item) => canAccessPath(currentUser?.role, item.to))
@@ -61,7 +71,7 @@ function MasterData() {
                 hash={item.hash}
                 data-tour={item.tour}
                 className="
-                  flex flex-col items-center justify-center
+                  app-menu-card flex flex-col items-center justify-center
                   bg-white border border-gray-100 rounded-[10px]
                   transition-all duration-200 ease-out
                   aspect-square p-2
@@ -72,15 +82,21 @@ function MasterData() {
                   hover:-translate-y-[1px]
                 "
               >
-                <div className="mb-[6px] sm:mb-[10px] lg:mb-[12px]">
-                  <item.icon className={`${item.color} text-[24px] sm:text-[30px] lg:text-[34px]`} />
+                <div className="app-menu-card__body flex flex-col items-center justify-center">
+                  <div className="mb-[6px] sm:mb-[10px] lg:mb-[12px]">
+                    <item.icon className={`${item.color} text-[24px] sm:text-[30px] lg:text-[34px]`} />
+                  </div>
+
+                  <h2 className="text-center text-[12px] font-medium leading-[1.3] text-gray-800 sm:mb-[6px] sm:text-[14px] lg:mb-[6px] lg:text-[15px]">
+                    {item.label}
+                  </h2>
+
+                  <p className="app-menu-card__brief mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400 sm:text-[11px] sm:leading-[1.618] lg:hidden">
+                    {item.desc}
+                  </p>
                 </div>
 
-                <h2 className="text-center text-[12px] font-medium leading-[1.3] text-gray-800 sm:mb-[6px] sm:text-[14px] lg:mb-[6px] lg:text-[15px]">
-                  {item.label}
-                </h2>
-
-                <p className="hidden sm:block sm:text-center sm:text-[11px] sm:leading-[1.618] sm:text-gray-400 sm:line-clamp-2 lg:text-[12px]">
+                <p className="app-menu-card__detail text-center text-[12px] leading-[1.55] text-gray-500">
                   {item.desc}
                 </p>
               </Link>

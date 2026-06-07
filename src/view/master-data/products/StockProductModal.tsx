@@ -770,7 +770,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                     <Alert
                       type="info"
                       showIcon
-                      message={t('stock.form.unitUsesGlobalManagement')}
+                      title={t('stock.form.unitUsesGlobalManagement')}
                       description={t('stock.form.unitUsesGlobalManagementDescription')}
                     />
 

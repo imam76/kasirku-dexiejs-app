@@ -1,10 +1,16 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Input, InputNumber, Form, Card, Tag, Typography, Statistic, Select, Row, Col, Divider } from 'antd';
+import { Table, Button, Card, Tag, Typography, Statistic, Select, Row, Col, Divider, Empty } from 'antd';
 import { useFinance } from '@/hooks/useFinance';
+import { useCashBankTransfer } from '@/hooks/useCashBankTransfer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useI18n } from '@/hooks/useI18n';
+import type { TranslationKey } from '@/i18n/messages';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import CashBankTransferModal from '@/view/finance/CashBankTransferModal';
+import FinanceTransactionModal from '@/view/finance/FinanceTransactionModal';
+import type { CashBankTransferFormData } from '@/lib/validations/cashBankTransfer';
+import type { FinanceTransactionFormValues } from '@/view/finance/FinanceTransactionModal';
 import {
   ArrowUpCircle,
   ArrowDownCircle,
@@ -13,6 +19,7 @@ import {
   Plus,
   Minus,
   Banknote,
+  ArrowLeftRight,
   TrendingUp,
   TrendingDown,
   LayoutDashboard,
@@ -25,14 +32,16 @@ import {
 } from '@/constants/finance';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 export default function FinanceManagement() {
   const { balance, transactions, isLoading, addTransaction, isAdding, recalculate, isRecalculating } = useFinance();
+  const { cashBankAccounts, recordTransfer, isRecordingTransfer } = useCashBankTransfer();
   const { t } = useI18n();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [modalType, setModalType] = useState<FinanceTransactionType>('INCOME');
-  const [form] = Form.useForm();
+  const [accountFilter, setAccountFilter] = useState<string>('ALL');
+  const [accountTypeFilter, setAccountTypeFilter] = useState<string>('ALL');
   const isMobile = useIsMobile();
 
   const summary = useMemo(() => {
@@ -46,31 +55,100 @@ export default function FinanceManagement() {
     }, { opening: 0, income: 0, expense: 0 });
   }, [transactions]);
 
-  const handleAddTransaction = async (values: { amount: number; category: string; description: string }) => {
-    try {
-      await addTransaction({
-        type: modalType,
-        ...values
-      });
-      setIsModalOpen(false);
-      form.resetFields();
-    } catch {
-      // Error handled in hook
-    }
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((transaction) => {
+      const accountKey = transaction.account_id ?? 'UNMAPPED';
+      const matchesAccount = accountFilter === 'ALL' || accountFilter === accountKey;
+      const matchesAccountType =
+        accountTypeFilter === 'ALL' ||
+        (accountTypeFilter === 'UNMAPPED' ? !transaction.account_type : transaction.account_type === accountTypeFilter);
+
+      return matchesAccount && matchesAccountType;
+    });
+  }, [accountFilter, accountTypeFilter, transactions]);
+
+  const accountOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    transactions.forEach((transaction) => {
+      if (transaction.account_id && transaction.account_code && transaction.account_name) {
+        options.set(transaction.account_id, `${transaction.account_code} - ${transaction.account_name}`);
+      }
+    });
+
+    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+  }, [transactions]);
+
+  const accountTypeSummary = useMemo(() => {
+    return filteredTransactions.reduce<Record<string, number>>((acc, transaction) => {
+      const key = transaction.account_type ?? 'UNMAPPED';
+      acc[key] = (acc[key] || 0) + transaction.amount;
+      return acc;
+    }, {});
+  }, [filteredTransactions]);
+
+  const cashBankSummary = useMemo(() => {
+    const summaryMap = new Map<string, {
+      key: string;
+      label: string;
+      balance: number;
+      inflow: number;
+      outflow: number;
+      count: number;
+    }>();
+
+    transactions.forEach((transaction) => {
+      const cashAccountId = transaction.cash_account_id
+        ?? (transaction.account_type === 'ASSET' ? transaction.account_id : undefined);
+      const cashAccountCode = transaction.cash_account_code
+        ?? (transaction.account_type === 'ASSET' ? transaction.account_code : undefined);
+      const cashAccountName = transaction.cash_account_name
+        ?? (transaction.account_type === 'ASSET' ? transaction.account_name : undefined);
+
+      if (!cashAccountId || !cashAccountName) return;
+
+      const businessType = getFinanceTransactionBusinessType(transaction);
+      const signedAmount = businessType === 'EXPENSE'
+        ? -transaction.amount
+        : transaction.amount;
+      const existing = summaryMap.get(cashAccountId) ?? {
+        key: cashAccountId,
+        label: cashAccountCode ? `${cashAccountCode} - ${cashAccountName}` : cashAccountName,
+        balance: 0,
+        inflow: 0,
+        outflow: 0,
+        count: 0,
+      };
+
+      existing.balance += signedAmount;
+      if (signedAmount >= 0) {
+        existing.inflow += signedAmount;
+      } else {
+        existing.outflow += Math.abs(signedAmount);
+      }
+      existing.count += 1;
+      summaryMap.set(cashAccountId, existing);
+    });
+
+    return Array.from(summaryMap.values())
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [transactions]);
+
+  const handleAddTransaction = async (values: FinanceTransactionFormValues) => {
+    await addTransaction({
+      type: modalType,
+      ...values,
+    });
+    setIsModalOpen(false);
+  };
+
+  const handleCashBankTransfer = async (values: CashBankTransferFormData) => {
+    await recordTransfer(values);
+    setIsTransferModalOpen(false);
   };
 
   const openModal = (type: FinanceTransactionType) => {
     setModalType(type);
     setIsModalOpen(true);
-
-    // Set default category based on type
-    if (type === 'OPENING_BALANCE') {
-      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPENING_BALANCE, description: t('finance.defaultOpeningDescription') });
-    } else if (type === 'INCOME') {
-      form.setFieldsValue({ category: FINANCE_CATEGORIES.OTHER, description: '' });
-    } else if (type === 'EXPENSE') {
-      form.setFieldsValue({ category: FINANCE_CATEGORIES.OPERATIONAL, description: '' });
-    }
   };
 
   const getFinanceTypeMeta = (transaction: Pick<FinanceTransaction, 'type' | 'category'>) => {
@@ -105,6 +183,16 @@ export default function FinanceManagement() {
     };
   };
 
+  const getTransferDirectionTag = (transaction: FinanceTransaction) => {
+    if (!transaction.transfer_group_id || !transaction.transfer_direction) return null;
+
+    return (
+      <Tag color={transaction.transfer_direction === 'OUT' ? 'orange' : 'cyan'} className="m-0">
+        {transaction.transfer_direction === 'OUT' ? t('finance.transferOut') : t('finance.transferIn')}
+      </Tag>
+    );
+  };
+
   const columns = [
     {
       title: t('finance.date'),
@@ -133,25 +221,45 @@ export default function FinanceManagement() {
         const { color, icon, label } = getFinanceTypeMeta(record);
 
         return (
-          <Tag color={color}>
-            <div className="flex items-center gap-1.5">
-              {icon}
-              {label}
-            </div>
-          </Tag>
+          <div className="flex flex-col items-start gap-1">
+            <Tag color={color} className="m-0">
+              <div className="flex items-center gap-1.5">
+                {icon}
+                {label}
+              </div>
+            </Tag>
+            {getTransferDirectionTag(record)}
+          </div>
         );
       },
       width: 140,
     },
     {
+      title: t('finance.account'),
+      dataIndex: 'account_name',
+      key: 'account_name',
+      render: (_value: string | undefined, record: FinanceTransaction) => (
+        record.account_code && record.account_name ? (
+          <Tag color="geekblue">{record.account_code} - {record.account_name}</Tag>
+        ) : (
+          <Tag color="default">{t('finance.unmappedAccount')}</Tag>
+        )
+      ),
+      width: 220,
+    },
+    {
       title: t('finance.amount'),
       dataIndex: 'amount',
       key: 'amount',
-      render: (amount: number, record: FinanceTransaction) => (
-        <span className={record.type === 'EXPENSE' ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
-          {record.type === 'EXPENSE' ? '-' : '+'} Rp {formatCurrency(amount)}
+      render: (amount: number, record: FinanceTransaction) => {
+        const businessType = getFinanceTransactionBusinessType(record);
+
+        return (
+        <span className={businessType === 'EXPENSE' ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
+          {businessType === 'EXPENSE' ? '-' : '+'} Rp {formatCurrency(amount)}
         </span>
-      ),
+      );
+      },
       width: 150,
     },
   ];
@@ -177,6 +285,12 @@ export default function FinanceManagement() {
               onClick={() => openModal('OPENING_BALANCE')}
             >
               {t('finance.balanceCapital')}
+            </Button>
+            <Button
+              icon={<ArrowLeftRight size={16} />}
+              onClick={() => setIsTransferModalOpen(true)}
+            >
+              {t('finance.transfer')}
             </Button>
             <Button
               type="primary"
@@ -284,7 +398,7 @@ export default function FinanceManagement() {
       {
         isMobile &&
         <Row gutter={[12, 12]}>
-          <Col xs={6} sm={6} md={6}>
+          <Col xs={8} sm={8} md={8}>
             <Button
               onClick={() => recalculate()}
               loading={isRecalculating}
@@ -295,7 +409,7 @@ export default function FinanceManagement() {
             </Button>
           </Col>
 
-          <Col xs={6} sm={6} md={6}>
+          <Col xs={8} sm={8} md={8}>
             <Button
               onClick={() => openModal('OPENING_BALANCE')}
               className="h-16 flex flex-col items-center justify-center w-full"
@@ -305,7 +419,17 @@ export default function FinanceManagement() {
             </Button>
           </Col>
 
-          <Col xs={6} sm={6} md={6}>
+          <Col xs={8} sm={8} md={8}>
+            <Button
+              onClick={() => setIsTransferModalOpen(true)}
+              className="h-16 flex flex-col items-center justify-center w-full"
+            >
+              <ArrowLeftRight size={18} />
+              <span className="text-[10px] mt-1">{t('finance.transfer')}</span>
+            </Button>
+          </Col>
+
+          <Col xs={8} sm={8} md={8}>
             <Button
               type="primary"
               onClick={() => openModal('INCOME')}
@@ -316,7 +440,7 @@ export default function FinanceManagement() {
             </Button>
           </Col>
 
-          <Col xs={6} sm={6} md={6}>
+          <Col xs={8} sm={8} md={8}>
             <Button
               danger
               type="primary"
@@ -333,6 +457,49 @@ export default function FinanceManagement() {
       <Card
         title={
           <div className="flex items-center gap-2">
+            <Banknote size={18} />
+            <span>{t('finance.cashBankSummaryTitle')}</span>
+          </div>
+        }
+        className="shadow-sm"
+        styles={{ body: { padding: isMobile ? '12px' : undefined } }}
+      >
+        {cashBankSummary.length > 0 ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {cashBankSummary.map((item) => (
+              <div key={item.key} className="rounded-md border border-gray-100 bg-gray-50 p-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{item.label}</div>
+                    <div className="text-xs text-gray-500">
+                      {t('finance.cashBankTransactionCount', { count: item.count })}
+                    </div>
+                  </div>
+                  <Tag color={item.balance >= 0 ? 'green' : 'red'}>
+                    Rp {formatCurrency(item.balance)}
+                  </Tag>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded bg-white p-2">
+                    <div className="text-gray-500">{t('finance.cashBankInflow')}</div>
+                    <div className="font-semibold text-green-600">Rp {formatCurrency(item.inflow)}</div>
+                  </div>
+                  <div className="rounded bg-white p-2">
+                    <div className="text-gray-500">{t('finance.cashBankOutflow')}</div>
+                    <div className="font-semibold text-red-600">Rp {formatCurrency(item.outflow)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('finance.cashBankSummaryEmpty')} />
+        )}
+      </Card>
+
+      <Card
+        title={
+          <div className="flex items-center gap-2">
             <LayoutDashboard size={18} />
             <span>{t('finance.historyTitle')}</span>
           </div>
@@ -340,6 +507,38 @@ export default function FinanceManagement() {
         className="shadow-sm"
         styles={{ body: { padding: isMobile ? '12px' : undefined } }}
       >
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,1fr)_220px]">
+          <Select
+            value={accountFilter}
+            onChange={setAccountFilter}
+            options={[
+              { value: 'ALL', label: t('finance.allAccounts') },
+              { value: 'UNMAPPED', label: t('finance.unmappedAccount') },
+              ...accountOptions,
+            ]}
+          />
+          <Select
+            value={accountTypeFilter}
+            onChange={setAccountTypeFilter}
+            options={[
+              { value: 'ALL', label: t('finance.allAccountTypes') },
+              { value: 'ASSET', label: t('coa.accountType.ASSET') },
+              { value: 'LIABILITY', label: t('coa.accountType.LIABILITY') },
+              { value: 'EQUITY', label: t('coa.accountType.EQUITY') },
+              { value: 'REVENUE', label: t('coa.accountType.REVENUE') },
+              { value: 'CONTRA_REVENUE', label: t('coa.accountType.CONTRA_REVENUE') },
+              { value: 'EXPENSE', label: t('coa.accountType.EXPENSE') },
+              { value: 'UNMAPPED', label: t('finance.unmappedAccount') },
+            ]}
+          />
+        </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {Object.entries(accountTypeSummary).map(([type, amount]) => (
+            <Tag key={type} color={type === 'UNMAPPED' ? 'default' : 'blue'}>
+              {type === 'UNMAPPED' ? t('finance.unmappedAccount') : t(`coa.accountType.${type}` as TranslationKey)}: Rp {formatCurrency(amount)}
+            </Tag>
+          ))}
+        </div>
         {isMobile ? (
           <div className="space-y-3">
           {isLoading ? (
@@ -347,9 +546,9 @@ export default function FinanceManagement() {
               <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
               <p className="text-gray-500 text-sm">{t('finance.loadingData')}</p>
             </div>
-          ) : transactions.length > 0 ? (
+          ) : filteredTransactions.length > 0 ? (
             <>
-              {transactions.slice(0, 10).map((transaction) => {
+              {filteredTransactions.slice(0, 10).map((transaction) => {
                 const businessType = getFinanceTransactionBusinessType(transaction);
                 const { icon, label } = getFinanceTypeMeta(transaction);
 
@@ -366,6 +565,19 @@ export default function FinanceManagement() {
                         <Tag color="blue" className="w-fit m-0 text-[10px] px-1.5 py-0">
                           {getFinanceCategoryLabel(transaction.category, t)}
                         </Tag>
+                        <Tag color={transaction.account_code ? 'geekblue' : 'default'} className="w-fit m-0 text-[10px] px-1.5 py-0">
+                          {transaction.account_code && transaction.account_name
+                            ? `${transaction.account_code} - ${transaction.account_name}`
+                            : t('finance.unmappedAccount')}
+                        </Tag>
+                        {transaction.transfer_group_id && transaction.transfer_direction && (
+                          <Tag
+                            color={transaction.transfer_direction === 'OUT' ? 'orange' : 'cyan'}
+                            className="w-fit m-0 text-[10px] px-1.5 py-0"
+                          >
+                            {transaction.transfer_direction === 'OUT' ? t('finance.transferOut') : t('finance.transferIn')}
+                          </Tag>
+                        )}
                       </div>
                       <div className="text-right">
                         <div className={`text-sm font-bold ${businessType === 'EXPENSE' ? 'text-red-600' : 'text-green-600'}`}>
@@ -385,7 +597,7 @@ export default function FinanceManagement() {
                   </div>
                 );
               })}
-              {transactions.length > 10 && (
+              {filteredTransactions.length > 10 && (
                 <div className="text-center py-2">
                   <Text type="secondary" className="text-xs">{t('finance.viewMoreDesktop')}</Text>
                 </div>
@@ -399,7 +611,7 @@ export default function FinanceManagement() {
           </div>
         ) : (
           <Table
-            dataSource={transactions}
+            dataSource={filteredTransactions}
             columns={columns}
             rowKey="id"
             loading={isLoading}
@@ -409,107 +621,22 @@ export default function FinanceManagement() {
         )}
       </Card>
 
-      <Modal
-        title={
-          modalType === 'OPENING_BALANCE' ? t('finance.addBalanceCapital') :
-            modalType === 'INCOME' ? t('finance.addManualIncome') :
-              t('finance.recordExpense')
-        }
+      <CashBankTransferModal
+        open={isTransferModalOpen}
+        onCancel={() => setIsTransferModalOpen(false)}
+        accounts={cashBankAccounts}
+        onSubmit={handleCashBankTransfer}
+        submitting={isRecordingTransfer}
+      />
+
+      <FinanceTransactionModal
         open={isModalOpen}
+        type={modalType}
+        accounts={cashBankAccounts}
         onCancel={() => setIsModalOpen(false)}
-        footer={null}
-        destroyOnClose
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleAddTransaction}
-          className="mt-4"
-        >
-          <Form.Item
-            name="amount"
-            label={t('finance.amount')}
-            rules={[
-              { required: true, message: t('finance.amountRequired') },
-              { type: 'number', min: 1, message: t('finance.amountMin') }
-            ]}
-          >
-            <InputNumber
-              inputMode='numeric'
-              style={{ width: '100%' }}
-              formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
-              placeholder="0"
-              size="large"
-              autoFocus
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="category"
-            label={t('finance.category')}
-            rules={[{ required: true, message: t('finance.categoryRequired') }]}
-          >
-            {modalType === 'OPENING_BALANCE' ? (
-              <Select showSearch placeholder={t('finance.balanceSourcePlaceholder')}>
-                <Option value={FINANCE_CATEGORIES.OPENING_BALANCE}>{t('finance.category.SALDO_AWAL')}</Option>
-                <Option value={FINANCE_CATEGORIES.CAPITAL_ADDITION}>{t('finance.category.TAMBAHAN_MODAL')}</Option>
-                <Option value={FINANCE_CATEGORIES.DEPOSIT}>{t('finance.category.DEPOSIT')}</Option>
-                <Option value={FINANCE_CATEGORIES.LOAN}>{t('finance.category.PINJAMAN')}</Option>
-              </Select>
-            ) : (
-              <Select showSearch allowClear placeholder={t('finance.categoryPlaceholder')}>
-                {modalType === 'INCOME' ? (
-                  <>
-                    <Option value={FINANCE_CATEGORIES.OTHER}>{t('finance.category.LAINNYA')}</Option>
-                    <Option value={FINANCE_CATEGORIES.SERVICE}>{t('finance.category.LAYANAN')}</Option>
-                    <Option value={FINANCE_CATEGORIES.BONUS_GRANT}>{t('finance.category.BONUS')}</Option>
-                  </>
-                ) : (
-                  <>
-                    <Option value={FINANCE_CATEGORIES.STOCK_PURCHASE}>{t('finance.category.stockPurchaseOption')}</Option>
-                    <Option value={FINANCE_CATEGORIES.OPERATIONAL}>{t('finance.category.operationalOption')}</Option>
-                    <Option value="GAJI">{t('finance.category.GAJI')}</Option>
-                    <Option value="PERLENGKAPAN">{t('finance.category.PERLENGKAPAN')}</Option>
-                    <Option value="MAKAN">{t('finance.category.MAKAN')}</Option>
-                    <Option value="TRANSPORT">{t('finance.category.TRANSPORT')}</Option>
-                  </>
-                )}
-              </Select>
-            )}
-          </Form.Item>
-
-          <Form.Item
-            name="description"
-            label={t('finance.description')}
-            rules={[{ required: true, message: t('finance.descriptionRequired') }]}
-          >
-            <Input.TextArea
-              placeholder={
-                modalType === 'OPENING_BALANCE' ? t('finance.descriptionOpeningPlaceholder') :
-                  modalType === 'INCOME' ? t('finance.descriptionIncomePlaceholder') :
-                    t('finance.descriptionExpensePlaceholder')
-              }
-              rows={3}
-            />
-          </Form.Item>
-
-          <div className="flex justify-end gap-2 mt-6">
-            <Button onClick={() => setIsModalOpen(false)}>
-              {t('stock.form.cancel')}
-            </Button>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={isAdding}
-              danger={modalType === 'EXPENSE'}
-              className={modalType === 'INCOME' ? 'bg-green-600 hover:bg-green-700 border-none' : ''}
-            >
-              {t('finance.saveTransaction')}
-            </Button>
-          </div>
-        </Form>
-      </Modal>
+        onSubmit={handleAddTransaction}
+        submitting={isAdding}
+      />
     </div>
   );
 }
