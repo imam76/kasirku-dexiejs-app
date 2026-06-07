@@ -1,5 +1,5 @@
 import { createLazyFileRoute } from '@tanstack/react-router';
-import SalesDocumentDetail from '@/view/finance/sales/SalesDocumentDetail';
+import SalesDocumentDetail from '@/view/sales/SalesDocumentDetail';
 
 export const Route = createLazyFileRoute('/sales/$documentType/$documentId')({
   component: SalesDocumentDetailRoute,

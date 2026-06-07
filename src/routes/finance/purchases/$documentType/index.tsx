@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { Alert } from 'antd';
 import { getPurchaseDocumentTypeFromPathSegment } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
-import { PurchaseDocumentTypeManagement } from '@/view/finance/purchases/PurchaseDocumentsManagement';
+import { PurchaseDocumentTypeManagement } from '@/view/purchases/PurchaseDocumentsManagement';
 
 export const Route = createFileRoute('/finance/purchases/$documentType/')({
   component: PurchaseDocumentTypeRoute,

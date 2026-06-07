@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { Alert } from 'antd';
 import { getSalesDocumentTypeFromPathSegment } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import { SalesDocumentTypeManagement } from '@/view/finance/sales/SalesDocumentsManagement';
+import { SalesDocumentTypeManagement } from '@/view/sales/SalesDocumentsManagement';
 
 export const Route = createFileRoute('/sales/$documentType/')({
   component: SalesDocumentTypeRoute,

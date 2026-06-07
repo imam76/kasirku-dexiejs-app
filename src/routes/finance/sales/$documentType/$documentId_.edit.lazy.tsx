@@ -2,7 +2,7 @@ import { createLazyFileRoute } from '@tanstack/react-router';
 import { Alert } from 'antd';
 import { getSalesDocumentTypeFromPathSegment } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
-import SalesDocumentEditor from '@/view/finance/sales/SalesDocumentEditor';
+import SalesDocumentEditor from '@/view/sales/SalesDocumentEditor';
 
 export const Route = createLazyFileRoute('/finance/sales/$documentType/$documentId_/edit')({
   component: EditSalesDocumentRoute,

@@ -28,8 +28,8 @@ const sharedToken: ThemeConfig["token"] = {
   fontSizeHeading4: 18,
   fontSizeHeading5: 15,
 
-  borderRadius: 6,
-  borderRadiusLG: 10,
+  borderRadius: 8,
+  borderRadiusLG: 8,
   borderRadiusSM: 4,
   borderRadiusXS: 2,
 

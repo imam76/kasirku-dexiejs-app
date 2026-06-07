@@ -341,7 +341,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
             {config.behavior.hasPricing ? (
               <div className="mt-5">
                 <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">
-                  {config.behavior.hasPaymentStatus ? 'Balance Due' : t('salesDocuments.field.total')}
+                  {config.behavior.hasPaymentStatus ? t('accountsReceivable.balanceDue') : t('salesDocuments.field.total')}
                 </div>
                 <div className="mt-1 text-2xl font-extrabold text-gray-950">
                   Rp {formatCurrency(config.behavior.hasPaymentStatus ? balanceDue : document.total_amount || 0)}
@@ -357,7 +357,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
 
         <div className="grid gap-6 md:grid-cols-2">
           <div>
-            <div className="text-[10.5px] font-bold uppercase tracking-[.08em] text-gray-400">Bill To</div>
+            <div className="text-[10.5px] font-bold uppercase tracking-[.08em] text-gray-400">{t('salesDocuments.field.billTo')}</div>
             <div className="mt-2 text-sm font-bold" style={{ color: config.theme.accent }}>
               {document.customer_company_name || document.customer_name}
             </div>

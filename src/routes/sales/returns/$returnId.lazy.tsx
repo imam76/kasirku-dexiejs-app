@@ -1,5 +1,5 @@
 import { createLazyFileRoute } from '@tanstack/react-router';
-import SalesReturnDetail from '@/view/finance/sales/returns/SalesReturnDetail';
+import SalesReturnDetail from '@/view/sales/returns/SalesReturnDetail';
 
 export const Route = createLazyFileRoute('/sales/returns/$returnId')({
   component: SalesReturnDetailRoute,
