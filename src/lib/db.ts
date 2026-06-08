@@ -683,6 +683,27 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(38).stores({
+      cooperativeMembers: 'id, member_number, name, status, sync_status, updated_at, created_at',
+      cooperativeSavingTransactions: 'id, member_id, member_number, saving_type, transaction_type, transaction_date, status, reversal_of_transaction_id, finance_transaction_id, journal_entry_id, sync_status, updated_at, created_at',
+      cooperativeMemberSavingBalances: 'id, member_id, member_number, saving_type, sync_status, updated_at',
+      cooperativeLoans: 'id, loan_number, member_id, member_number, status, application_date, disbursed_at, finance_transaction_id, journal_entry_id, sync_status, updated_at, created_at',
+      cooperativeLoanInstallments: 'id, loan_id, loan_number, member_id, member_number, due_date, status, paid_at, sync_status, updated_at, created_at',
+      cooperativeLoanPayments: 'id, payment_number, payment_type, loan_id, loan_number, installment_id, member_id, member_number, payment_date, status, reversal_of_payment_id, finance_transaction_id, journal_entry_id, sync_status, updated_at, created_at',
+      cooperativeSettings: 'id, updated_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const cooperativeSettings = tx.table<CooperativeSettings, string>('cooperativeSettings');
+
+      if (!await cooperativeSettings.get('default')) {
+        await cooperativeSettings.put({
+          id: 'default',
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
