@@ -25,6 +25,14 @@ const savingTransactionTypeLabels: Record<SavingTransactionType, string> = {
 
 const formatCurrency = (value: number) => value.toLocaleString('id-ID');
 
+async function clickCooperativeReportTab(page: Page, name: string) {
+  const tab = page.getByRole('tab', { name, exact: true });
+  await expect(tab).toBeVisible();
+  await tab.scrollIntoViewIfNeeded();
+  await tab.click({ force: true });
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
 export async function expectCooperativeOverview(page: Page) {
   await page.goto('/koperasi');
 
@@ -214,4 +222,34 @@ export async function expectCooperativeReportSummary(page: Page) {
   await expect(page.getByText('Total Simpanan').first()).toBeVisible();
   await expect(page.getByText('Outstanding Pinjaman').first()).toBeVisible();
   await expect(page.getByText('Rekonsiliasi').first()).toBeVisible();
+
+  await expect(page.getByRole('tab', { name: 'Neraca' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Perhitungan SHU' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Arus Kas' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Perubahan Ekuitas' })).toBeVisible();
+
+  await clickCooperativeReportTab(page, 'Perhitungan SHU');
+  await expect(page.getByTestId('koperasi-shu-report')).toContainText('SHU Periode');
+  await expect(page.getByTestId('koperasi-shu-report')).toContainText('Rp 30.000');
+
+  await clickCooperativeReportTab(page, 'Arus Kas');
+  await expect(page.getByTestId('koperasi-cash-flow-operating-net')).toContainText('Rp -2.470.000');
+  await expect(page.getByTestId('koperasi-cash-flow-financing-net')).toContainText('Rp 0');
+
+  await clickCooperativeReportTab(page, 'Neraca');
+  await expect(page.getByTestId('koperasi-balance-sheet-report')).toContainText('Rp 15.030.000');
+  await expect(page.getByTestId('koperasi-balance-sheet-report')).toContainText('Rp 0');
+
+  await clickCooperativeReportTab(page, 'Perubahan Ekuitas');
+  await expect(page.getByTestId('koperasi-equity-change-report')).toContainText('SHU Periode');
+  await expect(page.getByTestId('koperasi-equity-change-report')).toContainText('Rp 30.000');
+}
+
+export async function expectCooperativeFinancialReportsGated(page: Page) {
+  await page.goto('/koperasi/laporan');
+
+  await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
+  await clickCooperativeReportTab(page, 'Perhitungan SHU');
+  await expect(page.getByTestId('koperasi-financial-readiness-alert')).toBeVisible();
+  await expect(page.getByTestId('koperasi-shu-report')).toBeHidden();
 }

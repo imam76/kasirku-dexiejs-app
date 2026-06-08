@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Alert, Button, DatePicker, Descriptions, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -9,7 +9,10 @@ import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import dayjs from '@/lib/dayjs';
 import type {
+  CooperativeCashFlowRow,
+  CooperativeCashFlowSection,
   CooperativeCashBankReportRow,
+  CooperativeFinancialStatementRow,
   CooperativeInstallmentReportRow,
   CooperativeLedgerRow,
   CooperativeLoanPaymentReportRow,
@@ -148,6 +151,12 @@ const financeTypeColor: Record<FinanceTransactionType, string> = {
   OPENING_BALANCE: 'blue',
 };
 
+const cashFlowActivityLabelKey: Record<CooperativeCashFlowSection['activity'], TranslationKey> = {
+  OPERATING: 'cooperative.reports.cashFlow.operating',
+  INVESTING: 'cooperative.reports.cashFlow.investing',
+  FINANCING: 'cooperative.reports.cashFlow.financing',
+};
+
 const reconciliationLabelKey: Record<CooperativeReconciliationKey, TranslationKey> = {
   SAVING_BALANCE: 'cooperative.reports.reconciliation.savingBalance',
   LOAN_OUTSTANDING: 'cooperative.reports.reconciliation.loanOutstanding',
@@ -234,14 +243,47 @@ export default function CooperativeReportManagement() {
   const selectedAccount = data?.selectedAccount;
   const summary = data?.summary;
   const overdueSummary = data?.overdueReport.summary;
-  const incomeStatement = data?.incomeStatement;
-  const balanceSheet = data?.balanceSheet;
+  const financialReadiness = data?.financialReadiness;
+  const cooperativeBalanceSheet = data?.cooperativeBalanceSheet;
+  const cooperativeShuReport = data?.cooperativeShuReport;
+  const cooperativeCashFlowStatement = data?.cooperativeCashFlowStatement;
+  const cooperativeEquityChangeReport = data?.cooperativeEquityChangeReport;
   const reconciliation = data?.reconciliation;
+  const canShowFinancialStatements = Boolean(financialReadiness?.can_show_financial_statements);
 
   const accountOptions = accounts.map((account) => ({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   }));
+
+  const renderFinancialReport = (children: ReactNode) => (
+    <Space direction="vertical" className="w-full" size="middle">
+      {canShowFinancialStatements ? (
+        <Alert
+          type="info"
+          showIcon
+          message={t('cooperative.reports.financial.readyMessage', {
+            date: financialReadiness?.cutoff_date?.slice(0, 10) ?? '-',
+          })}
+        />
+      ) : (
+        <Alert
+          data-testid="koperasi-financial-readiness-alert"
+          type="warning"
+          showIcon
+          message={t('cooperative.reports.financial.notReadyTitle')}
+          description={(
+            <Space direction="vertical" size={4}>
+              {(financialReadiness?.messages.length ? financialReadiness.messages : [t('cooperative.reports.financial.loading')]).map((message) => (
+                <Text key={message}>{message}</Text>
+              ))}
+            </Space>
+          )}
+        />
+      )}
+      {canShowFinancialStatements ? children : null}
+    </Space>
+  );
 
   const reconciliationColumns: ColumnsType<CooperativeReconciliationRow> = [
     {
@@ -929,6 +971,87 @@ export default function CooperativeReportManagement() {
     },
   ];
 
+  const financialStatementColumns: ColumnsType<CooperativeFinancialStatementRow> = [
+    {
+      title: t('generalLedger.account'),
+      key: 'account',
+      render: (_value, record) => `${record.account_code} - ${record.account_name}`,
+    },
+    {
+      title: t('cooperative.reports.table.type'),
+      dataIndex: 'account_type',
+      key: 'account_type',
+      width: 150,
+    },
+    {
+      title: t('generalLedger.debit'),
+      dataIndex: 'debit',
+      key: 'debit',
+      align: 'right',
+      render: (value: number) => value > 0 ? money(value) : '-',
+      width: 160,
+    },
+    {
+      title: t('generalLedger.credit'),
+      dataIndex: 'credit',
+      key: 'credit',
+      align: 'right',
+      render: (value: number) => value > 0 ? money(value) : '-',
+      width: 160,
+    },
+    {
+      title: t('cooperative.reports.table.balance'),
+      dataIndex: 'balance',
+      key: 'balance',
+      align: 'right',
+      render: (value: number) => <Text className={getSignedAmountClass(value)}>{money(value)}</Text>,
+      width: 170,
+    },
+  ];
+
+  const cashFlowRowColumns: ColumnsType<CooperativeCashFlowRow> = [
+    {
+      title: t('cooperative.reports.table.date'),
+      dataIndex: 'entry_date',
+      key: 'entry_date',
+      render: (value: string) => formatDate(value),
+      width: 160,
+    },
+    {
+      title: t('generalLedger.journal.number'),
+      dataIndex: 'entry_number',
+      key: 'entry_number',
+      width: 170,
+    },
+    {
+      title: t('generalLedger.journal.source'),
+      key: 'source',
+      render: (_value, record) => (
+        <Space orientation="vertical" size={0}>
+          <CooperativeSourceLink
+            sourceType={record.source_type}
+            sourceNumber={record.source_number || record.entry_number}
+          />
+          <Text type="secondary" className="text-xs">{record.source_type}</Text>
+        </Space>
+      ),
+      width: 220,
+    },
+    {
+      title: t('cooperative.reports.table.description'),
+      dataIndex: 'description',
+      key: 'description',
+    },
+    {
+      title: t('cooperative.reports.table.amount'),
+      dataIndex: 'amount',
+      key: 'amount',
+      align: 'right',
+      render: (value: number) => <Text className={getSignedAmountClass(value)}>{money(value)}</Text>,
+      width: 170,
+    },
+  ];
+
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1175,6 +1298,70 @@ export default function CooperativeReportManagement() {
             ),
           },
           {
+            key: 'cash-flow-statement',
+            label: t('cooperative.reports.tabs.cashFlowStatement'),
+            children: renderFinancialReport(
+              <Space direction="vertical" className="w-full" size="middle" data-testid="koperasi-cash-flow-report">
+                <Descriptions bordered column={1}>
+                  <Descriptions.Item label={t('cooperative.reports.cashFlow.beginningCash')}>
+                    {money(cooperativeCashFlowStatement?.beginning_cash_amount ?? 0)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.cashFlow.operatingNet')}>
+                    <Text
+                      data-testid="koperasi-cash-flow-operating-net"
+                      className={getSignedAmountClass(cooperativeCashFlowStatement?.operating_net_amount ?? 0)}
+                    >
+                      {money(cooperativeCashFlowStatement?.operating_net_amount ?? 0)}
+                    </Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.cashFlow.investingNet')}>
+                    {money(cooperativeCashFlowStatement?.investing_net_amount ?? 0)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.cashFlow.financingNet')}>
+                    <Text
+                      data-testid="koperasi-cash-flow-financing-net"
+                      className={getSignedAmountClass(cooperativeCashFlowStatement?.financing_net_amount ?? 0)}
+                    >
+                      {money(cooperativeCashFlowStatement?.financing_net_amount ?? 0)}
+                    </Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.cashFlow.netChange')}>
+                    <Text className={getSignedAmountClass(cooperativeCashFlowStatement?.net_cash_change_amount ?? 0)}>
+                      {money(cooperativeCashFlowStatement?.net_cash_change_amount ?? 0)}
+                    </Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.cashFlow.endingCash')}>
+                    <Text strong>{money(cooperativeCashFlowStatement?.ending_cash_amount ?? 0)}</Text>
+                  </Descriptions.Item>
+                </Descriptions>
+                {(cooperativeCashFlowStatement?.sections ?? []).map((section) => (
+                  <Space key={section.activity} direction="vertical" className="w-full" size="small">
+                    <Title level={4} className="!mb-0">{t(cashFlowActivityLabelKey[section.activity])}</Title>
+                    <Descriptions bordered column={{ xs: 1, md: 3 }} size="small">
+                      <Descriptions.Item label={t('cooperative.reports.cashFlow.cashIn')}>
+                        {money(section.cash_in_amount)}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('cooperative.reports.cashFlow.cashOut')}>
+                        {money(section.cash_out_amount)}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('cooperative.reports.cashFlow.net')}>
+                        <Text className={getSignedAmountClass(section.net_amount)}>{money(section.net_amount)}</Text>
+                      </Descriptions.Item>
+                    </Descriptions>
+                    <Table
+                      dataSource={section.rows}
+                      columns={cashFlowRowColumns}
+                      rowKey="id"
+                      pagination={false}
+                      scroll={{ x: 980 }}
+                      locale={{ emptyText: t('cooperative.reports.cashFlow.empty') }}
+                    />
+                  </Space>
+                ))}
+              </Space>,
+            ),
+          },
+          {
             key: 'journal',
             label: t('cooperative.reports.tabs.journal'),
             children: (
@@ -1216,62 +1403,114 @@ export default function CooperativeReportManagement() {
           {
             key: 'balance-sheet',
             label: t('cooperative.reports.tabs.balanceSheet'),
-            children: (
-              <div className="rounded-lg border border-gray-100 bg-white p-4">
-                <Alert className="mb-3" type="info" showIcon message={t('cooperative.reports.balanceSheet.asOfNote')} />
+            children: renderFinancialReport(
+              <Space direction="vertical" className="w-full" size="middle" data-testid="koperasi-balance-sheet-report">
+                <Alert type="info" showIcon message={t('cooperative.reports.balanceSheet.asOfNote')} />
                 <Descriptions bordered column={1}>
                   <Descriptions.Item label={t('generalLedger.balance.assets')}>
-                    {money(balanceSheet?.assets ?? 0)}
+                    {money(cooperativeBalanceSheet?.assets ?? 0)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.liabilities')}>
-                    {money(balanceSheet?.liabilities ?? 0)}
+                    {money(cooperativeBalanceSheet?.liabilities ?? 0)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.equity')}>
-                    {money(balanceSheet?.equity ?? 0)}
+                    {money(cooperativeBalanceSheet?.equity ?? 0)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.currentIncome')}>
-                    {money(balanceSheet?.current_period_income ?? 0)}
+                    {money(cooperativeBalanceSheet?.current_period_income ?? 0)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.totalLiabilitiesAndEquity')}>
-                    {money(balanceSheet?.total_liabilities_and_equity ?? 0)}
+                    {money(cooperativeBalanceSheet?.total_liabilities_and_equity ?? 0)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.difference')}>
-                    <Text strong className={getSignedAmountClass(balanceSheet?.difference ?? 0)}>
-                      {money(balanceSheet?.difference ?? 0)}
+                    <Text strong className={getSignedAmountClass(cooperativeBalanceSheet?.difference ?? 0)}>
+                      {money(cooperativeBalanceSheet?.difference ?? 0)}
                     </Text>
                   </Descriptions.Item>
                 </Descriptions>
-                {balanceSheet && !balanceSheet.is_balanced && (
+                {cooperativeBalanceSheet && !cooperativeBalanceSheet.is_balanced && (
                   <Alert className="mt-3" type="error" showIcon message={t('generalLedger.balanceNotBalanced')} />
                 )}
-              </div>
+                <Table
+                  dataSource={cooperativeBalanceSheet?.rows ?? []}
+                  columns={financialStatementColumns}
+                  rowKey="account_id"
+                  loading={isLoading}
+                  pagination={false}
+                  scroll={{ x: 850 }}
+                />
+              </Space>,
             ),
           },
           {
-            key: 'income-statement',
-            label: t('cooperative.reports.tabs.incomeStatement'),
-            children: (
-              <div className="rounded-lg border border-gray-100 bg-white p-4">
+            key: 'shu',
+            label: t('cooperative.reports.tabs.shu'),
+            children: renderFinancialReport(
+              <Space direction="vertical" className="w-full" size="middle" data-testid="koperasi-shu-report">
                 <Descriptions bordered column={1}>
                   <Descriptions.Item label={t('generalLedger.income.revenue')}>
-                    {money(incomeStatement?.revenue ?? 0)}
+                    {money(cooperativeShuReport?.revenue ?? 0)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.income.contraRevenue')}>
-                    {money(incomeStatement?.contra_revenue ?? 0)}
+                    {money(cooperativeShuReport?.contra_revenue ?? 0)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.income.netRevenue')}>
-                    {money(incomeStatement?.net_revenue ?? 0)}
+                    {money(cooperativeShuReport?.net_revenue ?? 0)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.income.expense')}>
-                    {money(incomeStatement?.expense ?? 0)}
+                    {money(cooperativeShuReport?.expense ?? 0)}
                   </Descriptions.Item>
-                  <Descriptions.Item label={t('generalLedger.income.netIncome')}>
-                    <Text strong className={getSignedAmountClass(incomeStatement?.net_income ?? 0)}>
-                      {money(incomeStatement?.net_income ?? 0)}
+                  <Descriptions.Item label={t('cooperative.reports.shu.amount')}>
+                    <Text strong className={getSignedAmountClass(cooperativeShuReport?.shu_amount ?? 0)}>
+                      {money(cooperativeShuReport?.shu_amount ?? 0)}
                     </Text>
                   </Descriptions.Item>
                 </Descriptions>
-              </div>
+                <Table
+                  dataSource={cooperativeShuReport?.rows ?? []}
+                  columns={financialStatementColumns}
+                  rowKey="account_id"
+                  loading={isLoading}
+                  pagination={false}
+                  scroll={{ x: 850 }}
+                />
+              </Space>,
+            ),
+          },
+          {
+            key: 'equity-change',
+            label: t('cooperative.reports.tabs.equityChange'),
+            children: renderFinancialReport(
+              <Space direction="vertical" className="w-full" size="middle" data-testid="koperasi-equity-change-report">
+                <Descriptions bordered column={1}>
+                  <Descriptions.Item label={t('cooperative.reports.equity.opening')}>
+                    {money(cooperativeEquityChangeReport?.opening_equity_amount ?? 0)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.equity.additions')}>
+                    {money(cooperativeEquityChangeReport?.addition_amount ?? 0)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.equity.reductions')}>
+                    {money(cooperativeEquityChangeReport?.reduction_amount ?? 0)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.equity.periodShu')}>
+                    <Text className={getSignedAmountClass(cooperativeEquityChangeReport?.period_shu_amount ?? 0)}>
+                      {money(cooperativeEquityChangeReport?.period_shu_amount ?? 0)}
+                    </Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.reports.equity.ending')}>
+                    <Text strong>{money(cooperativeEquityChangeReport?.ending_equity_amount ?? 0)}</Text>
+                  </Descriptions.Item>
+                </Descriptions>
+                <Table
+                  dataSource={cooperativeEquityChangeReport?.rows ?? []}
+                  columns={financialStatementColumns}
+                  rowKey="account_id"
+                  loading={isLoading}
+                  pagination={false}
+                  scroll={{ x: 850 }}
+                  locale={{ emptyText: t('cooperative.reports.equity.empty') }}
+                />
+              </Space>,
             ),
           },
         ]}

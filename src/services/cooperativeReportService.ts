@@ -2,14 +2,19 @@ import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import {
-  getBalanceSheetReport,
-  getIncomeStatementReport,
   getJournalEntriesWithLines,
   type BalanceSheetReport,
   type IncomeStatementReport,
   type JournalEntryWithLines,
 } from '@/services/generalLedgerService';
+import {
+  getGeneralLedgerReadiness,
+  type GeneralLedgerReadinessResult,
+} from '@/utils/accounting/getGeneralLedgerReadiness';
+import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
 import type {
+  AccountNormalBalance,
+  AccountType,
   ChartOfAccount,
   CooperativeLoan,
   CooperativeLoanInstallment,
@@ -19,6 +24,7 @@ import type {
   CooperativeMemberSavingBalance,
   CooperativeSavingTransaction,
   FinanceTransaction,
+  JournalEntryLine,
   JournalSourceType,
 } from '@/types';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
@@ -29,6 +35,13 @@ const COOPERATIVE_JOURNAL_SOURCE_TYPES: JournalSourceType[] = [
   'COOPERATIVE_LOAN',
 ];
 
+const COOPERATIVE_FORMAL_STATEMENT_SOURCE_TYPES: JournalSourceType[] = [
+  'OPENING_BALANCE',
+  'COOPERATIVE_SAVING',
+  'COOPERATIVE_LOAN',
+  'MANUAL_JOURNAL',
+];
+
 const KSP_FINANCE_CATEGORIES = new Set<string>([
   FINANCE_CATEGORIES.KSP_SAVING_DEPOSIT,
   FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL,
@@ -37,6 +50,11 @@ const KSP_FINANCE_CATEGORIES = new Set<string>([
 ]);
 
 const MONEY_TOLERANCE = 0.01;
+
+type JournalLinePair = {
+  entry: JournalEntryWithLines;
+  line: JournalEntryLine;
+};
 
 export interface CooperativeReportFilters {
   startDate?: string;
@@ -170,6 +188,74 @@ export interface CooperativeCashBankReportRow {
   payment_channel?: string;
 }
 
+export interface CooperativeFinancialReadiness {
+  is_ready: boolean;
+  is_module_enabled: boolean;
+  can_show_financial_statements: boolean;
+  cutoff_date?: string;
+  messages: string[];
+}
+
+export interface CooperativeFinancialStatementRow {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: AccountType;
+  normal_balance: AccountNormalBalance;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface CooperativeBalanceSheetReport extends BalanceSheetReport {
+  rows: CooperativeFinancialStatementRow[];
+}
+
+export interface CooperativeShuReport extends IncomeStatementReport {
+  shu_amount: number;
+  rows: CooperativeFinancialStatementRow[];
+}
+
+export type CooperativeCashFlowActivity = 'OPERATING' | 'INVESTING' | 'FINANCING';
+
+export interface CooperativeCashFlowRow {
+  id: string;
+  entry_id: string;
+  entry_date: string;
+  entry_number: string;
+  source_type: JournalSourceType;
+  source_number?: string;
+  description: string;
+  amount: number;
+}
+
+export interface CooperativeCashFlowSection {
+  activity: CooperativeCashFlowActivity;
+  cash_in_amount: number;
+  cash_out_amount: number;
+  net_amount: number;
+  rows: CooperativeCashFlowRow[];
+}
+
+export interface CooperativeCashFlowStatement {
+  beginning_cash_amount: number;
+  operating_net_amount: number;
+  investing_net_amount: number;
+  financing_net_amount: number;
+  net_cash_change_amount: number;
+  ending_cash_amount: number;
+  sections: CooperativeCashFlowSection[];
+}
+
+export interface CooperativeEquityChangeReport {
+  opening_equity_amount: number;
+  addition_amount: number;
+  reduction_amount: number;
+  period_shu_amount: number;
+  ending_equity_amount: number;
+  rows: CooperativeFinancialStatementRow[];
+}
+
 export interface CooperativeOverdueReportRow {
   id: string;
   installment_id: string;
@@ -247,6 +333,7 @@ export interface CooperativeReconciliationSummary {
 export interface CooperativeReportData {
   accounts: ChartOfAccount[];
   selectedAccount?: ChartOfAccount;
+  financialReadiness: CooperativeFinancialReadiness;
   summary: CooperativeOperationalSummary;
   memberRows: CooperativeMemberReportRow[];
   savingBalanceRows: CooperativeSavingBalanceReportRow[];
@@ -260,6 +347,10 @@ export interface CooperativeReportData {
   ledgerRows: CooperativeLedgerRow[];
   incomeStatement: IncomeStatementReport;
   balanceSheet: BalanceSheetReport;
+  cooperativeBalanceSheet: CooperativeBalanceSheetReport;
+  cooperativeShuReport: CooperativeShuReport;
+  cooperativeCashFlowStatement: CooperativeCashFlowStatement;
+  cooperativeEquityChangeReport: CooperativeEquityChangeReport;
   overdueReport: CooperativeOverdueReport;
 }
 
@@ -294,6 +385,30 @@ const isBeforeStartDate = (value: string, startDate?: string) => (
 
 const compareDateDesc = (left?: string, right?: string) => (
   (right ?? '').localeCompare(left ?? '')
+);
+
+const compareDateAsc = (left?: string, right?: string) => (
+  (left ?? '').localeCompare(right ?? '')
+);
+
+const getStatementEndDate = (filters: CooperativeReportFilters) => (
+  filters.endDate ?? parseReportDate(filters.asOfDate).endOf('day').toISOString()
+);
+
+const getBalanceSheetEndDate = (filters: CooperativeReportFilters) => (
+  parseReportDate(filters.asOfDate).endOf('day').toISOString()
+);
+
+const isDateKeyOnOrBefore = (value: string, endDate?: string) => (
+  !endDate || getDateKey(value) <= getDateKey(endDate)
+);
+
+const isDateKeyBefore = (value: string, startDate?: string) => (
+  Boolean(startDate) && getDateKey(value) < getDateKey(startDate as string)
+);
+
+const isDateInStatementPeriod = (value: string, filters: CooperativeReportFilters) => (
+  isDateKeyInRange(value, filters.startDate, getStatementEndDate(filters))
 );
 
 const getAccountMovement = (
@@ -334,6 +449,327 @@ const isOutstandingLoan = (loan: CooperativeLoan) => (
 );
 
 const isBalanceMismatch = (value: number) => Math.abs(value) > MONEY_TOLERANCE;
+
+const getPostedLinePairs = (entries: JournalEntryWithLines[]): JournalLinePair[] => entries
+  .filter((entry) => entry.status === 'POSTED')
+  .flatMap((entry) => entry.lines.map((line) => ({ entry, line })));
+
+const getLineNormalBalance = (
+  line: JournalEntryLine,
+  accountById: Map<string, ChartOfAccount>,
+) => accountById.get(line.account_id)?.normal_balance ?? getAccountNormalBalance(line.account_type);
+
+const getFinancialMovement = (
+  debit: number,
+  credit: number,
+  normalBalance: AccountNormalBalance,
+) => normalBalance === 'DEBIT'
+  ? roundCurrency(debit - credit)
+  : roundCurrency(credit - debit);
+
+const isCashOrBankLine = (line: JournalEntryLine) => {
+  const accountName = line.account_name.toLowerCase();
+  return (
+    line.account_code === '1010' ||
+    line.account_code === '1020' ||
+    accountName.includes('kas') ||
+    accountName.includes('bank') ||
+    accountName.includes('cash')
+  );
+};
+
+const buildFinancialReadiness = (
+  readiness: GeneralLedgerReadinessResult,
+  generalLedgerModule: { is_enabled?: boolean } | undefined,
+): CooperativeFinancialReadiness => {
+  const isModuleEnabled = Boolean(generalLedgerModule?.is_enabled);
+  const messages = [
+    ...(!isModuleEnabled ? ['Module General Ledger belum aktif.'] : []),
+    ...readiness.checks.filter((check) => !check.passed).map((check) => check.message),
+  ];
+
+  return {
+    is_ready: readiness.isReady,
+    is_module_enabled: isModuleEnabled,
+    can_show_financial_statements: readiness.isReady && isModuleEnabled,
+    cutoff_date: readiness.setting?.cutoff_date,
+    messages,
+  };
+};
+
+const buildFinancialRows = (
+  entries: JournalEntryWithLines[],
+  accounts: ChartOfAccount[],
+  accountTypes: AccountType[],
+  filters: CooperativeReportFilters,
+  options: { useAsOfDate?: boolean; excludeOpeningBalance?: boolean } = {},
+): CooperativeFinancialStatementRow[] => {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const endDate = options.useAsOfDate ? getBalanceSheetEndDate(filters) : getStatementEndDate(filters);
+  const movementByAccountId = new Map<string, {
+    account_id: string;
+    account_code: string;
+    account_name: string;
+    account_type: AccountType;
+    normal_balance: AccountNormalBalance;
+    debit: number;
+    credit: number;
+  }>();
+
+  getPostedLinePairs(entries)
+    .filter(({ entry }) => isDateKeyOnOrBefore(entry.entry_date, endDate))
+    .filter(({ entry }) => !options.excludeOpeningBalance || entry.source_type !== 'OPENING_BALANCE')
+    .filter(({ entry }) => (
+      options.useAsOfDate
+        ? true
+        : isDateInStatementPeriod(entry.entry_date, filters)
+    ))
+    .filter(({ line }) => accountTypes.includes(line.account_type))
+    .forEach(({ line }) => {
+      const normalBalance = getLineNormalBalance(line, accountById);
+      const current = movementByAccountId.get(line.account_id) ?? {
+        account_id: line.account_id,
+        account_code: accountById.get(line.account_id)?.code ?? line.account_code,
+        account_name: accountById.get(line.account_id)?.name ?? line.account_name,
+        account_type: accountById.get(line.account_id)?.type ?? line.account_type,
+        normal_balance: normalBalance,
+        debit: 0,
+        credit: 0,
+      };
+
+      current.debit = roundCurrency(current.debit + Number(line.debit || 0));
+      current.credit = roundCurrency(current.credit + Number(line.credit || 0));
+      movementByAccountId.set(line.account_id, current);
+    });
+
+  return Array.from(movementByAccountId.values())
+    .map((row) => ({
+      ...row,
+      balance: getFinancialMovement(row.debit, row.credit, row.normal_balance),
+    }))
+    .filter((row) => row.debit > 0 || row.credit > 0 || Math.abs(row.balance) > MONEY_TOLERANCE)
+    .sort((left, right) => left.account_code.localeCompare(right.account_code));
+};
+
+const buildCooperativeShuReport = (
+  entries: JournalEntryWithLines[],
+  accounts: ChartOfAccount[],
+  filters: CooperativeReportFilters,
+): CooperativeShuReport => {
+  const rows = buildFinancialRows(
+    entries,
+    accounts,
+    ['REVENUE', 'CONTRA_REVENUE', 'EXPENSE'],
+    filters,
+    { excludeOpeningBalance: true },
+  );
+  const revenue = roundCurrency(
+    rows.filter((row) => row.account_type === 'REVENUE').reduce((sum, row) => sum + row.balance, 0),
+  );
+  const contraRevenue = roundCurrency(
+    rows.filter((row) => row.account_type === 'CONTRA_REVENUE').reduce((sum, row) => sum + row.balance, 0),
+  );
+  const expense = roundCurrency(
+    rows.filter((row) => row.account_type === 'EXPENSE').reduce((sum, row) => sum + row.balance, 0),
+  );
+  const netRevenue = roundCurrency(revenue - contraRevenue);
+  const shuAmount = roundCurrency(netRevenue - expense);
+
+  return {
+    revenue,
+    contra_revenue: contraRevenue,
+    net_revenue: netRevenue,
+    expense,
+    net_income: shuAmount,
+    shu_amount: shuAmount,
+    rows,
+  };
+};
+
+const buildCooperativeBalanceSheetReport = (
+  entries: JournalEntryWithLines[],
+  accounts: ChartOfAccount[],
+  filters: CooperativeReportFilters,
+): CooperativeBalanceSheetReport => {
+  const rows = buildFinancialRows(
+    entries,
+    accounts,
+    ['ASSET', 'LIABILITY', 'EQUITY'],
+    filters,
+    { useAsOfDate: true },
+  );
+  const incomeStatement = buildCooperativeShuReport(entries, accounts, {
+    ...filters,
+    startDate: undefined,
+    endDate: getBalanceSheetEndDate(filters),
+  });
+  const assets = roundCurrency(
+    rows.filter((row) => row.account_type === 'ASSET').reduce((sum, row) => sum + row.balance, 0),
+  );
+  const liabilities = roundCurrency(
+    rows.filter((row) => row.account_type === 'LIABILITY').reduce((sum, row) => sum + row.balance, 0),
+  );
+  const equity = roundCurrency(
+    rows.filter((row) => row.account_type === 'EQUITY').reduce((sum, row) => sum + row.balance, 0),
+  );
+  const currentPeriodIncome = roundCurrency(incomeStatement.shu_amount);
+  const totalLiabilitiesAndEquity = roundCurrency(liabilities + equity + currentPeriodIncome);
+  const difference = roundCurrency(assets - totalLiabilitiesAndEquity);
+
+  return {
+    assets,
+    liabilities,
+    equity,
+    current_period_income: currentPeriodIncome,
+    total_liabilities_and_equity: totalLiabilitiesAndEquity,
+    difference,
+    is_balanced: Math.abs(difference) <= MONEY_TOLERANCE,
+    rows,
+  };
+};
+
+const getCashFlowActivity = (
+  entry: JournalEntryWithLines,
+  nonCashLines: JournalEntryLine[],
+): CooperativeCashFlowActivity => {
+  if (entry.source_type === 'COOPERATIVE_SAVING') return 'FINANCING';
+  if (entry.source_type === 'COOPERATIVE_LOAN') return 'OPERATING';
+  if (nonCashLines.some((line) => line.account_type === 'EQUITY' || line.account_type === 'LIABILITY')) return 'FINANCING';
+  if (nonCashLines.some((line) => line.account_type === 'ASSET')) return 'INVESTING';
+  return 'OPERATING';
+};
+
+const createEmptyCashFlowSection = (activity: CooperativeCashFlowActivity): CooperativeCashFlowSection => ({
+  activity,
+  cash_in_amount: 0,
+  cash_out_amount: 0,
+  net_amount: 0,
+  rows: [],
+});
+
+const buildCooperativeCashFlowStatement = (
+  entries: JournalEntryWithLines[],
+  filters: CooperativeReportFilters,
+): CooperativeCashFlowStatement => {
+  const sectionByActivity = new Map<CooperativeCashFlowActivity, CooperativeCashFlowSection>([
+    ['OPERATING', createEmptyCashFlowSection('OPERATING')],
+    ['INVESTING', createEmptyCashFlowSection('INVESTING')],
+    ['FINANCING', createEmptyCashFlowSection('FINANCING')],
+  ]);
+  const statementEndDate = getStatementEndDate(filters);
+  const postedEntries = entries
+    .filter((entry) => entry.status === 'POSTED')
+    .filter((entry) => isDateKeyOnOrBefore(entry.entry_date, statementEndDate));
+  const cashMovementForEntry = (entry: JournalEntryWithLines) => roundCurrency(
+    entry.lines
+      .filter(isCashOrBankLine)
+      .reduce((sum, line) => sum + Number(line.debit || 0) - Number(line.credit || 0), 0),
+  );
+  const beginningCashAmount = roundCurrency(
+    postedEntries
+      .filter((entry) => (
+        filters.startDate
+          ? isDateKeyBefore(entry.entry_date, filters.startDate)
+          : entry.source_type === 'OPENING_BALANCE'
+      ))
+      .reduce((sum, entry) => sum + cashMovementForEntry(entry), 0),
+  );
+
+  postedEntries
+    .filter((entry) => entry.source_type !== 'OPENING_BALANCE')
+    .filter((entry) => isDateInStatementPeriod(entry.entry_date, filters))
+    .sort((left, right) => compareDateAsc(left.entry_date, right.entry_date))
+    .forEach((entry) => {
+      const amount = cashMovementForEntry(entry);
+      if (Math.abs(amount) <= MONEY_TOLERANCE) return;
+
+      const activity = getCashFlowActivity(entry, entry.lines.filter((line) => !isCashOrBankLine(line)));
+      const section = sectionByActivity.get(activity) ?? createEmptyCashFlowSection(activity);
+      section.rows.push({
+        id: entry.id,
+        entry_id: entry.id,
+        entry_date: entry.entry_date,
+        entry_number: entry.entry_number,
+        source_type: entry.source_type,
+        source_number: entry.source_number,
+        description: entry.description,
+        amount,
+      });
+      if (amount >= 0) {
+        section.cash_in_amount = roundCurrency(section.cash_in_amount + amount);
+      } else {
+        section.cash_out_amount = roundCurrency(section.cash_out_amount + Math.abs(amount));
+      }
+      section.net_amount = roundCurrency(section.cash_in_amount - section.cash_out_amount);
+      sectionByActivity.set(activity, section);
+    });
+
+  const sections = Array.from(sectionByActivity.values());
+  const operatingNetAmount = sectionByActivity.get('OPERATING')?.net_amount ?? 0;
+  const investingNetAmount = sectionByActivity.get('INVESTING')?.net_amount ?? 0;
+  const financingNetAmount = sectionByActivity.get('FINANCING')?.net_amount ?? 0;
+  const netCashChangeAmount = roundCurrency(operatingNetAmount + investingNetAmount + financingNetAmount);
+
+  return {
+    beginning_cash_amount: beginningCashAmount,
+    operating_net_amount: operatingNetAmount,
+    investing_net_amount: investingNetAmount,
+    financing_net_amount: financingNetAmount,
+    net_cash_change_amount: netCashChangeAmount,
+    ending_cash_amount: roundCurrency(beginningCashAmount + netCashChangeAmount),
+    sections,
+  };
+};
+
+const buildCooperativeEquityChangeReport = (
+  entries: JournalEntryWithLines[],
+  accounts: ChartOfAccount[],
+  shuReport: CooperativeShuReport,
+  filters: CooperativeReportFilters,
+): CooperativeEquityChangeReport => {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const statementEndDate = getStatementEndDate(filters);
+  const equityPairs = getPostedLinePairs(entries)
+    .filter(({ entry }) => isDateKeyOnOrBefore(entry.entry_date, statementEndDate))
+    .filter(({ line }) => line.account_type === 'EQUITY');
+  const equityMovement = ({ line }: JournalLinePair) => getFinancialMovement(
+    Number(line.debit || 0),
+    Number(line.credit || 0),
+    getLineNormalBalance(line, accountById),
+  );
+  const openingEquityAmount = roundCurrency(
+    equityPairs
+      .filter(({ entry }) => (
+        filters.startDate
+          ? isDateKeyBefore(entry.entry_date, filters.startDate)
+          : entry.source_type === 'OPENING_BALANCE'
+      ))
+      .reduce((sum, pair) => sum + equityMovement(pair), 0),
+  );
+  const periodRows = buildFinancialRows(
+    entries,
+    accounts,
+    ['EQUITY'],
+    filters,
+    { excludeOpeningBalance: true },
+  );
+  const additionAmount = roundCurrency(
+    periodRows.filter((row) => row.balance > 0).reduce((sum, row) => sum + row.balance, 0),
+  );
+  const reductionAmount = roundCurrency(
+    periodRows.filter((row) => row.balance < 0).reduce((sum, row) => sum + Math.abs(row.balance), 0),
+  );
+  const periodShuAmount = roundCurrency(shuReport.shu_amount);
+
+  return {
+    opening_equity_amount: openingEquityAmount,
+    addition_amount: additionAmount,
+    reduction_amount: reductionAmount,
+    period_shu_amount: periodShuAmount,
+    ending_equity_amount: roundCurrency(openingEquityAmount + additionAmount - reductionAmount + periodShuAmount),
+    rows: periodRows,
+  };
+};
 
 const summarizeOverdueRows = (rows: CooperativeOverdueReportRow[]): CooperativeOverdueReportSummary => {
   const loanIds = new Set<string>();
@@ -945,18 +1381,18 @@ export const getCooperativeReportData = async (
     endDate: filters.endDate,
     sourceTypes: COOPERATIVE_JOURNAL_SOURCE_TYPES,
   };
-  const balanceSheetFilters = {
-    endDate: parseReportDate(filters.asOfDate).endOf('day').toISOString(),
-    sourceTypes: COOPERATIVE_JOURNAL_SOURCE_TYPES,
+  const formalStatementFilters = {
+    sourceTypes: COOPERATIVE_FORMAL_STATEMENT_SOURCE_TYPES,
   };
 
   const [
     accounts,
+    financialReadinessResult,
+    generalLedgerModule,
     journalEntries,
     ledgerEntries,
     reconciliationJournalEntries,
-    incomeStatement,
-    balanceSheet,
+    formalStatementEntries,
     members,
     savingTransactions,
     savingBalances,
@@ -966,11 +1402,12 @@ export const getCooperativeReportData = async (
     financeTransactions,
   ] = await Promise.all([
     db.chartOfAccounts.orderBy('code').toArray(),
+    getGeneralLedgerReadiness(),
+    db.enabledModules.get('GENERAL_LEDGER'),
     getJournalEntriesWithLines(periodLedgerFilters),
     getJournalEntriesWithLines(ledgerFilters),
     getJournalEntriesWithLines({ sourceTypes: COOPERATIVE_JOURNAL_SOURCE_TYPES }),
-    getIncomeStatementReport(periodLedgerFilters),
-    getBalanceSheetReport(balanceSheetFilters),
+    getJournalEntriesWithLines(formalStatementFilters),
     db.cooperativeMembers.orderBy('member_number').toArray(),
     db.cooperativeSavingTransactions.orderBy('transaction_date').reverse().toArray(),
     db.cooperativeMemberSavingBalances.orderBy('member_number').toArray(),
@@ -985,10 +1422,37 @@ export const getCooperativeReportData = async (
     : undefined;
   const overdueReport = buildOverdueReport(loans, installments, filters);
   const cashBankRows = buildCashBankRows(financeTransactions, filters);
+  const financialReadiness = buildFinancialReadiness(financialReadinessResult, generalLedgerModule);
+  const cooperativeShuReport = buildCooperativeShuReport(formalStatementEntries, accounts, filters);
+  const cooperativeBalanceSheet = buildCooperativeBalanceSheetReport(formalStatementEntries, accounts, filters);
+  const cooperativeCashFlowStatement = buildCooperativeCashFlowStatement(formalStatementEntries, filters);
+  const cooperativeEquityChangeReport = buildCooperativeEquityChangeReport(
+    formalStatementEntries,
+    accounts,
+    cooperativeShuReport,
+    filters,
+  );
+  const incomeStatement: IncomeStatementReport = {
+    revenue: cooperativeShuReport.revenue,
+    contra_revenue: cooperativeShuReport.contra_revenue,
+    net_revenue: cooperativeShuReport.net_revenue,
+    expense: cooperativeShuReport.expense,
+    net_income: cooperativeShuReport.shu_amount,
+  };
+  const balanceSheet: BalanceSheetReport = {
+    assets: cooperativeBalanceSheet.assets,
+    liabilities: cooperativeBalanceSheet.liabilities,
+    equity: cooperativeBalanceSheet.equity,
+    current_period_income: cooperativeBalanceSheet.current_period_income,
+    total_liabilities_and_equity: cooperativeBalanceSheet.total_liabilities_and_equity,
+    difference: cooperativeBalanceSheet.difference,
+    is_balanced: cooperativeBalanceSheet.is_balanced,
+  };
 
   return {
     accounts,
     selectedAccount,
+    financialReadiness,
     summary: buildOperationalSummary(members, savingBalances, loans, cashBankRows, overdueReport),
     memberRows: buildMemberRows(members, savingBalances, loans),
     savingBalanceRows: buildSavingBalanceRows(savingBalances, savingTransactions),
@@ -1010,6 +1474,10 @@ export const getCooperativeReportData = async (
     ledgerRows: buildLedgerRows(ledgerEntries, selectedAccount, filters),
     incomeStatement,
     balanceSheet,
+    cooperativeBalanceSheet,
+    cooperativeShuReport,
+    cooperativeCashFlowStatement,
+    cooperativeEquityChangeReport,
     overdueReport,
   };
 };

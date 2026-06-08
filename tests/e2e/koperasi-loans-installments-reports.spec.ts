@@ -5,6 +5,7 @@ import { demoMembers } from './helpers/data';
 import {
   approveLoan,
   createActiveMember,
+  expectCooperativeFinancialReportsGated,
   createLoanApplication,
   disburseLoan,
   expectCooperativeReportSummary,
@@ -13,6 +14,11 @@ import {
 } from './helpers/koperasi';
 
 test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
+  test('REP-02 - laporan keuangan formal digate saat General Ledger belum ready', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await expectCooperativeFinancialReportsGated(page);
+  });
+
   test('LOAN-01, LOAN-02, LOAN-04, LOAN-05, PAY-01, REP-01, LOAN-07, PAY-07 - alur pinjaman Budi', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
     await setupAccountingReady(page);
@@ -30,4 +36,3 @@ test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
     await expect(page.getByText(/Pembayaran angsuran/)).toBeVisible();
   });
 });
-
