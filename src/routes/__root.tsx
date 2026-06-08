@@ -513,94 +513,10 @@ const RootLayout = () => {
                     )}
                   />
                 )}
-                <button
-                  onClick={handleLogoutClick}
-                  className="p-2 rounded-full text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none dark:hover:bg-red-950/40 dark:hover:text-red-300"
-                  aria-label={t('root.logout')}
-                  title={t('root.logout')}
-                >
-                  <LogOut size={20} />
-                </button>
               </div>
-            </div>
-          </nav>
-
-          {/* Body: Sider + Content */}
-          <Layout hasSider={!isMobile} style={{ marginTop: topOffset, height: contentHeight }}>
-            {/* Side Navigation */}
-            {!isMobile && (
-              <Sider
-                collapsible
-                collapsed={collapsed}
-                onCollapse={setCollapsed}
-                trigger={null}
-                theme={isDark ? 'dark' : 'light'}
-                collapsedWidth={0}
-                width={SIDEBAR_WIDTH}
-                style={
-                  !isMobile
-                    ? {
-                      position: 'fixed',
-                      top: topOffset,
-                      bottom: 0,
-                      left: 0,
-                      height: contentHeight,
-                      zIndex: 30,
-                    }
-                    : undefined
-                }
-              >
-                {!isMobile && (
-                  <button
-                    type="button"
-                    aria-label={collapsed ? t('root.openSidebar') : t('root.closeSidebar')}
-                    onClick={() => setCollapsed(!collapsed)}
-                    className="absolute -right-9 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-r-md border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
-                  >
-                    {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-                  </button>
-                )}
-                <Menu
-                  mode="inline"
-                  selectedKeys={[selectedKey]}
-                  openKeys={openMenuKeys}
-                  onOpenChange={setOpenMenuKeys}
-                  items={menuItems}
-                  theme={isDark ? 'dark' : 'light'}
-                  style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto' }}
-                />
-              </Sider>
-            )}
-
-            {/* Main Content */}
-            <Layout
-              style={{
-                height: contentHeight,
-                marginLeft: isMobile ? 0 : collapsed ? TRIGGER_WIDTH : SIDEBAR_WIDTH + TRIGGER_WIDTH,
-                overflow: 'hidden',
-                transition: 'margin-left 0.2s',
-              }}
-            >
-              <Content className="transition-all duration-200" style={{ height: '100%', overflowY: 'auto' }}>
-                <div className="p-4">
-                  {canOpenCurrentPath ? (
-                    <Outlet />
-                  ) : (
-                    <Result
-                      status="403"
-                      title="Akses tidak tersedia"
-                      subTitle="User Anda tidak memiliki izin untuk membuka halaman ini."
-                      extra={(
-                        <Button type="primary" onClick={() => navigate({ to: '/' })}>
-                          Kembali ke Home
-                        </Button>
-                      )}
-                    />
-                  )}
-                </div>
-              </Content>
-            </Layout>
+            </Content>
           </Layout>
+        </Layout>
 
           <TanStackRouterDevtools />
           <FeedbackModal
