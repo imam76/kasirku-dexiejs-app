@@ -13,11 +13,15 @@ import { postgresAdapter } from '@/services/postgresAdapter';
 import { enqueuePendingAuthUsersForSync, enqueuePendingFinanceTransactionsForSync, enqueuePendingJournalEntriesForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue, recoverStaleProcessingSyncQueueItems } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
+import { useSyncActivityStore } from '@/store/syncActivityStore';
 
 export const useSyncQueueWorker = () => {
   useEffect(() => {
     const syncWhenOnline = async () => {
+      const setSyncPhase = useSyncActivityStore.getState().setPhase;
+
       try {
+        setSyncPhase('uploading');
         await recoverStaleProcessingSyncQueueItems();
         await enqueuePendingAuthUsersForSync();
         await enqueuePendingFinanceTransactionsForSync();
@@ -26,9 +30,13 @@ export const useSyncQueueWorker = () => {
         await enqueuePendingSalesDocumentsForSync();
         await processPendingSyncQueue();
 
+        setSyncPhase('refreshing');
         const postgresHealth = await postgresAdapter.healthCheck();
         console.info('[PostgreSQL sync] health check', postgresHealth);
-        if (!postgresHealth.available) return;
+        if (!postgresHealth.available) {
+          setSyncPhase('idle');
+          return;
+        }
 
         const refreshResults = {
           authUsers: await refreshAuthUsersFromPostgres(),
@@ -47,8 +55,10 @@ export const useSyncQueueWorker = () => {
           salesDocuments: await refreshSalesDocumentsFromPostgres(),
         };
         console.info('[PostgreSQL sync] read refresh completed', refreshResults);
+        setSyncPhase('idle');
       } catch (error) {
         console.error('Failed to refresh PostgreSQL read data', error);
+        setSyncPhase('error', error instanceof Error ? error.message : String(error));
       }
     };
 

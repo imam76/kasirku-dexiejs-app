@@ -2,6 +2,7 @@ import FeedbackModal from '@/components/FeedbackModal'
 // import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
@@ -381,6 +382,7 @@ const RootLayout = () => {
 
             {/* Theme Toggle & Settings */}
             <div className="flex items-center">
+              <SyncStatusIndicator />
               <button
                 onClick={toggle}
                 className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
