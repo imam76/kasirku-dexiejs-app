@@ -78,6 +78,20 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'REPORT_PROFIT', label: 'Profit Report', description: 'Laporan laba rugi' },
     ],
   },
+  {
+    key: 'koperasi',
+    label: 'Koperasi',
+    iconName: 'Landmark',
+    modules: [
+      { code: 'KOPERASI_ANGGOTA', label: 'Anggota', description: 'Data anggota koperasi' },
+      { code: 'KOPERASI_SIMPANAN_POKOK', label: 'Simpanan Pokok', description: 'Simpanan wajib saat pendaftaran' },
+      { code: 'KOPERASI_SIMPANAN_WAJIB', label: 'Simpanan Wajib', description: 'Simpanan rutin bulanan anggota' },
+      { code: 'KOPERASI_SIMPANAN_SUKARELA', label: 'Simpanan Sukarela', description: 'Tabungan sukarela anggota' },
+      { code: 'KOPERASI_PINJAMAN', label: 'Pinjaman', description: 'Pengajuan & pencairan pinjaman' },
+      { code: 'KOPERASI_ANGSURAN', label: 'Angsuran', description: 'Cicilan & pembayaran pinjaman' },
+      { code: 'KOPERASI_SHU', label: 'SHU', description: 'Sisa Hasil Usaha & pembagian' },
+    ],
+  },
 ];
 
 /**

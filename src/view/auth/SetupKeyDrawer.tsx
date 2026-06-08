@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   Banknote,
   BarChart3,
+  Landmark,
   Check,
   ChevronRight,
   Settings2,
@@ -50,6 +51,7 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
   ShoppingBag,
   Banknote,
   BarChart3,
+  Landmark,
 };
 
 interface SetupKeyDrawerProps {
