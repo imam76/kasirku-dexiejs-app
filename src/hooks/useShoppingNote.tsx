@@ -9,21 +9,42 @@ import { db } from '@/lib/db';
 import { getCurrentSessionUser } from '@/auth/authService';
 import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
-import type { FinanceTransaction, Product, ShoppingNoteItem, StockMutation } from '@/types';
+import type { FinanceTransaction, Product, ProductCategory, ShoppingNoteItem, StockMutation } from '@/types';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
+
+type CreateBasicProductInput = {
+  name: string;
+  sku?: string;
+  category?: ProductCategory;
+  unit: string;
+  purchasePrice?: number;
+};
 
 export const useShoppingNote = () => {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [items, setItems] = useState<ShoppingNoteItem[]>([]);
+  const [pendingProducts, setPendingProducts] = useState<Product[]>([]);
 
   const liveProducts = useLiveQuery(
     () => db.products.orderBy('name').toArray(),
     [],
   );
-  const products = liveProducts ?? [];
+  const products = useMemo(() => liveProducts ?? [], [liveProducts]);
   const isProductsLoading = liveProducts === undefined;
+
+  const allProducts = useMemo(() => {
+    const map = new Map<string, Product>();
+    for (const product of products) {
+      map.set(product.id, product);
+    }
+    for (const product of pendingProducts) {
+      map.set(product.id, product);
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [products, pendingProducts]);
 
   const {
     control,
@@ -42,7 +63,7 @@ export const useShoppingNote = () => {
   });
 
   const handleProductChange = (productId: string) => {
-    const product = products.find((item) => item.id === productId);
+    const product = allProducts.find((item) => item.id === productId);
     if (!product) return;
 
     setValue('product_id', product.id);
@@ -50,16 +71,80 @@ export const useShoppingNote = () => {
     setValue('unit_price', product.purchase_price ?? 0);
   };
 
+  const createBasicProduct = (input: CreateBasicProductInput) => {
+    const name = input.name.trim();
+    const sku = input.sku?.trim() || undefined;
+    const category = input.category;
+    const unit = input.unit.trim() || 'pcs';
+    const purchasePrice = Number(input.purchasePrice || 0);
+
+    if (!name) {
+      message.warning('Nama produk wajib diisi');
+      return undefined;
+    }
+
+    if (sku) {
+      const skuLower = sku.toLowerCase();
+      const existing = allProducts.find((product) => (product.sku || '').toLowerCase() === skuLower);
+      if (existing) {
+        message.info('Barcode/SKU sudah terdaftar, gunakan produk yang sudah ada');
+        handleProductChange(existing.id);
+        return existing.id;
+      }
+    }
+
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    const baseProduct: Product = {
+      id,
+      name,
+      sku,
+      category,
+      purchase_unit: unit,
+      selling_unit: unit,
+      purchase_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,
+      selling_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,
+      stock: 0,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending',
+    };
+
+    setPendingProducts((prev) => [...prev, baseProduct]);
+
+    // Automatically select the newly created product in the form
+    setValue('product_id', id);
+    setValue('unit', unit);
+    setValue('unit_price', purchasePrice);
+
+    return id;
+  };
+
   const addItem = (data: ShoppingItemFormData) => {
-    const product = products.find((item) => item.id === data.product_id);
+    const product = allProducts.find((item) => item.id === data.product_id);
     if (!product) {
       message.warning('Produk tidak ditemukan');
       return;
     }
 
+    const now = new Date().toISOString();
     const unitPrice = Number(data.unit_price);
     const quantity = Number(data.quantity);
     const subtotal = unitPrice * quantity;
+
+    setPendingProducts((prev) => {
+      const pending = prev.find((p) => p.id === product.id);
+      if (!pending) return prev;
+      return prev.map((p) => p.id === product.id ? {
+        ...p,
+        purchase_unit: data.unit,
+        selling_unit: data.unit,
+        purchase_price: unitPrice,
+        selling_price: unitPrice,
+        updated_at: now,
+      } : p);
+    });
+
     const newItem: ShoppingNoteItem = {
       id: crypto.randomUUID(),
       product_id: product.id,
@@ -102,7 +187,46 @@ export const useShoppingNote = () => {
       const stockMutations: StockMutation[] = [];
       const financeTransactionsToSync: FinanceTransaction[] = [];
 
-      await db.transaction('rw', [db.shoppingNotes, db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
+      await db.transaction('rw', [
+        db.shoppingNotes,
+        db.products,
+        db.stockPurchases,
+        db.financeBalance,
+        db.financeTransactions,
+        db.chartOfAccounts,
+        db.financeAccountMappings,
+        db.enabledModules,
+        db.generalLedgerSetting,
+        db.journalEntries,
+        db.journalEntryLines,
+        db.inventoryLots
+      ], async () => {
+        const itemsByProductId = new Map(items.map((item) => [item.product_id, item]));
+        const productsToCreate = pendingProducts.filter((product) => itemsByProductId.has(product.id));
+
+        for (const product of productsToCreate) {
+          const item = itemsByProductId.get(product.id);
+          const existing = await db.products.get(product.id);
+          if (existing) continue;
+
+          if (product.sku) {
+            const sameSku = await db.products.where('sku').equals(product.sku).first();
+            if (sameSku) {
+              throw new Error(`Barcode/SKU ${product.sku} sudah terdaftar pada produk lain`);
+            }
+          }
+
+          await db.products.add({
+            ...product,
+            purchase_price: Number(item?.unit_price ?? product.purchase_price),
+            selling_price: Number(item?.unit_price ?? product.selling_price),
+            purchase_unit: item?.unit ?? product.purchase_unit,
+            selling_unit: item?.unit ?? product.selling_unit,
+            created_at: now,
+            updated_at: now,
+          });
+        }
+
         await db.shoppingNotes.add({
           id: shoppingNoteId,
           created_at: now,
@@ -125,11 +249,26 @@ export const useShoppingNote = () => {
             updated_at: now,
           };
 
+          // Update purchase_price as a UI reference for the next purchase form auto-fill.
+          // This does NOT affect HPP calculation — FIFO lots are used instead.
           if (product.purchase_price !== costPerStockUnit) {
             productUpdate.purchase_price = costPerStockUnit;
           }
 
           await db.products.update(product.id, productUpdate);
+
+          // Create a FIFO lot for this purchase batch
+          await addInventoryLot({
+            productId: product.id,
+            productName: product.name,
+            sku: product.sku,
+            sourceType: 'SHOPPING_NOTE',
+            sourceId: shoppingNoteId,
+            sourceLineId: item.id,
+            quantityReceived: quantityInStockUnit,
+            costPerUnit: costPerStockUnit,
+            receivedAt: now,
+          });
 
           if (quantityInStockUnit > 0) {
             stockMutations.push(createStockMutation({
@@ -166,6 +305,7 @@ export const useShoppingNote = () => {
 
       message.success('Belanja stok berhasil disimpan');
       setItems([]);
+      setPendingProducts([]);
       queryClient.invalidateQueries({ queryKey: ['shoppingNotesHistory'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
@@ -183,13 +323,15 @@ export const useShoppingNote = () => {
 
   return {
     items,
-    products,
+    products: allProducts,
+    pendingProducts,
     isProductsLoading,
     removeItem,
     totalShopping,
     control,
     handleSubmit: handleSubmit(addItem),
     handleProductChange,
+    createBasicProduct,
     errors,
     saveNote,
   };

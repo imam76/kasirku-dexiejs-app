@@ -1,5 +1,14 @@
 import Dexie, { Table } from 'dexie';
-import { Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote, FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog, SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, Currency, CurrencyRate, SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem, PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping, AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine, CooperativeMember, CooperativeSavingTransaction, CooperativeMemberSavingBalance, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeSettings } from '@/types';
+import {
+  Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote,
+  FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog,
+  SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, Currency, CurrencyRate,
+  SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem,
+  PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping,
+  AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine,
+  InventoryLot, CooperativeMember, CooperativeSavingTransaction, CooperativeMemberSavingBalance,
+  CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeSettings
+} from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
@@ -50,43 +59,6 @@ const buildAccountingSeed = (now: string) => {
   };
 };
 
-const roundCurrencyValue = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-
-const getPaymentForeignAmount = (
-  amount: number,
-  document: Pick<SalesDocument | PurchaseDocument, 'currency_code' | 'exchange_rate'>,
-) => {
-  const currencyCode = document.currency_code ?? BASE_CURRENCY_CODE;
-  const exchangeRate = Number(document.exchange_rate || 1);
-
-  if (currencyCode === BASE_CURRENCY_CODE) return roundCurrencyValue(amount);
-  return roundCurrencyValue(amount / (exchangeRate > 0 ? exchangeRate : 1));
-};
-
-const buildPaymentCurrencySnapshot = (
-  document: Pick<
-    SalesDocument | PurchaseDocument,
-    | 'currency_code'
-    | 'currency_name'
-    | 'currency_symbol'
-    | 'base_currency_code'
-    | 'exchange_rate'
-    | 'exchange_rate_source'
-    | 'exchange_rate_basis'
-    | 'exchange_rate_date'
-    | 'document_date'
-  >,
-) => ({
-  currency_code: document.currency_code ?? BASE_CURRENCY_CODE,
-  currency_name: document.currency_name ?? 'Rupiah Indonesia',
-  currency_symbol: document.currency_symbol ?? 'Rp',
-  base_currency_code: document.base_currency_code ?? BASE_CURRENCY_CODE,
-  exchange_rate: document.exchange_rate ?? 1,
-  exchange_rate_source: document.exchange_rate_source ?? 'SYSTEM' as const,
-  exchange_rate_basis: document.exchange_rate_basis ?? 'MID' as const,
-  exchange_rate_date: document.exchange_rate_date ?? document.document_date,
-});
-
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
   transactions!: Table<Transaction>;
@@ -133,6 +105,7 @@ export class KasirkuDB extends Dexie {
   cooperativeLoanInstallments!: Table<CooperativeLoanInstallment>;
   cooperativeLoanPayments!: Table<CooperativeLoanPayment>;
   cooperativeSettings!: Table<CooperativeSettings>;
+  inventoryLots!: Table<InventoryLot>;
 
   constructor() {
     super('KasirkuDB');
@@ -581,9 +554,12 @@ export class KasirkuDB extends Dexie {
       salesDocuments: 'id, document_number, type, status, contact_id, customer_name, document_date, due_date, payment_status, source_document_id, project_id, department_id, tax_id, currency_code, sync_status, updated_at, created_at',
       salesDocumentItems: 'id, document_id, product_id, currency_code',
       purchaseDocuments: 'id, document_number, type, status, contact_id, supplier_name, document_date, due_date, payment_status, source_document_id, project_id, department_id, tax_id, currency_code, sync_status, updated_at, created_at',
-      purchaseDocumentItems: 'id, document_id, product_id, currency_code'
+      purchaseDocumentItems: 'id, document_id, product_id, currency_code',
+      inventoryLots: 'id, product_id, quantity_remaining, received_at, source_type, created_at'
     }).upgrade(async (tx) => {
       const now = new Date().toISOString();
+
+      // ===== Currency setup =====
       const currencyTable = tx.table<Currency, string>('currencies');
       const currencyRateTable = tx.table<CurrencyRate, string>('currencyRates');
 
@@ -595,6 +571,7 @@ export class KasirkuDB extends Dexie {
         await currencyRateTable.put(buildBaseCurrencyRate(now));
       }
 
+      // ===== Sales documents =====
       const salesDocuments = await tx.table<SalesDocument, string>('salesDocuments').toArray();
       const salesDocumentsWithoutCurrency = salesDocuments
         .filter((document) => !document.currency_code || !document.exchange_rate)
@@ -613,11 +590,11 @@ export class KasirkuDB extends Dexie {
           foreign_tax_amount: document.foreign_tax_amount ?? document.tax_amount,
           foreign_total_amount: document.foreign_total_amount ?? document.total_amount,
         }));
-
       if (salesDocumentsWithoutCurrency.length > 0) {
         await tx.table<SalesDocument, string>('salesDocuments').bulkPut(salesDocumentsWithoutCurrency);
       }
 
+      // ===== Sales document items =====
       const salesItems = await tx.table<SalesDocumentItem, string>('salesDocumentItems').toArray();
       const salesItemsWithoutCurrency = salesItems
         .filter((item) => !item.currency_code || !item.exchange_rate)
@@ -635,11 +612,11 @@ export class KasirkuDB extends Dexie {
           foreign_subtotal: item.foreign_subtotal ?? item.subtotal,
           foreign_total_amount: item.foreign_total_amount ?? item.total_amount,
         }));
-
       if (salesItemsWithoutCurrency.length > 0) {
         await tx.table<SalesDocumentItem, string>('salesDocumentItems').bulkPut(salesItemsWithoutCurrency);
       }
 
+      // ===== Purchase documents =====
       const purchaseDocuments = await tx.table<PurchaseDocument, string>('purchaseDocuments').toArray();
       const purchaseDocumentsWithoutCurrency = purchaseDocuments
         .filter((document) => !document.currency_code || !document.exchange_rate)
@@ -658,11 +635,11 @@ export class KasirkuDB extends Dexie {
           foreign_tax_amount: document.foreign_tax_amount ?? document.tax_amount,
           foreign_total_amount: document.foreign_total_amount ?? document.total_amount,
         }));
-
       if (purchaseDocumentsWithoutCurrency.length > 0) {
         await tx.table<PurchaseDocument, string>('purchaseDocuments').bulkPut(purchaseDocumentsWithoutCurrency);
       }
 
+      // ===== Purchase items =====
       const purchaseItems = await tx.table<PurchaseDocumentItem, string>('purchaseDocumentItems').toArray();
       const purchaseItemsWithoutCurrency = purchaseItems
         .filter((item) => !item.currency_code || !item.exchange_rate)
@@ -680,154 +657,29 @@ export class KasirkuDB extends Dexie {
           foreign_subtotal: item.foreign_subtotal ?? item.subtotal,
           foreign_total_amount: item.foreign_total_amount ?? item.total_amount,
         }));
-
       if (purchaseItemsWithoutCurrency.length > 0) {
         await tx.table<PurchaseDocumentItem, string>('purchaseDocumentItems').bulkPut(purchaseItemsWithoutCurrency);
       }
-    });
 
-    this.version(38).stores({}).upgrade(async (tx) => {
-      const salesDocuments = await tx.table<SalesDocument, string>('salesDocuments').toArray();
-      const salesDocumentById = new Map(salesDocuments.map((document) => [document.id, document]));
-      const salesPayments = await tx.table<SalesInvoicePayment, string>('salesInvoicePayments').toArray();
-      const salesPaymentsWithCurrency = salesPayments
-        .filter((payment) => !payment.currency_code || payment.foreign_amount === undefined)
-        .map((payment) => {
-          const document = salesDocumentById.get(payment.sales_document_id);
-          if (!document) return payment;
-          const amount = Number(payment.amount || 0);
-
-          return {
-            ...payment,
-            ...buildPaymentCurrencySnapshot(document),
-            foreign_amount: payment.foreign_amount ?? getPaymentForeignAmount(amount, document),
-          };
-        });
-
-      if (salesPaymentsWithCurrency.length > 0) {
-        await tx.table<SalesInvoicePayment, string>('salesInvoicePayments').bulkPut(salesPaymentsWithCurrency);
-      }
-
-      const purchaseDocuments = await tx.table<PurchaseDocument, string>('purchaseDocuments').toArray();
-      const purchaseDocumentById = new Map(purchaseDocuments.map((document) => [document.id, document]));
-      const purchasePayments = await tx.table<PurchaseInvoicePayment, string>('purchaseInvoicePayments').toArray();
-      const purchasePaymentsWithCurrency = purchasePayments
-        .filter((payment) => !payment.currency_code || payment.foreign_amount === undefined)
-        .map((payment) => {
-          const document = purchaseDocumentById.get(payment.purchase_document_id);
-          if (!document) return payment;
-          const amount = Number(payment.amount || 0);
-
-          return {
-            ...payment,
-            ...buildPaymentCurrencySnapshot(document),
-            foreign_amount: payment.foreign_amount ?? getPaymentForeignAmount(amount, document),
-          };
-        });
-
-      if (purchasePaymentsWithCurrency.length > 0) {
-        await tx.table<PurchaseInvoicePayment, string>('purchaseInvoicePayments').bulkPut(purchasePaymentsWithCurrency);
-      }
-    });
-
-    this.version(39).stores({
-      cooperativeMembers: 'id, member_number, status, sync_status, updated_at, created_at',
-      cooperativeSavingTransactions: 'id, member_id, saving_type, transaction_type, status, transaction_date, finance_transaction_id, journal_entry_id, created_at',
-      cooperativeMemberSavingBalances: 'id, member_id, saving_type, updated_at',
-      cooperativeLoans: 'id, loan_number, member_id, status, application_date, disbursed_at, sync_status, updated_at, created_at',
-      cooperativeLoanInstallments: 'id, loan_id, due_date, status, installment_number, updated_at, created_at',
-      cooperativeLoanPayments: 'id, payment_number, loan_id, installment_id, payment_date, status, finance_transaction_id, journal_entry_id, created_at',
-      cooperativeSettings: 'id, updated_at'
-    }).upgrade(async (tx) => {
-      const now = new Date().toISOString();
-      const seed = buildAccountingSeed(now);
-      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
-      const accounts = await chartOfAccounts.toArray();
-      const accountCodes = new Set(accounts.map((account) => account.code));
-      const accountIds = new Set(accounts.map((account) => account.id));
-      const missingAccounts = seed.accounts.filter((account) => {
-        return !accountCodes.has(account.code) && !accountIds.has(account.id);
-      });
-
-      if (missingAccounts.length > 0) {
-        await chartOfAccounts.bulkPut(missingAccounts);
-      }
-
-      await tx.table<CooperativeSettings, string>('cooperativeSettings').put({
-        id: 'default',
-        created_at: now,
-        updated_at: now,
-      });
-    });
-
-    this.version(40).stores({
-      cooperativeSavingTransactions: 'id, member_id, saving_type, transaction_type, status, transaction_date, finance_transaction_id, journal_entry_id, reversal_of_transaction_id, created_at'
-    }).upgrade(async (tx) => {
-      const now = new Date().toISOString();
-      const seed = buildAccountingSeed(now);
-      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
-      const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
-      const accounts = await chartOfAccounts.toArray();
-      const accountCodes = new Set(accounts.map((account) => account.code));
-      const accountIds = new Set(accounts.map((account) => account.id));
-      const missingAccounts = seed.accounts.filter((account) => {
-        return !accountCodes.has(account.code) && !accountIds.has(account.id);
-      });
-
-      if (missingAccounts.length > 0) {
-        await chartOfAccounts.bulkPut(missingAccounts);
-      }
-
-      const mappings = await financeAccountMappings.toArray();
-      const mappingKeys = new Set(mappings.map((mapping) => mapping.key));
-      const missingMappings = seed.mappings.filter((mapping) => !mappingKeys.has(mapping.key));
-
-      if (missingMappings.length > 0) {
-        await financeAccountMappings.bulkPut(missingMappings);
-      }
-    });
-
-    this.version(41).stores({
-      cooperativeMemberSavingBalances: 'id, member_id, member_number, saving_type, updated_at'
-    });
-
-    this.version(42).stores({}).upgrade(async (tx) => {
-      const now = new Date().toISOString();
-      const seed = buildAccountingSeed(now);
-      const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
-      const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
-      const accounts = await chartOfAccounts.toArray();
-      const accountCodes = new Set(accounts.map((account) => account.code));
-      const accountIds = new Set(accounts.map((account) => account.id));
-      const missingAccounts = seed.accounts.filter((account) => {
-        return !accountCodes.has(account.code) && !accountIds.has(account.id);
-      });
-
-      if (missingAccounts.length > 0) {
-        await chartOfAccounts.bulkPut(missingAccounts);
-      }
-
-      const mappings = await financeAccountMappings.toArray();
-      const mappingKeys = new Set(mappings.map((mapping) => mapping.key));
-      const missingMappings = seed.mappings.filter((mapping) => !mappingKeys.has(mapping.key));
-
-      if (missingMappings.length > 0) {
-        await financeAccountMappings.bulkPut(missingMappings);
-      }
-    });
-
-    this.version(43).stores({
-      cooperativeLoanPayments: 'id, payment_number, payment_type, loan_id, installment_id, payment_date, status, finance_transaction_id, journal_entry_id, reversal_of_payment_id, created_at'
-    }).upgrade(async (tx) => {
-      const now = new Date().toISOString();
-      const seed = buildAccountingSeed(now);
-      const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
-      const mappings = await financeAccountMappings.toArray();
-      const mappingKeys = new Set(mappings.map((mapping) => mapping.key));
-      const missingMappings = seed.mappings.filter((mapping) => !mappingKeys.has(mapping.key));
-
-      if (missingMappings.length > 0) {
-        await financeAccountMappings.bulkPut(missingMappings);
+      // ===== Inventory opening lots =====
+      const products = await tx.table<Product, string>('products').toArray();
+      const openingLots: InventoryLot[] = products
+        .filter((product) => Number(product.stock || 0) > 0 && Number(product.purchase_price || 0) > 0)
+        .map((product) => ({
+          id: crypto.randomUUID(),
+          product_id: product.id,
+          product_name: product.name,
+          sku: product.sku,
+          source_type: 'OPENING' as const,
+          quantity_received: Number(product.stock),
+          quantity_remaining: Number(product.stock),
+          cost_per_unit: Number(product.purchase_price),
+          received_at: product.created_at || now,
+          created_at: now,
+          updated_at: now,
+        }));
+      if (openingLots.length > 0) {
+        await tx.table<InventoryLot, string>('inventoryLots').bulkAdd(openingLots);
       }
     });
 

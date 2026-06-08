@@ -27,6 +27,7 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
     warehouses,
     createDocument,
     updateDocument,
+    createBasicProduct,
     isSubmitting,
   } = usePurchaseDocuments();
   const [document, setDocument] = useState<PurchaseDocument | undefined>();
@@ -78,6 +79,7 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
         projects={projects}
         warehouses={warehouses}
         submitting={isSubmitting}
+        onCreateBasicProduct={createBasicProduct}
         onCancel={() => {
           if (!document) {
             navigate({

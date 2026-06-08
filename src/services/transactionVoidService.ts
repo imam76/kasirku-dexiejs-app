@@ -7,6 +7,8 @@ import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions'
 import { reversePosSaleJournal } from '@/services/generalLedgerService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
+import { normalisasiHargaProduk } from '@/utils/pricing';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -53,8 +55,10 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       db.financeTransactions,
       db.financeBalance,
       db.enabledModules,
+      db.generalLedgerSetting,
       db.journalEntries,
       db.journalEntryLines,
+      db.inventoryLots,
     ],
     async () => {
       const transaction = await db.transactions.get(transactionId);
@@ -82,6 +86,25 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         });
 
         if (returnedQuantity > 0) {
+          // Create a FIFO lot for the returned stock using the cost snapshot from the original sale
+          const costPerStockUnit = normalisasiHargaProduk(
+            item.purchase_price,
+            product,
+            item.unit,
+            product.purchase_unit,
+          );
+          await addInventoryLot({
+            productId: product.id,
+            productName: product.name,
+            sku: product.sku,
+            sourceType: 'POS_VOID',
+            sourceId: transaction.id,
+            sourceLineId: item.id,
+            quantityReceived: returnedQuantity,
+            costPerUnit: costPerStockUnit,
+            receivedAt: now,
+          });
+
           const sourceUnit = resolveTransactionItemUnit(item, product);
           stockMutations.push(createStockMutation({
             product,

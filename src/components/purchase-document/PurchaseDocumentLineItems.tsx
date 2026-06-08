@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import type { Product, PurchaseDocumentItem, Tax } from '@/types';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
+import { useUnits } from '@/hooks/useUnits';
 import { getPurchasePrice } from '@/utils/pricing';
 import { getProductDocumentUnits } from '@/utils/productUnits';
 import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/createEmptyPurchaseDocumentItem';
@@ -23,6 +24,7 @@ interface PurchaseDocumentLineItemsProps {
   taxes: Tax[];
   documentCurrencySnapshot: DocumentCurrencySnapshot;
   onChange: (items: PurchaseDocumentItem[]) => void;
+  onCreateProductRequest?: (lineId: string, search: string) => void;
 }
 
 const emptyUnitOptions: Array<{ value: string; label: string }> = [];
@@ -48,8 +50,10 @@ export const PurchaseDocumentLineItems = ({
   taxes,
   documentCurrencySnapshot,
   onChange,
+  onCreateProductRequest,
 }: PurchaseDocumentLineItemsProps) => {
   const { t } = useI18n();
+  const { unitOptions: masterUnitOptions } = useUnits();
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
   const [scrollToLastRequest, setScrollToLastRequest] = useState(0);
   const itemsRef = useRef(items);
@@ -71,6 +75,14 @@ export const PurchaseDocumentLineItems = ({
     [products],
   );
 
+  const masterUnitMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const option of masterUnitOptions) {
+      map.set(option.value.toLowerCase(), option.label);
+    }
+    return map;
+  }, [masterUnitOptions]);
+
   const taxOptions = useMemo(
     () => taxes.map((tax) => ({
       value: tax.id,
@@ -79,17 +91,44 @@ export const PurchaseDocumentLineItems = ({
     [taxes],
   );
   const unitOptionsByProductId = useMemo(
-    () => new Map(products.map((product) => [
-      product.id,
-      getProductDocumentUnits(product).map((unit) => ({ value: unit, label: unit })),
-    ])),
-    [products],
+    () => new Map(products.map((product) => {
+      const productUnits = getProductDocumentUnits(product);
+      const uniqueUnitKeys = new Set([
+        ...productUnits.map((u) => u.toLowerCase()),
+        ...Array.from(masterUnitMap.keys()),
+      ]);
+
+      const options = Array.from(uniqueUnitKeys)
+        .filter(Boolean)
+        .map((unitKey) => ({
+          value: unitKey,
+          label: masterUnitMap.get(unitKey) || unitKey,
+        }));
+
+      return [product.id, options];
+    })),
+    [products, masterUnitMap],
   );
 
   const unitOptionsByUnit = useMemo(() => {
-    const uniqueUnits = new Set(items.map((item) => item.unit).filter(Boolean));
-    return new Map(Array.from(uniqueUnits).map((unit) => [unit, [{ value: unit, label: unit }]]));
-  }, [items]);
+    const uniqueUnitKeys = new Set([
+      ...items.map((item) => item.unit?.toLowerCase()).filter(Boolean),
+      ...Array.from(masterUnitMap.keys()),
+    ]);
+
+    const allOptions = Array.from(uniqueUnitKeys)
+      .filter(Boolean)
+      .map((unitKey) => ({
+        value: unitKey,
+        label: masterUnitMap.get(unitKey) || unitKey,
+      }));
+
+    const map = new Map<string, typeof allOptions>();
+    for (const unitKey of uniqueUnitKeys) {
+      map.set(unitKey, allOptions);
+    }
+    return map;
+  }, [items, masterUnitMap]);
 
   const calculatedItemsById = useMemo(
     () => new Map(calculatedItems.map((item) => [item.id, item])),
@@ -217,6 +256,7 @@ export const PurchaseDocumentLineItems = ({
         onSelectProduct={selectProduct}
         onRemoveItem={removeItem}
         onToggleExpanded={toggleExpanded}
+        onCreateProductRequest={onCreateProductRequest}
       />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-gray-500">

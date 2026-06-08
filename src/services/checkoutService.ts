@@ -9,6 +9,7 @@ import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/s
 import { getCashOrBankAccountForPayment, postPosSaleJournal } from '@/services/generalLedgerService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -22,47 +23,87 @@ export interface CheckoutResult {
   items: TransactionItem[];
 }
 
-const createTransactionItems = (
+const createTransactionItems = async (
   cart: CartItem[],
   transactionId: string,
   createdAt: string,
   promoEvaluation: PromoEvaluationResult,
-): TransactionItem[] => {
-  return cart.map((item, index) => {
+): Promise<TransactionItem[]> => {
+  const items: TransactionItem[] = [];
+
+  for (const [index, item] of cart.entries()) {
     const promoLine = promoEvaluation.lines[index];
-    const priceBeforeDiscount = promoLine?.price_before_discount ?? getCartItemPrice(item);
-    const subtotalBeforeDiscount = promoLine?.subtotal_before_discount ?? priceBeforeDiscount * item.quantity;
+
+    const priceBeforeDiscount =
+      promoLine?.price_before_discount ?? getCartItemPrice(item);
+
+    const subtotalBeforeDiscount =
+      promoLine?.subtotal_before_discount ?? priceBeforeDiscount * item.quantity;
+
     const discountAmount = promoLine?.discount_amount ?? 0;
-    const sellingPrice = promoLine?.final_unit_price ?? priceBeforeDiscount;
-    const finalSubtotal = promoLine?.final_subtotal ?? sellingPrice * item.quantity;
+
+    const sellingPrice =
+      promoLine?.final_unit_price ?? priceBeforeDiscount;
+
+    const finalSubtotal =
+      promoLine?.final_subtotal ?? sellingPrice * item.quantity;
+
+    const unitSnapshot = createSalesUnitSnapshot(item.unit, item.product);
+
+    // Quantity dikonversi ke purchase_unit / stock unit
+    const quantityInStockUnit = konversiSatuanProduk(
+      item.quantity,
+      item.product,
+      item.unit,
+      item.product.purchase_unit,
+    );
+
+    // Ambil HPP aktual berdasarkan FIFO lot
+    const fifoResult = await consumeFifoLots(
+      item.product.id,
+      quantityInStockUnit,
+    );
+
+    // weightedAvgCostPerUnit berasal dari purchase_unit,
+    // lalu dinormalisasi ke unit jual item
     const normalizedPurchasePrice = normalisasiHargaProduk(
-      item.product.purchase_price,
+      fifoResult.weightedAvgCostPerUnit,
       item.product,
       item.product.purchase_unit,
       item.unit,
     );
-    const unitSnapshot = createSalesUnitSnapshot(item.unit, item.product);
 
-    return {
+    items.push({
       id: crypto.randomUUID(),
       transaction_id: transactionId,
       product_id: item.product.id,
       product_name: item.product.name,
+
       price: sellingPrice,
       selling_price: sellingPrice,
       is_price_edited: false,
+
       purchase_price: normalizedPurchasePrice,
+
       unit: item.unit,
       ...unitSnapshot,
+
       quantity: item.quantity,
+
       price_before_discount: priceBeforeDiscount,
       subtotal_before_discount: subtotalBeforeDiscount,
       discount_amount: discountAmount,
       subtotal: finalSubtotal,
-      profit: finalSubtotal - normalizedPurchasePrice * item.quantity,
+
+      // Lebih akurat karena pakai totalCost FIFO,
+      // bukan purchase_price rata-rata dikali quantity
+      profit: finalSubtotal - fifoResult.totalCost,
+
       created_at: createdAt,
-    };
-  });
+    });
+  }
+
+  return items;
 };
 
 const recordProfit = async (
@@ -215,6 +256,7 @@ export const checkout = async ({
       db.generalLedgerSetting,
       db.journalEntries,
       db.journalEntryLines,
+      db.inventoryLots,
     ],
     async () => {
       const transaction: Transaction = {
@@ -233,7 +275,7 @@ export const checkout = async ({
         created_at: createdAt,
       };
 
-      const items = createTransactionItems(cart, transactionId, createdAt, promoEvaluation);
+      const items = await createTransactionItems(cart, transactionId, createdAt, promoEvaluation);
 
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);

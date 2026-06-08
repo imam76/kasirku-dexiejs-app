@@ -1542,3 +1542,33 @@ export interface FinanceBalance {
   amount: number;
   updated_at: string;
 }
+
+export type InventoryLotSourceType =
+  | 'SHOPPING_NOTE'
+  | 'PURCHASE_RECEIPT'
+  | 'POS_VOID'
+  | 'SALES_RETURN_RESTOCK'
+  | 'PURCHASE_RETURN_VOID'
+  | 'SALES_DELIVERY_VOID'
+  | 'OPENING';
+
+/**
+ * Represents a single batch (lot) of inventory received at a specific cost.
+ * Used for FIFO (First In, First Out) cost calculation.
+ * When selling, the oldest lots (by received_at) are consumed first.
+ */
+export interface InventoryLot {
+  id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  source_type: InventoryLotSourceType;
+  source_id?: string;       // ID of the originating record (e.g. shoppingNoteId, purchaseDocumentId)
+  source_line_id?: string;  // ID of the specific line item for traceability
+  quantity_received: number; // Original quantity when lot was created (in product's purchase_unit)
+  quantity_remaining: number; // Remaining quantity not yet consumed by sales (in purchase_unit)
+  cost_per_unit: number;     // HPP per unit (in purchase_unit)
+  received_at: string;       // Timestamp used for FIFO ordering (oldest first)
+  created_at: string;
+  updated_at: string;
+}

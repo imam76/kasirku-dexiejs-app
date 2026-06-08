@@ -1,4 +1,4 @@
-import { forwardRef, memo } from 'react';
+import { forwardRef, memo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, InputNumber, Select } from 'antd';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
@@ -33,105 +33,168 @@ export interface PurchaseLineItemRowProps {
   onSelectProduct: (itemId: string, productId: string) => void;
   onRemoveItem: (itemId: string) => void;
   onToggleExpanded: (itemId: string) => void;
+  onCreateProductRequest?: (lineId: string, search: string) => void;
 }
 
-const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowProps>(({
-  item,
-  calculatedItem,
-  productOptions,
-  unitOptions,
-  taxOptions,
-  documentCurrencySnapshot,
-  isExpanded,
-  hasPricing,
-  isPurchaseReceipt,
-  gridTemplateColumns,
-  virtualIndex,
-  style,
-  onUpdateItem,
-  onSelectProduct,
-  onRemoveItem,
-  onToggleExpanded,
-}, ref) => {
-  const { t } = useI18n();
-  const displayedItem = calculatedItem ?? item;
-  const displayedSubtotal = toDocumentCurrencyAmount(displayedItem.subtotal, documentCurrencySnapshot);
+const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowProps>(
+  (
+    {
+      item,
+      calculatedItem,
+      productOptions,
+      unitOptions,
+      taxOptions,
+      documentCurrencySnapshot,
+      isExpanded,
+      hasPricing,
+      isPurchaseReceipt,
+      gridTemplateColumns,
+      virtualIndex,
+      style,
+      onUpdateItem,
+      onSelectProduct,
+      onRemoveItem,
+      onToggleExpanded,
+      onCreateProductRequest,
+    },
+    ref
+  ) => {
+    const { t } = useI18n();
+    const [productSearch, setProductSearch] = useState('');
 
-  return (
-    <div
-      ref={ref}
-      data-index={virtualIndex}
-      style={style}
-      className="border-b border-gray-100 bg-white"
-    >
+    const displayedItem = calculatedItem ?? item;
+    const displayedSubtotal = toDocumentCurrencyAmount(
+      displayedItem.subtotal,
+      documentCurrencySnapshot
+    );
+
+    return (
       <div
-        className="grid items-center gap-2 px-3 py-2"
-        style={{ gridTemplateColumns }}
+        ref={ref}
+        data-index={virtualIndex}
+        style={style}
+        className="border-b border-gray-100 bg-white"
       >
-        <Select
-          showSearch={{ optionFilterProp: 'label' }}
-          className="w-full min-w-0"
-          placeholder={t('purchaseDocuments.placeholder.product')}
-          value={item.product_id || undefined}
-          options={productOptions}
-          onChange={(productId: string) => onSelectProduct(item.id, productId)}
-        />
-        <InputNumber
-          min={0}
-          className="w-full"
-          value={item.quantity}
-          onChange={(value) => onUpdateItem(item.id, { quantity: Number(value || 0) })}
-        />
-        {isPurchaseReceipt && (
+        <div
+          className="grid items-center gap-2 px-3 py-2"
+          style={{ gridTemplateColumns }}
+        >
+          <Select
+            showSearch={{ optionFilterProp: 'label' }}
+            className="w-full min-w-0"
+            placeholder={t('purchaseDocuments.placeholder.product')}
+            value={item.product_id || undefined}
+            options={productOptions}
+            onSearch={setProductSearch}
+            searchValue={productSearch}
+            notFoundContent={
+              productSearch.trim().length > 0 ? (
+                <div className="px-2 py-2">
+                  <div className="mb-2 text-sm text-gray-600">
+                    Produk tidak ditemukan
+                  </div>
+                  <Button
+                    type="primary"
+                    size="small"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onCreateProductRequest?.(item.id, productSearch);
+                      setProductSearch('');
+                    }}
+                  >
+                    Buat Produk Baru
+                  </Button>
+                </div>
+              ) : null
+            }
+            onChange={(productId: string) => {
+              onSelectProduct(item.id, productId);
+              setProductSearch('');
+            }}
+          />
+
           <InputNumber
             min={0}
             className="w-full"
-            value={item.received_quantity ?? item.quantity}
-            onChange={(value) => onUpdateItem(item.id, {
-              received_quantity: Number(value || 0),
-            })}
+            value={item.quantity}
+            onChange={(value) =>
+              onUpdateItem(item.id, {
+                quantity: Number(value || 0),
+              })
+            }
           />
-        )}
-        <Select
-          className="w-full min-w-0"
-          value={item.unit || undefined}
-          options={unitOptions}
-          onChange={(unit: string) => onUpdateItem(item.id, { unit })}
-        />
-        {hasPricing && (
-          <div className="truncate text-right text-sm font-medium text-gray-700">
-            {formatDocumentCurrencyAmount(displayedSubtotal, documentCurrencySnapshot)}
-          </div>
-        )}
-        {hasPricing && (
+
+          {isPurchaseReceipt && (
+            <InputNumber
+              min={0}
+              className="w-full"
+              value={item.received_quantity ?? item.quantity}
+              onChange={(value) =>
+                onUpdateItem(item.id, {
+                  received_quantity: Number(value || 0),
+                })
+              }
+            />
+          )}
+
+          <Select
+            className="w-full min-w-0"
+            value={item.unit || undefined}
+            options={unitOptions}
+            onChange={(unit: string) => onUpdateItem(item.id, { unit })}
+          />
+
+          {hasPricing && (
+            <div className="truncate text-right text-sm font-medium text-gray-700">
+              {formatDocumentCurrencyAmount(
+                displayedSubtotal,
+                documentCurrencySnapshot
+              )}
+            </div>
+          )}
+
+          {hasPricing && (
+            <Button
+              type="text"
+              icon={
+                isExpanded ? (
+                  <ChevronUp size={16} />
+                ) : (
+                  <ChevronDown size={16} />
+                )
+              }
+              disabled={!item.product_id}
+              onClick={() => onToggleExpanded(item.id)}
+              aria-label={t(
+                isExpanded
+                  ? 'purchaseDocuments.closeItemDetail'
+                  : 'purchaseDocuments.openItemDetail'
+              )}
+            />
+          )}
+
           <Button
+            danger
             type="text"
-            icon={isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            disabled={!item.product_id}
-            onClick={() => onToggleExpanded(item.id)}
-            aria-label={t(isExpanded ? 'purchaseDocuments.closeItemDetail' : 'purchaseDocuments.openItemDetail')}
+            icon={<Trash2 size={16} />}
+            onClick={() => onRemoveItem(item.id)}
+            aria-label={t('purchaseDocuments.deleteItem')}
+          />
+        </div>
+
+        {hasPricing && isExpanded && item.product_id && (
+          <PurchaseLineItemExpandedFields
+            item={item}
+            calculatedItem={calculatedItem}
+            taxOptions={taxOptions}
+            documentCurrencySnapshot={documentCurrencySnapshot}
+            onUpdateItem={onUpdateItem}
           />
         )}
-        <Button
-          danger
-          type="text"
-          icon={<Trash2 size={16} />}
-          onClick={() => onRemoveItem(item.id)}
-          aria-label={t('purchaseDocuments.deleteItem')}
-        />
       </div>
-      {hasPricing && isExpanded && item.product_id && (
-        <PurchaseLineItemExpandedFields
-          item={item}
-          calculatedItem={calculatedItem}
-          taxOptions={taxOptions}
-          documentCurrencySnapshot={documentCurrencySnapshot}
-          onUpdateItem={onUpdateItem}
-        />
-      )}
-    </div>
-  );
-});
+    );
+  }
+);
 
 PurchaseLineItemRowBase.displayName = 'PurchaseLineItemRow';
 
@@ -151,5 +214,6 @@ export const PurchaseLineItemRow = memo(PurchaseLineItemRowBase, (prev, next) =>
   prev.onUpdateItem === next.onUpdateItem &&
   prev.onSelectProduct === next.onSelectProduct &&
   prev.onRemoveItem === next.onRemoveItem &&
-  prev.onToggleExpanded === next.onToggleExpanded
+  prev.onToggleExpanded === next.onToggleExpanded &&
+  prev.onCreateProductRequest === next.onCreateProductRequest
 ));

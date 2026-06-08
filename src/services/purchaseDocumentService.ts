@@ -2,6 +2,7 @@ import { getPurchaseDocumentConfig, type PurchaseDocumentConfig } from '@/config
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type {
+  Product,
   PurchaseDocument,
   PurchaseDocumentItem,
   PurchaseDocumentType,
@@ -33,10 +34,14 @@ import {
   snapshotFromDocumentInput,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
+import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
+import { normalisasiHargaProduk } from '@/utils/pricing';
 
 export interface PurchaseDocumentUpsertInput {
   document: Partial<PurchaseDocument>;
   items: PurchaseDocumentItem[];
+  pendingProducts?: Product[];
 }
 
 const purchaseDocumentTables = [
@@ -44,6 +49,7 @@ const purchaseDocumentTables = [
   db.purchaseDocumentItems,
   db.products,
   db.activityLogs,
+  db.inventoryLots,
 ];
 
 const allowedConversions: Record<PurchaseDocumentType, PurchaseDocumentType[]> = {
@@ -226,6 +232,27 @@ const addReceiptStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Calculate cost per stock unit from item price in the document
+      const itemCostPerUnit = normalisasiHargaProduk(
+        item.price ?? 0,
+        product,
+        item.unit,
+        product.purchase_unit,
+      );
+
+      // Create a FIFO lot for this received batch
+      await addInventoryLot({
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        sourceType: 'PURCHASE_RECEIPT',
+        sourceId: document.id,
+        sourceLineId: item.id,
+        quantityReceived: quantityInStockUnit,
+        costPerUnit: itemCostPerUnit,
+        receivedAt: occurredAt,
+      });
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
@@ -265,6 +292,9 @@ const restoreReceiptStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Stock Out -> Consume FIFO lots to keep stock consistent
+      await consumeFifoLots(product.id, quantityInStockUnit);
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
@@ -304,6 +334,9 @@ const removePurchaseReturnStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Stock Out (Returned to supplier) -> Consume FIFO lots to keep stock consistent
+      await consumeFifoLots(product.id, quantityInStockUnit);
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
@@ -343,6 +376,27 @@ const restorePurchaseReturnStock = async (
     });
 
     if (quantityInStockUnit > 0) {
+      // Calculate cost per stock unit from item price in the return document
+      const itemCostPerUnit = normalisasiHargaProduk(
+        item.price ?? 0,
+        product,
+        item.unit,
+        product.purchase_unit,
+      );
+
+      // Create a FIFO lot for this cancelled return
+      await addInventoryLot({
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        sourceType: 'PURCHASE_RETURN_VOID',
+        sourceId: document.id,
+        sourceLineId: item.id,
+        quantityReceived: quantityInStockUnit,
+        costPerUnit: itemCostPerUnit,
+        receivedAt: occurredAt,
+      });
+
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
@@ -385,7 +439,7 @@ const calculatePurchaseTotal = async (
   });
 };
 
-export const createPurchaseDocument = async ({ document, items }: PurchaseDocumentUpsertInput) => {
+export const createPurchaseDocument = async ({ document, items, pendingProducts }: PurchaseDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
 
@@ -418,10 +472,39 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
     ...total,
     ...foreignTotal,
   } satisfies PurchaseDocument, config), currentUser);
-  const products = await db.products.toArray();
-  validatePurchaseDocument({ document: nextDocument, items: calculatedItemsWithFx, config, products });
+  const liveProducts = await db.products.toArray();
+  const allProducts = [...liveProducts, ...(pendingProducts || [])];
+  validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products: allProducts });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
+    if (pendingProducts && pendingProducts.length > 0) {
+      const itemsByProductId = new Map(items.map((item) => [item.product_id, item]));
+      const productsToCreate = pendingProducts.filter((product) => itemsByProductId.has(product.id));
+
+      for (const product of productsToCreate) {
+        const item = itemsByProductId.get(product.id);
+        const existing = await db.products.get(product.id);
+        if (existing) continue;
+
+        if (product.sku) {
+          const sameSku = await db.products.where('sku').equals(product.sku).first();
+          if (sameSku) {
+            throw new Error(`Barcode/SKU ${product.sku} sudah terdaftar pada produk lain`);
+          }
+        }
+
+        await db.products.add({
+          ...product,
+          purchase_price: Number(item?.price ?? product.purchase_price),
+          selling_price: Number(item?.price ?? product.selling_price),
+          purchase_unit: item?.unit ?? product.purchase_unit,
+          selling_unit: item?.unit ?? product.selling_unit,
+          created_at: createdAt,
+          updated_at: createdAt,
+        });
+      }
+    }
+
     await db.purchaseDocuments.add(nextDocument);
     await db.purchaseDocumentItems.bulkAdd(calculatedItemsWithFx);
     await writeActivityLog({
@@ -438,7 +521,7 @@ export const createPurchaseDocument = async ({ document, items }: PurchaseDocume
   return { document: nextDocument, items: calculatedItemsWithFx };
 };
 
-export const updatePurchaseDocument = async (id: string, { document, items }: PurchaseDocumentUpsertInput) => {
+export const updatePurchaseDocument = async (id: string, { document, items, pendingProducts }: PurchaseDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const existing = await db.purchaseDocuments.get(id);
@@ -468,10 +551,39 @@ export const updatePurchaseDocument = async (id: string, { document, items }: Pu
     document_number: existing.document_number,
     updated_at: updatedAt,
   } satisfies PurchaseDocument, config), existing, currentUser);
-  const products = await db.products.toArray();
-  validatePurchaseDocument({ document: nextDocument, items: calculatedItemsWithFx, config, products });
+  const liveProducts = await db.products.toArray();
+  const allProducts = [...liveProducts, ...(pendingProducts || [])];
+  validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products: allProducts });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
+    if (pendingProducts && pendingProducts.length > 0) {
+      const itemsByProductId = new Map(items.map((item) => [item.product_id, item]));
+      const productsToCreate = pendingProducts.filter((product) => itemsByProductId.has(product.id));
+
+      for (const product of productsToCreate) {
+        const item = itemsByProductId.get(product.id);
+        const existingProduct = await db.products.get(product.id);
+        if (existingProduct) continue;
+
+        if (product.sku) {
+          const sameSku = await db.products.where('sku').equals(product.sku).first();
+          if (sameSku) {
+            throw new Error(`Barcode/SKU ${product.sku} sudah terdaftar pada produk lain`);
+          }
+        }
+
+        await db.products.add({
+          ...product,
+          purchase_price: Number(item?.price ?? product.purchase_price),
+          selling_price: Number(item?.price ?? product.selling_price),
+          purchase_unit: item?.unit ?? product.purchase_unit,
+          selling_unit: item?.unit ?? product.selling_unit,
+          created_at: updatedAt,
+          updated_at: updatedAt,
+        });
+      }
+    }
+
     await db.purchaseDocuments.put(nextDocument);
     await db.purchaseDocumentItems.where('document_id').equals(id).delete();
     await db.purchaseDocumentItems.bulkAdd(calculatedItemsWithFx);

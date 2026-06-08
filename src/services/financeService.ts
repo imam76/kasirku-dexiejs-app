@@ -130,7 +130,7 @@ export const recalculateFinance = async () => {
   const deletedAutoTransactions: FinanceTransaction[] = [];
   const newAutoTransactions: FinanceTransaction[] = [];
 
-  await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases, db.chartOfAccounts, db.financeAccountMappings], async () => {
+  await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases, db.chartOfAccounts, db.financeAccountMappings, db.generalLedgerSetting], async () => {
     const autoCategories = [
       FINANCE_CATEGORIES.SALES,
       FINANCE_CATEGORIES.AUTO_COGS,

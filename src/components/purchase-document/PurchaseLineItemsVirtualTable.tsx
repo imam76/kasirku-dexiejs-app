@@ -28,6 +28,7 @@ interface PurchaseLineItemsVirtualTableProps {
   onSelectProduct: (itemId: string, productId: string) => void;
   onRemoveItem: (itemId: string) => void;
   onToggleExpanded: (itemId: string) => void;
+  onCreateProductRequest?: (lineId: string, search: string) => void;
 }
 
 const COLLAPSED_ROW_ESTIMATE = 56;
@@ -51,6 +52,7 @@ export const PurchaseLineItemsVirtualTable = ({
   onSelectProduct,
   onRemoveItem,
   onToggleExpanded,
+  onCreateProductRequest,
 }: PurchaseLineItemsVirtualTableProps) => {
   const { t } = useI18n();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -169,6 +171,7 @@ export const PurchaseLineItemsVirtualTable = ({
                       onSelectProduct={onSelectProduct}
                       onRemoveItem={onRemoveItem}
                       onToggleExpanded={onToggleExpanded}
+                      onCreateProductRequest={onCreateProductRequest}
                     />
                   );
                 })}

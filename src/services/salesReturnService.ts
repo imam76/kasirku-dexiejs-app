@@ -35,6 +35,7 @@ import { validateSalesReturn } from '@/utils/salesReturns/validateSalesReturn';
 import type { SalesReturnSourceChain } from '@/utils/salesReturns/resolveSalesReturnSourceChain';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 
 export interface SalesReturnItemInput {
   source_item_id: string;
@@ -71,6 +72,7 @@ const salesReturnTables = [
   db.profitLogs,
   db.profitBalance,
   db.activityLogs,
+  db.inventoryLots,
 ];
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -364,6 +366,23 @@ const applyRestockEffect = async (
     }
 
     await db.products.update(product.id, { stock: nextStock });
+
+    // When restocking (direction === 1), create a FIFO lot using the original purchase_price snapshot.
+    // On void of a return (direction === -1), we do NOT remove the lot — it may already be consumed.
+    if (direction === 1 && stockQuantity > 0) {
+      const costPerStockUnit = item.purchase_price ?? 0;
+      await addInventoryLot({
+        productId: product.id,
+        productName: product.name,
+        sku: item.sku,
+        sourceType: 'SALES_RETURN_RESTOCK',
+        sourceId: salesReturn.id,
+        sourceLineId: item.id,
+        quantityReceived: stockQuantity,
+        costPerUnit: costPerStockUnit,
+        receivedAt: occurredAt,
+      });
+    }
 
     stockMutations.push(createStockMutation({
       product,

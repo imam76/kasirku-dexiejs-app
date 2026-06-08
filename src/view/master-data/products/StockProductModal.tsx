@@ -11,8 +11,8 @@ import { getProductCategoryOptions } from '@/i18n/stock';
 import { db } from '@/lib/db';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Alert, Badge, Button, Grid, Input, InputNumber, Modal, Select, Tabs, Tooltip } from 'antd';
-import { AlertTriangle, ExternalLink, Info, Plus, ScanLine, Trash2, X } from 'lucide-react';
+import { Alert, Badge, Button, Grid, Input, InputNumber, Modal, Select, Tabs } from 'antd';
+import { AlertTriangle, ExternalLink, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type Control,
@@ -272,14 +272,6 @@ export default function StockProductModal({ open, editingId, control, errors, se
     [purchaseUnit, getUnitType, getUnitCategory],
   );
 
-  const shouldShowUnitConversionTab = useMemo(() => {
-    return (
-      selectedSellableUnits.some(needsProductMapping) ||
-      unitMappings.length > 0 ||
-      unitMappingFields.length > 0
-    );
-  }, [selectedSellableUnits, needsProductMapping, unitMappings.length, unitMappingFields.length]);
-
   const missingProductMappingUnits = useMemo(() => {
     return selectedSellableUnits.filter((unit) => {
       if (!needsProductMapping(unit)) return false;
@@ -409,8 +401,8 @@ export default function StockProductModal({ open, editingId, control, errors, se
   }, [open, purchaseUnit, selectedSellableUnits, sellingUnit, setValue, isSellableUnitCompatible]);
 
   const handleSave = () => {
-    if (incompleteProductMappingUnits.length > 0 || errors.unit_mappings) {
-      setActiveTab('unit-conversion');
+    if (incompleteProductMappingUnits.length > 0 || errors.unit_mappings || errors.sellable_units || errors.selling_unit) {
+      setActiveTab('multi-unit');
     }
 
     onSave();
@@ -607,54 +599,6 @@ export default function StockProductModal({ open, editingId, control, errors, se
                           )}
                         />
                       </FieldContainer>
-
-                     
-                        <FieldContainer
-                          label={(
-                            <span className="inline-flex items-center gap-1.5">
-                              {t('stock.form.sellableUnits')}
-                              <Tooltip
-                                trigger={['hover', 'click']}
-                                title={t('stock.form.sellableUnitsHelp')}
-                              >
-                                <button
-                                  type="button"
-                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                                  aria-label={t('stock.form.sellableUnitsInfo')}
-                                >
-                                  <Info size={14} />
-                                </button>
-                              </Tooltip>
-                            </span>
-                          )}
-                          error={(errors.sellable_units || errors.selling_unit) as FieldError | undefined}
-                          required
-                          requiredLabel={t('stock.form.requiredLabel')}
-                        >
-                          <Controller
-                            name="sellable_units"
-                            control={control}
-                            render={({ field }) => (
-                              <Select
-                                mode="multiple"
-                                value={selectedSellableUnits}
-                                onChange={(values) => {
-                                  const additionalUnits = values
-                                    .filter((unit) => normalizeUnitKey(unit) !== normalizeUnitKey(purchaseUnit))
-                                    .filter(isSellableUnitCompatible);
-                                  const nextUnits = buildSellableUnitsWithDefault(purchaseUnit, additionalUnits);
-                                  field.onChange(nextUnits);
-                                  setValue('selling_unit', nextUnits[0] || '', { shouldDirty: true, shouldValidate: true });
-                                }}
-                                className="w-full"
-                                placeholder={t('stock.form.sellableUnitsPlaceholder')}
-                                options={sellableUnitOptions}
-                              />
-                            )}
-                          />
-                        </FieldContainer>
-                      
-
                       <FieldContainer
                         label={t('stock.form.purchasePricePer', { unit: purchaseUnit })}
                         error={errors.purchase_price}
@@ -726,40 +670,13 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         />
                       </FieldContainer>
 
-                      <FieldContainer label={t('stock.form.purchaseQuantity')} error={errors.purchase_quantity}>
-                        <Controller
-                          name="purchase_quantity"
-                          control={control}
-                          render={({ field }) => (
-                            <InputNumber
-                              inputMode="decimal"
-                              value={field.value}
-                              onBlur={field.onBlur}
-                              onChange={(value) => field.onChange(value ?? 0)}
-                              className="w-full"
-                              placeholder={t('stock.form.purchaseQuantityPlaceholder')}
-                              min={0}
-                            />
-                          )}
-                        />
-                      </FieldContainer>
                     </div>
 
-                    {!shouldShowUnitConversionTab && conversionWarning ? (
-                      <Alert
-                        title={conversionWarning.title}
-                        description={conversionWarning.description}
-                        type="warning"
-                        showIcon
-                        icon={<AlertTriangle size={20} />}
-                        className="mb-4"
-                      />
-                    ) : null}
                   </>
                 ),
               },
-              ...(shouldShowUnitConversionTab ? [{
-                key: 'unit-conversion',
+              {
+                key: 'multi-unit',
                 label: (
                   <Badge count={unitConversionAttentionCount} size="small">
                     <span className="pr-2">{t('stock.form.unitConversionTab')}</span>
@@ -767,6 +684,36 @@ export default function StockProductModal({ open, editingId, control, errors, se
                 ),
                 children: (
                   <div className="space-y-4">
+                    <FieldContainer
+                      label={t('stock.form.sellableUnits')}
+                      error={(errors.sellable_units || errors.selling_unit) as FieldError | undefined}
+                      help={t('stock.form.sellableUnitsHelp')}
+                      required
+                      requiredLabel={t('stock.form.requiredLabel')}
+                    >
+                      <Controller
+                        name="sellable_units"
+                        control={control}
+                        render={({ field }) => (
+                          <Select
+                            mode="multiple"
+                            value={selectedSellableUnits}
+                            onChange={(values) => {
+                              const additionalUnits = values
+                                .filter((unit) => normalizeUnitKey(unit) !== normalizeUnitKey(purchaseUnit))
+                                .filter(isSellableUnitCompatible);
+                              const nextUnits = buildSellableUnitsWithDefault(purchaseUnit, additionalUnits);
+                              field.onChange(nextUnits);
+                              setValue('selling_unit', nextUnits[0] || '', { shouldDirty: true, shouldValidate: true });
+                            }}
+                            className="w-full"
+                            placeholder={t('stock.form.sellableUnitsPlaceholder')}
+                            options={sellableUnitOptions}
+                          />
+                        )}
+                      />
+                    </FieldContainer>
+
                     <Alert
                       type="info"
                       showIcon
@@ -891,7 +838,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
                     </div>
                   </div>
                 ),
-              }] : []),
+              },
               {
                 key: 'wholesale',
                 label: t('stock.form.wholesaleTab'),

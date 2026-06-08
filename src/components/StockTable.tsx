@@ -6,7 +6,7 @@ import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock
 import type { Product } from '@/types';
 import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
-import { Edit2, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Edit2, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 interface StockTableProps {
@@ -226,7 +226,6 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
         mode="multiple"
         allowClear
         maxTagCount="responsive"
-        size="large"
         placeholder={t('stock.categoryPlaceholder')}
         value={selectedCategories}
         onChange={(value) => {
@@ -237,7 +236,6 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
       />
 
       <Select
-        size="large"
         value={stockStatus}
         onChange={(value) => {
           setStockStatus(value);
@@ -248,7 +246,6 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
 
       <div className="grid grid-cols-2 gap-2">
         <InputNumber
-          size="large"
           min={0}
           value={minStock}
           onChange={(value) => {
@@ -256,10 +253,9 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setCurrentPage(1);
           }}
           placeholder={t('stock.minStock')}
-          className="w-full"
+          style={{ width: '100%' }}
         />
         <InputNumber
-          size="large"
           min={0}
           value={maxStock}
           onChange={(value) => {
@@ -267,12 +263,11 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setCurrentPage(1);
           }}
           placeholder={t('stock.maxStock')}
-          className="w-full"
+          style={{ width: '100%' }}
         />
       </div>
 
       <Select
-        size="large"
         value={skuStatus}
         onChange={(value) => {
           setSkuStatus(value);
@@ -282,7 +277,6 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
       />
 
       <Select
-        size="large"
         value={wholesaleStatus}
         onChange={(value) => {
           setWholesaleStatus(value);
@@ -293,7 +287,6 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
 
       <div className="grid grid-cols-2 gap-2">
         <InputNumber
-          size="large"
           min={0}
           value={minSellingPrice}
           onChange={(value) => {
@@ -301,10 +294,9 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setCurrentPage(1);
           }}
           placeholder={t('stock.minSell')}
-          className="w-full"
+          style={{ width: '100%' }}
         />
         <InputNumber
-          size="large"
           min={0}
           value={maxSellingPrice}
           onChange={(value) => {
@@ -312,13 +304,12 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setCurrentPage(1);
           }}
           placeholder={t('stock.maxSell')}
-          className="w-full"
+          style={{ width: '100%' }}
         />
       </div>
 
       <div className={compact ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-2 md:col-span-2'}>
         <InputNumber
-          size="large"
           min={0}
           value={minPurchasePrice}
           onChange={(value) => {
@@ -326,10 +317,9 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setCurrentPage(1);
           }}
           placeholder={t('stock.minBuy')}
-          className="w-full"
+          style={{ width: '100%' }}
         />
         <InputNumber
-          size="large"
           min={0}
           value={maxPurchasePrice}
           onChange={(value) => {
@@ -337,7 +327,7 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             setCurrentPage(1);
           }}
           placeholder={t('stock.maxBuy')}
-          className="w-full"
+          style={{ width: '100%' }}
         />
       </div>
     </div>
@@ -363,10 +353,8 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
 
         <div className="space-y-3">
           <div className={isMobile ? 'grid grid-cols-[1fr_auto] gap-2' : 'block'}>
-            <Input
-              size="large"
+            <Input.Search
               allowClear
-              prefix={<Search size={18} className="text-gray-400" />}
               placeholder={t('stock.searchPlaceholder')}
               value={searchQuery}
               onChange={handleSearchChange}

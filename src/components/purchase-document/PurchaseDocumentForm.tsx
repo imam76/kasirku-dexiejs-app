@@ -13,7 +13,19 @@ import { DocumentDiscountSettingsModal } from '@/components/DocumentDiscountSett
 import { DocumentCurrencyFields } from '@/components/DocumentCurrencyFields';
 import { db } from '@/lib/db';
 import { BASE_CURRENCY_CODE, DEFAULT_EXCHANGE_RATE } from '@/constants/currencies';
-import type { Contact, CurrencyRate, Department, Product, Project, PromoType, PurchaseDocument, PurchaseDocumentItem, Tax, Warehouse } from '@/types';
+import type {
+  Contact,
+  CurrencyRate,
+  Department,
+  Product,
+  ProductCategory,
+  Project,
+  PromoType,
+  PurchaseDocument,
+  PurchaseDocumentItem,
+  Tax,
+  Warehouse,
+} from '@/types';
 import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import {
@@ -29,6 +41,8 @@ import {
 import { formatCurrency } from '@/utils/formatters';
 import { PurchaseDocumentLineItems } from './PurchaseDocumentLineItems';
 
+import { BasicProductFormModal } from '@/components/BasicProductFormModal';
+
 interface PurchaseDocumentFormProps {
   config: PurchaseDocumentConfig;
   initialData?: {
@@ -42,6 +56,7 @@ interface PurchaseDocumentFormProps {
   warehouses: Warehouse[];
   products: Product[];
   onSubmit: (input: { document: Partial<PurchaseDocument>; items: PurchaseDocumentItem[] }) => Promise<void>;
+  onCreateBasicProduct: (input: { name: string; sku?: string; category?: ProductCategory; unit: string; purchasePrice?: number }) => Product | undefined;
   onCancel?: () => void;
   submitting?: boolean;
 }
@@ -141,6 +156,7 @@ export const PurchaseDocumentForm = ({
   warehouses,
   products,
   onSubmit,
+  onCreateBasicProduct,
   onCancel,
   submitting,
 }: PurchaseDocumentFormProps) => {
@@ -148,6 +164,12 @@ export const PurchaseDocumentForm = ({
   const documentId = initialData?.document?.id ?? 'draft';
   const warehouseHelperKey = warehouseHelperKeysByType[config.type];
   const [isDiscountSettingsOpen, setIsDiscountSettingsOpen] = useState(false);
+
+  const [createProductOpen, setCreateProductOpen] = useState(false);
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductSku, setNewProductSku] = useState('');
+  const [activeLineId, setActiveLineId] = useState<string | null>(null);
+
   const {
     control,
     handleSubmit,
@@ -166,6 +188,49 @@ export const PurchaseDocumentForm = ({
   const watchedExchangeRateSource = useWatch({ control, name: 'exchange_rate_source' });
   const watchedExchangeRateBasis = useWatch({ control, name: 'exchange_rate_basis' });
   const watchedExchangeRateDate = useWatch({ control, name: 'exchange_rate_date' });
+
+  const handleCreateProductRequest = useCallback((lineId: string, search: string) => {
+    const value = search.trim();
+    const isBarcodeLike = /^\d{6,}$/.test(value);
+    setNewProductName(isBarcodeLike ? '' : value);
+    setNewProductSku(isBarcodeLike ? value : '');
+    setActiveLineId(lineId);
+    setCreateProductOpen(true);
+  }, []);
+
+  const handleCreateProductOk = useCallback((name: string, sku?: string, category?: ProductCategory) => {
+    const activeItem = items.find((item) => item.id === activeLineId);
+    const unit = activeItem?.unit || 'pcs';
+    const purchasePrice = Number(activeItem?.price || 0);
+
+    const product = onCreateBasicProduct({
+      name,
+      sku,
+      category,
+      unit,
+      purchasePrice,
+    });
+
+    if (product && activeLineId) {
+      const nextItems = items.map((item) => {
+        if (item.id === activeLineId) {
+          return {
+            ...item,
+            product_id: product.id,
+            product_name: product.name,
+            product_sku: product.sku,
+            unit: product.purchase_unit || 'pcs',
+            unit_price: product.purchase_price || 0,
+          };
+        }
+        return item;
+      });
+      setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
+    }
+
+    setCreateProductOpen(false);
+    setActiveLineId(null);
+  }, [onCreateBasicProduct, activeLineId, items, setValue]);
   const discountType = useWatch({ control, name: 'discount_type' }) ?? 'fixed';
   const discountValue = useWatch({ control, name: 'discount_value' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
@@ -533,6 +598,7 @@ export const PurchaseDocumentForm = ({
         taxes={taxes}
         documentCurrencySnapshot={documentCurrencySnapshot}
         onChange={handleItemsChange}
+        onCreateProductRequest={handleCreateProductRequest}
       />
 
       {config.behavior.hasPricing && (
@@ -643,6 +709,15 @@ export const PurchaseDocumentForm = ({
           {t('purchaseDocuments.saveDraft')}
         </Button>
       </div>
+
+      <BasicProductFormModal
+        open={createProductOpen}
+        onCancel={() => setCreateProductOpen(false)}
+        onOk={handleCreateProductOk}
+        initialName={newProductName}
+        initialSku={newProductSku}
+        unit={items.find((item) => item.id === activeLineId)?.unit || 'pcs'}
+      />
     </form>
   );
 };
