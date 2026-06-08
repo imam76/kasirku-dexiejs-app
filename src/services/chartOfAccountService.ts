@@ -15,6 +15,8 @@ import {
   PSAP_TEMPLATE_PREVIEW,
   SAK_EMKM_RETAIL_TEMPLATE,
   SAK_EMKM_RETAIL_TEMPLATE_LINES,
+  SAK_ETAP_KOPERASI_TEMPLATE,
+  SAK_ETAP_KOPERASI_TEMPLATE_LINES,
 } from '@/constants/chartOfAccounts';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
@@ -275,6 +277,10 @@ const assertAccountingProfileCombination = (
 
   if (industryExtension === 'RETAIL' && accountingProfile === 'PSAP') {
     throw new Error('Profile PSAP tidak memakai extension retail.');
+  }
+
+  if (accountingProfile === 'SAK_ETAP' && industryExtension !== 'COOPERATIVE') {
+    throw new Error('SAK ETAP saat ini hanya didukung untuk extension Koperasi.');
   }
 };
 
@@ -664,6 +670,19 @@ const getTemplateForInput = (
     };
   }
 
+  if (
+    templateId === SAK_ETAP_KOPERASI_TEMPLATE.id ||
+    (!templateId && accountingProfile === 'SAK_ETAP' && industryExtension === 'COOPERATIVE')
+  ) {
+    return {
+      template: SAK_ETAP_KOPERASI_TEMPLATE,
+      lines: SAK_ETAP_KOPERASI_TEMPLATE_LINES,
+      canApply: true,
+      warningMessages: [] as string[],
+      requiredDomainFeatures: [] as string[],
+    };
+  }
+
   return createUnsupportedTemplatePreview(accountingProfile, industryExtension);
 };
 
@@ -672,9 +691,11 @@ const countMappingChanges = async (lines: ChartOfAccountTemplateLine[]) => {
   const mappingByKey = new Map(currentMappings.map((mapping) => [mapping.key, mapping.account_code]));
 
   return lines.filter((line) => {
-    if (!line.mapping_key) return false;
-    const mappedCode = mappingByKey.get(line.mapping_key);
-    return mappedCode !== line.code;
+    if (!line.mapping_keys || line.mapping_keys.length === 0) return false;
+    return line.mapping_keys.some((key) => {
+      const mappedCode = mappingByKey.get(key);
+      return mappedCode !== undefined && mappedCode !== line.code;
+    });
   }).length;
 };
 
@@ -787,14 +808,17 @@ const updateMappingsFromTemplate = async (lines: ChartOfAccountTemplateLine[], n
   const mappings: FinanceAccountMapping[] = [];
 
   for (const line of lines) {
-    if (!line.mapping_key) continue;
+    if (!line.mapping_keys || line.mapping_keys.length === 0) continue;
     const account = accountByCode.get(line.code);
     if (!account || !account.is_active || !account.is_postable) continue;
-    const existingMapping = await db.financeAccountMappings.get(line.mapping_key);
-    mappings.push({
-      ...buildMappingFromAccount(line.mapping_key, account, now, true),
-      created_at: existingMapping?.created_at ?? now,
-    });
+    
+    for (const key of line.mapping_keys) {
+      const existingMapping = await db.financeAccountMappings.get(key);
+      mappings.push({
+        ...buildMappingFromAccount(key, account, now, true),
+        created_at: existingMapping?.created_at ?? now,
+      });
+    }
   }
 
   if (mappings.length > 0) {

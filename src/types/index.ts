@@ -1318,13 +1318,14 @@ export type AccountingProfileCode =
   | 'SAK_EP'
   | 'PSAK_FULL'
   | 'PSAP'
-  | 'SAK_ETAP_LEGACY';
+  | 'SAK_ETAP';
 
 export type IndustryExtensionCode =
   | 'NONE'
   | 'RETAIL'
   | 'MANUFACTURING'
-  | 'CONSTRUCTION';
+  | 'CONSTRUCTION'
+  | 'COOPERATIVE';
 
 export type AccountingModuleCode =
   | 'CHART_OF_ACCOUNTS'
@@ -1476,7 +1477,7 @@ export interface ChartOfAccountTemplateLine {
   parent_template_account_id?: string;
   is_postable: boolean;
   description?: string;
-  mapping_key?: string;
+  mapping_keys?: string[];
   created_at: string;
 }
 

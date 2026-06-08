@@ -8,7 +8,7 @@ import {
   INDUSTRY_EXTENSION_LABELS,
 } from '@/constants/accounting';
 import { FINANCE_CATEGORIES } from '@/constants/finance';
-import { SAK_EMKM_RETAIL_TEMPLATE } from '@/constants/chartOfAccounts';
+import { SAK_EMKM_RETAIL_TEMPLATE, SAK_ETAP_KOPERASI_TEMPLATE } from '@/constants/chartOfAccounts';
 import { useI18n } from '@/hooks/useI18n';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import type {
@@ -64,7 +64,6 @@ interface FinanceAccountMappingPanelProps {
 }
 
 const profileOptions = (Object.keys(ACCOUNTING_PROFILE_LABELS) as AccountingProfileCode[])
-  .filter((profile) => profile !== 'SAK_ETAP_LEGACY')
   .map((profile) => ({
     value: profile,
     label: ACCOUNTING_PROFILE_LABELS[profile],
@@ -139,12 +138,17 @@ export default function FinanceAccountMappingPanel({
 
   const handleSaveProfile = async () => {
     try {
+      let templateId: string | undefined;
+      if (selectedProfile === 'SAK_EMKM' && selectedExtension === 'RETAIL') {
+        templateId = SAK_EMKM_RETAIL_TEMPLATE.id;
+      } else if (selectedProfile === 'SAK_ETAP' && selectedExtension === 'COOPERATIVE') {
+        templateId = SAK_ETAP_KOPERASI_TEMPLATE.id;
+      }
+
       await onUpdateProfile({
         accountingProfile: selectedProfile,
         industryExtension: selectedExtension,
-        templateId: selectedProfile === 'SAK_EMKM' && selectedExtension === 'RETAIL'
-          ? SAK_EMKM_RETAIL_TEMPLATE.id
-          : undefined,
+        templateId,
       });
       message.success(t('coa.template.profileSaved'));
     } catch (error) {

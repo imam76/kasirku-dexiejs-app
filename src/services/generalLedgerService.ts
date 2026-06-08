@@ -168,6 +168,9 @@ const ACCOUNT_CANDIDATES = {
   salesReturn: { ids: ['sales-return', 'template-sales-return'], codes: ['4020', '4100'] },
   salesDiscount: { ids: ['sales-discount', 'template-sales-discount'], codes: ['4030', '4110'] },
   cooperativeMemberSavings: { ids: ['cooperative-member-savings'], codes: ['2300'] },
+  cooperativeMemberSavingsPokok: { ids: ['template-member-savings-pokok'], codes: ['2310'] },
+  cooperativeMemberSavingsWajib: { ids: ['template-member-savings-wajib'], codes: ['2320'] },
+  cooperativeMemberSavingsSukarela: { ids: ['template-member-savings-sukarela'], codes: ['2330'] },
   cooperativeLoanReceivable: { ids: ['cooperative-loan-receivable'], codes: ['1120'] },
   cooperativeLoanInterestIncome: { ids: ['cooperative-loan-interest-income'], codes: ['4040'] },
   cooperativeLoanPenaltyIncome: { ids: ['cooperative-loan-penalty-income'], codes: ['4050'] },
@@ -248,6 +251,23 @@ const getPostableAccount = (
 
   if (!account.is_active || !account.is_postable) {
     throw new Error(`Akun ${account.code} - ${account.name} harus aktif dan postable untuk posting jurnal.`);
+  }
+
+  return account;
+};
+
+const tryGetPostableAccount = (
+  accounts: ChartOfAccount[],
+  candidate: AccountCandidate,
+) => {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const accountByCode = new Map(accounts.map((account) => [account.code, account]));
+  const account = candidate.ids
+    .map((id) => accountById.get(id))
+    .find(Boolean) ?? candidate.codes.map((code) => accountByCode.get(code)).find(Boolean);
+
+  if (!account || !account.is_active || !account.is_postable) {
+    return undefined;
   }
 
   return account;
@@ -1015,15 +1035,25 @@ export const postCooperativeSavingTransactionJournal = async (
     throw new Error('Akun kas/bank simpanan harus bertipe aset, aktif, dan postable.');
   }
 
-  const savingAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeMemberSavings, 'Simpanan Anggota');
+  const savingAccountCandidate = (() => {
+    switch (transaction.saving_type) {
+      case 'POKOK': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsPokok;
+      case 'WAJIB': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsWajib;
+      case 'SUKARELA': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsSukarela;
+      default: return ACCOUNT_CANDIDATES.cooperativeMemberSavings;
+    }
+  })();
+  const savingAccountLabel = `Simpanan ${transaction.saving_type === 'POKOK' ? 'Pokok' : transaction.saving_type === 'WAJIB' ? 'Wajib' : transaction.saving_type === 'SUKARELA' ? 'Sukarela' : 'Anggota'}`;
+  const savingAccount = tryGetPostableAccount(accounts, savingAccountCandidate)
+    ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeMemberSavings, 'Simpanan Anggota');
   const lines = transaction.transaction_type === 'DEPOSIT'
     ? [
         createDebitLine(cashAccount, amount, 'Kas/bank bertambah dari setoran simpanan anggota'),
-        createCreditLine(savingAccount, amount, 'Kewajiban simpanan anggota bertambah'),
+        createCreditLine(savingAccount, amount, `Kewajiban ${savingAccountLabel.toLowerCase()} bertambah`),
       ]
     : [
-        createDebitLine(savingAccount, amount, 'Kewajiban simpanan anggota berkurang'),
-        createCreditLine(cashAccount, amount, 'Kas/bank berkurang karena penarikan simpanan anggota'),
+        createDebitLine(savingAccount, amount, `Kewajiban ${savingAccountLabel.toLowerCase()} berkurang`),
+        createCreditLine(cashAccount, amount, `Kas/bank berkurang karena penarikan ${savingAccountLabel.toLowerCase()}`),
       ];
 
   return postBalancedJournalEntry({

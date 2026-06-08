@@ -236,6 +236,196 @@ export const ACCOUNTING_PROFILE_TEMPLATE_RECOMMENDATIONS: AccountingProfileTempl
     created_at: '',
     updated_at: '',
   },
+  {
+    id: 'SAK_ETAP-COOPERATIVE-default-sak-etap-koperasi',
+    accounting_profile: 'SAK_ETAP',
+    industry_extension: 'COOPERATIVE',
+    template_id: 'default-sak-etap-koperasi',
+    is_default: true,
+    sort_order: 20,
+    created_at: '',
+    updated_at: '',
+  },
+];
+
+export const SAK_ETAP_KOPERASI_TEMPLATE: ChartOfAccountTemplate = {
+  id: 'default-sak-etap-koperasi',
+  code: 'SAK_ETAP_KOPERASI',
+  name: 'SAK ETAP Koperasi',
+  accounting_profile: 'SAK_ETAP',
+  industry_extension: 'COOPERATIVE',
+  description: 'Template akun koperasi simpan pinjam mengikuti SAK ETAP. Simpanan dipecah per jenis, tersedia cadangan kerugian piutang, dan dana-dana koperasi.',
+  account_count_hint: 40,
+  is_system: true,
+  is_active: true,
+  created_at: '',
+  updated_at: '',
+};
+
+const createEtapTemplateLine = (
+  templateAccountId: string,
+  code: string,
+  name: string,
+  type: AccountType,
+  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> = {},
+): ChartOfAccountTemplateLine => ({
+  id: `${SAK_ETAP_KOPERASI_TEMPLATE.id}-${templateAccountId}`,
+  template_id: SAK_ETAP_KOPERASI_TEMPLATE.id,
+  template_account_id: templateAccountId,
+  code,
+  name,
+  type,
+  normal_balance: getAccountNormalBalance(type),
+  is_postable: options.is_postable ?? true,
+  created_at: '',
+  ...options,
+});
+
+export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
+  // === ASET ===
+  createEtapTemplateLine('asset-current', '1000', 'Aset Lancar', 'ASSET', { is_postable: false }),
+  createEtapTemplateLine('cash', '1010', 'Kas Tunai', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+    mapping_keys: [
+      FINANCE_CATEGORIES.OPENING_BALANCE,
+      FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
+      FINANCE_CATEGORIES.KSP_LOAN_PAYMENT,
+      FINANCE_CATEGORIES.WITHDRAWAL,
+      FINANCE_CATEGORIES.DEPOSIT,
+    ],
+  }),
+  createEtapTemplateLine('bank', '1020', 'Bank / Non Tunai', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+    mapping_keys: [
+      FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT,
+      FINANCE_CATEGORIES.PURCHASE_INVOICE_PAYMENT,
+    ],
+  }),
+  createEtapTemplateLine('accounts-receivable', '1100', 'Piutang Usaha', 'ASSET', { parent_template_account_id: 'asset-current' }),
+  createEtapTemplateLine('cooperative-loan-receivable', '1120', 'Piutang Pinjaman Anggota', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+    mapping_keys: [FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT],
+  }),
+  createEtapTemplateLine('allowance-doubtful-accounts', '1121', 'Cadangan Kerugian Piutang', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+    description: 'Penyisihan piutang pinjaman tak tertagih (kontra aset)',
+  }),
+  createEtapTemplateLine('inventory', '1200', 'Persediaan Barang', 'ASSET', { parent_template_account_id: 'asset-current' }),
+  createEtapTemplateLine('prepaid-expense', '1300', 'Biaya Dibayar Dimuka', 'ASSET', { parent_template_account_id: 'asset-current' }),
+  createEtapTemplateLine('fixed-asset', '1500', 'Aset Tetap', 'ASSET', { is_postable: false }),
+  createEtapTemplateLine('equipment', '1510', 'Peralatan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
+  createEtapTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
+
+  // === KEWAJIBAN ===
+  createEtapTemplateLine('liability', '2000', 'Kewajiban', 'LIABILITY', { is_postable: false }),
+  createEtapTemplateLine('accounts-payable', '2010', 'Hutang Usaha', 'LIABILITY', {
+    parent_template_account_id: 'liability',
+    mapping_keys: [FINANCE_CATEGORIES.LOAN],
+  }),
+  createEtapTemplateLine('tax-payable', '2100', 'Hutang Pajak', 'LIABILITY', { parent_template_account_id: 'liability' }),
+  createEtapTemplateLine('deposit-payable', '2200', 'Dana Titipan', 'LIABILITY', { parent_template_account_id: 'liability' }),
+  createEtapTemplateLine('member-savings', '2300', 'Simpanan Anggota', 'LIABILITY', {
+    parent_template_account_id: 'liability',
+    is_postable: false,
+  }),
+  createEtapTemplateLine('member-savings-pokok', '2310', 'Simpanan Pokok', 'LIABILITY', {
+    parent_template_account_id: 'member-savings',
+    description: 'Simpanan pokok anggota koperasi, disetor satu kali saat menjadi anggota',
+  }),
+  createEtapTemplateLine('member-savings-wajib', '2320', 'Simpanan Wajib', 'LIABILITY', {
+    parent_template_account_id: 'member-savings',
+    description: 'Simpanan wajib anggota koperasi, disetor berkala setiap bulan',
+  }),
+  createEtapTemplateLine('member-savings-sukarela', '2330', 'Simpanan Sukarela', 'LIABILITY', {
+    parent_template_account_id: 'member-savings',
+    mapping_keys: [
+      FINANCE_CATEGORIES.KSP_SAVING_DEPOSIT,
+      FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL,
+    ],
+    description: 'Simpanan sukarela anggota koperasi, dapat disetor dan ditarik kapan saja',
+  }),
+
+  // === EKUITAS ===
+  createEtapTemplateLine('equity', '3000', 'Ekuitas', 'EQUITY', { is_postable: false }),
+  createEtapTemplateLine('simpanan-pokok-modal', '3010', 'Simpanan Pokok Modal', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    mapping_keys: [FINANCE_CATEGORIES.CAPITAL_ADDITION],
+    description: 'Modal dasar koperasi dari simpanan pokok anggota yang tidak dapat ditarik',
+  }),
+  createEtapTemplateLine('dana-cadangan', '3020', 'Dana Cadangan', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    description: 'Cadangan dari alokasi SHU untuk memperkuat modal koperasi',
+  }),
+  createEtapTemplateLine('dana-pendidikan', '3030', 'Dana Pendidikan', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    description: 'Dana pendidikan perkoperasian dari alokasi SHU',
+  }),
+  createEtapTemplateLine('dana-sosial', '3040', 'Dana Sosial', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    description: 'Dana sosial dari alokasi SHU untuk kegiatan sosial koperasi',
+  }),
+  createEtapTemplateLine('shu-belum-dibagikan', '3100', 'SHU Belum Dibagikan', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    description: 'Sisa Hasil Usaha tahun berjalan yang belum dialokasikan',
+  }),
+
+  // === PENDAPATAN ===
+  createEtapTemplateLine('revenue', '4000', 'Pendapatan', 'REVENUE', { is_postable: false }),
+  createEtapTemplateLine('sales-pos', '4010', 'Penjualan POS', 'REVENUE', {
+    parent_template_account_id: 'revenue',
+    mapping_keys: [FINANCE_CATEGORIES.SALES],
+  }),
+  createEtapTemplateLine('sales-invoice-revenue', '4020', 'Pendapatan Sales Invoice', 'REVENUE', { parent_template_account_id: 'revenue' }),
+  createEtapTemplateLine('loan-interest-income', '4030', 'Pendapatan Bunga Pinjaman', 'REVENUE', {
+    parent_template_account_id: 'revenue',
+    description: 'Pendapatan bunga dari pinjaman anggota koperasi',
+  }),
+  createEtapTemplateLine('loan-penalty-income', '4040', 'Pendapatan Denda Pinjaman', 'REVENUE', {
+    parent_template_account_id: 'revenue',
+    description: 'Pendapatan denda keterlambatan angsuran pinjaman',
+  }),
+  createEtapTemplateLine('other-service-income', '4050', 'Pendapatan Jasa Lainnya', 'REVENUE', {
+    parent_template_account_id: 'revenue',
+    mapping_keys: [FINANCE_CATEGORIES.SERVICE, FINANCE_CATEGORIES.BONUS_GRANT],
+  }),
+  createEtapTemplateLine('sales-return', '4100', 'Retur Penjualan', 'CONTRA_REVENUE', {
+    mapping_keys: [FINANCE_CATEGORIES.SALES_REFUND],
+  }),
+  createEtapTemplateLine('sales-discount', '4110', 'Diskon Penjualan', 'CONTRA_REVENUE'),
+
+  // === BEBAN ===
+  createEtapTemplateLine('cogs-group', '5000', 'Beban Pokok', 'EXPENSE', { is_postable: false }),
+  createEtapTemplateLine('cogs', '5010', 'HPP', 'EXPENSE', {
+    parent_template_account_id: 'cogs-group',
+    mapping_keys: [FINANCE_CATEGORIES.AUTO_COGS],
+  }),
+  createEtapTemplateLine('stock-purchase', '5100', 'Pembelian Stok', 'EXPENSE', {
+    parent_template_account_id: 'cogs-group',
+    mapping_keys: [FINANCE_CATEGORIES.STOCK_PURCHASE],
+  }),
+  createEtapTemplateLine('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE', { parent_template_account_id: 'cogs-group' }),
+  createEtapTemplateLine('bad-debt-expense', '5020', 'Beban Penyisihan Piutang', 'EXPENSE', {
+    parent_template_account_id: 'cogs-group',
+    description: 'Beban penyisihan piutang pinjaman tak tertagih',
+  }),
+  createEtapTemplateLine('operational-expense', '6000', 'Beban Operasional', 'EXPENSE', { is_postable: false }),
+  createEtapTemplateLine('salary-expense', '6010', 'Beban Gaji', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createEtapTemplateLine('rent-expense', '6020', 'Beban Sewa', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createEtapTemplateLine('rat-expense', '6030', 'Beban RAT', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    description: 'Beban penyelenggaraan Rapat Anggota Tahunan',
+  }),
+  createEtapTemplateLine('education-expense', '6040', 'Beban Pendidikan Koperasi', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    description: 'Beban pendidikan dan pelatihan perkoperasian',
+  }),
+  createEtapTemplateLine('electricity-expense', '6050', 'Beban Listrik', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createEtapTemplateLine('transport-expense', '6060', 'Beban Transport', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createEtapTemplateLine('supplies-expense', '6070', 'Beban Perlengkapan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createEtapTemplateLine('depreciation-expense', '6080', 'Beban Penyusutan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createEtapTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
+    mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
+  }),
 ];
 
 const createTemplateLine = (
@@ -243,7 +433,7 @@ const createTemplateLine = (
   code: string,
   name: string,
   type: AccountType,
-  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_key'>> = {},
+  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> = {},
 ): ChartOfAccountTemplateLine => ({
   id: `${SAK_EMKM_RETAIL_TEMPLATE.id}-${templateAccountId}`,
   template_id: SAK_EMKM_RETAIL_TEMPLATE.id,
@@ -261,48 +451,69 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('asset-current', '1000', 'Aset Lancar', 'ASSET', { is_postable: false }),
   createTemplateLine('cash', '1010', 'Kas Tunai', 'ASSET', {
     parent_template_account_id: 'asset-current',
-    mapping_key: FINANCE_CATEGORIES.OPENING_BALANCE,
+    mapping_keys: [
+      FINANCE_CATEGORIES.OPENING_BALANCE,
+      FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
+      FINANCE_CATEGORIES.KSP_LOAN_PAYMENT,
+      FINANCE_CATEGORIES.WITHDRAWAL,
+      FINANCE_CATEGORIES.DEPOSIT,
+    ],
   }),
   createTemplateLine('bank', '1020', 'Bank / Non Tunai', 'ASSET', {
     parent_template_account_id: 'asset-current',
-    mapping_key: FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT,
+    mapping_keys: [
+      FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT,
+      FINANCE_CATEGORIES.PURCHASE_INVOICE_PAYMENT,
+    ],
   }),
   createTemplateLine('accounts-receivable', '1100', 'Piutang Usaha', 'ASSET', { parent_template_account_id: 'asset-current' }),
-  createTemplateLine('other-receivable', '1110', 'Piutang Lain-lain', 'ASSET', { parent_template_account_id: 'asset-current' }),
+  createTemplateLine('other-receivable', '1110', 'Piutang Lain-lain', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+    mapping_keys: [FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT],
+  }),
   createTemplateLine('inventory', '1200', 'Persediaan Barang', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createTemplateLine('prepaid-expense', '1300', 'Biaya Dibayar Dimuka', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createTemplateLine('fixed-asset', '1500', 'Aset Tetap', 'ASSET', { is_postable: false }),
   createTemplateLine('equipment', '1510', 'Peralatan Toko', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
   createTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
   createTemplateLine('liability', '2000', 'Liabilitas', 'LIABILITY', { is_postable: false }),
-  createTemplateLine('accounts-payable', '2010', 'Hutang Usaha', 'LIABILITY', { parent_template_account_id: 'liability' }),
+  createTemplateLine('accounts-payable', '2010', 'Hutang Usaha', 'LIABILITY', {
+    parent_template_account_id: 'liability',
+    mapping_keys: [
+      FINANCE_CATEGORIES.KSP_SAVING_DEPOSIT,
+      FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL,
+    ],
+  }),
   createTemplateLine('tax-payable', '2100', 'Hutang Pajak', 'LIABILITY', { parent_template_account_id: 'liability' }),
-  createTemplateLine('loan-payable', '2200', 'Pinjaman', 'LIABILITY', { parent_template_account_id: 'liability' }),
+  createTemplateLine('loan-payable', '2200', 'Pinjaman', 'LIABILITY', {
+    parent_template_account_id: 'liability',
+    mapping_keys: [FINANCE_CATEGORIES.LOAN],
+  }),
   createTemplateLine('equity', '3000', 'Ekuitas', 'EQUITY', { is_postable: false }),
   createTemplateLine('owner-capital', '3010', 'Modal Pemilik', 'EQUITY', {
     parent_template_account_id: 'equity',
-    mapping_key: FINANCE_CATEGORIES.CAPITAL_ADDITION,
+    mapping_keys: [FINANCE_CATEGORIES.CAPITAL_ADDITION],
   }),
   createTemplateLine('owner-draw', '3020', 'Prive Pemilik', 'EQUITY', { parent_template_account_id: 'equity' }),
   createTemplateLine('retained-earning', '3100', 'Saldo Laba', 'EQUITY', { parent_template_account_id: 'equity' }),
   createTemplateLine('revenue', '4000', 'Pendapatan', 'REVENUE', { is_postable: false }),
   createTemplateLine('sales-pos', '4010', 'Penjualan POS', 'REVENUE', {
     parent_template_account_id: 'revenue',
-    mapping_key: FINANCE_CATEGORIES.SALES,
+    mapping_keys: [FINANCE_CATEGORIES.SALES],
   }),
   createTemplateLine('sales-invoice-revenue', '4020', 'Pendapatan Sales Invoice', 'REVENUE', { parent_template_account_id: 'revenue' }),
   createTemplateLine('sales-return', '4100', 'Retur Penjualan', 'CONTRA_REVENUE', {
-    mapping_key: FINANCE_CATEGORIES.SALES_REFUND,
+    mapping_keys: [FINANCE_CATEGORIES.SALES_REFUND],
   }),
   createTemplateLine('sales-discount', '4110', 'Diskon Penjualan', 'CONTRA_REVENUE'),
   createTemplateLine('cogs-group', '5000', 'Beban Pokok', 'EXPENSE', { is_postable: false }),
   createTemplateLine('cogs', '5010', 'HPP', 'EXPENSE', {
     parent_template_account_id: 'cogs-group',
-    mapping_key: FINANCE_CATEGORIES.AUTO_COGS,
+    mapping_keys: [FINANCE_CATEGORIES.AUTO_COGS],
   }),
   createTemplateLine('stock-purchase', '5100', 'Pembelian Stok', 'EXPENSE', {
     parent_template_account_id: 'cogs-group',
-    mapping_key: FINANCE_CATEGORIES.STOCK_PURCHASE,
+    mapping_keys: [FINANCE_CATEGORIES.STOCK_PURCHASE],
   }),
   createTemplateLine('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE', { parent_template_account_id: 'cogs-group' }),
   createTemplateLine('operational-expense', '6000', 'Beban Operasional', 'EXPENSE', { is_postable: false }),
@@ -312,7 +523,7 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('transport-expense', '6040', 'Beban Transport', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('supplies-expense', '6050', 'Beban Perlengkapan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
-    mapping_key: FINANCE_CATEGORIES.OTHER,
+    mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
   }),
 ];
 
