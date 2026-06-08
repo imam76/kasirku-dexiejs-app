@@ -2,6 +2,7 @@ import FeedbackModal from '@/components/FeedbackModal'
 // import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
+import { isRouteEnabledBySetup } from '@/auth/moduleAccess'
 import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
@@ -9,6 +10,7 @@ import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useI18n } from '@/hooks/useI18n'
 import { useTheme } from '@/hooks/useTheme'
+import { useEnabledModules } from '@/hooks/useEnabledModules'
 import dayjs from '@/lib/dayjs'
 import { db } from '@/lib/db'
 import { incrementSessionCount, markFeedbackSubmitted, shouldTriggerWave1, shouldTriggerWave2 } from '@/utils/feedback'
@@ -79,6 +81,7 @@ const RootLayout = () => {
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
   const { can, currentUser, logout } = useAuth()
+  const { isRouteEnabled } = useEnabledModules()
   const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
@@ -269,14 +272,14 @@ const RootLayout = () => {
 
   const filteredNavLinks = navLinks.reduce<NavLink[]>((acc, link) => {
     if (isNavGroup(link)) {
-      const children = link.children.filter((child) => canAccessPath(currentUser?.role, child.to))
+      const children = link.children.filter((child) => canAccessPath(currentUser?.role, child.to) && isRouteEnabled(child.to))
       if (children.length > 0) {
         acc.push({ ...link, children })
       }
       return acc
     }
 
-    if (canAccessPath(currentUser?.role, link.to)) {
+    if (canAccessPath(currentUser?.role, link.to) && isRouteEnabled(link.to)) {
       acc.push(link)
     }
 
@@ -347,6 +350,7 @@ const RootLayout = () => {
 
   const requiredPermission = getRequiredPermissionForPath(location.pathname)
   const canOpenCurrentPath = canAccessPermissionRule(currentUser?.role, requiredPermission)
+  const isModuleActive = isRouteEnabledBySetup(location.pathname)
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
@@ -484,7 +488,18 @@ const RootLayout = () => {
           >
             <Content className="transition-all duration-200" style={{ height: '100%', overflowY: 'auto' }}>
               <div className="p-4">
-                {canOpenCurrentPath ? (
+                {!isModuleActive ? (
+                  <Result
+                    status="info"
+                    title="Module tidak aktif"
+                    subTitle="Module ini belum diaktifkan pada konfigurasi setup. Hubungi developer untuk mengaktifkan."
+                    extra={(
+                      <Button type="primary" onClick={() => navigate({ to: '/' })}>
+                        Kembali ke Home
+                      </Button>
+                    )}
+                  />
+                ) : canOpenCurrentPath ? (
                   <Outlet />
                 ) : (
                   <Result
@@ -498,18 +513,102 @@ const RootLayout = () => {
                     )}
                   />
                 )}
+                <button
+                  onClick={handleLogoutClick}
+                  className="p-2 rounded-full text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                  aria-label={t('root.logout')}
+                  title={t('root.logout')}
+                >
+                  <LogOut size={20} />
+                </button>
               </div>
-            </Content>
-          </Layout>
-        </Layout>
+            </div>
+          </nav>
 
-        <TanStackRouterDevtools />
-        <FeedbackModal
-          open={showFeedback}
-          wave={feedbackWave}
-          onFinish={handleFeedbackSubmit}
-        />
-      </Layout>
+          {/* Body: Sider + Content */}
+          <Layout hasSider={!isMobile} style={{ marginTop: topOffset, height: contentHeight }}>
+            {/* Side Navigation */}
+            {!isMobile && (
+              <Sider
+                collapsible
+                collapsed={collapsed}
+                onCollapse={setCollapsed}
+                trigger={null}
+                theme={isDark ? 'dark' : 'light'}
+                collapsedWidth={0}
+                width={SIDEBAR_WIDTH}
+                style={
+                  !isMobile
+                    ? {
+                      position: 'fixed',
+                      top: topOffset,
+                      bottom: 0,
+                      left: 0,
+                      height: contentHeight,
+                      zIndex: 30,
+                    }
+                    : undefined
+                }
+              >
+                {!isMobile && (
+                  <button
+                    type="button"
+                    aria-label={collapsed ? t('root.openSidebar') : t('root.closeSidebar')}
+                    onClick={() => setCollapsed(!collapsed)}
+                    className="absolute -right-9 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-r-md border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                  >
+                    {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+                  </button>
+                )}
+                <Menu
+                  mode="inline"
+                  selectedKeys={[selectedKey]}
+                  openKeys={openMenuKeys}
+                  onOpenChange={setOpenMenuKeys}
+                  items={menuItems}
+                  theme={isDark ? 'dark' : 'light'}
+                  style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto' }}
+                />
+              </Sider>
+            )}
+
+            {/* Main Content */}
+            <Layout
+              style={{
+                height: contentHeight,
+                marginLeft: isMobile ? 0 : collapsed ? TRIGGER_WIDTH : SIDEBAR_WIDTH + TRIGGER_WIDTH,
+                overflow: 'hidden',
+                transition: 'margin-left 0.2s',
+              }}
+            >
+              <Content className="transition-all duration-200" style={{ height: '100%', overflowY: 'auto' }}>
+                <div className="p-4">
+                  {canOpenCurrentPath ? (
+                    <Outlet />
+                  ) : (
+                    <Result
+                      status="403"
+                      title="Akses tidak tersedia"
+                      subTitle="User Anda tidak memiliki izin untuk membuka halaman ini."
+                      extra={(
+                        <Button type="primary" onClick={() => navigate({ to: '/' })}>
+                          Kembali ke Home
+                        </Button>
+                      )}
+                    />
+                  )}
+                </div>
+              </Content>
+            </Layout>
+          </Layout>
+
+          <TanStackRouterDevtools />
+          <FeedbackModal
+            open={showFeedback}
+            wave={feedbackWave}
+            onFinish={handleFeedbackSubmit}
+          />
+        </Layout>
     </AuthGate>
   )
 }
