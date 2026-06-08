@@ -44,6 +44,14 @@ const MODULE_TO_ROUTES: Record<string, string[]> = {
   REPORT_EXPENSE: ['/report/expense-report'],
   REPORT_AGING: ['/report/aging-report'],
   REPORT_PROFIT: ['/profit'],
+  // Koperasi
+  KOPERASI_ANGGOTA: ['/koperasi/anggota', '/koperasi'],
+  KOPERASI_SIMPANAN_POKOK: ['/koperasi/simpanan', '/koperasi'],
+  KOPERASI_SIMPANAN_WAJIB: ['/koperasi/simpanan', '/koperasi'],
+  KOPERASI_SIMPANAN_SUKARELA: ['/koperasi/simpanan', '/koperasi'],
+  KOPERASI_PINJAMAN: ['/koperasi/pinjaman', '/koperasi'],
+  KOPERASI_ANGSURAN: ['/koperasi/angsuran', '/koperasi'],
+  KOPERASI_SHU: ['/koperasi/laporan', '/koperasi'],
 };
 
 /**
