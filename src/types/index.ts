@@ -1310,6 +1310,17 @@ export interface CooperativeSettings {
   updated_at: string;
 }
 
+export interface CompanyProfileSetting {
+  id: 'default';
+  company_name?: string;
+  logo_data_url?: string;
+  logo_file_name?: string;
+  logo_mime_type?: string;
+  logo_size?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export type FinanceTransactionType = 'INCOME' | 'EXPENSE' | 'OPENING_BALANCE';
 
 export type JournalEntryStatus = 'DRAFT' | 'POSTED' | 'VOIDED' | 'REVERSED';

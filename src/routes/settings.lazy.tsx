@@ -6,6 +6,7 @@ import { backupDatabase, restoreDatabase } from '@/utils/backupRestore'
 import { useNavigate } from '@tanstack/react-router'
 import PrinterSettingsCard from '@/components/PrinterSettingsCard'
 import UsbPrinterCard from '@/components/UsbPrinterCard'
+import CompanyProfileSettingsCard from '@/components/CompanyProfileSettingsCard'
 import { useI18n } from '@/hooks/useI18n'
 import { useAuth } from '@/auth/useAuth'
 import { UserManagement } from '@/view/auth/UserManagement'
@@ -89,6 +90,10 @@ function Settings() {
         <p className="text-gray-500 mt-2">
           {t('settings.subtitle')}
         </p>
+      </div>
+
+      <div className="mb-6">
+        <CompanyProfileSettingsCard />
       </div>
 
       <Row gutter={[16, 16]} className="mb-6">

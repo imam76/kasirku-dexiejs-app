@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import { exportJson } from '@/utils/export';
 import { clearAuthSessionState, getCurrentSessionUser, writeActivityLog } from '@/auth/authService';
 import { ensureAccountingDefaults } from '@/services/chartOfAccountService';
+import { ensureCompanyProfileSetting } from '@/services/companyProfileSettingService';
 import { ensureBaseCurrency } from '@/services/currencyService';
 import type { AuthUser } from '@/types';
 
@@ -51,9 +52,10 @@ export const backupDatabase = async () => {
       cooperativeLoanInstallments: await db.cooperativeLoanInstallments.toArray(),
       cooperativeLoanPayments: await db.cooperativeLoanPayments.toArray(),
       cooperativeSettings: await db.cooperativeSettings.toArray(),
+      companyProfileSetting: await db.companyProfileSetting.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 12,
+      version: 13,
       timestamp: new Date().toISOString(),
     };
 
@@ -78,7 +80,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeSettings', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'stockPurchases', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeSettings', 'companyProfileSetting', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -139,6 +141,7 @@ export const restoreDatabase = async (file: File) => {
           db.cooperativeLoanInstallments,
           db.cooperativeLoanPayments,
           db.cooperativeSettings,
+          db.companyProfileSetting,
           db.authUsers,
           db.authSessions,
           db.activityLogs,
@@ -184,6 +187,7 @@ export const restoreDatabase = async (file: File) => {
           await db.cooperativeLoanInstallments.clear();
           await db.cooperativeLoanPayments.clear();
           await db.cooperativeSettings.clear();
+          await db.companyProfileSetting.clear();
           await db.authSessions.clear();
 
           if (hasAuthUsersPayload) {
@@ -241,12 +245,14 @@ export const restoreDatabase = async (file: File) => {
               updated_at: now,
             });
           }
+          if (data.companyProfileSetting?.length) await db.companyProfileSetting.bulkAdd(data.companyProfileSetting);
           if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
           if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
         });
 
         await ensureAccountingDefaults();
         await ensureBaseCurrency();
+        await ensureCompanyProfileSetting();
 
         await clearAuthSessionState();
 

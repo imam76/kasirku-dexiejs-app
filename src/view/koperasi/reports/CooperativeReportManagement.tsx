@@ -4,6 +4,7 @@ import { Alert, Button, DatePicker, Descriptions, Select, Space, Statistic, Tabl
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { BookOpen, RefreshCw } from 'lucide-react';
+import CompanyReportHeader from '@/components/report/CompanyReportHeader';
 import { useCooperativeReports } from '@/hooks/useCooperativeReports';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
@@ -1087,6 +1088,11 @@ export default function CooperativeReportManagement() {
           </Button>
         </Space>
       </div>
+
+      <CompanyReportHeader
+        reportTitle={t('cooperative.reports.title')}
+        reportDescription={t('cooperative.reports.subtitle')}
+      />
 
       {reportQuery.error && (
         <Alert

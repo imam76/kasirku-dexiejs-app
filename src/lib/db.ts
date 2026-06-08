@@ -7,7 +7,8 @@ import {
   PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping,
   AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine,
   InventoryLot, CooperativeMember, CooperativeSavingTransaction, CooperativeMemberSavingBalance,
-  CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeSettings
+  CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeSettings,
+  CompanyProfileSetting
 } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
@@ -59,6 +60,12 @@ const buildAccountingSeed = (now: string) => {
   };
 };
 
+const buildDefaultCompanyProfileSetting = (now: string): CompanyProfileSetting => ({
+  id: 'default',
+  created_at: now,
+  updated_at: now,
+});
+
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
   transactions!: Table<Transaction>;
@@ -105,6 +112,7 @@ export class KasirkuDB extends Dexie {
   cooperativeLoanInstallments!: Table<CooperativeLoanInstallment>;
   cooperativeLoanPayments!: Table<CooperativeLoanPayment>;
   cooperativeSettings!: Table<CooperativeSettings>;
+  companyProfileSetting!: Table<CompanyProfileSetting>;
   inventoryLots!: Table<InventoryLot>;
 
   constructor() {
@@ -704,6 +712,17 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(39).stores({
+      companyProfileSetting: 'id, updated_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const companyProfileSetting = tx.table<CompanyProfileSetting, string>('companyProfileSetting');
+
+      if (!await companyProfileSetting.get('default')) {
+        await companyProfileSetting.put(buildDefaultCompanyProfileSetting(now));
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
@@ -721,6 +740,7 @@ export class KasirkuDB extends Dexie {
         created_at: now,
         updated_at: now,
       });
+      await this.companyProfileSetting.put(buildDefaultCompanyProfileSetting(now));
     });
   }
 }
