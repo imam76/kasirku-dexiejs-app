@@ -75,6 +75,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'REPORT_PURCHASE', label: 'Purchase Report', description: 'Laporan pembelian' },
       { code: 'REPORT_EXPENSE', label: 'Expense Report', description: 'Laporan pengeluaran' },
       { code: 'REPORT_AGING', label: 'Aging Report', description: 'Laporan umur piutang/hutang' },
+      { code: 'REPORT_STOCK_CARD', label: 'Stock Card', description: 'Kartu stok per produk' },
       { code: 'REPORT_PROFIT', label: 'Profit Report', description: 'Laporan laba rugi' },
     ],
   },

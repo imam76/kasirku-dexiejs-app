@@ -43,6 +43,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/report/purchase-report': 'STOCK_PURCHASE_ACCESS',
   '/report/expense-report': 'FINANCE_ACCESS',
   '/report/aging-report': 'FINANCE_ACCESS',
+  '/report/stock-card': 'STOCK_ACCESS',
 };
 
 const routeEntries = Object.entries(ROUTE_PERMISSIONS)

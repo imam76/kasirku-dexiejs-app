@@ -2,7 +2,6 @@ import FeedbackModal from '@/components/FeedbackModal'
 // import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
-import { isRouteEnabledBySetup } from '@/auth/moduleAccess'
 import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
@@ -26,6 +25,7 @@ import {
   Box,
   Building2,
   ClipboardList,
+  Coins,
   CreditCard,
   Database,
   DollarSign,
@@ -219,6 +219,7 @@ const RootLayout = () => {
         { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
         { to: '/master-data/contacts', label: t('nav.contacts'), icon: Users },
         { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: Warehouse },
+        { to: '/master-data/currencies', label: t('nav.currencies'), icon: Coins },
         { to: '/master-data/departments', label: t('nav.departments'), icon: Building2 },
         { to: '/master-data/projects', label: t('nav.projects'), icon: FolderKanban },
         { to: '/master-data/taxes', label: t('nav.taxes'), icon: Percent },
@@ -350,7 +351,7 @@ const RootLayout = () => {
 
   const requiredPermission = getRequiredPermissionForPath(location.pathname)
   const canOpenCurrentPath = canAccessPermissionRule(currentUser?.role, requiredPermission)
-  const isModuleActive = isRouteEnabledBySetup(location.pathname)
+  const isModuleActive = isRouteEnabled(location.pathname)
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`

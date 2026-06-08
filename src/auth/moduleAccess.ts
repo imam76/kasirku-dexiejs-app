@@ -5,7 +5,7 @@ import { getSetupConfig } from '@/services/setupKeyService';
  * A route is accessible only if at least one of its mapped module codes is enabled.
  * Routes not listed here are always accessible.
  */
-const ROUTE_MODULE_MAP: Record<string, string[]> = {
+export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   // Data Master
   '/master-data/products': ['PRODUCT'],
   '/master-data/contacts': ['CONTACT'],
@@ -22,10 +22,10 @@ const ROUTE_MODULE_MAP: Record<string, string[]> = {
   // Shopping Note
   '/shopping-note': ['SHOPPING_NOTE'],
   // Sales
-  '/sales': ['SALES_QUOTATION', 'SALES_ORDER', 'SALES_DELIVERY', 'SALES_INVOICE'],
+  '/sales': ['SALES_QUOTATION', 'SALES_ORDER', 'SALES_DELIVERY', 'SALES_INVOICE', 'SALES_RETURN'],
   '/sales/returns': ['SALES_RETURN'],
   // Purchases
-  '/purchases': ['PURCHASE_ORDER', 'PURCHASE_RECEIPT', 'PURCHASE_INVOICE'],
+  '/purchases': ['PURCHASE_ORDER', 'PURCHASE_RECEIPT', 'PURCHASE_INVOICE', 'PURCHASE_RETURN'],
   // Finance
   '/finance/cash-flow': ['CASH_FLOW'],
   '/finance/receivables': ['RECEIVABLES'],
@@ -38,6 +38,7 @@ const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/report/purchase-report': ['REPORT_PURCHASE'],
   '/report/expense-report': ['REPORT_EXPENSE'],
   '/report/aging-report': ['REPORT_AGING'],
+  '/report/stock-card': ['REPORT_STOCK_CARD'],
   '/profit': ['REPORT_PROFIT'],
   // Koperasi
   '/koperasi/anggota': ['KOPERASI_ANGGOTA'],
@@ -59,6 +60,32 @@ const ROUTE_MODULE_MAP: Record<string, string[]> = {
 const routeModuleEntries = Object.entries(ROUTE_MODULE_MAP)
   .sort(([left], [right]) => right.length - left.length);
 
+const normalizePath = (path: string) => {
+  if (path === '/') return path;
+  return path.replace(/\/+$/, '');
+};
+
+export const getModuleCodesForPath = (path: string): string[] | undefined => {
+  const normalizedPath = normalizePath(path);
+
+  return routeModuleEntries.find(([routePath]) => {
+    return normalizedPath === routePath || normalizedPath.startsWith(`${routePath}/`);
+  })?.[1];
+};
+
+export const isRouteEnabledForModules = (
+  path: string,
+  enabledModules: Iterable<string> | null,
+): boolean => {
+  if (!enabledModules) return true;
+
+  const moduleCodes = getModuleCodesForPath(path);
+  if (!moduleCodes || moduleCodes.length === 0) return true;
+
+  const enabledSet = enabledModules instanceof Set ? enabledModules : new Set(enabledModules);
+  return moduleCodes.some((code) => enabledSet.has(code));
+};
+
 /**
  * Check if a route path is enabled by the setup config.
  * If no setup config exists, all routes are enabled (backwards compatible).
@@ -66,19 +93,5 @@ const routeModuleEntries = Object.entries(ROUTE_MODULE_MAP)
 export const isRouteEnabledBySetup = (path: string): boolean => {
   const config = getSetupConfig();
   // No setup config = all routes enabled (fresh install / no developer setup)
-  if (!config) return true;
-
-  const normalizedPath = path === '/' ? path : path.replace(/\/+$/, '');
-  const enabledSet = new Set(config.enabledModules);
-
-  const match = routeModuleEntries.find(([routePath]) => {
-    return normalizedPath === routePath || normalizedPath.startsWith(`${routePath}/`);
-  });
-
-  // Route has no module restriction → always accessible
-  if (!match) return true;
-
-  const [, moduleCodes] = match;
-  // Route is accessible if ANY of its mapped module codes is enabled
-  return moduleCodes.some((code) => enabledSet.has(code));
+  return isRouteEnabledForModules(path, config?.enabledModules ?? null);
 };

@@ -1,75 +1,8 @@
-import { useMemo } from 'react';
-import { getSetupConfig } from '@/services/setupKeyService';
-
-/**
- * Mapping from setup module codes to route paths.
- * A route is visible only if at least one of its mapped module codes is enabled.
- * Routes not listed here are always visible.
- */
-const MODULE_TO_ROUTES: Record<string, string[]> = {
-  // Data Master
-  PRODUCT: ['/master-data/products'],
-  CONTACT: ['/master-data/contacts'],
-  WAREHOUSE: ['/master-data/warehouses'],
-  DEPARTMENT: ['/master-data/departments'],
-  PROJECT: ['/master-data/projects'],
-  TAX: ['/master-data/taxes'],
-  PROMO: ['/master-data/promos'],
-  UNIT: ['/master-data/units'],
-  CURRENCY: ['/master-data/currencies'],
-  // POS
-  POS_TRANSACTION: ['/transaction', '/history'],
-  SHOPPING_NOTE: ['/shopping-note'],
-  // Sales
-  SALES_QUOTATION: ['/sales'],
-  SALES_ORDER: ['/sales'],
-  SALES_DELIVERY: ['/sales'],
-  SALES_INVOICE: ['/sales'],
-  SALES_RETURN: ['/sales/returns'],
-  // Purchases
-  PURCHASE_ORDER: ['/purchases'],
-  PURCHASE_RECEIPT: ['/purchases'],
-  PURCHASE_INVOICE: ['/purchases'],
-  PURCHASE_RETURN: ['/purchases'],
-  // Finance
-  CASH_FLOW: ['/finance/cash-flow'],
-  RECEIVABLES: ['/finance/receivables'],
-  PAYABLES: ['/finance/payables'],
-  CHART_OF_ACCOUNTS: ['/finance/chart-of-accounts'],
-  GENERAL_LEDGER: ['/finance/general-ledger'],
-  // Reports
-  REPORT_POS_SALES: ['/report/pos-sales-report'],
-  REPORT_TRANSACTION_DETAIL: ['/report/transaction-detail-report'],
-  REPORT_PURCHASE: ['/report/purchase-report'],
-  REPORT_EXPENSE: ['/report/expense-report'],
-  REPORT_AGING: ['/report/aging-report'],
-  REPORT_PROFIT: ['/profit'],
-  // Koperasi
-  KOPERASI_ANGGOTA: ['/koperasi/anggota', '/koperasi'],
-  KOPERASI_SIMPANAN_POKOK: ['/koperasi/simpanan', '/koperasi'],
-  KOPERASI_SIMPANAN_WAJIB: ['/koperasi/simpanan', '/koperasi'],
-  KOPERASI_SIMPANAN_SUKARELA: ['/koperasi/simpanan', '/koperasi'],
-  KOPERASI_PINJAMAN: ['/koperasi/pinjaman', '/koperasi'],
-  KOPERASI_ANGSURAN: ['/koperasi/angsuran', '/koperasi'],
-  KOPERASI_SHU: ['/koperasi/laporan', '/koperasi'],
-};
-
-/**
- * Build a reverse lookup: route path → which module codes enable it.
- */
-const buildRouteToModules = (): Map<string, string[]> => {
-  const map = new Map<string, string[]>();
-  for (const [moduleCode, routes] of Object.entries(MODULE_TO_ROUTES)) {
-    for (const route of routes) {
-      const existing = map.get(route) ?? [];
-      existing.push(moduleCode);
-      map.set(route, existing);
-    }
-  }
-  return map;
-};
-
-const ROUTE_TO_MODULES = buildRouteToModules();
+import { useEffect, useMemo, useState } from 'react';
+import { isRouteEnabledForModules } from '@/auth/moduleAccess';
+import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
+import { SETUP_CONFIG_CHANGED_EVENT, getSetupConfig } from '@/services/setupKeyService';
+import type { SetupConfig } from '@/types/setup';
 
 /**
  * Hook to check if a given setup module is enabled.
@@ -84,7 +17,24 @@ const ROUTE_TO_MODULES = buildRouteToModules();
  * everything is enabled by default.
  */
 export const useEnabledModules = () => {
-  const config = useMemo(() => getSetupConfig(), []);
+  const [config, setConfig] = useState<SetupConfig | null>(() => getSetupConfig());
+
+  useEffect(() => {
+    const refreshConfig = () => setConfig(getSetupConfig());
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === SETUP_CONFIG_STORAGE_KEY) {
+        refreshConfig();
+      }
+    };
+
+    window.addEventListener(SETUP_CONFIG_CHANGED_EVENT, refreshConfig);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener(SETUP_CONFIG_CHANGED_EVENT, refreshConfig);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
 
   const enabledSet = useMemo(
     () => (config ? new Set(config.enabledModules) : null),
@@ -98,13 +48,7 @@ export const useEnabledModules = () => {
 
   const isRouteEnabled = useMemo(() => {
     if (!enabledSet) return (_path: string) => true;
-    return (path: string) => {
-      const moduleCodes = ROUTE_TO_MODULES.get(path);
-      // Route has no module restriction → always visible
-      if (!moduleCodes || moduleCodes.length === 0) return true;
-      // Route is visible if ANY of its mapped module codes is enabled
-      return moduleCodes.some((code) => enabledSet.has(code));
-    };
+    return (path: string) => isRouteEnabledForModules(path, enabledSet);
   }, [enabledSet]);
 
   return {

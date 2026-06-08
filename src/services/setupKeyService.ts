@@ -1,6 +1,8 @@
 import type { SetupConfig } from '@/types/setup';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 
+export const SETUP_CONFIG_CHANGED_EVENT = 'kasirku-setup-config-changed';
+
 /**
  * The expected hash of the license key (SHA-256, base64-encoded).
  * Sourced from SETUP_HASH_KEY in src-tauri/.env.
@@ -67,6 +69,7 @@ export const getSetupConfig = (): SetupConfig | null => {
  */
 export const saveSetupConfig = (config: SetupConfig): void => {
   localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify(config));
+  window.dispatchEvent(new Event(SETUP_CONFIG_CHANGED_EVENT));
 };
 
 /**
