@@ -16,6 +16,7 @@ import dayjs from '@/lib/dayjs'
 import { formatCurrency } from '@/utils/formatters'
 import { filterActiveTransactions } from '@/utils/transactions'
 import { useI18n } from '@/hooks/useI18n'
+import { useEnabledModules } from '@/hooks/useEnabledModules'
 import { canAccessPath } from '@/auth/routePermissions'
 import { useAuth } from '@/auth/useAuth'
 
@@ -36,6 +37,7 @@ type HomeMenuItem = {
 function Index() {
   const { t } = useI18n()
   const { currentUser } = useAuth()
+  const { isRouteEnabled } = useEnabledModules()
   const todaySales = useLiveQuery(
     async () => {
       const startOfToday = dayjs.tz().startOf('day').toISOString()
@@ -68,7 +70,7 @@ function Index() {
     { to: '/profit', label: t('nav.report.profit'), icon: DollarOutlined, color: 'text-emerald-600', desc: t('home.profitDesc') },
     { to: '/report', label: t('nav.reports'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('home.reportDesc') },
     { to: '/settings', label: t('nav.settings'), icon: SettingOutlined, color: 'text-gray-600', desc: t('home.settingsDesc') },
-  ].filter((item) => canAccessPath(currentUser?.role, item.to))
+  ].filter((item) => canAccessPath(currentUser?.role, item.to) && isRouteEnabled(item.to))
 
   const renderMenuGrid = (items: HomeMenuItem[]) => (
     <div

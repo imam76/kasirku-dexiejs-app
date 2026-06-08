@@ -2,6 +2,7 @@ import FeedbackModal from '@/components/FeedbackModal'
 // import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
+import { isRouteEnabledBySetup } from '@/auth/moduleAccess'
 import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
@@ -9,6 +10,7 @@ import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useI18n } from '@/hooks/useI18n'
 import { useTheme } from '@/hooks/useTheme'
+import { useEnabledModules } from '@/hooks/useEnabledModules'
 import dayjs from '@/lib/dayjs'
 import { db } from '@/lib/db'
 import { incrementSessionCount, markFeedbackSubmitted, shouldTriggerWave1, shouldTriggerWave2 } from '@/utils/feedback'
@@ -78,6 +80,7 @@ const RootLayout = () => {
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
   const { can, currentUser, logout } = useAuth()
+  const { isRouteEnabled } = useEnabledModules()
   const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
@@ -254,14 +257,14 @@ const RootLayout = () => {
 
   const filteredNavLinks = navLinks.reduce<NavLink[]>((acc, link) => {
     if (isNavGroup(link)) {
-      const children = link.children.filter((child) => canAccessPath(currentUser?.role, child.to))
+      const children = link.children.filter((child) => canAccessPath(currentUser?.role, child.to) && isRouteEnabled(child.to))
       if (children.length > 0) {
         acc.push({ ...link, children })
       }
       return acc
     }
 
-    if (canAccessPath(currentUser?.role, link.to)) {
+    if (canAccessPath(currentUser?.role, link.to) && isRouteEnabled(link.to)) {
       acc.push(link)
     }
 
@@ -332,6 +335,7 @@ const RootLayout = () => {
 
   const requiredPermission = getRequiredPermissionForPath(location.pathname)
   const canOpenCurrentPath = canAccessPermissionRule(currentUser?.role, requiredPermission)
+  const isModuleActive = isRouteEnabledBySetup(location.pathname)
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
@@ -469,7 +473,18 @@ const RootLayout = () => {
         >
           <Content className="transition-all duration-200" style={{ height: '100%', overflowY: 'auto' }}>
             <div className="p-4">
-              {canOpenCurrentPath ? (
+              {!isModuleActive ? (
+                <Result
+                  status="info"
+                  title="Module tidak aktif"
+                  subTitle="Module ini belum diaktifkan pada konfigurasi setup. Hubungi developer untuk mengaktifkan."
+                  extra={(
+                    <Button type="primary" onClick={() => navigate({ to: '/' })}>
+                      Kembali ke Home
+                    </Button>
+                  )}
+                />
+              ) : canOpenCurrentPath ? (
                 <Outlet />
               ) : (
                 <Result

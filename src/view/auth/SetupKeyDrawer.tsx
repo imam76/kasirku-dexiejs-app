@@ -57,9 +57,10 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
 interface SetupKeyDrawerProps {
   open: boolean;
   onClose: () => void;
+  forceMode?: boolean;
 }
 
-export const SetupKeyDrawer = ({ open, onClose }: SetupKeyDrawerProps) => {
+export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDrawerProps) => {
   const { message } = App.useApp();
 
   // Step state
@@ -301,7 +302,9 @@ export const SetupKeyDrawer = ({ open, onClose }: SetupKeyDrawerProps) => {
       onClose={handleClose}
       width={540}
       placement="right"
-      closable
+      closable={!forceMode}
+      maskClosable={!forceMode}
+      keyboard={!forceMode}
       destroyOnClose={false}
       styles={{
         header: {
