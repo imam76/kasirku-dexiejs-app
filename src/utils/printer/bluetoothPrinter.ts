@@ -13,7 +13,7 @@ type TauriWindow = Window & {
   __TAURI_INTERNALS__?: unknown;
 };
 
-const isNativeTauri = () => {
+export const isNativeTauri = () => {
   if (typeof window === 'undefined') {
     return false;
   }

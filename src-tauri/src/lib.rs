@@ -4,6 +4,7 @@ mod commands;
 mod db;
 mod models;
 mod repositories;
+mod usb_serial_printer;
 
 use tauri::Manager;
 
@@ -96,7 +97,9 @@ pub fn run() {
             commands::postgres_health::postgres_health_check,
             bluetooth_printer::list_bluetooth_printers,
             bluetooth_printer::test_print_bluetooth,
-            bluetooth_printer::print_receipt_bluetooth
+            bluetooth_printer::print_receipt_bluetooth,
+            usb_serial_printer::list_usb_serial_printers,
+            usb_serial_printer::write_usb_serial_printer
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

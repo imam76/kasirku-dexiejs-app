@@ -11,6 +11,10 @@ import {
   normalizePrinterError,
   printReceiptBluetooth,
 } from '@/utils/printer/bluetoothPrinter';
+import {
+  getStoredUsbPrinter,
+  printReceiptUsb,
+} from '@/utils/printer/usbSerialPrinter';
 
 const DEFAULT_MERCHANT_NAME = 'Kasirku';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
@@ -59,35 +63,37 @@ export const buildReceiptPayload = (transaction: TransactionReceiptInput): Recei
 export const printReceiptAfterTransaction = async (
   transaction: TransactionReceiptInput
 ): Promise<ReceiptPrintResult> => {
-  const selectedPrinter = getStoredBluetoothPrinter();
+  const receipt = buildReceiptPayload(transaction);
 
-  if (!selectedPrinter) {
-    const message = 'Printer belum dipilih.';
+  // Try USB printer first, then fall back to Bluetooth
+  const usbPrinter = getStoredUsbPrinter();
+  if (usbPrinter) {
+    try {
+      await printReceiptUsb(usbPrinter, receipt);
+      await updateReceiptStatus(transaction.id, 'printed');
+      return { success: true, status: 'printed' };
+    } catch (error) {
+      const printerError: PrinterError = normalizePrinterError(error);
+      await updateReceiptStatus(transaction.id, 'print_failed', printerError.message);
+      return { success: false, status: 'print_failed', error: printerError.message };
+    }
+  }
+
+  const bluetoothPrinter = getStoredBluetoothPrinter();
+  if (!bluetoothPrinter) {
+    const message = 'Printer belum dipilih (Bluetooth maupun USB).';
     await updateReceiptStatus(transaction.id, 'print_failed', message);
-
-    return {
-      success: false,
-      status: 'print_failed',
-      error: message,
-    };
+    return { success: false, status: 'print_failed', error: message };
   }
 
   try {
-    await printReceiptBluetooth(selectedPrinter, buildReceiptPayload(transaction));
+    await printReceiptBluetooth(bluetoothPrinter, receipt);
     await updateReceiptStatus(transaction.id, 'printed');
-
-    return {
-      success: true,
-      status: 'printed',
-    };
+    return { success: true, status: 'printed' };
   } catch (error) {
     const printerError: PrinterError = normalizePrinterError(error);
     await updateReceiptStatus(transaction.id, 'print_failed', printerError.message);
-
-    return {
-      success: false,
-      status: 'print_failed',
-      error: printerError.message,
-    };
+    return { success: false, status: 'print_failed', error: printerError.message };
   }
 };
+

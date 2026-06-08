@@ -993,6 +993,22 @@ export interface SelectedBluetoothPrinter {
   address: string;
 }
 
+export interface UsbSerialPrinterDevice {
+  name: string;
+  portName: string;
+  usbId: string;
+  manufacturer?: string;
+  serialNumber?: string;
+  isUsb: boolean;
+}
+
+export interface SelectedUsbPrinter {
+  name: string;
+  usbId: string;
+  baudRate: number;
+  portName?: string;
+}
+
 export interface ReceiptLineItem {
   name: string;
   quantity: number;
