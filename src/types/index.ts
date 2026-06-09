@@ -261,6 +261,41 @@ export type CooperativeLoanSyncStatus = EntitySyncStatus;
 export type CooperativeLoanInstallmentSyncStatus = EntitySyncStatus;
 export type CooperativeLoanPaymentSyncStatus = EntitySyncStatus;
 
+export interface CooperativeArea {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  position?: string;
+  user_id?: string;
+  user_name?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeArea {
+  id: string;
+  employee_id: string;
+  area_id: string;
+  area_name: string;
+  area_code?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Currency {
   id: string;
   code: string;
@@ -1124,6 +1159,9 @@ export interface CooperativeMember {
   identity_number?: string;
   phone?: string;
   address?: string;
+  area_id?: string;
+  area_name?: string;
+  area_code?: string;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string;

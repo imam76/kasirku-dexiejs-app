@@ -10,6 +10,7 @@ export interface CooperativeMemberUpsertInput {
   identity_number?: string;
   phone?: string;
   address?: string;
+  area_id: string;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string;
@@ -50,15 +51,31 @@ const requireCooperativeActor = async () => {
   return currentUser;
 };
 
+const resolveActiveArea = async (areaId: string) => {
+  const area = await db.cooperativeAreas.get(areaId);
+  if (!area) {
+    throw new Error('Area anggota tidak ditemukan.');
+  }
+
+  if (!area.is_active) {
+    throw new Error('Area anggota sudah nonaktif.');
+  }
+
+  return area;
+};
+
 export const createCooperativeMember = async (
   input: CooperativeMemberUpsertInput,
 ): Promise<CooperativeMember> => {
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
+  const area = await resolveActiveArea(sanitizedInput.area_id);
   const now = new Date().toISOString();
   const member: CooperativeMember = withPendingCooperativeSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
+    area_name: area.name,
+    area_code: area.code,
     created_at: now,
     updated_at: now,
     created_by: currentUser?.id,
@@ -93,6 +110,7 @@ export const updateCooperativeMember = async (
 ): Promise<CooperativeMember> => {
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
+  const area = await resolveActiveArea(sanitizedInput.area_id);
   const updatedAt = new Date().toISOString();
   let updatedMember: CooperativeMember | undefined;
 
@@ -109,6 +127,8 @@ export const updateCooperativeMember = async (
     updatedMember = withPendingCooperativeSync({
       ...existingMember,
       ...sanitizedInput,
+      area_name: area.name,
+      area_code: area.code,
       updated_at: updatedAt,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,

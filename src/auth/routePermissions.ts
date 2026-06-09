@@ -13,6 +13,8 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/contacts': 'SETTINGS_ACCESS',
   '/master-data/warehouses': 'SETTINGS_ACCESS',
   '/master-data/currencies': 'SETTINGS_ACCESS',
+  '/master-data/areas': 'SETTINGS_ACCESS',
+  '/master-data/employees': 'SETTINGS_ACCESS',
   '/master-data/departments': 'SETTINGS_ACCESS',
   '/master-data/projects': 'SETTINGS_ACCESS',
   '/master-data/taxes': 'SETTINGS_ACCESS',

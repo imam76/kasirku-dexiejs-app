@@ -8,7 +8,7 @@ import {
   AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine,
   InventoryLot, CooperativeMember, CooperativeSavingTransaction, CooperativeMemberSavingBalance,
   CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeSettings,
-  CompanyProfileSetting
+  CompanyProfileSetting, CooperativeArea, Employee, EmployeeArea
 } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
@@ -114,6 +114,9 @@ export class KasirkuDB extends Dexie {
   cooperativeSettings!: Table<CooperativeSettings>;
   companyProfileSetting!: Table<CompanyProfileSetting>;
   inventoryLots!: Table<InventoryLot>;
+  cooperativeAreas!: Table<CooperativeArea>;
+  employees!: Table<Employee>;
+  employeeAreas!: Table<EmployeeArea>;
 
   constructor() {
     super('KasirkuDB');
@@ -748,6 +751,17 @@ export class KasirkuDB extends Dexie {
       await markPendingCooperativeRecords<CooperativeLoan>('cooperativeLoans');
       await markPendingCooperativeRecords<CooperativeLoanInstallment>('cooperativeLoanInstallments');
       await markPendingCooperativeRecords<CooperativeLoanPayment>('cooperativeLoanPayments');
+    });
+
+    this.version(41).stores({
+      cooperativeMembers: 'id, member_number, name, area_id, status, sync_status, updated_at, created_at',
+      cooperativeAreas: 'id, name, code, is_active, created_at',
+      employees: 'id, name, user_id, is_active, created_at',
+      employeeAreas: 'id, employee_id, area_id'
+    });
+
+    this.version(42).stores({
+      authUsers: 'id, name, role, is_active, sync_status, created_at'
     });
 
     this.on('populate', async () => {

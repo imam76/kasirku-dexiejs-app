@@ -2,6 +2,7 @@ import {
   ApartmentOutlined,
   ContactsOutlined,
   DollarOutlined,
+  EnvironmentOutlined,
   PercentageOutlined,
   ProductOutlined,
   ProjectOutlined,
@@ -9,6 +10,7 @@ import {
   MoneyCollectOutlined,
   SwapOutlined,
   ShopOutlined,
+  TeamOutlined,
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
@@ -39,6 +41,8 @@ function MasterData() {
     { to: '/master-data/contacts', label: t('nav.contacts'), icon: ContactsOutlined, color: 'text-amber-600', desc: t('home.contactsDesc') },
     { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: ShopOutlined, color: 'text-teal-600', desc: t('home.warehousesDesc') },
     { to: '/master-data/currencies', label: t('nav.currencies'), icon: MoneyCollectOutlined, color: 'text-emerald-600', desc: t('home.currenciesDesc') },
+    { to: '/master-data/areas', label: t('nav.areas'), icon: EnvironmentOutlined, color: 'text-lime-600', desc: t('home.areasDesc') },
+    { to: '/master-data/employees', label: t('nav.employees'), icon: TeamOutlined, color: 'text-blue-600', desc: t('home.employeesDesc') },
     { to: '/master-data/departments', label: t('nav.departments'), icon: ApartmentOutlined, color: 'text-sky-600', desc: t('home.departmentsDesc') },
     { to: '/master-data/projects', label: t('nav.projects'), icon: ProjectOutlined, color: 'text-violet-600', desc: t('home.projectsDesc') },
     { to: '/master-data/taxes', label: t('nav.taxes'), icon: PercentageOutlined, color: 'text-orange-600', desc: t('home.taxesDesc') },

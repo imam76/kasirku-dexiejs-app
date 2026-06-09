@@ -65,6 +65,9 @@ const MasterDataProjectsLazyRouteImport = createFileRoute(
 const MasterDataProductsLazyRouteImport = createFileRoute(
   '/master-data/products',
 )()
+const MasterDataEmployeesLazyRouteImport = createFileRoute(
+  '/master-data/employees',
+)()
 const MasterDataDepartmentsLazyRouteImport = createFileRoute(
   '/master-data/departments',
 )()
@@ -74,6 +77,7 @@ const MasterDataCurrenciesLazyRouteImport = createFileRoute(
 const MasterDataContactsLazyRouteImport = createFileRoute(
   '/master-data/contacts',
 )()
+const MasterDataAreasLazyRouteImport = createFileRoute('/master-data/areas')()
 const KoperasiSimpananLazyRouteImport = createFileRoute('/koperasi/simpanan')()
 const KoperasiPinjamanLazyRouteImport = createFileRoute('/koperasi/pinjaman')()
 const KoperasiPenagihanLazyRouteImport = createFileRoute(
@@ -319,6 +323,13 @@ const MasterDataProductsLazyRoute = MasterDataProductsLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/master-data/products.lazy').then((d) => d.Route),
 )
+const MasterDataEmployeesLazyRoute = MasterDataEmployeesLazyRouteImport.update({
+  id: '/master-data/employees',
+  path: '/master-data/employees',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/master-data/employees.lazy').then((d) => d.Route),
+)
 const MasterDataDepartmentsLazyRoute =
   MasterDataDepartmentsLazyRouteImport.update({
     id: '/master-data/departments',
@@ -341,6 +352,13 @@ const MasterDataContactsLazyRoute = MasterDataContactsLazyRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
   import('./routes/master-data/contacts.lazy').then((d) => d.Route),
+)
+const MasterDataAreasLazyRoute = MasterDataAreasLazyRouteImport.update({
+  id: '/master-data/areas',
+  path: '/master-data/areas',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/master-data/areas.lazy').then((d) => d.Route),
 )
 const KoperasiSimpananLazyRoute = KoperasiSimpananLazyRouteImport.update({
   id: '/koperasi/simpanan',
@@ -677,9 +695,11 @@ export interface FileRoutesByFullPath {
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
+  '/master-data/areas': typeof MasterDataAreasLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
+  '/master-data/employees': typeof MasterDataEmployeesLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
@@ -749,9 +769,11 @@ export interface FileRoutesByTo {
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
+  '/master-data/areas': typeof MasterDataAreasLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
+  '/master-data/employees': typeof MasterDataEmployeesLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
@@ -822,9 +844,11 @@ export interface FileRoutesById {
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
+  '/master-data/areas': typeof MasterDataAreasLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
+  '/master-data/employees': typeof MasterDataEmployeesLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
@@ -896,9 +920,11 @@ export interface FileRouteTypes {
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
+    | '/master-data/areas'
     | '/master-data/contacts'
     | '/master-data/currencies'
     | '/master-data/departments'
+    | '/master-data/employees'
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
@@ -968,9 +994,11 @@ export interface FileRouteTypes {
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
+    | '/master-data/areas'
     | '/master-data/contacts'
     | '/master-data/currencies'
     | '/master-data/departments'
+    | '/master-data/employees'
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
@@ -1040,9 +1068,11 @@ export interface FileRouteTypes {
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
+    | '/master-data/areas'
     | '/master-data/contacts'
     | '/master-data/currencies'
     | '/master-data/departments'
+    | '/master-data/employees'
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
@@ -1113,9 +1143,11 @@ export interface RootRouteChildren {
   KoperasiPenagihanLazyRoute: typeof KoperasiPenagihanLazyRoute
   KoperasiPinjamanLazyRoute: typeof KoperasiPinjamanLazyRoute
   KoperasiSimpananLazyRoute: typeof KoperasiSimpananLazyRoute
+  MasterDataAreasLazyRoute: typeof MasterDataAreasLazyRoute
   MasterDataContactsLazyRoute: typeof MasterDataContactsLazyRoute
   MasterDataCurrenciesLazyRoute: typeof MasterDataCurrenciesLazyRoute
   MasterDataDepartmentsLazyRoute: typeof MasterDataDepartmentsLazyRoute
+  MasterDataEmployeesLazyRoute: typeof MasterDataEmployeesLazyRoute
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
   MasterDataProjectsLazyRoute: typeof MasterDataProjectsLazyRoute
   MasterDataPromosLazyRoute: typeof MasterDataPromosLazyRoute
@@ -1354,6 +1386,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MasterDataProductsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/master-data/employees': {
+      id: '/master-data/employees'
+      path: '/master-data/employees'
+      fullPath: '/master-data/employees'
+      preLoaderRoute: typeof MasterDataEmployeesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/master-data/departments': {
       id: '/master-data/departments'
       path: '/master-data/departments'
@@ -1373,6 +1412,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data/contacts'
       fullPath: '/master-data/contacts'
       preLoaderRoute: typeof MasterDataContactsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/master-data/areas': {
+      id: '/master-data/areas'
+      path: '/master-data/areas'
+      fullPath: '/master-data/areas'
+      preLoaderRoute: typeof MasterDataAreasLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/koperasi/simpanan': {
@@ -1694,9 +1740,11 @@ const rootRouteChildren: RootRouteChildren = {
   KoperasiPenagihanLazyRoute: KoperasiPenagihanLazyRoute,
   KoperasiPinjamanLazyRoute: KoperasiPinjamanLazyRoute,
   KoperasiSimpananLazyRoute: KoperasiSimpananLazyRoute,
+  MasterDataAreasLazyRoute: MasterDataAreasLazyRoute,
   MasterDataContactsLazyRoute: MasterDataContactsLazyRoute,
   MasterDataCurrenciesLazyRoute: MasterDataCurrenciesLazyRoute,
   MasterDataDepartmentsLazyRoute: MasterDataDepartmentsLazyRoute,
+  MasterDataEmployeesLazyRoute: MasterDataEmployeesLazyRoute,
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
   MasterDataProjectsLazyRoute: MasterDataProjectsLazyRoute,
   MasterDataPromosLazyRoute: MasterDataPromosLazyRoute,

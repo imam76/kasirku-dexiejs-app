@@ -46,6 +46,11 @@ export default function CooperativeMemberDetailDrawer({
             <Descriptions.Item label={t('cooperative.members.form.name')}>
               {member.name}
             </Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.members.form.area')}>
+              {member.area_name
+                ? <Tag color="blue">{member.area_code ? `${member.area_code} - ${member.area_name}` : member.area_name}</Tag>
+                : '-'}
+            </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.members.form.identityNumber')}>
               {member.identity_number || '-'}
             </Descriptions.Item>

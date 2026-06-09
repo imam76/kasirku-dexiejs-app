@@ -4,6 +4,7 @@ import { Plus, Users } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import {
   useCooperativeMembers,
+  type CooperativeMemberAreaFilter,
   type CooperativeMemberStatusFilter,
 } from '@/hooks/useCooperativeMembers';
 import { useI18n } from '@/hooks/useI18n';
@@ -20,12 +21,16 @@ export default function CooperativeMemberManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const {
     filteredMembers,
+    areas,
+    visibleAreas,
     editingMember,
     selectedMember,
     searchText,
     setSearchText,
     statusFilter,
     setStatusFilter,
+    areaFilter,
+    setAreaFilter,
     handleEdit,
     handleSelect,
     resetForm,
@@ -57,6 +62,7 @@ export default function CooperativeMemberManagement() {
       identity_number: member.identity_number,
       phone: member.phone,
       address: member.address,
+      area_id: member.area_id,
       join_date: member.join_date ? dayjs(member.join_date) : null,
       status: member.status,
       notes: member.notes,
@@ -70,6 +76,7 @@ export default function CooperativeMemberManagement() {
     identity_number: values.identity_number,
     phone: values.phone,
     address: values.address,
+    area_id: values.area_id,
     join_date: values.join_date?.toISOString() ?? '',
     status: values.status,
     notes: values.notes,
@@ -133,12 +140,26 @@ export default function CooperativeMemberManagement() {
         </Button>
       )}
     >
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_190px]">
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(180px,220px)_190px]">
         <Input.Search
           allowClear
           value={searchText}
           placeholder={t('cooperative.members.searchPlaceholder')}
           onChange={(event) => setSearchText(event.target.value)}
+        />
+        <Select<CooperativeMemberAreaFilter>
+          showSearch
+          value={areaFilter}
+          onChange={setAreaFilter}
+          optionFilterProp="label"
+          options={[
+            { value: 'ALL', label: t('cooperative.members.filter.allAreas') },
+            { value: 'UNASSIGNED', label: t('cooperative.members.filter.unassignedArea') },
+            ...visibleAreas.map((area) => ({
+              value: area.id,
+              label: area.code ? `${area.code} - ${area.name}` : area.name,
+            })),
+          ]}
         />
         <Select<CooperativeMemberStatusFilter>
           value={statusFilter}
@@ -160,6 +181,7 @@ export default function CooperativeMemberManagement() {
       <CooperativeMemberFormModal
         form={form}
         open={isModalOpen}
+        areas={areas}
         isEditing={Boolean(editingMember)}
         isSubmitting={isSubmitting}
         onCancel={closeModal}

@@ -14,6 +14,9 @@ macro_rules! cooperative_member_select {
             identity_number,
             phone,
             address,
+            area_id,
+            area_name,
+            area_code,
             join_date,
             status,
             notes,
@@ -239,6 +242,9 @@ pub async fn upsert_cooperative_member(
             identity_number,
             phone,
             address,
+            area_id,
+            area_name,
+            area_code,
             join_date,
             status,
             notes,
@@ -259,12 +265,15 @@ pub async fn upsert_cooperative_member(
             $7,
             $8,
             $9,
-            $10::TIMESTAMPTZ,
-            $11::TIMESTAMPTZ,
+            $10,
+            $11,
             $12,
-            $13,
-            $14,
-            $15
+            $13::TIMESTAMPTZ,
+            $14::TIMESTAMPTZ,
+            $15,
+            $16,
+            $17,
+            $18
         )
         ON CONFLICT (id) DO UPDATE SET
             member_number = EXCLUDED.member_number,
@@ -272,6 +281,9 @@ pub async fn upsert_cooperative_member(
             identity_number = EXCLUDED.identity_number,
             phone = EXCLUDED.phone,
             address = EXCLUDED.address,
+            area_id = EXCLUDED.area_id,
+            area_name = EXCLUDED.area_name,
+            area_code = EXCLUDED.area_code,
             join_date = EXCLUDED.join_date,
             status = EXCLUDED.status,
             notes = EXCLUDED.notes,
@@ -288,6 +300,9 @@ pub async fn upsert_cooperative_member(
             identity_number,
             phone,
             address,
+            area_id,
+            area_name,
+            area_code,
             join_date,
             status,
             notes,
@@ -305,6 +320,9 @@ pub async fn upsert_cooperative_member(
     .bind(input.identity_number)
     .bind(input.phone)
     .bind(input.address)
+    .bind(input.area_id)
+    .bind(input.area_name)
+    .bind(input.area_code)
     .bind(input.join_date)
     .bind(input.status)
     .bind(input.notes)

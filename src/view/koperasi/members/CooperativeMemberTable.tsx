@@ -42,6 +42,15 @@ export default function CooperativeMemberTable({
       ),
     },
     {
+      title: t('cooperative.members.table.area'),
+      key: 'area',
+      render: (_value: unknown, member) => (
+        member.area_name
+          ? <Tag color="blue">{member.area_code ? `${member.area_code} - ${member.area_name}` : member.area_name}</Tag>
+          : '-'
+      ),
+    },
+    {
       title: t('cooperative.members.table.identityNumber'),
       dataIndex: 'identity_number',
       key: 'identity_number',

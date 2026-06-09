@@ -2,7 +2,7 @@ import { DatePicker, Form, Input, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useI18n } from '@/hooks/useI18n';
-import type { CooperativeMemberStatus } from '@/types';
+import type { CooperativeArea, CooperativeMemberStatus } from '@/types';
 import { cooperativeMemberStatusOptions } from './memberOptions';
 
 const { TextArea } = Input;
@@ -13,6 +13,7 @@ export interface CooperativeMemberFormValues {
   identity_number?: string;
   phone?: string;
   address?: string;
+  area_id: string;
   join_date: Dayjs | null;
   status: CooperativeMemberStatus;
   notes?: string;
@@ -21,6 +22,7 @@ export interface CooperativeMemberFormValues {
 interface CooperativeMemberFormModalProps {
   form: FormInstance<CooperativeMemberFormValues>;
   open: boolean;
+  areas: CooperativeArea[];
   isEditing: boolean;
   isSubmitting: boolean;
   onCancel: () => void;
@@ -30,6 +32,7 @@ interface CooperativeMemberFormModalProps {
 export default function CooperativeMemberFormModal({
   form,
   open,
+  areas,
   isEditing,
   isSubmitting,
   onCancel,
@@ -110,6 +113,23 @@ export default function CooperativeMemberFormModal({
             />
           </Form.Item>
         </div>
+
+        <Form.Item
+          name="area_id"
+          label={t('cooperative.members.form.area')}
+          rules={[{ required: true, message: t('cooperative.members.validation.areaRequired') }]}
+        >
+          <Select
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('cooperative.members.form.areaPlaceholder')}
+            options={areas.map((area) => ({
+              value: area.id,
+              label: area.code ? `${area.code} - ${area.name}` : area.name,
+              disabled: !area.is_active,
+            }))}
+          />
+        </Form.Item>
 
         <Form.Item name="address" label={t('cooperative.members.form.address')}>
           <TextArea

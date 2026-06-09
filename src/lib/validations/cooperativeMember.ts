@@ -16,6 +16,7 @@ export const cooperativeMemberSchema = z.object({
   identity_number: optionalTrimmedString,
   phone: optionalTrimmedString,
   address: optionalTrimmedString,
+  area_id: z.string().trim().min(1, 'Area anggota wajib dipilih.'),
   join_date: z.string().trim().min(1, 'Tanggal bergabung wajib diisi.'),
   status: z.enum(cooperativeMemberStatusValues, { message: 'Status anggota wajib dipilih.' }),
   notes: optionalTrimmedString,

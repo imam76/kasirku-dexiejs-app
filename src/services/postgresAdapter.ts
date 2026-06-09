@@ -530,6 +530,9 @@ export interface RemoteCooperativeMemberDto {
   identity_number?: string | null;
   phone?: string | null;
   address?: string | null;
+  area_id?: string | null;
+  area_name?: string | null;
+  area_code?: string | null;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string | null;

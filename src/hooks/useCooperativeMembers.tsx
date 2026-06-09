@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
+import { useCooperativeAreaScope } from '@/hooks/useCooperativeAreaScope';
 import {
   archiveCooperativeMember,
   createCooperativeMember,
@@ -12,36 +13,57 @@ import {
 import type { CooperativeMember, CooperativeMemberStatus } from '@/types';
 
 export type CooperativeMemberStatusFilter = CooperativeMemberStatus | 'ALL';
+export type CooperativeMemberAreaFilter = string | 'ALL' | 'UNASSIGNED';
 
 export const useCooperativeMembers = () => {
   const queryClient = useQueryClient();
+  const areaScope = useCooperativeAreaScope();
   const [editingMember, setEditingMember] = useState<CooperativeMember | null>(null);
   const [selectedMember, setSelectedMember] = useState<CooperativeMember | null>(null);
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<CooperativeMemberStatusFilter>('ACTIVE');
+  const [areaFilter, setAreaFilter] = useState<CooperativeMemberAreaFilter>('ALL');
 
   const members = useLiveQuery(
     () => db.cooperativeMembers.orderBy('member_number').toArray(),
     [],
     [],
   );
+  const areas = useLiveQuery(
+    () => db.cooperativeAreas.orderBy('name').toArray(),
+    [],
+    [],
+  );
+
+  const visibleAreas = useMemo(() => {
+    if (!areaScope.isScoped) return areas;
+    const allowedAreaIds = new Set(areaScope.areaIds);
+    return areas.filter((area) => allowedAreaIds.has(area.id));
+  }, [areaScope.areaIds, areaScope.isScoped, areas]);
 
   const filteredMembers = useMemo(() => {
     const query = searchText.trim().toLowerCase();
+    const allowedAreaIds = new Set(areaScope.areaIds);
 
     return members.filter((member) => {
+      const matchesScope = !areaScope.isScoped || (member.area_id ? allowedAreaIds.has(member.area_id) : false);
       const matchesSearch = !query || [
         member.member_number,
         member.name,
         member.identity_number,
         member.phone,
         member.address,
+        member.area_name,
+        member.area_code,
       ].some((value) => value?.toLowerCase().includes(query));
       const matchesStatus = statusFilter === 'ALL' || member.status === statusFilter;
+      const matchesArea =
+        areaFilter === 'ALL' ||
+        (areaFilter === 'UNASSIGNED' ? !member.area_id : member.area_id === areaFilter);
 
-      return matchesSearch && matchesStatus;
+      return matchesScope && matchesSearch && matchesStatus && matchesArea;
     });
-  }, [members, searchText, statusFilter]);
+  }, [areaFilter, areaScope.areaIds, areaScope.isScoped, members, searchText, statusFilter]);
 
   const invalidateMembers = () => {
     queryClient.invalidateQueries({ queryKey: ['cooperativeMembers'] });
@@ -77,13 +99,18 @@ export const useCooperativeMembers = () => {
 
   return {
     members,
+    areas,
+    visibleAreas,
     filteredMembers,
+    areaScope,
     editingMember,
     selectedMember,
     searchText,
     setSearchText,
     statusFilter,
     setStatusFilter,
+    areaFilter,
+    setAreaFilter,
     handleEdit,
     handleSelect,
     resetForm,

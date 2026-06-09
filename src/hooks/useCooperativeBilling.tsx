@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
+import { useCooperativeAreaScope } from '@/hooks/useCooperativeAreaScope';
 import {
   recordCooperativeLoanPayment,
   type RecordCooperativeLoanPaymentInput,
@@ -26,9 +27,16 @@ const COOPERATIVE_BILLING_RELATED_QUERY_KEYS = [
 
 export const useCooperativeBilling = () => {
   const queryClient = useQueryClient();
+  const areaScope = useCooperativeAreaScope();
   const [searchText, setSearchText] = useState('');
   const [memberFilter, setMemberFilter] = useState<string>('ALL');
   const [selectedInstallment, setSelectedInstallment] = useState<CooperativeLoanInstallment | null>(null);
+
+  const members = useLiveQuery(
+    () => db.cooperativeMembers.toArray(),
+    [],
+    [],
+  );
 
   const loans = useLiveQuery(
     () => db.cooperativeLoans.orderBy('loan_number').toArray(),
@@ -53,13 +61,23 @@ export const useCooperativeBilling = () => {
   );
 
   const loanById = useMemo(() => new Map(loans.map((loan) => [loan.id, loan])), [loans]);
+  const visibleMemberIds = useMemo(() => {
+    if (!areaScope.isScoped) return null;
+    const allowedAreaIds = new Set(areaScope.areaIds);
+    return new Set(
+      members
+        .filter((member) => member.area_id && allowedAreaIds.has(member.area_id))
+        .map((member) => member.id),
+    );
+  }, [areaScope.areaIds, areaScope.isScoped, members]);
 
   const allUnpaidInstallments = useMemo(() => {
     return installments.filter((installment) => {
       const loan = loanById.get(installment.loan_id);
-      return loan?.status === 'DISBURSED' && installment.status !== 'PAID';
+      const matchesAreaScope = !visibleMemberIds || visibleMemberIds.has(installment.member_id);
+      return loan?.status === 'DISBURSED' && installment.status !== 'PAID' && matchesAreaScope;
     });
-  }, [installments, loanById]);
+  }, [installments, loanById, visibleMemberIds]);
 
   const memberFilterOptions = useMemo(() => {
     const memberById = new Map<string, { value: string; label: string; memberNumber: string; memberName: string }>();
