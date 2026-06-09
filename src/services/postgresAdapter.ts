@@ -1,6 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
+  CooperativeLoanInstallmentStatus,
+  CooperativeLoanPaymentStatus,
+  CooperativeLoanPaymentType,
+  CooperativeLoanStatus,
+  CooperativeMemberStatus,
+  CooperativeSavingTransactionStatus,
+  CooperativeSavingTransactionType,
+  CooperativeSavingType,
   FinanceTransactionType,
   JournalEntryStatus,
   JournalSourceType,
@@ -515,6 +523,167 @@ export interface RemoteJournalEntryBundleDto {
   lines: RemoteJournalEntryLineDto[];
 }
 
+export interface RemoteCooperativeMemberDto {
+  id: string;
+  member_number: string;
+  name: string;
+  identity_number?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  join_date: string;
+  status: CooperativeMemberStatus;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+}
+
+export interface RemoteCooperativeSavingTransactionDto {
+  id: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  saving_type: CooperativeSavingType;
+  transaction_type: CooperativeSavingTransactionType;
+  amount: number;
+  transaction_date: string;
+  status: CooperativeSavingTransactionStatus;
+  cash_account_id?: string | null;
+  cash_account_code?: string | null;
+  cash_account_name?: string | null;
+  payment_method?: PaymentMethod | null;
+  payment_channel?: string | null;
+  finance_transaction_id?: string | null;
+  journal_entry_id?: string | null;
+  reversal_of_transaction_id?: string | null;
+  reversal_transaction_id?: string | null;
+  reversal_finance_transaction_id?: string | null;
+  reversal_journal_entry_id?: string | null;
+  reversed_at?: string | null;
+  reversal_reason?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+}
+
+export interface RemoteCooperativeMemberSavingBalanceDto {
+  id: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  saving_type: CooperativeSavingType;
+  balance: number;
+  updated_at: string;
+}
+
+export interface RemoteCooperativeLoanDto {
+  id: string;
+  loan_number: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  principal_amount: number;
+  interest_rate_per_month: number;
+  tenor_months: number;
+  total_interest_amount: number;
+  total_payable_amount: number;
+  outstanding_principal_amount: number;
+  outstanding_interest_amount: number;
+  outstanding_penalty_amount: number;
+  status: CooperativeLoanStatus;
+  application_date: string;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  approved_by_name?: string | null;
+  approval_notes?: string | null;
+  rejected_at?: string | null;
+  rejected_by?: string | null;
+  rejected_by_name?: string | null;
+  rejection_reason?: string | null;
+  disbursed_at?: string | null;
+  cash_account_id?: string | null;
+  cash_account_code?: string | null;
+  cash_account_name?: string | null;
+  payment_method?: PaymentMethod | null;
+  payment_channel?: string | null;
+  finance_transaction_id?: string | null;
+  journal_entry_id?: string | null;
+  disbursement_notes?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+}
+
+export interface RemoteCooperativeLoanInstallmentDto {
+  id: string;
+  loan_id: string;
+  loan_number: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  installment_number: number;
+  due_date: string;
+  principal_amount: number;
+  interest_amount: number;
+  penalty_amount: number;
+  paid_principal_amount: number;
+  paid_interest_amount: number;
+  paid_penalty_amount: number;
+  status: CooperativeLoanInstallmentStatus;
+  paid_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteCooperativeLoanPaymentDto {
+  id: string;
+  payment_number: string;
+  payment_type?: CooperativeLoanPaymentType | null;
+  loan_id: string;
+  loan_number: string;
+  installment_id?: string | null;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  amount: number;
+  principal_amount: number;
+  interest_amount: number;
+  penalty_amount: number;
+  payment_date: string;
+  status: CooperativeLoanPaymentStatus;
+  cash_account_id?: string | null;
+  cash_account_code?: string | null;
+  cash_account_name?: string | null;
+  payment_method?: PaymentMethod | null;
+  payment_channel?: string | null;
+  finance_transaction_id?: string | null;
+  journal_entry_id?: string | null;
+  reversal_of_payment_id?: string | null;
+  reversal_payment_id?: string | null;
+  reversal_finance_transaction_id?: string | null;
+  reversal_journal_entry_id?: string | null;
+  reversed_at?: string | null;
+  reversal_reason?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+}
+
 export type PostgresHealthStatus = 'available' | 'unconfigured' | 'unreachable' | 'migration_failed';
 
 export interface PostgresHealth {
@@ -867,5 +1036,107 @@ export const journalEntryPostgresAdapter = {
   async upsert(input: RemoteJournalEntryBundleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteJournalEntryBundleDto>('postgres_upsert_journal_entry_bundle', { input });
+  },
+};
+
+export const cooperativeMemberPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeMemberDto[]>('postgres_list_cooperative_members');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeMemberDto | null>('postgres_get_cooperative_member', { id });
+  },
+
+  async upsert(input: RemoteCooperativeMemberDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeMemberDto>('postgres_upsert_cooperative_member', { input });
+  },
+};
+
+export const cooperativeSavingTransactionPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeSavingTransactionDto[]>('postgres_list_cooperative_saving_transactions');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeSavingTransactionDto | null>('postgres_get_cooperative_saving_transaction', { id });
+  },
+
+  async upsert(input: RemoteCooperativeSavingTransactionDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeSavingTransactionDto>('postgres_upsert_cooperative_saving_transaction', { input });
+  },
+};
+
+export const cooperativeMemberSavingBalancePostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeMemberSavingBalanceDto[]>('postgres_list_cooperative_member_saving_balances');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeMemberSavingBalanceDto | null>('postgres_get_cooperative_member_saving_balance', { id });
+  },
+
+  async upsert(input: RemoteCooperativeMemberSavingBalanceDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeMemberSavingBalanceDto>('postgres_upsert_cooperative_member_saving_balance', { input });
+  },
+};
+
+export const cooperativeLoanPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeLoanDto[]>('postgres_list_cooperative_loans');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeLoanDto | null>('postgres_get_cooperative_loan', { id });
+  },
+
+  async upsert(input: RemoteCooperativeLoanDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeLoanDto>('postgres_upsert_cooperative_loan', { input });
+  },
+};
+
+export const cooperativeLoanInstallmentPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeLoanInstallmentDto[]>('postgres_list_cooperative_loan_installments');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeLoanInstallmentDto | null>('postgres_get_cooperative_loan_installment', { id });
+  },
+
+  async upsert(input: RemoteCooperativeLoanInstallmentDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeLoanInstallmentDto>('postgres_upsert_cooperative_loan_installment', { input });
+  },
+};
+
+export const cooperativeLoanPaymentPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeLoanPaymentDto[]>('postgres_list_cooperative_loan_payments');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeLoanPaymentDto | null>('postgres_get_cooperative_loan_payment', { id });
+  },
+
+  async upsert(input: RemoteCooperativeLoanPaymentDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeLoanPaymentDto>('postgres_upsert_cooperative_loan_payment', { input });
   },
 };

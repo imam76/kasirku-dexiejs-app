@@ -11,6 +11,11 @@ import {
   reverseCooperativeSavingTransactionJournal,
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import {
+  enqueueCooperativeMemberSavingBalancesSync,
+  enqueueCooperativeSavingTransactionsSync,
+  withPendingCooperativeSync,
+} from '@/services/cooperativeSyncService';
 import type {
   CooperativeMember,
   CooperativeMemberSavingBalance,
@@ -141,7 +146,7 @@ const buildBalance = async (
     throw new Error('Saldo simpanan tidak boleh negatif.');
   }
 
-  const balance: CooperativeMemberSavingBalance = {
+  const balance: CooperativeMemberSavingBalance = withPendingCooperativeSync({
     id: balanceId,
     member_id: member.id,
     member_number: member.member_number,
@@ -149,7 +154,7 @@ const buildBalance = async (
     saving_type: savingType,
     balance: Math.max(0, nextBalance),
     updated_at: now,
-  };
+  });
 
   await db.cooperativeMemberSavingBalances.put(balance);
   return balance;
@@ -197,7 +202,7 @@ export const recordCooperativeSaving = async (
 
     const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
     const accountSnapshot = await getFinanceAccountSnapshotForCategory(financeCategory);
-    const savingTransaction: CooperativeSavingTransaction = {
+    const savingTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
       id: savingTransactionId,
       member_id: member.id,
       member_number: member.member_number,
@@ -220,7 +225,7 @@ export const recordCooperativeSaving = async (
       created_by_name: currentUser?.name,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
 
     await updateFinanceBalance(parsedInput.transaction_type, amount, now);
     savedBalance = await buildBalance(
@@ -255,6 +260,8 @@ export const recordCooperativeSaving = async (
           ...savingTransaction,
           journal_entry_id: journalEntry.id,
           updated_at: now,
+          sync_status: 'pending',
+          sync_error: undefined,
         }
       : savingTransaction;
 
@@ -262,6 +269,8 @@ export const recordCooperativeSaving = async (
       await db.cooperativeSavingTransactions.update(savingTransaction.id, {
         journal_entry_id: journalEntry.id,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
     }
 
@@ -283,6 +292,8 @@ export const recordCooperativeSaving = async (
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
   }
+  await enqueueCooperativeSavingTransactionsSync([savedTransaction], 'create');
+  await enqueueCooperativeMemberSavingBalancesSync([savedBalance], 'update');
 
   return {
     transaction: savedTransaction,
@@ -302,6 +313,8 @@ export const reverseCooperativeSaving = async (
   const reversalFinanceTransactionId = crypto.randomUUID();
   let reversalTransaction: CooperativeSavingTransaction | undefined;
   let reversalFinanceTransaction: FinanceTransaction | undefined;
+  let reversalBalance: CooperativeMemberSavingBalance | undefined;
+  let updatedOriginalTransaction: CooperativeSavingTransaction | undefined;
 
   await db.transaction('rw', cooperativeSavingTables, async () => {
     const originalTransaction = await db.cooperativeSavingTransactions.get(input.transaction_id);
@@ -324,7 +337,7 @@ export const reverseCooperativeSaving = async (
     }
 
     await updateFinanceBalance(originalTransaction.transaction_type, originalTransaction.amount, now, true);
-    await buildBalance(
+    reversalBalance = await buildBalance(
       {
         id: originalTransaction.member_id,
         member_number: originalTransaction.member_number,
@@ -354,7 +367,7 @@ export const reverseCooperativeSaving = async (
       ...accountSnapshot,
     }, currentUser, now);
 
-    const nextReversalTransaction: CooperativeSavingTransaction = {
+    const nextReversalTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
       id: reversalTransactionId,
       member_id: originalTransaction.member_id,
       member_number: originalTransaction.member_number,
@@ -378,7 +391,7 @@ export const reverseCooperativeSaving = async (
       created_by_name: currentUser?.name,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
     reversalTransaction = nextReversalTransaction;
 
     await db.financeTransactions.add(reversalFinanceTransaction);
@@ -394,8 +407,9 @@ export const reverseCooperativeSaving = async (
       : [];
     const reversalJournalEntryId = reversalEntries[0]?.id;
 
-    await db.cooperativeSavingTransactions.update(originalTransaction.id, {
-      status: 'REVERSED',
+    const nextOriginalTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
+      ...originalTransaction,
+      status: 'REVERSED' as const,
       reversal_transaction_id: nextReversalTransaction.id,
       reversal_finance_transaction_id: reversalFinanceTransactionId,
       reversal_journal_entry_id: reversalJournalEntryId,
@@ -405,17 +419,23 @@ export const reverseCooperativeSaving = async (
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
     });
+    updatedOriginalTransaction = nextOriginalTransaction;
+    await db.cooperativeSavingTransactions.put(nextOriginalTransaction);
 
     if (reversalJournalEntryId) {
       const reversalTransactionWithJournal: CooperativeSavingTransaction = {
         ...nextReversalTransaction,
         journal_entry_id: reversalJournalEntryId,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       };
       reversalTransaction = reversalTransactionWithJournal;
       await db.cooperativeSavingTransactions.update(nextReversalTransaction.id, {
         journal_entry_id: reversalJournalEntryId,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
     }
 
@@ -431,10 +451,16 @@ export const reverseCooperativeSaving = async (
   if (!reversalTransaction) {
     throw new Error('Reversal transaksi simpanan gagal disimpan.');
   }
+  if (!reversalBalance || !updatedOriginalTransaction) {
+    throw new Error('Reversal transaksi simpanan gagal memperbarui saldo.');
+  }
 
   if (reversalFinanceTransaction) {
     await enqueueFinanceTransactionsSync([reversalFinanceTransaction], 'create');
   }
+  await enqueueCooperativeSavingTransactionsSync([reversalTransaction], 'create');
+  await enqueueCooperativeSavingTransactionsSync([updatedOriginalTransaction], 'update');
+  await enqueueCooperativeMemberSavingBalancesSync([reversalBalance], 'update');
 
   return reversalTransaction;
 };

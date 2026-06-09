@@ -1,6 +1,14 @@
 import { db } from '@/lib/db';
 import { mergeRemoteAuthUsersIntoDexie } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
+import {
+  mergeRemoteCooperativeLoanInstallmentsIntoDexie,
+  mergeRemoteCooperativeLoanPaymentsIntoDexie,
+  mergeRemoteCooperativeLoansIntoDexie,
+  mergeRemoteCooperativeMembersIntoDexie,
+  mergeRemoteCooperativeMemberSavingBalancesIntoDexie,
+  mergeRemoteCooperativeSavingTransactionsIntoDexie,
+} from '@/services/cooperativeReadService';
 import { mergeRemoteCurrenciesIntoDexie, mergeRemoteCurrencyRatesIntoDexie } from '@/services/currencyReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
 import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
@@ -15,6 +23,12 @@ import {
   activityLogPostgresAdapter,
   authUserPostgresAdapter,
   contactPostgresAdapter,
+  cooperativeLoanInstallmentPostgresAdapter,
+  cooperativeLoanPaymentPostgresAdapter,
+  cooperativeLoanPostgresAdapter,
+  cooperativeMemberPostgresAdapter,
+  cooperativeMemberSavingBalancePostgresAdapter,
+  cooperativeSavingTransactionPostgresAdapter,
   currencyPostgresAdapter,
   currencyRatePostgresAdapter,
   departmentPostgresAdapter,
@@ -32,6 +46,12 @@ import {
   type RemoteActivityLogDto,
   type RemoteAuthUserDto,
   type RemoteContactDto,
+  type RemoteCooperativeLoanDto,
+  type RemoteCooperativeLoanInstallmentDto,
+  type RemoteCooperativeLoanPaymentDto,
+  type RemoteCooperativeMemberDto,
+  type RemoteCooperativeMemberSavingBalanceDto,
+  type RemoteCooperativeSavingTransactionDto,
   type RemoteCurrencyDto,
   type RemoteCurrencyRateDto,
   type RemoteDepartmentDto,
@@ -51,7 +71,7 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -59,6 +79,12 @@ const SYNC_QUEUE_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
 const ACTIVITY_LOG_ENTITY = 'activityLogs';
 const AUTH_USER_ENTITY = 'authUsers';
 const CONTACT_ENTITY = 'contacts';
+const COOPERATIVE_LOAN_ENTITY = 'cooperativeLoans';
+const COOPERATIVE_LOAN_INSTALLMENT_ENTITY = 'cooperativeLoanInstallments';
+const COOPERATIVE_LOAN_PAYMENT_ENTITY = 'cooperativeLoanPayments';
+const COOPERATIVE_MEMBER_ENTITY = 'cooperativeMembers';
+const COOPERATIVE_MEMBER_SAVING_BALANCE_ENTITY = 'cooperativeMemberSavingBalances';
+const COOPERATIVE_SAVING_TRANSACTION_ENTITY = 'cooperativeSavingTransactions';
 const CURRENCY_ENTITY = 'currencies';
 const CURRENCY_RATE_ENTITY = 'currencyRates';
 const DEPARTMENT_ENTITY = 'departments';
@@ -131,6 +157,175 @@ const mapContactToRemoteDto = (contact: Contact): RemoteContactDto => ({
   is_active: contact.is_active,
   created_at: contact.created_at,
   updated_at: contact.updated_at,
+});
+
+const mapCooperativeMemberToRemoteDto = (member: CooperativeMember): RemoteCooperativeMemberDto => ({
+  id: member.id,
+  member_number: member.member_number,
+  name: member.name,
+  identity_number: member.identity_number,
+  phone: member.phone,
+  address: member.address,
+  join_date: member.join_date,
+  status: member.status,
+  notes: member.notes,
+  created_at: member.created_at,
+  updated_at: member.updated_at,
+  created_by: member.created_by,
+  created_by_name: member.created_by_name,
+  updated_by: member.updated_by,
+  updated_by_name: member.updated_by_name,
+});
+
+const mapCooperativeSavingTransactionToRemoteDto = (
+  transaction: CooperativeSavingTransaction,
+): RemoteCooperativeSavingTransactionDto => ({
+  id: transaction.id,
+  member_id: transaction.member_id,
+  member_number: transaction.member_number,
+  member_name: transaction.member_name,
+  saving_type: transaction.saving_type,
+  transaction_type: transaction.transaction_type,
+  amount: normalizeRemoteNumber(transaction.amount),
+  transaction_date: transaction.transaction_date,
+  status: transaction.status,
+  cash_account_id: transaction.cash_account_id,
+  cash_account_code: transaction.cash_account_code,
+  cash_account_name: transaction.cash_account_name,
+  payment_method: transaction.payment_method,
+  payment_channel: transaction.payment_channel,
+  finance_transaction_id: transaction.finance_transaction_id,
+  journal_entry_id: transaction.journal_entry_id,
+  reversal_of_transaction_id: transaction.reversal_of_transaction_id,
+  reversal_transaction_id: transaction.reversal_transaction_id,
+  reversal_finance_transaction_id: transaction.reversal_finance_transaction_id,
+  reversal_journal_entry_id: transaction.reversal_journal_entry_id,
+  reversed_at: transaction.reversed_at,
+  reversal_reason: transaction.reversal_reason,
+  notes: transaction.notes,
+  created_at: transaction.created_at,
+  updated_at: transaction.updated_at,
+  created_by: transaction.created_by,
+  created_by_name: transaction.created_by_name,
+  updated_by: transaction.updated_by,
+  updated_by_name: transaction.updated_by_name,
+});
+
+const mapCooperativeMemberSavingBalanceToRemoteDto = (
+  balance: CooperativeMemberSavingBalance,
+): RemoteCooperativeMemberSavingBalanceDto => ({
+  id: balance.id,
+  member_id: balance.member_id,
+  member_number: balance.member_number,
+  member_name: balance.member_name,
+  saving_type: balance.saving_type,
+  balance: normalizeRemoteNumber(balance.balance),
+  updated_at: balance.updated_at,
+});
+
+const mapCooperativeLoanToRemoteDto = (loan: CooperativeLoan): RemoteCooperativeLoanDto => ({
+  id: loan.id,
+  loan_number: loan.loan_number,
+  member_id: loan.member_id,
+  member_number: loan.member_number,
+  member_name: loan.member_name,
+  principal_amount: normalizeRemoteNumber(loan.principal_amount),
+  interest_rate_per_month: normalizeRemoteNumber(loan.interest_rate_per_month),
+  tenor_months: Math.trunc(normalizeRemoteNumber(loan.tenor_months)),
+  total_interest_amount: normalizeRemoteNumber(loan.total_interest_amount),
+  total_payable_amount: normalizeRemoteNumber(loan.total_payable_amount),
+  outstanding_principal_amount: normalizeRemoteNumber(loan.outstanding_principal_amount),
+  outstanding_interest_amount: normalizeRemoteNumber(loan.outstanding_interest_amount),
+  outstanding_penalty_amount: normalizeRemoteNumber(loan.outstanding_penalty_amount),
+  status: loan.status,
+  application_date: loan.application_date,
+  approved_at: loan.approved_at,
+  approved_by: loan.approved_by,
+  approved_by_name: loan.approved_by_name,
+  approval_notes: loan.approval_notes,
+  rejected_at: loan.rejected_at,
+  rejected_by: loan.rejected_by,
+  rejected_by_name: loan.rejected_by_name,
+  rejection_reason: loan.rejection_reason,
+  disbursed_at: loan.disbursed_at,
+  cash_account_id: loan.cash_account_id,
+  cash_account_code: loan.cash_account_code,
+  cash_account_name: loan.cash_account_name,
+  payment_method: loan.payment_method,
+  payment_channel: loan.payment_channel,
+  finance_transaction_id: loan.finance_transaction_id,
+  journal_entry_id: loan.journal_entry_id,
+  disbursement_notes: loan.disbursement_notes,
+  notes: loan.notes,
+  created_at: loan.created_at,
+  updated_at: loan.updated_at,
+  created_by: loan.created_by,
+  created_by_name: loan.created_by_name,
+  updated_by: loan.updated_by,
+  updated_by_name: loan.updated_by_name,
+});
+
+const mapCooperativeLoanInstallmentToRemoteDto = (
+  installment: CooperativeLoanInstallment,
+): RemoteCooperativeLoanInstallmentDto => ({
+  id: installment.id,
+  loan_id: installment.loan_id,
+  loan_number: installment.loan_number,
+  member_id: installment.member_id,
+  member_number: installment.member_number,
+  member_name: installment.member_name,
+  installment_number: Math.trunc(normalizeRemoteNumber(installment.installment_number)),
+  due_date: installment.due_date,
+  principal_amount: normalizeRemoteNumber(installment.principal_amount),
+  interest_amount: normalizeRemoteNumber(installment.interest_amount),
+  penalty_amount: normalizeRemoteNumber(installment.penalty_amount),
+  paid_principal_amount: normalizeRemoteNumber(installment.paid_principal_amount),
+  paid_interest_amount: normalizeRemoteNumber(installment.paid_interest_amount),
+  paid_penalty_amount: normalizeRemoteNumber(installment.paid_penalty_amount),
+  status: installment.status,
+  paid_at: installment.paid_at,
+  created_at: installment.created_at,
+  updated_at: installment.updated_at,
+});
+
+const mapCooperativeLoanPaymentToRemoteDto = (
+  payment: CooperativeLoanPayment,
+): RemoteCooperativeLoanPaymentDto => ({
+  id: payment.id,
+  payment_number: payment.payment_number,
+  payment_type: payment.payment_type,
+  loan_id: payment.loan_id,
+  loan_number: payment.loan_number,
+  installment_id: payment.installment_id,
+  member_id: payment.member_id,
+  member_number: payment.member_number,
+  member_name: payment.member_name,
+  amount: normalizeRemoteNumber(payment.amount),
+  principal_amount: normalizeRemoteNumber(payment.principal_amount),
+  interest_amount: normalizeRemoteNumber(payment.interest_amount),
+  penalty_amount: normalizeRemoteNumber(payment.penalty_amount),
+  payment_date: payment.payment_date,
+  status: payment.status,
+  cash_account_id: payment.cash_account_id,
+  cash_account_code: payment.cash_account_code,
+  cash_account_name: payment.cash_account_name,
+  payment_method: payment.payment_method,
+  payment_channel: payment.payment_channel,
+  finance_transaction_id: payment.finance_transaction_id,
+  journal_entry_id: payment.journal_entry_id,
+  reversal_of_payment_id: payment.reversal_of_payment_id,
+  reversal_payment_id: payment.reversal_payment_id,
+  reversal_finance_transaction_id: payment.reversal_finance_transaction_id,
+  reversal_journal_entry_id: payment.reversal_journal_entry_id,
+  reversed_at: payment.reversed_at,
+  reversal_reason: payment.reversal_reason,
+  notes: payment.notes,
+  created_at: payment.created_at,
+  updated_at: payment.updated_at,
+  created_by: payment.created_by,
+  created_by_name: payment.created_by_name,
+  updated_by: payment.updated_by,
+  updated_by_name: payment.updated_by_name,
 });
 
 const mapDepartmentToRemoteDto = (department: Department): RemoteDepartmentDto => ({
@@ -593,6 +788,136 @@ const isRemoteContactDto = (payload: unknown): payload is RemoteContactDto => {
   );
 };
 
+const isRemoteCooperativeMemberDto = (payload: unknown): payload is RemoteCooperativeMemberDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCooperativeMemberDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.member_number === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.join_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteCooperativeSavingTransactionDto = (
+  payload: unknown,
+): payload is RemoteCooperativeSavingTransactionDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCooperativeSavingTransactionDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.member_id === 'string' &&
+    typeof candidate.member_number === 'string' &&
+    typeof candidate.member_name === 'string' &&
+    typeof candidate.saving_type === 'string' &&
+    typeof candidate.transaction_type === 'string' &&
+    typeof candidate.amount === 'number' &&
+    typeof candidate.transaction_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteCooperativeMemberSavingBalanceDto = (
+  payload: unknown,
+): payload is RemoteCooperativeMemberSavingBalanceDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCooperativeMemberSavingBalanceDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.member_id === 'string' &&
+    typeof candidate.member_number === 'string' &&
+    typeof candidate.member_name === 'string' &&
+    typeof candidate.saving_type === 'string' &&
+    typeof candidate.balance === 'number' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteCooperativeLoanDto = (payload: unknown): payload is RemoteCooperativeLoanDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCooperativeLoanDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.loan_number === 'string' &&
+    typeof candidate.member_id === 'string' &&
+    typeof candidate.member_number === 'string' &&
+    typeof candidate.member_name === 'string' &&
+    typeof candidate.principal_amount === 'number' &&
+    typeof candidate.interest_rate_per_month === 'number' &&
+    typeof candidate.tenor_months === 'number' &&
+    typeof candidate.total_interest_amount === 'number' &&
+    typeof candidate.total_payable_amount === 'number' &&
+    typeof candidate.outstanding_principal_amount === 'number' &&
+    typeof candidate.outstanding_interest_amount === 'number' &&
+    typeof candidate.outstanding_penalty_amount === 'number' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.application_date === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteCooperativeLoanInstallmentDto = (
+  payload: unknown,
+): payload is RemoteCooperativeLoanInstallmentDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCooperativeLoanInstallmentDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.loan_id === 'string' &&
+    typeof candidate.loan_number === 'string' &&
+    typeof candidate.member_id === 'string' &&
+    typeof candidate.member_number === 'string' &&
+    typeof candidate.member_name === 'string' &&
+    typeof candidate.installment_number === 'number' &&
+    typeof candidate.due_date === 'string' &&
+    typeof candidate.principal_amount === 'number' &&
+    typeof candidate.interest_amount === 'number' &&
+    typeof candidate.penalty_amount === 'number' &&
+    typeof candidate.paid_principal_amount === 'number' &&
+    typeof candidate.paid_interest_amount === 'number' &&
+    typeof candidate.paid_penalty_amount === 'number' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteCooperativeLoanPaymentDto = (
+  payload: unknown,
+): payload is RemoteCooperativeLoanPaymentDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCooperativeLoanPaymentDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.payment_number === 'string' &&
+    typeof candidate.loan_id === 'string' &&
+    typeof candidate.loan_number === 'string' &&
+    typeof candidate.member_id === 'string' &&
+    typeof candidate.member_number === 'string' &&
+    typeof candidate.member_name === 'string' &&
+    typeof candidate.amount === 'number' &&
+    typeof candidate.principal_amount === 'number' &&
+    typeof candidate.interest_amount === 'number' &&
+    typeof candidate.penalty_amount === 'number' &&
+    typeof candidate.payment_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteActivityLogDto = (payload: unknown): payload is RemoteActivityLogDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -914,6 +1239,72 @@ const updateContactSyncMetadata = async (
   await db.contacts.update(contactId, syncMetadata);
 };
 
+const updateCooperativeMemberSyncMetadata = async (
+  memberId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CooperativeMember, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentMember = await db.cooperativeMembers.get(memberId);
+  if (!currentMember || currentMember.updated_at !== sourceUpdatedAt) return;
+
+  await db.cooperativeMembers.update(memberId, syncMetadata);
+};
+
+const updateCooperativeSavingTransactionSyncMetadata = async (
+  transactionId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CooperativeSavingTransaction, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentTransaction = await db.cooperativeSavingTransactions.get(transactionId);
+  if (!currentTransaction || currentTransaction.updated_at !== sourceUpdatedAt) return;
+
+  await db.cooperativeSavingTransactions.update(transactionId, syncMetadata);
+};
+
+const updateCooperativeMemberSavingBalanceSyncMetadata = async (
+  balanceId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CooperativeMemberSavingBalance, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentBalance = await db.cooperativeMemberSavingBalances.get(balanceId);
+  if (!currentBalance || currentBalance.updated_at !== sourceUpdatedAt) return;
+
+  await db.cooperativeMemberSavingBalances.update(balanceId, syncMetadata);
+};
+
+const updateCooperativeLoanSyncMetadata = async (
+  loanId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CooperativeLoan, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentLoan = await db.cooperativeLoans.get(loanId);
+  if (!currentLoan || currentLoan.updated_at !== sourceUpdatedAt) return;
+
+  await db.cooperativeLoans.update(loanId, syncMetadata);
+};
+
+const updateCooperativeLoanInstallmentSyncMetadata = async (
+  installmentId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CooperativeLoanInstallment, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentInstallment = await db.cooperativeLoanInstallments.get(installmentId);
+  if (!currentInstallment || currentInstallment.updated_at !== sourceUpdatedAt) return;
+
+  await db.cooperativeLoanInstallments.update(installmentId, syncMetadata);
+};
+
+const updateCooperativeLoanPaymentSyncMetadata = async (
+  paymentId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CooperativeLoanPayment, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentPayment = await db.cooperativeLoanPayments.get(paymentId);
+  if (!currentPayment || currentPayment.updated_at !== sourceUpdatedAt) return;
+
+  await db.cooperativeLoanPayments.update(paymentId, syncMetadata);
+};
+
 const updateAuthUserSyncMetadata = async (
   userId: string,
   sourceUpdatedAt: string,
@@ -1085,6 +1476,57 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === COOPERATIVE_LOAN_ENTITY && isRemoteCooperativeLoanDto(queueItem.payload)) {
+    await updateCooperativeLoanSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === COOPERATIVE_LOAN_INSTALLMENT_ENTITY &&
+    isRemoteCooperativeLoanInstallmentDto(queueItem.payload)
+  ) {
+    await updateCooperativeLoanInstallmentSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === COOPERATIVE_LOAN_PAYMENT_ENTITY && isRemoteCooperativeLoanPaymentDto(queueItem.payload)) {
+    await updateCooperativeLoanPaymentSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === COOPERATIVE_MEMBER_ENTITY && isRemoteCooperativeMemberDto(queueItem.payload)) {
+    await updateCooperativeMemberSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === COOPERATIVE_MEMBER_SAVING_BALANCE_ENTITY &&
+    isRemoteCooperativeMemberSavingBalanceDto(queueItem.payload)
+  ) {
+    await updateCooperativeMemberSavingBalanceSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === COOPERATIVE_SAVING_TRANSACTION_ENTITY &&
+    isRemoteCooperativeSavingTransactionDto(queueItem.payload)
+  ) {
+    await updateCooperativeSavingTransactionSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === CURRENCY_ENTITY && isRemoteCurrencyDto(queueItem.payload)) {
     await updateCurrencySyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -1197,6 +1639,54 @@ const processContactQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return contactPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCooperativeMemberQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteCooperativeMemberDto(queueItem.payload)) {
+    throw new Error('Payload anggota koperasi sync queue tidak valid.');
+  }
+
+  return cooperativeMemberPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCooperativeSavingTransactionQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteCooperativeSavingTransactionDto(queueItem.payload)) {
+    throw new Error('Payload transaksi simpanan koperasi sync queue tidak valid.');
+  }
+
+  return cooperativeSavingTransactionPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCooperativeMemberSavingBalanceQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteCooperativeMemberSavingBalanceDto(queueItem.payload)) {
+    throw new Error('Payload saldo simpanan koperasi sync queue tidak valid.');
+  }
+
+  return cooperativeMemberSavingBalancePostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCooperativeLoanQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteCooperativeLoanDto(queueItem.payload)) {
+    throw new Error('Payload pinjaman koperasi sync queue tidak valid.');
+  }
+
+  return cooperativeLoanPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCooperativeLoanInstallmentQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteCooperativeLoanInstallmentDto(queueItem.payload)) {
+    throw new Error('Payload jadwal angsuran koperasi sync queue tidak valid.');
+  }
+
+  return cooperativeLoanInstallmentPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCooperativeLoanPaymentQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteCooperativeLoanPaymentDto(queueItem.payload)) {
+    throw new Error('Payload pembayaran angsuran koperasi sync queue tidak valid.');
+  }
+
+  return cooperativeLoanPaymentPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processCurrencyQueueItem = async (queueItem: SyncQueueItem) => {
@@ -1401,6 +1891,12 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteActivityLog: RemoteActivityLogDto | null = null;
     let remoteAuthUser: RemoteAuthUserDto | null = null;
     let remoteContact: RemoteContactDto | null = null;
+    let remoteCooperativeLoan: RemoteCooperativeLoanDto | null = null;
+    let remoteCooperativeLoanInstallment: RemoteCooperativeLoanInstallmentDto | null = null;
+    let remoteCooperativeLoanPayment: RemoteCooperativeLoanPaymentDto | null = null;
+    let remoteCooperativeMember: RemoteCooperativeMemberDto | null = null;
+    let remoteCooperativeMemberSavingBalance: RemoteCooperativeMemberSavingBalanceDto | null = null;
+    let remoteCooperativeSavingTransaction: RemoteCooperativeSavingTransactionDto | null = null;
     let remoteCurrency: RemoteCurrencyDto | null = null;
     let remoteCurrencyRate: RemoteCurrencyRateDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
@@ -1420,6 +1916,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteAuthUser = await processAuthUserQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CONTACT_ENTITY) {
       remoteContact = await processContactQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === COOPERATIVE_LOAN_ENTITY) {
+      remoteCooperativeLoan = await processCooperativeLoanQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === COOPERATIVE_LOAN_INSTALLMENT_ENTITY) {
+      remoteCooperativeLoanInstallment = await processCooperativeLoanInstallmentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === COOPERATIVE_LOAN_PAYMENT_ENTITY) {
+      remoteCooperativeLoanPayment = await processCooperativeLoanPaymentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === COOPERATIVE_MEMBER_ENTITY) {
+      remoteCooperativeMember = await processCooperativeMemberQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === COOPERATIVE_MEMBER_SAVING_BALANCE_ENTITY) {
+      remoteCooperativeMemberSavingBalance = await processCooperativeMemberSavingBalanceQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === COOPERATIVE_SAVING_TRANSACTION_ENTITY) {
+      remoteCooperativeSavingTransaction = await processCooperativeSavingTransactionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CURRENCY_ENTITY) {
       remoteCurrency = await processCurrencyQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CURRENCY_RATE_ENTITY) {
@@ -1599,6 +2107,84 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteContact.updated_at,
       });
       await mergeRemoteContactsIntoDexie([remoteContact], syncedAt);
+      return;
+    }
+
+    if (remoteCooperativeLoan && isRemoteCooperativeLoanDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCooperativeLoanSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCooperativeLoan.updated_at,
+      });
+      await mergeRemoteCooperativeLoansIntoDexie([remoteCooperativeLoan], syncedAt);
+      return;
+    }
+
+    if (remoteCooperativeLoanInstallment && isRemoteCooperativeLoanInstallmentDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCooperativeLoanInstallmentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCooperativeLoanInstallment.updated_at,
+      });
+      await mergeRemoteCooperativeLoanInstallmentsIntoDexie([remoteCooperativeLoanInstallment], syncedAt);
+      return;
+    }
+
+    if (remoteCooperativeLoanPayment && isRemoteCooperativeLoanPaymentDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCooperativeLoanPaymentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCooperativeLoanPayment.updated_at,
+      });
+      await mergeRemoteCooperativeLoanPaymentsIntoDexie([remoteCooperativeLoanPayment], syncedAt);
+      return;
+    }
+
+    if (remoteCooperativeMember && isRemoteCooperativeMemberDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCooperativeMemberSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCooperativeMember.updated_at,
+      });
+      await mergeRemoteCooperativeMembersIntoDexie([remoteCooperativeMember], syncedAt);
+      return;
+    }
+
+    if (
+      remoteCooperativeMemberSavingBalance &&
+      isRemoteCooperativeMemberSavingBalanceDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCooperativeMemberSavingBalanceSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCooperativeMemberSavingBalance.updated_at,
+      });
+      await mergeRemoteCooperativeMemberSavingBalancesIntoDexie([remoteCooperativeMemberSavingBalance], syncedAt);
+      return;
+    }
+
+    if (
+      remoteCooperativeSavingTransaction &&
+      isRemoteCooperativeSavingTransactionDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCooperativeSavingTransactionSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCooperativeSavingTransaction.updated_at,
+      });
+      await mergeRemoteCooperativeSavingTransactionsIntoDexie([remoteCooperativeSavingTransaction], syncedAt);
       return;
     }
 
@@ -1861,6 +2447,252 @@ export const enqueueContactSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueueCooperativeMemberSync = async (
+  member: CooperativeMember,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: COOPERATIVE_MEMBER_ENTITY,
+    entity_id: member.id,
+    operation,
+    payload: mapCooperativeMemberToRemoteDto(member),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueCooperativeSavingTransactionSync = async (
+  transaction: CooperativeSavingTransaction,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: COOPERATIVE_SAVING_TRANSACTION_ENTITY,
+    entity_id: transaction.id,
+    operation,
+    payload: mapCooperativeSavingTransactionToRemoteDto(transaction),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueCooperativeMemberSavingBalanceSync = async (
+  balance: CooperativeMemberSavingBalance,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: COOPERATIVE_MEMBER_SAVING_BALANCE_ENTITY,
+    entity_id: balance.id,
+    operation,
+    payload: mapCooperativeMemberSavingBalanceToRemoteDto(balance),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueCooperativeLoanSync = async (
+  loan: CooperativeLoan,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: COOPERATIVE_LOAN_ENTITY,
+    entity_id: loan.id,
+    operation,
+    payload: mapCooperativeLoanToRemoteDto(loan),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueCooperativeLoanInstallmentSync = async (
+  installment: CooperativeLoanInstallment,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: COOPERATIVE_LOAN_INSTALLMENT_ENTITY,
+    entity_id: installment.id,
+    operation,
+    payload: mapCooperativeLoanInstallmentToRemoteDto(installment),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueCooperativeLoanPaymentSync = async (
+  payment: CooperativeLoanPayment,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: COOPERATIVE_LOAN_PAYMENT_ENTITY,
+    entity_id: payment.id,
+    operation,
+    payload: mapCooperativeLoanPaymentToRemoteDto(payment),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingCooperativeDataForSync = async () => {
+  const [
+    memberQueueItems,
+    savingTransactionQueueItems,
+    savingBalanceQueueItems,
+    loanQueueItems,
+    loanInstallmentQueueItems,
+    loanPaymentQueueItems,
+  ] = await Promise.all([
+    db.syncQueue.where('entity').equals(COOPERATIVE_MEMBER_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(COOPERATIVE_SAVING_TRANSACTION_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(COOPERATIVE_MEMBER_SAVING_BALANCE_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(COOPERATIVE_LOAN_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(COOPERATIVE_LOAN_INSTALLMENT_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(COOPERATIVE_LOAN_PAYMENT_ENTITY).toArray(),
+  ]);
+
+  const members = (await db.cooperativeMembers.toArray())
+    .filter((member) => member.sync_status === 'pending' || member.sync_status === 'failed');
+  for (const member of members) {
+    const existingQueueItem = memberQueueItems.find((queueItem) => (
+      queueItem.entity_id === member.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCooperativeMemberDto(queueItem.payload) &&
+      queueItem.payload.updated_at === member.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueCooperativeMemberSync(member, 'update');
+    }
+  }
+
+  const savingTransactions = (await db.cooperativeSavingTransactions.toArray())
+    .filter((transaction) => transaction.sync_status === 'pending' || transaction.sync_status === 'failed');
+  for (const transaction of savingTransactions) {
+    const existingQueueItem = savingTransactionQueueItems.find((queueItem) => (
+      queueItem.entity_id === transaction.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCooperativeSavingTransactionDto(queueItem.payload) &&
+      queueItem.payload.updated_at === transaction.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueCooperativeSavingTransactionSync(transaction, 'update');
+    }
+  }
+
+  const savingBalances = (await db.cooperativeMemberSavingBalances.toArray())
+    .filter((balance) => balance.sync_status === 'pending' || balance.sync_status === 'failed');
+  for (const balance of savingBalances) {
+    const existingQueueItem = savingBalanceQueueItems.find((queueItem) => (
+      queueItem.entity_id === balance.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCooperativeMemberSavingBalanceDto(queueItem.payload) &&
+      queueItem.payload.updated_at === balance.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueCooperativeMemberSavingBalanceSync(balance, 'update');
+    }
+  }
+
+  const loans = (await db.cooperativeLoans.toArray())
+    .filter((loan) => loan.sync_status === 'pending' || loan.sync_status === 'failed');
+  for (const loan of loans) {
+    const existingQueueItem = loanQueueItems.find((queueItem) => (
+      queueItem.entity_id === loan.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCooperativeLoanDto(queueItem.payload) &&
+      queueItem.payload.updated_at === loan.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueCooperativeLoanSync(loan, 'update');
+    }
+  }
+
+  const loanInstallments = (await db.cooperativeLoanInstallments.toArray())
+    .filter((installment) => installment.sync_status === 'pending' || installment.sync_status === 'failed');
+  for (const installment of loanInstallments) {
+    const existingQueueItem = loanInstallmentQueueItems.find((queueItem) => (
+      queueItem.entity_id === installment.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCooperativeLoanInstallmentDto(queueItem.payload) &&
+      queueItem.payload.updated_at === installment.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueCooperativeLoanInstallmentSync(installment, 'update');
+    }
+  }
+
+  const loanPayments = (await db.cooperativeLoanPayments.toArray())
+    .filter((payment) => payment.sync_status === 'pending' || payment.sync_status === 'failed');
+  for (const payment of loanPayments) {
+    const existingQueueItem = loanPaymentQueueItems.find((queueItem) => (
+      queueItem.entity_id === payment.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCooperativeLoanPaymentDto(queueItem.payload) &&
+      queueItem.payload.updated_at === payment.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueCooperativeLoanPaymentSync(payment, 'update');
+    }
+  }
 };
 
 export const enqueueCurrencySync = async (

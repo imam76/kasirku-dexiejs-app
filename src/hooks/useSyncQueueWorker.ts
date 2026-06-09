@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
+import { refreshCooperativeDataFromPostgres } from '@/services/cooperativeReadService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
@@ -10,7 +11,7 @@ import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumen
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
 import { postgresAdapter } from '@/services/postgresAdapter';
-import { enqueuePendingAuthUsersForSync, enqueuePendingFinanceTransactionsForSync, enqueuePendingJournalEntriesForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue, recoverStaleProcessingSyncQueueItems } from '@/services/syncQueueService';
+import { enqueuePendingAuthUsersForSync, enqueuePendingCooperativeDataForSync, enqueuePendingFinanceTransactionsForSync, enqueuePendingJournalEntriesForSync, enqueuePendingPurchaseDocumentsForSync, enqueuePendingSalesDocumentsForSync, processPendingSyncQueue, recoverStaleProcessingSyncQueueItems } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
 import { useSyncActivityStore } from '@/store/syncActivityStore';
@@ -24,6 +25,7 @@ export const useSyncQueueWorker = () => {
         setSyncPhase('uploading');
         await recoverStaleProcessingSyncQueueItems();
         await enqueuePendingAuthUsersForSync();
+        await enqueuePendingCooperativeDataForSync();
         await enqueuePendingFinanceTransactionsForSync();
         await enqueuePendingJournalEntriesForSync();
         await enqueuePendingPurchaseDocumentsForSync();
@@ -51,6 +53,7 @@ export const useSyncQueueWorker = () => {
           products: await refreshProductsFromPostgres(),
           financeTransactions: await refreshFinanceTransactionsFromPostgres(),
           journalEntries: await refreshJournalEntriesFromPostgres(),
+          cooperative: await refreshCooperativeDataFromPostgres(),
           purchaseDocuments: await refreshPurchaseDocumentsFromPostgres(),
           salesDocuments: await refreshSalesDocumentsFromPostgres(),
         };

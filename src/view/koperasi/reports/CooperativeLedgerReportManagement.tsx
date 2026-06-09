@@ -1,7 +1,8 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { App, Alert, Button, DatePicker, Empty, Modal, Select, Space, Tag, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
-import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { FileTextOutlined } from '@ant-design/icons';
 import { BookOpen, Building2, Filter, RefreshCw } from 'lucide-react';
 import ExportActions from '@/components/ExportActions';
@@ -11,12 +12,11 @@ import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import dayjs from '@/lib/dayjs';
 import type {
-  CooperativeLedgerExportRow,
   CooperativeLedgerReportFilters,
   CooperativeLedgerReportRowType,
 } from '@/services/cooperativeLedgerReportService';
 import type { ExportRows, ExportTarget } from '@/utils/export';
-import { exportCsv, exportPdf } from '@/utils/export';
+import { exportCsv, saveExportFile } from '@/utils/export';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 const { Text, Title } = Typography;
@@ -171,6 +171,7 @@ export default function CooperativeLedgerReportManagement() {
   const { message } = App.useApp();
   const { t } = useI18n();
   const { profile } = useCompanyProfileSetting();
+  const reportRef = useRef<HTMLDivElement | null>(null);
   const [filters, setFilters] = useState<CooperativeLedgerReportFilters>(() => getDefaultFilters());
   const [draftFilters, setDraftFilters] = useState<CooperativeLedgerReportFilters>(() => getDefaultFilters());
   const [filterOpen, setFilterOpen] = useState(false);
@@ -245,36 +246,6 @@ export default function CooperativeLedgerReportManagement() {
     return rows;
   };
 
-  const buildPdfBody = (rows: CooperativeLedgerExportRow[]) => rows
-    .filter((row) => row.kind !== 'HEADER')
-    .map((row) => {
-      if (row.kind === 'ACCOUNT') {
-        return [
-          `${row.account_code} - ${row.account_name}`,
-          t('cooperative.ledger.accountSummary'),
-          '',
-          '',
-          t('cooperative.ledger.openingBalance'),
-          formatCurrency(row.opening_balance ?? 0),
-          formatCurrency(row.debit ?? 0),
-          formatCurrency(row.credit ?? 0),
-          formatCurrency(row.ending_balance ?? 0),
-        ];
-      }
-
-      return [
-        `${row.account_code} - ${row.account_name}`,
-        getRowTypeLabel(row.row_type),
-        row.date ? dayjs(row.date).tz().format('YYYY-MM-DD HH:mm') : '',
-        row.entry_number ?? '',
-        row.source_number ?? '',
-        row.description ?? '',
-        formatCurrency(row.debit ?? 0),
-        formatCurrency(row.credit ?? 0),
-        formatCurrency(row.running_balance ?? 0),
-      ];
-    });
-
   const handleOpenFilter = () => {
     setDraftFilters(filters);
     setFilterOpen(true);
@@ -309,45 +280,48 @@ export default function CooperativeLedgerReportManagement() {
   };
 
   const handleExportPdf = async (target: ExportTarget = 'auto') => {
-    if (!data) return;
+    if (!data || !reportRef.current) return;
 
     try {
-      const exported = await exportPdf({
-        filename: `buku-besar-koperasi-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
-        target,
-        build: (doc) => {
-          doc.setFontSize(12);
-          doc.text(companyName, 14, 16);
-          doc.setFontSize(11);
-          doc.text(t('cooperative.ledger.subtitle'), 14, 24);
-          doc.setFontSize(10);
-          doc.text(`${t('cooperative.ledger.period')}: ${periodText}`, 14, 32);
-          doc.text(`${t('report.printDate')} ${dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}`, 14, 38);
+      const reportElement = reportRef.current;
+      const canvas = await html2canvas(reportElement, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        windowHeight: reportElement.scrollHeight,
+        windowWidth: reportElement.scrollWidth,
+      });
+      const doc = new jsPDF({
+        format: 'a4',
+        orientation: 'landscape',
+        unit: 'pt',
+      });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const pageMargin = 24;
+      const contentWidth = pageWidth - (pageMargin * 2);
+      const contentHeight = pageHeight - (pageMargin * 2);
+      const imageData = canvas.toDataURL('image/png');
+      const imageHeight = (canvas.height * contentWidth) / canvas.width;
+      const pageCount = Math.max(1, Math.ceil(imageHeight / contentHeight));
 
-          autoTable(doc, {
-            startY: 44,
-            head: [[
-              t('generalLedger.account'),
-              t('cooperative.reports.table.rowType'),
-              t('generalLedger.journal.date'),
-              t('generalLedger.journal.number'),
-              t('generalLedger.journal.source'),
-              t('generalLedger.journal.description'),
-              t('generalLedger.debit'),
-              t('generalLedger.credit'),
-              t('generalLedger.ledger.runningBalance'),
-            ]],
-            body: buildPdfBody(data.exportRows),
-            theme: 'grid',
-            styles: { fontSize: 7, cellPadding: 1.5 },
-            headStyles: { fillColor: [17, 24, 39], textColor: 255 },
-            columnStyles: {
-              6: { halign: 'right' },
-              7: { halign: 'right' },
-              8: { halign: 'right' },
-            },
-          });
-        },
+      for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+        if (pageIndex > 0) doc.addPage();
+        doc.addImage(
+          imageData,
+          'PNG',
+          pageMargin,
+          pageMargin - (pageIndex * contentHeight),
+          contentWidth,
+          imageHeight,
+        );
+      }
+
+      const exported = await saveExportFile({
+        filename: `buku-besar-koperasi-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
+        mimeType: 'application/pdf',
+        content: doc.output('arraybuffer'),
+        target,
       });
       if (!exported) return;
       message.success(t('cooperative.ledger.exportPdfSuccess'));
@@ -408,7 +382,7 @@ export default function CooperativeLedgerReportManagement() {
 
       {data && data.groups.length > 0 ? (
         <div style={{ overflowX: 'auto' }}>
-          <div style={reportWrapperStyle} data-testid="koperasi-ledger-report">
+          <div ref={reportRef} style={reportWrapperStyle} data-testid="koperasi-ledger-report">
             <div style={reportHeaderStyle}>
               <div style={reportIdentityStyle}>
                 <div style={reportLogoStyle}>

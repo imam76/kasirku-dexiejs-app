@@ -17,6 +17,12 @@ import {
   reverseCooperativeLoanPaymentJournal,
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import {
+  enqueueCooperativeLoanInstallmentsSync,
+  enqueueCooperativeLoanPaymentsSync,
+  enqueueCooperativeLoansSync,
+  withPendingCooperativeSync,
+} from '@/services/cooperativeSyncService';
 import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
@@ -193,7 +199,7 @@ const buildInstallments = (
     tenorMonths: loan.tenor_months,
   });
 
-  return amounts.map((amount) => ({
+  return amounts.map((amount) => withPendingCooperativeSync({
     id: crypto.randomUUID(),
     loan_id: loan.id,
     loan_number: loan.loan_number,
@@ -269,7 +275,7 @@ export const createCooperativeLoanApplication = async (
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const member = assertActiveMember(await db.cooperativeMembers.get(parsedInput.member_id));
-    const loan: CooperativeLoan = {
+    const loan: CooperativeLoan = withPendingCooperativeSync({
       id: crypto.randomUUID(),
       loan_number: await createCooperativeLoanNumber(new Date(now)),
       member_id: member.id,
@@ -292,7 +298,7 @@ export const createCooperativeLoanApplication = async (
       created_by_name: currentUser?.name,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
 
     await db.cooperativeLoans.add(loan);
     savedLoan = loan;
@@ -309,6 +315,8 @@ export const createCooperativeLoanApplication = async (
   if (!savedLoan) {
     throw new Error('Pengajuan pinjaman gagal disimpan.');
   }
+
+  await enqueueCooperativeLoansSync([savedLoan], 'create');
 
   return savedLoan;
 };
@@ -336,9 +344,9 @@ export const approveCooperativeLoan = async (
       throw new Error('Hanya pinjaman berstatus submitted yang bisa di-approve.');
     }
 
-    approvedLoan = {
+    const nextApprovedLoan: CooperativeLoan = withPendingCooperativeSync({
       ...loan,
-      status: 'APPROVED',
+      status: 'APPROVED' as const,
       approved_at: approvalDate,
       approved_by: currentUser?.id,
       approved_by_name: currentUser?.name,
@@ -346,9 +354,10 @@ export const approveCooperativeLoan = async (
       updated_at: now,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
+    approvedLoan = nextApprovedLoan;
 
-    await db.cooperativeLoans.put(approvedLoan);
+    await db.cooperativeLoans.put(nextApprovedLoan);
 
     await writeActivityLog({
       user: currentUser,
@@ -362,6 +371,8 @@ export const approveCooperativeLoan = async (
   if (!approvedLoan) {
     throw new Error('Approval pinjaman gagal disimpan.');
   }
+
+  await enqueueCooperativeLoansSync([approvedLoan], 'update');
 
   return approvedLoan;
 };
@@ -385,9 +396,9 @@ export const rejectCooperativeLoan = async (
       throw new Error('Hanya pinjaman berstatus submitted yang bisa di-reject.');
     }
 
-    rejectedLoan = {
+    const nextRejectedLoan: CooperativeLoan = withPendingCooperativeSync({
       ...loan,
-      status: 'REJECTED',
+      status: 'REJECTED' as const,
       rejected_at: now,
       rejected_by: currentUser?.id,
       rejected_by_name: currentUser?.name,
@@ -395,9 +406,10 @@ export const rejectCooperativeLoan = async (
       updated_at: now,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
+    rejectedLoan = nextRejectedLoan;
 
-    await db.cooperativeLoans.put(rejectedLoan);
+    await db.cooperativeLoans.put(nextRejectedLoan);
 
     await writeActivityLog({
       user: currentUser,
@@ -411,6 +423,8 @@ export const rejectCooperativeLoan = async (
   if (!rejectedLoan) {
     throw new Error('Reject pinjaman gagal disimpan.');
   }
+
+  await enqueueCooperativeLoansSync([rejectedLoan], 'update');
 
   return rejectedLoan;
 };
@@ -452,9 +466,9 @@ export const disburseCooperativeLoan = async (
     const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT);
     await updateFinanceBalanceForDisbursement(loan.principal_amount, now);
 
-    disbursedLoan = {
+    const nextDisbursedLoan: CooperativeLoan = withPendingCooperativeSync({
       ...loan,
-      status: 'DISBURSED',
+      status: 'DISBURSED' as const,
       disbursed_at: disbursementDate,
       cash_account_id: cashAccount.id,
       cash_account_code: cashAccount.code,
@@ -469,9 +483,10 @@ export const disburseCooperativeLoan = async (
       updated_at: now,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
+    disbursedLoan = nextDisbursedLoan;
 
-    installments = buildInstallments(disbursedLoan, firstDueDate, now);
+    installments = buildInstallments(nextDisbursedLoan, firstDueDate, now);
     financeTransaction = withPendingFinanceTransactionSync({
       id: financeTransactionId,
       type: 'EXPENSE',
@@ -490,18 +505,22 @@ export const disburseCooperativeLoan = async (
 
     await db.financeTransactions.add(financeTransaction);
     await db.cooperativeLoanInstallments.bulkAdd(installments);
-    await db.cooperativeLoans.put(disbursedLoan);
+    await db.cooperativeLoans.put(nextDisbursedLoan);
 
-    const journalEntry = await postCooperativeLoanDisbursementJournal(disbursedLoan, currentUser);
+    const journalEntry = await postCooperativeLoanDisbursementJournal(nextDisbursedLoan, currentUser);
     if (journalEntry) {
       disbursedLoan = {
-        ...disbursedLoan,
+        ...nextDisbursedLoan,
         journal_entry_id: journalEntry.id,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       };
       await db.cooperativeLoans.update(loan.id, {
         journal_entry_id: journalEntry.id,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
     }
 
@@ -521,6 +540,8 @@ export const disburseCooperativeLoan = async (
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
   }
+  await enqueueCooperativeLoansSync([disbursedLoan], 'update');
+  await enqueueCooperativeLoanInstallmentsSync(installments, 'create');
 
   return {
     loan: disbursedLoan,
@@ -567,18 +588,18 @@ export const recordCooperativeLoanPayment = async (
     const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
     await updateFinanceBalanceForPayment(allocation.total_amount, now);
 
-    const nextInstallment: CooperativeLoanInstallment = {
+    const nextInstallment: CooperativeLoanInstallment = withPendingCooperativeSync({
       ...installment,
       paid_principal_amount: roundCurrency(installment.paid_principal_amount + allocation.principal_amount),
       paid_interest_amount: roundCurrency(installment.paid_interest_amount + allocation.interest_amount),
       paid_penalty_amount: roundCurrency(installment.paid_penalty_amount + allocation.penalty_amount),
       updated_at: now,
-    };
+    });
     const nextInstallmentStatus = getInstallmentNextStatus(nextInstallment);
     nextInstallment.status = nextInstallmentStatus;
     nextInstallment.paid_at = nextInstallmentStatus === 'PAID' ? paymentDate : undefined;
 
-    const payment: CooperativeLoanPayment = {
+    const payment: CooperativeLoanPayment = withPendingCooperativeSync({
       id: paymentId,
       payment_number: await createCooperativeLoanPaymentNumber(new Date(now)),
       payment_type: 'PAYMENT',
@@ -607,7 +628,7 @@ export const recordCooperativeLoanPayment = async (
       created_by_name: currentUser?.name,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
 
     financeTransaction = withPendingFinanceTransactionSync({
       id: financeTransactionId,
@@ -646,13 +667,13 @@ export const recordCooperativeLoanPayment = async (
     const nextInstallments = loanInstallments.map((item) => (
       item.id === nextInstallment.id ? nextInstallment : item
     ));
-    const nextLoan: CooperativeLoan = {
+    const nextLoan: CooperativeLoan = withPendingCooperativeSync({
       ...nextLoanDraft,
       outstanding_principal_amount: Math.max(0, nextLoanDraft.outstanding_principal_amount),
       outstanding_interest_amount: Math.max(0, nextLoanDraft.outstanding_interest_amount),
       outstanding_penalty_amount: Math.max(0, nextLoanDraft.outstanding_penalty_amount),
       status: getLoanNextStatus(nextLoanDraft, nextInstallments),
-    };
+    });
 
     await db.financeTransactions.add(financeTransaction);
     await db.cooperativeLoanPayments.add(payment);
@@ -665,6 +686,8 @@ export const recordCooperativeLoanPayment = async (
           ...payment,
           journal_entry_id: journalEntry.id,
           updated_at: now,
+          sync_status: 'pending',
+          sync_error: undefined,
         }
       : payment;
 
@@ -672,6 +695,8 @@ export const recordCooperativeLoanPayment = async (
       await db.cooperativeLoanPayments.update(payment.id, {
         journal_entry_id: journalEntry.id,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
     }
 
@@ -694,6 +719,9 @@ export const recordCooperativeLoanPayment = async (
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
   }
+  await enqueueCooperativeLoanPaymentsSync([savedPayment], 'create');
+  await enqueueCooperativeLoanInstallmentsSync([savedInstallment], 'update');
+  await enqueueCooperativeLoansSync([savedLoan], 'update');
 
   return {
     payment: savedPayment,
@@ -714,6 +742,9 @@ export const reverseCooperativeLoanPayment = async (
   const reversalFinanceTransactionId = crypto.randomUUID();
   let reversalPayment: CooperativeLoanPayment | undefined;
   let reversalFinanceTransaction: FinanceTransaction | undefined;
+  let updatedOriginalPayment: CooperativeLoanPayment | undefined;
+  let updatedInstallment: CooperativeLoanInstallment | undefined;
+  let updatedLoan: CooperativeLoan | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const payment = await db.cooperativeLoanPayments.get(input.payment_id);
@@ -750,13 +781,13 @@ export const reverseCooperativeLoanPayment = async (
       throw new Error('Jadwal angsuran pembayaran tidak ditemukan.');
     }
 
-    const nextInstallment: CooperativeLoanInstallment = {
+    const nextInstallment: CooperativeLoanInstallment = withPendingCooperativeSync({
       ...installment,
       paid_principal_amount: roundCurrency(installment.paid_principal_amount - payment.principal_amount),
       paid_interest_amount: roundCurrency(installment.paid_interest_amount - payment.interest_amount),
       paid_penalty_amount: roundCurrency(installment.paid_penalty_amount - payment.penalty_amount),
       updated_at: now,
-    };
+    });
     if (
       nextInstallment.paid_principal_amount < -0.01 ||
       nextInstallment.paid_interest_amount < -0.01 ||
@@ -781,12 +812,12 @@ export const reverseCooperativeLoanPayment = async (
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
     };
-    const nextLoan: CooperativeLoan = {
+    const nextLoan: CooperativeLoan = withPendingCooperativeSync({
       ...nextLoanDraft,
       outstanding_principal_amount: Math.min(loan.principal_amount, nextLoanDraft.outstanding_principal_amount),
       outstanding_interest_amount: Math.min(loan.total_interest_amount, nextLoanDraft.outstanding_interest_amount),
       outstanding_penalty_amount: Math.max(0, nextLoanDraft.outstanding_penalty_amount),
-    };
+    });
 
     await updateFinanceBalanceForPayment(payment.amount, now, true);
     reversalFinanceTransaction = withPendingFinanceTransactionSync({
@@ -808,7 +839,7 @@ export const reverseCooperativeLoanPayment = async (
       account_type: 'ASSET',
     }, currentUser, now);
 
-    const nextReversalPayment: CooperativeLoanPayment = {
+    const nextReversalPayment: CooperativeLoanPayment = withPendingCooperativeSync({
       id: reversalPaymentId,
       payment_number: await createCooperativeLoanPaymentNumber(new Date(now)),
       payment_type: 'REVERSAL',
@@ -838,13 +869,15 @@ export const reverseCooperativeLoanPayment = async (
       created_by_name: currentUser?.name,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
     reversalPayment = nextReversalPayment;
 
     await db.financeTransactions.add(reversalFinanceTransaction);
     await db.cooperativeLoanPayments.add(nextReversalPayment);
     await db.cooperativeLoanInstallments.put(nextInstallment);
     await db.cooperativeLoans.put(nextLoan);
+    updatedInstallment = nextInstallment;
+    updatedLoan = nextLoan;
 
     const reversalEntries = payment.journal_entry_id
       ? await reverseCooperativeLoanPaymentJournal(
@@ -856,8 +889,9 @@ export const reverseCooperativeLoanPayment = async (
       : [];
     const reversalJournalEntryId = reversalEntries[0]?.id;
 
-    await db.cooperativeLoanPayments.update(payment.id, {
-      status: 'REVERSED',
+    const nextOriginalPayment: CooperativeLoanPayment = withPendingCooperativeSync({
+      ...payment,
+      status: 'REVERSED' as const,
       reversal_payment_id: nextReversalPayment.id,
       reversal_finance_transaction_id: reversalFinanceTransactionId,
       reversal_journal_entry_id: reversalJournalEntryId,
@@ -867,16 +901,22 @@ export const reverseCooperativeLoanPayment = async (
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
     });
+    updatedOriginalPayment = nextOriginalPayment;
+    await db.cooperativeLoanPayments.put(nextOriginalPayment);
 
     if (reversalJournalEntryId) {
       reversalPayment = {
         ...nextReversalPayment,
         journal_entry_id: reversalJournalEntryId,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       };
       await db.cooperativeLoanPayments.update(nextReversalPayment.id, {
         journal_entry_id: reversalJournalEntryId,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
     }
 
@@ -892,10 +932,17 @@ export const reverseCooperativeLoanPayment = async (
   if (!reversalPayment) {
     throw new Error('Reversal pembayaran angsuran gagal disimpan.');
   }
+  if (!updatedOriginalPayment || !updatedInstallment || !updatedLoan) {
+    throw new Error('Reversal pembayaran angsuran gagal memperbarui pinjaman.');
+  }
 
   if (reversalFinanceTransaction) {
     await enqueueFinanceTransactionsSync([reversalFinanceTransaction], 'create');
   }
+  await enqueueCooperativeLoanPaymentsSync([reversalPayment], 'create');
+  await enqueueCooperativeLoanPaymentsSync([updatedOriginalPayment], 'update');
+  await enqueueCooperativeLoanInstallmentsSync([updatedInstallment], 'update');
+  await enqueueCooperativeLoansSync([updatedLoan], 'update');
 
   return reversalPayment;
 };

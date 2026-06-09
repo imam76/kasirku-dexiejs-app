@@ -723,6 +723,33 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(40).stores({}).upgrade(async (tx) => {
+      const markPendingCooperativeRecords = async <T extends { sync_status?: string; sync_error?: string }>(
+        tableName: string,
+      ) => {
+        const table = tx.table<T, string>(tableName);
+        const records = await table.toArray();
+        const recordsWithoutSyncStatus = records
+          .filter((record) => !record.sync_status)
+          .map((record) => ({
+            ...record,
+            sync_status: 'pending' as const,
+            sync_error: undefined,
+          }));
+
+        if (recordsWithoutSyncStatus.length > 0) {
+          await table.bulkPut(recordsWithoutSyncStatus);
+        }
+      };
+
+      await markPendingCooperativeRecords<CooperativeMember>('cooperativeMembers');
+      await markPendingCooperativeRecords<CooperativeSavingTransaction>('cooperativeSavingTransactions');
+      await markPendingCooperativeRecords<CooperativeMemberSavingBalance>('cooperativeMemberSavingBalances');
+      await markPendingCooperativeRecords<CooperativeLoan>('cooperativeLoans');
+      await markPendingCooperativeRecords<CooperativeLoanInstallment>('cooperativeLoanInstallments');
+      await markPendingCooperativeRecords<CooperativeLoanPayment>('cooperativeLoanPayments');
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

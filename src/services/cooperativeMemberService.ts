@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { cooperativeMemberSchema } from '@/lib/validations/cooperativeMember';
+import { enqueueCooperativeMembersSync, withPendingCooperativeSync } from '@/services/cooperativeSyncService';
 import type { CooperativeMember, CooperativeMemberStatus } from '@/types';
 
 export interface CooperativeMemberUpsertInput {
@@ -55,7 +56,7 @@ export const createCooperativeMember = async (
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
   const now = new Date().toISOString();
-  const member: CooperativeMember = {
+  const member: CooperativeMember = withPendingCooperativeSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
     created_at: now,
@@ -64,7 +65,7 @@ export const createCooperativeMember = async (
     created_by_name: currentUser?.name,
     updated_by: currentUser?.id,
     updated_by_name: currentUser?.name,
-  };
+  });
 
   await db.transaction('rw', [db.cooperativeMembers, db.activityLogs], async () => {
     if (member.status === 'ACTIVE') {
@@ -80,6 +81,8 @@ export const createCooperativeMember = async (
       description: `${currentUser?.name ?? 'User'} membuat anggota koperasi ${member.member_number} - ${member.name}.`,
     });
   });
+
+  await enqueueCooperativeMembersSync([member], 'create');
 
   return member;
 };
@@ -103,13 +106,13 @@ export const updateCooperativeMember = async (
       await assertActiveMemberNumberAvailable(sanitizedInput.member_number, id);
     }
 
-    updatedMember = {
+    updatedMember = withPendingCooperativeSync({
       ...existingMember,
       ...sanitizedInput,
       updated_at: updatedAt,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
 
     await db.cooperativeMembers.put(updatedMember);
     await writeActivityLog({
@@ -125,6 +128,8 @@ export const updateCooperativeMember = async (
     throw new Error('Anggota koperasi tidak ditemukan setelah diperbarui.');
   }
 
+  await enqueueCooperativeMembersSync([updatedMember], 'update');
+
   return updatedMember;
 };
 
@@ -139,15 +144,16 @@ export const archiveCooperativeMember = async (id: string): Promise<CooperativeM
       throw new Error('Anggota koperasi tidak ditemukan.');
     }
 
-    archivedMember = {
+    const nextArchivedMember: CooperativeMember = withPendingCooperativeSync({
       ...member,
-      status: 'INACTIVE',
+      status: 'INACTIVE' as const,
       updated_at: updatedAt,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
+    archivedMember = nextArchivedMember;
 
-    await db.cooperativeMembers.put(archivedMember);
+    await db.cooperativeMembers.put(nextArchivedMember);
     await writeActivityLog({
       user: currentUser,
       action: 'COOPERATIVE_MEMBER_ARCHIVED',
@@ -160,6 +166,8 @@ export const archiveCooperativeMember = async (id: string): Promise<CooperativeM
   if (!archivedMember) {
     throw new Error('Anggota koperasi tidak ditemukan setelah diarsipkan.');
   }
+
+  await enqueueCooperativeMembersSync([archivedMember], 'update');
 
   return archivedMember;
 };
@@ -177,15 +185,16 @@ export const restoreCooperativeMember = async (id: string): Promise<CooperativeM
 
     await assertActiveMemberNumberAvailable(member.member_number, id);
 
-    restoredMember = {
+    const nextRestoredMember: CooperativeMember = withPendingCooperativeSync({
       ...member,
-      status: 'ACTIVE',
+      status: 'ACTIVE' as const,
       updated_at: updatedAt,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-    };
+    });
+    restoredMember = nextRestoredMember;
 
-    await db.cooperativeMembers.put(restoredMember);
+    await db.cooperativeMembers.put(nextRestoredMember);
     await writeActivityLog({
       user: currentUser,
       action: 'COOPERATIVE_MEMBER_RESTORED',
@@ -198,6 +207,8 @@ export const restoreCooperativeMember = async (id: string): Promise<CooperativeM
   if (!restoredMember) {
     throw new Error('Anggota koperasi tidak ditemukan setelah dipulihkan.');
   }
+
+  await enqueueCooperativeMembersSync([restoredMember], 'update');
 
   return restoredMember;
 };
