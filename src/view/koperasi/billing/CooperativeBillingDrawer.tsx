@@ -13,6 +13,7 @@ interface CooperativeBillingDrawerProps {
   open: boolean;
   onClose: () => void;
   onPay: (installment: CooperativeLoanInstallment) => void;
+  canPay?: boolean;
 }
 
 export default function CooperativeBillingDrawer({
@@ -21,6 +22,7 @@ export default function CooperativeBillingDrawer({
   open,
   onClose,
   onPay,
+  canPay = true,
 }: CooperativeBillingDrawerProps) {
   const { t } = useI18n();
 
@@ -44,7 +46,7 @@ export default function CooperativeBillingDrawer({
           <Button
             type="primary"
             icon={<CreditCard size={16} />}
-            disabled={installment.status === 'PAID' || loan.status !== 'DISBURSED'}
+            disabled={!canPay || installment.status === 'PAID' || loan.status !== 'DISBURSED'}
             onClick={() => {
               onClose();
               onPay(installment);

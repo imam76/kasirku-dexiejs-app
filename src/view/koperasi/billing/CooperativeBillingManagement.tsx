@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { App, Card, Form, Input, Select, Tabs } from 'antd';
 import { Bell } from 'lucide-react';
+import { useAuth } from '@/auth/useAuth';
 import dayjs from '@/lib/dayjs';
 import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
 import { useCooperativeBilling } from '@/hooks/useCooperativeBilling';
@@ -27,6 +28,7 @@ function StatCard({ label, count, amount }: { label: string; count: number; amou
 export default function CooperativeBillingManagement() {
   const { message } = App.useApp();
   const { t } = useI18n();
+  const { can } = useAuth();
   const [form] = Form.useForm<CooperativeLoanPaymentFormValues>();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [payingInstallment, setPayingInstallment] = useState<CooperativeLoanInstallment | null>(null);
@@ -53,6 +55,7 @@ export default function CooperativeBillingManagement() {
     recordPayment,
     isMutating,
   } = useCooperativeBilling();
+  const canRecordPayment = can('COOPERATIVE_PAYMENT_CREATE');
 
   const closePaymentModal = () => {
     setIsPaymentModalOpen(false);
@@ -61,6 +64,11 @@ export default function CooperativeBillingManagement() {
   };
 
   const openPaymentModal = (installment: CooperativeLoanInstallment) => {
+    if (!canRecordPayment) {
+      message.error('Anda tidak memiliki akses untuk aksi ini.');
+      return;
+    }
+
     form.resetFields();
     const remaining = getInstallmentRemainingAmounts(installment);
     form.setFieldsValue({
@@ -144,6 +152,7 @@ export default function CooperativeBillingManagement() {
                 loanById={loanById}
                 onPay={openPaymentModal}
                 onView={setSelectedInstallment}
+                canPay={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -157,6 +166,7 @@ export default function CooperativeBillingManagement() {
                 loanById={loanById}
                 onPay={openPaymentModal}
                 onView={setSelectedInstallment}
+                canPay={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -170,6 +180,7 @@ export default function CooperativeBillingManagement() {
                 loanById={loanById}
                 onPay={openPaymentModal}
                 onView={setSelectedInstallment}
+                canPay={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -183,6 +194,7 @@ export default function CooperativeBillingManagement() {
                 loanById={loanById}
                 onPay={openPaymentModal}
                 onView={setSelectedInstallment}
+                canPay={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -206,6 +218,7 @@ export default function CooperativeBillingManagement() {
         open={Boolean(selectedInstallment)}
         onClose={() => setSelectedInstallment(null)}
         onPay={openPaymentModal}
+        canPay={canRecordPayment}
       />
     </Card>
   );

@@ -126,14 +126,14 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     code: 'COOPERATIVE_PAYMENT_CREATE',
     label: 'Catat Pembayaran Koperasi',
     group: 'Koperasi',
-    moduleCodes: ['KOPERASI_ANGSURAN'],
+    moduleCodes: ['KOPERASI_ANGSURAN', 'KOPERASI_PENAGIHAN'],
     isSensitive: true,
   },
   {
     code: 'COOPERATIVE_BILLING_ACCESS',
     label: 'Akses Penagihan Koperasi',
     group: 'Koperasi',
-    moduleCodes: ['KOPERASI_ANGSURAN'],
+    moduleCodes: ['KOPERASI_PENAGIHAN'],
   },
   {
     code: 'COOPERATIVE_REPORT_VIEW',

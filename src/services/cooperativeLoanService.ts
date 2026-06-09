@@ -553,7 +553,7 @@ export const recordCooperativeLoanPayment = async (
   input: RecordCooperativeLoanPaymentInput,
 ): Promise<RecordCooperativeLoanPaymentResult> => {
   const currentUser = await getCurrentSessionUser();
-  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
 
   const parsedInput = cooperativeLoanPaymentSchema.parse(input);
   const amount = roundCurrency(parsedInput.amount);

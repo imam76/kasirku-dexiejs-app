@@ -46,6 +46,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/koperasi/simpanan': ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
   '/koperasi/pinjaman': ['KOPERASI_PINJAMAN'],
   '/koperasi/angsuran': ['KOPERASI_ANGSURAN'],
+  '/koperasi/penagihan': ['KOPERASI_PENAGIHAN'],
   '/koperasi/laporan': ['KOPERASI_SHU'],
   '/koperasi/arus-kas': ['KOPERASI_SHU'],
   '/koperasi': [
@@ -55,6 +56,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'KOPERASI_SIMPANAN_SUKARELA',
     'KOPERASI_PINJAMAN',
     'KOPERASI_ANGSURAN',
+    'KOPERASI_PENAGIHAN',
     'KOPERASI_SHU'
   ],
 };

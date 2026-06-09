@@ -23,6 +23,7 @@ import type { MenuProps } from 'antd'
 import {
   BadgePercent,
   Banknote,
+  Bell,
   BookOpen,
   Box,
   Building2,
@@ -274,6 +275,7 @@ const RootLayout = () => {
         { to: '/koperasi/simpanan', label: t('nav.cooperative.savings'), icon: WalletCards },
         { to: '/koperasi/pinjaman', label: t('nav.cooperative.loans'), icon: Banknote },
         { to: '/koperasi/angsuran', label: t('nav.cooperative.installments'), icon: ReceiptText },
+        { to: '/koperasi/penagihan', label: t('cooperative.billing.title'), icon: Bell },
         {
           label: t('nav.cooperative.reports'),
           icon: FileText,

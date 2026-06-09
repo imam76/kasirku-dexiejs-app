@@ -20,6 +20,7 @@ interface CooperativeBillingTableProps {
   loanById: Map<string, CooperativeLoan>;
   onPay: (installment: CooperativeLoanInstallment) => void;
   onView: (installment: CooperativeLoanInstallment) => void;
+  canPay?: boolean;
   loading?: boolean;
 }
 
@@ -28,6 +29,7 @@ export default function CooperativeBillingTable({
   loanById,
   onPay,
   onView,
+  canPay = true,
   loading,
 }: CooperativeBillingTableProps) {
   const { t } = useI18n();
@@ -131,7 +133,7 @@ export default function CooperativeBillingTable({
             <Button
               type="text"
               icon={<CreditCard size={16} />}
-              disabled={installment.status === 'PAID' || loan?.status !== 'DISBURSED'}
+              disabled={!canPay || installment.status === 'PAID' || loan?.status !== 'DISBURSED'}
               data-testid={`koperasi-billing-pay-${installment.id}`}
               onClick={() => onPay(installment)}
             >
