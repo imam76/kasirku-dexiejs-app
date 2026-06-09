@@ -828,6 +828,22 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(45).stores({
+      cooperativeLoanInstallments: 'id, loan_id, loan_number, member_id, member_number, due_date, status, collection_status, follow_up_date, paid_at, sync_status, updated_at, created_at',
+    }).upgrade(async (tx) => {
+      const installments = await tx.table<CooperativeLoanInstallment, string>('cooperativeLoanInstallments').toArray();
+      const migratedInstallments = installments
+        .filter((installment) => !installment.collection_status)
+        .map((installment) => ({
+          ...installment,
+          collection_status: 'NONE' as const,
+        }));
+
+      if (migratedInstallments.length > 0) {
+        await tx.table<CooperativeLoanInstallment, string>('cooperativeLoanInstallments').bulkPut(migratedInstallments);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

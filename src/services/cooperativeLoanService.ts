@@ -6,6 +6,7 @@ import {
   cooperativeLoanApplicationSchema,
   cooperativeLoanApprovalSchema,
   cooperativeLoanDisbursementSchema,
+  cooperativeLoanInstallmentCollectionSchema,
   cooperativeLoanPaymentReversalSchema,
   cooperativeLoanPaymentSchema,
   cooperativeLoanRejectionSchema,
@@ -26,6 +27,7 @@ import {
 import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
+  CooperativeLoanInstallmentCollectionStatus,
   CooperativeLoanPayment,
   CooperativeMember,
   FinanceTransaction,
@@ -87,6 +89,13 @@ export interface RecordCooperativeLoanPaymentInput {
   notes?: string;
 }
 
+export interface RecordCooperativeLoanInstallmentCollectionInput {
+  installment_id: string;
+  collection_status: Exclude<CooperativeLoanInstallmentCollectionStatus, 'NONE'>;
+  follow_up_date?: string;
+  collection_notes: string;
+}
+
 export interface ReverseCooperativeLoanPaymentInput {
   payment_id: string;
   reason: string;
@@ -96,6 +105,10 @@ export interface RecordCooperativeLoanPaymentResult {
   payment: CooperativeLoanPayment;
   installment: CooperativeLoanInstallment;
   loan: CooperativeLoan;
+}
+
+export interface RecordCooperativeLoanInstallmentCollectionResult {
+  installment: CooperativeLoanInstallment;
 }
 
 const cooperativeLoanTables = [
@@ -215,6 +228,7 @@ const buildInstallments = (
     paid_interest_amount: 0,
     paid_penalty_amount: 0,
     status: 'UNPAID',
+    collection_status: 'NONE',
     created_at: now,
     updated_at: now,
   }));
@@ -598,6 +612,12 @@ export const recordCooperativeLoanPayment = async (
     const nextInstallmentStatus = getInstallmentNextStatus(nextInstallment);
     nextInstallment.status = nextInstallmentStatus;
     nextInstallment.paid_at = nextInstallmentStatus === 'PAID' ? paymentDate : undefined;
+    if (nextInstallmentStatus === 'PAID') {
+      nextInstallment.collection_status = 'NONE';
+      nextInstallment.follow_up_date = undefined;
+      nextInstallment.collection_notes = undefined;
+      nextInstallment.last_contacted_at = undefined;
+    }
 
     const payment: CooperativeLoanPayment = withPendingCooperativeSync({
       id: paymentId,
@@ -727,6 +747,65 @@ export const recordCooperativeLoanPayment = async (
     payment: savedPayment,
     installment: savedInstallment,
     loan: savedLoan,
+  };
+};
+
+export const recordCooperativeLoanInstallmentCollection = async (
+  input: RecordCooperativeLoanInstallmentCollectionInput,
+): Promise<RecordCooperativeLoanInstallmentCollectionResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
+
+  const parsedInput = cooperativeLoanInstallmentCollectionSchema.parse(input);
+  const now = new Date().toISOString();
+  let savedInstallment: CooperativeLoanInstallment | undefined;
+
+  await db.transaction('rw', cooperativeLoanTables, async () => {
+    const installment = await db.cooperativeLoanInstallments.get(parsedInput.installment_id);
+    if (!installment) {
+      throw new Error('Jadwal angsuran tidak ditemukan.');
+    }
+    if (installment.status === 'PAID') {
+      throw new Error('Angsuran yang sudah lunas tidak perlu tindak lanjut penagihan.');
+    }
+
+    const loan = await db.cooperativeLoans.get(installment.loan_id);
+    if (!loan) {
+      throw new Error('Pinjaman koperasi tidak ditemukan.');
+    }
+    if (loan.status !== 'DISBURSED') {
+      throw new Error('Tindak lanjut penagihan hanya bisa dicatat untuk pinjaman aktif.');
+    }
+
+    const nextInstallment: CooperativeLoanInstallment = withPendingCooperativeSync({
+      ...installment,
+      collection_status: parsedInput.collection_status,
+      follow_up_date: parsedInput.follow_up_date,
+      collection_notes: parsedInput.collection_notes,
+      last_contacted_at: now,
+      updated_at: now,
+    });
+
+    await db.cooperativeLoanInstallments.put(nextInstallment);
+    savedInstallment = nextInstallment;
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'COOPERATIVE_LOAN_INSTALLMENT_COLLECTION_RECORDED',
+      entity: 'cooperativeLoanInstallments',
+      entity_id: installment.id,
+      description: `${currentUser?.name ?? 'User'} mencatat tindak lanjut penagihan ${installment.loan_number} angsuran ${installment.installment_number}.`,
+    });
+  });
+
+  if (!savedInstallment) {
+    throw new Error('Tindak lanjut penagihan gagal disimpan.');
+  }
+
+  await enqueueCooperativeLoanInstallmentsSync([savedInstallment], 'update');
+
+  return {
+    installment: savedInstallment,
   };
 };
 

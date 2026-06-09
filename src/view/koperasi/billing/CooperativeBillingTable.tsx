@@ -1,12 +1,13 @@
-import { Button, Space, Table, Tag, Typography } from 'antd';
+import { Button, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { CreditCard, Eye } from 'lucide-react';
+import { CalendarClock, CreditCard, Eye } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import dayjs from '@/lib/dayjs';
 import { useI18n } from '@/hooks/useI18n';
 import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
+  CooperativeLoanInstallmentCollectionStatus,
   CooperativeLoanInstallmentStatus,
 } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
@@ -19,8 +20,10 @@ interface CooperativeBillingTableProps {
   installments: CooperativeLoanInstallment[];
   loanById: Map<string, CooperativeLoan>;
   onPay: (installment: CooperativeLoanInstallment) => void;
+  onCollect: (installment: CooperativeLoanInstallment) => void;
   onView: (installment: CooperativeLoanInstallment) => void;
   canPay?: boolean;
+  canCollect?: boolean;
   loading?: boolean;
 }
 
@@ -28,8 +31,10 @@ export default function CooperativeBillingTable({
   installments,
   loanById,
   onPay,
+  onCollect,
   onView,
   canPay = true,
+  canCollect = true,
   loading,
 }: CooperativeBillingTableProps) {
   const { t } = useI18n();
@@ -37,12 +42,25 @@ export default function CooperativeBillingTable({
     acc[option.value] = t(option.labelKey);
     return acc;
   }, {} as Record<CooperativeLoanInstallmentStatus, string>);
+  const collectionStatusLabels: Record<CooperativeLoanInstallmentCollectionStatus, string> = {
+    NONE: t('cooperative.billing.collection.status.none'),
+    PROMISED_TO_PAY: t('cooperative.billing.collection.status.promisedToPay'),
+    UNABLE_TO_PAY: t('cooperative.billing.collection.status.unableToPay'),
+    FOLLOW_UP: t('cooperative.billing.collection.status.followUp'),
+  };
+  const collectionStatusColors: Record<CooperativeLoanInstallmentCollectionStatus, string> = {
+    NONE: 'default',
+    PROMISED_TO_PAY: 'green',
+    UNABLE_TO_PAY: 'volcano',
+    FOLLOW_UP: 'gold',
+  };
 
   const columns: ColumnsType<CooperativeLoanInstallment> = [
     {
       title: t('cooperative.billing.table.dueDate'),
       dataIndex: 'due_date',
       key: 'due_date',
+      fixed: 'left',
       width: 150,
       render: (value: string) => {
         const isOverdue = dayjs(value).isBefore(dayjs().startOf('day'));
@@ -52,6 +70,7 @@ export default function CooperativeBillingTable({
     {
       title: t('cooperative.billing.table.member'),
       key: 'member',
+      fixed: 'left',
       width: 220,
       render: (_value: unknown, installment) => (
         <Space orientation="vertical" size={0}>
@@ -116,10 +135,26 @@ export default function CooperativeBillingTable({
       },
     },
     {
+      title: t('cooperative.billing.table.collection'),
+      key: 'collection',
+      width: 170,
+      render: (_value: unknown, installment) => {
+        const collectionStatus = installment.collection_status ?? 'NONE';
+        return (
+          <Space direction="vertical" size={0}>
+            <Tag color={collectionStatusColors[collectionStatus]}>{collectionStatusLabels[collectionStatus]}</Tag>
+            {installment.follow_up_date && (
+              <Text type="secondary">{formatDate(installment.follow_up_date)}</Text>
+            )}
+          </Space>
+        );
+      },
+    },
+    {
       title: t('cooperative.billing.table.action'),
       key: 'action',
       fixed: 'right',
-      width: 180,
+      width: 220,
       render: (_value: unknown, installment) => {
         const loan = loanById.get(installment.loan_id);
 
@@ -139,6 +174,15 @@ export default function CooperativeBillingTable({
             >
               {t('cooperative.billing.pay')}
             </Button>
+            <Tooltip title={t('cooperative.billing.collect')}>
+              <Button
+                type="text"
+                icon={<CalendarClock size={16} />}
+                disabled={!canCollect || installment.status === 'PAID' || loan?.status !== 'DISBURSED'}
+                data-testid={`koperasi-billing-collect-${installment.id}`}
+                onClick={() => onCollect(installment)}
+              />
+            </Tooltip>
           </Space>
         );
       },
@@ -159,7 +203,7 @@ export default function CooperativeBillingTable({
         } as unknown as HTMLAttributes<HTMLElement>;
       }}
       pagination={{ pageSize: 8 }}
-      scroll={{ x: 1350 }}
+      scroll={{ x: 1650 }}
       locale={{ emptyText: t('cooperative.billing.empty') }}
     />
   );

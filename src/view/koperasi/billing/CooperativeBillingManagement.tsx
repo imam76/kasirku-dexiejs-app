@@ -10,6 +10,7 @@ import type { CooperativeLoanInstallment } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 import CooperativeLoanPaymentFormModal, { type CooperativeLoanPaymentFormValues } from '../installments/CooperativeLoanPaymentFormModal';
+import CooperativeBillingCollectionModal, { type CooperativeBillingCollectionFormValues } from './CooperativeBillingCollectionModal';
 import CooperativeBillingDrawer from './CooperativeBillingDrawer';
 import CooperativeBillingTable from './CooperativeBillingTable';
 
@@ -30,8 +31,11 @@ export default function CooperativeBillingManagement() {
   const { t } = useI18n();
   const { can } = useAuth();
   const [form] = Form.useForm<CooperativeLoanPaymentFormValues>();
+  const [collectionForm] = Form.useForm<CooperativeBillingCollectionFormValues>();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [payingInstallment, setPayingInstallment] = useState<CooperativeLoanInstallment | null>(null);
+  const [collectingInstallment, setCollectingInstallment] = useState<CooperativeLoanInstallment | null>(null);
 
   const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanPayment');
   const {
@@ -53,6 +57,7 @@ export default function CooperativeBillingManagement() {
     dueTodayCount,
     dueThisWeekCount,
     recordPayment,
+    recordCollection,
     isMutating,
   } = useCooperativeBilling();
   const canRecordPayment = can('COOPERATIVE_PAYMENT_CREATE');
@@ -83,6 +88,30 @@ export default function CooperativeBillingManagement() {
     setIsPaymentModalOpen(true);
   };
 
+  const closeCollectionModal = () => {
+    setIsCollectionModalOpen(false);
+    setCollectingInstallment(null);
+    collectionForm.resetFields();
+  };
+
+  const openCollectionModal = (installment: CooperativeLoanInstallment) => {
+    if (!canRecordPayment) {
+      message.error('Anda tidak memiliki akses untuk aksi ini.');
+      return;
+    }
+
+    collectionForm.resetFields();
+    collectionForm.setFieldsValue({
+      collection_status: installment.collection_status && installment.collection_status !== 'NONE'
+        ? installment.collection_status
+        : 'UNABLE_TO_PAY',
+      follow_up_date: installment.follow_up_date ? dayjs(installment.follow_up_date) : undefined,
+      collection_notes: installment.collection_notes,
+    });
+    setCollectingInstallment(installment);
+    setIsCollectionModalOpen(true);
+  };
+
   const handleSubmit = async (values: CooperativeLoanPaymentFormValues) => {
     try {
       const result = await recordPayment({
@@ -103,6 +132,23 @@ export default function CooperativeBillingManagement() {
       closePaymentModal();
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('cooperative.billing.payFailed'));
+    }
+  };
+
+  const handleCollectionSubmit = async (values: CooperativeBillingCollectionFormValues) => {
+    if (!collectingInstallment) return;
+
+    try {
+      await recordCollection({
+        installment_id: collectingInstallment.id,
+        collection_status: values.collection_status,
+        follow_up_date: values.follow_up_date?.toISOString(),
+        collection_notes: values.collection_notes,
+      });
+      message.success(t('cooperative.billing.collection.success'));
+      closeCollectionModal();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('cooperative.billing.collection.failed'));
     }
   };
 
@@ -151,8 +197,10 @@ export default function CooperativeBillingManagement() {
                 installments={overdueInstallments}
                 loanById={loanById}
                 onPay={openPaymentModal}
+                onCollect={openCollectionModal}
                 onView={setSelectedInstallment}
                 canPay={canRecordPayment}
+                canCollect={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -165,8 +213,10 @@ export default function CooperativeBillingManagement() {
                 installments={dueTodayInstallments}
                 loanById={loanById}
                 onPay={openPaymentModal}
+                onCollect={openCollectionModal}
                 onView={setSelectedInstallment}
                 canPay={canRecordPayment}
+                canCollect={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -179,8 +229,10 @@ export default function CooperativeBillingManagement() {
                 installments={dueThisWeekInstallments}
                 loanById={loanById}
                 onPay={openPaymentModal}
+                onCollect={openCollectionModal}
                 onView={setSelectedInstallment}
                 canPay={canRecordPayment}
+                canCollect={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -193,8 +245,10 @@ export default function CooperativeBillingManagement() {
                 installments={allUnpaidInstallments}
                 loanById={loanById}
                 onPay={openPaymentModal}
+                onCollect={openCollectionModal}
                 onView={setSelectedInstallment}
                 canPay={canRecordPayment}
+                canCollect={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -212,13 +266,23 @@ export default function CooperativeBillingManagement() {
         onSubmit={handleSubmit}
       />
 
+      <CooperativeBillingCollectionModal
+        form={collectionForm}
+        open={isCollectionModalOpen}
+        isSubmitting={isMutating}
+        onCancel={closeCollectionModal}
+        onSubmit={handleCollectionSubmit}
+      />
+
       <CooperativeBillingDrawer
         installment={selectedInstallment}
         loan={selectedInstallment ? loanById.get(selectedInstallment.loan_id) : undefined}
         open={Boolean(selectedInstallment)}
         onClose={() => setSelectedInstallment(null)}
         onPay={openPaymentModal}
+        onCollect={openCollectionModal}
         canPay={canRecordPayment}
+        canCollect={canRecordPayment}
       />
     </Card>
   );

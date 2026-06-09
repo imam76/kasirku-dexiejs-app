@@ -330,6 +330,10 @@ const mapCooperativeLoanInstallmentToRemoteDto = (
   paid_penalty_amount: normalizeRemoteNumber(installment.paid_penalty_amount),
   status: installment.status,
   paid_at: installment.paid_at,
+  collection_status: installment.collection_status ?? 'NONE',
+  follow_up_date: installment.follow_up_date,
+  collection_notes: installment.collection_notes,
+  last_contacted_at: installment.last_contacted_at,
   created_at: installment.created_at,
   updated_at: installment.updated_at,
 });

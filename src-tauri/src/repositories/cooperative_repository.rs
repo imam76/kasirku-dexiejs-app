@@ -153,6 +153,10 @@ macro_rules! cooperative_loan_installment_select {
             paid_penalty_amount,
             status,
             paid_at,
+            collection_status,
+            follow_up_date,
+            collection_notes,
+            last_contacted_at,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at
         FROM cooperative_loan_installments
@@ -916,6 +920,10 @@ pub async fn upsert_cooperative_loan_installment(
             paid_penalty_amount,
             status,
             paid_at,
+            collection_status,
+            follow_up_date,
+            collection_notes,
+            last_contacted_at,
             created_at,
             updated_at
         )
@@ -936,8 +944,12 @@ pub async fn upsert_cooperative_loan_installment(
             $14,
             $15,
             $16,
-            $17::TIMESTAMPTZ,
-            $18::TIMESTAMPTZ
+            $17,
+            $18,
+            $19,
+            $20,
+            $21::TIMESTAMPTZ,
+            $22::TIMESTAMPTZ
         )
         ON CONFLICT (id) DO UPDATE SET
             loan_id = EXCLUDED.loan_id,
@@ -955,6 +967,10 @@ pub async fn upsert_cooperative_loan_installment(
             paid_penalty_amount = EXCLUDED.paid_penalty_amount,
             status = EXCLUDED.status,
             paid_at = EXCLUDED.paid_at,
+            collection_status = EXCLUDED.collection_status,
+            follow_up_date = EXCLUDED.follow_up_date,
+            collection_notes = EXCLUDED.collection_notes,
+            last_contacted_at = EXCLUDED.last_contacted_at,
             updated_at = EXCLUDED.updated_at
         WHERE EXCLUDED.updated_at >= cooperative_loan_installments.updated_at
         RETURNING
@@ -974,6 +990,10 @@ pub async fn upsert_cooperative_loan_installment(
             paid_penalty_amount,
             status,
             paid_at,
+            collection_status,
+            follow_up_date,
+            collection_notes,
+            last_contacted_at,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at
         "#,
@@ -994,6 +1014,10 @@ pub async fn upsert_cooperative_loan_installment(
     .bind(input.paid_penalty_amount)
     .bind(input.status)
     .bind(input.paid_at)
+    .bind(input.collection_status)
+    .bind(input.follow_up_date)
+    .bind(input.collection_notes)
+    .bind(input.last_contacted_at)
     .bind(input.created_at)
     .bind(input.updated_at)
     .fetch_optional(pool)

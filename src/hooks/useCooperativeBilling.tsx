@@ -5,7 +5,9 @@ import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { useCooperativeAreaScope } from '@/hooks/useCooperativeAreaScope';
 import {
+  recordCooperativeLoanInstallmentCollection,
   recordCooperativeLoanPayment,
+  type RecordCooperativeLoanInstallmentCollectionInput,
   type RecordCooperativeLoanPaymentInput,
 } from '@/services/cooperativeLoanService';
 import type {
@@ -172,6 +174,10 @@ export const useCooperativeBilling = () => {
     mutationFn: recordCooperativeLoanPayment,
     onSuccess: invalidate,
   });
+  const collectionMutation = useMutation({
+    mutationFn: recordCooperativeLoanInstallmentCollection,
+    onSuccess: invalidate,
+  });
 
   return {
     loans: loans as CooperativeLoan[],
@@ -195,6 +201,7 @@ export const useCooperativeBilling = () => {
     dueTodayTotalAmount,
     dueThisWeekCount,
     recordPayment: (input: RecordCooperativeLoanPaymentInput) => recordMutation.mutateAsync(input),
-    isMutating: recordMutation.isPending,
+    recordCollection: (input: RecordCooperativeLoanInstallmentCollectionInput) => collectionMutation.mutateAsync(input),
+    isMutating: recordMutation.isPending || collectionMutation.isPending,
   };
 };

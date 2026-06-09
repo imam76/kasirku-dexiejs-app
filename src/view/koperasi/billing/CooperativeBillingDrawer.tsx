@@ -1,7 +1,7 @@
-import { Button, Descriptions, Drawer, Space, Typography } from 'antd';
-import { CreditCard } from 'lucide-react';
+import { Button, Descriptions, Drawer, Space, Tag, Typography } from 'antd';
+import { CalendarClock, CreditCard } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
-import type { CooperativeLoan, CooperativeLoanInstallment } from '@/types';
+import type { CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanInstallmentCollectionStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 
@@ -13,7 +13,9 @@ interface CooperativeBillingDrawerProps {
   open: boolean;
   onClose: () => void;
   onPay: (installment: CooperativeLoanInstallment) => void;
+  onCollect: (installment: CooperativeLoanInstallment) => void;
   canPay?: boolean;
+  canCollect?: boolean;
 }
 
 export default function CooperativeBillingDrawer({
@@ -22,7 +24,9 @@ export default function CooperativeBillingDrawer({
   open,
   onClose,
   onPay,
+  onCollect,
   canPay = true,
+  canCollect = true,
 }: CooperativeBillingDrawerProps) {
   const { t } = useI18n();
 
@@ -33,6 +37,19 @@ export default function CooperativeBillingDrawer({
   }
 
   const remaining = getInstallmentRemainingAmounts(installment);
+  const collectionStatus = installment.collection_status ?? 'NONE';
+  const collectionStatusLabels: Record<CooperativeLoanInstallmentCollectionStatus, string> = {
+    NONE: t('cooperative.billing.collection.status.none'),
+    PROMISED_TO_PAY: t('cooperative.billing.collection.status.promisedToPay'),
+    UNABLE_TO_PAY: t('cooperative.billing.collection.status.unableToPay'),
+    FOLLOW_UP: t('cooperative.billing.collection.status.followUp'),
+  };
+  const collectionStatusColors: Record<CooperativeLoanInstallmentCollectionStatus, string> = {
+    NONE: 'default',
+    PROMISED_TO_PAY: 'green',
+    UNABLE_TO_PAY: 'volcano',
+    FOLLOW_UP: 'gold',
+  };
 
   return (
     <Drawer
@@ -43,6 +60,16 @@ export default function CooperativeBillingDrawer({
       footer={(
         <Space className="w-full justify-end">
           <Button onClick={onClose}>{t('common.cancel')}</Button>
+          <Button
+            icon={<CalendarClock size={16} />}
+            disabled={!canCollect || installment.status === 'PAID' || loan.status !== 'DISBURSED'}
+            onClick={() => {
+              onClose();
+              onCollect(installment);
+            }}
+          >
+            {t('cooperative.billing.collect')}
+          </Button>
           <Button
             type="primary"
             icon={<CreditCard size={16} />}
@@ -83,6 +110,19 @@ export default function CooperativeBillingDrawer({
             <Descriptions.Item label={t('cooperative.billing.table.bill')}>Rp {formatCurrency(installment.principal_amount + installment.interest_amount + installment.penalty_amount)}</Descriptions.Item>
             <Descriptions.Item label={t('cooperative.installments.table.paid')}>Rp {formatCurrency(installment.paid_principal_amount + installment.paid_interest_amount + installment.paid_penalty_amount)}</Descriptions.Item>
             <Descriptions.Item label={t('cooperative.billing.table.remaining')}>Rp {formatCurrency(remaining.total_amount)}</Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.billing.table.collection')}>
+              <Tag color={collectionStatusColors[collectionStatus]}>{collectionStatusLabels[collectionStatus]}</Tag>
+            </Descriptions.Item>
+            {installment.follow_up_date && (
+              <Descriptions.Item label={t('cooperative.billing.collection.followUpDate')}>
+                {formatDate(installment.follow_up_date)}
+              </Descriptions.Item>
+            )}
+            {installment.collection_notes && (
+              <Descriptions.Item label={t('cooperative.billing.collection.notes')}>
+                {installment.collection_notes}
+              </Descriptions.Item>
+            )}
           </Descriptions>
         </div>
       </div>

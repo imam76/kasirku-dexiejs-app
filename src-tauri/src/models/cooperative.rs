@@ -127,6 +127,10 @@ pub struct CooperativeLoanInstallmentDto {
     pub paid_penalty_amount: f64,
     pub status: String,
     pub paid_at: Option<String>,
+    pub collection_status: Option<String>,
+    pub follow_up_date: Option<String>,
+    pub collection_notes: Option<String>,
+    pub last_contacted_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

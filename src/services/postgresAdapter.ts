@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
+  CooperativeLoanInstallmentCollectionStatus,
   CooperativeLoanInstallmentStatus,
   CooperativeLoanPaymentStatus,
   CooperativeLoanPaymentType,
@@ -672,6 +673,10 @@ export interface RemoteCooperativeLoanInstallmentDto {
   paid_penalty_amount: number;
   status: CooperativeLoanInstallmentStatus;
   paid_at?: string | null;
+  collection_status?: CooperativeLoanInstallmentCollectionStatus | null;
+  follow_up_date?: string | null;
+  collection_notes?: string | null;
+  last_contacted_at?: string | null;
   created_at: string;
   updated_at: string;
 }

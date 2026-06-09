@@ -50,6 +50,27 @@ export const cooperativeLoanPaymentSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const cooperativeLoanInstallmentCollectionStatusValues = [
+  'PROMISED_TO_PAY',
+  'UNABLE_TO_PAY',
+  'FOLLOW_UP',
+] as const;
+
+export const cooperativeLoanInstallmentCollectionSchema = z.object({
+  installment_id: z.string().min(1, 'Angsuran wajib dipilih.'),
+  collection_status: z.enum(cooperativeLoanInstallmentCollectionStatusValues),
+  follow_up_date: z.string().optional(),
+  collection_notes: z.string().trim().min(3, 'Catatan tindak lanjut wajib diisi.'),
+}).superRefine((value, context) => {
+  if (value.collection_status !== 'UNABLE_TO_PAY' && !value.follow_up_date) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['follow_up_date'],
+      message: 'Tanggal follow-up wajib diisi.',
+    });
+  }
+});
+
 export const cooperativeLoanPaymentReversalSchema = z.object({
   reason: z.string().trim().min(3, 'Alasan reversal wajib diisi.'),
 });
@@ -59,4 +80,5 @@ export type CooperativeLoanApprovalFormData = z.infer<typeof cooperativeLoanAppr
 export type CooperativeLoanRejectionFormData = z.infer<typeof cooperativeLoanRejectionSchema>;
 export type CooperativeLoanDisbursementFormData = z.infer<typeof cooperativeLoanDisbursementSchema>;
 export type CooperativeLoanPaymentFormData = z.infer<typeof cooperativeLoanPaymentSchema>;
+export type CooperativeLoanInstallmentCollectionFormData = z.infer<typeof cooperativeLoanInstallmentCollectionSchema>;
 export type CooperativeLoanPaymentReversalFormData = z.infer<typeof cooperativeLoanPaymentReversalSchema>;

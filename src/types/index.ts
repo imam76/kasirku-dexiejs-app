@@ -1195,6 +1195,7 @@ export type CooperativeLoanStatus =
   | 'PAID_OFF'
   | 'REVERSED';
 export type CooperativeLoanInstallmentStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+export type CooperativeLoanInstallmentCollectionStatus = 'NONE' | 'PROMISED_TO_PAY' | 'UNABLE_TO_PAY' | 'FOLLOW_UP';
 export type CooperativeLoanPaymentType = 'PAYMENT' | 'REVERSAL';
 export type CooperativeLoanPaymentStatus = 'POSTED' | 'REVERSED';
 
@@ -1336,6 +1337,10 @@ export interface CooperativeLoanInstallment {
   paid_penalty_amount: number;
   status: CooperativeLoanInstallmentStatus;
   paid_at?: string;
+  collection_status?: CooperativeLoanInstallmentCollectionStatus;
+  follow_up_date?: string;
+  collection_notes?: string;
+  last_contacted_at?: string;
   created_at: string;
   updated_at: string;
   sync_status?: CooperativeLoanInstallmentSyncStatus;

@@ -141,6 +141,10 @@ CREATE TABLE IF NOT EXISTS cooperative_loan_installments (
     paid_penalty_amount DOUBLE PRECISION NOT NULL,
     status TEXT NOT NULL,
     paid_at TEXT,
+    collection_status TEXT DEFAULT 'NONE',
+    follow_up_date TEXT,
+    collection_notes TEXT,
+    last_contacted_at TEXT,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
@@ -150,6 +154,8 @@ CREATE INDEX IF NOT EXISTS idx_cooperative_loan_installments_member_id ON cooper
 CREATE INDEX IF NOT EXISTS idx_cooperative_loan_installments_member_number ON cooperative_loan_installments (member_number);
 CREATE INDEX IF NOT EXISTS idx_cooperative_loan_installments_due_date ON cooperative_loan_installments (due_date);
 CREATE INDEX IF NOT EXISTS idx_cooperative_loan_installments_status ON cooperative_loan_installments (status);
+CREATE INDEX IF NOT EXISTS idx_cooperative_loan_installments_collection_status ON cooperative_loan_installments (collection_status);
+CREATE INDEX IF NOT EXISTS idx_cooperative_loan_installments_follow_up_date ON cooperative_loan_installments (follow_up_date);
 CREATE INDEX IF NOT EXISTS idx_cooperative_loan_installments_updated_at ON cooperative_loan_installments (updated_at);
 
 CREATE TABLE IF NOT EXISTS cooperative_loan_payments (
