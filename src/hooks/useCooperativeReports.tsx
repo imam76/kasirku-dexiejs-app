@@ -11,6 +11,9 @@ export const useCooperativeReports = (filters: CooperativeReportFilters) => (
       filters.startDate,
       filters.endDate,
       filters.asOfDate,
+      filters.cashFlowActivity,
+      filters.cashFlowAccountType,
+      filters.cashFlowAccountId,
     ],
     queryFn: () => getCooperativeReportData(filters),
   })

@@ -56,10 +56,21 @@ type JournalLinePair = {
   line: JournalEntryLine;
 };
 
+export type CooperativeCashFlowActivity = 'OPERATING' | 'INVESTING' | 'FINANCING';
+
+const COOPERATIVE_CASH_FLOW_ACTIVITIES: CooperativeCashFlowActivity[] = [
+  'OPERATING',
+  'INVESTING',
+  'FINANCING',
+];
+
 export interface CooperativeReportFilters {
   startDate?: string;
   endDate?: string;
   asOfDate?: string;
+  cashFlowActivity?: CooperativeCashFlowActivity;
+  cashFlowAccountType?: AccountType;
+  cashFlowAccountId?: string;
 }
 
 export interface CooperativeOperationalSummary {
@@ -214,8 +225,6 @@ export interface CooperativeShuReport extends IncomeStatementReport {
   shu_amount: number;
   rows: CooperativeFinancialStatementRow[];
 }
-
-export type CooperativeCashFlowActivity = 'OPERATING' | 'INVESTING' | 'FINANCING';
 
 export interface CooperativeCashFlowRow {
   id: string;
@@ -615,22 +624,54 @@ const createEmptyCashFlowSection = (activity: CooperativeCashFlowActivity): Coop
   rows: [],
 });
 
+const getCashFlowFilterLines = (entry: JournalEntryWithLines) => {
+  const nonCashLines = entry.lines.filter((line) => !isCashOrBankLine(line));
+  return nonCashLines.length > 0 ? nonCashLines : entry.lines;
+};
+
+const matchesCashFlowAccountFilters = (
+  entry: JournalEntryWithLines,
+  filters: CooperativeReportFilters,
+) => {
+  const hasAccountTypeFilter = Boolean(filters.cashFlowAccountType);
+  const hasAccountIdFilter = Boolean(filters.cashFlowAccountId);
+  if (!hasAccountTypeFilter && !hasAccountIdFilter) return true;
+
+  const lineMatches = (line: JournalEntryLine) => (
+    (!filters.cashFlowAccountType || line.account_type === filters.cashFlowAccountType) &&
+    (!filters.cashFlowAccountId || line.account_id === filters.cashFlowAccountId)
+  );
+  const filterLines = getCashFlowFilterLines(entry);
+
+  return (
+    filterLines.some(lineMatches) ||
+    (hasAccountIdFilter && entry.lines.some(lineMatches))
+  );
+};
+
 const buildCooperativeCashFlowStatement = (
   entries: JournalEntryWithLines[],
   filters: CooperativeReportFilters,
 ): CooperativeCashFlowStatement => {
-  const sectionByActivity = new Map<CooperativeCashFlowActivity, CooperativeCashFlowSection>([
-    ['OPERATING', createEmptyCashFlowSection('OPERATING')],
-    ['INVESTING', createEmptyCashFlowSection('INVESTING')],
-    ['FINANCING', createEmptyCashFlowSection('FINANCING')],
-  ]);
+  const activities = filters.cashFlowActivity
+    ? [filters.cashFlowActivity]
+    : COOPERATIVE_CASH_FLOW_ACTIVITIES;
+  const sectionByActivity = new Map<CooperativeCashFlowActivity, CooperativeCashFlowSection>(
+    activities.map((activity) => [activity, createEmptyCashFlowSection(activity)]),
+  );
   const statementEndDate = getStatementEndDate(filters);
   const postedEntries = entries
     .filter((entry) => entry.status === 'POSTED')
     .filter((entry) => isDateKeyOnOrBefore(entry.entry_date, statementEndDate));
   const cashMovementForEntry = (entry: JournalEntryWithLines) => roundCurrency(
-    entry.lines
-      .filter(isCashOrBankLine)
+    (() => {
+      const cashLines = entry.lines.filter(isCashOrBankLine);
+      const filteredCashLines = filters.cashFlowAccountId && cashLines.some((line) => line.account_id === filters.cashFlowAccountId)
+        ? cashLines.filter((line) => line.account_id === filters.cashFlowAccountId)
+        : cashLines;
+
+      return filteredCashLines;
+    })()
       .reduce((sum, line) => sum + Number(line.debit || 0) - Number(line.credit || 0), 0),
   );
   const beginningCashAmount = roundCurrency(
@@ -648,10 +689,14 @@ const buildCooperativeCashFlowStatement = (
     .filter((entry) => isDateInStatementPeriod(entry.entry_date, filters))
     .sort((left, right) => compareDateAsc(left.entry_date, right.entry_date))
     .forEach((entry) => {
+      const nonCashLines = entry.lines.filter((line) => !isCashOrBankLine(line));
+      const activity = getCashFlowActivity(entry, nonCashLines);
+      if (filters.cashFlowActivity && activity !== filters.cashFlowActivity) return;
+      if (!matchesCashFlowAccountFilters(entry, filters)) return;
+
       const amount = cashMovementForEntry(entry);
       if (Math.abs(amount) <= MONEY_TOLERANCE) return;
 
-      const activity = getCashFlowActivity(entry, entry.lines.filter((line) => !isCashOrBankLine(line)));
       const section = sectionByActivity.get(activity) ?? createEmptyCashFlowSection(activity);
       section.rows.push({
         id: entry.id,
@@ -672,7 +717,7 @@ const buildCooperativeCashFlowStatement = (
       sectionByActivity.set(activity, section);
     });
 
-  const sections = Array.from(sectionByActivity.values());
+  const sections = activities.map((activity) => sectionByActivity.get(activity) ?? createEmptyCashFlowSection(activity));
   const operatingNetAmount = sectionByActivity.get('OPERATING')?.net_amount ?? 0;
   const investingNetAmount = sectionByActivity.get('INVESTING')?.net_amount ?? 0;
   const financingNetAmount = sectionByActivity.get('FINANCING')?.net_amount ?? 0;

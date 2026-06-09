@@ -275,11 +275,9 @@ const RootLayout = () => {
           children: [
             { to: '/koperasi/laporan', label: t('nav.cooperative.reportsOverview'), icon: FileText },
             {
-              to: '/koperasi/laporan',
+              to: '/koperasi/arus-kas',
               label: t('cooperative.reports.tabs.cashFlowStatement'),
               icon: Banknote,
-              key: '/koperasi/laporan#cash-flow-statement',
-              hash: 'cash-flow-statement',
             },
             { to: '/koperasi/buku-besar', label: t('nav.cooperative.ledger'), icon: BookOpen },
           ],

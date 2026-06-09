@@ -1,19 +1,15 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
-import { FilePdfOutlined, FileTextOutlined } from '@ant-design/icons';
-import { App, Alert, Button, DatePicker, Descriptions, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { Alert, Button, DatePicker, Descriptions, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { BookOpen, RefreshCw } from 'lucide-react';
-import ExportActions from '@/components/ExportActions';
 import CompanyReportHeader from '@/components/report/CompanyReportHeader';
-import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 import { useCooperativeReports } from '@/hooks/useCooperativeReports';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import dayjs from '@/lib/dayjs';
 import type {
-  CooperativeCashFlowActivity,
   CooperativeCashBankReportRow,
   CooperativeFinancialStatementRow,
   CooperativeInstallmentReportRow,
@@ -41,9 +37,7 @@ import type {
   JournalEntryStatus,
   JournalSourceType,
 } from '@/types';
-import { exportCsv, exportHtmlPdf, saveExportFile, type ExportRows, type ExportTarget } from '@/utils/export';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import CooperativeCashFlowStatementReport from './CooperativeCashFlowStatementReport';
 
 const { Text, Title } = Typography;
 
@@ -155,12 +149,6 @@ const financeTypeColor: Record<FinanceTransactionType, string> = {
   OPENING_BALANCE: 'blue',
 };
 
-const cashFlowActivityLabelKey: Record<CooperativeCashFlowActivity, TranslationKey> = {
-  OPERATING: 'cooperative.reports.cashFlow.operating',
-  INVESTING: 'cooperative.reports.cashFlow.investing',
-  FINANCING: 'cooperative.reports.cashFlow.financing',
-};
-
 const cooperativeReportTabKeys = new Set([
   'summary',
   'savings',
@@ -168,7 +156,6 @@ const cooperativeReportTabKeys = new Set([
   'installments',
   'overdue',
   'cash-bank',
-  'cash-flow-statement',
   'journal',
   'balance-sheet',
   'shu',
@@ -190,17 +177,6 @@ const money = (value: number) => `Rp ${formatCurrency(value || 0)}`;
 
 const idText = (value?: string) => value || '-';
 
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => {
-  const entities: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  };
-
-  return entities[char] ?? char;
-});
 
 const MemberLink = ({
   memberNumber,
@@ -254,12 +230,9 @@ const CooperativeSourceLink = ({
 };
 
 export default function CooperativeReportManagement() {
-  const { message } = App.useApp();
-  const { t, locale } = useI18n();
-  const { profile } = useCompanyProfileSetting();
+  const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
-  const cashFlowReportRef = useRef<HTMLDivElement | null>(null);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [asOfDate, setAsOfDate] = useState<Dayjs | null>(() => dayjs.tz());
 
@@ -277,13 +250,9 @@ export default function CooperativeReportManagement() {
   const financialReadiness = data?.financialReadiness;
   const cooperativeBalanceSheet = data?.cooperativeBalanceSheet;
   const cooperativeShuReport = data?.cooperativeShuReport;
-  const cooperativeCashFlowStatement = data?.cooperativeCashFlowStatement;
   const cooperativeEquityChangeReport = data?.cooperativeEquityChangeReport;
   const reconciliation = data?.reconciliation;
   const canShowFinancialStatements = Boolean(financialReadiness?.can_show_financial_statements);
-  const cashFlowPeriodText = `${filters.startDate ? dayjs(filters.startDate).tz().format('YYYY-MM-DD') : t('common.all')} - ${filters.endDate ? dayjs(filters.endDate).tz().format('YYYY-MM-DD') : t('common.all')}`;
-  const cashFlowPrintDateText = dayjs().tz().format('YYYY-MM-DD HH:mm:ss');
-  const companyName = profile?.company_name || t('cooperative.ledger.companyFallback');
   const reportTabHash = location.hash.replace(/^#/, '');
   const activeReportTab = cooperativeReportTabKeys.has(reportTabHash) ? reportTabHash : 'summary';
 
@@ -319,138 +288,6 @@ export default function CooperativeReportManagement() {
       {canShowFinancialStatements ? children : null}
     </Space>
   );
-
-  const buildCashFlowCsvRows = (): ExportRows => {
-    if (!cooperativeCashFlowStatement) return [];
-
-    const rows: ExportRows = [
-      [t('cooperative.reports.cashFlow.reportTitle'), cashFlowPrintDateText],
-      [t('cooperative.ledger.period'), cashFlowPeriodText],
-      [],
-      [t('cooperative.reports.cashFlow.beginningCash'), cooperativeCashFlowStatement.beginning_cash_amount],
-      [t('cooperative.reports.cashFlow.operatingNet'), cooperativeCashFlowStatement.operating_net_amount],
-      [t('cooperative.reports.cashFlow.investingNet'), cooperativeCashFlowStatement.investing_net_amount],
-      [t('cooperative.reports.cashFlow.financingNet'), cooperativeCashFlowStatement.financing_net_amount],
-      [t('cooperative.reports.cashFlow.netChange'), cooperativeCashFlowStatement.net_cash_change_amount],
-      [t('cooperative.reports.cashFlow.endingCash'), cooperativeCashFlowStatement.ending_cash_amount],
-    ];
-
-    cooperativeCashFlowStatement.sections.forEach((section) => {
-      rows.push([]);
-      rows.push([t(cashFlowActivityLabelKey[section.activity])]);
-      rows.push([
-        t('cooperative.reports.table.date'),
-        t('generalLedger.journal.number'),
-        t('generalLedger.journal.source'),
-        t('cooperative.reports.table.description'),
-        t('cooperative.reports.cashFlow.cashIn'),
-        t('cooperative.reports.cashFlow.cashOut'),
-        t('cooperative.reports.cashFlow.net'),
-      ]);
-
-      section.rows.forEach((row) => {
-        rows.push([
-          row.entry_date ? dayjs(row.entry_date).tz().format('YYYY-MM-DD HH:mm') : '',
-          row.entry_number,
-          row.source_number || row.source_type,
-          row.description,
-          row.amount > 0 ? row.amount : 0,
-          row.amount < 0 ? Math.abs(row.amount) : 0,
-          row.amount,
-        ]);
-      });
-
-      rows.push([
-        '',
-        '',
-        '',
-        `${t('common.total')} ${t(cashFlowActivityLabelKey[section.activity])}`,
-        section.cash_in_amount,
-        section.cash_out_amount,
-        section.net_amount,
-      ]);
-    });
-
-    return rows;
-  };
-
-  const buildCashFlowHtmlDocument = () => {
-    const reportHtml = cashFlowReportRef.current?.outerHTML;
-    const title = t('cooperative.reports.cashFlow.reportTitle');
-
-    return `<!doctype html>
-<html lang="${locale}">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(title)}</title>
-  <style>
-    @page { size: A4 landscape; margin: 12mm; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #f3f4f6; color: #111827; font-family: Arial, sans-serif; padding: 24px; }
-    .report-shell { margin: 0 auto; width: max-content; }
-  </style>
-</head>
-<body>
-  <main class="report-shell">
-    ${reportHtml ?? ''}
-  </main>
-</body>
-</html>`;
-  };
-
-  const handleExportCashFlowCsv = async (target: ExportTarget = 'auto') => {
-    if (!cooperativeCashFlowStatement) return;
-
-    try {
-      const exported = await exportCsv({
-        filename: `laporan-arus-kas-koperasi-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
-        rows: buildCashFlowCsvRows(),
-        target,
-      });
-      if (!exported) return;
-      message.success(t('cooperative.reports.cashFlow.exportCsvSuccess'));
-    } catch (error) {
-      console.error('Failed to export cooperative cash flow CSV:', error);
-      message.error(t('cooperative.reports.cashFlow.exportCsvFailed'));
-    }
-  };
-
-  const handleExportCashFlowHtml = async (target: ExportTarget = 'auto') => {
-    if (!cooperativeCashFlowStatement || !cashFlowReportRef.current) return;
-
-    try {
-      const exported = await saveExportFile({
-        filename: `laporan-arus-kas-koperasi-${dayjs().tz().format('YYYY-MM-DD')}.html`,
-        mimeType: 'text/html',
-        content: buildCashFlowHtmlDocument(),
-        target,
-      });
-      if (!exported) return;
-      message.success(t('cooperative.reports.cashFlow.exportHtmlSuccess'));
-    } catch (error) {
-      console.error('Failed to export cooperative cash flow HTML:', error);
-      message.error(t('cooperative.reports.cashFlow.exportHtmlFailed'));
-    }
-  };
-
-  const handleExportCashFlowPdf = async (target: ExportTarget = 'auto') => {
-    if (!cooperativeCashFlowStatement || !cashFlowReportRef.current) return;
-
-    try {
-      const exported = await exportHtmlPdf({
-        filename: `laporan-arus-kas-koperasi-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
-        element: cashFlowReportRef.current,
-        orientation: 'landscape',
-        target,
-      });
-      if (!exported) return;
-      message.success(t('cooperative.reports.cashFlow.exportPdfSuccess'));
-    } catch (error) {
-      console.error('Failed to export cooperative cash flow PDF:', error);
-      message.error(t('cooperative.reports.cashFlow.exportPdfFailed'));
-    }
-  };
 
   const reconciliationColumns: ColumnsType<CooperativeReconciliationRow> = [
     {
@@ -1347,58 +1184,6 @@ export default function CooperativeReportManagement() {
                 scroll={{ x: 1280 }}
                 locale={{ emptyText: t('cooperative.reports.empty.cashBank') }}
               />
-            ),
-          },
-          {
-            key: 'cash-flow-statement',
-            label: t('cooperative.reports.tabs.cashFlowStatement'),
-            children: renderFinancialReport(
-              <Space direction="vertical" className="w-full" size="middle">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <Title level={4} className="!mb-1">
-                      {t('cooperative.reports.cashFlow.reportTitle')}
-                    </Title>
-                    <Text type="secondary">
-                      {t('cooperative.ledger.period')}: {cashFlowPeriodText}
-                    </Text>
-                  </div>
-                  <ExportActions
-                    buttonType="default"
-                    disabled={!cooperativeCashFlowStatement}
-                    formats={[
-                      {
-                        key: 'pdf',
-                        label: 'PDF',
-                        icon: <FilePdfOutlined />,
-                        onExport: handleExportCashFlowPdf,
-                      },
-                      {
-                        key: 'html',
-                        label: 'HTML',
-                        icon: <FileTextOutlined />,
-                        onExport: handleExportCashFlowHtml,
-                      },
-                      {
-                        key: 'csv',
-                        label: 'CSV',
-                        icon: <FileTextOutlined />,
-                        onExport: handleExportCashFlowCsv,
-                      },
-                    ]}
-                  />
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <CooperativeCashFlowStatementReport
-                    ref={cashFlowReportRef}
-                    statement={cooperativeCashFlowStatement}
-                    companyName={companyName}
-                    logoDataUrl={profile?.logo_data_url}
-                    periodText={cashFlowPeriodText}
-                    printDateText={cashFlowPrintDateText}
-                  />
-                </div>
-              </Space>,
             ),
           },
           {

@@ -57,6 +57,13 @@ function Cooperative() {
       desc: t('cooperative.index.reportsDesc'),
     },
     {
+      to: '/koperasi/arus-kas',
+      label: t('cooperative.reports.tabs.cashFlowStatement'),
+      icon: BankOutlined,
+      color: 'text-teal-700',
+      desc: t('cooperative.index.cashFlowDesc'),
+    },
+    {
       to: '/koperasi/buku-besar',
       label: t('nav.cooperative.ledger'),
       icon: BookOutlined,
