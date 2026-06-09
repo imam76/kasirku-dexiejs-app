@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { App, Button, Layout, Menu, Result, notification } from 'antd'
+import type { MenuProps } from 'antd'
 import {
   BadgePercent,
   Banknote,
@@ -64,11 +65,26 @@ const TRIGGER_WIDTH = 36
 
 type FeedbackValues = Record<string, unknown>
 type NavLeaf = { to: string; label: string; icon: LucideIcon; key?: string; hash?: string }
-type NavGroup = { label: string; icon: LucideIcon; key: string; children: NavLeaf[] }
+type NavGroup = { label: string; icon: LucideIcon; key: string; children: NavLink[] }
 type NavLink = NavLeaf | NavGroup
 
 const isNavGroup = (link: NavLink): link is NavGroup => 'children' in link
 const getNavLeafKey = (link: NavLeaf) => link.key ?? `${link.to}${link.hash ? `#${link.hash}` : ''}`
+const flattenNavLeaves = (links: NavLink[]): NavLeaf[] => links.flatMap((link) => (
+  isNavGroup(link) ? flattenNavLeaves(link.children) : [link]
+))
+const getOpenKeysForSelected = (links: NavLink[], selectedKey: string): string[] => links.flatMap((link) => {
+  if (!isNavGroup(link)) return []
+
+  const childOpenKeys = getOpenKeysForSelected(link.children, selectedKey)
+  const hasSelectedChild = link.children.some((child) => (
+    isNavGroup(child)
+      ? child.key === selectedKey || childOpenKeys.includes(child.key)
+      : getNavLeafKey(child) === selectedKey
+  ))
+
+  return link.key === selectedKey || hasSelectedChild ? [link.key, ...childOpenKeys] : []
+})
 const escapeTelegramHtml = (value: unknown) =>
   String(value)
     .replace(/&/g, '&amp;')
@@ -252,8 +268,22 @@ const RootLayout = () => {
         { to: '/koperasi/simpanan', label: t('nav.cooperative.savings'), icon: WalletCards },
         { to: '/koperasi/pinjaman', label: t('nav.cooperative.loans'), icon: Banknote },
         { to: '/koperasi/angsuran', label: t('nav.cooperative.installments'), icon: ReceiptText },
-        { to: '/koperasi/laporan', label: t('nav.cooperative.reports'), icon: FileText },
-        { to: '/koperasi/buku-besar', label: t('nav.cooperative.ledger'), icon: BookOpen },
+        {
+          label: t('nav.cooperative.reports'),
+          icon: FileText,
+          key: 'cooperative-reports-group',
+          children: [
+            { to: '/koperasi/laporan', label: t('nav.cooperative.reportsOverview'), icon: FileText },
+            {
+              to: '/koperasi/laporan',
+              label: t('cooperative.reports.tabs.cashFlowStatement'),
+              icon: Banknote,
+              key: '/koperasi/laporan#cash-flow-statement',
+              hash: 'cash-flow-statement',
+            },
+            { to: '/koperasi/buku-besar', label: t('nav.cooperative.ledger'), icon: BookOpen },
+          ],
+        },
       ],
     },
     {
@@ -273,9 +303,9 @@ const RootLayout = () => {
     { to: '/settings', label: t('nav.settings'), icon: Settings },
   ]
 
-  const filteredNavLinks = navLinks.reduce<NavLink[]>((acc, link) => {
+  const filterNavLinks = (links: NavLink[]): NavLink[] => links.reduce<NavLink[]>((acc, link) => {
     if (isNavGroup(link)) {
-      const children = link.children.filter((child) => canAccessPath(currentUser?.role, child.to) && isRouteEnabled(child.to))
+      const children = filterNavLinks(link.children)
       if (children.length > 0) {
         acc.push({ ...link, children })
       }
@@ -289,33 +319,29 @@ const RootLayout = () => {
     return acc
   }, [])
 
-  const menuItems = filteredNavLinks.map((link) => {
+  const filteredNavLinks = filterNavLinks(navLinks)
+
+  const buildMenuItem = (link: NavLink): NonNullable<MenuProps['items']>[number] => {
     if (isNavGroup(link)) {
       return {
         key: link.key,
         icon: <link.icon size={16} />,
         label: link.label,
-        children: link.children.map((child) => ({
-          key: getNavLeafKey(child),
-          icon: <child.icon size={16} />,
-          label: <Link to={child.to} hash={child.hash}>{child.label}</Link>,
-        })),
+        children: link.children.map(buildMenuItem),
       }
     }
+
     return {
       key: getNavLeafKey(link),
       icon: <link.icon size={16} />,
       label: <Link to={link.to} hash={link.hash}>{link.label}</Link>,
     }
-  })
+  }
+
+  const menuItems = filteredNavLinks.map(buildMenuItem)
 
   // Determine active menu key from current path
-  const allLinks = navLinks.reduce<NavLeaf[]>((acc, link) => {
-    if (isNavGroup(link)) {
-      return [...acc, ...link.children]
-    }
-    return [...acc, link]
-  }, [])
+  const allLinks = flattenNavLeaves(navLinks)
 
   const currentHash = location.hash.replace(/^#/, '')
   const selectedLink =
@@ -339,10 +365,7 @@ const RootLayout = () => {
     return selectedLink ? getNavLeafKey(selectedLink) : '/'
   })()
 
-  const openKeys = filteredNavLinks
-    .filter(isNavGroup)
-    .filter((link) => link.key === selectedKey || link.children.some((child) => getNavLeafKey(child) === selectedKey))
-    .map((link) => link.key)
+  const openKeys = getOpenKeysForSelected(filteredNavLinks, selectedKey)
   const openKeySignature = openKeys.join('|')
   const [openMenuKeys, setOpenMenuKeys] = useState<string[]>(openKeys)
 
