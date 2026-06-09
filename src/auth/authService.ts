@@ -19,6 +19,7 @@ interface ActivityLogInput {
 
 interface CreateAuthUserInput {
   name: string;
+  email?: string;
   role?: UserRole;
   role_id?: string;
   pin: string;
@@ -28,6 +29,7 @@ interface CreateAuthUserInput {
 interface UpdateAuthUserInput {
   userId: string;
   name: string;
+  email?: string;
   role?: UserRole;
   role_id?: string;
   employee_id?: string;
@@ -201,7 +203,7 @@ export const hasActiveOwner = async () => {
   return Boolean(owner);
 };
 
-export const createOwnerUser = async (input: { name: string; pin: string }): Promise<AuthUser> => {
+export const createOwnerUser = async (input: { name: string; email: string; pin: string }): Promise<AuthUser> => {
   const hasOwner = await hasActiveOwner();
   if (hasOwner) {
     throw new Error('Owner aktif sudah ada.');
@@ -212,6 +214,7 @@ export const createOwnerUser = async (input: { name: string; pin: string }): Pro
   const owner: AuthUser = withPendingAuthUserSync({
     id: crypto.randomUUID(),
     name: input.name,
+    email: input.email,
     role: 'OWNER',
     role_id: resolveLegacyRoleId('OWNER'),
     role_name: resolveLegacyRoleName('OWNER'),
@@ -249,6 +252,7 @@ export const createAuthUser = async (input: CreateAuthUserInput): Promise<AuthUs
   const user: AuthUser = withPendingAuthUserSync({
     id: crypto.randomUUID(),
     name,
+    email: input.email,
     role: (role.code as UserRole | undefined) ?? input.role ?? 'KASIR',
     role_id: role.id,
     role_name: role.name,
@@ -294,6 +298,7 @@ export const updateAuthUser = async (input: UpdateAuthUserInput): Promise<AuthUs
   const updatedAt = new Date().toISOString();
   await db.authUsers.update(targetUser.id, {
     name,
+    email: input.email,
     role: nextLegacyRole,
     role_id: role.id,
     role_name: role.name,
@@ -410,8 +415,8 @@ export const getActivityLogs = async (input: ActivityLogQueryInput = {}): Promis
     .toArray();
 };
 
-export const loginWithPin = async (pin: string): Promise<AuthUser> => {
-  const users = (await db.authUsers.toArray()).filter((user) => user.is_active);
+export const loginWithEmailAndPin = async (email: string, pin: string): Promise<AuthUser> => {
+  const users = (await db.authUsers.toArray()).filter((user) => user.is_active && user.email === email);
 
   for (const user of users) {
     if (await verifyPin(pin, user.pin_hash, user.pin_salt)) {
@@ -445,7 +450,7 @@ export const loginWithPin = async (pin: string): Promise<AuthUser> => {
     }
   }
 
-  const employees = (await db.employees.toArray()).filter((emp) => emp.is_active && emp.pin_hash && emp.pin_salt);
+  const employees = (await db.employees.toArray()).filter((emp) => emp.is_active && emp.pin_hash && emp.pin_salt && emp.email === email);
   
   for (const employee of employees) {
     if (employee.pin_hash && employee.pin_salt && await verifyPin(pin, employee.pin_hash, employee.pin_salt)) {
@@ -495,7 +500,7 @@ export const loginWithPin = async (pin: string): Promise<AuthUser> => {
     }
   }
 
-  throw new Error('PIN tidak valid atau user tidak aktif.');
+  throw new Error('Email atau PIN tidak valid atau user tidak aktif.');
 };
 
 export const logout = async (): Promise<void> => {

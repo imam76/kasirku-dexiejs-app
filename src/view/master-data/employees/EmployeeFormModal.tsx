@@ -81,7 +81,14 @@ export default function EmployeeFormModal({
           <Form.Item name="phone" label={t('employees.form.phone')}>
             <Input placeholder={t('employees.form.phonePlaceholder')} />
           </Form.Item>
-          <Form.Item name="email" label={t('employees.form.email')} rules={[{ type: 'email', message: t('employees.validation.emailInvalid') }]}>
+          <Form.Item 
+            name="email" 
+            label={t('employees.form.email')} 
+            rules={[
+              { required: Boolean(isPinRequired && loginPinValue), message: 'Email wajib diisi jika PIN login diisi.' },
+              { type: 'email', message: t('employees.validation.emailInvalid') }
+            ]}
+          >
             <Input placeholder={t('employees.form.emailPlaceholder')} />
           </Form.Item>
         </div>

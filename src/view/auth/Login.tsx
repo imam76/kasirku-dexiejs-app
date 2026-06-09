@@ -8,6 +8,7 @@ import { useAuth } from '@/auth/useAuth';
 const { Text } = Typography;
 
 interface LoginFormValues {
+  email: string;
   pin: string;
 }
 
@@ -28,8 +29,8 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
 
   const handleSubmit = async (values: LoginFormValues) => {
     try {
-      await login(values.pin);
-      form.resetFields();
+      await login(values.email.trim(), values.pin);
+      form.resetFields(['pin']);
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Login gagal.');
     }
@@ -44,24 +45,11 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
         </div>
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Masuk Kasirku</h1>
-          <Text type="secondary">Gunakan PIN user aktif.</Text>
+          <Text type="secondary">Gunakan email dan PIN untuk masuk.</Text>
         </div>
       </div>
 
-      {canLogin ? (
-        <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
-          <Text type="secondary" className="block text-xs uppercase">
-            User aktif
-          </Text>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {activeUsers.map((user) => (
-              <span key={user.id} className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
-                {user.name} - {ROLE_LABEL[user.role]}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : (
+      {canLogin ? null : (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <Text strong className="block text-sm text-amber-900">
             Belum ada user aktif.
@@ -80,6 +68,17 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
           requiredMark={false}
         >
           <Form.Item
+            label="Email"
+            name="email"
+            rules={[
+              { required: true, message: 'Email wajib diisi.' },
+              { type: 'email', message: 'Format email tidak valid.' },
+            ]}
+          >
+            <Input size="large" autoFocus placeholder="Masukkan Email" />
+          </Form.Item>
+
+          <Form.Item
             label="PIN"
             name="pin"
             rules={[
@@ -88,7 +87,7 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
               { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
             ]}
           >
-            <Input.Password size="large" inputMode="numeric" autoFocus placeholder="Masukkan PIN" />
+            <Input.Password size="large" inputMode="numeric" placeholder="Masukkan PIN" />
           </Form.Item>
 
           <Button type="primary" htmlType="submit" size="large" block>

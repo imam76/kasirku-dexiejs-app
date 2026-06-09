@@ -809,6 +809,11 @@ export class KasirkuDB extends Dexie {
       }
     });
 
+    this.version(44).stores({
+      authUsers: 'id, name, email, role, role_id, role_name, employee_id, is_active, sync_status, created_at',
+      employees: 'id, name, email, user_id, is_active, created_at',
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AuthUser, Permission, Role } from '@/types';
 import { hasPermission } from './permissions';
-import { ensureDefaultOwner, getCurrentSessionUser, loginWithPin, logout as logoutSession } from './authService';
+import { ensureDefaultOwner, getCurrentSessionUser, loginWithEmailAndPin, logout as logoutSession } from './authService';
 import { AuthContext, type AuthContextValue } from './AuthContext';
 import { db } from '@/lib/db';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
@@ -77,8 +77,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [loadPermissions]);
 
-  const login = useCallback(async (pin: string) => {
-    const user = await loginWithPin(pin);
+  const login = useCallback(async (email: string, pin: string) => {
+    const user = await loginWithEmailAndPin(email, pin);
     setCurrentUser(user);
     await loadPermissions(user);
     return user;

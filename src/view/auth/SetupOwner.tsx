@@ -7,6 +7,7 @@ const { Text } = Typography;
 
 interface SetupOwnerFormValues {
   name: string;
+  email: string;
   pin: string;
   confirmPin: string;
 }
@@ -30,9 +31,10 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
     try {
       await createOwnerUser({
         name: values.name.trim(),
+        email: values.email.trim(),
         pin: values.pin,
       });
-      await login(values.pin);
+      await login(values.email.trim(), values.pin);
       message.success('Owner berhasil dibuat.');
       onComplete?.();
     } catch (error) {
@@ -67,6 +69,17 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
           ]}
         >
           <Input size="large" autoFocus placeholder="Contoh: Imam" />
+        </Form.Item>
+
+        <Form.Item
+          label="Email"
+          name="email"
+          rules={[
+            { required: true, message: 'Email wajib diisi.' },
+            { type: 'email', message: 'Format email tidak valid.' },
+          ]}
+        >
+          <Input size="large" placeholder="Contoh: owner@toko.com" />
         </Form.Item>
 
         <Form.Item

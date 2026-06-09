@@ -156,6 +156,7 @@ export interface AuthUser {
   role_id?: string;
   role_name?: string;
   employee_id?: string;
+  email?: string;
   pin_hash: string;
   pin_salt: string;
   is_active: boolean;

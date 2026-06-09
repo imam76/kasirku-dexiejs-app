@@ -7,7 +7,7 @@ export interface AuthContextValue {
   permissionSet: Set<Permission>;
   isLoading: boolean;
   isPermissionLoading: boolean;
-  login: (pin: string) => Promise<AuthUser>;
+  login: (email: string, pin: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshCurrentUser: () => Promise<AuthUser | null>;
   can: (permission: Permission) => boolean;
