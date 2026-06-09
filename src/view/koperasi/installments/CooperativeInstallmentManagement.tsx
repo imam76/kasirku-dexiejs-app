@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select, Tabs } from 'antd';
 import { CreditCard, Plus } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
+import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
 import {
   useCooperativeInstallments,
   type CooperativeInstallmentMemberFilter,
@@ -22,6 +23,7 @@ export default function CooperativeInstallmentManagement() {
   const { t } = useI18n();
   const [form] = Form.useForm<CooperativeLoanPaymentFormValues>();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanPayment');
   const {
     filteredInstallments,
     payableInstallments,
@@ -60,6 +62,8 @@ export default function CooperativeInstallmentManagement() {
       amount: remaining?.total_amount,
       payment_date: dayjs(),
       payment_method: 'TUNAI',
+      remember_cash_account: true,
+      ...getRememberedCashAccountFields(paymentAccounts),
     });
     setPayingInstallment(installment ?? null);
     setIsPaymentModalOpen(true);
@@ -67,7 +71,7 @@ export default function CooperativeInstallmentManagement() {
 
   const handleSubmit = async (values: CooperativeLoanPaymentFormValues) => {
     try {
-      await recordPayment({
+      const result = await recordPayment({
         installment_id: values.installment_id,
         amount: Number(values.amount || 0),
         payment_date: values.payment_date?.toISOString(),
@@ -76,6 +80,11 @@ export default function CooperativeInstallmentManagement() {
         payment_channel: values.payment_channel,
         notes: values.notes,
       });
+      if (values.remember_cash_account) {
+        rememberCashAccount({
+          cash_account_id: result.payment.cash_account_id ?? values.cash_account_id,
+        });
+      }
       message.success(t('cooperative.installments.paymentSuccess'));
       closePaymentModal();
     } catch (error) {

@@ -1,4 +1,4 @@
-import { DatePicker, Form, Input, Modal, Select } from 'antd';
+import { Checkbox, DatePicker, Form, Input, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
@@ -12,6 +12,7 @@ export interface CooperativeLoanDisbursementFormValues {
   first_due_date: Dayjs;
   payment_method: PaymentMethod;
   cash_account_id?: string;
+  remember_cash_account: boolean;
   payment_channel?: string;
   notes?: string;
 }
@@ -92,15 +93,20 @@ export default function CooperativeLoanDisbursementModal({
               data-testid="koperasi-loan-disbursement-payment-method-select"
             />
           </Form.Item>
-          <Form.Item name="cash_account_id" label={t('finance.cashAccount')}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder={t('finance.cashAccountPlaceholder')}
-              options={accountOptions}
-            />
-          </Form.Item>
+          <div>
+            <Form.Item name="cash_account_id" label={t('finance.cashAccount')} className="mb-2">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('finance.cashAccountPlaceholder')}
+                options={accountOptions}
+              />
+            </Form.Item>
+            <Form.Item name="remember_cash_account" valuePropName="checked" className="mb-0">
+              <Checkbox>{t('cooperative.cashPreference.rememberCashAccount')}</Checkbox>
+            </Form.Item>
+          </div>
           <Form.Item name="payment_channel" label={t('finance.paymentChannel')}>
             <Input placeholder={t('finance.paymentChannelPlaceholder')} />
           </Form.Item>

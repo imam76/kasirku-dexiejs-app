@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select, Tabs } from 'antd';
 import { Plus, WalletCards } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
+import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
 import {
   useCooperativeSavings,
   type CooperativeSavingStatusFilter,
@@ -25,6 +26,7 @@ export default function CooperativeSavingManagement() {
   const { t } = useI18n();
   const [form] = Form.useForm<CooperativeSavingFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('savings');
   const {
     activeMembers,
     filteredTransactions,
@@ -57,13 +59,15 @@ export default function CooperativeSavingManagement() {
       saving_type: 'SUKARELA',
       transaction_date: dayjs(),
       payment_method: 'TUNAI',
+      remember_cash_account: true,
+      ...getRememberedCashAccountFields(paymentAccounts),
     });
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (values: CooperativeSavingFormValues) => {
     try {
-      await recordSaving({
+      const result = await recordSaving({
         member_id: values.member_id,
         saving_type: values.saving_type,
         transaction_type: values.transaction_type,
@@ -74,6 +78,11 @@ export default function CooperativeSavingManagement() {
         payment_channel: values.payment_channel,
         notes: values.notes,
       });
+      if (values.remember_cash_account) {
+        rememberCashAccount({
+          cash_account_id: result.transaction.cash_account_id ?? values.cash_account_id,
+        });
+      }
       message.success(t('cooperative.savings.recordSuccess'));
       closeModal();
     } catch (error) {

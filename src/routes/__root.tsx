@@ -44,6 +44,7 @@ import {
   PanelLeftOpen,
   Percent,
   ReceiptText,
+  RefreshCw,
   Scale,
   Settings,
   SettingsIcon,
@@ -298,6 +299,7 @@ const RootLayout = () => {
         { to: '/profit', label: t('nav.report.profit'), icon: DollarSign },
       ],
     },
+    { to: '/sync-db', label: t('nav.syncDb'), icon: RefreshCw },
     { to: '/settings', label: t('nav.settings'), icon: Settings },
   ]
 

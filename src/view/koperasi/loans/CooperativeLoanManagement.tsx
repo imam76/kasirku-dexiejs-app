@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select } from 'antd';
 import { Banknote, Plus } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
+import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
 import {
   useCooperativeLoans,
   type CooperativeLoanStatusFilter,
@@ -20,6 +21,7 @@ export default function CooperativeLoanManagement() {
   const [form] = Form.useForm<CooperativeLoanFormValues>();
   const [disbursementForm] = Form.useForm<CooperativeLoanDisbursementFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanDisbursement');
   const {
     activeMembers,
     filteredLoans,
@@ -66,6 +68,8 @@ export default function CooperativeLoanManagement() {
       disbursement_date: dayjs(),
       first_due_date: dayjs().add(1, 'month'),
       payment_method: 'TUNAI',
+      remember_cash_account: true,
+      ...getRememberedCashAccountFields(paymentAccounts),
     });
     setDisbursingLoan(loan);
   };
@@ -151,7 +155,7 @@ export default function CooperativeLoanManagement() {
     if (!disbursingLoan) return;
 
     try {
-      await disburseLoan({
+      const result = await disburseLoan({
         loan_id: disbursingLoan.id,
         disbursement_date: values.disbursement_date?.toISOString(),
         first_due_date: values.first_due_date?.toISOString(),
@@ -160,6 +164,11 @@ export default function CooperativeLoanManagement() {
         payment_channel: values.payment_channel,
         notes: values.notes,
       });
+      if (values.remember_cash_account) {
+        rememberCashAccount({
+          cash_account_id: result.loan.cash_account_id ?? values.cash_account_id,
+        });
+      }
       message.success(t('cooperative.loans.disburseSuccess'));
       closeDisbursementModal();
     } catch (error) {

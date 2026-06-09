@@ -28,6 +28,7 @@ import { Route as FinanceSalesDocumentTypeIndexRouteImport } from './routes/fina
 import { Route as FinancePurchasesDocumentTypeIndexRouteImport } from './routes/finance/purchases/$documentType/index'
 
 const TransactionLazyRouteImport = createFileRoute('/transaction')()
+const SyncDbLazyRouteImport = createFileRoute('/sync-db')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
 const SettingsLazyRouteImport = createFileRoute('/settings')()
 const ProfitLazyRouteImport = createFileRoute('/profit')()
@@ -153,6 +154,11 @@ const TransactionLazyRoute = TransactionLazyRouteImport.update({
   path: '/transaction',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/transaction.lazy').then((d) => d.Route))
+const SyncDbLazyRoute = SyncDbLazyRouteImport.update({
+  id: '/sync-db',
+  path: '/sync-db',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/sync-db.lazy').then((d) => d.Route))
 const ShoppingNoteLazyRoute = ShoppingNoteLazyRouteImport.update({
   id: '/shopping-note',
   path: '/shopping-note',
@@ -646,6 +652,7 @@ export interface FileRoutesByFullPath {
   '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
+  '/sync-db': typeof SyncDbLazyRoute
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
@@ -716,6 +723,7 @@ export interface FileRoutesByTo {
   '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
+  '/sync-db': typeof SyncDbLazyRoute
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
@@ -787,6 +795,7 @@ export interface FileRoutesById {
   '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
+  '/sync-db': typeof SyncDbLazyRoute
   '/transaction': typeof TransactionLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
@@ -859,6 +868,7 @@ export interface FileRouteTypes {
     | '/profit'
     | '/settings'
     | '/shopping-note'
+    | '/sync-db'
     | '/transaction'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
@@ -929,6 +939,7 @@ export interface FileRouteTypes {
     | '/profit'
     | '/settings'
     | '/shopping-note'
+    | '/sync-db'
     | '/transaction'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
@@ -999,6 +1010,7 @@ export interface FileRouteTypes {
     | '/profit'
     | '/settings'
     | '/shopping-note'
+    | '/sync-db'
     | '/transaction'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
@@ -1070,6 +1082,7 @@ export interface RootRouteChildren {
   ProfitLazyRoute: typeof ProfitLazyRoute
   SettingsLazyRoute: typeof SettingsLazyRoute
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
+  SyncDbLazyRoute: typeof SyncDbLazyRoute
   TransactionLazyRoute: typeof TransactionLazyRoute
   FinanceCashFlowLazyRoute: typeof FinanceCashFlowLazyRoute
   FinanceChartOfAccountsLazyRoute: typeof FinanceChartOfAccountsLazyRoute
@@ -1140,6 +1153,13 @@ declare module '@tanstack/react-router' {
       path: '/transaction'
       fullPath: '/transaction'
       preLoaderRoute: typeof TransactionLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sync-db': {
+      id: '/sync-db'
+      path: '/sync-db'
+      fullPath: '/sync-db'
+      preLoaderRoute: typeof SyncDbLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/shopping-note': {
@@ -1635,6 +1655,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfitLazyRoute: ProfitLazyRoute,
   SettingsLazyRoute: SettingsLazyRoute,
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
+  SyncDbLazyRoute: SyncDbLazyRoute,
   TransactionLazyRoute: TransactionLazyRoute,
   FinanceCashFlowLazyRoute: FinanceCashFlowLazyRoute,
   FinanceChartOfAccountsLazyRoute: FinanceChartOfAccountsLazyRoute,
