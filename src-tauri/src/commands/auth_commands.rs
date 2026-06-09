@@ -1,6 +1,6 @@
 use crate::{
     db::{PostgresCommandResult, PostgresState},
-    models::auth::{ActivityLogDto, AuthUserDto},
+    models::auth::{ActivityLogDto, AuthUserDto, RoleDto, RolePermissionDto},
     repositories::auth_repository,
 };
 use tauri::State;
@@ -29,6 +29,58 @@ pub async fn postgres_upsert_auth_user(
 ) -> PostgresCommandResult<AuthUserDto> {
     let pool = state.pool()?;
     Ok(auth_repository::upsert_auth_user(pool, input).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_list_roles(
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<Vec<RoleDto>> {
+    let pool = state.pool()?;
+    Ok(auth_repository::list_roles(pool).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_get_role(
+    state: State<'_, PostgresState>,
+    id: String,
+) -> PostgresCommandResult<Option<RoleDto>> {
+    let pool = state.pool()?;
+    Ok(auth_repository::get_role(pool, id).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_upsert_role(
+    state: State<'_, PostgresState>,
+    input: RoleDto,
+) -> PostgresCommandResult<RoleDto> {
+    let pool = state.pool()?;
+    Ok(auth_repository::upsert_role(pool, input).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_list_role_permissions(
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<Vec<RolePermissionDto>> {
+    let pool = state.pool()?;
+    Ok(auth_repository::list_role_permissions(pool).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_get_role_permission(
+    state: State<'_, PostgresState>,
+    id: String,
+) -> PostgresCommandResult<Option<RolePermissionDto>> {
+    let pool = state.pool()?;
+    Ok(auth_repository::get_role_permission(pool, id).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_upsert_role_permission(
+    state: State<'_, PostgresState>,
+    input: RolePermissionDto,
+) -> PostgresCommandResult<RolePermissionDto> {
+    let pool = state.pool()?;
+    Ok(auth_repository::upsert_role_permission(pool, input).await?)
 }
 
 #[tauri::command]

@@ -28,3 +28,27 @@ pub struct ActivityLogDto {
     pub description: String,
     pub created_at: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct RoleDto {
+    pub id: String,
+    pub name: String,
+    pub code: Option<String>,
+    pub description: Option<String>,
+    pub is_system: bool,
+    pub is_owner: bool,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct RolePermissionDto {
+    pub id: String,
+    pub role_id: String,
+    pub permission_code: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}

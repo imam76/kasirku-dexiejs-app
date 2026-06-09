@@ -13,6 +13,7 @@ import type {
   JournalEntryStatus,
   JournalSourceType,
   PaymentMethod,
+  Permission,
   ProductUnit,
   ProductUnitMapping,
   PromoType,
@@ -55,6 +56,28 @@ export interface RemoteActivityLogDto {
   entity_id?: string | null;
   description: string;
   created_at: string;
+}
+
+export interface RemoteRoleDto {
+  id: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  is_system: boolean;
+  is_owner: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteRolePermissionDto {
+  id: string;
+  role_id: string;
+  permission_code: Permission;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
 }
 
 export interface RemoteDepartmentDto {
@@ -754,6 +777,40 @@ export const authUserPostgresAdapter = {
   async upsert(input: RemoteAuthUserDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteAuthUserDto>('postgres_upsert_auth_user', { input });
+  },
+};
+
+export const rolePostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteRoleDto[]>('postgres_list_roles');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteRoleDto | null>('postgres_get_role', { id });
+  },
+
+  async upsert(input: RemoteRoleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteRoleDto>('postgres_upsert_role', { input });
+  },
+};
+
+export const rolePermissionPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteRolePermissionDto[]>('postgres_list_role_permissions');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteRolePermissionDto | null>('postgres_get_role_permission', { id });
+  },
+
+  async upsert(input: RemoteRolePermissionDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteRolePermissionDto>('postgres_upsert_role_permission', { input });
   },
 };
 

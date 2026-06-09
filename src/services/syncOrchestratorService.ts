@@ -1,4 +1,4 @@
-import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres } from '@/auth/authReadService';
+import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshCooperativeDataFromPostgres } from '@/services/cooperativeReadService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
@@ -16,6 +16,8 @@ import {
   enqueuePendingFinanceTransactionsForSync,
   enqueuePendingJournalEntriesForSync,
   enqueuePendingPurchaseDocumentsForSync,
+  enqueuePendingRolePermissionsForSync,
+  enqueuePendingRolesForSync,
   enqueuePendingSalesDocumentsForSync,
   processPendingSyncQueue,
   recoverStaleProcessingSyncQueueItems,
@@ -31,6 +33,8 @@ const getErrorMessage = (error: unknown) => (
 
 export const enqueueAllPendingLocalChangesForSync = async () => {
   await recoverStaleProcessingSyncQueueItems();
+  await enqueuePendingRolesForSync();
+  await enqueuePendingRolePermissionsForSync();
   await enqueuePendingAuthUsersForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingFinanceTransactionsForSync();
@@ -52,6 +56,7 @@ export const refreshAllDataFromPostgres = async () => {
   }
 
   const refreshResults = {
+    roles: await refreshRolesFromPostgres(),
     authUsers: await refreshAuthUsersFromPostgres(),
     activityLogs: await refreshActivityLogsFromPostgres(),
     departments: await refreshDepartmentsFromPostgres(),

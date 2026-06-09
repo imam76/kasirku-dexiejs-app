@@ -3,6 +3,11 @@ import { getEnabledPermissionCatalog, PERMISSION_CATALOG } from '@/auth/permissi
 import { ROLE_LABEL } from '@/auth/permissions';
 import { resolveLegacyRoleId } from '@/auth/roleSeed';
 import { db } from '@/lib/db';
+import {
+  enqueueRolePermissionDeleteSync,
+  enqueueRolePermissionSync,
+  enqueueRoleSync,
+} from '@/services/syncQueueService';
 import type { Permission, Role, RolePermission } from '@/types';
 
 export interface RoleWithPermissions extends Role {
@@ -115,6 +120,7 @@ export const createRole = async (input: RoleFormInput): Promise<Role> => {
   };
 
   await db.roles.add(role);
+  await enqueueRoleSync(role, 'create');
   await writeActivityLog({
     user: actor,
     action: 'ROLE_CREATED',
@@ -160,6 +166,7 @@ export const updateRole = async (roleId: string, input: RoleFormInput): Promise<
     entity_id: roleId,
     description: `${actor.name} memperbarui role ${role.name}.`,
   });
+  await enqueueRoleSync(updatedRole, 'update');
 
   return updatedRole;
 };
@@ -205,6 +212,7 @@ export const setRoleActive = async (roleId: string, isActive: boolean): Promise<
     entity_id: roleId,
     description: `${actor.name} ${isActive ? 'mengaktifkan' : 'menonaktifkan'} role ${role.name}.`,
   });
+  await enqueueRoleSync(updatedRole, 'update');
 
   return updatedRole;
 };
@@ -224,6 +232,12 @@ export const updateRolePermissions = async (
 
   const sanitizedPermissions = sanitizePermissions(permissions);
   const now = new Date().toISOString();
+  const existingPermissions = await db.rolePermissions
+    .where('role_id')
+    .equals(roleId)
+    .toArray();
+  const nextPermissionIds = new Set(sanitizedPermissions.map((permission) => `${roleId}:${permission}`));
+  const deletedPermissions = existingPermissions.filter((permission) => !nextPermissionIds.has(permission.id));
   const records: RolePermission[] = sanitizedPermissions.map((permission) => ({
     id: `${roleId}:${permission}`,
     role_id: roleId,
@@ -244,6 +258,15 @@ export const updateRolePermissions = async (
       sync_error: undefined,
     });
   });
+
+  await Promise.all([
+    ...records.map((record) => enqueueRolePermissionSync(record, 'update')),
+    ...deletedPermissions.map((permission) => enqueueRolePermissionDeleteSync(permission, now)),
+  ]);
+  const updatedRole = await db.roles.get(roleId);
+  if (updatedRole) {
+    await enqueueRoleSync(updatedRole, 'update');
+  }
 
   await writeActivityLog({
     user: actor,

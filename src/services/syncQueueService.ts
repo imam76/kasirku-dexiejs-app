@@ -1,5 +1,9 @@
 import { db } from '@/lib/db';
-import { mergeRemoteAuthUsersIntoDexie } from '@/auth/authReadService';
+import {
+  mergeRemoteAuthUsersIntoDexie,
+  mergeRemoteRolePermissionsIntoDexie,
+  mergeRemoteRolesIntoDexie,
+} from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
 import {
   mergeRemoteCooperativeLoanInstallmentsIntoDexie,
@@ -39,6 +43,8 @@ import {
   productPostgresAdapter,
   purchaseDocumentPostgresAdapter,
   projectPostgresAdapter,
+  rolePermissionPostgresAdapter,
+  rolePostgresAdapter,
   salesDocumentPostgresAdapter,
   stockMutationPostgresAdapter,
   taxPostgresAdapter,
@@ -64,6 +70,8 @@ import {
   type RemotePurchaseDocumentDto,
   type RemotePurchaseDocumentItemDto,
   type RemoteProjectDto,
+  type RemoteRoleDto,
+  type RemoteRolePermissionDto,
   type RemoteSalesDocumentBundleDto,
   type RemoteSalesDocumentDto,
   type RemoteSalesDocumentItemDto,
@@ -71,7 +79,7 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -93,6 +101,8 @@ const JOURNAL_ENTRY_ENTITY = 'journalEntries';
 const PRODUCT_ENTITY = 'products';
 const PROJECT_ENTITY = 'projects';
 const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
+const ROLE_ENTITY = 'roles';
+const ROLE_PERMISSION_ENTITY = 'rolePermissions';
 const SALES_DOCUMENT_ENTITY = 'salesDocuments';
 const STOCK_MUTATION_ENTITY = 'stockMutations';
 const TAX_ENTITY = 'taxes';
@@ -145,6 +155,35 @@ const mapAuthUserToRemoteDto = (user: AuthUser): RemoteAuthUserDto => ({
   is_active: user.is_active,
   created_at: user.created_at,
   updated_at: user.updated_at,
+});
+
+const mapRoleToRemoteDto = (role: Role): RemoteRoleDto => ({
+  id: role.id,
+  name: role.name,
+  code: role.code,
+  description: role.description,
+  is_system: role.is_system,
+  is_owner: role.is_owner,
+  is_active: role.is_active,
+  created_at: role.created_at,
+  updated_at: role.updated_at,
+});
+
+const mapRolePermissionToRemoteDto = (permission: RolePermission): RemoteRolePermissionDto => ({
+  id: permission.id,
+  role_id: permission.role_id,
+  permission_code: permission.permission_code,
+  created_at: permission.created_at,
+  updated_at: permission.updated_at,
+});
+
+const mapDeletedRolePermissionToRemoteDto = (
+  permission: RolePermission,
+  deletedAt: string,
+): RemoteRolePermissionDto => ({
+  ...mapRolePermissionToRemoteDto(permission),
+  updated_at: deletedAt,
+  deleted_at: deletedAt,
 });
 
 const mapContactToRemoteDto = (contact: Contact): RemoteContactDto => ({
@@ -953,6 +992,34 @@ const isRemoteAuthUserDto = (payload: unknown): payload is RemoteAuthUserDto => 
   );
 };
 
+const isRemoteRoleDto = (payload: unknown): payload is RemoteRoleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteRoleDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.is_system === 'boolean' &&
+    typeof candidate.is_owner === 'boolean' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteRolePermissionDto = (payload: unknown): payload is RemoteRolePermissionDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteRolePermissionDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.role_id === 'string' &&
+    typeof candidate.permission_code === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteDepartmentDto = (payload: unknown): payload is RemoteDepartmentDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -1322,6 +1389,28 @@ const updateAuthUserSyncMetadata = async (
   await db.authUsers.update(userId, syncMetadata);
 };
 
+const updateRoleSyncMetadata = async (
+  roleId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Role, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentRole = await db.roles.get(roleId);
+  if (!currentRole || currentRole.updated_at !== sourceUpdatedAt) return;
+
+  await db.roles.update(roleId, syncMetadata);
+};
+
+const updateRolePermissionSyncMetadata = async (
+  permissionId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<RolePermission, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentPermission = await db.rolePermissions.get(permissionId);
+  if (!currentPermission || currentPermission.updated_at !== sourceUpdatedAt) return;
+
+  await db.rolePermissions.update(permissionId, syncMetadata);
+};
+
 const updateDepartmentSyncMetadata = async (
   departmentId: string,
   sourceUpdatedAt: string,
@@ -1470,6 +1559,20 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === AUTH_USER_ENTITY && isRemoteAuthUserDto(queueItem.payload)) {
     await updateAuthUserSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === ROLE_ENTITY && isRemoteRoleDto(queueItem.payload)) {
+    await updateRoleSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === ROLE_PERMISSION_ENTITY && isRemoteRolePermissionDto(queueItem.payload)) {
+    await updateRolePermissionSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -1633,6 +1736,30 @@ const processAuthUserQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return authUserPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processRoleQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Role sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteRoleDto(queueItem.payload)) {
+    throw new Error('Payload role sync queue tidak valid.');
+  }
+
+  return rolePostgresAdapter.upsert(queueItem.payload);
+};
+
+const processRolePermissionQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Role permission sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteRolePermissionDto(queueItem.payload)) {
+    throw new Error('Payload role permission sync queue tidak valid.');
+  }
+
+  return rolePermissionPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processContactQueueItem = async (queueItem: SyncQueueItem) => {
@@ -1911,6 +2038,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
     let remotePurchaseDocumentBundle: RemotePurchaseDocumentBundleDto | null = null;
+    let remoteRole: RemoteRoleDto | null = null;
+    let remoteRolePermission: RemoteRolePermissionDto | null = null;
     let remoteSalesDocumentBundle: RemoteSalesDocumentBundleDto | null = null;
     let remoteStockMutation: RemoteStockMutationDto | null = null;
     let remoteTax: RemoteTaxDto | null = null;
@@ -1950,6 +2079,10 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteProject = await processProjectQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PURCHASE_DOCUMENT_ENTITY) {
       remotePurchaseDocumentBundle = await processPurchaseDocumentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === ROLE_ENTITY) {
+      remoteRole = await processRoleQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === ROLE_PERMISSION_ENTITY) {
+      remoteRolePermission = await processRolePermissionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === SALES_DOCUMENT_ENTITY) {
       remoteSalesDocumentBundle = await processSalesDocumentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === STOCK_MUTATION_ENTITY) {
@@ -2290,6 +2423,30 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       return;
     }
 
+    if (remoteRole && isRemoteRoleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateRoleSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteRole.updated_at,
+      });
+      await mergeRemoteRolesIntoDexie([remoteRole], syncedAt);
+      return;
+    }
+
+    if (remoteRolePermission && isRemoteRolePermissionDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateRolePermissionSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteRolePermission.updated_at,
+      });
+      await mergeRemoteRolePermissionsIntoDexie([remoteRolePermission], syncedAt);
+      return;
+    }
+
     if (remoteSalesDocumentBundle && isRemoteSalesDocumentBundleDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateSalesDocumentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.document.updated_at, {
@@ -2408,6 +2565,118 @@ export const enqueueAuthUserSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueueRoleSync = async (
+  role: Role,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ROLE_ENTITY,
+    entity_id: role.id,
+    operation,
+    payload: mapRoleToRemoteDto(role),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueRolePermissionSync = async (
+  permission: RolePermission,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ROLE_PERMISSION_ENTITY,
+    entity_id: permission.id,
+    operation,
+    payload: mapRolePermissionToRemoteDto(permission),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueRolePermissionDeleteSync = async (
+  permission: RolePermission,
+  deletedAt: string,
+) => {
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ROLE_PERMISSION_ENTITY,
+    entity_id: permission.id,
+    operation: 'update',
+    payload: mapDeletedRolePermissionToRemoteDto(permission, deletedAt),
+    status: 'pending',
+    attempts: 0,
+    created_at: deletedAt,
+    updated_at: deletedAt,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingRolesForSync = async () => {
+  const roles = (await db.roles.toArray())
+    .filter((role) => role.sync_status === 'pending' || role.sync_status === 'failed');
+
+  for (const role of roles) {
+    const existingQueueItem = (await db.syncQueue
+      .where('entity')
+      .equals(ROLE_ENTITY)
+      .toArray())
+      .find((queueItem) => (
+        queueItem.entity_id === role.id &&
+        queueItem.status !== 'synced' &&
+        isRemoteRoleDto(queueItem.payload) &&
+        queueItem.payload.updated_at === role.updated_at
+      ));
+
+    if (!existingQueueItem) {
+      await enqueueRoleSync(role, 'update');
+    }
+  }
+};
+
+export const enqueuePendingRolePermissionsForSync = async () => {
+  const permissions = (await db.rolePermissions.toArray())
+    .filter((permission) => permission.sync_status === 'pending' || permission.sync_status === 'failed');
+
+  for (const permission of permissions) {
+    const existingQueueItem = (await db.syncQueue
+      .where('entity')
+      .equals(ROLE_PERMISSION_ENTITY)
+      .toArray())
+      .find((queueItem) => (
+        queueItem.entity_id === permission.id &&
+        queueItem.status !== 'synced' &&
+        isRemoteRolePermissionDto(queueItem.payload) &&
+        queueItem.payload.updated_at === permission.updated_at
+      ));
+
+    if (!existingQueueItem) {
+      await enqueueRolePermissionSync(permission, 'update');
+    }
+  }
 };
 
 export const enqueuePendingAuthUsersForSync = async () => {
