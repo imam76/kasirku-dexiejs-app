@@ -15,6 +15,7 @@ const { Text } = Typography;
 
 interface UserFormValues {
   name: string;
+  email: string;
   role_id: string;
   pin?: string;
   confirmPin?: string;
@@ -88,6 +89,7 @@ export const UserManagement = () => {
     userForm.resetFields();
     userForm.setFieldsValue({
       name: user.name,
+      email: user.email,
       role_id: user.role_id ?? resolveLegacyRoleId(user.role),
     });
     setIsUserModalOpen(true);
@@ -107,6 +109,7 @@ export const UserManagement = () => {
         await updateAuthUser({
           userId: editingUser.id,
           name: values.name,
+          email: values.email,
           role_id: values.role_id,
         });
 
@@ -126,6 +129,7 @@ export const UserManagement = () => {
 
       await createAuthUser({
         name: values.name,
+        email: values.email,
         role_id: values.role_id,
         pin: values.pin,
       });
@@ -192,6 +196,12 @@ export const UserManagement = () => {
           {user.id === currentUser?.id && <Text type="secondary">Sedang login</Text>}
         </Space>
       ),
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      key: 'email',
+      render: (email?: string) => email || '-',
     },
     {
       title: 'Role',
@@ -301,6 +311,17 @@ export const UserManagement = () => {
             ]}
           >
             <Input placeholder="Contoh: Kasir 1" />
+          </Form.Item>
+
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: 'Email wajib diisi.' },
+              { type: 'email', message: 'Format email tidak valid.' },
+            ]}
+          >
+            <Input placeholder="Contoh: user@toko.com" />
           </Form.Item>
 
           <Form.Item

@@ -812,6 +812,20 @@ export class KasirkuDB extends Dexie {
     this.version(44).stores({
       authUsers: 'id, name, email, role, role_id, role_name, employee_id, is_active, sync_status, created_at',
       employees: 'id, name, email, user_id, is_active, created_at',
+    }).upgrade(async (tx) => {
+      // Set default email for existing auth users who don't have one
+      const authUsers = await tx.table<AuthUser, string>('authUsers').toArray();
+      const authUsersWithoutEmail = authUsers
+        .filter((user) => !user.email)
+        .map((user) => ({
+          ...user,
+          email: `${user.name.toLowerCase().replace(/\s+/g, '')}@kasirku.com`,
+          sync_status: 'pending' as const,
+        }));
+
+      if (authUsersWithoutEmail.length > 0) {
+        await tx.table<AuthUser, string>('authUsers').bulkPut(authUsersWithoutEmail);
+      }
     });
 
     this.on('populate', async () => {
