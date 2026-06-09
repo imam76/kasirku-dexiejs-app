@@ -1,4 +1,4 @@
-import { BankOutlined, BookOutlined, CreditCardOutlined, FileTextOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons';
+import { BankOutlined, BellOutlined, BookOutlined, CreditCardOutlined, FileTextOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { Empty } from 'antd';
 import { canAccessPath } from '@/auth/routePermissions';
@@ -48,6 +48,13 @@ function Cooperative() {
       icon: CreditCardOutlined,
       color: 'text-cyan-700',
       desc: t('cooperative.index.installmentsDesc'),
+    },
+    {
+      to: '/koperasi/penagihan',
+      label: t('cooperative.billing.title'),
+      icon: BellOutlined,
+      color: 'text-rose-600',
+      desc: t('cooperative.billing.subtitle'),
     },
     {
       to: '/koperasi/laporan',
