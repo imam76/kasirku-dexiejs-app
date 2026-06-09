@@ -1,18 +1,56 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { AuthUser, Permission } from '@/types';
+import type { AuthUser, Permission, Role } from '@/types';
 import { hasPermission } from './permissions';
-import { ensureDefaultOwner, getCurrentSessionUser, loginWithPin, logout as logoutSession, requireRolePermission } from './authService';
+import { ensureDefaultOwner, getCurrentSessionUser, loginWithPin, logout as logoutSession } from './authService';
 import { AuthContext, type AuthContextValue } from './AuthContext';
+import { db } from '@/lib/db';
+import { isPermissionEnabledBySetup } from './permissionCatalog';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [currentRole, setCurrentRole] = useState<Role | null>(null);
+  const [permissionSet, setPermissionSet] = useState<Set<Permission>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [isPermissionLoading, setIsPermissionLoading] = useState(false);
+
+  const loadPermissions = useCallback(async (user: AuthUser | null) => {
+    setIsPermissionLoading(true);
+    try {
+      if (!user) {
+        setCurrentRole(null);
+        setPermissionSet(new Set());
+        return;
+      }
+
+      const role = user.role_id ? await db.roles.get(user.role_id) : undefined;
+      setCurrentRole(role ?? null);
+
+      if (role?.is_owner || user.role === 'OWNER') {
+        setPermissionSet(new Set());
+        return;
+      }
+
+      if (user.role_id) {
+        const rolePermissions = await db.rolePermissions
+          .where('role_id')
+          .equals(user.role_id)
+          .toArray();
+        setPermissionSet(new Set(rolePermissions.map((item) => item.permission_code)));
+        return;
+      }
+
+      setPermissionSet(new Set());
+    } finally {
+      setIsPermissionLoading(false);
+    }
+  }, []);
 
   const refreshCurrentUser = useCallback(async () => {
     const user = await getCurrentSessionUser();
     setCurrentUser(user);
+    await loadPermissions(user);
     return user;
-  }, []);
+  }, [loadPermissions]);
 
   useEffect(() => {
     let isMounted = true;
@@ -23,6 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const user = await getCurrentSessionUser();
         if (isMounted) {
           setCurrentUser(user);
+          await loadPermissions(user);
         }
       } finally {
         if (isMounted) {
@@ -36,36 +75,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loadPermissions]);
 
   const login = useCallback(async (pin: string) => {
     const user = await loginWithPin(pin);
     setCurrentUser(user);
+    await loadPermissions(user);
     return user;
-  }, []);
+  }, [loadPermissions]);
 
   const logout = useCallback(async () => {
     await logoutSession();
     setCurrentUser(null);
-  }, []);
+    await loadPermissions(null);
+  }, [loadPermissions]);
 
   const can = useCallback((permission: Permission) => {
-    return hasPermission(currentUser?.role, permission);
-  }, [currentUser?.role]);
+    if (!currentUser) return false;
+    if (!isPermissionEnabledBySetup(permission)) return false;
+    if (currentRole?.is_owner || currentUser.role === 'OWNER') return true;
+    if (currentUser.role_id) return permissionSet.has(permission);
+    return hasPermission(currentUser.role, permission);
+  }, [currentRole?.is_owner, currentUser, permissionSet]);
 
   const requirePermission = useCallback((permission: Permission) => {
-    requireRolePermission(currentUser?.role, permission);
-  }, [currentUser?.role]);
+    if (!can(permission)) {
+      throw new Error('Anda tidak memiliki akses untuk aksi ini.');
+    }
+  }, [can]);
 
   const value = useMemo<AuthContextValue>(() => ({
     currentUser,
+    currentRole,
+    permissionSet,
     isLoading,
+    isPermissionLoading,
     login,
     logout,
     refreshCurrentUser,
     can,
     requirePermission,
-  }), [can, currentUser, isLoading, login, logout, refreshCurrentUser, requirePermission]);
+  }), [can, currentRole, currentUser, isLoading, isPermissionLoading, login, logout, permissionSet, refreshCurrentUser, requirePermission]);
 
   return (
     <AuthContext.Provider value={value}>

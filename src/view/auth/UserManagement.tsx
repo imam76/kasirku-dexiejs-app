@@ -5,16 +5,17 @@ import { Edit2, KeyRound, Plus, UserCheck, UserRoundCog, UserX } from 'lucide-re
 import { useLiveQuery } from 'dexie-react-hooks';
 import { createAuthUser, resetAuthUserPin, setAuthUserActive, updateAuthUser } from '@/auth/authService';
 import { ROLE_LABEL } from '@/auth/permissions';
+import { resolveLegacyRoleId } from '@/auth/roleSeed';
 import { useAuth } from '@/auth/useAuth';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import type { AuthUser, UserRole } from '@/types';
+import type { AuthUser, Role, UserRole } from '@/types';
 
 const { Text } = Typography;
 
 interface UserFormValues {
   name: string;
-  role: UserRole;
+  role_id: string;
   pin?: string;
   confirmPin?: string;
 }
@@ -32,7 +33,7 @@ const roleColor: Record<UserRole, string> = {
 };
 
 const roleOptions = (Object.keys(ROLE_LABEL) as UserRole[]).map((role) => ({
-  value: role,
+  value: resolveLegacyRoleId(role),
   label: ROLE_LABEL[role],
 }));
 
@@ -52,6 +53,16 @@ export const UserManagement = () => {
     [],
     [],
   );
+  const roles = useLiveQuery(
+    () => db.roles.where('is_active').equals(1).toArray(),
+    [],
+    [],
+  );
+  const activeRoleOptions = (roles && roles.length > 0 ? roles : []).map((role: Role) => ({
+    value: role.id,
+    label: role.name,
+  }));
+  const selectRoleOptions = activeRoleOptions.length > 0 ? activeRoleOptions : roleOptions;
 
   const closeUserModal = () => {
     setIsUserModalOpen(false);
@@ -68,7 +79,7 @@ export const UserManagement = () => {
   const handleAddUser = () => {
     setEditingUser(null);
     userForm.resetFields();
-    userForm.setFieldsValue({ role: 'KASIR' });
+    userForm.setFieldsValue({ role_id: resolveLegacyRoleId('KASIR') });
     setIsUserModalOpen(true);
   };
 
@@ -77,7 +88,7 @@ export const UserManagement = () => {
     userForm.resetFields();
     userForm.setFieldsValue({
       name: user.name,
-      role: user.role,
+      role_id: user.role_id ?? resolveLegacyRoleId(user.role),
     });
     setIsUserModalOpen(true);
   };
@@ -96,7 +107,7 @@ export const UserManagement = () => {
         await updateAuthUser({
           userId: editingUser.id,
           name: values.name,
-          role: values.role,
+          role_id: values.role_id,
         });
 
         if (editingUser.id === currentUser?.id) {
@@ -115,7 +126,7 @@ export const UserManagement = () => {
 
       await createAuthUser({
         name: values.name,
-        role: values.role,
+        role_id: values.role_id,
         pin: values.pin,
       });
       message.success('User berhasil ditambahkan.');
@@ -186,7 +197,9 @@ export const UserManagement = () => {
       title: 'Role',
       dataIndex: 'role',
       key: 'role',
-      render: (role: UserRole) => <Tag color={roleColor[role]}>{ROLE_LABEL[role]}</Tag>,
+      render: (role: UserRole, user) => (
+        <Tag color={roleColor[role] ?? 'default'}>{user.role_name ?? ROLE_LABEL[role] ?? role}</Tag>
+      ),
     },
     {
       title: 'Status',
@@ -275,7 +288,7 @@ export const UserManagement = () => {
           form={userForm}
           layout="vertical"
           onFinish={handleSubmitUser}
-          initialValues={{ role: 'KASIR' }}
+          initialValues={{ role_id: resolveLegacyRoleId('KASIR') }}
           className="mt-4"
           requiredMark={false}
         >
@@ -291,11 +304,11 @@ export const UserManagement = () => {
           </Form.Item>
 
           <Form.Item
-            name="role"
+            name="role_id"
             label="Role"
             rules={[{ required: true, message: 'Role wajib dipilih.' }]}
           >
-            <Select options={roleOptions} />
+            <Select options={selectRoleOptions} />
           </Form.Item>
 
           {!editingUser && (

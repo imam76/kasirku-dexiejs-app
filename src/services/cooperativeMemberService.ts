@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { cooperativeMemberSchema } from '@/lib/validations/cooperativeMember';
 import { enqueueCooperativeMembersSync, withPendingCooperativeSync } from '@/services/cooperativeSyncService';
@@ -47,7 +47,7 @@ const assertActiveMemberNumberAvailable = async (
 
 const requireCooperativeActor = async () => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_MEMBER_MANAGE');
   return currentUser;
 };
 

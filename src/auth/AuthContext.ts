@@ -1,9 +1,12 @@
 import { createContext } from 'react';
-import type { AuthUser, Permission } from '@/types';
+import type { AuthUser, Permission, Role } from '@/types';
 
 export interface AuthContextValue {
   currentUser: AuthUser | null;
+  currentRole: Role | null;
+  permissionSet: Set<Permission>;
   isLoading: boolean;
+  isPermissionLoading: boolean;
   login: (pin: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshCurrentUser: () => Promise<AuthUser | null>;
@@ -13,7 +16,10 @@ export interface AuthContextValue {
 
 export const AuthContext = createContext<AuthContextValue>({
   currentUser: null,
+  currentRole: null,
+  permissionSet: new Set(),
   isLoading: true,
+  isPermissionLoading: false,
   login: async () => {
     throw new Error('AuthProvider belum siap.');
   },

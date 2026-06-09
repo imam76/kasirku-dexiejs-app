@@ -2,7 +2,7 @@ import Dexie, { Table } from 'dexie';
 import {
   Product, Transaction, TransactionItem, StockPurchase, ProfitLog, ProfitBalance, ShoppingNote,
   FinanceTransaction, FinanceBalance, UnitConversion, UnitDefinition, AuthUser, AuthSession, ActivityLog,
-  SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, Currency, CurrencyRate,
+  SyncQueueItem, Promo, Contact, Department, Project, Tax, Warehouse, Currency, CurrencyRate, Role, RolePermission,
   SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem,
   PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping,
   AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine,
@@ -14,6 +14,7 @@ import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/cons
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
 import { BASE_CURRENCY_CODE, buildBaseCurrency, buildBaseCurrencyRate } from '@/constants/currencies';
+import { buildSystemRolePermissions, buildSystemRoles, resolveLegacyRoleId, resolveLegacyRoleName } from '@/auth/roleSeed';
 
 const buildAccountingSeed = (now: string) => {
   const accounts: ChartOfAccount[] = DEFAULT_CHART_OF_ACCOUNTS.map((account) => ({
@@ -81,6 +82,8 @@ export class KasirkuDB extends Dexie {
   authUsers!: Table<AuthUser>;
   authSessions!: Table<AuthSession>;
   activityLogs!: Table<ActivityLog>;
+  roles!: Table<Role>;
+  rolePermissions!: Table<RolePermission>;
   syncQueue!: Table<SyncQueueItem>;
   promos!: Table<Promo>;
   contacts!: Table<Contact>;
@@ -764,6 +767,48 @@ export class KasirkuDB extends Dexie {
       authUsers: 'id, name, role, is_active, sync_status, created_at'
     });
 
+    this.version(43).stores({
+      authUsers: 'id, name, role, role_id, role_name, employee_id, is_active, sync_status, created_at',
+      roles: 'id, name, code, is_system, is_owner, is_active, sync_status, updated_at, created_at',
+      rolePermissions: 'id, [role_id+permission_code], role_id, permission_code, sync_status, updated_at, created_at'
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const roleTable = tx.table<Role, string>('roles');
+      const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+      const authUserTable = tx.table<AuthUser, string>('authUsers');
+
+      const existingRoles = await roleTable.toArray();
+      const existingRoleIds = new Set(existingRoles.map((role) => role.id));
+      const missingSystemRoles = buildSystemRoles(now)
+        .filter((role) => !existingRoleIds.has(role.id));
+
+      if (missingSystemRoles.length > 0) {
+        await roleTable.bulkPut(missingSystemRoles);
+      }
+
+      const existingRolePermissions = await rolePermissionTable.toArray();
+      const existingRolePermissionIds = new Set(existingRolePermissions.map((permission) => permission.id));
+      const missingSystemRolePermissions = buildSystemRolePermissions(now)
+        .filter((permission) => !existingRolePermissionIds.has(permission.id));
+
+      if (missingSystemRolePermissions.length > 0) {
+        await rolePermissionTable.bulkPut(missingSystemRolePermissions);
+      }
+
+      const users = await authUserTable.toArray();
+      const migratedUsers = users
+        .filter((user) => !user.role_id && resolveLegacyRoleId(user.role))
+        .map((user) => ({
+          ...user,
+          role_id: resolveLegacyRoleId(user.role),
+          role_name: resolveLegacyRoleName(user.role),
+        }));
+
+      if (migratedUsers.length > 0) {
+        await authUserTable.bulkPut(migratedUsers);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);
@@ -782,6 +827,8 @@ export class KasirkuDB extends Dexie {
         updated_at: now,
       });
       await this.companyProfileSetting.put(buildDefaultCompanyProfileSetting(now));
+      await this.roles.bulkPut(buildSystemRoles(now));
+      await this.rolePermissions.bulkPut(buildSystemRolePermissions(now));
     });
   }
 }

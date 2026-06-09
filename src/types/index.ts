@@ -134,6 +134,17 @@ export type Permission =
   | 'FINANCE_ACCESS'
   | 'JOURNAL_MANAGE'
   | 'SALES_RETURN_MANAGE'
+  | 'COOPERATIVE_MEMBER_VIEW'
+  | 'COOPERATIVE_MEMBER_MANAGE'
+  | 'COOPERATIVE_SAVING_VIEW'
+  | 'COOPERATIVE_SAVING_MANAGE'
+  | 'COOPERATIVE_LOAN_VIEW'
+  | 'COOPERATIVE_LOAN_MANAGE'
+  | 'COOPERATIVE_INSTALLMENT_VIEW'
+  | 'COOPERATIVE_PAYMENT_CREATE'
+  | 'COOPERATIVE_BILLING_ACCESS'
+  | 'COOPERATIVE_REPORT_VIEW'
+  | 'COOPERATIVE_AREA_ALL'
   | 'SETTINGS_ACCESS'
   | 'USER_MANAGE'
   | 'ACTIVITY_LOG_VIEW';
@@ -142,12 +153,43 @@ export interface AuthUser {
   id: string;
   name: string;
   role: UserRole;
+  role_id?: string;
+  role_name?: string;
+  employee_id?: string;
   pin_hash: string;
   pin_salt: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   sync_status?: AuthUserSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  code?: UserRole | string;
+  description?: string;
+  is_system: boolean;
+  is_owner: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: EntitySyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface RolePermission {
+  id: string;
+  role_id: string;
+  permission_code: Permission;
+  created_at: string;
+  updated_at: string;
+  sync_status?: EntitySyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;

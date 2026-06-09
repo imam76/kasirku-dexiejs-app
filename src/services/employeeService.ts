@@ -1,4 +1,11 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import {
+  createAuthUser,
+  getCurrentSessionUser,
+  requireRolePermission,
+  resetAuthUserPin,
+  updateAuthUser,
+  writeActivityLog,
+} from '@/auth/authService';
 import { db } from '@/lib/db';
 import { employeeSchema } from '@/lib/validations/employee';
 import type { CooperativeArea, Employee, EmployeeArea } from '@/types';
@@ -10,6 +17,10 @@ export interface EmployeeUpsertInput {
   address?: string;
   position?: string;
   user_id?: string;
+  create_login?: boolean;
+  login_role_id?: string;
+  login_pin?: string;
+  reset_login_pin?: boolean;
   notes?: string;
   area_ids?: string[];
   is_active?: boolean;
@@ -90,19 +101,38 @@ const buildEmployeeAreaAssignments = (
 export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employee> => {
   const currentUser = await requireEmployeeActor();
   const sanitizedInput = sanitizeEmployeeInput(input);
+  if (sanitizedInput.create_login && sanitizedInput.user_id) {
+    throw new Error('Pilih salah satu: tautkan user lama atau buat akses login baru.');
+  }
+  if (sanitizedInput.create_login && (!sanitizedInput.login_role_id || !sanitizedInput.login_pin)) {
+    throw new Error('Role dan PIN login wajib diisi.');
+  }
+  if (sanitizedInput.reset_login_pin) {
+    throw new Error('Reset PIN hanya tersedia saat mengubah karyawan yang sudah punya user login.');
+  }
   await assertUserAvailable(sanitizedInput.user_id);
   const areas = await getSelectedAreas(sanitizedInput.area_ids);
-  const linkedUser = sanitizedInput.user_id ? await db.authUsers.get(sanitizedInput.user_id) : undefined;
 
   const now = new Date().toISOString();
+  const employeeId = crypto.randomUUID();
+  const createdUser = sanitizedInput.create_login
+    ? await createAuthUser({
+      name: sanitizedInput.name,
+      role_id: sanitizedInput.login_role_id,
+      pin: sanitizedInput.login_pin ?? '',
+      employee_id: employeeId,
+    })
+    : undefined;
+  const userId = createdUser?.id ?? sanitizedInput.user_id;
+  const linkedUser = userId ? await db.authUsers.get(userId) : undefined;
   const employee: Employee = {
-    id: crypto.randomUUID(),
+    id: employeeId,
     name: sanitizedInput.name,
     phone: sanitizedInput.phone,
     email: sanitizedInput.email,
     address: sanitizedInput.address,
     position: sanitizedInput.position,
-    user_id: sanitizedInput.user_id,
+    user_id: userId,
     user_name: linkedUser?.name,
     notes: sanitizedInput.notes,
     is_active: sanitizedInput.is_active,
@@ -111,8 +141,16 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
   };
   const assignments = buildEmployeeAreaAssignments(employee, areas, now);
 
-  await db.transaction('rw', [db.employees, db.employeeAreas, db.activityLogs], async () => {
+  await db.transaction('rw', [db.employees, db.employeeAreas, db.authUsers, db.activityLogs], async () => {
     await db.employees.add(employee);
+    if (userId && linkedUser?.employee_id !== employee.id) {
+      await db.authUsers.update(userId, {
+        employee_id: employee.id,
+        updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
+      });
+    }
     if (assignments.length > 0) {
       await db.employeeAreas.bulkAdd(assignments);
     }
@@ -136,11 +174,50 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
   }
 
   const sanitizedInput = sanitizeEmployeeInput(input);
+  if (sanitizedInput.create_login && sanitizedInput.user_id) {
+    throw new Error('Pilih salah satu: tautkan user lama atau buat akses login baru.');
+  }
+  if (sanitizedInput.create_login && existingEmployee.user_id) {
+    throw new Error('Karyawan sudah punya user login tertaut.');
+  }
+  if (sanitizedInput.create_login && (!sanitizedInput.login_role_id || !sanitizedInput.login_pin)) {
+    throw new Error('Role dan PIN login wajib diisi.');
+  }
+  if (sanitizedInput.reset_login_pin && !sanitizedInput.login_pin) {
+    throw new Error('PIN login baru wajib diisi.');
+  }
   await assertUserAvailable(sanitizedInput.user_id, id);
   const areas = await getSelectedAreas(sanitizedInput.area_ids);
-  const linkedUser = sanitizedInput.user_id ? await db.authUsers.get(sanitizedInput.user_id) : undefined;
+  const createdUser = sanitizedInput.create_login
+    ? await createAuthUser({
+      name: sanitizedInput.name,
+      role_id: sanitizedInput.login_role_id,
+      pin: sanitizedInput.login_pin ?? '',
+      employee_id: id,
+    })
+    : undefined;
+  const userId = createdUser?.id ?? sanitizedInput.user_id;
+  const linkedUser = userId ? await db.authUsers.get(userId) : undefined;
+  if (userId && !linkedUser) {
+    throw new Error('User login tidak ditemukan.');
+  }
+  if (userId && sanitizedInput.login_role_id) {
+    await updateAuthUser({
+      userId,
+      name: sanitizedInput.name,
+      role_id: sanitizedInput.login_role_id,
+      employee_id: id,
+    });
+  }
+  if (userId && sanitizedInput.reset_login_pin && sanitizedInput.login_pin) {
+    await resetAuthUserPin({
+      userId,
+      pin: sanitizedInput.login_pin,
+    });
+  }
 
   const updatedAt = new Date().toISOString();
+  const nextLinkedUser = userId ? await db.authUsers.get(userId) : undefined;
   const updatedEmployee: Employee = {
     ...existingEmployee,
     name: sanitizedInput.name,
@@ -148,16 +225,32 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     email: sanitizedInput.email,
     address: sanitizedInput.address,
     position: sanitizedInput.position,
-    user_id: sanitizedInput.user_id,
-    user_name: linkedUser?.name,
+    user_id: userId,
+    user_name: nextLinkedUser?.name ?? linkedUser?.name,
     notes: sanitizedInput.notes,
     is_active: sanitizedInput.is_active,
     updated_at: updatedAt,
   };
   const assignments = buildEmployeeAreaAssignments(updatedEmployee, areas, updatedAt);
 
-  await db.transaction('rw', [db.employees, db.employeeAreas, db.activityLogs], async () => {
+  await db.transaction('rw', [db.employees, db.employeeAreas, db.authUsers, db.activityLogs], async () => {
     await db.employees.put(updatedEmployee);
+    if (existingEmployee.user_id && existingEmployee.user_id !== userId) {
+      await db.authUsers.update(existingEmployee.user_id, {
+        employee_id: undefined,
+        updated_at: updatedAt,
+        sync_status: 'pending',
+        sync_error: undefined,
+      });
+    }
+    if (userId && linkedUser?.employee_id !== id) {
+      await db.authUsers.update(userId, {
+        employee_id: id,
+        updated_at: updatedAt,
+        sync_status: 'pending',
+        sync_error: undefined,
+      });
+    }
     await db.employeeAreas.where('employee_id').equals(id).delete();
     if (assignments.length > 0) {
       await db.employeeAreas.bulkAdd(assignments);

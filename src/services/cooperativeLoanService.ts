@@ -1,5 +1,5 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import {
@@ -261,7 +261,7 @@ export const createCooperativeLoanApplication = async (
   input: CreateCooperativeLoanApplicationInput,
 ): Promise<CooperativeLoan> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
 
   const parsedInput = cooperativeLoanApplicationSchema.parse(input);
   const summary = calculateFlatLoanSummary({
@@ -325,7 +325,7 @@ export const approveCooperativeLoan = async (
   input: ApproveCooperativeLoanInput,
 ): Promise<CooperativeLoan> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
 
   const parsedInput = cooperativeLoanApprovalSchema.parse({
     approval_date: input.approval_date,
@@ -381,7 +381,7 @@ export const rejectCooperativeLoan = async (
   input: RejectCooperativeLoanInput,
 ): Promise<CooperativeLoan> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
 
   const parsedInput = cooperativeLoanRejectionSchema.parse({ reason: input.reason });
   const now = new Date().toISOString();
@@ -433,7 +433,7 @@ export const disburseCooperativeLoan = async (
   input: DisburseCooperativeLoanInput,
 ): Promise<DisburseCooperativeLoanResult> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
 
   const parsedInput = cooperativeLoanDisbursementSchema.parse(input);
   const now = new Date().toISOString();
@@ -553,7 +553,7 @@ export const recordCooperativeLoanPayment = async (
   input: RecordCooperativeLoanPaymentInput,
 ): Promise<RecordCooperativeLoanPaymentResult> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
 
   const parsedInput = cooperativeLoanPaymentSchema.parse(input);
   const amount = roundCurrency(parsedInput.amount);
@@ -734,7 +734,7 @@ export const reverseCooperativeLoanPayment = async (
   input: ReverseCooperativeLoanPaymentInput,
 ): Promise<CooperativeLoanPayment> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
 
   const parsedInput = cooperativeLoanPaymentReversalSchema.parse({ reason: input.reason });
   const now = new Date().toISOString();

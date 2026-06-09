@@ -100,7 +100,7 @@ const RootLayout = () => {
   const location = useLocation()
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
-  const { can, currentUser, logout } = useAuth()
+  const { can, currentUser, currentRole, permissionSet, logout } = useAuth()
   const { isRouteEnabled } = useEnabledModules()
   const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
@@ -242,6 +242,7 @@ const RootLayout = () => {
         { to: '/master-data/currencies', label: t('nav.currencies'), icon: Coins },
         { to: '/master-data/areas', label: t('nav.areas'), icon: MapPinned },
         { to: '/master-data/employees', label: t('nav.employees'), icon: UserRoundCog },
+        { to: '/master-data/roles', label: t('nav.roles'), icon: Users },
         { to: '/master-data/departments', label: t('nav.departments'), icon: Building2 },
         { to: '/master-data/projects', label: t('nav.projects'), icon: FolderKanban },
         { to: '/master-data/taxes', label: t('nav.taxes'), icon: Percent },
@@ -316,7 +317,7 @@ const RootLayout = () => {
       return acc
     }
 
-    if (canAccessPath(currentUser?.role, link.to) && isRouteEnabled(link.to)) {
+    if (canAccessPath(currentUser ?? undefined, link.to, { currentRole, permissionSet }) && isRouteEnabled(link.to)) {
       acc.push(link)
     }
 
@@ -379,7 +380,7 @@ const RootLayout = () => {
   }, [openKeySignature])
 
   const requiredPermission = getRequiredPermissionForPath(location.pathname)
-  const canOpenCurrentPath = canAccessPermissionRule(currentUser?.role, requiredPermission)
+  const canOpenCurrentPath = canAccessPermissionRule(currentUser ?? undefined, requiredPermission, { currentRole, permissionSet })
   const isModuleActive = isRouteEnabled(location.pathname)
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'

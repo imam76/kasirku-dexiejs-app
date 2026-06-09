@@ -19,7 +19,7 @@ type FinanceMenuItem = {
 
 function Finance() {
   const { t } = useI18n()
-  const { currentUser } = useAuth()
+  const { currentUser, currentRole, permissionSet } = useAuth()
   const menuItems: FinanceMenuItem[] = [
     {
       to: '/finance/cash-flow',
@@ -56,7 +56,7 @@ function Finance() {
       color: 'text-violet-600',
       desc: t('finance.index.generalLedgerDesc'),
     },
-  ].filter((item) => canAccessPath(currentUser?.role, item.to))
+  ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }))
 
   return (
     <div

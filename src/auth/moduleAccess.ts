@@ -16,6 +16,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/master-data/promos': ['PROMO'],
   '/master-data/units': ['UNIT'],
   '/master-data/currencies': ['CURRENCY'],
+  '/master-data/roles': ['ROLE_PERMISSION'],
   // POS
   '/transaction': ['POS_TRANSACTION'],
   '/history': ['POS_TRANSACTION'],

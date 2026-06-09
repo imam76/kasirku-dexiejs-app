@@ -15,14 +15,15 @@ const unrestrictedScope: CooperativeAreaScope = {
 };
 
 export const useCooperativeAreaScope = () => {
-  const { currentUser } = useAuth();
-  const defaultScope: CooperativeAreaScope = currentUser?.role && currentUser.role !== 'OWNER'
+  const { currentUser, can } = useAuth();
+  const canSeeAllAreas = can('COOPERATIVE_AREA_ALL');
+  const defaultScope: CooperativeAreaScope = currentUser?.role && !canSeeAllAreas
     ? { isScoped: true, areaIds: [] }
     : unrestrictedScope;
 
   return useLiveQuery(
     async () => {
-      if (!currentUser?.id || currentUser.role === 'OWNER') {
+      if (!currentUser?.id || canSeeAllAreas) {
         return unrestrictedScope;
       }
 
@@ -48,7 +49,7 @@ export const useCooperativeAreaScope = () => {
         employeeName: employee.name,
       };
     },
-    [currentUser?.id, currentUser?.role],
+    [canSeeAllAreas, currentUser?.id],
     defaultScope,
   );
 };

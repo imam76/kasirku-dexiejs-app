@@ -19,7 +19,7 @@ type CooperativeMenuItem = {
 
 function Cooperative() {
   const { t } = useI18n();
-  const { currentUser } = useAuth();
+  const { currentUser, currentRole, permissionSet } = useAuth();
   const menuItems: CooperativeMenuItem[] = [
     {
       to: '/koperasi/anggota',
@@ -77,7 +77,7 @@ function Cooperative() {
       color: 'text-slate-700',
       desc: t('cooperative.index.ledgerDesc'),
     },
-  ].filter((item) => canAccessPath(currentUser?.role, item.to));
+  ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }));
 
   return (
     <div

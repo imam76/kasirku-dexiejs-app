@@ -9,7 +9,7 @@ import {
   updateEmployee,
   type EmployeeUpsertInput,
 } from '@/services/employeeService';
-import type { AuthUser, CooperativeArea, Employee, EmployeeArea } from '@/types';
+import type { AuthUser, CooperativeArea, Employee, EmployeeArea, Role } from '@/types';
 
 export type EmployeeStatusFilter = 'active' | 'inactive' | 'all';
 
@@ -33,6 +33,11 @@ export const useEmployees = () => {
     () => db.authUsers.orderBy('name').toArray(),
     [],
     [] as AuthUser[],
+  );
+  const roles = useLiveQuery(
+    () => db.roles.where('is_active').equals(1).toArray(),
+    [],
+    [] as Role[],
   );
   const employees = useLiveQuery(
     async () => {
@@ -113,6 +118,7 @@ export const useEmployees = () => {
   return {
     areas,
     authUsers,
+    roles,
     employees,
     filteredEmployees,
     editingEmployee,

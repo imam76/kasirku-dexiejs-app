@@ -8,6 +8,9 @@ pub async fn list_auth_users(pool: &PgPool) -> Result<Vec<AuthUserDto>, sqlx::Er
             id,
             name,
             role,
+            role_id,
+            role_name,
+            employee_id,
             pin_hash,
             pin_salt,
             is_active,
@@ -30,6 +33,9 @@ pub async fn get_auth_user(pool: &PgPool, id: String) -> Result<Option<AuthUserD
             id,
             name,
             role,
+            role_id,
+            role_name,
+            employee_id,
             pin_hash,
             pin_salt,
             is_active,
@@ -55,6 +61,9 @@ async fn get_auth_user_including_deleted(
             id,
             name,
             role,
+            role_id,
+            role_name,
+            employee_id,
             pin_hash,
             pin_salt,
             is_active,
@@ -81,6 +90,9 @@ pub async fn upsert_auth_user(
             id,
             name,
             role,
+            role_id,
+            role_name,
+            employee_id,
             pin_hash,
             pin_salt,
             is_active,
@@ -88,10 +100,13 @@ pub async fn upsert_auth_user(
             updated_at,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7::TIMESTAMPTZ, $8::TIMESTAMPTZ, $9::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::TIMESTAMPTZ, $11::TIMESTAMPTZ, $12::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             role = EXCLUDED.role,
+            role_id = EXCLUDED.role_id,
+            role_name = EXCLUDED.role_name,
+            employee_id = EXCLUDED.employee_id,
             pin_hash = EXCLUDED.pin_hash,
             pin_salt = EXCLUDED.pin_salt,
             is_active = EXCLUDED.is_active,
@@ -102,6 +117,9 @@ pub async fn upsert_auth_user(
             id,
             name,
             role,
+            role_id,
+            role_name,
+            employee_id,
             pin_hash,
             pin_salt,
             is_active,
@@ -113,6 +131,9 @@ pub async fn upsert_auth_user(
     .bind(input.id)
     .bind(input.name)
     .bind(input.role)
+    .bind(input.role_id)
+    .bind(input.role_name)
+    .bind(input.employee_id)
     .bind(input.pin_hash)
     .bind(input.pin_salt)
     .bind(input.is_active)

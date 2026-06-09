@@ -58,6 +58,7 @@ const MasterDataWarehousesLazyRouteImport = createFileRoute(
 )()
 const MasterDataUnitsLazyRouteImport = createFileRoute('/master-data/units')()
 const MasterDataTaxesLazyRouteImport = createFileRoute('/master-data/taxes')()
+const MasterDataRolesLazyRouteImport = createFileRoute('/master-data/roles')()
 const MasterDataPromosLazyRouteImport = createFileRoute('/master-data/promos')()
 const MasterDataProjectsLazyRouteImport = createFileRoute(
   '/master-data/projects',
@@ -301,6 +302,13 @@ const MasterDataTaxesLazyRoute = MasterDataTaxesLazyRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
   import('./routes/master-data/taxes.lazy').then((d) => d.Route),
+)
+const MasterDataRolesLazyRoute = MasterDataRolesLazyRouteImport.update({
+  id: '/master-data/roles',
+  path: '/master-data/roles',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/master-data/roles.lazy').then((d) => d.Route),
 )
 const MasterDataPromosLazyRoute = MasterDataPromosLazyRouteImport.update({
   id: '/master-data/promos',
@@ -703,6 +711,7 @@ export interface FileRoutesByFullPath {
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/roles': typeof MasterDataRolesLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
@@ -777,6 +786,7 @@ export interface FileRoutesByTo {
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/roles': typeof MasterDataRolesLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
@@ -852,6 +862,7 @@ export interface FileRoutesById {
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/roles': typeof MasterDataRolesLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
@@ -928,6 +939,7 @@ export interface FileRouteTypes {
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/roles'
     | '/master-data/taxes'
     | '/master-data/units'
     | '/master-data/warehouses'
@@ -1002,6 +1014,7 @@ export interface FileRouteTypes {
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/roles'
     | '/master-data/taxes'
     | '/master-data/units'
     | '/master-data/warehouses'
@@ -1076,6 +1089,7 @@ export interface FileRouteTypes {
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/roles'
     | '/master-data/taxes'
     | '/master-data/units'
     | '/master-data/warehouses'
@@ -1151,6 +1165,7 @@ export interface RootRouteChildren {
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
   MasterDataProjectsLazyRoute: typeof MasterDataProjectsLazyRoute
   MasterDataPromosLazyRoute: typeof MasterDataPromosLazyRoute
+  MasterDataRolesLazyRoute: typeof MasterDataRolesLazyRoute
   MasterDataTaxesLazyRoute: typeof MasterDataTaxesLazyRoute
   MasterDataUnitsLazyRoute: typeof MasterDataUnitsLazyRoute
   MasterDataWarehousesLazyRoute: typeof MasterDataWarehousesLazyRoute
@@ -1363,6 +1378,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data/taxes'
       fullPath: '/master-data/taxes'
       preLoaderRoute: typeof MasterDataTaxesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/master-data/roles': {
+      id: '/master-data/roles'
+      path: '/master-data/roles'
+      fullPath: '/master-data/roles'
+      preLoaderRoute: typeof MasterDataRolesLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/master-data/promos': {
@@ -1748,6 +1770,7 @@ const rootRouteChildren: RootRouteChildren = {
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
   MasterDataProjectsLazyRoute: MasterDataProjectsLazyRoute,
   MasterDataPromosLazyRoute: MasterDataPromosLazyRoute,
+  MasterDataRolesLazyRoute: MasterDataRolesLazyRoute,
   MasterDataTaxesLazyRoute: MasterDataTaxesLazyRoute,
   MasterDataUnitsLazyRoute: MasterDataUnitsLazyRoute,
   MasterDataWarehousesLazyRoute: MasterDataWarehousesLazyRoute,

@@ -3,6 +3,8 @@ import type { ActivityLog, AuthUser, Permission, UserRole } from '@/types';
 import { hasPermission } from './permissions';
 import { refreshAuthUsersFromPostgres } from './authReadService';
 import { enqueueActivityLogSync, enqueueAuthUserSync } from '@/services/syncQueueService';
+import { isPermissionEnabledBySetup } from './permissionCatalog';
+import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './roleSeed';
 
 const SESSION_STORAGE_KEY = 'kasirku-auth-session-id';
 const PIN_HASH_ALGORITHM = 'SHA-256';
@@ -17,14 +19,18 @@ interface ActivityLogInput {
 
 interface CreateAuthUserInput {
   name: string;
-  role: UserRole;
+  role?: UserRole;
+  role_id?: string;
   pin: string;
+  employee_id?: string;
 }
 
 interface UpdateAuthUserInput {
   userId: string;
   name: string;
-  role: UserRole;
+  role?: UserRole;
+  role_id?: string;
+  employee_id?: string;
 }
 
 interface ResetAuthUserPinInput {
@@ -106,6 +112,17 @@ const assertPinAvailable = async (pin: string, excludeUserId?: string) => {
   }
 };
 
+const getRoleForAuthInput = async (input: { role?: UserRole; role_id?: string }) => {
+  const roleId = input.role_id ?? resolveLegacyRoleId(input.role);
+  const role = roleId ? await db.roles.get(roleId) : undefined;
+
+  if (!role || !role.is_active) {
+    throw new Error('Role tidak ditemukan atau sudah nonaktif.');
+  }
+
+  return role;
+};
+
 const countOtherActiveOwners = async (userId: string) => {
   return db.authUsers
     .where('role')
@@ -123,7 +140,7 @@ const assertAnotherActiveOwnerExists = async (userId: string) => {
 
 const requireUserManageAccess = async () => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'USER_MANAGE');
+  await requireUserPermission(currentUser, 'USER_MANAGE');
 
   if (!currentUser) {
     throw new Error('Session user tidak ditemukan.');
@@ -137,7 +154,7 @@ const requireActivityLogAccess = async () => {
     touchSession: false,
     cleanupInvalidSession: false,
   });
-  requireRolePermission(currentUser?.role, 'ACTIVITY_LOG_VIEW');
+  await requireUserPermission(currentUser, 'ACTIVITY_LOG_VIEW');
 
   if (!currentUser) {
     throw new Error('Session user tidak ditemukan.');
@@ -147,6 +164,8 @@ const requireActivityLogAccess = async () => {
 };
 
 export const ensureDefaultOwner = async (): Promise<void> => {
+  await seedSystemRoles(db);
+
   try {
     await refreshAuthUsersFromPostgres();
   } catch (error) {
@@ -186,6 +205,8 @@ export const createOwnerUser = async (input: { name: string; pin: string }): Pro
     id: crypto.randomUUID(),
     name: input.name,
     role: 'OWNER',
+    role_id: resolveLegacyRoleId('OWNER'),
+    role_name: resolveLegacyRoleName('OWNER'),
     pin_hash: hash,
     pin_salt: salt,
     is_active: true,
@@ -216,10 +237,14 @@ export const createAuthUser = async (input: CreateAuthUserInput): Promise<AuthUs
 
   const now = new Date().toISOString();
   const { hash, salt } = await createPinHash(input.pin);
+  const role = await getRoleForAuthInput(input);
   const user: AuthUser = withPendingAuthUserSync({
     id: crypto.randomUUID(),
     name,
-    role: input.role,
+    role: (role.code as UserRole | undefined) ?? input.role ?? 'KASIR',
+    role_id: role.id,
+    role_name: role.name,
+    employee_id: input.employee_id,
     pin_hash: hash,
     pin_salt: salt,
     is_active: true,
@@ -234,7 +259,7 @@ export const createAuthUser = async (input: CreateAuthUserInput): Promise<AuthUs
     action: 'AUTH_USER_CREATED',
     entity: 'authUsers',
     entity_id: user.id,
-    description: `${actor.name} membuat user ${user.name} dengan role ${user.role}.`,
+    description: `${actor.name} membuat user ${user.name} dengan role ${user.role_name ?? user.role}.`,
   });
 
   return user;
@@ -251,14 +276,20 @@ export const updateAuthUser = async (input: UpdateAuthUserInput): Promise<AuthUs
   const name = normalizeName(input.name);
   assertValidName(name);
 
-  if (targetUser.is_active && targetUser.role === 'OWNER' && input.role !== 'OWNER') {
+  const role = await getRoleForAuthInput(input);
+  const nextLegacyRole = (role.code as UserRole | undefined) ?? input.role ?? targetUser.role;
+
+  if (targetUser.is_active && targetUser.role === 'OWNER' && nextLegacyRole !== 'OWNER') {
     await assertAnotherActiveOwnerExists(targetUser.id);
   }
 
   const updatedAt = new Date().toISOString();
   await db.authUsers.update(targetUser.id, {
     name,
-    role: input.role,
+    role: nextLegacyRole,
+    role_id: role.id,
+    role_name: role.name,
+    employee_id: input.employee_id,
     updated_at: updatedAt,
     sync_status: 'pending',
     sync_error: undefined,
@@ -376,6 +407,13 @@ export const loginWithPin = async (pin: string): Promise<AuthUser> => {
 
   for (const user of users) {
     if (await verifyPin(pin, user.pin_hash, user.pin_salt)) {
+      if (user.role_id) {
+        const role = await db.roles.get(user.role_id);
+        if (!role?.is_active) {
+          throw new Error('Role user sudah nonaktif.');
+        }
+      }
+
       const now = new Date().toISOString();
       const sessionId = crypto.randomUUID();
 
@@ -478,6 +516,37 @@ export const writeActivityLog = async (input: ActivityLogInput): Promise<void> =
 
 export const requireRolePermission = (role: UserRole | undefined, permission: Permission) => {
   if (!hasPermission(role, permission)) {
+    throw new Error('Anda tidak memiliki akses untuk aksi ini.');
+  }
+};
+
+export const hasUserPermission = async (
+  user: AuthUser | null | undefined,
+  permission: Permission,
+) => {
+  if (!user) return false;
+  if (!isPermissionEnabledBySetup(permission)) return false;
+
+  const role = user.role_id ? await db.roles.get(user.role_id) : undefined;
+  if (role?.is_owner || user.role === 'OWNER') return true;
+
+  if (user.role_id) {
+    const rolePermission = await db.rolePermissions
+      .where('[role_id+permission_code]')
+      .equals([user.role_id, permission])
+      .first();
+
+    return Boolean(rolePermission);
+  }
+
+  return hasPermission(user.role, permission);
+};
+
+export const requireUserPermission = async (
+  user: AuthUser | null | undefined,
+  permission: Permission,
+) => {
+  if (!await hasUserPermission(user, permission)) {
     throw new Error('Anda tidak memiliki akses untuk aksi ini.');
   }
 };

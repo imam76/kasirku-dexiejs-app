@@ -1,4 +1,5 @@
 import type { Permission, UserRole } from '@/types';
+import { isPermissionEnabledBySetup } from './permissionCatalog';
 
 export const ROLE_LABEL: Record<UserRole, string> = {
   OWNER: 'Owner',
@@ -19,6 +20,17 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'FINANCE_ACCESS',
     'JOURNAL_MANAGE',
     'SALES_RETURN_MANAGE',
+    'COOPERATIVE_MEMBER_VIEW',
+    'COOPERATIVE_MEMBER_MANAGE',
+    'COOPERATIVE_SAVING_VIEW',
+    'COOPERATIVE_SAVING_MANAGE',
+    'COOPERATIVE_LOAN_VIEW',
+    'COOPERATIVE_LOAN_MANAGE',
+    'COOPERATIVE_INSTALLMENT_VIEW',
+    'COOPERATIVE_PAYMENT_CREATE',
+    'COOPERATIVE_BILLING_ACCESS',
+    'COOPERATIVE_REPORT_VIEW',
+    'COOPERATIVE_AREA_ALL',
     'SETTINGS_ACCESS',
     'USER_MANAGE',
     'ACTIVITY_LOG_VIEW',
@@ -33,6 +45,17 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'STOCK_PURCHASE_ACCESS',
     'FINANCE_ACCESS',
     'SALES_RETURN_MANAGE',
+    'COOPERATIVE_MEMBER_VIEW',
+    'COOPERATIVE_MEMBER_MANAGE',
+    'COOPERATIVE_SAVING_VIEW',
+    'COOPERATIVE_SAVING_MANAGE',
+    'COOPERATIVE_LOAN_VIEW',
+    'COOPERATIVE_LOAN_MANAGE',
+    'COOPERATIVE_INSTALLMENT_VIEW',
+    'COOPERATIVE_PAYMENT_CREATE',
+    'COOPERATIVE_BILLING_ACCESS',
+    'COOPERATIVE_REPORT_VIEW',
+    'COOPERATIVE_AREA_ALL',
     'SETTINGS_ACCESS',
     'ACTIVITY_LOG_VIEW',
   ],
@@ -48,5 +71,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 
 export const hasPermission = (role: UserRole | undefined, permission: Permission) => {
   if (!role) return false;
+  if (!isPermissionEnabledBySetup(permission)) return false;
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 };

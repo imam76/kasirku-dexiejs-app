@@ -36,7 +36,7 @@ type HomeMenuItem = {
 
 function Index() {
   const { t } = useI18n()
-  const { currentUser } = useAuth()
+  const { currentUser, currentRole, permissionSet } = useAuth()
   const { isRouteEnabled } = useEnabledModules()
   const todaySales = useLiveQuery(
     async () => {
@@ -71,7 +71,7 @@ function Index() {
     { to: '/profit', label: t('nav.report.profit'), icon: DollarOutlined, color: 'text-emerald-600', desc: t('home.profitDesc') },
     { to: '/report', label: t('nav.reports'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('home.reportDesc') },
     { to: '/settings', label: t('nav.settings'), icon: SettingOutlined, color: 'text-gray-600', desc: t('home.settingsDesc') },
-  ].filter((item) => canAccessPath(currentUser?.role, item.to) && isRouteEnabled(item.to))
+  ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }) && isRouteEnabled(item.to))
 
   const renderMenuGrid = (items: HomeMenuItem[]) => (
     <div

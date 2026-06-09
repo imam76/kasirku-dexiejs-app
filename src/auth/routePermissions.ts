@@ -1,5 +1,6 @@
-import type { Permission, UserRole } from '@/types';
+import type { AuthUser, Permission, Role, UserRole } from '@/types';
 import { hasPermission } from './permissions';
+import { isPermissionEnabledBySetup } from './permissionCatalog';
 
 type RoutePermissionRule = Permission | Permission[];
 
@@ -15,6 +16,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/currencies': 'SETTINGS_ACCESS',
   '/master-data/areas': 'SETTINGS_ACCESS',
   '/master-data/employees': 'SETTINGS_ACCESS',
+  '/master-data/roles': 'USER_MANAGE',
   '/master-data/departments': 'SETTINGS_ACCESS',
   '/master-data/projects': 'SETTINGS_ACCESS',
   '/master-data/taxes': 'SETTINGS_ACCESS',
@@ -31,13 +33,22 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/finance/sales': 'FINANCE_ACCESS',
   '/finance/purchases': 'FINANCE_ACCESS',
   '/finance/sales/returns': 'SALES_RETURN_MANAGE',
-  '/koperasi': 'FINANCE_ACCESS',
-  '/koperasi/anggota': 'FINANCE_ACCESS',
-  '/koperasi/simpanan': 'FINANCE_ACCESS',
-  '/koperasi/pinjaman': 'FINANCE_ACCESS',
-  '/koperasi/angsuran': 'FINANCE_ACCESS',
-  '/koperasi/penagihan': 'FINANCE_ACCESS',
-  '/koperasi/buku-besar': 'FINANCE_ACCESS',
+  '/koperasi': [
+    'COOPERATIVE_MEMBER_VIEW',
+    'COOPERATIVE_SAVING_VIEW',
+    'COOPERATIVE_LOAN_VIEW',
+    'COOPERATIVE_INSTALLMENT_VIEW',
+    'COOPERATIVE_BILLING_ACCESS',
+    'COOPERATIVE_REPORT_VIEW',
+  ],
+  '/koperasi/anggota': 'COOPERATIVE_MEMBER_VIEW',
+  '/koperasi/simpanan': 'COOPERATIVE_SAVING_VIEW',
+  '/koperasi/pinjaman': 'COOPERATIVE_LOAN_VIEW',
+  '/koperasi/angsuran': 'COOPERATIVE_INSTALLMENT_VIEW',
+  '/koperasi/penagihan': 'COOPERATIVE_BILLING_ACCESS',
+  '/koperasi/laporan': 'COOPERATIVE_REPORT_VIEW',
+  '/koperasi/arus-kas': 'COOPERATIVE_REPORT_VIEW',
+  '/koperasi/buku-besar': 'COOPERATIVE_REPORT_VIEW',
   '/sync-db': 'SETTINGS_ACCESS',
   '/settings': 'SETTINGS_ACCESS',
   '/profit': 'PROFIT_VIEW',
@@ -68,17 +79,40 @@ export const getRequiredPermissionForPath = (path: string): RoutePermissionRule 
 };
 
 export const canAccessPermissionRule = (
-  role: UserRole | undefined,
+  roleOrUser: UserRole | AuthUser | undefined,
   rule: RoutePermissionRule | undefined,
+  options: { permissionSet?: Set<Permission>; currentRole?: Role | null } = {},
 ) => {
   if (!rule) return true;
-  if (Array.isArray(rule)) {
-    return rule.some((permission) => hasPermission(role, permission));
+  const permissions = Array.isArray(rule) ? rule : [rule];
+  const user = typeof roleOrUser === 'object' ? roleOrUser : undefined;
+  const legacyRole = typeof roleOrUser === 'string' ? roleOrUser : user?.role;
+
+  if (!permissions.some((permission) => isPermissionEnabledBySetup(permission))) {
+    return false;
   }
 
-  return hasPermission(role, rule);
+  if (options.currentRole?.is_owner || legacyRole === 'OWNER') {
+    return true;
+  }
+
+  if (user?.role_id && options.permissionSet) {
+    return permissions.some((permission) => (
+      isPermissionEnabledBySetup(permission) && options.permissionSet?.has(permission)
+    ));
+  }
+
+  if (Array.isArray(rule)) {
+    return rule.some((permission) => hasPermission(legacyRole, permission));
+  }
+
+  return hasPermission(legacyRole, rule);
 };
 
-export const canAccessPath = (role: UserRole | undefined, path: string) => {
-  return canAccessPermissionRule(role, getRequiredPermissionForPath(path));
+export const canAccessPath = (
+  roleOrUser: UserRole | AuthUser | undefined,
+  path: string,
+  options: { permissionSet?: Set<Permission>; currentRole?: Role | null } = {},
+) => {
+  return canAccessPermissionRule(roleOrUser, getRequiredPermissionForPath(path), options);
 };

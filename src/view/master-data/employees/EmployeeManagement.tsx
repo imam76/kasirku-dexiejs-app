@@ -3,17 +3,20 @@ import { App, Button, Card, Form, Input, Select } from 'antd';
 import { Plus, UserRoundCog } from 'lucide-react';
 import { useEmployees, type EmployeeStatusFilter, type EmployeeWithAreas } from '@/hooks/useEmployees';
 import { useI18n } from '@/hooks/useI18n';
+import { useAuth } from '@/auth/useAuth';
 import EmployeeFormModal, { type EmployeeFormValues } from './EmployeeFormModal';
 import EmployeeTable from './EmployeeTable';
 
 export default function EmployeeManagement() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
+  const { can, refreshCurrentUser } = useAuth();
   const [form] = Form.useForm<EmployeeFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const {
     areas,
     authUsers,
+    roles,
     filteredEmployees,
     editingEmployee,
     searchText,
@@ -37,12 +40,14 @@ export default function EmployeeManagement() {
   const openAddModal = () => {
     resetForm();
     form.resetFields();
-    form.setFieldsValue({ area_ids: [], is_active: true });
+    form.setFieldsValue({ area_ids: [], create_login: false, reset_login_pin: false, is_active: true });
     setIsModalOpen(true);
   };
 
   const openEditModal = (employee: EmployeeWithAreas) => {
     handleEdit(employee);
+    const linkedUser = authUsers.find((user) => user.id === employee.user_id);
+    const linkedRoleId = linkedUser?.role_id ?? roles.find((role) => role.code === linkedUser?.role)?.id;
     form.resetFields();
     form.setFieldsValue({
       name: employee.name,
@@ -51,9 +56,12 @@ export default function EmployeeManagement() {
       address: employee.address,
       position: employee.position,
       user_id: employee.user_id,
+      login_role_id: linkedRoleId,
       area_ids: employee.area_assignments.map((assignment) => assignment.area_id),
       notes: employee.notes,
       is_active: employee.is_active,
+      create_login: false,
+      reset_login_pin: false,
     });
     setIsModalOpen(true);
   };
@@ -61,7 +69,19 @@ export default function EmployeeManagement() {
   const handleSubmit = async (values: EmployeeFormValues) => {
     try {
       const wasEditing = Boolean(editingEmployee);
-      await submitForm(values);
+      const payload = can('USER_MANAGE')
+        ? values
+        : {
+          ...values,
+          user_id: editingEmployee?.user_id,
+          create_login: false,
+          login_role_id: undefined,
+          login_pin: undefined,
+          confirm_login_pin: undefined,
+          reset_login_pin: false,
+        };
+      await submitForm(payload);
+      await refreshCurrentUser();
       message.success(wasEditing ? t('employees.updateSuccess') : t('employees.createSuccess'));
       closeModal();
     } catch (error) {
@@ -139,8 +159,10 @@ export default function EmployeeManagement() {
         form={form}
         areas={areas}
         authUsers={authUsers}
+        roles={roles}
         open={isModalOpen}
         isEditing={Boolean(editingEmployee)}
+        canManageLogin={can('USER_MANAGE')}
         isSubmitting={isSubmitting}
         onCancel={closeModal}
         onSubmit={handleSubmit}

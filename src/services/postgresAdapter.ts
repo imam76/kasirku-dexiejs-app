@@ -34,6 +34,9 @@ export interface RemoteAuthUserDto {
   id: string;
   name: string;
   role: UserRole;
+  role_id?: string | null;
+  role_name?: string | null;
+  employee_id?: string | null;
   pin_hash: string;
   pin_salt: string;
   is_active: boolean;

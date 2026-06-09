@@ -1,5 +1,5 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import {
   cooperativeSavingReversalSchema,
@@ -182,7 +182,7 @@ export const recordCooperativeSaving = async (
   input: RecordCooperativeSavingInput,
 ): Promise<RecordCooperativeSavingResult> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_SAVING_MANAGE');
 
   const parsedInput = cooperativeSavingTransactionSchema.parse(input);
   const amount = roundCurrency(parsedInput.amount);
@@ -305,7 +305,7 @@ export const reverseCooperativeSaving = async (
   input: ReverseCooperativeSavingInput,
 ): Promise<CooperativeSavingTransaction> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'COOPERATIVE_SAVING_MANAGE');
 
   const parsedInput = cooperativeSavingReversalSchema.parse({ reason: input.reason });
   const now = new Date().toISOString();

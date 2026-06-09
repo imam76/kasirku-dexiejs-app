@@ -9,7 +9,6 @@ import UsbPrinterCard from '@/components/UsbPrinterCard'
 import CompanyProfileSettingsCard from '@/components/CompanyProfileSettingsCard'
 import { useI18n } from '@/hooks/useI18n'
 import { useAuth } from '@/auth/useAuth'
-import { UserManagement } from '@/view/auth/UserManagement'
 import { ActivityLogViewer } from '@/view/auth/ActivityLogViewer'
 import { useSalesDocumentMarginSettings } from '@/hooks/useSalesDocumentMarginSettings'
 import type { SalesDocumentMarginBasis } from '@/types'
@@ -132,12 +131,6 @@ function Settings() {
           </div>
         </Card>
       </div>
-
-      {can('USER_MANAGE') && (
-        <div className="mb-6">
-          <UserManagement />
-        </div>
-      )}
 
       {can('ACTIVITY_LOG_VIEW') && (
         <div className="mb-6">
