@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct AuthUserDto {
     pub id: String,
     pub name: String,
+    pub email: Option<String>,
     pub role: String,
     pub role_id: Option<String>,
     pub role_name: Option<String>,

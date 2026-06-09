@@ -1,6 +1,7 @@
 import {
   createPinHash,
   getCurrentSessionUser,
+  normalizeAuthEmail,
   requireRolePermission,
   writeActivityLog,
 } from '@/auth/authService';
@@ -32,6 +33,7 @@ const sanitizeEmployeeInput = (input: EmployeeUpsertInput): SanitizedEmployeeInp
   return {
     ...parsed,
     name: parsed.name.trim(),
+    email: normalizeAuthEmail(parsed.email),
     area_ids: Array.from(new Set(parsed.area_ids ?? [])),
     is_active: parsed.is_active ?? true,
   };

@@ -62,12 +62,18 @@ const isUserRole = (role: string): role is UserRole => (
   VALID_ROLES.includes(role as UserRole)
 );
 
+const normalizeRemoteEmail = (email: string | null | undefined) => (
+  email?.trim().toLowerCase() || undefined
+);
+
 const mapRemoteAuthUserToLocal = (
   remoteUser: RemoteAuthUserDto,
   syncedAt: string,
+  localUser?: AuthUser,
 ): AuthUser => ({
   id: remoteUser.id,
   name: remoteUser.name,
+  email: normalizeRemoteEmail(remoteUser.email) ?? normalizeRemoteEmail(localUser?.email),
   role: isUserRole(remoteUser.role) ? remoteUser.role : 'KASIR',
   role_id: remoteUser.role_id ?? undefined,
   role_name: remoteUser.role_name ?? undefined,
@@ -77,7 +83,7 @@ const mapRemoteAuthUserToLocal = (
   is_active: remoteUser.deleted_at ? false : remoteUser.is_active,
   created_at: remoteUser.created_at,
   updated_at: remoteUser.updated_at,
-  sync_status: 'synced',
+  sync_status: remoteUser.email || !localUser?.email ? 'synced' : 'pending',
   sync_error: undefined,
   last_synced_at: syncedAt,
   remote_updated_at: remoteUser.updated_at,
@@ -221,7 +227,7 @@ export const mergeRemoteAuthUsersIntoDexie = async (
         continue;
       }
 
-      usersToPut.push(mapRemoteAuthUserToLocal(remoteUser, syncedAt));
+      usersToPut.push(mapRemoteAuthUserToLocal(remoteUser, syncedAt, localUser));
       if (localUser) {
         result.updated += 1;
       } else {

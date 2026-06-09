@@ -34,6 +34,7 @@ import type {
 export interface RemoteAuthUserDto {
   id: string;
   name: string;
+  email?: string | null;
   role: UserRole;
   role_id?: string | null;
   role_name?: string | null;

@@ -3,7 +3,7 @@ import { App, Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typog
 import type { ColumnsType } from 'antd/es/table';
 import { Edit2, KeyRound, Plus, UserCheck, UserRoundCog, UserX } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { createAuthUser, resetAuthUserPin, setAuthUserActive, updateAuthUser } from '@/auth/authService';
+import { createAuthUser, normalizeAuthEmail, resetAuthUserPin, setAuthUserActive, updateAuthUser } from '@/auth/authService';
 import { ROLE_LABEL } from '@/auth/permissions';
 import { resolveLegacyRoleId } from '@/auth/roleSeed';
 import { useAuth } from '@/auth/useAuth';
@@ -109,7 +109,7 @@ export const UserManagement = () => {
         await updateAuthUser({
           userId: editingUser.id,
           name: values.name,
-          email: values.email,
+          email: normalizeAuthEmail(values.email),
           role_id: values.role_id,
         });
 
@@ -129,7 +129,7 @@ export const UserManagement = () => {
 
       await createAuthUser({
         name: values.name,
-        email: values.email,
+        email: normalizeAuthEmail(values.email),
         role_id: values.role_id,
         pin: values.pin,
       });

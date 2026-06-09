@@ -1,8 +1,9 @@
 import { db } from '@/lib/db';
 import type { ActivityLog, AuthUser, Permission, UserRole } from '@/types';
 import { hasPermission } from './permissions';
-import { refreshAuthUsersFromPostgres } from './authReadService';
+import { refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from './authReadService';
 import { enqueueActivityLogSync, enqueueAuthUserSync } from '@/services/syncQueueService';
+import { authUserPostgresAdapter, type RemoteAuthUserDto } from '@/services/postgresAdapter';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './roleSeed';
 
@@ -84,6 +85,10 @@ export const verifyPin = async (pin: string, hash: string, salt: string): Promis
 };
 
 const normalizeName = (name: string) => name.trim();
+
+export const normalizeAuthEmail = (email: string | undefined) => (
+  email?.trim().toLowerCase() || undefined
+);
 
 const withPendingAuthUserSync = (user: AuthUser): AuthUser => ({
   ...user,
@@ -177,9 +182,10 @@ export const ensureDefaultOwner = async (): Promise<void> => {
   await seedSystemRoles(db);
 
   try {
+    await refreshRolesFromPostgres();
     await refreshAuthUsersFromPostgres();
   } catch (error) {
-    console.error('Failed to refresh auth users from PostgreSQL', error);
+    console.error('Failed to refresh auth data from PostgreSQL', error);
   }
 
   const activeOwner = await db.authUsers
@@ -214,7 +220,7 @@ export const createOwnerUser = async (input: { name: string; email: string; pin:
   const owner: AuthUser = withPendingAuthUserSync({
     id: crypto.randomUUID(),
     name: input.name,
-    email: input.email,
+    email: normalizeAuthEmail(input.email),
     role: 'OWNER',
     role_id: resolveLegacyRoleId('OWNER'),
     role_name: resolveLegacyRoleName('OWNER'),
@@ -252,7 +258,7 @@ export const createAuthUser = async (input: CreateAuthUserInput): Promise<AuthUs
   const user: AuthUser = withPendingAuthUserSync({
     id: crypto.randomUUID(),
     name,
-    email: input.email,
+    email: normalizeAuthEmail(input.email),
     role: (role.code as UserRole | undefined) ?? input.role ?? 'KASIR',
     role_id: role.id,
     role_name: role.name,
@@ -298,7 +304,7 @@ export const updateAuthUser = async (input: UpdateAuthUserInput): Promise<AuthUs
   const updatedAt = new Date().toISOString();
   await db.authUsers.update(targetUser.id, {
     name,
-    email: input.email,
+    email: normalizeAuthEmail(input.email),
     role: nextLegacyRole,
     role_id: role.id,
     role_name: role.name,
@@ -415,8 +421,62 @@ export const getActivityLogs = async (input: ActivityLogQueryInput = {}): Promis
     .toArray();
 };
 
-export const loginWithEmailAndPin = async (email: string, pin: string): Promise<AuthUser> => {
-  const users = (await db.authUsers.toArray()).filter((user) => user.is_active && user.email === email);
+const buildLegacyAuthUserEmail = (name: string) => (
+  `${name.trim().toLowerCase().replace(/\s+/g, '')}@kasirku.com`
+);
+
+const authUserEmailMatches = (user: AuthUser, email: string) => (
+  normalizeAuthEmail(user.email) === email || (!user.email && buildLegacyAuthUserEmail(user.name) === email)
+);
+
+const remoteAuthUserEmailMatches = (user: RemoteAuthUserDto, email: string) => (
+  normalizeAuthEmail(user.email ?? undefined) === email || (!user.email && buildLegacyAuthUserEmail(user.name) === email)
+);
+
+const createLoginSession = async (user: AuthUser): Promise<AuthUser> => {
+  const now = new Date().toISOString();
+  const sessionId = crypto.randomUUID();
+
+  await db.authSessions.add({
+    id: sessionId,
+    user_id: user.id,
+    created_at: now,
+    last_active_at: now,
+  });
+  setActiveSessionId(sessionId);
+
+  await writeActivityLog({
+    user,
+    action: 'AUTH_LOGIN',
+    entity: 'authSessions',
+    entity_id: sessionId,
+    description: `${user.name} login.`,
+  });
+
+  return user;
+};
+
+const mapRemoteAuthUserForLogin = (remoteUser: RemoteAuthUserDto): AuthUser => ({
+  id: remoteUser.id,
+  name: remoteUser.name,
+  email: normalizeAuthEmail(remoteUser.email ?? undefined),
+  role: remoteUser.role,
+  role_id: remoteUser.role_id ?? undefined,
+  role_name: remoteUser.role_name ?? undefined,
+  employee_id: remoteUser.employee_id ?? undefined,
+  pin_hash: remoteUser.pin_hash,
+  pin_salt: remoteUser.pin_salt,
+  is_active: remoteUser.deleted_at ? false : remoteUser.is_active,
+  created_at: remoteUser.created_at,
+  updated_at: remoteUser.updated_at,
+  sync_status: 'synced',
+  sync_error: undefined,
+  last_synced_at: new Date().toISOString(),
+  remote_updated_at: remoteUser.updated_at,
+});
+
+const tryLoginWithLocalData = async (normalizedEmail: string, pin: string): Promise<AuthUser | null> => {
+  const users = (await db.authUsers.toArray()).filter((user) => user.is_active && authUserEmailMatches(user, normalizedEmail));
 
   for (const user of users) {
     if (await verifyPin(pin, user.pin_hash, user.pin_salt)) {
@@ -427,30 +487,11 @@ export const loginWithEmailAndPin = async (email: string, pin: string): Promise<
         }
       }
 
-      const now = new Date().toISOString();
-      const sessionId = crypto.randomUUID();
-
-      await db.authSessions.add({
-        id: sessionId,
-        user_id: user.id,
-        created_at: now,
-        last_active_at: now,
-      });
-      setActiveSessionId(sessionId);
-
-      await writeActivityLog({
-        user,
-        action: 'AUTH_LOGIN',
-        entity: 'authSessions',
-        entity_id: sessionId,
-        description: `${user.name} login.`,
-      });
-
-      return user;
+      return createLoginSession(user);
     }
   }
 
-  const employees = (await db.employees.toArray()).filter((emp) => emp.is_active && emp.pin_hash && emp.pin_salt && emp.email === email);
+  const employees = (await db.employees.toArray()).filter((emp) => emp.is_active && emp.pin_hash && emp.pin_salt && normalizeAuthEmail(emp.email) === normalizedEmail);
   
   for (const employee of employees) {
     if (employee.pin_hash && employee.pin_salt && await verifyPin(pin, employee.pin_hash, employee.pin_salt)) {
@@ -498,6 +539,60 @@ export const loginWithEmailAndPin = async (email: string, pin: string): Promise<
 
       return ephemeralUser;
     }
+  }
+
+  return null;
+};
+
+const tryLoginWithRemoteAuthUsers = async (normalizedEmail: string, pin: string): Promise<AuthUser | null> => {
+  const remoteUsers = (await authUserPostgresAdapter.list())
+    .filter((user) => !user.deleted_at && user.is_active && remoteAuthUserEmailMatches(user, normalizedEmail));
+
+  for (const remoteUser of remoteUsers) {
+    if (!await verifyPin(pin, remoteUser.pin_hash, remoteUser.pin_salt)) continue;
+
+    await refreshRolesFromPostgres();
+    if (remoteUser.role_id) {
+      const role = await db.roles.get(remoteUser.role_id);
+      if (!role?.is_active) {
+        throw new Error('Role user sudah nonaktif atau belum tersinkron.');
+      }
+    }
+
+    const user = mapRemoteAuthUserForLogin(remoteUser);
+    await db.authUsers.put(user);
+    return createLoginSession(user);
+  }
+
+  return null;
+};
+
+export const loginWithEmailAndPin = async (email: string, pin: string): Promise<AuthUser> => {
+  const normalizedEmail = normalizeAuthEmail(email);
+  if (!normalizedEmail) {
+    throw new Error('Email wajib diisi.');
+  }
+
+  const localLogin = await tryLoginWithLocalData(normalizedEmail, pin);
+  if (localLogin) return localLogin;
+
+  try {
+    await refreshAuthUsersFromPostgres();
+  } catch (error) {
+    console.error('Failed to refresh auth users before login retry', error);
+  }
+
+  const refreshedLogin = await tryLoginWithLocalData(normalizedEmail, pin);
+  if (refreshedLogin) return refreshedLogin;
+
+  try {
+    const remoteLogin = await tryLoginWithRemoteAuthUsers(normalizedEmail, pin);
+    if (remoteLogin) return remoteLogin;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Role user')) {
+      throw error;
+    }
+    console.error('Failed to verify login directly against PostgreSQL', error);
   }
 
   throw new Error('Email atau PIN tidak valid atau user tidak aktif.');

@@ -1,6 +1,6 @@
 import { App, Button, Form, Input, Typography } from 'antd';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
-import { createOwnerUser } from '@/auth/authService';
+import { createOwnerUser, normalizeAuthEmail } from '@/auth/authService';
 import { useAuth } from '@/auth/useAuth';
 
 const { Text } = Typography;
@@ -29,12 +29,13 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
     }
 
     try {
+      const email = normalizeAuthEmail(values.email) ?? '';
       await createOwnerUser({
         name: values.name.trim(),
-        email: values.email.trim(),
+        email,
         pin: values.pin,
       });
-      await login(values.email.trim(), values.pin);
+      await login(email, values.pin);
       message.success('Owner berhasil dibuat.');
       onComplete?.();
     } catch (error) {

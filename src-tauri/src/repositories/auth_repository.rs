@@ -7,6 +7,7 @@ pub async fn list_auth_users(pool: &PgPool) -> Result<Vec<AuthUserDto>, sqlx::Er
         SELECT
             id,
             name,
+            email,
             role,
             role_id,
             role_name,
@@ -32,6 +33,7 @@ pub async fn get_auth_user(pool: &PgPool, id: String) -> Result<Option<AuthUserD
         SELECT
             id,
             name,
+            email,
             role,
             role_id,
             role_name,
@@ -60,6 +62,7 @@ async fn get_auth_user_including_deleted(
         SELECT
             id,
             name,
+            email,
             role,
             role_id,
             role_name,
@@ -89,6 +92,7 @@ pub async fn upsert_auth_user(
         INSERT INTO auth_users (
             id,
             name,
+            email,
             role,
             role_id,
             role_name,
@@ -100,9 +104,10 @@ pub async fn upsert_auth_user(
             updated_at,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::TIMESTAMPTZ, $11::TIMESTAMPTZ, $12::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::TIMESTAMPTZ, $12::TIMESTAMPTZ, $13::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
+            email = EXCLUDED.email,
             role = EXCLUDED.role,
             role_id = EXCLUDED.role_id,
             role_name = EXCLUDED.role_name,
@@ -116,6 +121,7 @@ pub async fn upsert_auth_user(
         RETURNING
             id,
             name,
+            email,
             role,
             role_id,
             role_name,
@@ -130,6 +136,7 @@ pub async fn upsert_auth_user(
     )
     .bind(input.id)
     .bind(input.name)
+    .bind(input.email)
     .bind(input.role)
     .bind(input.role_id)
     .bind(input.role_name)

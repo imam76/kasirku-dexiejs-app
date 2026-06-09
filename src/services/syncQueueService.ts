@@ -146,6 +146,7 @@ const mapActivityLogToRemoteDto = (log: ActivityLog): RemoteActivityLogDto => ({
 const mapAuthUserToRemoteDto = (user: AuthUser): RemoteAuthUserDto => ({
   id: user.id,
   name: user.name,
+  email: user.email,
   role: user.role,
   role_id: user.role_id,
   role_name: user.role_name,

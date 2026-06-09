@@ -2,7 +2,7 @@ import { App, Button, Form, Input, Typography } from 'antd';
 import { LockKeyhole } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
-import { ROLE_LABEL } from '@/auth/permissions';
+import { normalizeAuthEmail } from '@/auth/authService';
 import { useAuth } from '@/auth/useAuth';
 
 const { Text } = Typography;
@@ -29,7 +29,7 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
 
   const handleSubmit = async (values: LoginFormValues) => {
     try {
-      await login(values.email.trim(), values.pin);
+      await login(normalizeAuthEmail(values.email) ?? '', values.pin);
       form.resetFields(['pin']);
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Login gagal.');
