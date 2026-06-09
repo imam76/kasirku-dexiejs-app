@@ -34,6 +34,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/koperasi/simpanan': 'FINANCE_ACCESS',
   '/koperasi/pinjaman': 'FINANCE_ACCESS',
   '/koperasi/angsuran': 'FINANCE_ACCESS',
+  '/koperasi/buku-besar': 'FINANCE_ACCESS',
   '/settings': 'SETTINGS_ACCESS',
   '/profit': 'PROFIT_VIEW',
   '/report': ['CASHIER_ACCESS', 'STOCK_PURCHASE_ACCESS', 'FINANCE_ACCESS'],

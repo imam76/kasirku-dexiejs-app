@@ -11,7 +11,6 @@ export const useCooperativeReports = (filters: CooperativeReportFilters) => (
       filters.startDate,
       filters.endDate,
       filters.asOfDate,
-      filters.accountId,
     ],
     queryFn: () => getCooperativeReportData(filters),
   })

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Alert, Button, DatePicker, Descriptions, Select, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { Alert, Button, DatePicker, Descriptions, Space, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { BookOpen, RefreshCw } from 'lucide-react';
@@ -15,7 +15,6 @@ import type {
   CooperativeCashBankReportRow,
   CooperativeFinancialStatementRow,
   CooperativeInstallmentReportRow,
-  CooperativeLedgerRow,
   CooperativeLoanPaymentReportRow,
   CooperativeLoanReportRow,
   CooperativeMemberReportRow,
@@ -228,20 +227,16 @@ export default function CooperativeReportManagement() {
   const { t } = useI18n();
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [asOfDate, setAsOfDate] = useState<Dayjs | null>(() => dayjs.tz());
-  const [accountFilter, setAccountFilter] = useState<string>();
 
   const filters = useMemo(() => ({
     startDate: dateRange?.[0].startOf('day').toISOString(),
     endDate: dateRange?.[1].endOf('day').toISOString(),
     asOfDate: asOfDate?.format('YYYY-MM-DD'),
-    accountId: accountFilter,
-  }), [accountFilter, asOfDate, dateRange]);
+  }), [asOfDate, dateRange]);
 
   const reportQuery = useCooperativeReports(filters);
   const data = reportQuery.data;
   const isLoading = reportQuery.isLoading || reportQuery.isFetching;
-  const accounts = data?.accounts ?? [];
-  const selectedAccount = data?.selectedAccount;
   const summary = data?.summary;
   const overdueSummary = data?.overdueReport.summary;
   const financialReadiness = data?.financialReadiness;
@@ -251,11 +246,6 @@ export default function CooperativeReportManagement() {
   const cooperativeEquityChangeReport = data?.cooperativeEquityChangeReport;
   const reconciliation = data?.reconciliation;
   const canShowFinancialStatements = Boolean(financialReadiness?.can_show_financial_statements);
-
-  const accountOptions = accounts.map((account) => ({
-    value: account.id,
-    label: `${account.code} - ${account.name}`,
-  }));
 
   const renderFinancialReport = (children: ReactNode) => (
     <Space direction="vertical" className="w-full" size="middle">
@@ -903,75 +893,6 @@ export default function CooperativeReportManagement() {
     },
   ];
 
-  const ledgerColumns: ColumnsType<CooperativeLedgerRow> = [
-    {
-      title: t('generalLedger.journal.date'),
-      dataIndex: 'entry_date',
-      key: 'entry_date',
-      render: (value?: string) => value ? formatDate(value) : '-',
-      width: 170,
-    },
-    {
-      title: t('generalLedger.journal.number'),
-      dataIndex: 'entry_number',
-      key: 'entry_number',
-      width: 170,
-    },
-    {
-      title: t('cooperative.reports.table.rowType'),
-      dataIndex: 'row_type',
-      key: 'row_type',
-      render: (rowType: CooperativeLedgerRow['row_type']) => t(`cooperative.reports.ledger.${rowType.toLowerCase()}` as TranslationKey),
-      width: 140,
-    },
-    {
-      title: t('generalLedger.journal.source'),
-      key: 'source',
-      render: (_value, record) => (
-        <CooperativeSourceLink
-          sourceType={record.source_type}
-          sourceEvent={record.source_event}
-          sourceNumber={record.source_number}
-        />
-      ),
-      width: 180,
-    },
-    {
-      title: t('generalLedger.journal.description'),
-      dataIndex: 'description',
-      key: 'description',
-      render: (_value: string, record) => record.row_type === 'MOVEMENT'
-        ? record.description
-        : t(`cooperative.reports.ledger.${record.row_type.toLowerCase()}Description` as TranslationKey),
-    },
-    {
-      title: t('generalLedger.debit'),
-      dataIndex: 'debit',
-      key: 'debit',
-      align: 'right',
-      render: (value: number) => value > 0 ? money(value) : '-',
-      width: 150,
-    },
-    {
-      title: t('generalLedger.credit'),
-      dataIndex: 'credit',
-      key: 'credit',
-      align: 'right',
-      render: (value: number) => value > 0 ? money(value) : '-',
-      width: 150,
-    },
-    {
-      title: t('generalLedger.ledger.runningBalance'),
-      dataIndex: 'running_balance',
-      key: 'running_balance',
-      align: 'right',
-      render: (value: number) => (
-        <Text className={getSignedAmountClass(value)}>{money(value)}</Text>
-      ),
-      width: 190,
-    },
-  ];
-
   const financialStatementColumns: ColumnsType<CooperativeFinancialStatementRow> = [
     {
       title: t('generalLedger.account'),
@@ -1072,16 +993,6 @@ export default function CooperativeReportManagement() {
             value={asOfDate}
             onChange={(value) => setAsOfDate(value)}
             placeholder={t('cooperative.reports.asOfDate')}
-          />
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder={t('generalLedger.filterAccount')}
-            value={accountFilter}
-            options={accountOptions}
-            onChange={setAccountFilter}
-            className="min-w-[260px]"
           />
           <Button icon={<RefreshCw size={16} />} onClick={() => void reportQuery.refetch()} loading={isLoading}>
             {t('common.refresh')}
@@ -1389,21 +1300,6 @@ export default function CooperativeReportManagement() {
                   ),
                 }}
               />
-            ),
-          },
-          {
-            key: 'ledger',
-            label: t('cooperative.reports.tabs.ledger'),
-            children: selectedAccount ? (
-              <Table
-                dataSource={data?.ledgerRows ?? []}
-                columns={ledgerColumns}
-                rowKey="id"
-                loading={isLoading}
-                scroll={{ x: 1380 }}
-              />
-            ) : (
-              <Alert type="info" showIcon message={t('cooperative.reports.ledger.selectAccount')} />
             ),
           },
           {

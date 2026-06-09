@@ -60,7 +60,6 @@ export interface CooperativeReportFilters {
   startDate?: string;
   endDate?: string;
   asOfDate?: string;
-  accountId?: string;
 }
 
 export interface CooperativeOperationalSummary {
@@ -290,23 +289,6 @@ export interface CooperativeOverdueReport {
   as_of_date: string;
 }
 
-export type CooperativeLedgerRowType = 'OPENING' | 'MOVEMENT' | 'ENDING';
-
-export interface CooperativeLedgerRow {
-  id: string;
-  row_type: CooperativeLedgerRowType;
-  entry_id?: string;
-  entry_date?: string;
-  entry_number: string;
-  source_type?: JournalSourceType;
-  source_number?: string;
-  source_event?: string;
-  description: string;
-  debit: number;
-  credit: number;
-  running_balance: number;
-}
-
 export type CooperativeReconciliationStatus = 'OK' | 'WARNING';
 
 export type CooperativeReconciliationKey =
@@ -332,7 +314,6 @@ export interface CooperativeReconciliationSummary {
 
 export interface CooperativeReportData {
   accounts: ChartOfAccount[];
-  selectedAccount?: ChartOfAccount;
   financialReadiness: CooperativeFinancialReadiness;
   summary: CooperativeOperationalSummary;
   memberRows: CooperativeMemberReportRow[];
@@ -344,7 +325,6 @@ export interface CooperativeReportData {
   cashBankRows: CooperativeCashBankReportRow[];
   reconciliation: CooperativeReconciliationSummary;
   journalEntries: JournalEntryWithLines[];
-  ledgerRows: CooperativeLedgerRow[];
   incomeStatement: IncomeStatementReport;
   balanceSheet: BalanceSheetReport;
   cooperativeBalanceSheet: CooperativeBalanceSheetReport;
@@ -379,10 +359,6 @@ const isDateKeyInRange = (value: string, startDate?: string, endDate?: string) =
   return (!startKey || dateKey >= startKey) && (!endKey || dateKey <= endKey);
 };
 
-const isBeforeStartDate = (value: string, startDate?: string) => (
-  Boolean(startDate) && getDateKey(value) < getDateKey(startDate as string)
-);
-
 const compareDateDesc = (left?: string, right?: string) => (
   (right ?? '').localeCompare(left ?? '')
 );
@@ -410,14 +386,6 @@ const isDateKeyBefore = (value: string, startDate?: string) => (
 const isDateInStatementPeriod = (value: string, filters: CooperativeReportFilters) => (
   isDateKeyInRange(value, filters.startDate, getStatementEndDate(filters))
 );
-
-const getAccountMovement = (
-  debit: number,
-  credit: number,
-  account: ChartOfAccount,
-) => account.normal_balance === 'DEBIT'
-  ? debit - credit
-  : credit - debit;
 
 const getLoanOutstandingTotal = (loan: Pick<
   CooperativeLoan,
@@ -1090,85 +1058,6 @@ const buildCashBankRows = (
   }))
   .sort((left, right) => compareDateDesc(left.created_at, right.created_at));
 
-const buildLedgerRows = (
-  journalEntries: JournalEntryWithLines[],
-  selectedAccount: ChartOfAccount | undefined,
-  filters: CooperativeReportFilters,
-): CooperativeLedgerRow[] => {
-  if (!selectedAccount) return [];
-
-  const sortedPairs = journalEntries
-    .filter((entry) => entry.status === 'POSTED')
-    .flatMap((entry) => entry.lines.map((line) => ({ entry, line })))
-    .filter(({ line }) => line.account_id === selectedAccount.id)
-    .sort((left, right) => {
-      const dateCompare = left.entry.entry_date.localeCompare(right.entry.entry_date);
-      if (dateCompare !== 0) return dateCompare;
-      return left.entry.entry_number.localeCompare(right.entry.entry_number);
-    });
-
-  const openingBalance = roundCurrency(
-    sortedPairs
-      .filter(({ entry }) => isBeforeStartDate(entry.entry_date, filters.startDate))
-      .reduce((sum, { line }) => (
-        sum + getAccountMovement(line.debit, line.credit, selectedAccount)
-      ), 0),
-  );
-  const periodPairs = sortedPairs
-    .filter(({ entry }) => isDateKeyInRange(entry.entry_date, filters.startDate, filters.endDate));
-
-  let runningBalance = openingBalance;
-  const rows: CooperativeLedgerRow[] = [];
-
-  if (filters.startDate) {
-    rows.push({
-      id: `${selectedAccount.id}:opening`,
-      row_type: 'OPENING',
-      entry_date: filters.startDate,
-      entry_number: '-',
-      description: 'Opening balance',
-      debit: 0,
-      credit: 0,
-      running_balance: openingBalance,
-    });
-  }
-
-  periodPairs.forEach(({ entry, line }) => {
-    runningBalance = roundCurrency(
-      runningBalance + getAccountMovement(line.debit, line.credit, selectedAccount),
-    );
-    rows.push({
-      id: line.id,
-      row_type: 'MOVEMENT',
-      entry_id: entry.id,
-      entry_date: entry.entry_date,
-      entry_number: entry.entry_number,
-      source_type: entry.source_type,
-      source_number: entry.source_number,
-      source_event: entry.source_event,
-      description: line.description || entry.description,
-      debit: line.debit,
-      credit: line.credit,
-      running_balance: runningBalance,
-    });
-  });
-
-  rows.push({
-    id: `${selectedAccount.id}:ending`,
-    row_type: 'ENDING',
-    entry_date: filters.endDate ?? (
-      periodPairs.length > 0 ? periodPairs[periodPairs.length - 1].entry.entry_date : filters.startDate
-    ),
-    entry_number: '-',
-    description: 'Ending balance',
-    debit: 0,
-    credit: 0,
-    running_balance: runningBalance,
-  });
-
-  return rows;
-};
-
 const createReconciliationRow = (
   key: CooperativeReconciliationKey,
   mismatchCount: number,
@@ -1377,10 +1266,6 @@ export const getCooperativeReportData = async (
     endDate: filters.endDate,
     sourceTypes: COOPERATIVE_JOURNAL_SOURCE_TYPES,
   };
-  const ledgerFilters = {
-    endDate: filters.endDate,
-    sourceTypes: COOPERATIVE_JOURNAL_SOURCE_TYPES,
-  };
   const formalStatementFilters = {
     sourceTypes: COOPERATIVE_FORMAL_STATEMENT_SOURCE_TYPES,
   };
@@ -1390,7 +1275,6 @@ export const getCooperativeReportData = async (
     financialReadinessResult,
     generalLedgerModule,
     journalEntries,
-    ledgerEntries,
     reconciliationJournalEntries,
     formalStatementEntries,
     members,
@@ -1405,7 +1289,6 @@ export const getCooperativeReportData = async (
     getGeneralLedgerReadiness(),
     db.enabledModules.get('GENERAL_LEDGER'),
     getJournalEntriesWithLines(periodLedgerFilters),
-    getJournalEntriesWithLines(ledgerFilters),
     getJournalEntriesWithLines({ sourceTypes: COOPERATIVE_JOURNAL_SOURCE_TYPES }),
     getJournalEntriesWithLines(formalStatementFilters),
     db.cooperativeMembers.orderBy('member_number').toArray(),
@@ -1417,9 +1300,6 @@ export const getCooperativeReportData = async (
     db.financeTransactions.orderBy('created_at').reverse().toArray(),
   ]);
 
-  const selectedAccount = filters.accountId
-    ? accounts.find((account) => account.id === filters.accountId)
-    : undefined;
   const overdueReport = buildOverdueReport(loans, installments, filters);
   const cashBankRows = buildCashBankRows(financeTransactions, filters);
   const financialReadiness = buildFinancialReadiness(financialReadinessResult, generalLedgerModule);
@@ -1451,7 +1331,6 @@ export const getCooperativeReportData = async (
 
   return {
     accounts,
-    selectedAccount,
     financialReadiness,
     summary: buildOperationalSummary(members, savingBalances, loans, cashBankRows, overdueReport),
     memberRows: buildMemberRows(members, savingBalances, loans),
@@ -1471,7 +1350,6 @@ export const getCooperativeReportData = async (
       reconciliationJournalEntries,
     ),
     journalEntries,
-    ledgerRows: buildLedgerRows(ledgerEntries, selectedAccount, filters),
     incomeStatement,
     balanceSheet,
     cooperativeBalanceSheet,
