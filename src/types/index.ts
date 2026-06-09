@@ -322,6 +322,9 @@ export interface Employee {
   position?: string;
   user_id?: string;
   user_name?: string;
+  login_role_id?: string;
+  pin_hash?: string;
+  pin_salt?: string;
   notes?: string;
   is_active: boolean;
   created_at: string;

@@ -110,6 +110,14 @@ const assertPinAvailable = async (pin: string, excludeUserId?: string) => {
       throw new Error('PIN sudah digunakan user lain.');
     }
   }
+
+  const employees = await db.employees.toArray();
+  for (const employee of employees) {
+    if (employee.id === excludeUserId) continue;
+    if (employee.pin_hash && employee.pin_salt && await verifyPin(pin, employee.pin_hash, employee.pin_salt)) {
+      throw new Error('PIN sudah digunakan karyawan lain.');
+    }
+  }
 };
 
 const getRoleForAuthInput = async (input: { role?: UserRole; role_id?: string }) => {
@@ -437,6 +445,56 @@ export const loginWithPin = async (pin: string): Promise<AuthUser> => {
     }
   }
 
+  const employees = (await db.employees.toArray()).filter((emp) => emp.is_active && emp.pin_hash && emp.pin_salt);
+  
+  for (const employee of employees) {
+    if (employee.pin_hash && employee.pin_salt && await verifyPin(pin, employee.pin_hash, employee.pin_salt)) {
+      if (employee.login_role_id) {
+        const role = await db.roles.get(employee.login_role_id);
+        if (!role?.is_active) {
+          throw new Error('Role karyawan sudah nonaktif.');
+        }
+      }
+
+      const now = new Date().toISOString();
+      const sessionId = crypto.randomUUID();
+
+      await db.authSessions.add({
+        id: sessionId,
+        user_id: employee.id, // We use employee id as user_id for the session
+        created_at: now,
+        last_active_at: now,
+      });
+      setActiveSessionId(sessionId);
+
+      // Create ephemeral AuthUser for the log
+      const role = employee.login_role_id ? await db.roles.get(employee.login_role_id) : undefined;
+      const ephemeralUser: AuthUser = {
+        id: employee.id,
+        name: employee.name,
+        role: (role?.code as UserRole) || 'KASIR',
+        role_id: employee.login_role_id,
+        role_name: role?.name,
+        employee_id: employee.id,
+        pin_hash: employee.pin_hash,
+        pin_salt: employee.pin_salt,
+        is_active: employee.is_active,
+        created_at: employee.created_at,
+        updated_at: employee.updated_at,
+      };
+
+      await writeActivityLog({
+        user: ephemeralUser,
+        action: 'AUTH_LOGIN',
+        entity: 'authSessions',
+        entity_id: sessionId,
+        description: `${employee.name} (Karyawan) login.`,
+      });
+
+      return ephemeralUser;
+    }
+  }
+
   throw new Error('PIN tidak valid atau user tidak aktif.');
 };
 
@@ -476,13 +534,32 @@ export const getCurrentSessionUser = async (options: CurrentSessionUserOptions =
     return null;
   }
 
-  const user = await db.authUsers.get(session.user_id);
+  let user = await db.authUsers.get(session.user_id);
   if (!user || !user.is_active) {
-    if (cleanupInvalidSession) {
-      await db.authSessions.delete(sessionId);
-      clearActiveSessionId();
+    // Check if it's an employee session
+    const employee = await db.employees.get(session.user_id);
+    if (!employee || !employee.is_active || !employee.pin_hash) {
+      if (cleanupInvalidSession) {
+        await db.authSessions.delete(sessionId);
+        clearActiveSessionId();
+      }
+      return null;
     }
-    return null;
+
+    const role = employee.login_role_id ? await db.roles.get(employee.login_role_id) : undefined;
+    user = {
+      id: employee.id,
+      name: employee.name,
+      role: (role?.code as UserRole) || 'KASIR',
+      role_id: employee.login_role_id,
+      role_name: role?.name,
+      employee_id: employee.id,
+      pin_hash: employee.pin_hash,
+      pin_salt: employee.pin_salt!,
+      is_active: employee.is_active,
+      created_at: employee.created_at,
+      updated_at: employee.updated_at,
+    };
   }
 
   if (touchSession) {

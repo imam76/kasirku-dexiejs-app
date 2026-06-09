@@ -45,9 +45,7 @@ const withPendingSync = (tax: Tax): Tax => ({
 
 const clearOtherDefaultTaxes = async (taxId: string, updatedAt = new Date().toISOString()): Promise<Tax[]> => {
   const defaultTaxes = await db.taxes
-    .where('is_default')
-    .equals(1)
-    .and((tax) => tax.id !== taxId)
+    .filter((tax) => tax.is_default && tax.id !== taxId)
     .toArray();
 
   const clearedTaxes = defaultTaxes.map((tax) => withPendingSync({

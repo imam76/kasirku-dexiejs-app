@@ -1,7 +1,7 @@
 import { Form, Input, Modal, Select, Switch } from 'antd';
 import type { FormInstance } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
-import type { AuthUser, CooperativeArea, Role } from '@/types';
+import type { CooperativeArea, Role } from '@/types';
 
 const { TextArea } = Input;
 
@@ -11,12 +11,9 @@ export interface EmployeeFormValues {
   email?: string;
   address?: string;
   position?: string;
-  user_id?: string;
-  create_login?: boolean;
   login_role_id?: string;
   login_pin?: string;
   confirm_login_pin?: string;
-  reset_login_pin?: boolean;
   area_ids?: string[];
   notes?: string;
   is_active?: boolean;
@@ -25,7 +22,6 @@ export interface EmployeeFormValues {
 interface EmployeeFormModalProps {
   form: FormInstance<EmployeeFormValues>;
   areas: CooperativeArea[];
-  authUsers: AuthUser[];
   roles: Role[];
   open: boolean;
   isEditing: boolean;
@@ -38,7 +34,6 @@ interface EmployeeFormModalProps {
 export default function EmployeeFormModal({
   form,
   areas,
-  authUsers,
   roles,
   open,
   isEditing,
@@ -48,16 +43,8 @@ export default function EmployeeFormModal({
   onSubmit,
 }: EmployeeFormModalProps) {
   const { t } = useI18n();
-  const createLogin = Form.useWatch('create_login', form);
-  const resetLoginPin = Form.useWatch('reset_login_pin', form);
-  const selectedUserId = Form.useWatch('user_id', form);
-  const selectedUser = authUsers.find((user) => user.id === selectedUserId);
-  const getLoginRoleId = (user: AuthUser | undefined) => (
-    user?.role_id ?? roles.find((role) => role.code === user?.role)?.id
-  );
-  const showExistingLoginControls = canManageLogin && isEditing && Boolean(selectedUser);
-  const showCreateLoginControls = canManageLogin && (!isEditing || !selectedUserId);
-  const showPinFields = Boolean(createLogin || resetLoginPin);
+  const loginPinValue = Form.useWatch('login_pin', form);
+  const isPinRequired = !isEditing || Boolean(loginPinValue);
 
   return (
     <Modal
@@ -100,32 +87,7 @@ export default function EmployeeFormModal({
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {canManageLogin ? (
-            <Form.Item name="user_id" label={t('employees.form.user')}>
-              <Select
-                allowClear
-                showSearch
-                disabled={Boolean(createLogin)}
-                optionFilterProp="label"
-                placeholder={t('employees.form.userPlaceholder')}
-                options={authUsers.map((user) => ({
-                  value: user.id,
-                  label: `${user.name} (${user.role_name ?? user.role})`,
-                  disabled: !user.is_active,
-                }))}
-                onChange={(userId) => {
-                  const user = authUsers.find((item) => item.id === userId);
-                  form.setFieldsValue({
-                    login_role_id: getLoginRoleId(user),
-                    reset_login_pin: false,
-                    login_pin: undefined,
-                    confirm_login_pin: undefined,
-                  });
-                }}
-              />
-            </Form.Item>
-          ) : null}
-          <Form.Item name="area_ids" label={t('employees.form.areas')}>
+          <Form.Item name="area_ids" label={t('employees.form.areas')} className="md:col-span-2">
             <Select
               mode="multiple"
               allowClear
@@ -141,118 +103,66 @@ export default function EmployeeFormModal({
           </Form.Item>
         </div>
 
-        {showCreateLoginControls ? (
+        {canManageLogin ? (
           <>
-            <Form.Item name="create_login" label="Beri akses login" valuePropName="checked">
-              <Switch
-                checkedChildren="Ya"
-                unCheckedChildren="Tidak"
-                onChange={(checked) => {
-                  if (checked) {
-                    form.setFieldsValue({
-                      user_id: undefined,
-                      reset_login_pin: false,
-                      login_pin: undefined,
-                      confirm_login_pin: undefined,
-                    });
-                  }
-                }}
-              />
-            </Form.Item>
-
-            {createLogin && (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="mb-2 mt-4 text-sm font-semibold text-gray-900">Akses Login (Opsional)</div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Form.Item
+                name="login_role_id"
+                label="Role Login"
+                rules={[{ required: Boolean(isPinRequired && loginPinValue), message: 'Role login wajib dipilih jika PIN diisi.' }]}
+              >
+                <Select
+                  showSearch
+                  allowClear
+                  optionFilterProp="label"
+                  placeholder="Pilih role login"
+                  options={roles.map((role) => ({
+                    value: role.id,
+                    label: role.name,
+                    disabled: !role.is_active,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item
+                name="login_pin"
+                label={isEditing ? 'PIN Login Baru (Isi untuk mengubah)' : 'PIN Login'}
+                preserve={false}
+                rules={[
+                  { required: !isEditing && Boolean(form.getFieldValue('login_role_id')), message: 'PIN login wajib diisi jika role dipilih.' },
+                  { min: 4, message: 'PIN minimal 4 digit.' },
+                  { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
+                ]}
+              >
+                <Input.Password inputMode="numeric" placeholder="Masukkan PIN" />
+              </Form.Item>
+              {loginPinValue && (
                 <Form.Item
-                  name="login_role_id"
-                  label="Role Login"
-                  rules={[{ required: true, message: 'Role login wajib dipilih.' }]}
+                  name="confirm_login_pin"
+                  label="Konfirmasi PIN"
+                  preserve={false}
+                  dependencies={['login_pin']}
+                  rules={[
+                    { required: true, message: 'Konfirmasi PIN wajib diisi.' },
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        if (!value || getFieldValue('login_pin') === value) {
+                          return Promise.resolve();
+                        }
+                        return Promise.reject(new Error('Konfirmasi PIN tidak sama.'));
+                      },
+                    }),
+                  ]}
+                  className="md:col-start-2"
                 >
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    placeholder="Pilih role login"
-                    options={roles.map((role) => ({
-                      value: role.id,
-                      label: role.name,
-                      disabled: !role.is_active,
-                    }))}
-                  />
+                  <Input.Password inputMode="numeric" placeholder="Ulangi PIN" />
                 </Form.Item>
-              </div>
-            )}
+              )}
+            </div>
           </>
         ) : null}
 
-        {showExistingLoginControls ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Form.Item
-              name="login_role_id"
-              label="Role Login"
-              rules={[{ required: true, message: 'Role login wajib dipilih.' }]}
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                placeholder="Pilih role login"
-                options={roles.map((role) => ({
-                  value: role.id,
-                  label: role.name,
-                  disabled: !role.is_active,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="reset_login_pin" label="Reset PIN Login" valuePropName="checked">
-              <Switch
-                checkedChildren="Ya"
-                unCheckedChildren="Tidak"
-                onChange={(checked) => {
-                  if (!checked) {
-                    form.setFieldsValue({
-                      login_pin: undefined,
-                      confirm_login_pin: undefined,
-                    });
-                  }
-                }}
-              />
-            </Form.Item>
-          </div>
-        ) : null}
 
-        {showPinFields ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Form.Item
-              name="login_pin"
-              label={createLogin ? 'PIN Login' : 'PIN Login Baru'}
-              preserve={false}
-              rules={[
-                { required: true, message: 'PIN login wajib diisi.' },
-                { min: 4, message: 'PIN minimal 4 digit.' },
-                { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
-              ]}
-            >
-              <Input.Password inputMode="numeric" placeholder="Masukkan PIN" />
-            </Form.Item>
-            <Form.Item
-              name="confirm_login_pin"
-              label="Konfirmasi PIN"
-              preserve={false}
-              dependencies={['login_pin']}
-              rules={[
-                { required: true, message: 'Konfirmasi PIN wajib diisi.' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('login_pin') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Konfirmasi PIN tidak sama.'));
-                  },
-                }),
-              ]}
-            >
-              <Input.Password inputMode="numeric" placeholder="Ulangi PIN" />
-            </Form.Item>
-          </div>
-        ) : null}
 
         <Form.Item name="address" label={t('employees.form.address')}>
           <TextArea rows={2} placeholder={t('employees.form.addressPlaceholder')} />

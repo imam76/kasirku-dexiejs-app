@@ -15,7 +15,6 @@ export default function EmployeeManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const {
     areas,
-    authUsers,
     roles,
     filteredEmployees,
     editingEmployee,
@@ -40,14 +39,12 @@ export default function EmployeeManagement() {
   const openAddModal = () => {
     resetForm();
     form.resetFields();
-    form.setFieldsValue({ area_ids: [], create_login: false, reset_login_pin: false, is_active: true });
+    form.setFieldsValue({ area_ids: [], is_active: true });
     setIsModalOpen(true);
   };
 
   const openEditModal = (employee: EmployeeWithAreas) => {
     handleEdit(employee);
-    const linkedUser = authUsers.find((user) => user.id === employee.user_id);
-    const linkedRoleId = linkedUser?.role_id ?? roles.find((role) => role.code === linkedUser?.role)?.id;
     form.resetFields();
     form.setFieldsValue({
       name: employee.name,
@@ -55,13 +52,10 @@ export default function EmployeeManagement() {
       email: employee.email,
       address: employee.address,
       position: employee.position,
-      user_id: employee.user_id,
-      login_role_id: linkedRoleId,
+      login_role_id: employee.login_role_id,
       area_ids: employee.area_assignments.map((assignment) => assignment.area_id),
       notes: employee.notes,
       is_active: employee.is_active,
-      create_login: false,
-      reset_login_pin: false,
     });
     setIsModalOpen(true);
   };
@@ -73,12 +67,9 @@ export default function EmployeeManagement() {
         ? values
         : {
           ...values,
-          user_id: editingEmployee?.user_id,
-          create_login: false,
           login_role_id: undefined,
           login_pin: undefined,
           confirm_login_pin: undefined,
-          reset_login_pin: false,
         };
       await submitForm(payload);
       await refreshCurrentUser();
@@ -158,7 +149,6 @@ export default function EmployeeManagement() {
       <EmployeeFormModal
         form={form}
         areas={areas}
-        authUsers={authUsers}
         roles={roles}
         open={isModalOpen}
         isEditing={Boolean(editingEmployee)}

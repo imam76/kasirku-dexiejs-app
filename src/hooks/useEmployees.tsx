@@ -35,7 +35,7 @@ export const useEmployees = () => {
     [] as AuthUser[],
   );
   const roles = useLiveQuery(
-    () => db.roles.where('is_active').equals(1).toArray(),
+    () => db.roles.filter((role) => role.is_active).toArray(),
     [],
     [] as Role[],
   );

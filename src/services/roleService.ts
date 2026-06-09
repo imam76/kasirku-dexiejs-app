@@ -279,8 +279,7 @@ export const updateRolePermissions = async (
 
 export const getActiveRoleOptions = async () => {
   const roles = await db.roles
-    .where('is_active')
-    .equals(1)
+    .filter((role) => role.is_active)
     .toArray();
 
   return roles
