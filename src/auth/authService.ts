@@ -6,6 +6,7 @@ import { enqueueActivityLogSync, enqueueAuthUserSync } from '@/services/syncQueu
 import { authUserPostgresAdapter, type RemoteAuthUserDto } from '@/services/postgresAdapter';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './roleSeed';
+import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
 
 const SESSION_STORAGE_KEY = 'kasirku-auth-session-id';
 const PIN_HASH_ALGORITHM = 'SHA-256';
@@ -702,9 +703,10 @@ export const hasUserPermission = async (
   permission: Permission,
 ) => {
   if (!user) return false;
-  if (!isPermissionEnabledBySetup(permission)) return false;
 
   const role = user.role_id ? await db.roles.get(user.role_id) : undefined;
+  const bypassSetupModuleLock = canBypassSetupModuleLockForUser(user, role);
+  if (!isPermissionEnabledBySetup(permission, { bypassSetupModuleLock })) return false;
   if (role?.is_owner || user.role === 'OWNER') return true;
 
   if (user.role_id) {

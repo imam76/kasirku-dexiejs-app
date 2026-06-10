@@ -1,6 +1,7 @@
 import type { AuthUser, Permission, Role, UserRole } from '@/types';
 import { hasPermission } from './permissions';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
+import { canBypassSetupModuleLockForUser, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
 
 type RoutePermissionRule = Permission | Permission[];
 
@@ -88,8 +89,11 @@ export const canAccessPermissionRule = (
   const permissions = Array.isArray(rule) ? rule : [rule];
   const user = typeof roleOrUser === 'object' ? roleOrUser : undefined;
   const legacyRole = typeof roleOrUser === 'string' ? roleOrUser : user?.role;
+  const bypassSetupModuleLock =
+    canBypassSetupModuleLockForUser(user, options.currentRole) ||
+    (legacyRole === 'OWNER' && shouldBypassSetupModuleLock());
 
-  if (!permissions.some((permission) => isPermissionEnabledBySetup(permission))) {
+  if (!permissions.some((permission) => isPermissionEnabledBySetup(permission, { bypassSetupModuleLock }))) {
     return false;
   }
 
@@ -99,15 +103,15 @@ export const canAccessPermissionRule = (
 
   if (user?.role_id && options.permissionSet) {
     return permissions.some((permission) => (
-      isPermissionEnabledBySetup(permission) && options.permissionSet?.has(permission)
+      isPermissionEnabledBySetup(permission, { bypassSetupModuleLock }) && options.permissionSet?.has(permission)
     ));
   }
 
   if (Array.isArray(rule)) {
-    return rule.some((permission) => hasPermission(legacyRole, permission));
+    return rule.some((permission) => hasPermission(legacyRole, permission, { bypassSetupModuleLock }));
   }
 
-  return hasPermission(legacyRole, rule);
+  return hasPermission(legacyRole, rule, { bypassSetupModuleLock });
 };
 
 export const canAccessPath = (

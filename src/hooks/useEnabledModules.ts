@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isRouteEnabledForModules } from '@/auth/moduleAccess';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
-import { SETUP_CONFIG_CHANGED_EVENT, getSetupConfig, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
+import { SETUP_CONFIG_CHANGED_EVENT, canBypassSetupModuleLockForUser, getSetupConfig } from '@/services/setupKeyService';
+import type { AuthUser, Role } from '@/types';
 import type { SetupConfig } from '@/types/setup';
 
 /**
@@ -16,9 +17,15 @@ import type { SetupConfig } from '@/types/setup';
  * If no setup config exists (fresh install without developer setup),
  * everything is enabled by default.
  */
-export const useEnabledModules = () => {
+export const useEnabledModules = (options: {
+  currentUser?: Pick<AuthUser, 'role'> | null;
+  currentRole?: Pick<Role, 'is_owner'> | null;
+} = {}) => {
   const [config, setConfig] = useState<SetupConfig | null>(() => getSetupConfig());
-  const bypassSetupModuleLock = shouldBypassSetupModuleLock();
+  const bypassSetupModuleLock = canBypassSetupModuleLockForUser(
+    options.currentUser,
+    options.currentRole,
+  );
 
   useEffect(() => {
     const refreshConfig = () => setConfig(getSetupConfig());

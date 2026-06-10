@@ -15,6 +15,7 @@ test.describe.serial('setup awal owner', () => {
     await page.getByRole('button', { name: 'Register Owner Pertama' }).click();
 
     await page.getByLabel('Nama Owner').fill(demoOwner.name);
+    await page.getByLabel('Email').fill(demoOwner.email);
     await page.getByLabel('PIN', { exact: true }).fill(demoOwner.pin);
     await page.getByLabel('Konfirmasi PIN').fill('654321');
     await page.getByRole('button', { name: 'Simpan Owner' }).click();
@@ -22,4 +23,3 @@ test.describe.serial('setup awal owner', () => {
     await expect(page.getByText('Konfirmasi PIN tidak sama.')).toBeVisible();
   });
 });
-

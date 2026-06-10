@@ -1,4 +1,4 @@
-import { getSetupConfig, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
+import { getSetupConfig } from '@/services/setupKeyService';
 
 /**
  * Mapping from route paths to setup module codes.
@@ -95,8 +95,11 @@ export const isRouteEnabledForModules = (
  * Check if a route path is enabled by the setup config.
  * If no setup config exists, all routes are enabled (backwards compatible).
  */
-export const isRouteEnabledBySetup = (path: string): boolean => {
-  if (shouldBypassSetupModuleLock()) return true;
+export const isRouteEnabledBySetup = (
+  path: string,
+  options: { bypassSetupModuleLock?: boolean } = {},
+): boolean => {
+  if (options.bypassSetupModuleLock) return true;
 
   const config = getSetupConfig();
   // No setup config = all routes enabled (fresh install / no developer setup)

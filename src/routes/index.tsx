@@ -37,7 +37,7 @@ type HomeMenuItem = {
 function Index() {
   const { t } = useI18n()
   const { currentUser, currentRole, permissionSet } = useAuth()
-  const { isRouteEnabled } = useEnabledModules()
+  const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole })
   const todaySales = useLiveQuery(
     async () => {
       const startOfToday = dayjs.tz().startOf('day').toISOString()

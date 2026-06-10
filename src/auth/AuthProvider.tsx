@@ -5,6 +5,7 @@ import { ensureDefaultOwner, getCurrentSessionUser, loginWithEmailAndPin, logout
 import { AuthContext, type AuthContextValue } from './AuthContext';
 import { db } from '@/lib/db';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
+import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -92,10 +93,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const can = useCallback((permission: Permission) => {
     if (!currentUser) return false;
-    if (!isPermissionEnabledBySetup(permission)) return false;
+    const bypassSetupModuleLock = canBypassSetupModuleLockForUser(currentUser, currentRole);
+    if (!isPermissionEnabledBySetup(permission, { bypassSetupModuleLock })) return false;
     if (currentRole?.is_owner || currentUser.role === 'OWNER') return true;
     if (currentUser.role_id) return permissionSet.has(permission);
-    return hasPermission(currentUser.role, permission);
+    return hasPermission(currentUser.role, permission, { bypassSetupModuleLock });
   }, [currentRole?.is_owner, currentUser, permissionSet]);
 
   const requirePermission = useCallback((permission: Permission) => {

@@ -1,4 +1,4 @@
-import { getSetupConfig, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
+import { getSetupConfig } from '@/services/setupKeyService';
 import type { Permission } from '@/types';
 
 export interface PermissionCatalogItem {
@@ -175,10 +175,17 @@ export const getPermissionCatalogItem = (permission: Permission) => (
   PERMISSION_CATALOG.find((item) => item.code === permission)
 );
 
-export const isPermissionEnabledBySetup = (permission: Permission) => {
+interface SetupPermissionOptions {
+  bypassSetupModuleLock?: boolean;
+}
+
+export const isPermissionEnabledBySetup = (
+  permission: Permission,
+  options: SetupPermissionOptions = {},
+) => {
   const catalogItem = getPermissionCatalogItem(permission);
   if (!catalogItem) return false;
-  if (shouldBypassSetupModuleLock()) return true;
+  if (options.bypassSetupModuleLock) return true;
 
   const config = getSetupConfig();
   if (!config) return true;
@@ -186,6 +193,6 @@ export const isPermissionEnabledBySetup = (permission: Permission) => {
   return catalogItem.moduleCodes.some((moduleCode) => config.enabledModules.includes(moduleCode));
 };
 
-export const getEnabledPermissionCatalog = () => (
-  PERMISSION_CATALOG.filter((item) => isPermissionEnabledBySetup(item.code))
+export const getEnabledPermissionCatalog = (options: SetupPermissionOptions = {}) => (
+  PERMISSION_CATALOG.filter((item) => isPermissionEnabledBySetup(item.code, options))
 );

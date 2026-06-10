@@ -102,7 +102,7 @@ const RootLayout = () => {
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
   const { can, currentUser, currentRole, permissionSet, logout } = useAuth()
-  const { isRouteEnabled } = useEnabledModules()
+  const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole })
   const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)

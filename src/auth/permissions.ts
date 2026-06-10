@@ -1,5 +1,6 @@
 import type { Permission, UserRole } from '@/types';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
+import { shouldBypassSetupModuleLock } from '@/services/setupKeyService';
 
 export const ROLE_LABEL: Record<UserRole, string> = {
   OWNER: 'Owner',
@@ -69,8 +70,13 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
 };
 
-export const hasPermission = (role: UserRole | undefined, permission: Permission) => {
+export const hasPermission = (
+  role: UserRole | undefined,
+  permission: Permission,
+  options: { bypassSetupModuleLock?: boolean } = {},
+) => {
   if (!role) return false;
-  if (!isPermissionEnabledBySetup(permission)) return false;
+  const bypassSetupModuleLock = options.bypassSetupModuleLock ?? (role === 'OWNER' && shouldBypassSetupModuleLock());
+  if (!isPermissionEnabledBySetup(permission, { bypassSetupModuleLock })) return false;
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 };

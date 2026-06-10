@@ -3,6 +3,7 @@ import { getEnabledPermissionCatalog, PERMISSION_CATALOG } from '@/auth/permissi
 import { ROLE_LABEL } from '@/auth/permissions';
 import { resolveLegacyRoleId } from '@/auth/roleSeed';
 import { db } from '@/lib/db';
+import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
 import {
   enqueueRolePermissionDeleteSync,
   enqueueRolePermissionSync,
@@ -47,13 +48,16 @@ const assertValidRoleName = async (name: string, excludeRoleId?: string) => {
   }
 };
 
-const getAllowedPermissionSet = () => (
-  new Set(getEnabledPermissionCatalog().map((item) => item.code))
+const getAllowedPermissionSet = (options: { bypassSetupModuleLock?: boolean } = {}) => (
+  new Set(getEnabledPermissionCatalog(options).map((item) => item.code))
 );
 
-const sanitizePermissions = (permissions: Permission[]) => {
+const sanitizePermissions = (
+  permissions: Permission[],
+  options: { bypassSetupModuleLock?: boolean } = {},
+) => {
   const catalogCodes = new Set(PERMISSION_CATALOG.map((item) => item.code));
-  const allowedPermissions = getAllowedPermissionSet();
+  const allowedPermissions = getAllowedPermissionSet(options);
   const uniquePermissions = Array.from(new Set(permissions));
   const invalidPermission = uniquePermissions.find((permission) => !catalogCodes.has(permission));
   if (invalidPermission) {
@@ -230,7 +234,10 @@ export const updateRolePermissions = async (
     throw new Error('Permission Owner system tidak bisa diubah dari UI.');
   }
 
-  const sanitizedPermissions = sanitizePermissions(permissions);
+  const actorRole = actor.role_id ? await db.roles.get(actor.role_id) : undefined;
+  const sanitizedPermissions = sanitizePermissions(permissions, {
+    bypassSetupModuleLock: canBypassSetupModuleLockForUser(actor, actorRole),
+  });
   const now = new Date().toISOString();
   const existingPermissions = await db.rolePermissions
     .where('role_id')

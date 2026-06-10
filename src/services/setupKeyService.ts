@@ -1,4 +1,5 @@
 import type { SetupConfig } from '@/types/setup';
+import type { AuthUser, Role } from '@/types';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 
@@ -81,8 +82,9 @@ export const isSetupConfigured = (): boolean => {
 };
 
 /**
- * Web builds are used as a trial/demo surface, so setup module locks are bypassed
- * there by default. Tauri builds keep enforcing the developer setup config.
+ * Web builds can be used as a trial/demo surface. This only detects whether the
+ * web trial bypass is available; callers still decide whether the current user
+ * is allowed to use it.
  */
 export const shouldBypassSetupModuleLock = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -91,4 +93,18 @@ export const shouldBypassSetupModuleLock = (): boolean => {
   const webTrialBypassEnabled = meta.env?.VITE_WEB_TRIAL_MODULE_BYPASS !== 'false';
 
   return webTrialBypassEnabled && !isTauriRuntime();
+};
+
+export const isOwnerAccessContext = (
+  user: Pick<AuthUser, 'role'> | null | undefined,
+  role: Pick<Role, 'is_owner'> | null | undefined,
+): boolean => {
+  return Boolean(role?.is_owner || user?.role === 'OWNER');
+};
+
+export const canBypassSetupModuleLockForUser = (
+  user: Pick<AuthUser, 'role'> | null | undefined,
+  role: Pick<Role, 'is_owner'> | null | undefined,
+): boolean => {
+  return isOwnerAccessContext(user, role) && shouldBypassSetupModuleLock();
 };

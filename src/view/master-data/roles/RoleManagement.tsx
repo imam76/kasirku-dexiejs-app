@@ -4,6 +4,8 @@ import type { ColumnsType } from 'antd/es/table';
 import { Edit2, KeyRound, Plus, ShieldCheck, UserCheck, UserX } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getEnabledPermissionCatalog } from '@/auth/permissionCatalog';
+import { useAuth } from '@/auth/useAuth';
+import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
 import dayjs from '@/lib/dayjs';
 import {
   createRole,
@@ -27,6 +29,7 @@ type RoleRow = Role & { permission_count: number };
 
 export default function RoleManagement() {
   const { message, modal } = App.useApp();
+  const { currentUser, currentRole } = useAuth();
   const [roleForm] = Form.useForm<RoleFormValues>();
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
@@ -43,13 +46,15 @@ export default function RoleManagement() {
 
   const catalogGroups = useMemo(() => {
     const groups = new Map<string, ReturnType<typeof getEnabledPermissionCatalog>>();
-    getEnabledPermissionCatalog().forEach((item) => {
+    getEnabledPermissionCatalog({
+      bypassSetupModuleLock: canBypassSetupModuleLockForUser(currentUser, currentRole),
+    }).forEach((item) => {
       const items = groups.get(item.group) ?? [];
       items.push(item);
       groups.set(item.group, items);
     });
     return Array.from(groups.entries());
-  }, []);
+  }, [currentRole, currentUser]);
 
   const closeRoleModal = () => {
     setIsRoleModalOpen(false);

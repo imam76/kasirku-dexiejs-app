@@ -1,5 +1,6 @@
 export const demoOwner = {
   name: 'Owner KSU Madu Kenjacana',
+  email: 'owner@ksu.test',
   pin: '123456',
 };
 
@@ -25,4 +26,3 @@ export const demoMembers = {
     address: 'Alamat demo Budi Hartono',
   },
 } as const;
-
