@@ -1,4 +1,4 @@
-import { getSetupConfig } from '@/services/setupKeyService';
+import { getSetupConfig, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
 import type { Permission } from '@/types';
 
 export interface PermissionCatalogItem {
@@ -178,6 +178,7 @@ export const getPermissionCatalogItem = (permission: Permission) => (
 export const isPermissionEnabledBySetup = (permission: Permission) => {
   const catalogItem = getPermissionCatalogItem(permission);
   if (!catalogItem) return false;
+  if (shouldBypassSetupModuleLock()) return true;
 
   const config = getSetupConfig();
   if (!config) return true;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isRouteEnabledForModules } from '@/auth/moduleAccess';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
-import { SETUP_CONFIG_CHANGED_EVENT, getSetupConfig } from '@/services/setupKeyService';
+import { SETUP_CONFIG_CHANGED_EVENT, getSetupConfig, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
 import type { SetupConfig } from '@/types/setup';
 
 /**
@@ -18,6 +18,7 @@ import type { SetupConfig } from '@/types/setup';
  */
 export const useEnabledModules = () => {
   const [config, setConfig] = useState<SetupConfig | null>(() => getSetupConfig());
+  const bypassSetupModuleLock = shouldBypassSetupModuleLock();
 
   useEffect(() => {
     const refreshConfig = () => setConfig(getSetupConfig());
@@ -37,8 +38,8 @@ export const useEnabledModules = () => {
   }, []);
 
   const enabledSet = useMemo(
-    () => (config ? new Set(config.enabledModules) : null),
-    [config],
+    () => (config && !bypassSetupModuleLock ? new Set(config.enabledModules) : null),
+    [bypassSetupModuleLock, config],
   );
 
   const isModuleEnabled = useMemo(() => {
@@ -56,5 +57,6 @@ export const useEnabledModules = () => {
     isRouteEnabled,
     enabledModules: config?.enabledModules ?? [],
     isConfigured: config !== null,
+    bypassSetupModuleLock,
   };
 };

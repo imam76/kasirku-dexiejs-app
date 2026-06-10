@@ -1,5 +1,6 @@
 import type { SetupConfig } from '@/types/setup';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
+import { isTauriRuntime } from '@/utils/export/platform';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'kasirku-setup-config-changed';
 
@@ -77,4 +78,17 @@ export const saveSetupConfig = (config: SetupConfig): void => {
  */
 export const isSetupConfigured = (): boolean => {
   return getSetupConfig() !== null;
+};
+
+/**
+ * Web builds are used as a trial/demo surface, so setup module locks are bypassed
+ * there by default. Tauri builds keep enforcing the developer setup config.
+ */
+export const shouldBypassSetupModuleLock = (): boolean => {
+  if (typeof window === 'undefined') return false;
+
+  const meta = import.meta as unknown as { env?: Record<string, string | undefined> };
+  const webTrialBypassEnabled = meta.env?.VITE_WEB_TRIAL_MODULE_BYPASS !== 'false';
+
+  return webTrialBypassEnabled && !isTauriRuntime();
 };

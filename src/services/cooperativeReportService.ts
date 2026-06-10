@@ -551,13 +551,63 @@ const buildCooperativeShuReport = (
   );
   const netRevenue = roundCurrency(revenue - contraRevenue);
   const shuAmount = roundCurrency(netRevenue - expense);
+  const sections: CooperativeShuReport['sections'] = [
+    {
+      key: 'REVENUE',
+      total: revenue,
+      rows: rows
+        .filter((row) => row.account_type === 'REVENUE')
+        .map((row) => ({
+          account_id: row.account_id,
+          account_code: row.account_code,
+          account_name: row.account_name,
+          account_type: row.account_type,
+          amount: row.balance,
+        })),
+    },
+    {
+      key: 'CONTRA_REVENUE',
+      total: contraRevenue,
+      rows: rows
+        .filter((row) => row.account_type === 'CONTRA_REVENUE')
+        .map((row) => ({
+          account_id: row.account_id,
+          account_code: row.account_code,
+          account_name: row.account_name,
+          account_type: row.account_type,
+          amount: row.balance,
+        })),
+    },
+    {
+      key: 'COST_OF_REVENUE',
+      total: 0,
+      rows: [],
+    },
+    {
+      key: 'OPERATING_EXPENSE',
+      total: expense,
+      rows: rows
+        .filter((row) => row.account_type === 'EXPENSE')
+        .map((row) => ({
+          account_id: row.account_id,
+          account_code: row.account_code,
+          account_name: row.account_name,
+          account_type: row.account_type,
+          amount: row.balance,
+        })),
+    },
+  ];
 
   return {
     revenue,
     contra_revenue: contraRevenue,
     net_revenue: netRevenue,
+    cost_of_revenue: 0,
+    gross_profit: netRevenue,
+    operating_expense: expense,
     expense,
     net_income: shuAmount,
+    sections,
     shu_amount: shuAmount,
     rows,
   };
@@ -1361,8 +1411,12 @@ export const getCooperativeReportData = async (
     revenue: cooperativeShuReport.revenue,
     contra_revenue: cooperativeShuReport.contra_revenue,
     net_revenue: cooperativeShuReport.net_revenue,
+    cost_of_revenue: cooperativeShuReport.cost_of_revenue,
+    gross_profit: cooperativeShuReport.gross_profit,
+    operating_expense: cooperativeShuReport.operating_expense,
     expense: cooperativeShuReport.expense,
     net_income: cooperativeShuReport.shu_amount,
+    sections: cooperativeShuReport.sections,
   };
   const balanceSheet: BalanceSheetReport = {
     assets: cooperativeBalanceSheet.assets,

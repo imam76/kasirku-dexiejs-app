@@ -1,4 +1,4 @@
-import { getSetupConfig } from '@/services/setupKeyService';
+import { getSetupConfig, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
 
 /**
  * Mapping from route paths to setup module codes.
@@ -38,6 +38,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/report/transaction-detail-report': ['REPORT_TRANSACTION_DETAIL'],
   '/report/purchase-report': ['REPORT_PURCHASE'],
   '/report/expense-report': ['REPORT_EXPENSE'],
+  '/report/profit-loss-report': ['REPORT_PROFIT'],
   '/report/aging-report': ['REPORT_AGING'],
   '/report/stock-card': ['REPORT_STOCK_CARD'],
   '/profit': ['REPORT_PROFIT'],
@@ -95,6 +96,8 @@ export const isRouteEnabledForModules = (
  * If no setup config exists, all routes are enabled (backwards compatible).
  */
 export const isRouteEnabledBySetup = (path: string): boolean => {
+  if (shouldBypassSetupModuleLock()) return true;
+
   const config = getSetupConfig();
   // No setup config = all routes enabled (fresh install / no developer setup)
   return isRouteEnabledForModules(path, config?.enabledModules ?? null);

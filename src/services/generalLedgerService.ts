@@ -142,8 +142,32 @@ export interface IncomeStatementReport {
   revenue: number;
   contra_revenue: number;
   net_revenue: number;
+  cost_of_revenue: number;
+  gross_profit: number;
+  operating_expense: number;
   expense: number;
   net_income: number;
+  sections: IncomeStatementSection[];
+}
+
+export type IncomeStatementSectionKey =
+  | 'REVENUE'
+  | 'CONTRA_REVENUE'
+  | 'COST_OF_REVENUE'
+  | 'OPERATING_EXPENSE';
+
+export interface IncomeStatementAccountRow {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: AccountType;
+  amount: number;
+}
+
+export interface IncomeStatementSection {
+  key: IncomeStatementSectionKey;
+  total: number;
+  rows: IncomeStatementAccountRow[];
 }
 
 export interface BalanceSheetReport {
@@ -1351,6 +1375,14 @@ const getAccountBalance = (
   ? roundCurrency(debit - credit)
   : roundCurrency(credit - debit);
 
+const isCostOfRevenueAccount = (line: Pick<JournalEntryLine, 'account_id' | 'account_code' | 'account_name'>) => (
+  ACCOUNT_CANDIDATES.cogs.ids.includes(line.account_id) ||
+  ACCOUNT_CANDIDATES.cogs.codes.includes(line.account_code) ||
+  /^5\d{3}/.test(line.account_code) ||
+  line.account_name.toLowerCase().includes('hpp') ||
+  line.account_name.toLowerCase().includes('harga pokok')
+);
+
 export const getTrialBalanceReport = async (
   filters: GeneralLedgerReportFilters = {},
 ): Promise<TrialBalanceReport> => {
@@ -1415,31 +1447,78 @@ export const getIncomeStatementReport = async (
   filters: GeneralLedgerReportFilters = {},
 ): Promise<IncomeStatementReport> => {
   const reportLines = await getPostedReportLines(filters);
+  const rowsBySection = new Map<IncomeStatementSectionKey, Map<string, IncomeStatementAccountRow>>();
+  const addAccountRow = (
+    sectionKey: IncomeStatementSectionKey,
+    line: JournalEntryLine,
+    amount: number,
+  ) => {
+    const rows = rowsBySection.get(sectionKey) ?? new Map<string, IncomeStatementAccountRow>();
+    const current = rows.get(line.account_id) ?? {
+      account_id: line.account_id,
+      account_code: line.account_code,
+      account_name: line.account_name,
+      account_type: line.account_type,
+      amount: 0,
+    };
+    current.amount = roundCurrency(current.amount + amount);
+    rows.set(line.account_id, current);
+    rowsBySection.set(sectionKey, rows);
+  };
   const totals = reportLines.reduce((acc, { line }) => {
     const normalBalance = getAccountNormalBalance(line.account_type);
     const balance = getAccountBalance(line.debit, line.credit, normalBalance);
 
     if (line.account_type === 'REVENUE') {
       acc.revenue += balance;
+      addAccountRow('REVENUE', line, balance);
     } else if (line.account_type === 'CONTRA_REVENUE') {
       acc.contra_revenue += balance;
+      addAccountRow('CONTRA_REVENUE', line, balance);
     } else if (line.account_type === 'EXPENSE') {
       acc.expense += balance;
+      if (isCostOfRevenueAccount(line)) {
+        acc.cost_of_revenue += balance;
+        addAccountRow('COST_OF_REVENUE', line, balance);
+      } else {
+        acc.operating_expense += balance;
+        addAccountRow('OPERATING_EXPENSE', line, balance);
+      }
     }
 
     return acc;
-  }, { revenue: 0, contra_revenue: 0, expense: 0 });
+  }, { revenue: 0, contra_revenue: 0, cost_of_revenue: 0, operating_expense: 0, expense: 0 });
   const revenue = roundCurrency(totals.revenue);
   const contraRevenue = roundCurrency(totals.contra_revenue);
+  const costOfRevenue = roundCurrency(totals.cost_of_revenue);
+  const operatingExpense = roundCurrency(totals.operating_expense);
   const expense = roundCurrency(totals.expense);
   const netRevenue = roundCurrency(revenue - contraRevenue);
+  const grossProfit = roundCurrency(netRevenue - costOfRevenue);
+  const createSection = (key: IncomeStatementSectionKey, total: number): IncomeStatementSection => ({
+    key,
+    total,
+    rows: Array.from(rowsBySection.get(key)?.values() ?? [])
+      .map((row) => ({ ...row, amount: roundCurrency(row.amount) }))
+      .filter((row) => row.amount !== 0)
+      .sort((left, right) => left.account_code.localeCompare(right.account_code)),
+  });
 
   return {
     revenue,
     contra_revenue: contraRevenue,
     net_revenue: netRevenue,
+    cost_of_revenue: costOfRevenue,
+    gross_profit: grossProfit,
+    operating_expense: operatingExpense,
     expense,
-    net_income: roundCurrency(netRevenue - expense),
+    net_income: roundCurrency(grossProfit - operatingExpense),
+    sections: [
+      createSection('REVENUE', revenue),
+      createSection('CONTRA_REVENUE', contraRevenue),
+      createSection('COST_OF_REVENUE', costOfRevenue),
+      createSection('OPERATING_EXPENSE', operatingExpense),
+    ],
   };
 };
 
