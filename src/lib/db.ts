@@ -9,7 +9,7 @@ import {
   InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem,
   CooperativeMember, CooperativeSavingTransaction, CooperativeMemberSavingBalance,
   CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeSettings,
-  CompanyProfileSetting, CooperativeArea, Employee, EmployeeArea
+  CompanyProfileSetting, CooperativeArea, Employee, EmployeeArea, CashierSession
 } from '@/types';
 import { createUnitDefinition, DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_ACCOUNTING_PROFILE_SETTING, DEFAULT_ENABLED_MODULES, DEFAULT_GENERAL_LEDGER_SETTING } from '@/constants/accounting';
@@ -72,6 +72,7 @@ export class KasirkuDB extends Dexie {
   products!: Table<Product>;
   transactions!: Table<Transaction>;
   transactionItems!: Table<TransactionItem>;
+  cashierSessions!: Table<CashierSession>;
   stockPurchases!: Table<StockPurchase>;
   profitLogs!: Table<ProfitLog>;
   profitBalance!: Table<ProfitBalance>;
@@ -882,6 +883,11 @@ export class KasirkuDB extends Dexie {
       if (migratedTransactionItems.length > 0) {
         await tx.table<TransactionItem, string>('transactionItems').bulkPut(migratedTransactionItems);
       }
+    });
+
+    this.version(47).stores({
+      cashierSessions: 'id, session_number, status, cashier_user_id, opened_at, closed_at, balance_status, created_at, updated_at',
+      transactions: 'id, transaction_number, payment_method, cashier_session_id, cashier_user_id, created_at',
     });
 
     this.on('populate', async () => {

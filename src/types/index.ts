@@ -73,6 +73,8 @@ export interface Product {
 export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
 export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 export type TransactionStatus = 'COMPLETED' | 'VOIDED';
+export type CashierSessionStatus = 'OPEN' | 'CLOSED';
+export type CashierSessionBalanceStatus = 'BALANCED' | 'NON_BALANCED';
 export type SyncQueueOperation = 'create' | 'update' | 'delete';
 export type SyncQueueStatus = 'pending' | 'processing' | 'synced' | 'failed';
 export type UserRole = 'OWNER' | 'ADMIN' | 'KASIR' | 'GUDANG';
@@ -1045,6 +1047,10 @@ export interface AppliedPromoSnapshot {
 export interface Transaction {
   id: string;
   transaction_number: string;
+  cashier_session_id?: string;
+  cashier_session_number?: string;
+  cashier_user_id?: string;
+  cashier_user_name?: string;
   subtotal_amount?: number;
   discount_amount?: number;
   discount_breakdown?: Array<{ label: string; amount: number }>;
@@ -1060,6 +1066,33 @@ export interface Transaction {
   receipt_printed_at?: string;
   receipt_print_error?: string;
   created_at: string;
+}
+
+export interface CashierSession {
+  id: string;
+  session_number: string;
+  status: CashierSessionStatus;
+  cashier_user_id?: string;
+  cashier_user_name?: string;
+  opened_at: string;
+  opening_cash_amount: number;
+  opening_note?: string;
+  closed_at?: string;
+  closed_by_user_id?: string;
+  closed_by_user_name?: string;
+  closing_cash_amount?: number;
+  closing_note?: string;
+  expected_cash_amount?: number;
+  cash_sales_amount?: number;
+  non_cash_sales_amount?: number;
+  total_sales_amount?: number;
+  voided_sales_amount?: number;
+  transaction_count?: number;
+  voided_transaction_count?: number;
+  cash_difference_amount?: number;
+  balance_status?: CashierSessionBalanceStatus;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TransactionItem {

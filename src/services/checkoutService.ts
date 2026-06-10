@@ -4,12 +4,13 @@ import type { CartItem, FinanceTransaction, PaymentMethod, StockMutation, Transa
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
-import { getCurrentSessionUser } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
 import { getCashOrBankAccountForPayment, postPosSaleJournal } from '@/services/generalLedgerService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
+import { getOpenCashierSessionForCurrentUser } from '@/services/cashierSessionService';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -248,6 +249,12 @@ export const checkout = async ({
   voucherCode,
 }: CheckoutInput): Promise<CheckoutResult> => {
   const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'CASHIER_ACCESS');
+  const cashierSession = await getOpenCashierSessionForCurrentUser();
+
+  if (!cashierSession) {
+    throw new Error('Sesi kasir belum dibuka.');
+  }
 
   const now = new Date();
   const transactionId = crypto.randomUUID();
@@ -288,11 +295,16 @@ export const checkout = async ({
       db.journalEntryLines,
       db.inventoryLots,
       db.inventoryLotConsumptions,
+      db.cashierSessions,
     ],
     async () => {
       const transaction: Transaction = {
         id: transactionId,
         transaction_number: transactionNumber,
+        cashier_session_id: cashierSession.id,
+        cashier_session_number: cashierSession.session_number,
+        cashier_user_id: currentUser?.id,
+        cashier_user_name: currentUser?.name,
         subtotal_amount: promoEvaluation.subtotal_before_discount,
         discount_amount: promoEvaluation.discount_amount,
         discount_breakdown: promoEvaluation.discount_breakdown,
