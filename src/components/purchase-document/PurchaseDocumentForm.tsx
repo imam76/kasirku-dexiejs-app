@@ -98,6 +98,11 @@ const toFormInitialValues = (
       values.paid_amount = 0;
     }
 
+    if (config.type === 'PURCHASE_RECEIPT') {
+      values.cost_status = 'FINAL';
+      values.additional_cost_treatment = 'IGNORE_FOR_MVP';
+    }
+
     return values;
   }
 
@@ -183,6 +188,7 @@ export const PurchaseDocumentForm = ({
   const watchedItems = useWatch({ control, name: 'items' });
   const items = useMemo(() => watchedItems ?? [], [watchedItems]);
   const documentDate = useWatch({ control, name: 'document_date' });
+  const watchedCostStatus = useWatch({ control, name: 'cost_status' });
   const watchedCurrencyCode = useWatch({ control, name: 'currency_code' });
   const watchedExchangeRate = useWatch({ control, name: 'exchange_rate' });
   const watchedExchangeRateSource = useWatch({ control, name: 'exchange_rate_source' });
@@ -472,6 +478,69 @@ export const PurchaseDocumentForm = ({
               )}
             />
           </div>
+        )}
+        {config.type === 'PURCHASE_RECEIPT' && (
+          <>
+            <div className={fieldContainerClassName}>
+              <label className={labelClassName}>{t('purchaseDocuments.field.deliveryNoteNumber')}</label>
+              <Controller
+                name="delivery_note_number"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    value={field.value ?? ''}
+                    onBlur={field.onBlur}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+            </div>
+            <div className={fieldContainerClassName}>
+              <label className={labelClassName}>{t('purchaseDocuments.field.deliveryNoteDate')}</label>
+              <Controller
+                name="delivery_note_date"
+                control={control}
+                render={({ field }) => (
+                  <DatePicker
+                    className="w-full"
+                    value={field.value ? dayjs(field.value as string) : null}
+                    onBlur={field.onBlur}
+                    onChange={(value) => field.onChange(value ? value.format('YYYY-MM-DD') : undefined)}
+                  />
+                )}
+              />
+            </div>
+            <div className={fieldContainerClassName}>
+              <label className={labelClassName}>{t('purchaseDocuments.field.costStatus')}</label>
+              <Controller
+                name="cost_status"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    className="w-full"
+                    value={field.value ?? 'FINAL'}
+                    options={[
+                      { value: 'FINAL', label: t('purchaseDocuments.costStatus.final') },
+                      { value: 'ESTIMATED', label: t('purchaseDocuments.costStatus.estimated') },
+                      { value: 'PENDING', label: t('purchaseDocuments.costStatus.pending') },
+                    ]}
+                    onBlur={field.onBlur}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+              {watchedCostStatus === 'ESTIMATED' && (
+                <p className="mt-1 text-xs leading-5 text-amber-700">
+                  {t('purchaseDocuments.helper.estimatedCost')}
+                </p>
+              )}
+              {watchedCostStatus === 'PENDING' && (
+                <p className="mt-1 text-xs leading-5 text-red-600">
+                  {t('purchaseDocuments.helper.pendingCost')}
+                </p>
+              )}
+            </div>
+          </>
         )}
         {config.behavior.hasDueDate && (
           <div className={fieldContainerClassName}>

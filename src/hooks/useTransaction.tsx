@@ -207,7 +207,7 @@ export const useTransaction = () => {
         paymentMethod,
         voucherCode,
       });
-      const { transaction, items } = checkoutResult;
+      const { transaction, items, warnings } = checkoutResult;
 
       modal.success({
         title: t('checkout.successTitle'),
@@ -235,6 +235,10 @@ export const useTransaction = () => {
             </p>
           </div>
         ),
+      });
+
+      warnings?.forEach((warning) => {
+        message.warning(warning);
       });
 
       queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
@@ -266,7 +270,7 @@ export const useTransaction = () => {
       console.error('Checkout failed:', error);
       modal.error({
         title: t('checkout.failedTitle'),
-        content: t('checkout.failedContent'),
+        content: error instanceof Error ? error.message : t('checkout.failedContent'),
       });
     }
   };

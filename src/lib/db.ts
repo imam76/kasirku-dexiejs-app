@@ -6,7 +6,8 @@ import {
   SalesDocument, SalesDocumentItem, SalesInvoicePayment, SalesReturn, SalesReturnItem,
   PurchaseDocument, PurchaseDocumentItem, PurchaseInvoicePayment, ChartOfAccount, FinanceAccountMapping,
   AccountingProfileSetting, EnabledModule, GeneralLedgerSetting, JournalEntry, JournalEntryLine,
-  InventoryLot, CooperativeMember, CooperativeSavingTransaction, CooperativeMemberSavingBalance,
+  InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem,
+  CooperativeMember, CooperativeSavingTransaction, CooperativeMemberSavingBalance,
   CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeSettings,
   CompanyProfileSetting, CooperativeArea, Employee, EmployeeArea
 } from '@/types';
@@ -117,6 +118,9 @@ export class KasirkuDB extends Dexie {
   cooperativeSettings!: Table<CooperativeSettings>;
   companyProfileSetting!: Table<CompanyProfileSetting>;
   inventoryLots!: Table<InventoryLot>;
+  inventoryLotConsumptions!: Table<InventoryLotConsumption>;
+  purchaseCostReconciliations!: Table<PurchaseCostReconciliation>;
+  purchaseCostReconciliationItems!: Table<PurchaseCostReconciliationItem>;
   cooperativeAreas!: Table<CooperativeArea>;
   employees!: Table<Employee>;
   employeeAreas!: Table<EmployeeArea>;
@@ -841,6 +845,42 @@ export class KasirkuDB extends Dexie {
 
       if (migratedInstallments.length > 0) {
         await tx.table<CooperativeLoanInstallment, string>('cooperativeLoanInstallments').bulkPut(migratedInstallments);
+      }
+    });
+
+    this.version(46).stores({
+      purchaseDocuments: 'id, document_number, type, status, contact_id, supplier_name, document_date, due_date, payment_status, source_document_id, project_id, department_id, tax_id, cost_status, sync_status, updated_at, created_at',
+      purchaseDocumentItems: 'id, document_id, product_id, cost_status',
+      inventoryLots: 'id, product_id, quantity_remaining, cost_status, received_at, source_type, source_id, source_line_id, created_at',
+      inventoryLotConsumptions: 'id, lot_id, product_id, source_type, source_id, source_line_id, created_at',
+      purchaseCostReconciliations: 'id, purchase_document_id, supplier_invoice_number, created_at',
+      purchaseCostReconciliationItems: 'id, reconciliation_id, purchase_document_item_id, product_id',
+      transactionItems: 'id, transaction_id, product_id, hpp_status, created_at',
+    }).upgrade(async (tx) => {
+      const lots = await tx.table<InventoryLot, string>('inventoryLots').toArray();
+      const migratedLots = lots
+        .filter((lot) => !lot.cost_status)
+        .map((lot) => ({
+          ...lot,
+          cost_status: 'FINAL' as const,
+          final_cost_per_unit: lot.cost_per_unit,
+        }));
+
+      if (migratedLots.length > 0) {
+        await tx.table<InventoryLot, string>('inventoryLots').bulkPut(migratedLots);
+      }
+
+      const transactionItems = await tx.table<TransactionItem, string>('transactionItems').toArray();
+      const migratedTransactionItems = transactionItems
+        .filter((item) => !item.hpp_status || !item.profit_status)
+        .map((item) => ({
+          ...item,
+          hpp_status: item.hpp_status ?? 'FINAL' as const,
+          profit_status: item.profit_status ?? 'FINAL' as const,
+        }));
+
+      if (migratedTransactionItems.length > 0) {
+        await tx.table<TransactionItem, string>('transactionItems').bulkPut(migratedTransactionItems);
       }
     });
 

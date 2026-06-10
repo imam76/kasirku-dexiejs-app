@@ -102,6 +102,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
             sourceLineId: item.id,
             quantityReceived: returnedQuantity,
             costPerUnit: costPerStockUnit,
+            costStatus: item.hpp_status ?? 'FINAL',
             receivedAt: now,
           });
 

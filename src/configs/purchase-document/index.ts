@@ -16,7 +16,8 @@ export type PurchaseDocumentFieldType =
   | 'department'
   | 'project'
   | 'warehouse'
-  | 'paymentStatus';
+  | 'paymentStatus'
+  | 'costStatus';
 
 export interface PurchaseDocumentFieldConfig {
   name: string;

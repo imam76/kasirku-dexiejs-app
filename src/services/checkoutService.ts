@@ -21,6 +21,12 @@ interface CheckoutInput {
 export interface CheckoutResult {
   transaction: Transaction;
   items: TransactionItem[];
+  warnings?: string[];
+}
+
+interface CreateTransactionItemsResult {
+  items: TransactionItem[];
+  warnings: string[];
 }
 
 const createTransactionItems = async (
@@ -28,10 +34,12 @@ const createTransactionItems = async (
   transactionId: string,
   createdAt: string,
   promoEvaluation: PromoEvaluationResult,
-): Promise<TransactionItem[]> => {
+): Promise<CreateTransactionItemsResult> => {
   const items: TransactionItem[] = [];
+  const warnings: string[] = [];
 
   for (const [index, item] of cart.entries()) {
+    const transactionItemId = crypto.randomUUID();
     const promoLine = promoEvaluation.lines[index];
 
     const priceBeforeDiscount =
@@ -62,7 +70,27 @@ const createTransactionItems = async (
     const fifoResult = await consumeFifoLots(
       item.product.id,
       quantityInStockUnit,
+      {
+        sourceType: 'POS_TRANSACTION',
+        sourceId: transactionId,
+        sourceLineId: transactionItemId,
+        createdAt,
+      },
     );
+    const hasEstimatedCost = fifoResult.consumedLots.some((lot) => lot.costStatus !== 'FINAL');
+    const estimatedProfit = finalSubtotal - fifoResult.totalCost;
+
+    if (finalSubtotal <= 0) {
+      throw new Error(`Harga jual ${item.product.name} belum valid.`);
+    }
+
+    if (hasEstimatedCost) {
+      warnings.push(`HPP ${item.product.name} masih memakai harga sementara.`);
+    }
+
+    if (hasEstimatedCost && estimatedProfit < 0) {
+      throw new Error(`Margin estimasi ${item.product.name} negatif. Transaksi diblokir sampai harga beli final/aman.`);
+    }
 
     // weightedAvgCostPerUnit berasal dari purchase_unit,
     // lalu dinormalisasi ke unit jual item
@@ -74,7 +102,7 @@ const createTransactionItems = async (
     );
 
     items.push({
-      id: crypto.randomUUID(),
+      id: transactionItemId,
       transaction_id: transactionId,
       product_id: item.product.id,
       product_name: item.product.name,
@@ -98,12 +126,14 @@ const createTransactionItems = async (
       // Lebih akurat karena pakai totalCost FIFO,
       // bukan purchase_price rata-rata dikali quantity
       profit: finalSubtotal - fifoResult.totalCost,
+      hpp_status: hasEstimatedCost ? 'ESTIMATED' : 'FINAL',
+      profit_status: hasEstimatedCost ? 'ESTIMATED' : 'FINAL',
 
       created_at: createdAt,
     });
   }
 
-  return items;
+  return { items, warnings };
 };
 
 const recordProfit = async (
@@ -257,6 +287,7 @@ export const checkout = async ({
       db.journalEntries,
       db.journalEntryLines,
       db.inventoryLots,
+      db.inventoryLotConsumptions,
     ],
     async () => {
       const transaction: Transaction = {
@@ -275,7 +306,7 @@ export const checkout = async ({
         created_at: createdAt,
       };
 
-      const items = await createTransactionItems(cart, transactionId, createdAt, promoEvaluation);
+      const { items, warnings } = await createTransactionItems(cart, transactionId, createdAt, promoEvaluation);
 
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);
@@ -284,7 +315,7 @@ export const checkout = async ({
       await postPosSaleJournal(transaction, items, currentUser);
       stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
 
-      return { transaction, items };
+      return { transaction, items, warnings };
     },
   );
 

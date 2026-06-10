@@ -103,6 +103,19 @@ export type PurchaseDocumentType =
 export type PurchaseDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type PurchaseInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 export type PurchaseInvoicePaymentRecordStatus = 'ACTIVE' | 'VOIDED';
+export type PurchaseCostStatus =
+  | 'FINAL'
+  | 'ESTIMATED'
+  | 'PENDING';
+export type PurchaseCostEstimateSource =
+  | 'LAST_PURCHASE_PRICE'
+  | 'PRODUCT_PURCHASE_PRICE'
+  | 'MANUAL'
+  | 'UNKNOWN';
+export type PurchaseAdditionalCostTreatment =
+  | 'INVENTORY_COST'
+  | 'OPERATING_EXPENSE'
+  | 'IGNORE_FOR_MVP';
 export type ReceivableAgingBucket =
   | 'CURRENT'
   | 'OVERDUE_1_30'
@@ -682,6 +695,18 @@ export interface PurchaseDocument {
   cash_account_name?: string;
   finance_transaction_id?: string;
   notes?: string;
+  cost_status?: PurchaseCostStatus;
+  delivery_note_number?: string;
+  delivery_note_date?: string;
+  supplier_invoice_number?: string;
+  supplier_invoice_date?: string;
+  additional_cost_treatment?: PurchaseAdditionalCostTreatment;
+  additional_cost_amount?: number;
+  supplier_discount_amount?: number;
+  supplier_tax_amount?: number;
+  cost_finalized_at?: string;
+  cost_finalized_by?: string;
+  cost_finalized_by_name?: string;
   issued_at?: string;
   voided_at?: string;
   void_reason?: string;
@@ -796,6 +821,62 @@ export interface PurchaseDocumentItem {
   foreign_subtotal?: number;
   total_amount?: number;
   foreign_total_amount?: number;
+  cost_status?: PurchaseCostStatus;
+  estimate_source?: PurchaseCostEstimateSource;
+  estimated_price?: number;
+  final_price?: number;
+  invoiced_quantity?: number;
+  quantity_variance?: number;
+  additional_cost_allocation?: number;
+  supplier_discount_allocation?: number;
+  supplier_tax_allocation?: number;
+  final_landed_cost_per_unit?: number;
+  cost_finalized_at?: string;
+  cost_variance_amount?: number;
+  created_at: string;
+}
+
+export interface PurchaseCostReconciliation {
+  id: string;
+  purchase_document_id: string;
+  purchase_document_number: string;
+  supplier_invoice_number?: string;
+  supplier_invoice_date?: string;
+  additional_cost_treatment: PurchaseAdditionalCostTreatment;
+  additional_cost_amount: number;
+  supplier_discount_amount: number;
+  supplier_tax_amount: number;
+  total_estimated_cost: number;
+  total_final_cost: number;
+  total_variance_amount: number;
+  sold_cost_variance_amount: number;
+  remaining_stock_variance_amount: number;
+  notes?: string;
+  created_by?: string;
+  created_by_name?: string;
+  created_at: string;
+}
+
+export interface PurchaseCostReconciliationItem {
+  id: string;
+  reconciliation_id: string;
+  purchase_document_item_id: string;
+  product_id: string;
+  product_name: string;
+  received_quantity: number;
+  invoiced_quantity: number;
+  quantity_variance: number;
+  sold_quantity_at_reconciliation: number;
+  remaining_quantity_at_reconciliation: number;
+  estimated_price: number;
+  final_price: number;
+  additional_cost_allocation: number;
+  supplier_discount_allocation: number;
+  supplier_tax_allocation: number;
+  final_landed_cost_per_unit: number;
+  variance_per_unit: number;
+  sold_cost_variance_amount: number;
+  remaining_stock_variance_amount: number;
   created_at: string;
 }
 
@@ -1005,6 +1086,10 @@ export interface TransactionItem {
   discount_amount?: number;
   subtotal: number;
   profit: number;
+  hpp_status?: PurchaseCostStatus;
+  hpp_reconciled_at?: string;
+  hpp_variance_amount?: number;
+  profit_status?: 'FINAL' | 'ESTIMATED' | 'RECONCILED';
   created_at: string;
 }
 
@@ -1170,7 +1255,7 @@ export interface ProfitLog {
   transaction_id?: string; // Optional, link to transaction if source is transaction
   amount: number;
   type: 'IN' | 'OUT';
-  category?: 'WITHDRAW' | 'OPERATIONAL' | 'SALES' | 'VOID' | 'SALES_RETURN'; // New field to categorize profit log
+  category?: 'WITHDRAW' | 'OPERATIONAL' | 'SALES' | 'VOID' | 'SALES_RETURN' | 'HPP_RECONCILIATION'; // New field to categorize profit log
   description: string;
   created_at: string;
   balance_after: number;
@@ -1669,6 +1754,10 @@ export type InventoryLotSourceType =
   | 'SALES_DELIVERY_VOID'
   | 'OPENING';
 
+export type InventoryLotConsumptionSourceType =
+  | 'POS_TRANSACTION'
+  | 'SALES_DELIVERY';
+
 /**
  * Represents a single batch (lot) of inventory received at a specific cost.
  * Used for FIFO (First In, First Out) cost calculation.
@@ -1685,7 +1774,27 @@ export interface InventoryLot {
   quantity_received: number; // Original quantity when lot was created (in product's purchase_unit)
   quantity_remaining: number; // Remaining quantity not yet consumed by sales (in purchase_unit)
   cost_per_unit: number;     // HPP per unit (in purchase_unit)
+  cost_status?: PurchaseCostStatus;
+  estimate_source?: PurchaseCostEstimateSource;
+  estimated_cost_per_unit?: number;
+  final_cost_per_unit?: number;
+  cost_finalized_at?: string;
+  cost_reconciliation_id?: string;
   received_at: string;       // Timestamp used for FIFO ordering (oldest first)
   created_at: string;
   updated_at: string;
+}
+
+export interface InventoryLotConsumption {
+  id: string;
+  lot_id: string;
+  product_id: string;
+  product_name: string;
+  source_type: InventoryLotConsumptionSourceType;
+  source_id: string;
+  source_line_id: string;
+  quantity: number;
+  cost_per_unit_at_consumption: number;
+  cost_status_at_consumption: PurchaseCostStatus;
+  created_at: string;
 }

@@ -21,6 +21,18 @@ import { useMemo, useState } from 'react';
 
 const { Text, Title } = Typography;
 
+const hppStatusLabel = {
+  FINAL: 'Final',
+  ESTIMATED: 'Estimasi',
+  PENDING: 'Pending',
+} as const;
+
+const profitStatusLabel = {
+  FINAL: 'Final',
+  ESTIMATED: 'Estimasi',
+  RECONCILED: 'Rekonsiliasi',
+} as const;
+
 export default function TransactionDetailReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
@@ -108,9 +120,19 @@ export default function TransactionDetailReport() {
       ...(canViewProfit ? [{
         title: 'HPP',
         dataIndex: 'purchase_price',
-        width: 120,
+        width: 150,
         align: 'right' as const,
-        render: (value: number) => `Rp ${formatCurrency(value)}`,
+        render: (value: number, row: TransactionDetailReportRow) => (
+          <div>
+            <div>Rp {formatCurrency(value)}</div>
+            <Tag
+              color={row.hpp_status === 'ESTIMATED' ? 'gold' : row.hpp_status === 'PENDING' ? 'red' : 'green'}
+              className="mt-1"
+            >
+              {hppStatusLabel[row.hpp_status ?? 'FINAL']}
+            </Tag>
+          </div>
+        ),
       }] : []),
       {
         title: t('report.discount'),
@@ -145,6 +167,9 @@ export default function TransactionDetailReport() {
                 Rp {formatCurrency(value)}
               </div>
               <div className="text-xs text-gray-400">{row.margin.toFixed(2)}%</div>
+              <Tag color={row.profit_status === 'ESTIMATED' ? 'gold' : row.profit_status === 'RECONCILED' ? 'blue' : 'green'} className="mt-1">
+                {profitStatusLabel[row.profit_status ?? 'FINAL']}
+              </Tag>
             </div>
           ),
         },
@@ -237,10 +262,10 @@ export default function TransactionDetailReport() {
         t('report.qty'),
         t('report.unit'),
         t('report.sellingPrice'),
-        ...(canViewProfit ? [t('report.hpp')] : []),
+        ...(canViewProfit ? [t('report.hpp'), 'Status HPP'] : []),
         t('report.discount'),
         t('report.subtotal'),
-        ...(canViewProfit ? [t('report.totalCost'), t('report.itemMargin'), `${t('report.itemMargin')} %`, t('report.transactionMargin'), `${t('report.transactionMargin')} %`] : []),
+        ...(canViewProfit ? [t('report.totalCost'), t('report.itemMargin'), 'Status Profit', `${t('report.itemMargin')} %`, t('report.transactionMargin'), `${t('report.transactionMargin')} %`] : []),
       ];
       const summaryRows = [
         [t('report.totalTransactions'), data.transactions.length],
@@ -269,12 +294,13 @@ export default function TransactionDetailReport() {
             row.quantity,
             row.unit,
             row.selling_price,
-            ...(canViewProfit ? [row.purchase_price] : []),
+            ...(canViewProfit ? [row.purchase_price, hppStatusLabel[row.hpp_status ?? 'FINAL']] : []),
             row.discount_amount,
             row.subtotal,
             ...(canViewProfit ? [
               row.cost_total,
               row.profit,
+              profitStatusLabel[row.profit_status ?? 'FINAL'],
               row.margin.toFixed(2),
               row.transaction_profit,
               row.transaction_margin.toFixed(2),
@@ -321,7 +347,7 @@ export default function TransactionDetailReport() {
           );
 
           const tableHead = canViewProfit
-            ? [t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.discount'), t('report.subtotal'), t('report.cost'), t('report.margin'), '%']
+            ? [t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.discount'), t('report.subtotal'), t('report.cost'), 'Status HPP', t('report.margin'), 'Status Profit', '%']
             : [t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.discount'), t('report.subtotal')];
           const tableBody = data.rows.map((row) => [
             dayjs(row.transaction_created_at).tz().format('DD/MM/YY'),
@@ -332,7 +358,9 @@ export default function TransactionDetailReport() {
             formatCurrency(row.subtotal),
             ...(canViewProfit ? [
               formatCurrency(row.cost_total),
+              hppStatusLabel[row.hpp_status ?? 'FINAL'],
               formatCurrency(row.profit),
+              profitStatusLabel[row.profit_status ?? 'FINAL'],
               row.margin.toFixed(2),
             ] : []),
           ]);
@@ -345,7 +373,9 @@ export default function TransactionDetailReport() {
               formatCurrency(data.totalDiscount),
               formatCurrency(data.totalRevenue),
               formatCurrency(data.totalCost),
+              '',
               formatCurrency(data.totalProfit),
+              '',
               data.averageMargin.toFixed(2),
             ]
             : [

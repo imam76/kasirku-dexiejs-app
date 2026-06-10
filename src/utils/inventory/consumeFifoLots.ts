@@ -1,11 +1,15 @@
 import { db } from '@/lib/db';
+import type { InventoryLotConsumptionSourceType, PurchaseCostStatus } from '@/types';
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export interface FifoConsumedLot {
   lotId: string;
+  productId?: string;
+  productName?: string;
   quantityConsumed: number;
   costPerUnit: number;
+  costStatus: PurchaseCostStatus;
 }
 
 export interface FifoConsumeResult {
@@ -16,6 +20,13 @@ export interface FifoConsumeResult {
   weightedAvgCostPerUnit: number;
   /** Detail of which lots were consumed and by how much */
   consumedLots: FifoConsumedLot[];
+}
+
+export interface ConsumeFifoLotsOptions {
+  sourceType?: InventoryLotConsumptionSourceType;
+  sourceId?: string;
+  sourceLineId?: string;
+  createdAt?: string;
 }
 
 /**
@@ -35,6 +46,7 @@ export interface FifoConsumeResult {
 export const consumeFifoLots = async (
   productId: string,
   quantityNeeded: number,
+  options: ConsumeFifoLotsOptions = {},
 ): Promise<FifoConsumeResult> => {
   if (quantityNeeded <= 0) {
     return { totalCost: 0, weightedAvgCostPerUnit: 0, consumedLots: [] };
@@ -58,17 +70,45 @@ export const consumeFifoLots = async (
   for (const lot of lots) {
     if (remaining <= 0) break;
 
+    const costStatus = lot.cost_status ?? 'FINAL';
+    if (costStatus === 'PENDING') {
+      throw new Error(`Stok ${lot.product_name} belum memiliki harga beli dan tidak boleh dijual.`);
+    }
+
     const consume = Math.min(lot.quantity_remaining, remaining);
     const lotCost = roundCurrency(consume * lot.cost_per_unit);
 
     totalCost += lotCost;
     remaining -= consume;
-    consumedLots.push({ lotId: lot.id, quantityConsumed: consume, costPerUnit: lot.cost_per_unit });
+    consumedLots.push({
+      lotId: lot.id,
+      productId: lot.product_id,
+      productName: lot.product_name,
+      quantityConsumed: consume,
+      costPerUnit: lot.cost_per_unit,
+      costStatus,
+    });
 
     await db.inventoryLots.update(lot.id, {
       quantity_remaining: lot.quantity_remaining - consume,
       updated_at: now,
     });
+
+    if (options.sourceType && options.sourceId && options.sourceLineId) {
+      await db.inventoryLotConsumptions.add({
+        id: crypto.randomUUID(),
+        lot_id: lot.id,
+        product_id: lot.product_id,
+        product_name: lot.product_name,
+        source_type: options.sourceType,
+        source_id: options.sourceId,
+        source_line_id: options.sourceLineId,
+        quantity: consume,
+        cost_per_unit_at_consumption: lot.cost_per_unit,
+        cost_status_at_consumption: costStatus,
+        created_at: options.createdAt ?? now,
+      });
+    }
   }
 
   // Fallback: lots were insufficient (data gap). Use last known cost to cover remainder.
@@ -81,7 +121,13 @@ export const consumeFifoLots = async (
     totalCost += fallbackTotal;
     if (fallbackCost > 0) {
       // Record it as if we consumed from the last lot (no lot to update — already exhausted)
-      consumedLots.push({ lotId: 'fallback', quantityConsumed: remaining, costPerUnit: fallbackCost });
+      consumedLots.push({
+        lotId: 'fallback',
+        productId,
+        quantityConsumed: remaining,
+        costPerUnit: fallbackCost,
+        costStatus: 'FINAL',
+      });
     }
     // remaining is now 0 conceptually — we accepted the gap
   }

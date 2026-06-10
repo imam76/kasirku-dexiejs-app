@@ -16,6 +16,9 @@ export const purchaseReceiptConfig: PurchaseDocumentConfig = {
   },
   headerFields: [
     ...baseHeaderFields.slice(0, 3),
+    { name: 'delivery_note_number', labelKey: 'purchaseDocuments.field.deliveryNoteNumber', type: 'text' },
+    { name: 'delivery_note_date', labelKey: 'purchaseDocuments.field.deliveryNoteDate', type: 'date' },
+    { name: 'cost_status', labelKey: 'purchaseDocuments.field.costStatus', type: 'costStatus' },
     { name: 'tax_id', labelKey: 'purchaseDocuments.field.tax', type: 'tax' },
     ...baseHeaderFields.slice(3),
   ],

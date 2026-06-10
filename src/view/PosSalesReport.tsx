@@ -144,7 +144,7 @@ export default function PosSalesReport() {
         t('report.unitPrice'),
         t('report.discount'),
         t('report.subtotal'),
-        ...(canViewProfit ? [t('report.hpp'), t('report.profit')] : []),
+        ...(canViewProfit ? [t('report.hpp'), 'Status HPP', t('report.profit'), 'Status Profit'] : []),
       ];
       const summaryRows = [
         [t('report.totalTransactions'), data.transactions.length],
@@ -187,7 +187,12 @@ export default function PosSalesReport() {
             item.price,
             item.discount_amount ?? 0,
             item.subtotal,
-            ...(canViewProfit ? [item.purchase_price, item.profit] : []),
+            ...(canViewProfit ? [
+              item.purchase_price,
+              item.hpp_status === 'ESTIMATED' ? 'Estimasi' : item.hpp_status === 'PENDING' ? 'Pending' : 'Final',
+              item.profit,
+              item.profit_status === 'ESTIMATED' ? 'Estimasi' : item.profit_status === 'RECONCILED' ? 'Rekonsiliasi' : 'Final',
+            ] : []),
           ];
         }),
         [],

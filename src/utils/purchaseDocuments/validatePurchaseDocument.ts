@@ -61,6 +61,18 @@ export const validatePurchaseDocument = ({
       throw new Error(`Harga ${item.product_name} tidak valid.`);
     }
 
+    if (config.type === 'PURCHASE_RECEIPT') {
+      const costStatus = item.cost_status ?? document.cost_status ?? 'FINAL';
+
+      if (costStatus === 'ESTIMATED' && Number(item.price || item.estimated_price || 0) <= 0) {
+        throw new Error(`Harga sementara ${item.product_name} wajib lebih dari 0.`);
+      }
+
+      if (mode === 'issue' && costStatus === 'PENDING') {
+        throw new Error(`Harga ${item.product_name} belum ada. Isi harga sementara/final sebelum menerbitkan penerimaan.`);
+      }
+    }
+
     if (config.behavior.hasTax && document.tax_id) {
       if (!Number.isFinite(Number(item.tax_rate)) || Number(item.tax_rate) < 0) {
         throw new Error(`Rate pajak ${item.product_name} tidak valid.`);

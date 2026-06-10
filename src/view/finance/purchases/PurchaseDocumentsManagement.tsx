@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, Input, Table, Tag, Typography } from 'antd';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, Eye, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, Eye, FileCheck2, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, type LucideIcon } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import {
   getPurchaseDocumentConfig,
@@ -10,7 +10,7 @@ import {
 import type { TranslationKey } from '@/i18n/messages';
 import { useI18n } from '@/hooks/useI18n';
 import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
-import type { PurchaseDocument, PurchaseDocumentStatus, PurchaseDocumentType } from '@/types';
+import type { PurchaseCostStatus, PurchaseDocument, PurchaseDocumentStatus, PurchaseDocumentType } from '@/types';
 import {
   formatDocumentCurrencyAmount,
   isBaseCurrency,
@@ -26,6 +26,18 @@ const statusColor: Record<PurchaseDocumentStatus, string> = {
   ISSUED: 'blue',
   CONVERTED: 'green',
   VOIDED: 'red',
+};
+
+const costStatusColor: Record<PurchaseCostStatus, string> = {
+  FINAL: 'green',
+  ESTIMATED: 'gold',
+  PENDING: 'red',
+};
+
+const costStatusLabel: Record<PurchaseCostStatus, string> = {
+  FINAL: 'Harga Final',
+  ESTIMATED: 'Harga Sementara',
+  PENDING: 'Belum Ada Harga',
 };
 
 const renderDocumentTotal = (document: PurchaseDocument) => {
@@ -177,6 +189,38 @@ function PurchaseFinanceActionGrid() {
   return (
     <div className="grid grid-cols-1 gap-[10px] sm:grid-cols-2 sm:gap-[14px] lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]">
       <Link
+        to="/purchases/pending-costs"
+        className="
+          app-menu-card relative flex min-h-[96px] items-center justify-center overflow-hidden rounded-[10px] border border-gray-100 bg-white p-4
+          transition-all duration-200 ease-out hover:-translate-y-[1px] hover:border-gray-200
+          hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
+          lg:h-[192px] lg:w-[192px] lg:flex-col lg:rounded-[14px] lg:p-[24px]
+        "
+      >
+        <span className="app-menu-card__body flex items-center gap-3 lg:flex-col lg:justify-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-amber-50 lg:h-12 lg:w-12">
+            <FileCheck2 className="h-5 w-5 text-amber-700" />
+          </span>
+          <span className="lg:text-center">
+            <span className="block text-sm font-semibold text-gray-900 lg:text-[15px] lg:font-medium lg:leading-[1.3]">Harga Belum Final</span>
+            <span className="app-menu-card__brief mt-0.5 line-clamp-2 block text-xs leading-5 text-gray-500 lg:hidden">
+              Daftar Purchase Receipt dengan HPP sementara.
+            </span>
+            <span className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3 lg:justify-center">
+              <span>{t('purchaseDocuments.menu.open')}</span>
+              <ArrowRight size={12} />
+            </span>
+          </span>
+        </span>
+        <span className="app-menu-card__detail flex-col text-center">
+          <span className="text-xs leading-5 text-gray-500">Daftar Purchase Receipt dengan HPP sementara.</span>
+          <span className="mt-3 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400">
+            <span>{t('purchaseDocuments.menu.open')}</span>
+            <ArrowRight size={12} />
+          </span>
+        </span>
+      </Link>
+      <Link
         to="/finance/payables"
         className="
           app-menu-card relative flex min-h-[96px] items-center justify-center overflow-hidden rounded-[10px] border border-gray-100 bg-white p-4
@@ -253,6 +297,7 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
 
   const showPaymentColumn = filteredDocuments.some(hasPaymentStatus) || config.behavior.hasPaymentStatus;
   const showTotalColumn = filteredDocuments.some(hasPricing) || config.behavior.hasPricing;
+  const showCostColumn = documentType === 'PURCHASE_RECEIPT';
 
   const columns: ColumnsType<PurchaseDocument> = [
     {
@@ -291,6 +336,15 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
         hasPaymentStatus(record) && value ? <Tag>{t(purchaseInvoicePaymentStatusLabelKeys[value])}</Tag> : '-'
       ),
       width: 110,
+    }] : []),
+    ...(showCostColumn ? [{
+      title: 'Status Harga',
+      dataIndex: 'cost_status',
+      render: (value: PurchaseDocument['cost_status']) => {
+        const status = value ?? 'FINAL';
+        return <Tag color={costStatusColor[status]}>{costStatusLabel[status]}</Tag>;
+      },
+      width: 150,
     }] : []),
     ...(showTotalColumn ? [{
       title: t('purchaseDocuments.table.total'),

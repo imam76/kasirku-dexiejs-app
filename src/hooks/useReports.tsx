@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product } from '@/types';
+import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus } from '@/types';
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
@@ -185,6 +185,9 @@ export interface TransactionDetailReportRow {
   cost_total: number;
   profit: number;
   margin: number;
+  hpp_status?: PurchaseCostStatus;
+  profit_status?: 'FINAL' | 'ESTIMATED' | 'RECONCILED';
+  hpp_variance_amount?: number;
 }
 
 interface TransactionDetailReportData {
@@ -526,6 +529,9 @@ export const useTransactionDetailReport = (
             cost_total: costTotal,
             profit,
             margin: item.subtotal > 0 ? (profit / item.subtotal) * 100 : 0,
+            hpp_status: item.hpp_status ?? 'FINAL',
+            profit_status: item.profit_status ?? 'FINAL',
+            hpp_variance_amount: item.hpp_variance_amount,
           };
         })
         .filter((row): row is TransactionDetailReportRow => Boolean(row));

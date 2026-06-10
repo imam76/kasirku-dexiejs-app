@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import type { InventoryLot, InventoryLotSourceType } from '@/types';
+import type { InventoryLot, InventoryLotSourceType, PurchaseCostEstimateSource, PurchaseCostStatus } from '@/types';
 
 export interface AddInventoryLotInput {
   productId: string;
@@ -12,6 +12,8 @@ export interface AddInventoryLotInput {
   quantityReceived: number;
   /** HPP per purchase_unit */
   costPerUnit: number;
+  costStatus?: PurchaseCostStatus;
+  estimateSource?: PurchaseCostEstimateSource;
   /** ISO timestamp — determines FIFO order (oldest first) */
   receivedAt: string;
 }
@@ -33,6 +35,10 @@ export const addInventoryLot = async (input: AddInventoryLotInput): Promise<Inve
     quantity_received: input.quantityReceived,
     quantity_remaining: input.quantityReceived,
     cost_per_unit: input.costPerUnit,
+    cost_status: input.costStatus ?? 'FINAL',
+    estimate_source: input.estimateSource,
+    estimated_cost_per_unit: input.costStatus === 'ESTIMATED' ? input.costPerUnit : undefined,
+    final_cost_per_unit: (input.costStatus ?? 'FINAL') === 'FINAL' ? input.costPerUnit : undefined,
     received_at: input.receivedAt,
     created_at: now,
     updated_at: now,

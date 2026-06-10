@@ -24,6 +24,7 @@ import {
   createSupplierSnapshot,
 } from '@/utils/purchaseDocuments/createPurchaseDocumentSnapshots';
 import { validatePurchaseDocument } from '@/utils/purchaseDocuments/validatePurchaseDocument';
+import { resolveEstimatedPurchaseCost } from '@/utils/purchaseDocuments/resolveEstimatedPurchaseCost';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import {
   applyCurrencySnapshotToLineItem,
@@ -37,6 +38,8 @@ import {
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
 import { normalisasiHargaProduk } from '@/utils/pricing';
+
+const PURCHASE_RECEIPT_DEFAULT_COST_STATUS = 'FINAL' as const;
 
 export interface PurchaseDocumentUpsertInput {
   document: Partial<PurchaseDocument>;
@@ -127,6 +130,81 @@ const normalizeDocumentItems = (
   foreign_total_amount: item.foreign_total_amount === undefined ? undefined : Number(item.foreign_total_amount),
   created_at: item.created_at || createdAt,
 }, documentCurrency, { preferForeignPrice: item.foreign_price !== undefined && !isBaseCurrency(documentCurrency.currency_code) }));
+
+const applyPurchaseReceiptCostMetadata = async (
+  document: Partial<PurchaseDocument>,
+  items: PurchaseDocumentItem[],
+  products: Product[],
+): Promise<{ document: Partial<PurchaseDocument>; items: PurchaseDocumentItem[] }> => {
+  if (document.type !== 'PURCHASE_RECEIPT') {
+    return { document, items };
+  }
+
+  const productById = new Map(products.map((product) => [product.id, product]));
+  const headerCostStatus = document.cost_status ?? PURCHASE_RECEIPT_DEFAULT_COST_STATUS;
+  const costAwareItems = await Promise.all(items.map(async (item) => {
+    const product = productById.get(item.product_id);
+
+    if (headerCostStatus === 'FINAL') {
+      return {
+        ...item,
+        cost_status: 'FINAL' as const,
+        estimate_source: undefined,
+        estimated_price: undefined,
+        final_price: item.final_price ?? Number(item.price || 0),
+      };
+    }
+
+    if (headerCostStatus === 'PENDING') {
+      return {
+        ...item,
+        cost_status: 'PENDING' as const,
+        estimate_source: 'UNKNOWN' as const,
+        estimated_price: undefined,
+        final_price: undefined,
+      };
+    }
+
+    if (!product) {
+      return {
+        ...item,
+        cost_status: 'ESTIMATED' as const,
+        estimate_source: Number(item.price || 0) > 0 ? 'MANUAL' as const : 'UNKNOWN' as const,
+        estimated_price: Number(item.price || 0) > 0 ? Number(item.price || 0) : undefined,
+      };
+    }
+
+    const estimate = await resolveEstimatedPurchaseCost({
+      product,
+      unit: item.unit,
+      sourceDocumentId: document.source_document_id,
+      manualPrice: item.price,
+    });
+
+    return {
+      ...item,
+      price: estimate.price > 0 ? estimate.price : item.price,
+      cost_status: 'ESTIMATED' as const,
+      estimate_source: estimate.source,
+      estimated_price: estimate.price > 0 ? estimate.price : undefined,
+      final_price: undefined,
+    };
+  }));
+  const itemStatuses = new Set(costAwareItems.map((item) => item.cost_status ?? headerCostStatus));
+  const summarizedCostStatus = itemStatuses.has('PENDING')
+    ? 'PENDING'
+    : itemStatuses.has('ESTIMATED')
+      ? 'ESTIMATED'
+      : 'FINAL';
+
+  return {
+    document: {
+      ...document,
+      cost_status: summarizedCostStatus,
+    },
+    items: costAwareItems,
+  };
+};
 
 const applyConfigBehavior = <T extends Partial<PurchaseDocument>>(
   document: T,
@@ -250,6 +328,8 @@ const addReceiptStock = async (
         sourceLineId: item.id,
         quantityReceived: quantityInStockUnit,
         costPerUnit: itemCostPerUnit,
+        costStatus: item.cost_status ?? document.cost_status ?? 'FINAL',
+        estimateSource: item.estimate_source,
         receivedAt: occurredAt,
       });
 
@@ -394,6 +474,7 @@ const restorePurchaseReturnStock = async (
         sourceLineId: item.id,
         quantityReceived: quantityInStockUnit,
         costPerUnit: itemCostPerUnit,
+        costStatus: 'FINAL',
         receivedAt: occurredAt,
       });
 
@@ -454,7 +535,11 @@ export const createPurchaseDocument = async ({ document, items, pendingProducts 
   const snapshot = applyConfigBehavior(await buildDocumentSnapshot(document), config);
   const documentNumber = document.document_number || await createPurchaseDocumentNumber(config.numberPrefix, now);
   const normalizedItems = normalizeDocumentItems(items, documentId, createdAt, snapshot as DocumentCurrencySnapshot);
-  const { items: calculatedItems, ...total } = await calculatePurchaseTotal(normalizedItems, snapshot, config);
+  const liveProducts = await db.products.toArray();
+  const allProducts = [...liveProducts, ...(pendingProducts || [])];
+  const costAware = await applyPurchaseReceiptCostMetadata(snapshot, normalizedItems, allProducts);
+  const costAwareSnapshot = costAware.document;
+  const { items: calculatedItems, ...total } = await calculatePurchaseTotal(costAware.items, costAwareSnapshot, config);
   const calculatedItemsWithFx = calculatedItems.map((item) => (
     applyForeignAmountsToLineItem(item, snapshot as DocumentCurrencySnapshot)
   ));
@@ -465,15 +550,13 @@ export const createPurchaseDocument = async ({ document, items, pendingProducts 
     type: document.type,
     status: document.status ?? 'DRAFT',
     supplier_name: snapshot.supplier_name ?? '',
-    document_date: snapshot.document_date || createdAt.slice(0, 10),
+    document_date: costAwareSnapshot.document_date || createdAt.slice(0, 10),
     created_at: createdAt,
     updated_at: createdAt,
-    ...snapshot,
+    ...costAwareSnapshot,
     ...total,
     ...foreignTotal,
   } satisfies PurchaseDocument, config), currentUser);
-  const liveProducts = await db.products.toArray();
-  const allProducts = [...liveProducts, ...(pendingProducts || [])];
   validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products: allProducts });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
@@ -535,14 +618,18 @@ export const updatePurchaseDocument = async (id: string, { document, items, pend
     config,
   );
   const normalizedItems = normalizeDocumentItems(items, id, existing.created_at, snapshot as DocumentCurrencySnapshot);
-  const { items: calculatedItems, ...total } = await calculatePurchaseTotal(normalizedItems, snapshot, config);
+  const liveProducts = await db.products.toArray();
+  const allProducts = [...liveProducts, ...(pendingProducts || [])];
+  const costAware = await applyPurchaseReceiptCostMetadata(snapshot, normalizedItems, allProducts);
+  const costAwareSnapshot = costAware.document;
+  const { items: calculatedItems, ...total } = await calculatePurchaseTotal(costAware.items, costAwareSnapshot, config);
   const calculatedItemsWithFx = calculatedItems.map((item) => (
     applyForeignAmountsToLineItem(item, snapshot as DocumentCurrencySnapshot)
   ));
   const foreignTotal = getForeignDocumentTotals(total, snapshot as DocumentCurrencySnapshot);
   const nextDocument = withUpdatedPurchaseDocumentSync(applyConfigBehavior({
     ...existing,
-    ...snapshot,
+    ...costAwareSnapshot,
     ...total,
     ...foreignTotal,
     id,
@@ -551,8 +638,6 @@ export const updatePurchaseDocument = async (id: string, { document, items, pend
     document_number: existing.document_number,
     updated_at: updatedAt,
   } satisfies PurchaseDocument, config), existing, currentUser);
-  const liveProducts = await db.products.toArray();
-  const allProducts = [...liveProducts, ...(pendingProducts || [])];
   validatePurchaseDocument({ document: nextDocument, items: calculatedItems, config, products: allProducts });
 
   await db.transaction('rw', purchaseDocumentTables, async () => {

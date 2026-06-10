@@ -22,6 +22,9 @@ import type {
   CurrencyRateSource,
   PurchaseDocumentStatus,
   PurchaseDocumentType,
+  PurchaseAdditionalCostTreatment,
+  PurchaseCostEstimateSource,
+  PurchaseCostStatus,
   PurchaseInvoicePaymentStatus,
   SalesDocumentStatus,
   SalesDocumentType,
@@ -423,6 +426,18 @@ export interface RemotePurchaseDocumentDto {
   cash_account_name?: string | null;
   finance_transaction_id?: string | null;
   notes?: string | null;
+  cost_status?: PurchaseCostStatus | null;
+  delivery_note_number?: string | null;
+  delivery_note_date?: string | null;
+  supplier_invoice_number?: string | null;
+  supplier_invoice_date?: string | null;
+  additional_cost_treatment?: PurchaseAdditionalCostTreatment | null;
+  additional_cost_amount?: number | null;
+  supplier_discount_amount?: number | null;
+  supplier_tax_amount?: number | null;
+  cost_finalized_at?: string | null;
+  cost_finalized_by?: string | null;
+  cost_finalized_by_name?: string | null;
   issued_at?: string | null;
   voided_at?: string | null;
   void_reason?: string | null;
@@ -469,6 +484,18 @@ export interface RemotePurchaseDocumentItemDto {
   foreign_subtotal?: number | null;
   total_amount?: number | null;
   foreign_total_amount?: number | null;
+  cost_status?: PurchaseCostStatus | null;
+  estimate_source?: PurchaseCostEstimateSource | null;
+  estimated_price?: number | null;
+  final_price?: number | null;
+  invoiced_quantity?: number | null;
+  quantity_variance?: number | null;
+  additional_cost_allocation?: number | null;
+  supplier_discount_allocation?: number | null;
+  supplier_tax_allocation?: number | null;
+  final_landed_cost_per_unit?: number | null;
+  cost_finalized_at?: string | null;
+  cost_variance_amount?: number | null;
   created_at: string;
 }
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, FileCheck2 } from 'lucide-react';
 import { PayablePaymentHistory } from '@/components/accounts-payable/PayablePaymentHistory';
 import {
   getPurchaseDocumentConfig,
@@ -17,6 +17,7 @@ import type {
   PurchaseDocumentItem,
   PurchaseDocumentStatus,
   PurchaseDocumentType,
+  PurchaseCostStatus,
   PurchaseInvoicePaymentStatus,
 } from '@/types';
 import {
@@ -41,6 +42,18 @@ const paymentStatusColor: Record<PurchaseInvoicePaymentStatus, { background: str
   UNPAID: { background: '#FEE2E2', color: '#991B1B', border: '#FECACA' },
   PARTIAL: { background: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
   PAID: { background: '#DCFCE7', color: '#166534', border: '#BBF7D0' },
+};
+
+const costStatusColor: Record<PurchaseCostStatus, { background: string; color: string; border: string }> = {
+  FINAL: { background: '#DCFCE7', color: '#166534', border: '#BBF7D0' },
+  ESTIMATED: { background: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  PENDING: { background: '#FEE2E2', color: '#991B1B', border: '#FECACA' },
+};
+
+const costStatusLabel: Record<PurchaseCostStatus, string> = {
+  FINAL: 'Harga Final',
+  ESTIMATED: 'Harga Sementara',
+  PENDING: 'Belum Ada Harga',
 };
 
 const getDocumentDiscountLabel = (document: PurchaseDocument) => {
@@ -122,7 +135,12 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
   const canEdit = document.status === 'DRAFT';
   const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
     !(document.type === 'PURCHASE_INVOICE' && (document.finance_transaction_id || Number(document.paid_amount || 0) > 0));
+  const canReconcileCost = document.type === 'PURCHASE_RECEIPT' &&
+    document.status === 'ISSUED' &&
+    (document.cost_status ?? 'FINAL') !== 'FINAL';
   const statusStyle = statusColor[document.status];
+  const costStatus = document.cost_status ?? 'FINAL';
+  const costStyle = costStatusColor[costStatus];
   const paymentStyle = document.payment_status ? paymentStatusColor[document.payment_status] : undefined;
   const statusBadge = (
     <span
@@ -142,6 +160,15 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
       {t(purchaseInvoicePaymentStatusLabelKeys[document.payment_status])}
     </span>
   ) : '-';
+  const costStatusBadge = document.type === 'PURCHASE_RECEIPT' ? (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[.05em]"
+      style={costStyle}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: costStyle.color }} />
+      {costStatusLabel[costStatus]}
+    </span>
+  ) : null;
   const documentCurrencySnapshot = snapshotFromDocumentInput(document, undefined, document.document_date);
   const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
   const renderMoney = (amount?: number, foreignAmount?: number, className = 'font-bold') => (
@@ -215,6 +242,17 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
               await loadDocument();
             }}>
               {t('purchaseDocuments.issue')}
+            </Button>
+          )}
+          {canReconcileCost && (
+            <Button
+              icon={<FileCheck2 size={16} />}
+              onClick={() => navigate({
+                to: '/purchases/$documentType/$documentId/reconcile',
+                params: { documentType: getPurchaseDocumentTypePathSegment(document.type), documentId: document.id },
+              })}
+            >
+              Rekonsiliasi HPP
             </Button>
           )}
           {nextConvertOptions.map((targetType) => (
@@ -345,6 +383,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
               <div className="mt-2 flex flex-wrap gap-2 md:justify-end">
                 {statusBadge}
                 {config.behavior.hasPaymentStatus && paymentStatusBadge}
+                {costStatusBadge}
               </div>
             </div>
           </div>
@@ -370,6 +409,24 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                 {document.tax_name ? `${document.tax_name} (${document.tax_rate}%)` : '-'}
               </div>
             </div>
+          )}
+          {document.type === 'PURCHASE_RECEIPT' && (
+            <>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">Nomor Surat Jalan</div>
+                <div className="mt-1 text-[13px] font-medium text-gray-700">{document.delivery_note_number || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">Tanggal Surat Jalan</div>
+                <div className="mt-1 text-[13px] font-medium text-gray-700">
+                  {document.delivery_note_date ? formatDate(document.delivery_note_date) : '-'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">Invoice Supplier</div>
+                <div className="mt-1 text-[13px] font-medium text-gray-700">{document.supplier_invoice_number || '-'}</div>
+              </div>
+            </>
           )}
         </div>
 
@@ -414,6 +471,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                       {item.sku ? `${item.sku} · ` : ''}
                       {item.quantity} {item.unit}
                       {item.received_quantity !== undefined ? ` · ${t('purchaseDocuments.field.receivedQuantity')}: ${item.received_quantity}` : ''}
+                      {config.type === 'PURCHASE_RECEIPT' ? ` · ${costStatusLabel[item.cost_status ?? document.cost_status ?? 'FINAL']}` : ''}
                       {config.behavior.hasPricing ? ` · ${t('purchaseDocuments.field.discount')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.discount_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
                       {config.behavior.hasTax ? ` · ${t('purchaseDocuments.field.tax')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.tax_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
                     </div>
