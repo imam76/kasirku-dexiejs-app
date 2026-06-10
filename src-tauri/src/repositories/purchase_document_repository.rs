@@ -69,6 +69,18 @@ macro_rules! purchase_document_select {
             cash_account_name,
             finance_transaction_id,
             notes,
+            cost_status,
+            delivery_note_number,
+            delivery_note_date,
+            supplier_invoice_number,
+            supplier_invoice_date,
+            additional_cost_treatment,
+            additional_cost_amount,
+            supplier_discount_amount,
+            supplier_tax_amount,
+            cost_finalized_at,
+            cost_finalized_by,
+            cost_finalized_by_name,
             issued_at::TEXT AS issued_at,
             voided_at::TEXT AS voided_at,
             void_reason,
@@ -121,6 +133,18 @@ macro_rules! purchase_document_item_select {
             foreign_subtotal,
             total_amount,
             foreign_total_amount,
+            cost_status,
+            estimate_source,
+            estimated_price,
+            final_price,
+            invoiced_quantity,
+            quantity_variance,
+            additional_cost_allocation,
+            supplier_discount_allocation,
+            supplier_tax_allocation,
+            final_landed_cost_per_unit,
+            cost_finalized_at,
+            cost_variance_amount,
             created_at::TEXT AS created_at
         FROM purchase_document_items
         "#
@@ -230,7 +254,20 @@ async fn upsert_purchase_document(
     tx: &mut Transaction<'_, Postgres>,
     input: PurchaseDocumentDto,
 ) -> Result<Option<PurchaseDocumentDto>, sqlx::Error> {
-    sqlx::query_as::<_, PurchaseDocumentDto>(
+    let cost_status = input.cost_status.clone();
+    let delivery_note_number = input.delivery_note_number.clone();
+    let delivery_note_date = input.delivery_note_date.clone();
+    let supplier_invoice_number = input.supplier_invoice_number.clone();
+    let supplier_invoice_date = input.supplier_invoice_date.clone();
+    let additional_cost_treatment = input.additional_cost_treatment.clone();
+    let additional_cost_amount = input.additional_cost_amount;
+    let supplier_discount_amount = input.supplier_discount_amount;
+    let supplier_tax_amount = input.supplier_tax_amount;
+    let cost_finalized_at = input.cost_finalized_at.clone();
+    let cost_finalized_by = input.cost_finalized_by.clone();
+    let cost_finalized_by_name = input.cost_finalized_by_name.clone();
+
+    let upserted = sqlx::query_as::<_, PurchaseDocumentDto>(
         r#"
         INSERT INTO purchase_documents (
             id,
@@ -506,6 +543,18 @@ async fn upsert_purchase_document(
             cash_account_name,
             finance_transaction_id,
             notes,
+            cost_status,
+            delivery_note_number,
+            delivery_note_date,
+            supplier_invoice_number,
+            supplier_invoice_date,
+            additional_cost_treatment,
+            additional_cost_amount,
+            supplier_discount_amount,
+            supplier_tax_amount,
+            cost_finalized_at,
+            cost_finalized_by,
+            cost_finalized_by_name,
             issued_at::TEXT AS issued_at,
             voided_at::TEXT AS voided_at,
             void_reason,
@@ -603,7 +652,48 @@ async fn upsert_purchase_document(
     .bind(input.foreign_tax_amount)
     .bind(input.foreign_total_amount)
     .fetch_optional(&mut **tx)
-    .await
+    .await?;
+
+    if let Some(document) = upserted {
+        sqlx::query(
+            r#"
+            UPDATE purchase_documents
+            SET
+                cost_status = $2,
+                delivery_note_number = $3,
+                delivery_note_date = $4,
+                supplier_invoice_number = $5,
+                supplier_invoice_date = $6,
+                additional_cost_treatment = $7,
+                additional_cost_amount = $8,
+                supplier_discount_amount = $9,
+                supplier_tax_amount = $10,
+                cost_finalized_at = $11,
+                cost_finalized_by = $12,
+                cost_finalized_by_name = $13
+            WHERE id = $1
+            "#,
+        )
+        .bind(&document.id)
+        .bind(cost_status)
+        .bind(delivery_note_number)
+        .bind(delivery_note_date)
+        .bind(supplier_invoice_number)
+        .bind(supplier_invoice_date)
+        .bind(additional_cost_treatment)
+        .bind(additional_cost_amount)
+        .bind(supplier_discount_amount)
+        .bind(supplier_tax_amount)
+        .bind(cost_finalized_at)
+        .bind(cost_finalized_by)
+        .bind(cost_finalized_by_name)
+        .execute(&mut **tx)
+        .await?;
+
+        return get_purchase_document_in_tx(tx, &document.id).await;
+    }
+
+    Ok(None)
 }
 
 async fn replace_purchase_document_items(
@@ -617,6 +707,20 @@ async fn replace_purchase_document_items(
         .await?;
 
     for item in items {
+        let item_id = item.id.clone();
+        let cost_status = item.cost_status.clone();
+        let estimate_source = item.estimate_source.clone();
+        let estimated_price = item.estimated_price;
+        let final_price = item.final_price;
+        let invoiced_quantity = item.invoiced_quantity;
+        let quantity_variance = item.quantity_variance;
+        let additional_cost_allocation = item.additional_cost_allocation;
+        let supplier_discount_allocation = item.supplier_discount_allocation;
+        let supplier_tax_allocation = item.supplier_tax_allocation;
+        let final_landed_cost_per_unit = item.final_landed_cost_per_unit;
+        let cost_finalized_at = item.cost_finalized_at.clone();
+        let cost_variance_amount = item.cost_variance_amount;
+
         sqlx::query(
             r#"
             INSERT INTO purchase_document_items (
@@ -727,6 +831,41 @@ async fn replace_purchase_document_items(
         .bind(item.foreign_tax_amount)
         .bind(item.foreign_subtotal)
         .bind(item.foreign_total_amount)
+        .execute(&mut **tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            UPDATE purchase_document_items
+            SET
+                cost_status = $2,
+                estimate_source = $3,
+                estimated_price = $4,
+                final_price = $5,
+                invoiced_quantity = $6,
+                quantity_variance = $7,
+                additional_cost_allocation = $8,
+                supplier_discount_allocation = $9,
+                supplier_tax_allocation = $10,
+                final_landed_cost_per_unit = $11,
+                cost_finalized_at = $12,
+                cost_variance_amount = $13
+            WHERE id = $1
+            "#,
+        )
+        .bind(item_id)
+        .bind(cost_status)
+        .bind(estimate_source)
+        .bind(estimated_price)
+        .bind(final_price)
+        .bind(invoiced_quantity)
+        .bind(quantity_variance)
+        .bind(additional_cost_allocation)
+        .bind(supplier_discount_allocation)
+        .bind(supplier_tax_allocation)
+        .bind(final_landed_cost_per_unit)
+        .bind(cost_finalized_at)
+        .bind(cost_variance_amount)
         .execute(&mut **tx)
         .await?;
     }
