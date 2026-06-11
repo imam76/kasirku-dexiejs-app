@@ -647,29 +647,6 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         />
                       </FieldContainer>
 
-                      <FieldContainer
-                        label={t('product.stock')}
-                        error={errors.stock}
-                        required
-                        requiredLabel={t('stock.form.requiredLabel')}
-                      >
-                        <Controller
-                          name="stock"
-                          control={control}
-                          render={({ field }) => (
-                            <InputNumber
-                              inputMode="decimal"
-                              value={field.value}
-                              onBlur={field.onBlur}
-                              onChange={(value) => field.onChange(value ?? 0)}
-                              className="w-full"
-                              placeholder={t('stock.form.stockPlaceholder')}
-                              min={0}
-                            />
-                          )}
-                        />
-                      </FieldContainer>
-
                     </div>
 
                   </>

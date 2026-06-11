@@ -6,6 +6,7 @@ import dayjs from '@/lib/dayjs';
 import { useStockManagement } from '@/hooks/useStockManagement';
 import { getStockCard } from '@/services/stockCardService';
 import { Loading } from '@/components/Loading';
+import type { StockCardRow } from '@/services/stockCardService';
 
 const { Title } = Typography;
 
@@ -48,7 +49,8 @@ export default function StockCard() {
         const types: Record<string, string> = {
           'OPENING_BALANCE': 'Saldo Awal Sistem',
           'SALDO_AWAL': 'Saldo Awal Periode',
-          'SHOPPING_NOTE': 'Catatan Belanja',
+          'OPENING_STOCK': 'Saldo Awal Stok',
+          'STOCK_PURCHASE': 'Pembelian Stok',
           'POS_SALE': 'Penjualan (POS)',
           'POS_VOID': 'Batal Penjualan (POS)',
           'PURCHASE_RECEIPT': 'Penerimaan Pembelian',
@@ -72,19 +74,19 @@ export default function StockCard() {
       title: 'Masuk',
       dataIndex: 'qtyIn',
       key: 'qtyIn',
-      render: (val: number, record: any) => val > 0 ? `${val} ${record.unit}` : '-',
+      render: (val: number, record: StockCardRow) => val > 0 ? `${val} ${record.unit}` : '-',
     },
     {
       title: 'Keluar',
       dataIndex: 'qtyOut',
       key: 'qtyOut',
-      render: (val: number, record: any) => val > 0 ? `${val} ${record.unit}` : '-',
+      render: (val: number, record: StockCardRow) => val > 0 ? `${val} ${record.unit}` : '-',
     },
     {
       title: 'Sisa Stok',
       dataIndex: 'balance',
       key: 'balance',
-      render: (val: number, record: any) => <span className="font-bold">{val} {record.unit}</span>,
+      render: (val: number, record: StockCardRow) => <span className="font-bold">{val} {record.unit}</span>,
     },
   ];
 
@@ -131,7 +133,7 @@ export default function StockCard() {
             <span className="text-[13px] font-medium text-gray-700 ml-0.5">Rentang Waktu</span>
             <DatePicker.RangePicker
               value={dateRange}
-              onChange={handleDateRangeChange as any}
+              onChange={(dates) => handleDateRangeChange(dates)}
               format="DD MMM YYYY"
               className="w-full rounded-lg"
               size="large"

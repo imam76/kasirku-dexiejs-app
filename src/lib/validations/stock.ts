@@ -21,7 +21,7 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
   selling_unit: z.string().min(1, t('stock.validation.sellingUnitRequired')),
   purchase_price: z.number({ message: t('stock.validation.purchasePriceRequired') }).min(0, t('stock.validation.purchasePriceMin')),
   selling_price: z.number({ message: t('stock.validation.sellingPriceRequired') }).min(0, t('stock.validation.sellingPriceMin')),
-  stock: z.number({ message: t('stock.validation.stockRequired') }).min(0, t('stock.validation.stockMin')),
+  stock: z.number().min(0, t('stock.validation.stockMin')).optional(),
   sku: z.string().optional().or(z.literal('')),
   purchase_quantity: z.number().min(0).optional().or(z.literal(0)),
   wholesale_prices: z.array(z.object({

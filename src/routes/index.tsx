@@ -1,5 +1,4 @@
 import {
-  AccountBookOutlined,
   BankOutlined,
   DollarOutlined,
   FileTextOutlined,
@@ -66,7 +65,6 @@ function Index() {
     { to: '/master-data', label: t('nav.masterData'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.masterDataDesc') },
     { to: '/finance', label: t('nav.finance'), icon: BankOutlined, color: 'text-red-600', desc: t('home.menu.financeDesc') },
     { to: '/koperasi', label: t('nav.cooperative'), icon: BankOutlined, color: 'text-emerald-600', desc: t('home.cooperativeDesc') },
-    { to: '/shopping-note', label: t('home.menu.shoppingNote'), icon: AccountBookOutlined, color: 'text-yellow-600', desc: t('home.menu.shoppingNoteDesc') },
     { to: '/history', label: t('nav.history'), icon: HistoryOutlined, color: 'text-purple-600', desc: t('home.historyDesc') },
     { to: '/profit', label: t('nav.report.profit'), icon: DollarOutlined, color: 'text-emerald-600', desc: t('home.profitDesc') },
     { to: '/report', label: t('nav.reports'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('home.reportDesc') },

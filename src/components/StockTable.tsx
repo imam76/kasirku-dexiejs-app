@@ -6,13 +6,14 @@ import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock
 import type { Product } from '@/types';
 import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
 import { getPrice } from '@/utils/pricing';
-import { Edit2, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Edit2, PackagePlus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 interface StockTableProps {
   products: Product[];
   onEdit: (product: Product) => void;
   onDelete: (id: string) => void;
+  onOpeningStock: (product: Product) => void;
 }
 
 type SortField = 'name' | 'sku' | 'purchase_price' | 'selling_price' | 'stock';
@@ -21,7 +22,7 @@ type StockStatusFilter = 'all' | 'out' | 'low' | 'safe';
 type SkuStatusFilter = 'all' | 'with' | 'without';
 type WholesaleStatusFilter = 'all' | 'with' | 'without';
 
-export default function StockTable({ products, onEdit, onDelete }: StockTableProps) {
+export default function StockTable({ products, onEdit, onDelete, onOpeningStock }: StockTableProps) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState('');
@@ -577,6 +578,13 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex gap-2">
                         <button
+                          onClick={() => onOpeningStock(product)}
+                          className="text-emerald-600 hover:text-emerald-800 transition-colors"
+                          title={t('stock.openingStockAction')}
+                        >
+                          <PackagePlus size={18} />
+                        </button>
+                        <button
                           onClick={() => onEdit(product)}
                           className="text-blue-600 hover:text-blue-800 transition-colors"
                           title={t('stock.editTitle')}
@@ -624,6 +632,22 @@ export default function StockTable({ products, onEdit, onDelete }: StockTablePro
             </div>
 
             <div className="space-y-3">
+              <button
+                onClick={() => {
+                  onOpeningStock(selectedProduct);
+                  setSelectedProduct(null);
+                }}
+                className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
+              >
+                <div className="p-2.5 bg-emerald-100 rounded-lg text-emerald-600">
+                  <PackagePlus size={22} />
+                </div>
+                <div>
+                  <span className="block font-bold text-gray-900">{t('stock.openingStockAction')}</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">{t('stock.openingStockDescription')}</span>
+                </div>
+              </button>
+
               <button
                 onClick={() => {
                   onEdit(selectedProduct);

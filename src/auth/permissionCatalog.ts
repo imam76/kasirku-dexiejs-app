@@ -50,7 +50,7 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     code: 'STOCK_PURCHASE_ACCESS',
     label: 'Akses Pembelian Stok',
     group: 'Stok',
-    moduleCodes: ['SHOPPING_NOTE', 'PURCHASE_ORDER', 'PURCHASE_RECEIPT', 'PURCHASE_INVOICE'],
+    moduleCodes: ['PURCHASE_ORDER', 'PURCHASE_RECEIPT', 'PURCHASE_INVOICE'],
   },
   {
     code: 'PROFIT_VIEW',

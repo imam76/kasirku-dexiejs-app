@@ -251,7 +251,6 @@ const RootLayout = () => {
         { to: '/master-data/units', label: t('nav.unit'), icon: Scale, key: '/master-data/units#units', hash: 'units' },
       ],
     },
-    { to: '/shopping-note', label: t('nav.shoppingNote'), icon: ClipboardList },
     { to: '/history', label: t('nav.history'), icon: History },
     {
       label: t('nav.finance'),

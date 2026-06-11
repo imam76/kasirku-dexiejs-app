@@ -12,10 +12,26 @@ export interface StockCardRow {
   balance: number;
 }
 
+type StockCardMovement = Omit<StockCardRow, 'balance'>;
+
 const numberOrFallback = (value: unknown, fallback: number) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
 };
+
+const toFiniteNumber = (value: unknown) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const roundQuantity = (value: number) => Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000;
+
+const getMovementTime = (movement: Pick<StockCardMovement, 'date'>) => {
+  const timestamp = new Date(movement.date).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const getMovementDelta = (movement: Pick<StockCardMovement, 'qtyIn' | 'qtyOut'>) => movement.qtyIn - movement.qtyOut;
 
 export const getStockCard = async (productId: string, startDate: Date, endDate: Date): Promise<{ openingBalance: number; rows: StockCardRow[] }> => {
   const product = await db.products.get(productId);
@@ -24,41 +40,44 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
   }
 
   const baseUnit = product.purchase_unit;
-  const allMutations: Omit<StockCardRow, 'balance'>[] = [];
+  const allMutations: StockCardMovement[] = [];
 
-  // 1. OPENING Balances from inventoryLots (from migration 37)
+  // 1. Manual opening stock entries. Migration-generated opening lots do not
+  // have source_id/source_line_id and are skipped to avoid double counting.
   const openingLots = await db.inventoryLots
     .where('product_id')
     .equals(productId)
-    .filter((lot) => lot.source_type === 'OPENING')
+    .filter((lot) => lot.source_type === 'OPENING' && Boolean(lot.source_id || lot.source_line_id))
     .toArray();
 
   for (const lot of openingLots) {
+    const quantity = toFiniteNumber(lot.quantity_received);
+    if (quantity <= 0) continue;
+
     allMutations.push({
-      id: lot.id,
+      id: `opening_stock_${lot.id}`,
       date: lot.received_at,
-      sourceType: 'OPENING_BALANCE',
+      sourceType: 'OPENING_STOCK',
       sourceNumber: '-',
-      qtyIn: lot.quantity_received,
+      qtyIn: quantity,
       qtyOut: 0,
       unit: baseUnit,
     });
   }
 
-  // 2. SHOPPING_NOTE from inventoryLots
-  const shoppingLots = await db.inventoryLots
-    .where('product_id')
-    .equals(productId)
-    .filter((lot) => lot.source_type === 'SHOPPING_NOTE')
-    .toArray();
+  // 2. Legacy quick stock purchases from Stock Management/import.
+  // Read this ledger instead of FIFO lots to avoid double counting stock-in rows.
+  const stockPurchases = await db.stockPurchases.where('product_id').equals(productId).toArray();
+  for (const purchase of stockPurchases) {
+    const quantity = toFiniteNumber(purchase.quantity);
+    if (quantity <= 0) continue;
 
-  for (const lot of shoppingLots) {
     allMutations.push({
-      id: lot.id,
-      date: lot.received_at,
-      sourceType: 'SHOPPING_NOTE',
-      sourceNumber: lot.source_id || '-',
-      qtyIn: lot.quantity_received,
+      id: `stock_purchase_${purchase.id}`,
+      date: purchase.created_at,
+      sourceType: 'STOCK_PURCHASE',
+      sourceNumber: purchase.id,
+      qtyIn: quantity,
       qtyOut: 0,
       unit: baseUnit,
     });
@@ -241,27 +260,36 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
   }
 
   // 7. Sort by date ASC
-  allMutations.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  allMutations.sort((a, b) => {
+    const dateDiff = getMovementTime(a) - getMovementTime(b);
+    return dateDiff !== 0 ? dateDiff : a.id.localeCompare(b.id);
+  });
 
-  // 8. Calculate running balance & opening balance
-  let runningBalance = 0;
-  let openingBalance = 0;
+  // 8. Calculate balances from the product stock snapshot.
+  // FIFO opening lots are migration snapshots, not true transaction history.
+  // Anchoring to products.stock prevents those snapshots from being counted
+  // again together with POS/Purchase/Sales movements.
   const startMs = startDate.getTime();
   const endMs = endDate.getTime();
   const finalRows: StockCardRow[] = [];
+  const currentStock = toFiniteNumber(product.stock);
+  const movementsInRange = allMutations.filter((movement) => {
+    const movementMs = getMovementTime(movement);
+    return movementMs >= startMs && movementMs <= endMs;
+  });
+  const netInRange = movementsInRange.reduce((sum, movement) => sum + getMovementDelta(movement), 0);
+  const netAfterRange = allMutations.reduce((sum, movement) => (
+    getMovementTime(movement) > endMs ? sum + getMovementDelta(movement) : sum
+  ), 0);
+  const openingBalance = roundQuantity(currentStock - netAfterRange - netInRange);
+  let runningBalance = openingBalance;
 
-  for (const mut of allMutations) {
-    runningBalance += mut.qtyIn - mut.qtyOut;
-    
-    const mutMs = new Date(mut.date).getTime();
-    if (mutMs < startMs) {
-      openingBalance = runningBalance;
-    } else if (mutMs <= endMs) {
-      finalRows.push({
-        ...mut,
-        balance: runningBalance,
-      });
-    }
+  for (const mut of movementsInRange) {
+    runningBalance = roundQuantity(runningBalance + getMovementDelta(mut));
+    finalRows.push({
+      ...mut,
+      balance: runningBalance,
+    });
   }
 
   // Add the initial opening balance row if there are rows or opening balance is > 0

@@ -28,7 +28,6 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
     iconName: 'ShoppingCart',
     modules: [
       { code: 'POS_TRANSACTION', label: 'Transaction (POS)', description: 'Penjualan langsung di kasir' },
-      { code: 'SHOPPING_NOTE', label: 'Shopping Note', description: 'Catatan belanja / order list' },
     ],
   },
   {

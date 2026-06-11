@@ -14,6 +14,7 @@ import type { FinanceTransaction, Product, ProductUnit } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 
 export type { StockFormData };
 
@@ -71,7 +72,7 @@ export const useStockManagement = () => {
 
   // Upsert (add/update) mutation
   const upsertMutation = useMutation({
-    mutationFn: async (productData: Omit<Product, 'id' | 'created_at' | 'updated_at'> & { purchase_quantity?: number }) => {
+    mutationFn: async (productData: ProductUpsertData & { purchase_quantity?: number }) => {
       const currentUser = await getCurrentSessionUser();
       requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
       const purchase_quantity = productData.purchase_quantity || 0;
@@ -239,6 +240,67 @@ export const useStockManagement = () => {
     },
   });
 
+  const openingStockMutation = useMutation({
+    mutationFn: async ({ productId, quantity }: { productId: string; quantity: number }) => {
+      const currentUser = await getCurrentSessionUser();
+      requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
+
+      const normalizedQuantity = Number(quantity);
+      if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
+        throw new Error(t('stock.openingStockInvalid'));
+      }
+
+      const now = new Date().toISOString();
+
+      await db.transaction('rw', [db.products, db.inventoryLots], async () => {
+        const product = await db.products.get(productId);
+        if (!product) {
+          throw new Error('Produk tidak ditemukan.');
+        }
+
+        const updatedProduct = withPendingSync({
+          ...product,
+          stock: Number(product.stock || 0) + normalizedQuantity,
+          updated_at: now,
+        });
+
+        await db.products.put(updatedProduct);
+        await addInventoryLot({
+          productId: product.id,
+          productName: product.name,
+          sku: product.sku,
+          sourceType: 'OPENING',
+          sourceId: product.id,
+          sourceLineId: crypto.randomUUID(),
+          quantityReceived: normalizedQuantity,
+          costPerUnit: Number(product.purchase_price || 0),
+          receivedAt: now,
+        });
+      });
+
+      const updatedProduct = await db.products.get(productId);
+      if (!updatedProduct) {
+        throw new Error('Saldo awal stok gagal disimpan.');
+      }
+
+      await enqueueProductSync(updatedProduct, 'update');
+      await writeActivityLog({
+        user: currentUser,
+        action: 'PRODUCT_OPENING_STOCK_CREATED',
+        entity: 'products',
+        entity_id: productId,
+        description: `${currentUser?.name ?? 'User'} menambahkan saldo awal stok ${updatedProduct.name}: ${normalizedQuantity} ${updatedProduct.purchase_unit}.`,
+      });
+
+      return updatedProduct;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['stockCard'] });
+      message.success(t('stock.openingStockSaved'));
+    },
+  });
+
   const importCsvMutation = useMutation({
     mutationFn: async (items: ProductCsvImportItem[]) => {
       const currentUser = await getCurrentSessionUser();
@@ -389,7 +451,6 @@ export const useStockManagement = () => {
       selling_unit: defaultSellingUnit,
       purchase_price: data.purchase_price,
       selling_price: data.selling_price,
-      stock: data.stock,
       sku: data.sku || '',
       purchase_quantity: data.purchase_quantity || 0,
       wholesale_prices: data.wholesale_prices || [],
@@ -417,7 +478,6 @@ export const useStockManagement = () => {
     setValue('selling_unit', product.selling_unit);
     setValue('purchase_price', product.purchase_price);
     setValue('selling_price', product.selling_price);
-    setValue('stock', product.stock);
     setValue('sku', product.sku || '');
     setValue('purchase_quantity', 0);
     setValue('wholesale_prices', (product.wholesale_prices || []).map(p => ({
@@ -461,6 +521,9 @@ export const useStockManagement = () => {
     setValue,
     isSubmitting: upsertMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    recordOpeningStock: (input: Parameters<typeof openingStockMutation.mutateAsync>[0]) =>
+      openingStockMutation.mutateAsync(input),
+    isRecordingOpeningStock: openingStockMutation.isPending,
     importProductsFromCsv: (items: Parameters<typeof importCsvMutation.mutateAsync>[0]) =>
       importCsvMutation.mutateAsync(items),
     isImporting: importCsvMutation.isPending,

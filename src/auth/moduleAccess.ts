@@ -20,8 +20,8 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   // POS
   '/transaction': ['POS_TRANSACTION'],
   '/history': ['POS_TRANSACTION'],
-  // Shopping Note
-  '/shopping-note': ['SHOPPING_NOTE'],
+  // Legacy stock shopping route redirects to Purchase Receipt.
+  '/shopping-note': ['PURCHASE_RECEIPT'],
   // Sales
   '/sales': ['SALES_QUOTATION', 'SALES_ORDER', 'SALES_DELIVERY', 'SALES_INVOICE', 'SALES_RETURN'],
   '/sales/returns': ['SALES_RETURN'],

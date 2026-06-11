@@ -21,7 +21,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/departments': 'SETTINGS_ACCESS',
   '/master-data/projects': 'SETTINGS_ACCESS',
   '/master-data/taxes': 'SETTINGS_ACCESS',
-  '/shopping-note': 'STOCK_PURCHASE_ACCESS',
+  '/shopping-note': 'FINANCE_ACCESS',
   '/sales': 'FINANCE_ACCESS',
   '/sales/returns': 'SALES_RETURN_MANAGE',
   '/purchases': 'FINANCE_ACCESS',
