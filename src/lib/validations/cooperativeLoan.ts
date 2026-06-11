@@ -36,13 +36,13 @@ export const cooperativeLoanApplicationSchema = z.object({
   member_id: z.string().min(1, 'Anggota wajib dipilih.'),
   principal_amount: z.number().positive('Pokok pinjaman wajib lebih dari 0.'),
   interest_calculation_type: z.enum(cooperativeLoanInterestCalculationTypeValues).default('MONTHLY_RATE'),
-  interest_rate_per_month: z.number().min(0, 'Bunga per bulan tidak boleh negatif.').optional(),
-  tenor_months: z.number().int().min(1, 'Tenor minimal 1 bulan.').optional(),
+  interest_rate_per_month: z.number().optional(),
+  tenor_months: z.number().int().optional(),
   billing_frequency: z.enum(cooperativeLoanBillingFrequencyValues).optional(),
-  installment_count: z.number().int().min(1, 'Jumlah angsuran minimal 1.').optional(),
-  loan_service_rate: z.number().min(0, 'Jasa pinjaman tidak boleh negatif.').optional(),
-  admin_fee_rate: z.number().min(0, 'Biaya administrasi tidak boleh negatif.').optional(),
-  mandatory_saving_rate: z.number().min(0, 'Simpanan wajib tidak boleh negatif.').optional(),
+  installment_count: z.number().int().optional(),
+  loan_service_rate: z.number().optional(),
+  admin_fee_rate: z.number().optional(),
+  mandatory_saving_rate: z.number().optional(),
   deduction_method: z.enum(cooperativeLoanDeductionMethodValues).optional(),
   application_date: z.string().optional(),
   notes: z.string().optional(),
@@ -54,12 +54,24 @@ export const cooperativeLoanApplicationSchema = z.object({
         path: ['interest_rate_per_month'],
         message: 'Bunga per bulan wajib diisi.',
       });
+    } else if (value.interest_rate_per_month < 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['interest_rate_per_month'],
+        message: 'Bunga per bulan tidak boleh negatif.',
+      });
     }
     if (value.tenor_months === undefined) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['tenor_months'],
         message: 'Tenor wajib diisi.',
+      });
+    } else if (value.tenor_months < 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['tenor_months'],
+        message: 'Tenor minimal 1 bulan.',
       });
     }
     return;
@@ -71,12 +83,24 @@ export const cooperativeLoanApplicationSchema = z.object({
       path: ['loan_service_rate'],
       message: 'Jasa pinjaman total wajib diisi.',
     });
+  } else if (value.loan_service_rate < 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['loan_service_rate'],
+      message: 'Jasa pinjaman tidak boleh negatif.',
+    });
   }
   if (value.admin_fee_rate === undefined) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['admin_fee_rate'],
       message: 'Biaya administrasi wajib diisi.',
+    });
+  } else if (value.admin_fee_rate < 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['admin_fee_rate'],
+      message: 'Biaya administrasi tidak boleh negatif.',
     });
   }
   if (value.mandatory_saving_rate === undefined) {
@@ -85,12 +109,24 @@ export const cooperativeLoanApplicationSchema = z.object({
       path: ['mandatory_saving_rate'],
       message: 'Simpanan wajib wajib diisi.',
     });
+  } else if (value.mandatory_saving_rate < 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['mandatory_saving_rate'],
+      message: 'Simpanan wajib tidak boleh negatif.',
+    });
   }
   if (value.installment_count === undefined) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['installment_count'],
       message: 'Jumlah angsuran wajib diisi.',
+    });
+  } else if (value.installment_count < 1) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['installment_count'],
+      message: 'Jumlah angsuran minimal 1.',
     });
   }
   if (!value.billing_frequency) {

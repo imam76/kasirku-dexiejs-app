@@ -88,20 +88,29 @@ export default function CooperativeLoanManagement() {
 
   const handleSubmit = async (values: CooperativeLoanFormValues) => {
     try {
-      await createLoan({
+      const calculationType = values.interest_calculation_type ?? 'MONTHLY_RATE';
+      const commonInput = {
         member_id: values.member_id,
         principal_amount: Number(values.principal_amount || 0),
-        interest_calculation_type: values.interest_calculation_type,
-        interest_rate_per_month: Number(values.interest_rate_per_month || 0),
-        tenor_months: Number(values.tenor_months || 0),
-        billing_frequency: values.billing_frequency,
-        installment_count: Number(values.installment_count || 0),
-        loan_service_rate: Number(values.loan_service_rate || 0),
-        admin_fee_rate: Number(values.admin_fee_rate || 0),
-        mandatory_saving_rate: Number(values.mandatory_saving_rate || 0),
+        interest_calculation_type: calculationType,
         application_date: values.application_date?.toISOString(),
         notes: values.notes,
-      });
+      };
+
+      await createLoan(calculationType === 'TOTAL_PERCENT'
+        ? {
+            ...commonInput,
+            billing_frequency: values.billing_frequency,
+            installment_count: Number(values.installment_count || 0),
+            loan_service_rate: Number(values.loan_service_rate || 0),
+            admin_fee_rate: Number(values.admin_fee_rate || 0),
+            mandatory_saving_rate: Number(values.mandatory_saving_rate || 0),
+          }
+        : {
+            ...commonInput,
+            interest_rate_per_month: Number(values.interest_rate_per_month || 0),
+            tenor_months: Number(values.tenor_months || 0),
+          });
       message.success(t('cooperative.loans.createSuccess'));
       closeModal();
     } catch (error) {
