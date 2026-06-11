@@ -5,7 +5,11 @@ import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan, CooperativeLoanStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import { cooperativeLoanStatusOptions } from './loanOptions';
+import {
+  cooperativeLoanBillingFrequencyOptions,
+  cooperativeLoanCalculationTypeOptions,
+  cooperativeLoanStatusOptions,
+} from './loanOptions';
 
 const { Text } = Typography;
 
@@ -31,6 +35,14 @@ export default function CooperativeLoanTable({
     acc[option.value] = t(option.labelKey);
     return acc;
   }, {} as Record<CooperativeLoanStatus, string>);
+  const calculationTypeLabels = cooperativeLoanCalculationTypeOptions.reduce<Record<string, string>>((acc, option) => {
+    acc[option.value] = t(option.labelKey);
+    return acc;
+  }, {});
+  const billingFrequencyLabels = cooperativeLoanBillingFrequencyOptions.reduce<Record<string, string>>((acc, option) => {
+    acc[option.value] = t(option.labelKey);
+    return acc;
+  }, {});
 
   const columns: ColumnsType<CooperativeLoan> = [
     {
@@ -66,20 +78,46 @@ export default function CooperativeLoanTable({
       render: (amount: number) => `Rp ${formatCurrency(amount)}`,
     },
     {
-      title: t('cooperative.loans.table.interestRate'),
+      title: t('cooperative.loans.table.scheme'),
       dataIndex: 'interest_rate_per_month',
       key: 'interest_rate_per_month',
-      align: 'right',
-      width: 120,
-      render: (rate: number) => `${rate}%`,
+      width: 170,
+      render: (_rate: number, loan) => {
+        const calculationType = loan.interest_calculation_type ?? 'MONTHLY_RATE';
+        const rate = calculationType === 'TOTAL_PERCENT'
+          ? loan.loan_service_rate ?? 0
+          : loan.interest_rate_per_month;
+
+        return (
+          <Space orientation="vertical" size={0}>
+            <Text>{calculationTypeLabels[calculationType]}</Text>
+            <Text type="secondary">
+              {calculationType === 'TOTAL_PERCENT'
+                ? t('cooperative.loans.totalPercentRate', { rate })
+                : t('cooperative.loans.monthlyRate', { rate })}
+            </Text>
+          </Space>
+        );
+      },
     },
     {
-      title: t('cooperative.loans.table.tenor'),
+      title: t('cooperative.loans.table.installments'),
       dataIndex: 'tenor_months',
       key: 'tenor_months',
-      align: 'right',
-      width: 110,
-      render: (tenor: number) => t('cooperative.loans.monthCount', { count: tenor }),
+      width: 150,
+      render: (tenor: number, loan) => {
+        if ((loan.interest_calculation_type ?? 'MONTHLY_RATE') === 'TOTAL_PERCENT') {
+          const frequency = loan.billing_frequency ?? 'MONTHLY';
+          return (
+            <Space orientation="vertical" size={0}>
+              <Text>{t('cooperative.loans.installmentCount', { count: loan.installment_count ?? tenor })}</Text>
+              <Text type="secondary">{billingFrequencyLabels[frequency]}</Text>
+            </Space>
+          );
+        }
+
+        return t('cooperative.loans.monthCount', { count: tenor });
+      },
     },
     {
       title: t('cooperative.loans.table.totalPayable'),

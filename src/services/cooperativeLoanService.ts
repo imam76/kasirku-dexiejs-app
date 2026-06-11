@@ -19,17 +19,24 @@ import {
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import {
+  enqueueCooperativeMemberSavingBalancesSync,
   enqueueCooperativeLoanInstallmentsSync,
   enqueueCooperativeLoanPaymentsSync,
   enqueueCooperativeLoansSync,
+  enqueueCooperativeSavingTransactionsSync,
   withPendingCooperativeSync,
 } from '@/services/cooperativeSyncService';
 import type {
   CooperativeLoan,
+  CooperativeLoanBillingFrequency,
+  CooperativeLoanDeductionMethod,
   CooperativeLoanInstallment,
   CooperativeLoanInstallmentCollectionStatus,
+  CooperativeLoanInterestCalculationType,
   CooperativeLoanPayment,
   CooperativeMember,
+  CooperativeMemberSavingBalance,
+  CooperativeSavingTransaction,
   FinanceTransaction,
   PaymentMethod,
 } from '@/types';
@@ -39,16 +46,25 @@ import {
   getInstallmentRemainingAmounts,
 } from '@/utils/koperasi/loanPaymentAllocation';
 import {
+  buildFlexibleLoanInstallmentAmounts,
   buildFlatLoanInstallmentAmounts,
   calculateFlatLoanSummary,
+  calculateTotalPercentLoanSummary,
   roundCurrency,
 } from '@/utils/koperasi/loanSchedule';
 
 export interface CreateCooperativeLoanApplicationInput {
   member_id: string;
   principal_amount: number;
-  interest_rate_per_month: number;
-  tenor_months: number;
+  interest_calculation_type?: CooperativeLoanInterestCalculationType;
+  interest_rate_per_month?: number;
+  tenor_months?: number;
+  billing_frequency?: CooperativeLoanBillingFrequency;
+  installment_count?: number;
+  loan_service_rate?: number;
+  admin_fee_rate?: number;
+  mandatory_saving_rate?: number;
+  deduction_method?: CooperativeLoanDeductionMethod;
   application_date?: string;
   notes?: string;
 }
@@ -113,6 +129,8 @@ export interface RecordCooperativeLoanInstallmentCollectionResult {
 
 const cooperativeLoanTables = [
   db.cooperativeMembers,
+  db.cooperativeSavingTransactions,
+  db.cooperativeMemberSavingBalances,
   db.cooperativeLoans,
   db.cooperativeLoanInstallments,
   db.cooperativeLoanPayments,
@@ -172,6 +190,47 @@ const createCooperativeLoanPaymentNumber = async (date = new Date()) => {
   return `${prefix}-${datePart}-${String(count + 1).padStart(4, '0')}`;
 };
 
+const getMandatorySavingBalanceId = (memberId: string) => `${memberId}:WAJIB`;
+
+const resolveLoanCalculationType = (
+  loan: Pick<CooperativeLoan, 'interest_calculation_type'>,
+): CooperativeLoanInterestCalculationType => loan.interest_calculation_type ?? 'MONTHLY_RATE';
+
+const resolveLoanBillingFrequency = (
+  loan: Pick<CooperativeLoan, 'billing_frequency'>,
+): CooperativeLoanBillingFrequency => loan.billing_frequency ?? 'MONTHLY';
+
+const resolveLoanInstallmentCount = (
+  loan: Pick<CooperativeLoan, 'installment_count' | 'tenor_months'>,
+) => Math.max(1, Math.trunc(Number(loan.installment_count ?? loan.tenor_months)));
+
+const resolveLoanDeductionMethod = (
+  loan: Pick<CooperativeLoan, 'deduction_method'>,
+): CooperativeLoanDeductionMethod => loan.deduction_method ?? 'NONE';
+
+const resolveNetDisbursementAmount = (
+  loan: Pick<CooperativeLoan, 'principal_amount' | 'admin_fee_amount' | 'mandatory_saving_amount' | 'net_disbursement_amount' | 'deduction_method'>,
+) => {
+  if (resolveLoanDeductionMethod(loan) !== 'DEDUCT_ON_DISBURSEMENT') {
+    return roundCurrency(loan.principal_amount);
+  }
+
+  return roundCurrency(
+    loan.net_disbursement_amount ??
+    loan.principal_amount - Number(loan.admin_fee_amount || 0) - Number(loan.mandatory_saving_amount || 0),
+  );
+};
+
+const addBillingInterval = (
+  date: dayjs.Dayjs,
+  frequency: CooperativeLoanBillingFrequency,
+  intervalIndex: number,
+) => {
+  if (frequency === 'WEEKLY') return date.add(intervalIndex, 'week');
+  if (frequency === 'BIWEEKLY') return date.add(intervalIndex * 2, 'week');
+  return date.add(intervalIndex, 'month');
+};
+
 const updateFinanceBalanceForDisbursement = async (amount: number, now: string) => {
   const currentFinanceBalance = await db.financeBalance.get('current');
   const nextFinanceBalance = roundCurrency(Number(currentFinanceBalance?.amount || 0) - amount);
@@ -206,11 +265,18 @@ const buildInstallments = (
   now: string,
 ): CooperativeLoanInstallment[] => {
   const baseDueDate = dayjs(firstDueDate);
-  const amounts = buildFlatLoanInstallmentAmounts({
-    principalAmount: loan.principal_amount,
-    totalInterestAmount: loan.total_interest_amount,
-    tenorMonths: loan.tenor_months,
-  });
+  const billingFrequency = resolveLoanBillingFrequency(loan);
+  const amounts = resolveLoanCalculationType(loan) === 'MONTHLY_RATE'
+    ? buildFlatLoanInstallmentAmounts({
+        principalAmount: loan.principal_amount,
+        totalInterestAmount: loan.total_interest_amount,
+        tenorMonths: loan.tenor_months,
+      })
+    : buildFlexibleLoanInstallmentAmounts({
+        principalAmount: loan.principal_amount,
+        totalInterestAmount: loan.total_interest_amount,
+        installmentCount: resolveLoanInstallmentCount(loan),
+      });
 
   return amounts.map((amount) => withPendingCooperativeSync({
     id: crypto.randomUUID(),
@@ -220,7 +286,7 @@ const buildInstallments = (
     member_number: loan.member_number,
     member_name: loan.member_name,
     installment_number: amount.installment_number,
-    due_date: baseDueDate.add(amount.installment_number - 1, 'month').toISOString(),
+    due_date: addBillingInterval(baseDueDate, billingFrequency, amount.installment_number - 1).toISOString(),
     principal_amount: amount.principal_amount,
     interest_amount: amount.interest_amount,
     penalty_amount: 0,
@@ -232,6 +298,73 @@ const buildInstallments = (
     created_at: now,
     updated_at: now,
   }));
+};
+
+const recordMandatorySavingDeduction = async ({
+  loan,
+  amount,
+  transactionDate,
+  now,
+  cashAccount,
+  paymentMethod,
+  paymentChannel,
+  currentUser,
+}: {
+  loan: CooperativeLoan;
+  amount: number;
+  transactionDate: string;
+  now: string;
+  cashAccount: { id: string; code: string; name: string };
+  paymentMethod: PaymentMethod;
+  paymentChannel?: string;
+  currentUser?: { id: string; name: string } | null;
+}): Promise<{
+  transaction?: CooperativeSavingTransaction;
+  balance?: CooperativeMemberSavingBalance;
+}> => {
+  const mandatorySavingAmount = roundCurrency(amount);
+  if (mandatorySavingAmount <= 0) return {};
+
+  const balanceId = getMandatorySavingBalanceId(loan.member_id);
+  const existingBalance = await db.cooperativeMemberSavingBalances.get(balanceId);
+  const nextBalance = roundCurrency(Number(existingBalance?.balance || 0) + mandatorySavingAmount);
+  const balance: CooperativeMemberSavingBalance = withPendingCooperativeSync({
+    id: balanceId,
+    member_id: loan.member_id,
+    member_number: loan.member_number,
+    member_name: loan.member_name,
+    saving_type: 'WAJIB',
+    balance: nextBalance,
+    updated_at: now,
+  });
+  const transaction: CooperativeSavingTransaction = withPendingCooperativeSync({
+    id: crypto.randomUUID(),
+    member_id: loan.member_id,
+    member_number: loan.member_number,
+    member_name: loan.member_name,
+    saving_type: 'WAJIB',
+    transaction_type: 'DEPOSIT',
+    amount: mandatorySavingAmount,
+    transaction_date: transactionDate,
+    status: 'POSTED',
+    cash_account_id: cashAccount.id,
+    cash_account_code: cashAccount.code,
+    cash_account_name: cashAccount.name,
+    payment_method: paymentMethod,
+    payment_channel: paymentChannel,
+    notes: `Potongan simpanan wajib dari pencairan pinjaman ${loan.loan_number}.`,
+    created_at: now,
+    updated_at: now,
+    created_by: currentUser?.id,
+    created_by_name: currentUser?.name,
+    updated_by: currentUser?.id,
+    updated_by_name: currentUser?.name,
+  });
+
+  await db.cooperativeMemberSavingBalances.put(balance);
+  await db.cooperativeSavingTransactions.add(transaction);
+
+  return { transaction, balance };
 };
 
 const getInstallmentNextStatus = (installment: CooperativeLoanInstallment) => {
@@ -278,11 +411,30 @@ export const createCooperativeLoanApplication = async (
   await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
 
   const parsedInput = cooperativeLoanApplicationSchema.parse(input);
-  const summary = calculateFlatLoanSummary({
-    principalAmount: parsedInput.principal_amount,
-    interestRatePerMonth: parsedInput.interest_rate_per_month,
-    tenorMonths: parsedInput.tenor_months,
-  });
+  const calculationType = parsedInput.interest_calculation_type;
+  const flatSummary = calculationType === 'MONTHLY_RATE'
+    ? calculateFlatLoanSummary({
+        principalAmount: parsedInput.principal_amount,
+        interestRatePerMonth: Number(parsedInput.interest_rate_per_month || 0),
+        tenorMonths: Number(parsedInput.tenor_months || 1),
+      })
+    : undefined;
+  const totalPercentSummary = calculationType === 'TOTAL_PERCENT'
+    ? calculateTotalPercentLoanSummary({
+        principalAmount: parsedInput.principal_amount,
+        loanServiceRate: Number(parsedInput.loan_service_rate || 0),
+        adminFeeRate: Number(parsedInput.admin_fee_rate || 0),
+        mandatorySavingRate: Number(parsedInput.mandatory_saving_rate || 0),
+        installmentCount: Number(parsedInput.installment_count || 1),
+      })
+    : undefined;
+  const summary = flatSummary ?? totalPercentSummary;
+  if (!summary) {
+    throw new Error('Skema perhitungan pinjaman tidak valid.');
+  }
+  if (totalPercentSummary && totalPercentSummary.net_disbursement_amount < -0.01) {
+    throw new Error('Estimasi uang diterima anggota tidak boleh negatif.');
+  }
   const now = new Date().toISOString();
   const applicationDate = parsedInput.application_date ?? now;
   let savedLoan: CooperativeLoan | undefined;
@@ -296,8 +448,23 @@ export const createCooperativeLoanApplication = async (
       member_number: member.member_number,
       member_name: member.name,
       principal_amount: summary.principal_amount,
-      interest_rate_per_month: summary.interest_rate_per_month,
-      tenor_months: summary.tenor_months,
+      interest_rate_per_month: flatSummary?.interest_rate_per_month ?? 0,
+      tenor_months: flatSummary?.tenor_months ?? totalPercentSummary?.installment_count ?? 1,
+      interest_calculation_type: calculationType,
+      billing_frequency: calculationType === 'TOTAL_PERCENT'
+        ? parsedInput.billing_frequency ?? 'MONTHLY'
+        : 'MONTHLY',
+      installment_count: flatSummary?.tenor_months ?? totalPercentSummary?.installment_count ?? 1,
+      loan_service_rate: flatSummary?.interest_rate_per_month ?? totalPercentSummary?.loan_service_rate ?? 0,
+      loan_service_amount: summary.total_interest_amount,
+      admin_fee_rate: totalPercentSummary?.admin_fee_rate ?? 0,
+      admin_fee_amount: totalPercentSummary?.admin_fee_amount ?? 0,
+      mandatory_saving_rate: totalPercentSummary?.mandatory_saving_rate ?? 0,
+      mandatory_saving_amount: totalPercentSummary?.mandatory_saving_amount ?? 0,
+      deduction_method: calculationType === 'TOTAL_PERCENT'
+        ? parsedInput.deduction_method ?? 'DEDUCT_ON_DISBURSEMENT'
+        : 'NONE',
+      net_disbursement_amount: totalPercentSummary?.net_disbursement_amount ?? summary.principal_amount,
       total_interest_amount: summary.total_interest_amount,
       total_payable_amount: summary.total_payable_amount,
       outstanding_principal_amount: summary.principal_amount,
@@ -452,12 +619,13 @@ export const disburseCooperativeLoan = async (
   const parsedInput = cooperativeLoanDisbursementSchema.parse(input);
   const now = new Date().toISOString();
   const disbursementDate = parsedInput.disbursement_date ?? now;
-  const firstDueDate = parsedInput.first_due_date ?? dayjs(disbursementDate).add(1, 'month').toISOString();
   const paymentMethod = parsedInput.payment_method ?? 'TUNAI';
   const financeTransactionId = crypto.randomUUID();
   let disbursedLoan: CooperativeLoan | undefined;
   let installments: CooperativeLoanInstallment[] = [];
   let financeTransaction: FinanceTransaction | undefined;
+  let mandatorySavingTransaction: CooperativeSavingTransaction | undefined;
+  let mandatorySavingBalance: CooperativeMemberSavingBalance | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const loan = await db.cooperativeLoans.get(input.loan_id);
@@ -478,7 +646,13 @@ export const disburseCooperativeLoan = async (
 
     const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
     const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT);
-    await updateFinanceBalanceForDisbursement(loan.principal_amount, now);
+    const disbursementAmount = resolveNetDisbursementAmount(loan);
+    if (disbursementAmount < -0.01) {
+      throw new Error('Nominal pencairan net tidak boleh negatif.');
+    }
+    const firstDueDate = parsedInput.first_due_date
+      ?? addBillingInterval(dayjs(disbursementDate), resolveLoanBillingFrequency(loan), 1).toISOString();
+    await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
 
     const nextDisbursedLoan: CooperativeLoan = withPendingCooperativeSync({
       ...loan,
@@ -491,6 +665,7 @@ export const disburseCooperativeLoan = async (
       payment_channel: parsedInput.payment_channel,
       finance_transaction_id: financeTransactionId,
       disbursement_notes: parsedInput.notes,
+      net_disbursement_amount: Math.max(0, disbursementAmount),
       outstanding_principal_amount: loan.principal_amount,
       outstanding_interest_amount: loan.total_interest_amount,
       outstanding_penalty_amount: 0,
@@ -505,7 +680,7 @@ export const disburseCooperativeLoan = async (
       id: financeTransactionId,
       type: 'EXPENSE',
       category: FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT,
-      amount: loan.principal_amount,
+      amount: Math.max(0, disbursementAmount),
       description: `Pencairan pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
       created_at: disbursementDate,
       reference_id: loan.id,
@@ -518,6 +693,20 @@ export const disburseCooperativeLoan = async (
     }, currentUser, now);
 
     await db.financeTransactions.add(financeTransaction);
+    if (resolveLoanDeductionMethod(nextDisbursedLoan) === 'DEDUCT_ON_DISBURSEMENT') {
+      const mandatorySavingResult = await recordMandatorySavingDeduction({
+        loan: nextDisbursedLoan,
+        amount: Number(nextDisbursedLoan.mandatory_saving_amount || 0),
+        transactionDate: disbursementDate,
+        now,
+        cashAccount,
+        paymentMethod,
+        paymentChannel: parsedInput.payment_channel,
+        currentUser,
+      });
+      mandatorySavingTransaction = mandatorySavingResult.transaction;
+      mandatorySavingBalance = mandatorySavingResult.balance;
+    }
     await db.cooperativeLoanInstallments.bulkAdd(installments);
     await db.cooperativeLoans.put(nextDisbursedLoan);
 
@@ -543,7 +732,7 @@ export const disburseCooperativeLoan = async (
       action: 'COOPERATIVE_LOAN_DISBURSED',
       entity: 'cooperativeLoans',
       entity_id: loan.id,
-      description: `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${loan.principal_amount}.`,
+      description: `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)}.`,
     });
   });
 
@@ -553,6 +742,12 @@ export const disburseCooperativeLoan = async (
 
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  }
+  if (mandatorySavingTransaction) {
+    await enqueueCooperativeSavingTransactionsSync([mandatorySavingTransaction], 'create');
+  }
+  if (mandatorySavingBalance) {
+    await enqueueCooperativeMemberSavingBalancesSync([mandatorySavingBalance], 'update');
   }
   await enqueueCooperativeLoansSync([disbursedLoan], 'update');
   await enqueueCooperativeLoanInstallmentsSync(installments, 'create');

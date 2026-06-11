@@ -4,6 +4,7 @@ import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanInstallmentCollectionStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
+import { cooperativeLoanBillingFrequencyOptions } from '../loans/loanOptions';
 
 const { Text } = Typography;
 
@@ -50,6 +51,10 @@ export default function CooperativeBillingDrawer({
     UNABLE_TO_PAY: 'volcano',
     FOLLOW_UP: 'gold',
   };
+  const billingFrequencyLabels = cooperativeLoanBillingFrequencyOptions.reduce<Record<string, string>>((acc, option) => {
+    acc[option.value] = t(option.labelKey);
+    return acc;
+  }, {});
 
   return (
     <Drawer
@@ -98,6 +103,9 @@ export default function CooperativeBillingDrawer({
           <Descriptions column={1} size="small" bordered>
             <Descriptions.Item label={t('cooperative.billing.table.loan')}>{loan.loan_number}</Descriptions.Item>
             <Descriptions.Item label="Pokok Awal">Rp {formatCurrency(loan.principal_amount)}</Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.loans.form.billingFrequency')}>
+              {billingFrequencyLabels[loan.billing_frequency ?? 'MONTHLY']}
+            </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.billing.drawer.outstandingTotal')}>Rp {formatCurrency(loan.outstanding_principal_amount + loan.outstanding_interest_amount + loan.outstanding_penalty_amount)}</Descriptions.Item>
           </Descriptions>
         </div>

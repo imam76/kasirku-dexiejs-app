@@ -57,6 +57,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('sales-discount', '4030', 'Diskon Penjualan', 'CONTRA_REVENUE'),
   createAccountSeed('cooperative-loan-interest-income', '4040', 'Pendapatan Bunga Pinjaman Anggota', 'REVENUE'),
   createAccountSeed('cooperative-loan-penalty-income', '4050', 'Pendapatan Denda Pinjaman Anggota', 'REVENUE'),
+  createAccountSeed('cooperative-loan-admin-income', '4060', 'Pendapatan Administrasi Pinjaman', 'REVENUE'),
   createAccountSeed('cogs', '5000', 'HPP', 'EXPENSE'),
   createAccountSeed('stock-purchase', '5100', 'Pembelian Stok', 'EXPENSE'),
   createAccountSeed('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE'),
@@ -192,6 +193,15 @@ export const DEFAULT_FINANCE_ACCOUNT_MAPPINGS: DefaultMappingSeed[] = [
     is_system: true,
   },
   {
+    key: FINANCE_CATEGORIES.KSP_LOAN_ADMIN_FEE,
+    category: FINANCE_CATEGORIES.KSP_LOAN_ADMIN_FEE,
+    account_id: 'cooperative-loan-admin-income',
+    account_code: '4060',
+    account_name: 'Pendapatan Administrasi Pinjaman',
+    account_type: 'REVENUE',
+    is_system: true,
+  },
+  {
     key: FINANCE_CATEGORIES.KSP_LOAN_PAYMENT,
     category: FINANCE_CATEGORIES.KSP_LOAN_PAYMENT,
     account_id: 'cash-and-bank',
@@ -255,7 +265,7 @@ export const SAK_ETAP_KOPERASI_TEMPLATE: ChartOfAccountTemplate = {
   accounting_profile: 'SAK_ETAP',
   industry_extension: 'COOPERATIVE',
   description: 'Template akun koperasi simpan pinjam mengikuti SAK ETAP. Simpanan dipecah per jenis, tersedia cadangan kerugian piutang, dan dana-dana koperasi.',
-  account_count_hint: 40,
+  account_count_hint: 41,
   is_system: true,
   is_active: true,
   created_at: '',
@@ -384,7 +394,11 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     parent_template_account_id: 'revenue',
     description: 'Pendapatan denda keterlambatan angsuran pinjaman',
   }),
-  createEtapTemplateLine('other-service-income', '4050', 'Pendapatan Jasa Lainnya', 'REVENUE', {
+  createEtapTemplateLine('loan-admin-income', '4050', 'Pendapatan Administrasi Pinjaman', 'REVENUE', {
+    parent_template_account_id: 'revenue',
+    mapping_keys: [FINANCE_CATEGORIES.KSP_LOAN_ADMIN_FEE],
+  }),
+  createEtapTemplateLine('other-service-income', '4060', 'Pendapatan Jasa Lainnya', 'REVENUE', {
     parent_template_account_id: 'revenue',
     mapping_keys: [FINANCE_CATEGORIES.SERVICE, FINANCE_CATEGORIES.BONUS_GRANT],
   }),

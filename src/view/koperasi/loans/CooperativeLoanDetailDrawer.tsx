@@ -10,6 +10,8 @@ import type {
 } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import {
+  cooperativeLoanBillingFrequencyOptions,
+  cooperativeLoanCalculationTypeOptions,
   cooperativeLoanInstallmentStatusOptions,
   cooperativeLoanStatusOptions,
 } from './loanOptions';
@@ -38,9 +40,24 @@ export default function CooperativeLoanDetailDrawer({
     acc[option.value] = t(option.labelKey);
     return acc;
   }, {} as Record<CooperativeLoanInstallmentStatus, string>);
+  const calculationTypeLabels = cooperativeLoanCalculationTypeOptions.reduce<Record<string, string>>((acc, option) => {
+    acc[option.value] = t(option.labelKey);
+    return acc;
+  }, {});
+  const billingFrequencyLabels = cooperativeLoanBillingFrequencyOptions.reduce<Record<string, string>>((acc, option) => {
+    acc[option.value] = t(option.labelKey);
+    return acc;
+  }, {});
   const statusOption = loan
     ? cooperativeLoanStatusOptions.find((option) => option.value === loan.status)
     : undefined;
+  const calculationType = loan?.interest_calculation_type ?? 'MONTHLY_RATE';
+  const interestLabel = calculationType === 'TOTAL_PERCENT'
+    ? t('cooperative.loans.installments.loanService')
+    : t('cooperative.loans.installments.interest');
+  const outstandingInterestLabel = calculationType === 'TOTAL_PERCENT'
+    ? t('cooperative.loans.outstandingLoanService')
+    : t('cooperative.loans.outstandingInterest');
 
   const installmentColumns = useMemo<ColumnsType<CooperativeLoanInstallment>>(() => [
     {
@@ -65,7 +82,7 @@ export default function CooperativeLoanDetailDrawer({
       render: (value: number) => `Rp ${formatCurrency(value)}`,
     },
     {
-      title: t('cooperative.loans.installments.interest'),
+      title: interestLabel,
       dataIndex: 'interest_amount',
       key: 'interest_amount',
       align: 'right',
@@ -91,7 +108,7 @@ export default function CooperativeLoanDetailDrawer({
         return <Tag color={option?.color}>{installmentStatusLabels[status]}</Tag>;
       },
     },
-  ], [installmentStatusLabels, t]);
+  ], [installmentStatusLabels, interestLabel, t]);
 
   return (
     <Drawer
@@ -119,13 +136,46 @@ export default function CooperativeLoanDetailDrawer({
             <Descriptions.Item label={t('cooperative.loans.form.principalAmount')}>
               Rp {formatCurrency(loan.principal_amount)}
             </Descriptions.Item>
-            <Descriptions.Item label={t('cooperative.loans.form.interestRate')}>
-              {loan.interest_rate_per_month}%
+            <Descriptions.Item label={t('cooperative.loans.form.calculationType')}>
+              {calculationTypeLabels[calculationType]}
             </Descriptions.Item>
-            <Descriptions.Item label={t('cooperative.loans.form.tenor')}>
-              {t('cooperative.loans.monthCount', { count: loan.tenor_months })}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('cooperative.loans.table.totalInterest')}>
+            {calculationType === 'MONTHLY_RATE' ? (
+              <>
+                <Descriptions.Item label={t('cooperative.loans.form.interestRate')}>
+                  {loan.interest_rate_per_month}%
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.loans.form.tenor')}>
+                  {t('cooperative.loans.monthCount', { count: loan.tenor_months })}
+                </Descriptions.Item>
+              </>
+            ) : (
+              <>
+                <Descriptions.Item label={t('cooperative.loans.form.loanServiceRate')}>
+                  {loan.loan_service_rate ?? 0}%
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.loans.form.installmentCount')}>
+                  {t('cooperative.loans.installmentCount', { count: loan.installment_count ?? loan.tenor_months })}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.loans.form.billingFrequency')}>
+                  {billingFrequencyLabels[loan.billing_frequency ?? 'MONTHLY']}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.loans.form.adminFeeRate')}>
+                  {loan.admin_fee_rate ?? 0}% / Rp {formatCurrency(loan.admin_fee_amount ?? 0)}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.loans.form.mandatorySavingRate')}>
+                  {loan.mandatory_saving_rate ?? 0}% / Rp {formatCurrency(loan.mandatory_saving_amount ?? 0)}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.loans.deductionMethod')}>
+                  {loan.deduction_method === 'DEDUCT_ON_DISBURSEMENT'
+                    ? t('cooperative.loans.deductionMethod.deductOnDisbursement')
+                    : t('cooperative.loans.deductionMethod.none')}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.loans.netDisbursement')}>
+                  Rp {formatCurrency(loan.net_disbursement_amount ?? loan.principal_amount)}
+                </Descriptions.Item>
+              </>
+            )}
+            <Descriptions.Item label={calculationType === 'TOTAL_PERCENT' ? t('cooperative.loans.table.totalLoanService') : t('cooperative.loans.table.totalInterest')}>
               Rp {formatCurrency(loan.total_interest_amount)}
             </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.loans.table.totalPayable')}>
@@ -134,7 +184,7 @@ export default function CooperativeLoanDetailDrawer({
             <Descriptions.Item label={t('cooperative.loans.outstandingPrincipal')}>
               Rp {formatCurrency(loan.outstanding_principal_amount)}
             </Descriptions.Item>
-            <Descriptions.Item label={t('cooperative.loans.outstandingInterest')}>
+            <Descriptions.Item label={outstandingInterestLabel}>
               Rp {formatCurrency(loan.outstanding_interest_amount)}
             </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.loans.approvedAt')}>

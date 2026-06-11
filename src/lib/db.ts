@@ -890,6 +890,102 @@ export class KasirkuDB extends Dexie {
       transactions: 'id, transaction_number, payment_method, cashier_session_id, cashier_user_id, created_at',
     });
 
+    this.version(48).stores({
+      cooperativeLoans: 'id, loan_number, member_id, member_number, status, interest_calculation_type, billing_frequency, application_date, disbursed_at, finance_transaction_id, journal_entry_id, sync_status, updated_at, created_at',
+    }).upgrade(async (tx) => {
+      const now = new Date().toISOString();
+      const loanTable = tx.table<CooperativeLoan, string>('cooperativeLoans');
+      const loans = await loanTable.toArray();
+      const migratedLoans = loans
+        .filter((loan) => !loan.interest_calculation_type || !loan.billing_frequency || !loan.installment_count)
+        .map((loan) => ({
+          ...loan,
+          interest_calculation_type: loan.interest_calculation_type ?? 'MONTHLY_RATE' as const,
+          billing_frequency: loan.billing_frequency ?? 'MONTHLY' as const,
+          installment_count: loan.installment_count ?? loan.tenor_months,
+          loan_service_rate: loan.loan_service_rate ?? loan.interest_rate_per_month,
+          loan_service_amount: loan.loan_service_amount ?? loan.total_interest_amount,
+          admin_fee_rate: loan.admin_fee_rate ?? 0,
+          admin_fee_amount: loan.admin_fee_amount ?? 0,
+          mandatory_saving_rate: loan.mandatory_saving_rate ?? 0,
+          mandatory_saving_amount: loan.mandatory_saving_amount ?? 0,
+          deduction_method: loan.deduction_method ?? 'NONE' as const,
+          net_disbursement_amount: loan.net_disbursement_amount ?? loan.principal_amount,
+        }));
+
+      if (migratedLoans.length > 0) {
+        await loanTable.bulkPut(migratedLoans);
+      }
+
+      let adminIncomeAccountForMapping: ChartOfAccount | undefined;
+      const adminIncomeAccountSeed = DEFAULT_CHART_OF_ACCOUNTS.find((account) => account.id === 'cooperative-loan-admin-income');
+      if (adminIncomeAccountSeed) {
+        const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+        const existingAccount = await chartOfAccounts.get(adminIncomeAccountSeed.id)
+          ?? await chartOfAccounts.where('code').equals(adminIncomeAccountSeed.code).first();
+
+        if (!existingAccount) {
+          adminIncomeAccountForMapping = {
+            ...adminIncomeAccountSeed,
+            created_at: now,
+            updated_at: now,
+          };
+          await chartOfAccounts.put(adminIncomeAccountForMapping);
+        } else {
+          adminIncomeAccountForMapping = existingAccount;
+        }
+      }
+
+      const adminFeeMappingSeed = DEFAULT_FINANCE_ACCOUNT_MAPPINGS.find((mapping) => mapping.key === 'KSP_ADMIN_PINJAMAN');
+      if (adminFeeMappingSeed) {
+        const mappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
+        const existingMapping = await mappings.get(adminFeeMappingSeed.key);
+
+        if (!existingMapping) {
+          await mappings.put({
+            ...adminFeeMappingSeed,
+            id: adminFeeMappingSeed.key,
+            account_id: adminIncomeAccountForMapping?.id ?? adminFeeMappingSeed.account_id,
+            account_code: adminIncomeAccountForMapping?.code ?? adminFeeMappingSeed.account_code,
+            account_name: adminIncomeAccountForMapping?.name ?? adminFeeMappingSeed.account_name,
+            account_type: adminIncomeAccountForMapping?.type ?? adminFeeMappingSeed.account_type,
+            created_at: now,
+            updated_at: now,
+          });
+        }
+      }
+
+      const syncQueue = tx.table<SyncQueueItem, string>('syncQueue');
+      const queueItems = await syncQueue.toArray();
+      const migratedQueueItems = queueItems
+        .filter((queueItem) => queueItem.entity === 'cooperativeLoans' && queueItem.payload && typeof queueItem.payload === 'object')
+        .map((queueItem) => {
+          const payload = queueItem.payload as Partial<CooperativeLoan>;
+          return {
+            ...queueItem,
+            payload: {
+              ...payload,
+              interest_calculation_type: payload.interest_calculation_type ?? 'MONTHLY_RATE',
+              billing_frequency: payload.billing_frequency ?? 'MONTHLY',
+              installment_count: payload.installment_count ?? payload.tenor_months,
+              loan_service_rate: payload.loan_service_rate ?? payload.interest_rate_per_month,
+              loan_service_amount: payload.loan_service_amount ?? payload.total_interest_amount,
+              admin_fee_rate: payload.admin_fee_rate ?? 0,
+              admin_fee_amount: payload.admin_fee_amount ?? 0,
+              mandatory_saving_rate: payload.mandatory_saving_rate ?? 0,
+              mandatory_saving_amount: payload.mandatory_saving_amount ?? 0,
+              deduction_method: payload.deduction_method ?? 'NONE',
+              net_disbursement_amount: payload.net_disbursement_amount ?? payload.principal_amount,
+            },
+            updated_at: now,
+          };
+        });
+
+      if (migratedQueueItems.length > 0) {
+        await syncQueue.bulkPut(migratedQueueItems);
+      }
+    });
+
     this.on('populate', async () => {
       await this.units.bulkAdd(DEFAULT_UNITS);
       await this.unitConversions.bulkAdd(DEFAULT_CONVERSIONS);

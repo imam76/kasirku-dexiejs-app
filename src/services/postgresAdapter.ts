@@ -1,8 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
+  CooperativeLoanBillingFrequency,
+  CooperativeLoanDeductionMethod,
   CooperativeLoanInstallmentCollectionStatus,
   CooperativeLoanInstallmentStatus,
+  CooperativeLoanInterestCalculationType,
   CooperativeLoanPaymentStatus,
   CooperativeLoanPaymentType,
   CooperativeLoanStatus,
@@ -650,6 +653,17 @@ export interface RemoteCooperativeLoanDto {
   principal_amount: number;
   interest_rate_per_month: number;
   tenor_months: number;
+  interest_calculation_type?: CooperativeLoanInterestCalculationType | null;
+  billing_frequency?: CooperativeLoanBillingFrequency | null;
+  installment_count?: number | null;
+  loan_service_rate?: number | null;
+  loan_service_amount?: number | null;
+  admin_fee_rate?: number | null;
+  admin_fee_amount?: number | null;
+  mandatory_saving_rate?: number | null;
+  mandatory_saving_amount?: number | null;
+  deduction_method?: CooperativeLoanDeductionMethod | null;
+  net_disbursement_amount?: number | null;
   total_interest_amount: number;
   total_payable_amount: number;
   outstanding_principal_amount: number;

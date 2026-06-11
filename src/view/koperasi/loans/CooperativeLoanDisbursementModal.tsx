@@ -1,11 +1,13 @@
-import { Checkbox, DatePicker, Form, Input, Modal, Select } from 'antd';
+import { Checkbox, DatePicker, Descriptions, Form, Input, Modal, Select, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { ChartOfAccount, CooperativeLoan, PaymentMethod } from '@/types';
+import { formatCurrency } from '@/utils/formatters';
 
 const { TextArea } = Input;
+const { Text } = Typography;
 
 export interface CooperativeLoanDisbursementFormValues {
   disbursement_date: Dayjs;
@@ -41,6 +43,10 @@ export default function CooperativeLoanDisbursementModal({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [paymentAccounts]);
+  const isDeductedLoan = loan?.deduction_method === 'DEDUCT_ON_DISBURSEMENT';
+  const netDisbursementAmount = loan
+    ? loan.net_disbursement_amount ?? loan.principal_amount
+    : 0;
 
   return (
     <Modal
@@ -115,6 +121,30 @@ export default function CooperativeLoanDisbursementModal({
         <Form.Item name="notes" label={t('cooperative.loans.form.disbursementNotes')}>
           <TextArea rows={3} placeholder={t('cooperative.loans.form.disbursementNotesPlaceholder')} />
         </Form.Item>
+
+        {loan && (
+          <div className="mb-2">
+            <Text strong className="mb-2 block">{t('cooperative.loans.disbursementPreview')}</Text>
+            <Descriptions size="small" bordered column={1}>
+              <Descriptions.Item label={t('cooperative.loans.form.principalAmount')}>
+                Rp {formatCurrency(loan.principal_amount)}
+              </Descriptions.Item>
+              {isDeductedLoan && (
+                <>
+                  <Descriptions.Item label={t('cooperative.loans.preview.adminFee')}>
+                    Rp {formatCurrency(loan.admin_fee_amount ?? 0)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('cooperative.loans.preview.mandatorySaving')}>
+                    Rp {formatCurrency(loan.mandatory_saving_amount ?? 0)}
+                  </Descriptions.Item>
+                </>
+              )}
+              <Descriptions.Item label={t('cooperative.loans.netDisbursement')}>
+                Rp {formatCurrency(netDisbursementAmount)}
+              </Descriptions.Item>
+            </Descriptions>
+          </div>
+        )}
       </Form>
     </Modal>
   );

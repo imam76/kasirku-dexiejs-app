@@ -24,6 +24,7 @@ export type CooperativeLoanStatusFilter = CooperativeLoanStatus | 'ALL';
 const COOPERATIVE_LOAN_RELATED_QUERY_KEYS = [
   'cooperativeLoans',
   'cooperativeLoanInstallments',
+  'cooperativeSavings',
   'financeBalance',
   'financeTransactions',
   'journalEntries',

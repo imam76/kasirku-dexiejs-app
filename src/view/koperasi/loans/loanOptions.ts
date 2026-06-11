@@ -1,4 +1,9 @@
-import type { CooperativeLoanInstallmentStatus, CooperativeLoanStatus } from '@/types';
+import type {
+  CooperativeLoanBillingFrequency,
+  CooperativeLoanInstallmentStatus,
+  CooperativeLoanInterestCalculationType,
+  CooperativeLoanStatus,
+} from '@/types';
 import type { TranslationKey } from '@/i18n/messages';
 
 export const cooperativeLoanStatusOptions: Array<{
@@ -24,4 +29,21 @@ export const cooperativeLoanInstallmentStatusOptions: Array<{
   { value: 'PARTIAL', labelKey: 'cooperative.loans.installmentStatus.partial', color: 'blue' },
   { value: 'PAID', labelKey: 'cooperative.loans.installmentStatus.paid', color: 'green' },
   { value: 'OVERDUE', labelKey: 'cooperative.loans.installmentStatus.overdue', color: 'red' },
+];
+
+export const cooperativeLoanCalculationTypeOptions: Array<{
+  value: CooperativeLoanInterestCalculationType;
+  labelKey: TranslationKey;
+}> = [
+  { value: 'MONTHLY_RATE', labelKey: 'cooperative.loans.calculationType.monthlyRate' },
+  { value: 'TOTAL_PERCENT', labelKey: 'cooperative.loans.calculationType.totalPercent' },
+];
+
+export const cooperativeLoanBillingFrequencyOptions: Array<{
+  value: CooperativeLoanBillingFrequency;
+  labelKey: TranslationKey;
+}> = [
+  { value: 'WEEKLY', labelKey: 'cooperative.loans.billingFrequency.weekly' },
+  { value: 'BIWEEKLY', labelKey: 'cooperative.loans.billingFrequency.biweekly' },
+  { value: 'MONTHLY', labelKey: 'cooperative.loans.billingFrequency.monthly' },
 ];

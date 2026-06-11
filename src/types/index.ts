@@ -1316,6 +1316,9 @@ export type CooperativeLoanInstallmentStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | '
 export type CooperativeLoanInstallmentCollectionStatus = 'NONE' | 'PROMISED_TO_PAY' | 'UNABLE_TO_PAY' | 'FOLLOW_UP';
 export type CooperativeLoanPaymentType = 'PAYMENT' | 'REVERSAL';
 export type CooperativeLoanPaymentStatus = 'POSTED' | 'REVERSED';
+export type CooperativeLoanInterestCalculationType = 'MONTHLY_RATE' | 'TOTAL_PERCENT';
+export type CooperativeLoanBillingFrequency = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
+export type CooperativeLoanDeductionMethod = 'NONE' | 'DEDUCT_ON_DISBURSEMENT';
 
 export interface CooperativeMember {
   id: string;
@@ -1401,6 +1404,17 @@ export interface CooperativeLoan {
   principal_amount: number;
   interest_rate_per_month: number;
   tenor_months: number;
+  interest_calculation_type?: CooperativeLoanInterestCalculationType;
+  billing_frequency?: CooperativeLoanBillingFrequency;
+  installment_count?: number;
+  loan_service_rate?: number;
+  loan_service_amount?: number;
+  admin_fee_rate?: number;
+  admin_fee_amount?: number;
+  mandatory_saving_rate?: number;
+  mandatory_saving_amount?: number;
+  deduction_method?: CooperativeLoanDeductionMethod;
+  net_disbursement_amount?: number;
   total_interest_amount: number;
   total_payable_amount: number;
   outstanding_principal_amount: number;

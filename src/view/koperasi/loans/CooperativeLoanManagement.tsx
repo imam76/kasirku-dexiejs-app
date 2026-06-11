@@ -15,6 +15,12 @@ import CooperativeLoanFormModal, { type CooperativeLoanFormValues } from './Coop
 import CooperativeLoanTable from './CooperativeLoanTable';
 import { cooperativeLoanStatusOptions } from './loanOptions';
 
+const getDefaultFirstDueDate = (loan: CooperativeLoan) => {
+  if (loan.billing_frequency === 'WEEKLY') return dayjs().add(1, 'week');
+  if (loan.billing_frequency === 'BIWEEKLY') return dayjs().add(2, 'week');
+  return dayjs().add(1, 'month');
+};
+
 export default function CooperativeLoanManagement() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
@@ -51,8 +57,14 @@ export default function CooperativeLoanManagement() {
     form.resetFields();
     form.setFieldsValue({
       application_date: dayjs(),
+      interest_calculation_type: 'MONTHLY_RATE',
       interest_rate_per_month: 1,
       tenor_months: 12,
+      loan_service_rate: 0,
+      admin_fee_rate: 0,
+      mandatory_saving_rate: 0,
+      installment_count: 12,
+      billing_frequency: 'MONTHLY',
     });
     setIsModalOpen(true);
   };
@@ -66,7 +78,7 @@ export default function CooperativeLoanManagement() {
     disbursementForm.resetFields();
     disbursementForm.setFieldsValue({
       disbursement_date: dayjs(),
-      first_due_date: dayjs().add(1, 'month'),
+      first_due_date: getDefaultFirstDueDate(loan),
       payment_method: 'TUNAI',
       remember_cash_account: true,
       ...getRememberedCashAccountFields(paymentAccounts),
@@ -79,8 +91,14 @@ export default function CooperativeLoanManagement() {
       await createLoan({
         member_id: values.member_id,
         principal_amount: Number(values.principal_amount || 0),
+        interest_calculation_type: values.interest_calculation_type,
         interest_rate_per_month: Number(values.interest_rate_per_month || 0),
         tenor_months: Number(values.tenor_months || 0),
+        billing_frequency: values.billing_frequency,
+        installment_count: Number(values.installment_count || 0),
+        loan_service_rate: Number(values.loan_service_rate || 0),
+        admin_fee_rate: Number(values.admin_fee_rate || 0),
+        mandatory_saving_rate: Number(values.mandatory_saving_rate || 0),
         application_date: values.application_date?.toISOString(),
         notes: values.notes,
       });

@@ -97,6 +97,17 @@ macro_rules! cooperative_loan_select {
             principal_amount,
             interest_rate_per_month,
             tenor_months,
+            interest_calculation_type,
+            billing_frequency,
+            installment_count,
+            loan_service_rate,
+            loan_service_amount,
+            admin_fee_rate,
+            admin_fee_amount,
+            mandatory_saving_rate,
+            mandatory_saving_amount,
+            deduction_method,
+            net_disbursement_amount,
             total_interest_amount,
             total_payable_amount,
             outstanding_principal_amount,
@@ -667,6 +678,17 @@ pub async fn upsert_cooperative_loan(
             principal_amount,
             interest_rate_per_month,
             tenor_months,
+            interest_calculation_type,
+            billing_frequency,
+            installment_count,
+            loan_service_rate,
+            loan_service_amount,
+            admin_fee_rate,
+            admin_fee_amount,
+            mandatory_saving_rate,
+            mandatory_saving_amount,
+            deduction_method,
+            net_disbursement_amount,
             total_interest_amount,
             total_payable_amount,
             outstanding_principal_amount,
@@ -733,12 +755,23 @@ pub async fn upsert_cooperative_loan(
             $31,
             $32,
             $33,
-            $34::TIMESTAMPTZ,
-            $35::TIMESTAMPTZ,
+            $34,
+            $35,
             $36,
             $37,
             $38,
-            $39
+            $39,
+            $40,
+            $41,
+            $42,
+            $43,
+            $44,
+            $45::TIMESTAMPTZ,
+            $46::TIMESTAMPTZ,
+            $47,
+            $48,
+            $49,
+            $50
         )
         ON CONFLICT (id) DO UPDATE SET
             loan_number = EXCLUDED.loan_number,
@@ -748,6 +781,17 @@ pub async fn upsert_cooperative_loan(
             principal_amount = EXCLUDED.principal_amount,
             interest_rate_per_month = EXCLUDED.interest_rate_per_month,
             tenor_months = EXCLUDED.tenor_months,
+            interest_calculation_type = EXCLUDED.interest_calculation_type,
+            billing_frequency = EXCLUDED.billing_frequency,
+            installment_count = EXCLUDED.installment_count,
+            loan_service_rate = EXCLUDED.loan_service_rate,
+            loan_service_amount = EXCLUDED.loan_service_amount,
+            admin_fee_rate = EXCLUDED.admin_fee_rate,
+            admin_fee_amount = EXCLUDED.admin_fee_amount,
+            mandatory_saving_rate = EXCLUDED.mandatory_saving_rate,
+            mandatory_saving_amount = EXCLUDED.mandatory_saving_amount,
+            deduction_method = EXCLUDED.deduction_method,
+            net_disbursement_amount = EXCLUDED.net_disbursement_amount,
             total_interest_amount = EXCLUDED.total_interest_amount,
             total_payable_amount = EXCLUDED.total_payable_amount,
             outstanding_principal_amount = EXCLUDED.outstanding_principal_amount,
@@ -788,6 +832,17 @@ pub async fn upsert_cooperative_loan(
             principal_amount,
             interest_rate_per_month,
             tenor_months,
+            interest_calculation_type,
+            billing_frequency,
+            installment_count,
+            loan_service_rate,
+            loan_service_amount,
+            admin_fee_rate,
+            admin_fee_amount,
+            mandatory_saving_rate,
+            mandatory_saving_amount,
+            deduction_method,
+            net_disbursement_amount,
             total_interest_amount,
             total_payable_amount,
             outstanding_principal_amount,
@@ -829,6 +884,17 @@ pub async fn upsert_cooperative_loan(
     .bind(input.principal_amount)
     .bind(input.interest_rate_per_month)
     .bind(input.tenor_months)
+    .bind(input.interest_calculation_type)
+    .bind(input.billing_frequency)
+    .bind(input.installment_count)
+    .bind(input.loan_service_rate)
+    .bind(input.loan_service_amount)
+    .bind(input.admin_fee_rate)
+    .bind(input.admin_fee_amount)
+    .bind(input.mandatory_saving_rate)
+    .bind(input.mandatory_saving_amount)
+    .bind(input.deduction_method)
+    .bind(input.net_disbursement_amount)
     .bind(input.total_interest_amount)
     .bind(input.total_payable_amount)
     .bind(input.outstanding_principal_amount)

@@ -198,6 +198,7 @@ const ACCOUNT_CANDIDATES = {
   cooperativeLoanReceivable: { ids: ['cooperative-loan-receivable'], codes: ['1120'] },
   cooperativeLoanInterestIncome: { ids: ['cooperative-loan-interest-income'], codes: ['4040'] },
   cooperativeLoanPenaltyIncome: { ids: ['cooperative-loan-penalty-income'], codes: ['4050'] },
+  cooperativeLoanAdminIncome: { ids: ['cooperative-loan-admin-income', 'template-loan-admin-income'], codes: ['4060'] },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
 } satisfies Record<string, AccountCandidate>;
 
@@ -1120,6 +1121,12 @@ export const postCooperativeLoanDisbursementJournal = async (
   if (!await isGeneralLedgerPostingEnabled(loan.disbursed_at)) return undefined;
 
   const amount = amountOrZero(loan.principal_amount);
+  const adminFeeAmount = amountOrZero(loan.admin_fee_amount);
+  const mandatorySavingAmount = amountOrZero(loan.mandatory_saving_amount);
+  const shouldDeductOnDisbursement = loan.deduction_method === 'DEDUCT_ON_DISBURSEMENT';
+  const cashDisbursementAmount = shouldDeductOnDisbursement
+    ? amountOrZero(loan.net_disbursement_amount ?? amount - adminFeeAmount - mandatorySavingAmount)
+    : amount;
   if (amount <= 0) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
@@ -1139,6 +1146,20 @@ export const postCooperativeLoanDisbursementJournal = async (
     ACCOUNT_CANDIDATES.cooperativeLoanReceivable,
     'Piutang Pinjaman Anggota',
   );
+  const adminIncomeAccount = adminFeeAmount > 0
+    ? getPostableAccount(
+        accounts,
+        ACCOUNT_CANDIDATES.cooperativeLoanAdminIncome,
+        'Pendapatan Administrasi Pinjaman',
+      )
+    : undefined;
+  const memberSavingAccount = mandatorySavingAmount > 0
+    ? getPostableAccount(
+        accounts,
+        ACCOUNT_CANDIDATES.cooperativeMemberSavingsWajib,
+        'Simpanan Wajib Anggota',
+      )
+    : undefined;
 
   return postBalancedJournalEntry({
     source_type: 'COOPERATIVE_LOAN',
@@ -1149,7 +1170,13 @@ export const postCooperativeLoanDisbursementJournal = async (
     description: `Pencairan pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
     lines: [
       createDebitLine(receivableAccount, amount, 'Piutang pinjaman anggota bertambah'),
-      createCreditLine(cashAccount, amount, 'Kas/bank berkurang karena pencairan pinjaman anggota'),
+      createCreditLine(cashAccount, cashDisbursementAmount, 'Kas/bank berkurang karena pencairan pinjaman anggota'),
+      adminIncomeAccount
+        ? createCreditLine(adminIncomeAccount, adminFeeAmount, 'Pendapatan administrasi pinjaman')
+        : undefined,
+      memberSavingAccount
+        ? createCreditLine(memberSavingAccount, mandatorySavingAmount, 'Simpanan wajib anggota dari potongan pencairan')
+        : undefined,
     ].filter((line): line is JournalLineDraft => Boolean(line)),
     actor,
   });
