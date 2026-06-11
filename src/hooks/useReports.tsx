@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus } from '@/types';
+import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem } from '@/types';
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
@@ -50,12 +50,19 @@ interface TopProduct {
 type TopProductAggregation = Omit<TopProduct, 'totalQuantity' | 'margin'>;
 
 interface PurchaseReportData {
-  purchases: StockPurchase[];
+  purchases: PurchaseReportRow[];
   totalCost: number;
   totalQuantity: number;
   uniqueProducts: number;
   averageCostPerUnit: number;
 }
+
+type PurchaseReportRow = StockPurchase & {
+  source_type?: 'STOCK_PURCHASE' | 'PURCHASE_RECEIPT' | 'PURCHASE_INVOICE';
+  source_number?: string;
+  supplier_name?: string;
+  unit?: string;
+};
 
 interface ExpenseReportData {
   transactions: FinanceTransaction[];
@@ -110,6 +117,70 @@ const createEmptyAgingSummary = (): AccountsAgingReportSummary => ({
 const isDateKeyInRange = (value: string, from?: string, to?: string) => {
   const dateKey = value.slice(0, 10);
   return (!from || dateKey >= from) && (!to || dateKey <= to);
+};
+
+const getReportDateKey = (value?: string) => {
+  if (!value) return '';
+  const parsed = value.length <= 10 ? dayjs.tz(value) : dayjs(value).tz();
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD') : value.slice(0, 10);
+};
+
+const isReportDateInRange = (value: string | undefined, from?: string, to?: string) => {
+  const dateKey = getReportDateKey(value);
+  if (!dateKey) return false;
+  return (!from || dateKey >= from) && (!to || dateKey <= to);
+};
+
+const getReportTime = (value?: string) => {
+  if (!value) return 0;
+  const parsed = value.length <= 10 ? dayjs.tz(value) : dayjs(value);
+  const timestamp = parsed.valueOf();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const getPurchaseDocumentReportDate = (document: PurchaseDocument) => (
+  document.issued_at ||
+  (document.document_date ? dayjs.tz(document.document_date).startOf('day').toISOString() : undefined) ||
+  document.created_at
+);
+
+const isReportablePurchaseDocument = (document: PurchaseDocument) => {
+  if (document.type === 'PURCHASE_RECEIPT') {
+    return document.status === 'ISSUED' || document.status === 'CONVERTED';
+  }
+
+  return document.type === 'PURCHASE_INVOICE' &&
+    document.status === 'ISSUED' &&
+    document.source_document_type !== 'PURCHASE_RECEIPT';
+};
+
+const mapPurchaseDocumentItemToReportRow = (
+  document: PurchaseDocument,
+  item: PurchaseDocumentItem,
+): PurchaseReportRow => {
+  const quantity = document.type === 'PURCHASE_RECEIPT'
+    ? Number(item.received_quantity ?? item.quantity ?? 0)
+    : Number(item.quantity ?? 0);
+  const unitCost = Number(item.price ?? 0);
+  const fallbackTotal = quantity * unitCost;
+  const totalCost = Number(item.total_amount ?? item.subtotal ?? fallbackTotal);
+  const reportDate = getPurchaseDocumentReportDate(document);
+
+  return {
+    id: `${document.type.toLowerCase()}_${item.id}`,
+    product_id: item.product_id,
+    product_name: item.product_name,
+    sku: item.sku,
+    quantity,
+    cost_per_unit: unitCost,
+    total_cost: Number.isFinite(totalCost) ? totalCost : fallbackTotal,
+    created_at: reportDate,
+    updated_at: document.updated_at,
+    source_type: document.type === 'PURCHASE_RECEIPT' ? 'PURCHASE_RECEIPT' : 'PURCHASE_INVOICE',
+    source_number: document.document_number,
+    supplier_name: document.supplier_name,
+    unit: item.unit,
+  };
 };
 
 const matchesAccountsAgingFilters = (
@@ -582,21 +653,36 @@ export const usePurchaseReport = (startDate?: string, endDate?: string) => {
   return useQuery({
     queryKey: ['purchaseReport', startDate, endDate],
     queryFn: async (): Promise<PurchaseReportData> => {
-      let collection = db.stockPurchases.orderBy('created_at').reverse();
+      const stockPurchases = (await db.stockPurchases.toArray())
+        .filter((purchase) => isReportDateInRange(purchase.created_at, startDate, endDate))
+        .map<PurchaseReportRow>((purchase) => ({
+          ...purchase,
+          source_type: 'STOCK_PURCHASE',
+          source_number: purchase.id,
+        }));
 
-      if (startDate && endDate) {
-        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-        collection = db.stockPurchases.where('created_at').between(startISO, endISO, true, true).reverse();
-      } else if (startDate) {
-        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-        collection = db.stockPurchases.where('created_at').aboveOrEqual(startISO).reverse();
-      } else if (endDate) {
-        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-        collection = db.stockPurchases.where('created_at').belowOrEqual(endISO).reverse();
-      }
+      const purchaseDocuments = (await db.purchaseDocuments
+        .where('type')
+        .anyOf(['PURCHASE_RECEIPT', 'PURCHASE_INVOICE'])
+        .toArray())
+        .filter(isReportablePurchaseDocument)
+        .filter((document) => isReportDateInRange(getPurchaseDocumentReportDate(document), startDate, endDate));
+      const purchaseDocumentIds = purchaseDocuments.map((document) => document.id);
+      const purchaseDocumentItems = purchaseDocumentIds.length > 0
+        ? await db.purchaseDocumentItems.where('document_id').anyOf(purchaseDocumentIds).toArray()
+        : [];
+      const purchaseDocumentById = new Map(purchaseDocuments.map((document) => [document.id, document]));
+      const documentPurchases = purchaseDocumentItems
+        .map((item) => {
+          const document = purchaseDocumentById.get(item.document_id);
+          return document ? mapPurchaseDocumentItemToReportRow(document, item) : undefined;
+        })
+        .filter((purchase): purchase is PurchaseReportRow => Boolean(purchase))
+        .filter((purchase) => purchase.quantity > 0)
+        .filter((purchase) => purchase.total_cost >= 0);
 
-      const purchases = await collection.toArray();
+      const purchases = [...stockPurchases, ...documentPurchases]
+        .sort((a, b) => getReportTime(b.created_at) - getReportTime(a.created_at));
       const totalCost = purchases.reduce((sum, p) => sum + p.total_cost, 0);
       const totalQuantity = purchases.reduce((sum, p) => sum + p.quantity, 0);
       const uniqueProducts = new Set(purchases.map((p) => p.product_id)).size;
