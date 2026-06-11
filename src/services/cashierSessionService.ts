@@ -51,13 +51,13 @@ const buildSessionNumber = (date = new Date()) => {
 
 export const getOpenCashierSessionForCurrentUser = async () => {
   const currentUser = await getCurrentSessionUser();
-  if (!currentUser) return undefined;
+  if (!currentUser) return null;
 
-  return db.cashierSessions
+  return (await db.cashierSessions
     .where('cashier_user_id')
     .equals(currentUser.id)
     .and((session) => session.status === 'OPEN')
-    .first();
+    .first()) ?? null;
 };
 
 export const openCashierSession = async (input: OpenCashierSessionInput): Promise<CashierSession> => {

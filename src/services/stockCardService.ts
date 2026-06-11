@@ -17,6 +17,12 @@ const numberOrFallback = (value: unknown, fallback: number) => {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
 };
 
+const stockImpactPurchaseStatuses = new Set(['ISSUED', 'CONVERTED', 'VOIDED']);
+
+const isPurchaseInvoiceBackedByReceipt = (sourceDocumentType?: string) => (
+  sourceDocumentType === 'PURCHASE_RECEIPT'
+);
+
 export const getStockCard = async (productId: string, startDate: Date, endDate: Date): Promise<{ openingBalance: number; rows: StockCardRow[] }> => {
   const product = await db.products.get(productId);
   if (!product) {
@@ -109,7 +115,7 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
   const purchaseItems = await db.purchaseDocumentItems.where('product_id').equals(productId).toArray();
   for (const item of purchaseItems) {
     const doc = await db.purchaseDocuments.get(item.document_id);
-    if (!doc || (doc.status !== 'ISSUED' && doc.status !== 'VOIDED')) continue;
+    if (!doc || !stockImpactPurchaseStatuses.has(doc.status)) continue;
 
     const quantity = doc.type === 'PURCHASE_RECEIPT' ? (item.received_quantity ?? item.quantity) : item.quantity;
     const quantityInBaseUnit = konversiSatuanProduk(quantity, product, item.unit, baseUnit);
@@ -127,11 +133,34 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
             unit: baseUnit,
           });
         }
-        if (doc.status === 'VOIDED' && doc.voided_at) {
+        if (doc.status === 'VOIDED' && doc.voided_at && doc.issued_at) {
           allMutations.push({
             id: `pur_rec_void_${item.id}`,
             date: doc.voided_at,
             sourceType: 'PURCHASE_RECEIPT_VOID',
+            sourceNumber: doc.document_number,
+            qtyIn: 0,
+            qtyOut: quantityInBaseUnit,
+            unit: baseUnit,
+          });
+        }
+      } else if (doc.type === 'PURCHASE_INVOICE' && !isPurchaseInvoiceBackedByReceipt(doc.source_document_type)) {
+        if (doc.issued_at) {
+          allMutations.push({
+            id: `pur_inv_${item.id}`,
+            date: doc.issued_at,
+            sourceType: 'PURCHASE_INVOICE',
+            sourceNumber: doc.document_number,
+            qtyIn: quantityInBaseUnit,
+            qtyOut: 0,
+            unit: baseUnit,
+          });
+        }
+        if (doc.status === 'VOIDED' && doc.voided_at && doc.issued_at) {
+          allMutations.push({
+            id: `pur_inv_void_${item.id}`,
+            date: doc.voided_at,
+            sourceType: 'PURCHASE_INVOICE_VOID',
             sourceNumber: doc.document_number,
             qtyIn: 0,
             qtyOut: quantityInBaseUnit,
@@ -150,7 +179,7 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
             unit: baseUnit,
           });
         }
-        if (doc.status === 'VOIDED' && doc.voided_at) {
+        if (doc.status === 'VOIDED' && doc.voided_at && doc.issued_at) {
           allMutations.push({
             id: `pur_ret_void_${item.id}`,
             date: doc.voided_at,

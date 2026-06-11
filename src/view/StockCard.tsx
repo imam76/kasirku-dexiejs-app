@@ -53,6 +53,8 @@ export default function StockCard() {
           'POS_VOID': 'Batal Penjualan (POS)',
           'PURCHASE_RECEIPT': 'Penerimaan Pembelian',
           'PURCHASE_RECEIPT_VOID': 'Batal Penerimaan',
+          'PURCHASE_INVOICE': 'Invoice Pembelian Langsung',
+          'PURCHASE_INVOICE_VOID': 'Batal Invoice Pembelian',
           'PURCHASE_RETURN': 'Retur Pembelian',
           'PURCHASE_RETURN_VOID': 'Batal Retur Pembelian',
           'SALES_DELIVERY': 'Pengiriman Penjualan',

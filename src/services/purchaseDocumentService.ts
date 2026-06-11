@@ -7,6 +7,7 @@ import type {
   PurchaseDocumentItem,
   PurchaseDocumentType,
   StockMutation,
+  StockMutationSourceType,
   AuthUser,
 } from '@/types';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
@@ -65,6 +66,9 @@ const allowedConversions: Record<PurchaseDocumentType, PurchaseDocumentType[]> =
 };
 
 const nonClosingConversionTargets = new Set<PurchaseDocumentType>(['PURCHASE_RETURN']);
+
+type PurchaseStockInSourceType = Extract<StockMutationSourceType, 'PURCHASE_RECEIPT' | 'PURCHASE_INVOICE'>;
+type PurchaseStockInVoidSourceType = Extract<StockMutationSourceType, 'PURCHASE_RECEIPT_VOID' | 'PURCHASE_INVOICE_VOID'>;
 
 const buildDocumentSnapshot = async (input: Partial<PurchaseDocument>): Promise<Partial<PurchaseDocument>> => {
   const [contact, tax, department, project, warehouse, currency, discountAccountSnapshot] = await Promise.all([
@@ -291,11 +295,29 @@ const getPurchaseDocumentWarehouse = (document: PurchaseDocument) => ({
   name: document.warehouse_name,
 });
 
+const isPurchaseInvoiceBackedByReceipt = (document: Pick<PurchaseDocument, 'type' | 'source_document_type'>) => (
+  document.type === 'PURCHASE_INVOICE' && document.source_document_type === 'PURCHASE_RECEIPT'
+);
+
+const isPurchaseStockInDocument = (document: PurchaseDocument) => (
+  document.type === 'PURCHASE_RECEIPT' ||
+  (document.type === 'PURCHASE_INVOICE' && !isPurchaseInvoiceBackedByReceipt(document))
+);
+
+const getPurchaseStockInSourceType = (document: PurchaseDocument): PurchaseStockInSourceType => (
+  document.type === 'PURCHASE_INVOICE' ? 'PURCHASE_INVOICE' : 'PURCHASE_RECEIPT'
+);
+
+const getPurchaseStockInVoidSourceType = (document: PurchaseDocument): PurchaseStockInVoidSourceType => (
+  document.type === 'PURCHASE_INVOICE' ? 'PURCHASE_INVOICE_VOID' : 'PURCHASE_RECEIPT_VOID'
+);
+
 const addReceiptStock = async (
   document: PurchaseDocument,
   items: PurchaseDocumentItem[],
   actor: AuthUser | null,
   occurredAt: string,
+  sourceType: PurchaseStockInSourceType = 'PURCHASE_RECEIPT',
 ) => {
   const stockMutations: StockMutation[] = [];
 
@@ -323,7 +345,7 @@ const addReceiptStock = async (
         productId: product.id,
         productName: product.name,
         sku: product.sku,
-        sourceType: 'PURCHASE_RECEIPT',
+        sourceType,
         sourceId: document.id,
         sourceLineId: item.id,
         quantityReceived: quantityInStockUnit,
@@ -336,7 +358,7 @@ const addReceiptStock = async (
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
-        sourceType: 'PURCHASE_RECEIPT',
+        sourceType,
         sourceId: document.id,
         sourceNumber: document.document_number,
         sourceLineId: item.id,
@@ -358,6 +380,7 @@ const restoreReceiptStock = async (
   actor: AuthUser | null,
   occurredAt: string,
   reason: string,
+  sourceType: PurchaseStockInVoidSourceType = 'PURCHASE_RECEIPT_VOID',
 ) => {
   const stockMutations: StockMutation[] = [];
 
@@ -378,7 +401,7 @@ const restoreReceiptStock = async (
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
-        sourceType: 'PURCHASE_RECEIPT_VOID',
+        sourceType,
         sourceId: document.id,
         sourceNumber: document.document_number,
         sourceLineId: item.id,
@@ -710,12 +733,16 @@ export const issuePurchaseDocument = async (id: string) => {
   }, document, currentUser);
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
-    if (config.behavior.affectsStock) {
-      if (document.type === 'PURCHASE_RETURN') {
-        stockMutations = await removePurchaseReturnStock(issuedDocument, items, currentUser, now);
-      } else {
-        stockMutations = await addReceiptStock(issuedDocument, items, currentUser, now);
-      }
+    if (document.type === 'PURCHASE_RETURN' && config.behavior.affectsStock) {
+      stockMutations = await removePurchaseReturnStock(issuedDocument, items, currentUser, now);
+    } else if (isPurchaseStockInDocument(issuedDocument)) {
+      stockMutations = await addReceiptStock(
+        issuedDocument,
+        items,
+        currentUser,
+        now,
+        getPurchaseStockInSourceType(issuedDocument),
+      );
     }
 
     await db.purchaseDocuments.put(issuedDocument);
@@ -861,8 +888,15 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   }, document, currentUser);
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
-    if (document.type === 'PURCHASE_RECEIPT' && document.status === 'ISSUED') {
-      stockMutations = await restoreReceiptStock(document, items, currentUser, now, normalizedReason);
+    if (document.status === 'ISSUED' && isPurchaseStockInDocument(document)) {
+      stockMutations = await restoreReceiptStock(
+        document,
+        items,
+        currentUser,
+        now,
+        normalizedReason,
+        getPurchaseStockInVoidSourceType(document),
+      );
     } else if (document.type === 'PURCHASE_RETURN' && document.status === 'ISSUED') {
       stockMutations = await restorePurchaseReturnStock(document, items, currentUser, now, normalizedReason);
     }

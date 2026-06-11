@@ -1145,6 +1145,8 @@ export type StockMutationSourceType =
   | 'SALES_DELIVERY_VOID'
   | 'PURCHASE_RECEIPT'
   | 'PURCHASE_RECEIPT_VOID'
+  | 'PURCHASE_INVOICE'
+  | 'PURCHASE_INVOICE_VOID'
   | 'PURCHASE_RETURN'
   | 'PURCHASE_RETURN_VOID'
   | 'SALES_RETURN'
@@ -1781,6 +1783,7 @@ export interface FinanceBalance {
 export type InventoryLotSourceType =
   | 'SHOPPING_NOTE'
   | 'PURCHASE_RECEIPT'
+  | 'PURCHASE_INVOICE'
   | 'POS_VOID'
   | 'SALES_RETURN_RESTOCK'
   | 'PURCHASE_RETURN_VOID'

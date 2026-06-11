@@ -130,7 +130,18 @@ export const recalculateFinance = async () => {
   const deletedAutoTransactions: FinanceTransaction[] = [];
   const newAutoTransactions: FinanceTransaction[] = [];
 
-  await db.transaction('rw', [db.transactions, db.transactionItems, db.financeTransactions, db.financeBalance, db.stockPurchases, db.chartOfAccounts, db.financeAccountMappings, db.generalLedgerSetting], async () => {
+  await db.transaction('rw', [
+    db.transactions,
+    db.transactionItems,
+    db.financeTransactions,
+    db.financeBalance,
+    db.stockPurchases,
+    db.purchaseDocuments,
+    db.purchaseInvoicePayments,
+    db.chartOfAccounts,
+    db.financeAccountMappings,
+    db.generalLedgerSetting,
+  ], async () => {
     const autoCategories = [
       FINANCE_CATEGORIES.SALES,
       FINANCE_CATEGORIES.AUTO_COGS,
@@ -153,6 +164,16 @@ export const recalculateFinance = async () => {
 
     const posTransactions = (await db.transactions.toArray()).filter(isTransactionActive);
     const stockPurchases = await db.stockPurchases.toArray();
+    const purchaseInvoicePayments = (await db.purchaseInvoicePayments.toArray())
+      .filter((payment) => payment.status === 'ACTIVE');
+    const existingPurchaseInvoicePaymentReferenceIds = new Set(
+      (await db.financeTransactions
+        .where('category')
+        .equals(FINANCE_CATEGORIES.PURCHASE_INVOICE_PAYMENT)
+        .filter((transaction) => Boolean(transaction.reference_id) && !transaction.deleted_at)
+        .toArray())
+        .map((transaction) => transaction.reference_id as string),
+    );
 
     for (const transaction of posTransactions) {
       const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES);
@@ -189,6 +210,34 @@ export const recalculateFinance = async () => {
         cash_account_code: cashAccount.code,
         cash_account_name: cashAccount.name,
         ...accountSnapshot,
+      }, currentUser, now));
+    }
+
+    for (const payment of purchaseInvoicePayments) {
+      if (existingPurchaseInvoicePaymentReferenceIds.has(payment.id)) continue;
+
+      const document = await db.purchaseDocuments.get(payment.purchase_document_id);
+      if (!document || document.type !== 'PURCHASE_INVOICE' || document.status === 'VOIDED') continue;
+
+      const paymentMethod = payment.payment_method ?? document.payment_method ?? 'TUNAI';
+      const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, payment.cash_account_id);
+      newAutoTransactions.push(withPendingFinanceTransactionSync({
+        id: crypto.randomUUID(),
+        type: 'EXPENSE',
+        category: FINANCE_CATEGORIES.PURCHASE_INVOICE_PAYMENT,
+        amount: Number(payment.amount || 0),
+        description: `Pembayaran purchase invoice ${payment.document_number}`,
+        created_at: payment.paid_at,
+        reference_id: payment.id,
+        payment_method: paymentMethod,
+        payment_channel: payment.payment_channel,
+        cash_account_id: cashAccount.id,
+        cash_account_code: cashAccount.code,
+        cash_account_name: cashAccount.name,
+        account_id: cashAccount.id,
+        account_code: cashAccount.code,
+        account_name: cashAccount.name,
+        account_type: cashAccount.type,
       }, currentUser, now));
     }
 
