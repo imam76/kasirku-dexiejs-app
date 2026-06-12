@@ -33,13 +33,15 @@ const getMovementTime = (movement: Pick<StockCardMovement, 'date'>) => {
 
 const getMovementDelta = (movement: Pick<StockCardMovement, 'qtyIn' | 'qtyOut'>) => movement.qtyIn - movement.qtyOut;
 
-const isReceiptBackedPurchaseInvoice = (document: { type: string; source_document_type?: string }) => (
+const stockImpactPurchaseStatuses = new Set(['ISSUED', 'CONVERTED', 'VOIDED']);
+
+const isPurchaseInvoiceBackedByReceipt = (document: { type: string; source_document_type?: string }) => (
   document.type === 'PURCHASE_INVOICE' && document.source_document_type === 'PURCHASE_RECEIPT'
 );
 
 const isPurchaseStockInDocument = (document: { type: string; source_document_type?: string }) => (
   document.type === 'PURCHASE_RECEIPT' ||
-  (document.type === 'PURCHASE_INVOICE' && !isReceiptBackedPurchaseInvoice(document))
+  (document.type === 'PURCHASE_INVOICE' && !isPurchaseInvoiceBackedByReceipt(document))
 );
 
 export const getStockCard = async (productId: string, startDate: Date, endDate: Date): Promise<{ openingBalance: number; rows: StockCardRow[] }> => {
@@ -137,7 +139,7 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
   const purchaseItems = await db.purchaseDocumentItems.where('product_id').equals(productId).toArray();
   for (const item of purchaseItems) {
     const doc = await db.purchaseDocuments.get(item.document_id);
-    if (!doc || (doc.status !== 'ISSUED' && doc.status !== 'CONVERTED' && doc.status !== 'VOIDED')) continue;
+    if (!doc || !stockImpactPurchaseStatuses.has(doc.status)) continue;
 
     const quantity = isPurchaseStockInDocument(doc) ? (item.received_quantity ?? item.quantity) : item.quantity;
     const quantityInBaseUnit = konversiSatuanProduk(quantity, product, item.unit, baseUnit);
@@ -157,7 +159,7 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
             unit: baseUnit,
           });
         }
-        if (doc.status === 'VOIDED' && doc.voided_at) {
+        if (doc.status === 'VOIDED' && doc.voided_at && doc.issued_at) {
           allMutations.push({
             id: `${voidSourceType.toLowerCase()}_${item.id}`,
             date: doc.voided_at,
@@ -180,7 +182,7 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
             unit: baseUnit,
           });
         }
-        if (doc.status === 'VOIDED' && doc.voided_at) {
+        if (doc.status === 'VOIDED' && doc.voided_at && doc.issued_at) {
           allMutations.push({
             id: `pur_ret_void_${item.id}`,
             date: doc.voided_at,

@@ -36,7 +36,8 @@ export const useCashierSession = () => {
 
   const openMutation = useMutation({
     mutationFn: (input: OpenCashierSessionInput) => openCashierSession(input),
-    onSuccess: () => {
+    onSuccess: (session) => {
+      queryClient.setQueryData(['cashierSession', 'active'], session);
       invalidate();
       message.success(t('cashierSession.openSuccess'));
     },
@@ -51,6 +52,7 @@ export const useCashierSession = () => {
   const closeMutation = useMutation({
     mutationFn: (input: CloseCashierSessionInput) => closeCashierSession(input),
     onSuccess: (session) => {
+      queryClient.setQueryData(['cashierSession', 'active'], null);
       invalidate();
       if (session.balance_status === 'NON_BALANCED') {
         message.warning(t('cashierSession.closeNonBalancedSuccess'));

@@ -130,6 +130,7 @@ export const usePurchaseDocuments = () => {
     setPendingProducts([]);
     queryClient.invalidateQueries({ queryKey: ['purchaseDocuments'] });
     queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
+    queryClient.invalidateQueries({ queryKey: ['stockCard'] });
     queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
     queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
     queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
