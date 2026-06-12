@@ -298,6 +298,7 @@ const RootLayout = () => {
       key: 'reports-group',
       children: [
         { to: '/report/pos-sales-report', label: t('nav.report.posSales'), icon: FileText },
+        { to: '/report/deposit-report', label: t('nav.report.deposit'), icon: FileText },
         { to: '/report/transaction-detail-report', label: t('nav.report.transactionDetail'), icon: FileText },
         { to: '/report/purchase-report', label: t('nav.report.purchase'), icon: FileText },
         { to: '/report/expense-report', label: t('nav.report.expense'), icon: FileText },

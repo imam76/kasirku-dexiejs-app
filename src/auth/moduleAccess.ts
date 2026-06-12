@@ -35,6 +35,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/finance/general-ledger': ['GENERAL_LEDGER'],
   // Reports
   '/report/pos-sales-report': ['REPORT_POS_SALES'],
+  '/report/deposit-report': ['REPORT_POS_SALES'],
   '/report/transaction-detail-report': ['REPORT_TRANSACTION_DETAIL'],
   '/report/purchase-report': ['REPORT_PURCHASE'],
   '/report/expense-report': ['REPORT_EXPENSE'],

@@ -20,6 +20,7 @@ function Laporan() {
   const { currentUser, currentRole, permissionSet } = useAuth()
   const menuItems = [
     { to: '/report/pos-sales-report', label: t('report.index.posSalesShort'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('report.index.posSalesDesc') },
+    { to: '/report/deposit-report', label: t('report.index.depositShort'), icon: ReconciliationOutlined, color: 'text-amber-600', desc: t('report.index.depositDesc') },
     { to: '/report/transaction-detail-report', label: t('report.index.detailShort'), icon: FileSearchOutlined, color: 'text-blue-600', desc: t('report.index.detailDesc') },
     { to: '/report/purchase-report', label: t('report.index.purchaseShort'), icon: FileExcelOutlined, color: 'text-teal-600', desc: t('report.index.purchaseDesc') },
     { to: '/report/expense-report', label: t('report.index.expenseShort'), icon: FileExcelOutlined, color: 'text-red-600', desc: t('report.index.expenseDesc') },

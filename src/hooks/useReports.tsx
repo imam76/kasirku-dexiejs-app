@@ -125,7 +125,7 @@ const getReportDateKey = (value?: string) => {
   return parsed.isValid() ? parsed.format('YYYY-MM-DD') : value.slice(0, 10);
 };
 
-const isReportDateInRange = (value: string | undefined, from?: string, to?: string) => {
+export const isReportDateInRange = (value: string | undefined, from?: string, to?: string) => {
   const dateKey = getReportDateKey(value);
   if (!dateKey) return false;
   return (!from || dateKey >= from) && (!to || dateKey <= to);
