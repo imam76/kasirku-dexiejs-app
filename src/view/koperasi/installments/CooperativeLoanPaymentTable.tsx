@@ -101,6 +101,23 @@ export default function CooperativeLoanPaymentTable({
       ),
     },
     {
+      title: t('cooperative.installments.payments.collector'),
+      key: 'collector',
+      width: 180,
+      render: (_value: unknown, payment) => (
+        payment.collector_name
+          ? (
+              <Space orientation="vertical" size={0}>
+                <Text>{payment.collector_name}</Text>
+                {payment.collector_position && (
+                  <Text type="secondary">{payment.collector_position}</Text>
+                )}
+              </Space>
+            )
+          : '-'
+      ),
+    },
+    {
       title: t('cooperative.installments.payments.status'),
       dataIndex: 'status',
       key: 'status',
@@ -149,7 +166,7 @@ export default function CooperativeLoanPaymentTable({
         'data-testid': `koperasi-installment-payment-row-${payment.payment_number}`,
       } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
-      scroll={{ x: 1500 }}
+      scroll={{ x: 1680 }}
       locale={{ emptyText: t('cooperative.installments.payments.empty') }}
     />
   );

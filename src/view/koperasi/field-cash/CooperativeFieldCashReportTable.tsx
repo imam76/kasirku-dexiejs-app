@@ -18,7 +18,7 @@ export default function CooperativeFieldCashReportTable({
 }: CooperativeFieldCashReportTableProps) {
   const columns: ColumnsType<CooperativeFieldCashReportRow> = [
     {
-      title: 'Petugas',
+      title: 'Kolektor',
       key: 'employee',
       fixed: 'left',
       render: (_value: unknown, row) => (
@@ -46,35 +46,35 @@ export default function CooperativeFieldCashReportTable({
       render: money,
     },
     {
-      title: 'Dropping Finance',
+      title: 'Dropping Kas',
       dataIndex: 'dropping_from_finance_amount',
       key: 'dropping_from_finance_amount',
       align: 'right',
       render: money,
     },
     {
-      title: 'Storting Angsuran',
+      title: 'Setoran Angsuran',
       dataIndex: 'storting_loan_payment_amount',
       key: 'storting_loan_payment_amount',
       align: 'right',
       render: money,
     },
     {
-      title: 'Storting Simpanan',
+      title: 'Setoran Simpanan',
       dataIndex: 'storting_saving_deposit_amount',
       key: 'storting_saving_deposit_amount',
       align: 'right',
       render: money,
     },
     {
-      title: 'Total Storting',
+      title: 'Total Setoran',
       dataIndex: 'total_storting_amount',
       key: 'total_storting_amount',
       align: 'right',
       render: money,
     },
     {
-      title: 'Dropping Pinjaman',
+      title: 'Pencairan Pinjaman',
       dataIndex: 'loan_disbursement_amount',
       key: 'loan_disbursement_amount',
       align: 'right',
@@ -88,7 +88,7 @@ export default function CooperativeFieldCashReportTable({
       render: money,
     },
     {
-      title: 'Setor Finance',
+      title: 'Setor Kas/Bank',
       dataIndex: 'deposit_to_finance_amount',
       key: 'deposit_to_finance_amount',
       align: 'right',
@@ -139,7 +139,7 @@ export default function CooperativeFieldCashReportTable({
       loading={loading}
       pagination={{ pageSize: 8 }}
       scroll={{ x: 1700 }}
-      locale={{ emptyText: 'Belum ada rekap kas petugas.' }}
+      locale={{ emptyText: 'Belum ada rekap setoran kolektor.' }}
     />
   );
 }

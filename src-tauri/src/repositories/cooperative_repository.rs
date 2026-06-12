@@ -202,6 +202,12 @@ macro_rules! cooperative_loan_payment_select {
             cash_account_name,
             payment_method,
             payment_channel,
+            collector_id,
+            collector_name,
+            collector_position,
+            received_by,
+            received_by_name,
+            posted_at,
             finance_transaction_id,
             journal_entry_id,
             reversal_of_payment_id,
@@ -1168,6 +1174,12 @@ pub async fn upsert_cooperative_loan_payment(
             cash_account_name,
             payment_method,
             payment_channel,
+            collector_id,
+            collector_name,
+            collector_position,
+            received_by,
+            received_by_name,
+            posted_at,
             finance_transaction_id,
             journal_entry_id,
             reversal_of_payment_id,
@@ -1210,16 +1222,22 @@ pub async fn upsert_cooperative_loan_payment(
             $23,
             $24,
             $25,
-            $26,
+            $26::TIMESTAMPTZ,
             $27,
             $28,
             $29,
-            $30::TIMESTAMPTZ,
-            $31::TIMESTAMPTZ,
+            $30,
+            $31,
             $32,
             $33,
             $34,
-            $35
+            $35,
+            $36::TIMESTAMPTZ,
+            $37::TIMESTAMPTZ,
+            $38,
+            $39,
+            $40,
+            $41
         )
         ON CONFLICT (id) DO UPDATE SET
             payment_number = EXCLUDED.payment_number,
@@ -1241,6 +1259,12 @@ pub async fn upsert_cooperative_loan_payment(
             cash_account_name = EXCLUDED.cash_account_name,
             payment_method = EXCLUDED.payment_method,
             payment_channel = EXCLUDED.payment_channel,
+            collector_id = EXCLUDED.collector_id,
+            collector_name = EXCLUDED.collector_name,
+            collector_position = EXCLUDED.collector_position,
+            received_by = EXCLUDED.received_by,
+            received_by_name = EXCLUDED.received_by_name,
+            posted_at = EXCLUDED.posted_at,
             finance_transaction_id = EXCLUDED.finance_transaction_id,
             journal_entry_id = EXCLUDED.journal_entry_id,
             reversal_of_payment_id = EXCLUDED.reversal_of_payment_id,
@@ -1277,6 +1301,12 @@ pub async fn upsert_cooperative_loan_payment(
             cash_account_name,
             payment_method,
             payment_channel,
+            collector_id,
+            collector_name,
+            collector_position,
+            received_by,
+            received_by_name,
+            posted_at,
             finance_transaction_id,
             journal_entry_id,
             reversal_of_payment_id,
@@ -1314,6 +1344,12 @@ pub async fn upsert_cooperative_loan_payment(
     .bind(input.cash_account_name)
     .bind(input.payment_method)
     .bind(input.payment_channel)
+    .bind(input.collector_id)
+    .bind(input.collector_name)
+    .bind(input.collector_position)
+    .bind(input.received_by)
+    .bind(input.received_by_name)
+    .bind(input.posted_at)
     .bind(input.finance_transaction_id)
     .bind(input.journal_entry_id)
     .bind(input.reversal_of_payment_id)

@@ -107,6 +107,7 @@ export interface RecordCooperativeLoanPaymentInput {
   payment_method?: PaymentMethod;
   cash_account_id?: string;
   payment_channel?: string;
+  collector_id?: string;
   notes?: string;
 }
 
@@ -809,6 +810,22 @@ export const recordCooperativeLoanPayment = async (
       throw new Error('Pembayaran hanya bisa dicatat untuk pinjaman yang sudah dicairkan dan belum lunas.');
     }
 
+    const member = await db.cooperativeMembers.get(loan.member_id);
+    const collectorId = parsedInput.collector_id || member?.officer_id;
+    const collector = collectorId ? await db.employees.get(collectorId) : undefined;
+    if (parsedInput.collector_id && !collector) {
+      throw new Error('Kolektor penagihan tidak ditemukan.');
+    }
+    if (collector && !collector.is_active) {
+      throw new Error(`Kolektor ${collector.name} sudah nonaktif.`);
+    }
+    const collectorName = collector?.name ?? (
+      collectorId === member?.officer_id ? member?.officer_name : undefined
+    );
+    const collectorPosition = collector?.position ?? (
+      collectorId === member?.officer_id ? member?.officer_position : undefined
+    );
+
     const allocation = allocateLoanPaymentToInstallment(installment, amount);
     const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
     const fieldCashContext = paymentMethod === 'TUNAI'
@@ -854,6 +871,12 @@ export const recordCooperativeLoanPayment = async (
       cash_account_name: cashAccount.name,
       payment_method: paymentMethod,
       payment_channel: parsedInput.payment_channel,
+      collector_id: collectorId,
+      collector_name: collectorName,
+      collector_position: collectorPosition,
+      received_by: currentUser?.id,
+      received_by_name: currentUser?.name,
+      posted_at: now,
       finance_transaction_id: financeTransactionId,
       notes: parsedInput.notes,
       created_at: now,
@@ -1156,6 +1179,12 @@ export const reverseCooperativeLoanPayment = async (
       cash_account_name: payment.cash_account_name,
       payment_method: payment.payment_method,
       payment_channel: payment.payment_channel,
+      collector_id: payment.collector_id,
+      collector_name: payment.collector_name,
+      collector_position: payment.collector_position,
+      received_by: currentUser?.id,
+      received_by_name: currentUser?.name,
+      posted_at: now,
       finance_transaction_id: reversalFinanceTransactionId,
       reversal_of_payment_id: payment.id,
       notes: parsedInput.reason,

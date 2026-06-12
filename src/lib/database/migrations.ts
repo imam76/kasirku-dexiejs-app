@@ -941,4 +941,67 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       await tx.table<Employee, string>('employees').bulkPut(await Promise.all(employeesWithFieldCashSnapshot));
     }
   });
+
+  this.version(51).stores({
+    cooperativeLoanPayments: 'id, payment_number, payment_type, loan_id, loan_number, installment_id, member_id, member_number, collector_id, received_by, payment_date, posted_at, status, reversal_of_payment_id, finance_transaction_id, journal_entry_id, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const members = await tx.table<CooperativeMember, string>('cooperativeMembers').toArray();
+    const memberById = new Map(members.map((member) => [member.id, member]));
+    const payments = await tx.table<CooperativeLoanPayment, string>('cooperativeLoanPayments').toArray();
+    const migratedPayments = payments
+      .filter((payment) => !payment.posted_at || !payment.collector_id)
+      .map((payment) => {
+        const member = memberById.get(payment.member_id);
+        const collectorId = payment.collector_id ?? member?.officer_id;
+        return {
+          ...payment,
+          collector_id: collectorId,
+          collector_name: payment.collector_name ?? (
+            collectorId === member?.officer_id ? member?.officer_name : undefined
+          ),
+          collector_position: payment.collector_position ?? (
+            collectorId === member?.officer_id ? member?.officer_position : undefined
+          ),
+          received_by: payment.received_by ?? payment.created_by,
+          received_by_name: payment.received_by_name ?? payment.created_by_name,
+          posted_at: payment.posted_at ?? payment.created_at,
+        };
+      });
+
+    if (migratedPayments.length > 0) {
+      await tx.table<CooperativeLoanPayment, string>('cooperativeLoanPayments').bulkPut(migratedPayments);
+    }
+
+    const syncQueue = tx.table<SyncQueueItem, string>('syncQueue');
+    const queueItems = await syncQueue.toArray();
+    const migratedQueueItems = queueItems
+      .filter((queueItem) => queueItem.entity === 'cooperativeLoanPayments' && queueItem.payload && typeof queueItem.payload === 'object')
+      .map((queueItem) => {
+        const payload = queueItem.payload as Partial<CooperativeLoanPayment>;
+        const member = payload.member_id ? memberById.get(payload.member_id) : undefined;
+        const collectorId = payload.collector_id ?? member?.officer_id;
+        return {
+          ...queueItem,
+          payload: {
+            ...payload,
+            collector_id: collectorId,
+            collector_name: payload.collector_name ?? (
+              collectorId === member?.officer_id ? member?.officer_name : undefined
+            ),
+            collector_position: payload.collector_position ?? (
+              collectorId === member?.officer_id ? member?.officer_position : undefined
+            ),
+            received_by: payload.received_by ?? payload.created_by,
+            received_by_name: payload.received_by_name ?? payload.created_by_name,
+            posted_at: payload.posted_at ?? payload.created_at ?? now,
+          },
+          updated_at: now,
+        };
+      });
+
+    if (migratedQueueItems.length > 0) {
+      await syncQueue.bulkPut(migratedQueueItems);
+    }
+  });
 }

@@ -746,6 +746,12 @@ export interface RemoteCooperativeLoanPaymentDto {
   cash_account_name?: string | null;
   payment_method?: PaymentMethod | null;
   payment_channel?: string | null;
+  collector_id?: string | null;
+  collector_name?: string | null;
+  collector_position?: string | null;
+  received_by?: string | null;
+  received_by_name?: string | null;
+  posted_at?: string | null;
   finance_transaction_id?: string | null;
   journal_entry_id?: string | null;
   reversal_of_payment_id?: string | null;

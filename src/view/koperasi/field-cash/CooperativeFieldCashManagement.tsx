@@ -127,10 +127,10 @@ export default function CooperativeFieldCashManagement() {
         opening_cash_amount: Number(values.opening_cash_amount || 0),
         opening_note: values.opening_note,
       });
-      message.success('Sesi kas petugas berhasil dibuka.');
+      message.success('Sesi setoran kolektor berhasil dibuka.');
       closeOpenModal();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Gagal membuka sesi kas petugas.');
+      message.error(error instanceof Error ? error.message : 'Gagal membuka sesi setoran kolektor.');
     }
   };
 
@@ -139,7 +139,7 @@ export default function CooperativeFieldCashManagement() {
 
     const employee = employeeById.get(values.employee_id);
     if (!employee?.field_cash_account_id) {
-      message.error('Petugas belum memiliki akun kas petugas.');
+      message.error('Kolektor belum memiliki akun kas petugas.');
       return;
     }
 
@@ -155,14 +155,14 @@ export default function CooperativeFieldCashManagement() {
     try {
       if (transferMode === 'DROPPING') {
         await recordDropping(input);
-        message.success('Dropping kas ke petugas berhasil dicatat.');
+        message.success('Dropping kas ke kolektor berhasil dicatat.');
       } else {
         await recordDeposit(input);
-        message.success('Setor kas petugas ke finance berhasil dicatat.');
+        message.success('Setoran kolektor ke kas/bank berhasil dicatat.');
       }
       closeTransferModal();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Transfer kas petugas gagal dicatat.');
+      message.error(error instanceof Error ? error.message : 'Transfer setoran kolektor gagal dicatat.');
     }
   };
 
@@ -173,10 +173,10 @@ export default function CooperativeFieldCashManagement() {
         closing_cash_amount: Number(values.closing_cash_amount || 0),
         closing_note: values.closing_note,
       });
-      message.success('Sesi kas petugas berhasil ditutup.');
+      message.success('Sesi setoran kolektor berhasil ditutup.');
       closeCloseModal();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Gagal menutup sesi kas petugas.');
+      message.error(error instanceof Error ? error.message : 'Gagal menutup sesi setoran kolektor.');
     }
   };
 
@@ -186,16 +186,16 @@ export default function CooperativeFieldCashManagement() {
       title={(
         <div className="flex items-center gap-2">
           <Banknote className="h-5 w-5" />
-          Kas Petugas
+          Setoran Kolektor
         </div>
       )}
       extra={canManage ? (
         <Space wrap>
           <Button icon={<Download size={16} />} onClick={() => openTransferModal('DROPPING')}>
-            Dropping
+            Dropping Kas
           </Button>
           <Button icon={<Upload size={16} />} onClick={() => openTransferModal('DEPOSIT')}>
-            Setor
+            Setor Kas/Bank
           </Button>
           <Button type="primary" icon={<Plus size={16} />} onClick={openOpenModal}>
             Buka Sesi
@@ -205,15 +205,15 @@ export default function CooperativeFieldCashManagement() {
     >
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="rounded-md border border-gray-100 p-3">
-          <p className="text-xs text-gray-500">Sesi Open</p>
+          <p className="text-xs text-gray-500">Sesi Aktif</p>
           <p className="text-xl font-semibold text-gray-800">{activeSessions.length}</p>
         </div>
         <div className="rounded-md border border-gray-100 p-3">
-          <p className="text-xs text-gray-500">Petugas Aktif</p>
+          <p className="text-xs text-gray-500">Kolektor Aktif</p>
           <p className="text-xl font-semibold text-gray-800">{fieldCashEmployees.length}</p>
         </div>
         <div className="rounded-md border border-gray-100 p-3">
-          <p className="text-xs text-gray-500">Akun Finance</p>
+          <p className="text-xs text-gray-500">Akun Kas/Bank</p>
           <p className="text-xl font-semibold text-gray-800">{financeAccounts.length}</p>
         </div>
       </div>
@@ -222,7 +222,7 @@ export default function CooperativeFieldCashManagement() {
         items={[
           {
             key: 'sessions',
-            label: 'Sesi',
+            label: 'Sesi Setoran',
             children: (
               <CooperativeFieldCashSessionTable
                 sessions={sessions}
@@ -236,7 +236,7 @@ export default function CooperativeFieldCashManagement() {
           },
           {
             key: 'report',
-            label: 'Rekap',
+            label: 'Rekap Setoran',
             children: (
               <>
                 <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,280px)_160px]">
@@ -244,7 +244,7 @@ export default function CooperativeFieldCashManagement() {
                     allowClear
                     showSearch
                     optionFilterProp="label"
-                    placeholder="Semua petugas"
+                    placeholder="Semua kolektor"
                     value={reportFilters.employeeId}
                     onChange={(employeeId) => setReportFilters({ ...reportFilters, employeeId })}
                     options={employeeOptions}
@@ -267,7 +267,7 @@ export default function CooperativeFieldCashManagement() {
       />
 
       <Modal
-        title="Buka Sesi Kas Petugas"
+        title="Buka Sesi Setoran Kolektor"
         open={isOpenModalVisible}
         onCancel={closeOpenModal}
         onOk={() => openForm.submit()}
@@ -285,13 +285,13 @@ export default function CooperativeFieldCashManagement() {
         >
           <Form.Item
             name="employee_id"
-            label="Petugas"
-            rules={[{ required: true, message: 'Petugas wajib dipilih.' }]}
+            label="Kolektor"
+            rules={[{ required: true, message: 'Kolektor wajib dipilih.' }]}
           >
             <Select
               showSearch
               optionFilterProp="label"
-              placeholder="Pilih petugas"
+              placeholder="Pilih kolektor"
               options={employeeOptions}
             />
           </Form.Item>
@@ -306,7 +306,7 @@ export default function CooperativeFieldCashManagement() {
           )}
           <Form.Item
             name="opening_cash_amount"
-            label="Uang Fisik Awal"
+            label="Uang Fisik Awal Kolektor"
             rules={[{ required: true, type: 'number', min: 0, message: 'Uang fisik awal wajib diisi.' }]}
           >
             <InputNumber<number>
@@ -323,7 +323,7 @@ export default function CooperativeFieldCashManagement() {
       </Modal>
 
       <Modal
-        title={transferMode === 'DROPPING' ? 'Dropping Finance ke Petugas' : 'Setor Petugas ke Finance'}
+        title={transferMode === 'DROPPING' ? 'Dropping Kas ke Kolektor' : 'Setoran Kolektor ke Kas/Bank'}
         open={Boolean(transferMode)}
         onCancel={closeTransferModal}
         onOk={() => transferForm.submit()}
@@ -341,13 +341,13 @@ export default function CooperativeFieldCashManagement() {
         >
           <Form.Item
             name="employee_id"
-            label="Petugas"
-            rules={[{ required: true, message: 'Petugas wajib dipilih.' }]}
+            label="Kolektor"
+            rules={[{ required: true, message: 'Kolektor wajib dipilih.' }]}
           >
             <Select
               showSearch
               optionFilterProp="label"
-              placeholder="Pilih petugas"
+              placeholder="Pilih kolektor"
               options={employeeOptions}
             />
           </Form.Item>
@@ -363,13 +363,13 @@ export default function CooperativeFieldCashManagement() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Form.Item
               name="finance_cash_account_id"
-              label="Akun Finance"
-              rules={[{ required: true, message: 'Akun finance wajib dipilih.' }]}
+              label="Akun Kas/Bank"
+              rules={[{ required: true, message: 'Akun kas/bank wajib dipilih.' }]}
             >
               <Select
                 showSearch
                 optionFilterProp="label"
-                placeholder="Pilih akun finance"
+                placeholder="Pilih akun kas/bank"
                 options={financeAccountOptions}
               />
             </Form.Item>
@@ -400,7 +400,7 @@ export default function CooperativeFieldCashManagement() {
       </Modal>
 
       <Modal
-        title="Tutup Sesi Kas Petugas"
+        title="Tutup Sesi Setoran Kolektor"
         open={isCloseModalVisible}
         onCancel={closeCloseModal}
         onOk={() => closeForm.submit()}
@@ -421,7 +421,7 @@ export default function CooperativeFieldCashManagement() {
           </Form.Item>
           <Form.Item
             name="closing_cash_amount"
-            label="Uang Fisik Akhir"
+            label="Uang Fisik Akhir Kolektor"
             rules={[{ required: true, type: 'number', min: 0, message: 'Uang fisik akhir wajib diisi.' }]}
           >
             <InputNumber<number>

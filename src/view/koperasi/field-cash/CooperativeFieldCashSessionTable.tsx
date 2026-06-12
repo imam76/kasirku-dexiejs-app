@@ -35,7 +35,7 @@ export default function CooperativeFieldCashSessionTable({
       ),
     },
     {
-      title: 'Petugas',
+      title: 'Kolektor',
       key: 'employee',
       render: (_value: unknown, session) => (
         <Space orientation="vertical" size={0}>
@@ -83,10 +83,10 @@ export default function CooperativeFieldCashSessionTable({
         session.status === 'OPEN' && canManage ? (
           <Space wrap>
             <Button icon={<Download size={16} />} onClick={() => onDropping(session)}>
-              Dropping
+              Dropping Kas
             </Button>
             <Button icon={<Upload size={16} />} onClick={() => onDeposit(session)}>
-              Setor
+              Setor Kas/Bank
             </Button>
             <Button icon={<Lock size={16} />} onClick={() => onClose(session)}>
               Tutup
@@ -105,7 +105,7 @@ export default function CooperativeFieldCashSessionTable({
       loading={loading}
       pagination={{ pageSize: 8 }}
       scroll={{ x: true }}
-      locale={{ emptyText: 'Belum ada sesi kas petugas.' }}
+      locale={{ emptyText: 'Belum ada sesi setoran kolektor.' }}
     />
   );
 }

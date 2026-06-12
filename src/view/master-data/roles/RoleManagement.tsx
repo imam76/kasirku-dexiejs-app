@@ -88,6 +88,21 @@ export default function RoleManagement() {
     }
   };
 
+  const handlePermissionGroupChange = (
+    groupPermissions: Permission[],
+    nextGroupPermissions: Permission[],
+  ) => {
+    setSelectedPermissions((currentPermissions) => {
+      const groupPermissionSet = new Set(groupPermissions);
+      const preservedPermissions = currentPermissions.filter((permission) => !groupPermissionSet.has(permission));
+
+      return [
+        ...preservedPermissions,
+        ...groupPermissions.filter((permission) => nextGroupPermissions.includes(permission)),
+      ];
+    });
+  };
+
   const handleSubmitRole = async (values: RoleFormValues) => {
     try {
       setIsSubmitting(true);
@@ -280,7 +295,10 @@ export default function RoleManagement() {
               <Checkbox.Group
                 className="mt-3 grid w-full grid-cols-1 gap-2 md:grid-cols-2"
                 value={selectedPermissions}
-                onChange={(values) => setSelectedPermissions(values as Permission[])}
+                onChange={(values) => handlePermissionGroupChange(
+                  items.map((item) => item.code),
+                  values as Permission[],
+                )}
               >
                 {items.map((item) => (
                   <Checkbox key={item.code} value={item.code}>

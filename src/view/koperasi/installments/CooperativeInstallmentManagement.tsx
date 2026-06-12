@@ -78,6 +78,7 @@ export default function CooperativeInstallmentManagement() {
         payment_method: values.payment_method,
         cash_account_id: values.cash_account_id,
         payment_channel: values.payment_channel,
+        collector_id: values.collector_id,
         notes: values.notes,
       });
       if (values.remember_cash_account) {
