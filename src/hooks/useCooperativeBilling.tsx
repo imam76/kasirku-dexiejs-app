@@ -78,6 +78,9 @@ export const useCooperativeBilling = () => {
   const loanById = useMemo(() => new Map(loans.map((loan) => [loan.id, loan])), [loans]);
   const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
   const employeeById = useMemo(() => new Map(employees.map((employee) => [employee.id, employee])), [employees]);
+  const activeCollectors = useMemo(() => (
+    employees.filter((employee) => employee.is_active)
+  ), [employees]);
   const openFieldCashSessionByEmployee = useMemo(() => (
     new Map(fieldCashSessions.map((session) => [session.employee_id, session]))
   ), [fieldCashSessions]);
@@ -214,7 +217,7 @@ export const useCooperativeBilling = () => {
         employee,
         cash_account_id: employee.field_cash_account_id,
         session: undefined,
-        badge: `Kas Petugas ${employee.name} belum memiliki sesi OPEN.`,
+        badge: `Sesi setoran kolektor ${employee.name} belum dibuka.`,
       };
     }
 
@@ -222,8 +225,15 @@ export const useCooperativeBilling = () => {
       employee,
       cash_account_id: session.cash_account_id,
       session,
-      badge: `Kas Petugas ${employee.name} - ${session.cash_account_code}`,
+      badge: `Setoran kolektor ${employee.name} - ${session.cash_account_code}`,
     };
+  };
+
+  const getDefaultCollectorIdForInstallment = (installment: CooperativeLoanInstallment) => {
+    const member = memberById.get(installment.member_id);
+    return member?.officer_id && employeeById.get(member.officer_id)?.is_active
+      ? member.officer_id
+      : undefined;
   };
 
   const invalidate = () => {
@@ -250,6 +260,7 @@ export const useCooperativeBilling = () => {
     dueTodayInstallments: filterInstallments(dueTodayInstallments),
     dueThisWeekInstallments: filterInstallments(dueThisWeekInstallments),
     memberFilterOptions,
+    activeCollectors,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
     selectedInstallment,
     setSelectedInstallment,
@@ -268,6 +279,7 @@ export const useCooperativeBilling = () => {
     recordPayment: (input: RecordCooperativeLoanPaymentInput) => recordMutation.mutateAsync(input),
     recordCollection: (input: RecordCooperativeLoanInstallmentCollectionInput) => collectionMutation.mutateAsync(input),
     getFieldCashPaymentStatusForInstallment,
+    getDefaultCollectorIdForInstallment,
     isMutating: recordMutation.isPending || collectionMutation.isPending,
   };
 };

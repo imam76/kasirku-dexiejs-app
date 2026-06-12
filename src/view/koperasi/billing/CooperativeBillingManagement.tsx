@@ -46,6 +46,7 @@ export default function CooperativeBillingManagement() {
     dueTodayInstallments,
     dueThisWeekInstallments,
     memberFilterOptions,
+    activeCollectors,
     paymentAccounts,
     selectedInstallment,
     setSelectedInstallment,
@@ -63,6 +64,7 @@ export default function CooperativeBillingManagement() {
     recordPayment,
     recordCollection,
     getFieldCashPaymentStatusForInstallment,
+    getDefaultCollectorIdForInstallment,
     isMutating,
   } = useCooperativeBilling();
   const canRecordPayment = can('COOPERATIVE_PAYMENT_CREATE');
@@ -93,6 +95,7 @@ export default function CooperativeBillingManagement() {
       payment_date: dayjs(),
       payment_method: 'TUNAI',
       remember_cash_account: true,
+      collector_id: getDefaultCollectorIdForInstallment(installment),
       ...rememberedFields,
       ...(fieldCashStatus?.session ? { cash_account_id: fieldCashStatus.cash_account_id } : {}),
     });
@@ -134,6 +137,7 @@ export default function CooperativeBillingManagement() {
         payment_method: values.payment_method,
         cash_account_id: values.cash_account_id,
         payment_channel: values.payment_channel,
+        collector_id: values.collector_id,
         notes: values.notes,
       });
       if (values.remember_cash_account) {
@@ -285,6 +289,7 @@ export default function CooperativeBillingManagement() {
         isSubmitting={isMutating}
         payableInstallments={payingInstallment ? [payingInstallment] : []}
         paymentAccounts={paymentAccounts}
+        activeCollectors={activeCollectors}
         fieldCashBadge={fieldCashPaymentBadge}
         onCancel={closePaymentModal}
         onSubmit={handleSubmit}

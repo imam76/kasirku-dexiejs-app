@@ -172,6 +172,7 @@ export const cooperativeLoanPaymentSchema = z.object({
   payment_method: z.enum(cooperativeLoanPaymentMethodValues).optional(),
   cash_account_id: z.string().optional(),
   payment_channel: z.string().optional(),
+  collector_id: z.string().optional(),
   notes: z.string().optional(),
 });
 

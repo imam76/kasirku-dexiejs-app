@@ -1562,6 +1562,12 @@ export interface CooperativeLoanPayment {
   cash_account_name?: string;
   payment_method?: PaymentMethod;
   payment_channel?: string;
+  collector_id?: string;
+  collector_name?: string;
+  collector_position?: string;
+  received_by?: string;
+  received_by_name?: string;
+  posted_at?: string;
   finance_transaction_id?: string;
   journal_entry_id?: string;
   reversal_of_payment_id?: string;

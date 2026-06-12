@@ -47,6 +47,9 @@ export default function CooperativeLoanPaymentDetailDrawer({
             <Descriptions.Item label={t('cooperative.installments.payments.paymentDate')}>
               {formatDate(payment.payment_date)}
             </Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.installments.payments.postedAt')}>
+              {payment.posted_at ? formatDate(payment.posted_at) : '-'}
+            </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.installments.table.loan')}>
               {payment.loan_number}
             </Descriptions.Item>
@@ -75,6 +78,12 @@ export default function CooperativeLoanPaymentDetailDrawer({
             </Descriptions.Item>
             <Descriptions.Item label={t('finance.paymentChannel')}>
               {payment.payment_channel || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.installments.payments.collector')}>
+              {payment.collector_name || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.installments.payments.receivedBy')}>
+              {payment.received_by_name || '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.savings.financeTransaction')}>
               {payment.finance_transaction_id || '-'}

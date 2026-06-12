@@ -2,6 +2,7 @@ import FeedbackModal from '@/components/FeedbackModal'
 // import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
+import LoginProfile from '@/components/auth/LoginProfile'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
@@ -39,7 +40,6 @@ import {
   Home,
   Languages,
   ListTree,
-  LogOut,
   MapPinned,
   Moon,
   PanelLeftClose,
@@ -275,6 +275,7 @@ const RootLayout = () => {
         { to: '/koperasi/pinjaman', label: t('nav.cooperative.loans'), icon: Banknote },
         { to: '/koperasi/angsuran', label: t('nav.cooperative.installments'), icon: ReceiptText },
         { to: '/koperasi/penagihan', label: t('cooperative.billing.title'), icon: Bell },
+        { to: '/koperasi/kas-petugas', label: t('nav.cooperative.fieldCash'), icon: WalletCards },
         {
           label: t('nav.cooperative.reports'),
           icon: FileText,
@@ -414,7 +415,7 @@ const RootLayout = () => {
             </div>
 
             {/* Theme Toggle & Settings */}
-            <div className="flex items-center">
+            <div className="flex items-center gap-1">
               <SyncStatusIndicator />
               <button
                 onClick={toggle}
@@ -454,14 +455,11 @@ const RootLayout = () => {
                   <SettingsIcon size={20} />
                 </button>
               )}
-              <button
-                onClick={handleLogoutClick}
-                className="p-2 rounded-full text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none dark:hover:bg-red-950/40 dark:hover:text-red-300"
-                aria-label={t('root.logout')}
-                title={t('root.logout')}
-              >
-                <LogOut size={20} />
-              </button>
+              <LoginProfile
+                currentUser={currentUser}
+                currentRole={currentRole}
+                onLogout={handleLogoutClick}
+              />
             </div>
           </div>
         </nav>

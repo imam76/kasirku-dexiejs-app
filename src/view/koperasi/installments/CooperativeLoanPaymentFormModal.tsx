@@ -3,7 +3,7 @@ import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { ChartOfAccount, CooperativeLoanInstallment, PaymentMethod } from '@/types';
+import type { ChartOfAccount, CooperativeLoanInstallment, Employee, PaymentMethod } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 
@@ -17,6 +17,7 @@ export interface CooperativeLoanPaymentFormValues {
   cash_account_id?: string;
   remember_cash_account: boolean;
   payment_channel?: string;
+  collector_id?: string;
   notes?: string;
 }
 
@@ -26,6 +27,7 @@ interface CooperativeLoanPaymentFormModalProps {
   isSubmitting: boolean;
   payableInstallments: CooperativeLoanInstallment[];
   paymentAccounts: ChartOfAccount[];
+  activeCollectors?: Employee[];
   fieldCashBadge?: string;
   onCancel: () => void;
   onSubmit: (values: CooperativeLoanPaymentFormValues) => void;
@@ -37,6 +39,7 @@ export default function CooperativeLoanPaymentFormModal({
   isSubmitting,
   payableInstallments,
   paymentAccounts,
+  activeCollectors = [],
   fieldCashBadge,
   onCancel,
   onSubmit,
@@ -59,6 +62,11 @@ export default function CooperativeLoanPaymentFormModal({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [paymentAccounts]);
+  const collectorOptions = useMemo(() => activeCollectors.map((employee) => ({
+    value: employee.id,
+    label: employee.position ? `${employee.name} - ${employee.position}` : employee.name,
+  })), [activeCollectors]);
+  const showCollectorSelect = collectorOptions.length > 0;
 
   return (
     <Modal
@@ -145,7 +153,7 @@ export default function CooperativeLoanPaymentFormModal({
           </Form.Item>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className={`grid grid-cols-1 gap-4 ${showCollectorSelect ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           <Form.Item
             name="payment_method"
             label={t('checkout.method')}
@@ -159,6 +167,17 @@ export default function CooperativeLoanPaymentFormModal({
               data-testid="koperasi-installment-payment-method-select"
             />
           </Form.Item>
+          {showCollectorSelect && (
+            <Form.Item name="collector_id" label={t('cooperative.installments.form.collector')}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('cooperative.installments.form.collectorPlaceholder')}
+                options={collectorOptions}
+              />
+            </Form.Item>
+          )}
           <div>
             <Form.Item name="cash_account_id" label={t('finance.cashAccount')} className="mb-2">
               <Select
