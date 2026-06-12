@@ -291,6 +291,23 @@ const getPurchaseDocumentWarehouse = (document: PurchaseDocument) => ({
   name: document.warehouse_name,
 });
 
+const isReceiptBackedPurchaseInvoice = (document: PurchaseDocument) => (
+  document.type === 'PURCHASE_INVOICE' && document.source_document_type === 'PURCHASE_RECEIPT'
+);
+
+const shouldApplyPurchaseStockImpact = (
+  document: PurchaseDocument,
+  config: PurchaseDocumentConfig,
+) => config.behavior.affectsStock && !isReceiptBackedPurchaseInvoice(document);
+
+const getPurchaseStockInSourceType = (document: PurchaseDocument) => (
+  document.type === 'PURCHASE_INVOICE' ? 'PURCHASE_INVOICE' : 'PURCHASE_RECEIPT'
+);
+
+const getPurchaseStockInVoidSourceType = (document: PurchaseDocument) => (
+  document.type === 'PURCHASE_INVOICE' ? 'PURCHASE_INVOICE_VOID' : 'PURCHASE_RECEIPT_VOID'
+);
+
 const addReceiptStock = async (
   document: PurchaseDocument,
   items: PurchaseDocumentItem[],
@@ -298,6 +315,7 @@ const addReceiptStock = async (
   occurredAt: string,
 ) => {
   const stockMutations: StockMutation[] = [];
+  const sourceType = getPurchaseStockInSourceType(document);
 
   for (const item of items) {
     const product = await db.products.get(item.product_id);
@@ -323,7 +341,7 @@ const addReceiptStock = async (
         productId: product.id,
         productName: product.name,
         sku: product.sku,
-        sourceType: 'PURCHASE_RECEIPT',
+        sourceType,
         sourceId: document.id,
         sourceLineId: item.id,
         quantityReceived: quantityInStockUnit,
@@ -336,7 +354,7 @@ const addReceiptStock = async (
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
-        sourceType: 'PURCHASE_RECEIPT',
+        sourceType,
         sourceId: document.id,
         sourceNumber: document.document_number,
         sourceLineId: item.id,
@@ -360,6 +378,7 @@ const restoreReceiptStock = async (
   reason: string,
 ) => {
   const stockMutations: StockMutation[] = [];
+  const sourceType = getPurchaseStockInVoidSourceType(document);
 
   for (const item of items) {
     const product = await db.products.get(item.product_id);
@@ -378,7 +397,7 @@ const restoreReceiptStock = async (
       stockMutations.push(createStockMutation({
         product,
         warehouse: getPurchaseDocumentWarehouse(document),
-        sourceType: 'PURCHASE_RECEIPT_VOID',
+        sourceType,
         sourceId: document.id,
         sourceNumber: document.document_number,
         sourceLineId: item.id,
@@ -710,7 +729,7 @@ export const issuePurchaseDocument = async (id: string) => {
   }, document, currentUser);
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
-    if (config.behavior.affectsStock) {
+    if (shouldApplyPurchaseStockImpact(issuedDocument, config)) {
       if (document.type === 'PURCHASE_RETURN') {
         stockMutations = await removePurchaseReturnStock(issuedDocument, items, currentUser, now);
       } else {
@@ -850,6 +869,7 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   }
 
   const items = await db.purchaseDocumentItems.where('document_id').equals(id).toArray();
+  const config = getPurchaseDocumentConfig(document.type);
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
   const voidedDocument = withUpdatedPurchaseDocumentSync({
@@ -861,10 +881,12 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   }, document, currentUser);
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
-    if (document.type === 'PURCHASE_RECEIPT' && document.status === 'ISSUED') {
-      stockMutations = await restoreReceiptStock(document, items, currentUser, now, normalizedReason);
-    } else if (document.type === 'PURCHASE_RETURN' && document.status === 'ISSUED') {
-      stockMutations = await restorePurchaseReturnStock(document, items, currentUser, now, normalizedReason);
+    if (document.status === 'ISSUED') {
+      if (document.type === 'PURCHASE_RETURN') {
+        stockMutations = await restorePurchaseReturnStock(document, items, currentUser, now, normalizedReason);
+      } else if (shouldApplyPurchaseStockImpact(document, config)) {
+        stockMutations = await restoreReceiptStock(document, items, currentUser, now, normalizedReason);
+      }
     }
 
     await db.purchaseDocuments.put(voidedDocument);

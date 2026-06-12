@@ -25,6 +25,7 @@ export const purchaseInvoiceConfig: PurchaseDocumentConfig = {
   requiredFields: ['document_date'],
   behavior: {
     ...baseBehavior,
+    affectsStock: true,
     hasPricing: true,
     hasTax: true,
     hasDueDate: true,

@@ -33,6 +33,15 @@ const getMovementTime = (movement: Pick<StockCardMovement, 'date'>) => {
 
 const getMovementDelta = (movement: Pick<StockCardMovement, 'qtyIn' | 'qtyOut'>) => movement.qtyIn - movement.qtyOut;
 
+const isReceiptBackedPurchaseInvoice = (document: { type: string; source_document_type?: string }) => (
+  document.type === 'PURCHASE_INVOICE' && document.source_document_type === 'PURCHASE_RECEIPT'
+);
+
+const isPurchaseStockInDocument = (document: { type: string; source_document_type?: string }) => (
+  document.type === 'PURCHASE_RECEIPT' ||
+  (document.type === 'PURCHASE_INVOICE' && !isReceiptBackedPurchaseInvoice(document))
+);
+
 export const getStockCard = async (productId: string, startDate: Date, endDate: Date): Promise<{ openingBalance: number; rows: StockCardRow[] }> => {
   const product = await db.products.get(productId);
   if (!product) {
@@ -128,18 +137,20 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
   const purchaseItems = await db.purchaseDocumentItems.where('product_id').equals(productId).toArray();
   for (const item of purchaseItems) {
     const doc = await db.purchaseDocuments.get(item.document_id);
-    if (!doc || (doc.status !== 'ISSUED' && doc.status !== 'VOIDED')) continue;
+    if (!doc || (doc.status !== 'ISSUED' && doc.status !== 'CONVERTED' && doc.status !== 'VOIDED')) continue;
 
-    const quantity = doc.type === 'PURCHASE_RECEIPT' ? (item.received_quantity ?? item.quantity) : item.quantity;
+    const quantity = isPurchaseStockInDocument(doc) ? (item.received_quantity ?? item.quantity) : item.quantity;
     const quantityInBaseUnit = konversiSatuanProduk(quantity, product, item.unit, baseUnit);
 
     if (quantityInBaseUnit > 0) {
-      if (doc.type === 'PURCHASE_RECEIPT') {
+      if (isPurchaseStockInDocument(doc)) {
+        const sourceType = doc.type === 'PURCHASE_INVOICE' ? 'PURCHASE_INVOICE' : 'PURCHASE_RECEIPT';
+        const voidSourceType = doc.type === 'PURCHASE_INVOICE' ? 'PURCHASE_INVOICE_VOID' : 'PURCHASE_RECEIPT_VOID';
         if (doc.issued_at) {
           allMutations.push({
-            id: `pur_rec_${item.id}`,
+            id: `${sourceType.toLowerCase()}_${item.id}`,
             date: doc.issued_at,
-            sourceType: 'PURCHASE_RECEIPT',
+            sourceType,
             sourceNumber: doc.document_number,
             qtyIn: quantityInBaseUnit,
             qtyOut: 0,
@@ -148,9 +159,9 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
         }
         if (doc.status === 'VOIDED' && doc.voided_at) {
           allMutations.push({
-            id: `pur_rec_void_${item.id}`,
+            id: `${voidSourceType.toLowerCase()}_${item.id}`,
             date: doc.voided_at,
-            sourceType: 'PURCHASE_RECEIPT_VOID',
+            sourceType: voidSourceType,
             sourceNumber: doc.document_number,
             qtyIn: 0,
             qtyOut: quantityInBaseUnit,
