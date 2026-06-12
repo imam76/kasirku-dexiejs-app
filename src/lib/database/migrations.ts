@@ -15,6 +15,7 @@ import type {
   CurrencyRate,
   Department,
   EnabledModule,
+  Employee,
   FinanceAccountMapping,
   FinanceTransaction,
   GeneralLedgerSetting,
@@ -905,5 +906,39 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
 
   this.version(49).stores({
     cooperativeMembers: 'id, member_number, name, area_id, officer_id, status, sync_status, updated_at, created_at',
+  });
+
+  this.version(50).stores({
+    cooperativeFieldCashSessions: 'id, session_number, status, employee_id, cash_account_id, opened_at, closed_at, balance_status, created_at, updated_at',
+    financeTransactions: 'id, type, category, account_id, cash_account_id, field_cash_session_id, field_employee_id, transfer_group_id, sync_status, updated_at, created_at, reference_id',
+    employees: 'id, name, email, phone, login_role_id, field_cash_account_id, is_active, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingRolePermissions = await rolePermissionTable.toArray();
+    const existingRolePermissionIds = new Set(existingRolePermissions.map((permission) => permission.id));
+    const missingSystemRolePermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingRolePermissionIds.has(permission.id));
+
+    if (missingSystemRolePermissions.length > 0) {
+      await rolePermissionTable.bulkPut(missingSystemRolePermissions);
+    }
+
+    const employees = await tx.table<Employee, string>('employees').toArray();
+    const employeesWithFieldCashSnapshot = employees
+      .filter((employee) => employee.field_cash_account_id && (!employee.field_cash_account_code || !employee.field_cash_account_name))
+      .map(async (employee): Promise<Employee> => {
+        const account = await tx.table<ChartOfAccount, string>('chartOfAccounts').get(employee.field_cash_account_id ?? '');
+        return {
+          ...employee,
+          field_cash_account_code: employee.field_cash_account_code ?? account?.code,
+          field_cash_account_name: employee.field_cash_account_name ?? account?.name,
+          updated_at: employee.updated_at ?? now,
+        };
+      });
+
+    if (employeesWithFieldCashSnapshot.length > 0) {
+      await tx.table<Employee, string>('employees').bulkPut(await Promise.all(employeesWithFieldCashSnapshot));
+    }
   });
 }

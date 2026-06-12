@@ -36,6 +36,7 @@ export default function CooperativeBillingManagement() {
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [payingInstallment, setPayingInstallment] = useState<CooperativeLoanInstallment | null>(null);
   const [collectingInstallment, setCollectingInstallment] = useState<CooperativeLoanInstallment | null>(null);
+  const [fieldCashPaymentBadge, setFieldCashPaymentBadge] = useState<string | undefined>();
 
   const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanPayment');
   const {
@@ -52,12 +53,16 @@ export default function CooperativeBillingManagement() {
     setSearchText,
     memberFilter,
     setMemberFilter,
+    officerFilter,
+    setOfficerFilter,
+    officerFilterOptions,
     overdueCount,
     overdueTotalAmount,
     dueTodayCount,
     dueThisWeekCount,
     recordPayment,
     recordCollection,
+    getFieldCashPaymentStatusForInstallment,
     isMutating,
   } = useCooperativeBilling();
   const canRecordPayment = can('COOPERATIVE_PAYMENT_CREATE');
@@ -65,6 +70,7 @@ export default function CooperativeBillingManagement() {
   const closePaymentModal = () => {
     setIsPaymentModalOpen(false);
     setPayingInstallment(null);
+    setFieldCashPaymentBadge(undefined);
     form.resetFields();
   };
 
@@ -76,14 +82,21 @@ export default function CooperativeBillingManagement() {
 
     form.resetFields();
     const remaining = getInstallmentRemainingAmounts(installment);
+    const fieldCashStatus = getFieldCashPaymentStatusForInstallment(installment);
+    const rememberedFields = getRememberedCashAccountFields(paymentAccounts);
+    if (fieldCashStatus && !fieldCashStatus.session) {
+      message.warning(fieldCashStatus.badge);
+    }
     form.setFieldsValue({
       installment_id: installment.id,
       amount: remaining.total_amount,
       payment_date: dayjs(),
       payment_method: 'TUNAI',
       remember_cash_account: true,
-      ...getRememberedCashAccountFields(paymentAccounts),
+      ...rememberedFields,
+      ...(fieldCashStatus?.session ? { cash_account_id: fieldCashStatus.cash_account_id } : {}),
     });
+    setFieldCashPaymentBadge(fieldCashStatus?.session ? fieldCashStatus.badge : undefined);
     setPayingInstallment(installment);
     setIsPaymentModalOpen(true);
   };
@@ -168,7 +181,7 @@ export default function CooperativeBillingManagement() {
         <StatCard label={t('cooperative.billing.summaryDueThisWeek')} count={dueThisWeekCount} />
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)]">
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)_minmax(220px,260px)]">
         <Input.Search
           allowClear
           value={searchText}
@@ -183,6 +196,16 @@ export default function CooperativeBillingManagement() {
           options={[
             { value: 'ALL', label: t('cooperative.billing.memberFilter.all') },
             ...memberFilterOptions,
+          ]}
+        />
+        <Select<string>
+          showSearch
+          value={officerFilter}
+          onChange={setOfficerFilter}
+          optionFilterProp="label"
+          options={[
+            { value: 'ALL', label: 'Semua petugas' },
+            ...officerFilterOptions,
           ]}
         />
       </div>
@@ -262,6 +285,7 @@ export default function CooperativeBillingManagement() {
         isSubmitting={isMutating}
         payableInstallments={payingInstallment ? [payingInstallment] : []}
         paymentAccounts={paymentAccounts}
+        fieldCashBadge={fieldCashPaymentBadge}
         onCancel={closePaymentModal}
         onSubmit={handleSubmit}
       />

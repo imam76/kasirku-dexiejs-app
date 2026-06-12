@@ -37,6 +37,8 @@ export default function CooperativeLoanManagement() {
     disbursingLoan,
     setDisbursingLoan,
     paymentAccounts,
+    fieldCashAccountIds,
+    fieldCashBalances,
     searchText,
     setSearchText,
     statusFilter,
@@ -263,6 +265,8 @@ export default function CooperativeLoanManagement() {
         open={Boolean(disbursingLoan)}
         isSubmitting={isMutating}
         paymentAccounts={paymentAccounts}
+        fieldCashAccountIds={fieldCashAccountIds}
+        fieldCashBalances={fieldCashBalances}
         onCancel={closeDisbursementModal}
         onSubmit={handleDisburse}
       />

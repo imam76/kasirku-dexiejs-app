@@ -12,6 +12,7 @@ import {
   type DisburseCooperativeLoanInput,
   type RejectCooperativeLoanInput,
 } from '@/services/cooperativeLoanService';
+import { getCashAccountBalance } from '@/services/cooperativeFieldCashService';
 import type {
   ChartOfAccount,
   CooperativeLoan,
@@ -63,6 +64,30 @@ export const useCooperativeLoans = () => {
       .toArray(),
     [],
     [],
+  );
+  const fieldCashEmployees = useLiveQuery(
+    () => db.employees
+      .where('field_cash_account_id')
+      .above('')
+      .filter((employee) => employee.is_active && Boolean(employee.field_cash_account_id))
+      .toArray(),
+    [],
+    [],
+  );
+  const fieldCashBalances = useLiveQuery(
+    async () => {
+      const pairs = await Promise.all(fieldCashEmployees.map(async (employee) => {
+        const accountId = employee.field_cash_account_id;
+        return accountId ? [accountId, await getCashAccountBalance(accountId)] as const : undefined;
+      }));
+      return new Map(pairs.filter((pair): pair is readonly [string, number] => Boolean(pair)));
+    },
+    [fieldCashEmployees.map((employee) => employee.field_cash_account_id).join('|')],
+    new Map<string, number>(),
+  );
+  const fieldCashAccountIds = useMemo(
+    () => new Set(fieldCashEmployees.map((employee) => employee.field_cash_account_id).filter(Boolean) as string[]),
+    [fieldCashEmployees],
   );
 
   const activeMembers = useMemo(
@@ -131,6 +156,8 @@ export const useCooperativeLoans = () => {
     disbursingLoan,
     setDisbursingLoan,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
+    fieldCashAccountIds,
+    fieldCashBalances,
     searchText,
     setSearchText,
     statusFilter,

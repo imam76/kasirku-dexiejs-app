@@ -75,6 +75,15 @@ export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 export type TransactionStatus = 'COMPLETED' | 'VOIDED';
 export type CashierSessionStatus = 'OPEN' | 'CLOSED';
 export type CashierSessionBalanceStatus = 'BALANCED' | 'NON_BALANCED';
+export type CooperativeFieldCashSessionStatus = 'OPEN' | 'CLOSED';
+export type CooperativeFieldCashSessionBalanceStatus = 'BALANCED' | 'NON_BALANCED';
+export type CooperativeFieldCashMovementKind =
+  | 'DROPPING_FROM_FINANCE'
+  | 'STORTING_LOAN_PAYMENT'
+  | 'STORTING_SAVING_DEPOSIT'
+  | 'LOAN_DISBURSEMENT'
+  | 'SAVING_WITHDRAWAL'
+  | 'DEPOSIT_TO_FINANCE';
 export type SyncQueueOperation = 'create' | 'update' | 'delete';
 export type SyncQueueStatus = 'pending' | 'processing' | 'synced' | 'failed';
 export type UserRole = 'OWNER' | 'ADMIN' | 'KASIR' | 'GUDANG';
@@ -158,6 +167,8 @@ export type Permission =
   | 'COOPERATIVE_INSTALLMENT_VIEW'
   | 'COOPERATIVE_PAYMENT_CREATE'
   | 'COOPERATIVE_BILLING_ACCESS'
+  | 'COOPERATIVE_FIELD_CASH_VIEW'
+  | 'COOPERATIVE_FIELD_CASH_MANAGE'
   | 'COOPERATIVE_REPORT_VIEW'
   | 'COOPERATIVE_AREA_ALL'
   | 'SETTINGS_ACCESS'
@@ -339,6 +350,9 @@ export interface Employee {
   user_id?: string;
   user_name?: string;
   login_role_id?: string;
+  field_cash_account_id?: string;
+  field_cash_account_code?: string;
+  field_cash_account_name?: string;
   pin_hash?: string;
   pin_salt?: string;
   notes?: string;
@@ -1095,6 +1109,47 @@ export interface CashierSession {
   updated_at: string;
 }
 
+export interface CooperativeFieldCashSession {
+  id: string;
+  session_number: string;
+  status: CooperativeFieldCashSessionStatus;
+
+  employee_id: string;
+  employee_name: string;
+  employee_position?: string;
+
+  cash_account_id: string;
+  cash_account_code: string;
+  cash_account_name: string;
+
+  opened_at: string;
+  opening_cash_amount: number;
+  expected_opening_cash_amount: number;
+  opening_difference_amount: number;
+  opening_note?: string;
+
+  closed_at?: string;
+  closing_cash_amount?: number;
+  expected_closing_cash_amount?: number;
+  closing_difference_amount?: number;
+  closing_note?: string;
+  balance_status?: CooperativeFieldCashSessionBalanceStatus;
+
+  dropping_from_finance_amount?: number;
+  storting_loan_payment_amount?: number;
+  storting_saving_deposit_amount?: number;
+  loan_disbursement_amount?: number;
+  saving_withdrawal_amount?: number;
+  deposit_to_finance_amount?: number;
+
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+}
+
 export interface TransactionItem {
   id: string;
   transaction_id: string;
@@ -1778,6 +1833,11 @@ export interface FinanceTransaction {
   transfer_group_id?: string;
   transfer_direction?: 'OUT' | 'IN';
   reversal_of_transfer_group_id?: string;
+  field_cash_session_id?: string;
+  field_cash_session_number?: string;
+  field_employee_id?: string;
+  field_employee_name?: string;
+  field_cash_movement_kind?: CooperativeFieldCashMovementKind;
   version?: number;
   created_by?: string;
   created_by_name?: string;

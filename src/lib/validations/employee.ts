@@ -17,6 +17,7 @@ export const employeeSchema = z.object({
   position: optionalTrimmedString,
   user_id: optionalTrimmedString,
   login_role_id: optionalTrimmedString,
+  field_cash_account_id: optionalTrimmedString,
   login_pin: optionalTrimmedString,
   notes: optionalTrimmedString,
   area_ids: z.array(z.string().trim().min(1)).optional(),

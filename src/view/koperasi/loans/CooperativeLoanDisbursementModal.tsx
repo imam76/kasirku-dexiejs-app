@@ -1,4 +1,4 @@
-import { Checkbox, DatePicker, Descriptions, Form, Input, Modal, Select, Typography } from 'antd';
+import { Checkbox, DatePicker, Descriptions, Form, Input, Modal, Select, Tag, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
@@ -25,6 +25,8 @@ interface CooperativeLoanDisbursementModalProps {
   open: boolean;
   isSubmitting: boolean;
   paymentAccounts: ChartOfAccount[];
+  fieldCashAccountIds: Set<string>;
+  fieldCashBalances: Map<string, number>;
   onCancel: () => void;
   onSubmit: (values: CooperativeLoanDisbursementFormValues) => void;
 }
@@ -35,14 +37,20 @@ export default function CooperativeLoanDisbursementModal({
   open,
   isSubmitting,
   paymentAccounts,
+  fieldCashAccountIds,
+  fieldCashBalances,
   onCancel,
   onSubmit,
 }: CooperativeLoanDisbursementModalProps) {
   const { t } = useI18n();
+  const selectedCashAccountId = Form.useWatch('cash_account_id', form);
   const accountOptions = useMemo(() => paymentAccounts.map((account) => ({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [paymentAccounts]);
+  const selectedAccount = useMemo(() => (
+    paymentAccounts.find((account) => account.id === selectedCashAccountId)
+  ), [paymentAccounts, selectedCashAccountId]);
   const isDeductedLoan = loan?.deduction_method === 'DEDUCT_ON_DISBURSEMENT';
   const netDisbursementAmount = loan
     ? loan.net_disbursement_amount ?? loan.principal_amount
@@ -121,6 +129,12 @@ export default function CooperativeLoanDisbursementModal({
         <Form.Item name="notes" label={t('cooperative.loans.form.disbursementNotes')}>
           <TextArea rows={3} placeholder={t('cooperative.loans.form.disbursementNotesPlaceholder')} />
         </Form.Item>
+
+        {selectedAccount && fieldCashAccountIds.has(selectedAccount.id) && (
+          <Tag color="green" className="mb-4">
+            Kas Petugas {selectedAccount.code} - saldo Rp {formatCurrency(Number(fieldCashBalances.get(selectedAccount.id) || 0))}
+          </Tag>
+        )}
 
         {loan && (
           <div className="mb-2">

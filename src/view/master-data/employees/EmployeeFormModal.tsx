@@ -1,7 +1,8 @@
-import { Form, Input, Modal, Select, Switch } from 'antd';
+import { Button, Form, Input, Modal, Select, Switch } from 'antd';
 import type { FormInstance } from 'antd';
+import { Plus } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
-import type { CooperativeArea, Role } from '@/types';
+import type { ChartOfAccount, CooperativeArea, Role } from '@/types';
 
 const { TextArea } = Input;
 
@@ -12,6 +13,7 @@ export interface EmployeeFormValues {
   address?: string;
   position?: string;
   login_role_id?: string;
+  field_cash_account_id?: string;
   login_pin?: string;
   confirm_login_pin?: string;
   area_ids?: string[];
@@ -23,27 +25,34 @@ interface EmployeeFormModalProps {
   form: FormInstance<EmployeeFormValues>;
   areas: CooperativeArea[];
   roles: Role[];
+  fieldCashAccounts: ChartOfAccount[];
   open: boolean;
   isEditing: boolean;
   canManageLogin: boolean;
   isSubmitting: boolean;
+  isCreatingFieldCashAccount: boolean;
   onCancel: () => void;
   onSubmit: (values: EmployeeFormValues) => void;
+  onCreateFieldCashAccount: (employeeName: string) => Promise<ChartOfAccount | undefined>;
 }
 
 export default function EmployeeFormModal({
   form,
   areas,
   roles,
+  fieldCashAccounts,
   open,
   isEditing,
   canManageLogin,
   isSubmitting,
+  isCreatingFieldCashAccount,
   onCancel,
   onSubmit,
+  onCreateFieldCashAccount,
 }: EmployeeFormModalProps) {
   const { t } = useI18n();
   const loginPinValue = Form.useWatch('login_pin', form);
+  const employeeNameValue = Form.useWatch('name', form);
   const isPinRequired = !isEditing || Boolean(loginPinValue);
 
   return (
@@ -108,6 +117,34 @@ export default function EmployeeFormModal({
               }))}
             />
           </Form.Item>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <Form.Item name="field_cash_account_id" label="Akun Kas Petugas" className="mb-0">
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Pilih akun kas petugas"
+              options={fieldCashAccounts.map((account) => ({
+                value: account.id,
+                label: `${account.code} - ${account.name}`,
+              }))}
+            />
+          </Form.Item>
+          <Button
+            icon={<Plus size={16} />}
+            loading={isCreatingFieldCashAccount}
+            disabled={!employeeNameValue?.trim()}
+            onClick={async () => {
+              const account = await onCreateFieldCashAccount(employeeNameValue ?? '');
+              if (account) {
+                form.setFieldsValue({ field_cash_account_id: account.id });
+              }
+            }}
+          >
+            Buat Akun
+          </Button>
         </div>
 
         {canManageLogin ? (

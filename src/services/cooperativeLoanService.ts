@@ -19,6 +19,11 @@ import {
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import {
+  assertSufficientCashAccountBalance,
+  buildFieldCashFinanceTransactionFields,
+  getFieldCashContextForCashAccount,
+} from '@/services/cooperativeFieldCashService';
+import {
   enqueueCooperativeMemberSavingBalancesSync,
   enqueueCooperativeLoanInstallmentsSync,
   enqueueCooperativeLoanPaymentsSync,
@@ -134,6 +139,8 @@ const cooperativeLoanTables = [
   db.cooperativeLoans,
   db.cooperativeLoanInstallments,
   db.cooperativeLoanPayments,
+  db.cooperativeFieldCashSessions,
+  db.employees,
   db.financeTransactions,
   db.financeBalance,
   db.chartOfAccounts,
@@ -650,6 +657,12 @@ export const disburseCooperativeLoan = async (
     if (disbursementAmount < -0.01) {
       throw new Error('Nominal pencairan net tidak boleh negatif.');
     }
+    const fieldCashContext = paymentMethod === 'TUNAI'
+      ? await getFieldCashContextForCashAccount(cashAccount.id)
+      : undefined;
+    if (fieldCashContext && disbursementAmount > 0) {
+      await assertSufficientCashAccountBalance(cashAccount.id, disbursementAmount);
+    }
     const firstDueDate = parsedInput.first_due_date
       ?? addBillingInterval(dayjs(disbursementDate), resolveLoanBillingFrequency(loan), 1).toISOString();
     await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
@@ -690,6 +703,9 @@ export const disburseCooperativeLoan = async (
       cash_account_code: cashAccount.code,
       cash_account_name: cashAccount.name,
       ...accountSnapshot,
+      ...(fieldCashContext
+        ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'LOAN_DISBURSEMENT')
+        : {}),
     }, currentUser, now);
 
     await db.financeTransactions.add(financeTransaction);
@@ -795,6 +811,9 @@ export const recordCooperativeLoanPayment = async (
 
     const allocation = allocateLoanPaymentToInstallment(installment, amount);
     const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
+    const fieldCashContext = paymentMethod === 'TUNAI'
+      ? await getFieldCashContextForCashAccount(cashAccount.id)
+      : undefined;
     await updateFinanceBalanceForPayment(allocation.total_amount, now);
 
     const nextInstallment: CooperativeLoanInstallment = withPendingCooperativeSync({
@@ -862,6 +881,9 @@ export const recordCooperativeLoanPayment = async (
       account_code: cashAccount.code,
       account_name: cashAccount.name,
       account_type: cashAccount.type,
+      ...(fieldCashContext
+        ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'STORTING_LOAN_PAYMENT')
+        : {}),
     }, currentUser, now);
 
     const nextLoanDraft: CooperativeLoan = {

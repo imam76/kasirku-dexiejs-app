@@ -1,4 +1,4 @@
-import { Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select, Tag } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
@@ -8,6 +8,7 @@ import {
   cooperativeSavingTransactionTypeOptions,
   cooperativeSavingTypeOptions,
 } from './savingOptions';
+import { formatCurrency } from '@/utils/formatters';
 
 const { TextArea } = Input;
 
@@ -30,6 +31,8 @@ interface CooperativeSavingFormModalProps {
   isSubmitting: boolean;
   activeMembers: CooperativeMember[];
   paymentAccounts: ChartOfAccount[];
+  fieldCashAccountIds: Set<string>;
+  fieldCashBalances: Map<string, number>;
   onCancel: () => void;
   onSubmit: (values: CooperativeSavingFormValues) => void;
 }
@@ -40,10 +43,13 @@ export default function CooperativeSavingFormModal({
   isSubmitting,
   activeMembers,
   paymentAccounts,
+  fieldCashAccountIds,
+  fieldCashBalances,
   onCancel,
   onSubmit,
 }: CooperativeSavingFormModalProps) {
   const { t } = useI18n();
+  const selectedCashAccountId = Form.useWatch('cash_account_id', form);
   const memberOptions = useMemo(() => activeMembers.map((member) => ({
     value: member.id,
     label: `${member.member_number} - ${member.name}`,
@@ -52,6 +58,9 @@ export default function CooperativeSavingFormModal({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [paymentAccounts]);
+  const selectedAccount = useMemo(() => (
+    paymentAccounts.find((account) => account.id === selectedCashAccountId)
+  ), [paymentAccounts, selectedCashAccountId]);
 
   return (
     <Modal
@@ -172,6 +181,12 @@ export default function CooperativeSavingFormModal({
         <Form.Item name="notes" label={t('cooperative.savings.form.notes')}>
           <TextArea rows={3} placeholder={t('cooperative.savings.form.notesPlaceholder')} />
         </Form.Item>
+
+        {selectedAccount && fieldCashAccountIds.has(selectedAccount.id) && (
+          <Tag color="green">
+            Kas Petugas {selectedAccount.code} - saldo Rp {formatCurrency(Number(fieldCashBalances.get(selectedAccount.id) || 0))}
+          </Tag>
+        )}
       </Form>
     </Modal>
   );

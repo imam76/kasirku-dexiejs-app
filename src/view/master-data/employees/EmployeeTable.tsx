@@ -50,6 +50,16 @@ export default function EmployeeTable({
       render: (userName?: string) => userName || '-',
     },
     {
+      title: 'Kas Petugas',
+      key: 'field_cash_account',
+      render: (_value: unknown, employee) => employee.field_cash_account_id ? (
+        <Space orientation="vertical" size={0}>
+          <Text>{employee.field_cash_account_name}</Text>
+          <Text type="secondary">{employee.field_cash_account_code}</Text>
+        </Space>
+      ) : '-',
+    },
+    {
       title: t('employees.table.areas'),
       key: 'areas',
       render: (_value: unknown, employee) => (

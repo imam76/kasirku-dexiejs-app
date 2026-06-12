@@ -4,7 +4,13 @@ import { db } from '@/lib/db';
 import { cashBankTransferSchema } from '@/lib/validations/cashBankTransfer';
 import { postCashBankTransferJournal } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
-import type { ChartOfAccount, FinanceTransaction } from '@/types';
+import type {
+  ChartOfAccount,
+  CooperativeFieldCashMovementKind,
+  CooperativeFieldCashSession,
+  Employee,
+  FinanceTransaction,
+} from '@/types';
 
 export interface RecordCashBankTransferInput {
   from_cash_account_id: string;
@@ -49,6 +55,77 @@ const createTransferDescription = (
   return notes ? `${base}. ${notes}` : base;
 };
 
+const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+const formatAmount = (value: number) => value.toLocaleString('id-ID');
+
+const getActiveFieldCashEmployeeByCashAccount = async (cashAccountId: string) => (
+  db.employees
+    .where('field_cash_account_id')
+    .equals(cashAccountId)
+    .and((employee) => employee.is_active)
+    .first()
+);
+
+const getOpenFieldCashSessionForEmployee = async (employee: Employee, cashAccountId: string) => (
+  db.cooperativeFieldCashSessions
+    .where('employee_id')
+    .equals(employee.id)
+    .and((session) => session.status === 'OPEN' && session.cash_account_id === cashAccountId)
+    .first()
+);
+
+const getCashAccountBalance = async (cashAccountId: string) => {
+  const transactions = await db.financeTransactions
+    .where('cash_account_id')
+    .equals(cashAccountId)
+    .filter((transaction) => !transaction.deleted_at)
+    .toArray();
+
+  return roundCurrency(transactions.reduce((sum, transaction) => {
+    if (transaction.type === 'INCOME' || transaction.type === 'OPENING_BALANCE') {
+      return sum + Number(transaction.amount || 0);
+    }
+    if (transaction.type === 'EXPENSE') {
+      return sum - Number(transaction.amount || 0);
+    }
+    return sum;
+  }, 0));
+};
+
+const assertFieldCashBalanceForTransferOut = async (
+  employee: Employee,
+  cashAccountId: string,
+  amount: number,
+) => {
+  const balance = await getCashAccountBalance(cashAccountId);
+  if (balance + 0.01 >= amount) return;
+
+  const shortage = roundCurrency(amount - balance);
+  throw new Error(
+    `Saldo Kas Petugas ${employee.name} tidak cukup untuk transfer keluar. Kekurangan Rp ${formatAmount(shortage)}.`,
+  );
+};
+
+const buildFieldCashFinanceFields = (
+  employee: Employee,
+  session: CooperativeFieldCashSession,
+  movementKind: CooperativeFieldCashMovementKind,
+): Pick<
+  FinanceTransaction,
+  | 'field_cash_session_id'
+  | 'field_cash_session_number'
+  | 'field_employee_id'
+  | 'field_employee_name'
+  | 'field_cash_movement_kind'
+> => ({
+  field_cash_session_id: session.id,
+  field_cash_session_number: session.session_number,
+  field_employee_id: employee.id,
+  field_employee_name: employee.name,
+  field_cash_movement_kind: movementKind,
+});
+
 export const recordCashBankTransfer = async (
   input: RecordCashBankTransferInput,
 ): Promise<RecordCashBankTransferResult> => {
@@ -67,6 +144,8 @@ export const recordCashBankTransfer = async (
   await db.transaction('rw', [
     db.financeTransactions,
     db.chartOfAccounts,
+    db.employees,
+    db.cooperativeFieldCashSessions,
     db.enabledModules,
     db.generalLedgerSetting,
     db.journalEntries,
@@ -82,6 +161,25 @@ export const recordCashBankTransfer = async (
 
     if (fromAccount.id === toAccount.id) {
       throw new Error('Akun tujuan harus berbeda dari akun sumber.');
+    }
+
+    const [fromFieldEmployee, toFieldEmployee] = await Promise.all([
+      getActiveFieldCashEmployeeByCashAccount(fromAccount.id),
+      getActiveFieldCashEmployeeByCashAccount(toAccount.id),
+    ]);
+    const [fromFieldSession, toFieldSession] = await Promise.all([
+      fromFieldEmployee ? getOpenFieldCashSessionForEmployee(fromFieldEmployee, fromAccount.id) : undefined,
+      toFieldEmployee ? getOpenFieldCashSessionForEmployee(toFieldEmployee, toAccount.id) : undefined,
+    ]);
+
+    if (fromFieldEmployee && !fromFieldSession) {
+      throw new Error(`Sesi kas petugas ${fromFieldEmployee.name} belum dibuka.`);
+    }
+    if (toFieldEmployee && !toFieldSession) {
+      throw new Error(`Sesi kas petugas ${toFieldEmployee.name} belum dibuka.`);
+    }
+    if (fromFieldEmployee) {
+      await assertFieldCashBalanceForTransferOut(fromFieldEmployee, fromAccount.id, parsedInput.amount);
     }
 
     const description = createTransferDescription(fromAccount, toAccount, parsedInput.notes);
@@ -102,6 +200,9 @@ export const recordCashBankTransfer = async (
       account_type: fromAccount.type,
       transfer_group_id: transferGroupId,
       transfer_direction: 'OUT',
+      ...(fromFieldEmployee && fromFieldSession
+        ? buildFieldCashFinanceFields(fromFieldEmployee, fromFieldSession, 'DEPOSIT_TO_FINANCE')
+        : {}),
     }, currentUser, transferDate);
     inTransaction = withPendingFinanceTransactionSync({
       id: inTransactionId,
@@ -120,6 +221,9 @@ export const recordCashBankTransfer = async (
       account_type: toAccount.type,
       transfer_group_id: transferGroupId,
       transfer_direction: 'IN',
+      ...(toFieldEmployee && toFieldSession
+        ? buildFieldCashFinanceFields(toFieldEmployee, toFieldSession, 'DROPPING_FROM_FINANCE')
+        : {}),
     }, currentUser, transferDate);
 
     await db.financeTransactions.bulkAdd([outTransaction, inTransaction]);

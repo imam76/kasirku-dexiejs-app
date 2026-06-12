@@ -12,6 +12,11 @@ import {
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import {
+  assertSufficientCashAccountBalance,
+  buildFieldCashFinanceTransactionFields,
+  getFieldCashContextForCashAccount,
+} from '@/services/cooperativeFieldCashService';
+import {
   enqueueCooperativeMemberSavingBalancesSync,
   enqueueCooperativeSavingTransactionsSync,
   withPendingCooperativeSync,
@@ -53,6 +58,8 @@ const cooperativeSavingTables = [
   db.cooperativeMembers,
   db.cooperativeSavingTransactions,
   db.cooperativeMemberSavingBalances,
+  db.cooperativeFieldCashSessions,
+  db.employees,
   db.financeTransactions,
   db.financeBalance,
   db.chartOfAccounts,
@@ -201,6 +208,14 @@ export const recordCooperativeSaving = async (
     await assertSavingBusinessRules(member, parsedInput.saving_type, parsedInput.transaction_type, amount);
 
     const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
+    const fieldCashContext = paymentMethod === 'TUNAI'
+      ? await getFieldCashContextForCashAccount(cashAccount.id)
+      : undefined;
+    if (fieldCashContext && parsedInput.transaction_type === 'WITHDRAWAL') {
+      await assertSufficientCashAccountBalance(cashAccount.id, amount, {
+        actionLabel: 'penarikan simpanan',
+      });
+    }
     const accountSnapshot = await getFinanceAccountSnapshotForCategory(financeCategory);
     const savingTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
       id: savingTransactionId,
@@ -249,6 +264,14 @@ export const recordCooperativeSaving = async (
       cash_account_code: cashAccount.code,
       cash_account_name: cashAccount.name,
       ...accountSnapshot,
+      ...(fieldCashContext
+        ? buildFieldCashFinanceTransactionFields(
+            fieldCashContext,
+            parsedInput.transaction_type === 'WITHDRAWAL'
+              ? 'SAVING_WITHDRAWAL'
+              : 'STORTING_SAVING_DEPOSIT',
+          )
+        : {}),
     }, currentUser, now);
 
     await db.financeTransactions.add(financeTransaction);

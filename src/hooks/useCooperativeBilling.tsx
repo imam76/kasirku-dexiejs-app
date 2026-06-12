@@ -14,6 +14,8 @@ import type {
   ChartOfAccount,
   CooperativeLoan,
   CooperativeLoanInstallment,
+  CooperativeMember,
+  Employee,
 } from '@/types';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 
@@ -32,10 +34,21 @@ export const useCooperativeBilling = () => {
   const areaScope = useCooperativeAreaScope();
   const [searchText, setSearchText] = useState('');
   const [memberFilter, setMemberFilter] = useState<string>('ALL');
+  const [officerFilter, setOfficerFilter] = useState<string>('ALL');
   const [selectedInstallment, setSelectedInstallment] = useState<CooperativeLoanInstallment | null>(null);
 
   const members = useLiveQuery(
     () => db.cooperativeMembers.toArray(),
+    [],
+    [] as CooperativeMember[],
+  );
+  const employees = useLiveQuery(
+    () => db.employees.orderBy('name').toArray(),
+    [],
+    [] as Employee[],
+  );
+  const fieldCashSessions = useLiveQuery(
+    () => db.cooperativeFieldCashSessions.where('status').equals('OPEN').toArray(),
     [],
     [],
   );
@@ -63,6 +76,11 @@ export const useCooperativeBilling = () => {
   );
 
   const loanById = useMemo(() => new Map(loans.map((loan) => [loan.id, loan])), [loans]);
+  const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
+  const employeeById = useMemo(() => new Map(employees.map((employee) => [employee.id, employee])), [employees]);
+  const openFieldCashSessionByEmployee = useMemo(() => (
+    new Map(fieldCashSessions.map((session) => [session.employee_id, session]))
+  ), [fieldCashSessions]);
   const visibleMemberIds = useMemo(() => {
     if (!areaScope.isScoped) return null;
     const allowedAreaIds = new Set(areaScope.areaIds);
@@ -97,6 +115,25 @@ export const useCooperativeBilling = () => {
       a.memberNumber.localeCompare(b.memberNumber) || a.memberName.localeCompare(b.memberName)
     ));
   }, [allUnpaidInstallments]);
+
+  const officerFilterOptions = useMemo(() => {
+    const officerById = new Map<string, { value: string; label: string; officerName: string }>();
+
+    allUnpaidInstallments.forEach((installment) => {
+      const member = memberById.get(installment.member_id);
+      if (!member?.officer_id || officerById.has(member.officer_id)) return;
+
+      const officerName = member.officer_name ?? employeeById.get(member.officer_id)?.name ?? member.officer_id;
+      officerById.set(member.officer_id, {
+        value: member.officer_id,
+        label: officerName,
+        officerName,
+      });
+    });
+
+    return Array.from(officerById.values())
+      .sort((left, right) => left.officerName.localeCompare(right.officerName));
+  }, [allUnpaidInstallments, employeeById, memberById]);
 
   const {
     overdueInstallments,
@@ -159,9 +196,34 @@ export const useCooperativeBilling = () => {
       ].some((value) => value.toLowerCase().includes(query));
       
       const matchesMember = memberFilter === 'ALL' || installment.member_id === memberFilter;
+      const member = memberById.get(installment.member_id);
+      const matchesOfficer = officerFilter === 'ALL' || member?.officer_id === officerFilter;
 
-      return matchesSearch && matchesMember;
+      return matchesSearch && matchesMember && matchesOfficer;
     });
+  };
+
+  const getFieldCashPaymentStatusForInstallment = (installment: CooperativeLoanInstallment) => {
+    const member = memberById.get(installment.member_id);
+    const employee = member?.officer_id ? employeeById.get(member.officer_id) : undefined;
+    if (!employee?.field_cash_account_id) return undefined;
+
+    const session = openFieldCashSessionByEmployee.get(employee.id);
+    if (!session) {
+      return {
+        employee,
+        cash_account_id: employee.field_cash_account_id,
+        session: undefined,
+        badge: `Kas Petugas ${employee.name} belum memiliki sesi OPEN.`,
+      };
+    }
+
+    return {
+      employee,
+      cash_account_id: session.cash_account_id,
+      session,
+      badge: `Kas Petugas ${employee.name} - ${session.cash_account_code}`,
+    };
   };
 
   const invalidate = () => {
@@ -195,6 +257,9 @@ export const useCooperativeBilling = () => {
     setSearchText,
     memberFilter,
     setMemberFilter,
+    officerFilter,
+    setOfficerFilter,
+    officerFilterOptions,
     overdueCount,
     overdueTotalAmount,
     dueTodayCount,
@@ -202,6 +267,7 @@ export const useCooperativeBilling = () => {
     dueThisWeekCount,
     recordPayment: (input: RecordCooperativeLoanPaymentInput) => recordMutation.mutateAsync(input),
     recordCollection: (input: RecordCooperativeLoanInstallmentCollectionInput) => collectionMutation.mutateAsync(input),
+    getFieldCashPaymentStatusForInstallment,
     isMutating: recordMutation.isPending || collectionMutation.isPending,
   };
 };

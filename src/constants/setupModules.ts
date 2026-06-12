@@ -91,6 +91,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'KOPERASI_PINJAMAN', label: 'Pinjaman', description: 'Pengajuan & pencairan pinjaman' },
       { code: 'KOPERASI_ANGSURAN', label: 'Angsuran', description: 'Cicilan & pembayaran pinjaman' },
       { code: 'KOPERASI_PENAGIHAN', label: 'Penagihan', description: 'Daftar tagihan jatuh tempo & tunggakan anggota' },
+      { code: 'KOPERASI_KAS_PETUGAS', label: 'Kas Petugas', description: 'Sesi, dropping, storting, dan setor kas petugas lapangan' },
       { code: 'KOPERASI_SHU', label: 'SHU', description: 'Sisa Hasil Usaha & pembagian' },
     ],
   },

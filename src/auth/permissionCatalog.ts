@@ -136,6 +136,19 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['KOPERASI_PENAGIHAN'],
   },
   {
+    code: 'COOPERATIVE_FIELD_CASH_VIEW',
+    label: 'Lihat Kas Petugas',
+    group: 'Koperasi',
+    moduleCodes: ['KOPERASI_KAS_PETUGAS'],
+  },
+  {
+    code: 'COOPERATIVE_FIELD_CASH_MANAGE',
+    label: 'Kelola Kas Petugas',
+    group: 'Koperasi',
+    moduleCodes: ['KOPERASI_KAS_PETUGAS'],
+    isSensitive: true,
+  },
+  {
     code: 'COOPERATIVE_REPORT_VIEW',
     label: 'Lihat Laporan Koperasi',
     group: 'Koperasi',

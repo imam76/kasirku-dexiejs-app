@@ -57,6 +57,13 @@ function Cooperative() {
       desc: t('cooperative.billing.subtitle'),
     },
     {
+      to: '/koperasi/kas-petugas',
+      label: t('nav.cooperative.fieldCash'),
+      icon: WalletOutlined,
+      color: 'text-lime-700',
+      desc: t('cooperative.index.fieldCashDesc'),
+    },
+    {
       to: '/koperasi/laporan',
       label: t('nav.cooperative.reports'),
       icon: FileTextOutlined,

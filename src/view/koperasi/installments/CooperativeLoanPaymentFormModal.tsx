@@ -1,4 +1,4 @@
-import { Checkbox, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select } from 'antd';
+import { Checkbox, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select, Tag } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
@@ -26,6 +26,7 @@ interface CooperativeLoanPaymentFormModalProps {
   isSubmitting: boolean;
   payableInstallments: CooperativeLoanInstallment[];
   paymentAccounts: ChartOfAccount[];
+  fieldCashBadge?: string;
   onCancel: () => void;
   onSubmit: (values: CooperativeLoanPaymentFormValues) => void;
 }
@@ -36,6 +37,7 @@ export default function CooperativeLoanPaymentFormModal({
   isSubmitting,
   payableInstallments,
   paymentAccounts,
+  fieldCashBadge,
   onCancel,
   onSubmit,
 }: CooperativeLoanPaymentFormModalProps) {
@@ -175,6 +177,12 @@ export default function CooperativeLoanPaymentFormModal({
             <Input placeholder={t('finance.paymentChannelPlaceholder')} />
           </Form.Item>
         </div>
+
+        {fieldCashBadge && (
+          <Tag color="green" className="mb-4">
+            {fieldCashBadge}
+          </Tag>
+        )}
 
         <Form.Item name="notes" label={t('cooperative.installments.form.notes')}>
           <TextArea rows={3} placeholder={t('cooperative.installments.form.notesPlaceholder')} />

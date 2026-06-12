@@ -4,6 +4,7 @@ import { Plus, UserRoundCog } from 'lucide-react';
 import { useEmployees, type EmployeeStatusFilter, type EmployeeWithAreas } from '@/hooks/useEmployees';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
+import { createFieldCashAccountForEmployee } from '@/services/employeeService';
 import EmployeeFormModal, { type EmployeeFormValues } from './EmployeeFormModal';
 import EmployeeTable from './EmployeeTable';
 
@@ -13,9 +14,11 @@ export default function EmployeeManagement() {
   const { can, refreshCurrentUser } = useAuth();
   const [form] = Form.useForm<EmployeeFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreatingFieldCashAccount, setIsCreatingFieldCashAccount] = useState(false);
   const {
     areas,
     roles,
+    fieldCashAccounts,
     filteredEmployees,
     editingEmployee,
     searchText,
@@ -53,11 +56,26 @@ export default function EmployeeManagement() {
       address: employee.address,
       position: employee.position,
       login_role_id: employee.login_role_id,
+      field_cash_account_id: employee.field_cash_account_id,
       area_ids: employee.area_assignments.map((assignment) => assignment.area_id),
       notes: employee.notes,
       is_active: employee.is_active,
     });
     setIsModalOpen(true);
+  };
+
+  const handleCreateFieldCashAccount = async (employeeName: string) => {
+    try {
+      setIsCreatingFieldCashAccount(true);
+      const account = await createFieldCashAccountForEmployee({ employee_name: employeeName });
+      message.success(`Akun kas petugas ${account.code} berhasil dibuat.`);
+      return account;
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Gagal membuat akun kas petugas.');
+      return undefined;
+    } finally {
+      setIsCreatingFieldCashAccount(false);
+    }
   };
 
   const handleSubmit = async (values: EmployeeFormValues) => {
@@ -150,12 +168,15 @@ export default function EmployeeManagement() {
         form={form}
         areas={areas}
         roles={roles}
+        fieldCashAccounts={fieldCashAccounts}
         open={isModalOpen}
         isEditing={Boolean(editingEmployee)}
         canManageLogin={can('USER_MANAGE')}
         isSubmitting={isSubmitting}
+        isCreatingFieldCashAccount={isCreatingFieldCashAccount}
         onCancel={closeModal}
         onSubmit={handleSubmit}
+        onCreateFieldCashAccount={handleCreateFieldCashAccount}
       />
     </Card>
   );

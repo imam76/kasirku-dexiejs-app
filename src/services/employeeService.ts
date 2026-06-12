@@ -7,7 +7,8 @@ import {
 } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { employeeSchema } from '@/lib/validations/employee';
-import type { CooperativeArea, Employee, EmployeeArea } from '@/types';
+import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
+import type { ChartOfAccount, CooperativeArea, Employee, EmployeeArea } from '@/types';
 
 export interface EmployeeUpsertInput {
   name: string;
@@ -16,6 +17,7 @@ export interface EmployeeUpsertInput {
   address?: string;
   position?: string;
   login_role_id?: string;
+  field_cash_account_id?: string;
   login_pin?: string;
   confirm_login_pin?: string;
   notes?: string;
@@ -45,6 +47,134 @@ const requireEmployeeActor = async () => {
   return currentUser;
 };
 
+const assertFieldCashAccount = (account: ChartOfAccount | undefined) => {
+  if (!account) {
+    throw new Error('Akun kas petugas tidak ditemukan.');
+  }
+
+  if (account.type !== 'ASSET' || !account.is_active || !account.is_postable) {
+    throw new Error('Akun kas petugas harus bertipe aset, aktif, dan postable.');
+  }
+
+  return account;
+};
+
+const getFieldCashAccountSnapshot = async (accountId?: string) => {
+  if (!accountId) return {};
+
+  const account = assertFieldCashAccount(await db.chartOfAccounts.get(accountId));
+  return {
+    field_cash_account_id: account.id,
+    field_cash_account_code: account.code,
+    field_cash_account_name: account.name,
+  };
+};
+
+const assertFieldCashAccountAvailable = async (
+  accountId: string | undefined,
+  excludeEmployeeId: string | undefined,
+  isActive: boolean,
+) => {
+  if (!accountId || !isActive) return;
+
+  const existingEmployee = await db.employees
+    .where('field_cash_account_id')
+    .equals(accountId)
+    .and((employee) => employee.is_active && employee.id !== excludeEmployeeId)
+    .first();
+
+  if (existingEmployee) {
+    throw new Error(`Akun kas petugas sudah dipakai oleh karyawan aktif ${existingEmployee.name}.`);
+  }
+};
+
+const normalizeAccountCodeCandidate = (value: string) => value.trim().toUpperCase();
+
+const createNextFieldCashAccountCode = async () => {
+  const accounts = await db.chartOfAccounts.toArray();
+  const usedCodes = new Set(accounts.filter((account) => account.is_active).map((account) => account.code));
+  const fieldCashNumbers = accounts
+    .map((account) => {
+      const match = account.code.match(/^1011\.(\d{3})$/);
+      return match ? Number(match[1]) : 0;
+    })
+    .filter((value) => value > 0);
+  let nextNumber = Math.max(0, ...fieldCashNumbers) + 1;
+  let nextCode = `1011.${String(nextNumber).padStart(3, '0')}`;
+
+  while (usedCodes.has(nextCode)) {
+    nextNumber += 1;
+    nextCode = `1011.${String(nextNumber).padStart(3, '0')}`;
+  }
+
+  return nextCode;
+};
+
+const getFieldCashParentAccount = async () => {
+  const parent = await db.chartOfAccounts.get('cash-and-bank')
+    ?? await db.chartOfAccounts.where('code').equals('1000').first();
+
+  if (!parent || parent.type !== 'ASSET' || !parent.is_active) {
+    throw new Error('Parent akun Kas dan Bank tidak ditemukan atau tidak aktif.');
+  }
+
+  return parent;
+};
+
+export const createFieldCashAccountForEmployee = async (input: {
+  employee_name: string;
+  account_code?: string;
+}): Promise<ChartOfAccount> => {
+  const currentUser = await requireEmployeeActor();
+  const employeeName = input.employee_name.trim();
+  if (!employeeName) {
+    throw new Error('Nama karyawan wajib diisi sebelum membuat akun kas petugas.');
+  }
+
+  const code = input.account_code
+    ? normalizeAccountCodeCandidate(input.account_code)
+    : await createNextFieldCashAccountCode();
+  const existingAccount = await db.chartOfAccounts
+    .where('code')
+    .equals(code)
+    .and((account) => account.is_active)
+    .first();
+  if (existingAccount) {
+    throw new Error('Kode akun kas petugas sudah dipakai akun aktif lain.');
+  }
+
+  const parent = await getFieldCashParentAccount();
+  const now = new Date().toISOString();
+  const account: ChartOfAccount = {
+    id: crypto.randomUUID(),
+    code,
+    name: `Kas Petugas - ${employeeName}`,
+    type: 'ASSET',
+    normal_balance: getAccountNormalBalance('ASSET'),
+    parent_id: parent.id,
+    parent_code: parent.code,
+    parent_name: parent.name,
+    is_postable: true,
+    is_system: false,
+    is_active: true,
+    description: `Akun kas petugas lapangan ${employeeName}.`,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.transaction('rw', [db.chartOfAccounts, db.activityLogs], async () => {
+    await db.chartOfAccounts.add(account);
+    await writeActivityLog({
+      user: currentUser,
+      action: 'FIELD_CASH_ACCOUNT_CREATED',
+      entity: 'chartOfAccounts',
+      entity_id: account.id,
+      description: `${currentUser?.name ?? 'User'} membuat akun kas petugas ${account.code} ${account.name}.`,
+    });
+  });
+
+  return account;
+};
 
 const getSelectedAreas = async (areaIds: string[]): Promise<CooperativeArea[]> => {
   if (areaIds.length === 0) return [];
@@ -87,6 +217,12 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
   }
 
   const areas = await getSelectedAreas(sanitizedInput.area_ids);
+  await assertFieldCashAccountAvailable(
+    sanitizedInput.field_cash_account_id,
+    undefined,
+    sanitizedInput.is_active,
+  );
+  const fieldCashAccountSnapshot = await getFieldCashAccountSnapshot(sanitizedInput.field_cash_account_id);
   const now = new Date().toISOString();
   const employeeId = crypto.randomUUID();
 
@@ -107,6 +243,7 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
     address: sanitizedInput.address,
     position: sanitizedInput.position,
     login_role_id: sanitizedInput.login_role_id,
+    ...fieldCashAccountSnapshot,
     pin_hash: pinHash,
     pin_salt: pinSalt,
     notes: sanitizedInput.notes,
@@ -147,6 +284,12 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
   }
 
   const areas = await getSelectedAreas(sanitizedInput.area_ids);
+  await assertFieldCashAccountAvailable(
+    sanitizedInput.field_cash_account_id,
+    id,
+    sanitizedInput.is_active,
+  );
+  const fieldCashAccountSnapshot = await getFieldCashAccountSnapshot(sanitizedInput.field_cash_account_id);
 
   let pinHash = existingEmployee.pin_hash;
   let pinSalt = existingEmployee.pin_salt;
@@ -170,6 +313,9 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     address: sanitizedInput.address,
     position: sanitizedInput.position,
     login_role_id: loginRoleId,
+    field_cash_account_id: fieldCashAccountSnapshot.field_cash_account_id,
+    field_cash_account_code: fieldCashAccountSnapshot.field_cash_account_code,
+    field_cash_account_name: fieldCashAccountSnapshot.field_cash_account_name,
     pin_hash: pinHash,
     pin_salt: pinSalt,
     notes: sanitizedInput.notes,
@@ -228,6 +374,8 @@ export const restoreEmployee = async (id: string): Promise<Employee> => {
     throw new Error('Karyawan tidak ditemukan.');
   }
 
+
+  await assertFieldCashAccountAvailable(employee.field_cash_account_id, id, true);
 
   const restoredEmployee: Employee = {
     ...employee,

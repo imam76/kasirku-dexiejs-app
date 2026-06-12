@@ -56,6 +56,7 @@ import type {
   Employee,
   EmployeeArea,
   CashierSession,
+  CooperativeFieldCashSession,
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
@@ -65,6 +66,7 @@ export class KasirkuDB extends Dexie {
   transactions!: Table<Transaction>;
   transactionItems!: Table<TransactionItem>;
   cashierSessions!: Table<CashierSession>;
+  cooperativeFieldCashSessions!: Table<CooperativeFieldCashSession>;
   stockPurchases!: Table<StockPurchase>;
   profitLogs!: Table<ProfitLog>;
   profitBalance!: Table<ProfitBalance>;
