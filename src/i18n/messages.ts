@@ -1,7 +1,7 @@
 import { appMessages } from './app';
 import { commonMessages } from './common';
-import { cooperativeMessages } from './cooperativeMessage';
-import { navigationMessages } from './navigation';
+import { cooperativeMessages } from './cooperativeMessages';
+import { navigationMessages } from './navigationMessages';
 import { stockMessages } from './stockMessages';
 
 export const messages = {
