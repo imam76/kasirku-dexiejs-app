@@ -10,7 +10,7 @@ import {
   updateCooperativeMember,
   type CooperativeMemberUpsertInput,
 } from '@/services/cooperativeMemberService';
-import type { CooperativeMember, CooperativeMemberStatus } from '@/types';
+import type { CooperativeMember, CooperativeMemberStatus, Employee } from '@/types';
 
 export type CooperativeMemberStatusFilter = CooperativeMemberStatus | 'ALL';
 export type CooperativeMemberAreaFilter = string | 'ALL' | 'UNASSIGNED';
@@ -34,6 +34,11 @@ export const useCooperativeMembers = () => {
     [],
     [],
   );
+  const employees = useLiveQuery(
+    () => db.employees.orderBy('name').toArray(),
+    [],
+    [] as Employee[],
+  );
 
   const visibleAreas = useMemo(() => {
     if (!areaScope.isScoped) return areas;
@@ -55,6 +60,8 @@ export const useCooperativeMembers = () => {
         member.address,
         member.area_name,
         member.area_code,
+        member.officer_name,
+        member.officer_position,
       ].some((value) => value?.toLowerCase().includes(query));
       const matchesStatus = statusFilter === 'ALL' || member.status === statusFilter;
       const matchesArea =
@@ -100,6 +107,7 @@ export const useCooperativeMembers = () => {
   return {
     members,
     areas,
+    employees,
     visibleAreas,
     filteredMembers,
     areaScope,

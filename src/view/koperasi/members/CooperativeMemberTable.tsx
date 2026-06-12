@@ -51,6 +51,20 @@ export default function CooperativeMemberTable({
       ),
     },
     {
+      title: t('cooperative.members.table.officer'),
+      key: 'officer',
+      render: (_value: unknown, member) => (
+        member.officer_name
+          ? (
+            <Space orientation="vertical" size={0}>
+              <Text>{member.officer_name}</Text>
+              <Text type="secondary">{member.officer_position || '-'}</Text>
+            </Space>
+          )
+          : '-'
+      ),
+    },
+    {
       title: t('cooperative.members.table.identityNumber'),
       dataIndex: 'identity_number',
       key: 'identity_number',

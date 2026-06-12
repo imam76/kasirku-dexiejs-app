@@ -11,6 +11,7 @@ export interface CooperativeMemberUpsertInput {
   phone?: string;
   address?: string;
   area_id: string;
+  officer_id?: string;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string;
@@ -64,18 +65,32 @@ const resolveActiveArea = async (areaId: string) => {
   return area;
 };
 
+const resolveOfficer = async (officerId?: string) => {
+  if (!officerId) return undefined;
+
+  const officer = await db.employees.get(officerId);
+  if (!officer) {
+    throw new Error('Petugas anggota tidak ditemukan.');
+  }
+
+  return officer;
+};
+
 export const createCooperativeMember = async (
   input: CooperativeMemberUpsertInput,
 ): Promise<CooperativeMember> => {
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
   const area = await resolveActiveArea(sanitizedInput.area_id);
+  const officer = await resolveOfficer(sanitizedInput.officer_id);
   const now = new Date().toISOString();
   const member: CooperativeMember = withPendingCooperativeSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
     area_name: area.name,
     area_code: area.code,
+    officer_name: officer?.name,
+    officer_position: officer?.position,
     created_at: now,
     updated_at: now,
     created_by: currentUser?.id,
@@ -111,6 +126,7 @@ export const updateCooperativeMember = async (
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
   const area = await resolveActiveArea(sanitizedInput.area_id);
+  const officer = await resolveOfficer(sanitizedInput.officer_id);
   const updatedAt = new Date().toISOString();
   let updatedMember: CooperativeMember | undefined;
 
@@ -129,6 +145,8 @@ export const updateCooperativeMember = async (
       ...sanitizedInput,
       area_name: area.name,
       area_code: area.code,
+      officer_name: officer?.name,
+      officer_position: officer?.position,
       updated_at: updatedAt,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,

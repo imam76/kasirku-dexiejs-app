@@ -359,6 +359,19 @@ export default function CooperativeReportManagement() {
       width: 150,
     },
     {
+      title: t('cooperative.reports.table.officer'),
+      key: 'officer',
+      render: (_value, record) => (
+        record.officer_name ? (
+          <Space orientation="vertical" size={0}>
+            <Text>{record.officer_name}</Text>
+            <Text type="secondary">{record.officer_position || '-'}</Text>
+          </Space>
+        ) : '-'
+      ),
+      width: 220,
+    },
+    {
       title: t('cooperative.reports.table.status'),
       dataIndex: 'status',
       key: 'status',
@@ -1066,7 +1079,7 @@ export default function CooperativeReportManagement() {
                   columns={memberColumns}
                   rowKey="id"
                   loading={isLoading}
-                  scroll={{ x: 1180 }}
+                  scroll={{ x: 1400 }}
                   locale={{ emptyText: t('cooperative.reports.empty.members') }}
                 />
               </Space>

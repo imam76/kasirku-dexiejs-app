@@ -902,4 +902,8 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       await syncQueue.bulkPut(migratedQueueItems);
     }
   });
+
+  this.version(49).stores({
+    cooperativeMembers: 'id, member_number, name, area_id, officer_id, status, sync_status, updated_at, created_at',
+  });
 }

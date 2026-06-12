@@ -281,6 +281,7 @@ const RootLayout = () => {
           key: 'cooperative-reports-group',
           children: [
             { to: '/koperasi/laporan', label: t('nav.cooperative.reportsOverview'), icon: FileText },
+            { to: '/koperasi/laporan-induk-anggota', label: t('nav.cooperative.memberRegister'), icon: FileText },
             {
               to: '/koperasi/arus-kas',
               label: t('cooperative.reports.tabs.cashFlowStatement'),

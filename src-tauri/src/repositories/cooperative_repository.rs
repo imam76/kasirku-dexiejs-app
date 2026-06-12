@@ -17,6 +17,9 @@ macro_rules! cooperative_member_select {
             area_id,
             area_name,
             area_code,
+            officer_id,
+            officer_name,
+            officer_position,
             join_date,
             status,
             notes,
@@ -260,6 +263,9 @@ pub async fn upsert_cooperative_member(
             area_id,
             area_name,
             area_code,
+            officer_id,
+            officer_name,
+            officer_position,
             join_date,
             status,
             notes,
@@ -283,12 +289,15 @@ pub async fn upsert_cooperative_member(
             $10,
             $11,
             $12,
-            $13::TIMESTAMPTZ,
-            $14::TIMESTAMPTZ,
+            $13,
+            $14,
             $15,
-            $16,
-            $17,
-            $18
+            $16::TIMESTAMPTZ,
+            $17::TIMESTAMPTZ,
+            $18,
+            $19,
+            $20,
+            $21
         )
         ON CONFLICT (id) DO UPDATE SET
             member_number = EXCLUDED.member_number,
@@ -299,6 +308,9 @@ pub async fn upsert_cooperative_member(
             area_id = EXCLUDED.area_id,
             area_name = EXCLUDED.area_name,
             area_code = EXCLUDED.area_code,
+            officer_id = EXCLUDED.officer_id,
+            officer_name = EXCLUDED.officer_name,
+            officer_position = EXCLUDED.officer_position,
             join_date = EXCLUDED.join_date,
             status = EXCLUDED.status,
             notes = EXCLUDED.notes,
@@ -318,6 +330,9 @@ pub async fn upsert_cooperative_member(
             area_id,
             area_name,
             area_code,
+            officer_id,
+            officer_name,
+            officer_position,
             join_date,
             status,
             notes,
@@ -338,6 +353,9 @@ pub async fn upsert_cooperative_member(
     .bind(input.area_id)
     .bind(input.area_name)
     .bind(input.area_code)
+    .bind(input.officer_id)
+    .bind(input.officer_name)
+    .bind(input.officer_position)
     .bind(input.join_date)
     .bind(input.status)
     .bind(input.notes)

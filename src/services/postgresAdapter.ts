@@ -591,6 +591,9 @@ export interface RemoteCooperativeMemberDto {
   area_id?: string | null;
   area_name?: string | null;
   area_code?: string | null;
+  officer_id?: string | null;
+  officer_name?: string | null;
+  officer_position?: string | null;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string | null;

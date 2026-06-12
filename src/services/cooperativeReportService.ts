@@ -90,6 +90,9 @@ export interface CooperativeMemberReportRow {
   member_number: string;
   name: string;
   phone?: string;
+  officer_id?: string;
+  officer_name?: string;
+  officer_position?: string;
   join_date: string;
   status: CooperativeMember['status'];
   saving_balance: number;
@@ -969,6 +972,9 @@ const buildMemberRows = (
         member_number: member.member_number,
         name: member.name,
         phone: member.phone,
+        officer_id: member.officer_id,
+        officer_name: member.officer_name,
+        officer_position: member.officer_position,
         join_date: member.join_date,
         status: member.status,
         saving_balance: savingTotalByMember.get(member.id) ?? 0,

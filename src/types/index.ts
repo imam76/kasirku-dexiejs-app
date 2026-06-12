@@ -1332,6 +1332,9 @@ export interface CooperativeMember {
   area_id?: string;
   area_name?: string;
   area_code?: string;
+  officer_id?: string;
+  officer_name?: string;
+  officer_position?: string;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string;

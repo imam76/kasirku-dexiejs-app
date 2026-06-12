@@ -22,6 +22,7 @@ export default function CooperativeMemberManagement() {
   const {
     filteredMembers,
     areas,
+    employees,
     visibleAreas,
     editingMember,
     selectedMember,
@@ -63,6 +64,7 @@ export default function CooperativeMemberManagement() {
       phone: member.phone,
       address: member.address,
       area_id: member.area_id,
+      officer_id: member.officer_id,
       join_date: member.join_date ? dayjs(member.join_date) : null,
       status: member.status,
       notes: member.notes,
@@ -77,6 +79,7 @@ export default function CooperativeMemberManagement() {
     phone: values.phone,
     address: values.address,
     area_id: values.area_id,
+    officer_id: values.officer_id,
     join_date: values.join_date?.toISOString() ?? '',
     status: values.status,
     notes: values.notes,
@@ -182,6 +185,7 @@ export default function CooperativeMemberManagement() {
         form={form}
         open={isModalOpen}
         areas={areas}
+        employees={employees}
         isEditing={Boolean(editingMember)}
         isSubmitting={isSubmitting}
         onCancel={closeModal}
