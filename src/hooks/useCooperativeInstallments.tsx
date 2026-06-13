@@ -15,6 +15,8 @@ import type {
   CooperativeLoanInstallmentStatus,
   CooperativeLoanPayment,
   CooperativeLoanPaymentStatus,
+  CooperativeMember,
+  Employee,
 } from '@/types';
 
 export type CooperativeInstallmentStatusFilter = CooperativeLoanInstallmentStatus | 'DUE' | 'ALL';
@@ -34,6 +36,7 @@ const COOPERATIVE_INSTALLMENT_RELATED_QUERY_KEYS = [
   'cooperativeLoans',
   'cooperativeLoanInstallments',
   'cooperativeLoanPayments',
+  'cooperativeFieldCashReport',
   'financeBalance',
   'financeTransactions',
   'journalEntries',
@@ -66,6 +69,16 @@ export const useCooperativeInstallments = () => {
     [],
     [],
   );
+  const members = useLiveQuery(
+    () => db.cooperativeMembers.toArray(),
+    [],
+    [] as CooperativeMember[],
+  );
+  const employees = useLiveQuery(
+    () => db.employees.orderBy('name').toArray(),
+    [],
+    [] as Employee[],
+  );
   const paymentAccounts = useLiveQuery(
     () => db.chartOfAccounts
       .where('type')
@@ -77,6 +90,11 @@ export const useCooperativeInstallments = () => {
   );
 
   const loanById = useMemo(() => new Map(loans.map((loan) => [loan.id, loan])), [loans]);
+  const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
+  const employeeById = useMemo(() => new Map(employees.map((employee) => [employee.id, employee])), [employees]);
+  const activeCollectors = useMemo(() => (
+    employees.filter((employee) => employee.is_active)
+  ), [employees]);
 
   const memberFilterOptions = useMemo(() => {
     const memberById = new Map<string, CooperativeInstallmentMemberOption>();
@@ -152,6 +170,25 @@ export const useCooperativeInstallments = () => {
     });
   };
 
+  const getFieldCashPaymentStatusForInstallment = (installment: CooperativeLoanInstallment) => {
+    const member = memberById.get(installment.member_id);
+    const employee = member?.officer_id ? employeeById.get(member.officer_id) : undefined;
+    if (!employee?.is_active || !employee.field_cash_account_id) return undefined;
+
+    return {
+      employee,
+      cash_account_id: employee.field_cash_account_id,
+      badge: `Setoran kolektor ${employee.name} - ${employee.field_cash_account_code ?? '-'}`,
+    };
+  };
+
+  const getDefaultCollectorIdForInstallment = (installment: CooperativeLoanInstallment) => {
+    const member = memberById.get(installment.member_id);
+    return member?.officer_id && employeeById.get(member.officer_id)?.is_active
+      ? member.officer_id
+      : undefined;
+  };
+
   const recordMutation = useMutation({
     mutationFn: recordCooperativeLoanPayment,
     onSuccess: invalidate,
@@ -169,6 +206,7 @@ export const useCooperativeInstallments = () => {
     payments,
     filteredPayments,
     memberFilterOptions,
+    activeCollectors,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
     loanById,
     payingInstallment,
@@ -185,6 +223,8 @@ export const useCooperativeInstallments = () => {
     setPaymentStatusFilter,
     recordPayment: (input: RecordCooperativeLoanPaymentInput) => recordMutation.mutateAsync(input),
     reversePayment: (input: ReverseCooperativeLoanPaymentInput) => reverseMutation.mutateAsync(input),
+    getFieldCashPaymentStatusForInstallment,
+    getDefaultCollectorIdForInstallment,
     isMutating: recordMutation.isPending || reverseMutation.isPending,
   };
 };

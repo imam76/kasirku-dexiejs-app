@@ -1,14 +1,15 @@
 import { Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select, Tag } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { ChartOfAccount, CooperativeMember, CooperativeSavingTransactionType, CooperativeSavingType, PaymentMethod } from '@/types';
+import type { ChartOfAccount, CooperativeMember, CooperativeSavingTransactionType, CooperativeSavingType, Employee, PaymentMethod } from '@/types';
+import { formatCurrency } from '@/utils/formatters';
+import { getResponsibleFieldCashAccountId } from '@/utils/koperasi/fieldCashDefaults';
 import {
   cooperativeSavingTransactionTypeOptions,
   cooperativeSavingTypeOptions,
 } from './savingOptions';
-import { formatCurrency } from '@/utils/formatters';
 
 const { TextArea } = Input;
 
@@ -31,8 +32,10 @@ interface CooperativeSavingFormModalProps {
   isSubmitting: boolean;
   activeMembers: CooperativeMember[];
   paymentAccounts: ChartOfAccount[];
+  fieldCashEmployees: Employee[];
   fieldCashAccountIds: Set<string>;
   fieldCashBalances: Map<string, number>;
+  defaultCashAccountId?: string;
   onCancel: () => void;
   onSubmit: (values: CooperativeSavingFormValues) => void;
 }
@@ -43,12 +46,15 @@ export default function CooperativeSavingFormModal({
   isSubmitting,
   activeMembers,
   paymentAccounts,
+  fieldCashEmployees,
   fieldCashAccountIds,
   fieldCashBalances,
+  defaultCashAccountId,
   onCancel,
   onSubmit,
 }: CooperativeSavingFormModalProps) {
   const { t } = useI18n();
+  const selectedMemberId = Form.useWatch('member_id', form);
   const selectedCashAccountId = Form.useWatch('cash_account_id', form);
   const memberOptions = useMemo(() => activeMembers.map((member) => ({
     value: member.id,
@@ -61,6 +67,21 @@ export default function CooperativeSavingFormModal({
   const selectedAccount = useMemo(() => (
     paymentAccounts.find((account) => account.id === selectedCashAccountId)
   ), [paymentAccounts, selectedCashAccountId]);
+  const selectedMember = useMemo(() => (
+    activeMembers.find((member) => member.id === selectedMemberId)
+  ), [activeMembers, selectedMemberId]);
+  const responsibleCashAccountId = useMemo(() => (
+    getResponsibleFieldCashAccountId(selectedMember, fieldCashEmployees, paymentAccounts)
+  ), [fieldCashEmployees, paymentAccounts, selectedMember]);
+
+  useEffect(() => {
+    if (!open || !selectedMemberId) return;
+
+    const nextCashAccountId = responsibleCashAccountId ?? defaultCashAccountId;
+    if (form.getFieldValue('cash_account_id') !== nextCashAccountId) {
+      form.setFieldValue('cash_account_id', nextCashAccountId);
+    }
+  }, [defaultCashAccountId, form, open, responsibleCashAccountId, selectedMemberId]);
 
   return (
     <Modal

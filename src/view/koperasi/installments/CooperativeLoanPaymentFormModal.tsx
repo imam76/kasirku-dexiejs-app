@@ -29,6 +29,7 @@ interface CooperativeLoanPaymentFormModalProps {
   paymentAccounts: ChartOfAccount[];
   activeCollectors?: Employee[];
   fieldCashBadge?: string;
+  onInstallmentChange?: (installment?: CooperativeLoanInstallment) => void;
   onCancel: () => void;
   onSubmit: (values: CooperativeLoanPaymentFormValues) => void;
 }
@@ -41,6 +42,7 @@ export default function CooperativeLoanPaymentFormModal({
   paymentAccounts,
   activeCollectors = [],
   fieldCashBadge,
+  onInstallmentChange,
   onCancel,
   onSubmit,
 }: CooperativeLoanPaymentFormModalProps) {
@@ -98,6 +100,11 @@ export default function CooperativeLoanPaymentFormModal({
             optionFilterProp="label"
             placeholder={t('cooperative.installments.form.installmentPlaceholder')}
             options={installmentOptions}
+            onChange={(installmentId) => {
+              onInstallmentChange?.(
+                payableInstallments.find((installment) => installment.id === installmentId),
+              );
+            }}
             data-testid="koperasi-installment-select"
           />
         </Form.Item>

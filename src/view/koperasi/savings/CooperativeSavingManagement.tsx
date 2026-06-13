@@ -32,6 +32,7 @@ export default function CooperativeSavingManagement() {
     filteredTransactions,
     filteredBalances,
     paymentAccounts,
+    fieldCashEmployees,
     fieldCashAccountIds,
     fieldCashBalances,
     selectedTransaction,
@@ -219,8 +220,10 @@ export default function CooperativeSavingManagement() {
         isSubmitting={isMutating}
         activeMembers={activeMembers}
         paymentAccounts={paymentAccounts}
+        fieldCashEmployees={fieldCashEmployees}
         fieldCashAccountIds={fieldCashAccountIds}
         fieldCashBalances={fieldCashBalances}
+        defaultCashAccountId={getRememberedCashAccountFields(paymentAccounts).cash_account_id}
         onCancel={closeModal}
         onSubmit={handleSubmit}
       />

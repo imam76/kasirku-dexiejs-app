@@ -23,12 +23,14 @@ export default function CooperativeInstallmentManagement() {
   const { t } = useI18n();
   const [form] = Form.useForm<CooperativeLoanPaymentFormValues>();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [fieldCashPaymentBadge, setFieldCashPaymentBadge] = useState<string | undefined>();
   const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanPayment');
   const {
     filteredInstallments,
     payableInstallments,
     filteredPayments,
     memberFilterOptions,
+    activeCollectors,
     paymentAccounts,
     loanById,
     payingInstallment,
@@ -45,28 +47,57 @@ export default function CooperativeInstallmentManagement() {
     setPaymentStatusFilter,
     recordPayment,
     reversePayment,
+    getFieldCashPaymentStatusForInstallment,
+    getDefaultCollectorIdForInstallment,
     isMutating,
   } = useCooperativeInstallments();
+
+  const getPaymentDefaultFields = (installment?: CooperativeLoanInstallment) => {
+    const fieldCashStatus = installment ? getFieldCashPaymentStatusForInstallment(installment) : undefined;
+
+    return {
+      fields: {
+        ...getRememberedCashAccountFields(paymentAccounts),
+        collector_id: installment ? getDefaultCollectorIdForInstallment(installment) : undefined,
+        ...(fieldCashStatus ? { cash_account_id: fieldCashStatus.cash_account_id } : {}),
+      },
+      fieldCashBadge: fieldCashStatus?.badge,
+    };
+  };
 
   const closePaymentModal = () => {
     setIsPaymentModalOpen(false);
     setPayingInstallment(null);
+    setFieldCashPaymentBadge(undefined);
     form.resetFields();
   };
 
   const openPaymentModal = (installment?: CooperativeLoanInstallment) => {
     form.resetFields();
     const remaining = installment ? getInstallmentRemainingAmounts(installment) : undefined;
+    const paymentDefaults = getPaymentDefaultFields(installment);
     form.setFieldsValue({
       installment_id: installment?.id,
       amount: remaining?.total_amount,
       payment_date: dayjs(),
       payment_method: 'TUNAI',
       remember_cash_account: true,
-      ...getRememberedCashAccountFields(paymentAccounts),
+      ...paymentDefaults.fields,
     });
+    setFieldCashPaymentBadge(paymentDefaults.fieldCashBadge);
     setPayingInstallment(installment ?? null);
     setIsPaymentModalOpen(true);
+  };
+
+  const handleInstallmentChange = (installment?: CooperativeLoanInstallment) => {
+    const remaining = installment ? getInstallmentRemainingAmounts(installment) : undefined;
+    const paymentDefaults = getPaymentDefaultFields(installment);
+
+    form.setFieldsValue({
+      amount: remaining?.total_amount,
+      ...paymentDefaults.fields,
+    });
+    setFieldCashPaymentBadge(paymentDefaults.fieldCashBadge);
   };
 
   const handleSubmit = async (values: CooperativeLoanPaymentFormValues) => {
@@ -225,6 +256,9 @@ export default function CooperativeInstallmentManagement() {
         isSubmitting={isMutating}
         payableInstallments={payingInstallment ? [payingInstallment, ...payableInstallments.filter((item) => item.id !== payingInstallment.id)] : payableInstallments}
         paymentAccounts={paymentAccounts}
+        activeCollectors={activeCollectors}
+        fieldCashBadge={fieldCashPaymentBadge}
+        onInstallmentChange={handleInstallmentChange}
         onCancel={closePaymentModal}
         onSubmit={handleSubmit}
       />

@@ -16,6 +16,7 @@ import type {
   CooperativeSavingTransaction,
   CooperativeSavingTransactionType,
   CooperativeSavingType,
+  Employee,
 } from '@/types';
 
 export type CooperativeSavingTypeFilter = CooperativeSavingType | 'ALL';
@@ -24,6 +25,7 @@ export type CooperativeSavingStatusFilter = CooperativeSavingTransaction['status
 
 const COOPERATIVE_SAVING_RELATED_QUERY_KEYS = [
   'cooperativeSavings',
+  'cooperativeFieldCashReport',
   'financeBalance',
   'financeTransactions',
   'journalEntries',
@@ -150,6 +152,7 @@ export const useCooperativeSavings = () => {
     balances,
     filteredBalances,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
+    fieldCashEmployees: fieldCashEmployees as Employee[],
     fieldCashAccountIds,
     fieldCashBalances,
     selectedTransaction,

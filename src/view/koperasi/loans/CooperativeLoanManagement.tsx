@@ -9,6 +9,7 @@ import {
 } from '@/hooks/useCooperativeLoans';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan } from '@/types';
+import { getResponsibleFieldCashAccountFields } from '@/utils/koperasi/fieldCashDefaults';
 import CooperativeLoanDetailDrawer from './CooperativeLoanDetailDrawer';
 import CooperativeLoanDisbursementModal, { type CooperativeLoanDisbursementFormValues } from './CooperativeLoanDisbursementModal';
 import CooperativeLoanFormModal, { type CooperativeLoanFormValues } from './CooperativeLoanFormModal';
@@ -30,6 +31,7 @@ export default function CooperativeLoanManagement() {
   const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanDisbursement');
   const {
     activeMembers,
+    members,
     filteredLoans,
     selectedLoan,
     setSelectedLoan,
@@ -37,6 +39,7 @@ export default function CooperativeLoanManagement() {
     disbursingLoan,
     setDisbursingLoan,
     paymentAccounts,
+    fieldCashEmployees,
     fieldCashAccountIds,
     fieldCashBalances,
     searchText,
@@ -78,12 +81,14 @@ export default function CooperativeLoanManagement() {
 
   const openDisbursementModal = (loan: CooperativeLoan) => {
     disbursementForm.resetFields();
+    const member = members.find((item) => item.id === loan.member_id);
     disbursementForm.setFieldsValue({
       disbursement_date: dayjs(),
       first_due_date: getDefaultFirstDueDate(loan),
       payment_method: 'TUNAI',
       remember_cash_account: true,
       ...getRememberedCashAccountFields(paymentAccounts),
+      ...getResponsibleFieldCashAccountFields(member, fieldCashEmployees, paymentAccounts),
     });
     setDisbursingLoan(loan);
   };

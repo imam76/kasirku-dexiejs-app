@@ -54,6 +54,7 @@ export const useFinance = () => {
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cooperativeFieldCashReport'] });
       queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
       queryClient.invalidateQueries({ queryKey: ['profitBalance'] });
@@ -71,6 +72,7 @@ export const useFinance = () => {
   const recalculateFinanceMutation = useMutation({
     mutationFn: recalculateFinance,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cooperativeFieldCashReport'] });
       queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
       message.success(t('finance.recalculateSuccess'));

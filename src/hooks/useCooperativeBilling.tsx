@@ -23,6 +23,7 @@ const COOPERATIVE_BILLING_RELATED_QUERY_KEYS = [
   'cooperativeLoans',
   'cooperativeLoanInstallments',
   'cooperativeLoanPayments',
+  'cooperativeFieldCashReport',
   'financeBalance',
   'financeTransactions',
   'journalEntries',

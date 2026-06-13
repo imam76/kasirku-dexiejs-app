@@ -18,6 +18,7 @@ import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
   CooperativeLoanStatus,
+  Employee,
 } from '@/types';
 
 export type CooperativeLoanStatusFilter = CooperativeLoanStatus | 'ALL';
@@ -26,6 +27,7 @@ const COOPERATIVE_LOAN_RELATED_QUERY_KEYS = [
   'cooperativeLoans',
   'cooperativeLoanInstallments',
   'cooperativeSavings',
+  'cooperativeFieldCashReport',
   'financeBalance',
   'financeTransactions',
   'journalEntries',
@@ -156,6 +158,7 @@ export const useCooperativeLoans = () => {
     disbursingLoan,
     setDisbursingLoan,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
+    fieldCashEmployees: fieldCashEmployees as Employee[],
     fieldCashAccountIds,
     fieldCashBalances,
     searchText,
