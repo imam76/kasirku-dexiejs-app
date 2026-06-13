@@ -67,6 +67,9 @@ const MasterDataWarehousesLazyRouteImport = createFileRoute(
 )()
 const MasterDataUnitsLazyRouteImport = createFileRoute('/master-data/units')()
 const MasterDataTaxesLazyRouteImport = createFileRoute('/master-data/taxes')()
+const MasterDataStockOpnameLazyRouteImport = createFileRoute(
+  '/master-data/stock-opname',
+)()
 const MasterDataRolesLazyRouteImport = createFileRoute('/master-data/roles')()
 const MasterDataPromosLazyRouteImport = createFileRoute('/master-data/promos')()
 const MasterDataProjectsLazyRouteImport = createFileRoute(
@@ -355,6 +358,14 @@ const MasterDataTaxesLazyRoute = MasterDataTaxesLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/master-data/taxes.lazy').then((d) => d.Route),
 )
+const MasterDataStockOpnameLazyRoute =
+  MasterDataStockOpnameLazyRouteImport.update({
+    id: '/master-data/stock-opname',
+    path: '/master-data/stock-opname',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/master-data/stock-opname.lazy').then((d) => d.Route),
+  )
 const MasterDataRolesLazyRoute = MasterDataRolesLazyRouteImport.update({
   id: '/master-data/roles',
   path: '/master-data/roles',
@@ -829,6 +840,7 @@ export interface FileRoutesByFullPath {
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/roles': typeof MasterDataRolesLazyRoute
+  '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
@@ -914,6 +926,7 @@ export interface FileRoutesByTo {
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/roles': typeof MasterDataRolesLazyRoute
+  '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
@@ -1000,6 +1013,7 @@ export interface FileRoutesById {
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
   '/master-data/roles': typeof MasterDataRolesLazyRoute
+  '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
@@ -1087,6 +1101,7 @@ export interface FileRouteTypes {
     | '/master-data/projects'
     | '/master-data/promos'
     | '/master-data/roles'
+    | '/master-data/stock-opname'
     | '/master-data/taxes'
     | '/master-data/units'
     | '/master-data/warehouses'
@@ -1172,6 +1187,7 @@ export interface FileRouteTypes {
     | '/master-data/projects'
     | '/master-data/promos'
     | '/master-data/roles'
+    | '/master-data/stock-opname'
     | '/master-data/taxes'
     | '/master-data/units'
     | '/master-data/warehouses'
@@ -1257,6 +1273,7 @@ export interface FileRouteTypes {
     | '/master-data/projects'
     | '/master-data/promos'
     | '/master-data/roles'
+    | '/master-data/stock-opname'
     | '/master-data/taxes'
     | '/master-data/units'
     | '/master-data/warehouses'
@@ -1343,6 +1360,7 @@ export interface RootRouteChildren {
   MasterDataProjectsLazyRoute: typeof MasterDataProjectsLazyRoute
   MasterDataPromosLazyRoute: typeof MasterDataPromosLazyRoute
   MasterDataRolesLazyRoute: typeof MasterDataRolesLazyRoute
+  MasterDataStockOpnameLazyRoute: typeof MasterDataStockOpnameLazyRoute
   MasterDataTaxesLazyRoute: typeof MasterDataTaxesLazyRoute
   MasterDataUnitsLazyRoute: typeof MasterDataUnitsLazyRoute
   MasterDataWarehousesLazyRoute: typeof MasterDataWarehousesLazyRoute
@@ -1580,6 +1598,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data/taxes'
       fullPath: '/master-data/taxes'
       preLoaderRoute: typeof MasterDataTaxesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/master-data/stock-opname': {
+      id: '/master-data/stock-opname'
+      path: '/master-data/stock-opname'
+      fullPath: '/master-data/stock-opname'
+      preLoaderRoute: typeof MasterDataStockOpnameLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/master-data/roles': {
@@ -2056,6 +2081,7 @@ const rootRouteChildren: RootRouteChildren = {
   MasterDataProjectsLazyRoute: MasterDataProjectsLazyRoute,
   MasterDataPromosLazyRoute: MasterDataPromosLazyRoute,
   MasterDataRolesLazyRoute: MasterDataRolesLazyRoute,
+  MasterDataStockOpnameLazyRoute: MasterDataStockOpnameLazyRoute,
   MasterDataTaxesLazyRoute: MasterDataTaxesLazyRoute,
   MasterDataUnitsLazyRoute: MasterDataUnitsLazyRoute,
   MasterDataWarehousesLazyRoute: MasterDataWarehousesLazyRoute,

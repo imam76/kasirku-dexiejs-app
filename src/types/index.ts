@@ -154,6 +154,7 @@ export type Permission =
   | 'PROFIT_VIEW'
   | 'CASHIER_ACCESS'
   | 'STOCK_ACCESS'
+  | 'STOCK_OPNAME_MANAGE'
   | 'STOCK_PURCHASE_ACCESS'
   | 'FINANCE_ACCESS'
   | 'JOURNAL_MANAGE'
@@ -1193,6 +1194,59 @@ export interface StockPurchase {
   updated_at: string;
 }
 
+export type StockOpnameStatus =
+  | 'DRAFT'
+  | 'POSTED'
+  | 'CANCELLED';
+
+export interface StockOpname {
+  id: string;
+  opname_number: string;
+  status: StockOpnameStatus;
+  counted_at: string;
+  posted_at?: string;
+  cancelled_at?: string;
+  warehouse_id?: string;
+  warehouse_code?: string;
+  warehouse_name?: string;
+  notes?: string;
+  created_by?: string;
+  created_by_name?: string;
+  posted_by?: string;
+  posted_by_name?: string;
+  cancelled_by?: string;
+  cancelled_by_name?: string;
+  cancel_reason?: string;
+  total_items: number;
+  total_adjustment_in: number;
+  total_adjustment_out: number;
+  total_variance_value: number;
+  created_at: string;
+  updated_at: string;
+  sync_status?: EntitySyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface StockOpnameItem {
+  id: string;
+  opname_id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  category?: string;
+  system_quantity: number;
+  counted_quantity?: number;
+  quantity_delta: number;
+  unit: ProductUnit;
+  cost_per_unit: number;
+  variance_value: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type StockMutationSourceType =
   | 'POS_TRANSACTION'
   | 'POS_TRANSACTION_VOID'
@@ -1206,6 +1260,7 @@ export type StockMutationSourceType =
   | 'PURCHASE_RETURN_VOID'
   | 'SALES_RETURN'
   | 'SALES_RETURN_VOID'
+  | 'STOCK_OPNAME'
   | 'SHOPPING_NOTE';
 
 export interface StockMutation {
@@ -1871,11 +1926,13 @@ export type InventoryLotSourceType =
   | 'SALES_RETURN_RESTOCK'
   | 'PURCHASE_RETURN_VOID'
   | 'SALES_DELIVERY_VOID'
+  | 'STOCK_OPNAME'
   | 'OPENING';
 
 export type InventoryLotConsumptionSourceType =
   | 'POS_TRANSACTION'
-  | 'SALES_DELIVERY';
+  | 'SALES_DELIVERY'
+  | 'STOCK_OPNAME';
 
 /**
  * Represents a single batch (lot) of inventory received at a specific cost.

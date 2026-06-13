@@ -272,13 +272,33 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
     }
   }
 
-  // 7. Sort by date ASC
+  // 7. Stock Opnames
+  const stockOpnameItems = await db.stockOpnameItems.where('product_id').equals(productId).toArray();
+  for (const item of stockOpnameItems) {
+    const opname = await db.stockOpnames.get(item.opname_id);
+    if (!opname || opname.status !== 'POSTED') continue;
+
+    const quantityDelta = toFiniteNumber(item.quantity_delta);
+    if (quantityDelta === 0) continue;
+
+    allMutations.push({
+      id: `stock_opname_${item.id}`,
+      date: opname.posted_at ?? opname.counted_at,
+      sourceType: 'STOCK_OPNAME',
+      sourceNumber: opname.opname_number,
+      qtyIn: quantityDelta > 0 ? quantityDelta : 0,
+      qtyOut: quantityDelta < 0 ? Math.abs(quantityDelta) : 0,
+      unit: baseUnit,
+    });
+  }
+
+  // 8. Sort by date ASC
   allMutations.sort((a, b) => {
     const dateDiff = getMovementTime(a) - getMovementTime(b);
     return dateDiff !== 0 ? dateDiff : a.id.localeCompare(b.id);
   });
 
-  // 8. Calculate balances from the product stock snapshot.
+  // 9. Calculate balances from the product stock snapshot.
   // FIFO opening lots are migration snapshots, not true transaction history.
   // Anchoring to products.stock prevents those snapshots from being counted
   // again together with POS/Purchase/Sales movements.

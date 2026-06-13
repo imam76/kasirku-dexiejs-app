@@ -47,6 +47,13 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['PRODUCT', 'WAREHOUSE', 'UNIT'],
   },
   {
+    code: 'STOCK_OPNAME_MANAGE',
+    label: 'Kelola Stock Opname',
+    group: 'Stok',
+    moduleCodes: ['PRODUCT'],
+    isSensitive: true,
+  },
+  {
     code: 'STOCK_PURCHASE_ACCESS',
     label: 'Akses Pembelian Stok',
     group: 'Stok',

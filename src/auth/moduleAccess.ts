@@ -8,6 +8,7 @@ import { getSetupConfig } from '@/services/setupKeyService';
 export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   // Data Master
   '/master-data/products': ['PRODUCT'],
+  '/master-data/stock-opname': ['PRODUCT'],
   '/master-data/contacts': ['CONTACT'],
   '/master-data/warehouses': ['WAREHOUSE'],
   '/master-data/departments': ['DEPARTMENT'],

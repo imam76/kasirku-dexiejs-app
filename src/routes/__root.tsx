@@ -28,6 +28,7 @@ import {
   BookOpen,
   Box,
   Building2,
+  ClipboardCheck,
   ClipboardList,
   Coins,
   CreditCard,
@@ -237,6 +238,7 @@ const RootLayout = () => {
       key: 'master-data-group',
       children: [
         { to: '/master-data/products', label: t('nav.product'), icon: Box },
+        { to: '/master-data/stock-opname', label: t('nav.stockOpname'), icon: ClipboardCheck },
         { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
         { to: '/master-data/contacts', label: t('nav.contacts'), icon: Users },
         { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: Warehouse },

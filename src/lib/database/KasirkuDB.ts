@@ -4,6 +4,8 @@ import type {
   Transaction,
   TransactionItem,
   StockPurchase,
+  StockOpname,
+  StockOpnameItem,
   ProfitLog,
   ProfitBalance,
   ShoppingNote,
@@ -68,6 +70,8 @@ export class KasirkuDB extends Dexie {
   cashierSessions!: Table<CashierSession>;
   cooperativeFieldCashSessions!: Table<CooperativeFieldCashSession>;
   stockPurchases!: Table<StockPurchase>;
+  stockOpnames!: Table<StockOpname>;
+  stockOpnameItems!: Table<StockOpnameItem>;
   profitLogs!: Table<ProfitLog>;
   profitBalance!: Table<ProfitBalance>;
   shoppingNotes!: Table<ShoppingNote>;

@@ -17,6 +17,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'PROFIT_VIEW',
     'CASHIER_ACCESS',
     'STOCK_ACCESS',
+    'STOCK_OPNAME_MANAGE',
     'STOCK_PURCHASE_ACCESS',
     'FINANCE_ACCESS',
     'JOURNAL_MANAGE',
@@ -45,6 +46,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'PROFIT_VIEW',
     'CASHIER_ACCESS',
     'STOCK_ACCESS',
+    'STOCK_OPNAME_MANAGE',
     'STOCK_PURCHASE_ACCESS',
     'FINANCE_ACCESS',
     'SALES_RETURN_MANAGE',
@@ -70,6 +72,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
   GUDANG: [
     'STOCK_ACCESS',
+    'STOCK_OPNAME_MANAGE',
     'STOCK_PURCHASE_ACCESS',
   ],
 };

@@ -63,6 +63,7 @@ export default function StockCard() {
           'SALES_DELIVERY_VOID': 'Batal Pengiriman',
           'SALES_RETURN': 'Retur Penjualan',
           'SALES_RETURN_VOID': 'Batal Retur Penjualan',
+          'STOCK_OPNAME': 'Stock Opname',
         };
         return types[type] || type;
       },

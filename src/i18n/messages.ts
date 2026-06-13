@@ -3,6 +3,7 @@ import { commonMessages } from './common';
 import { cooperativeMessages } from './cooperativeMessages';
 import { navigationMessages } from './navigationMessages';
 import { stockMessages } from './stockMessages';
+import { stockOpnameMessages } from './stockOpnameMessages';
 
 export const messages = {
   id: {
@@ -10,6 +11,7 @@ export const messages = {
     ...navigationMessages.id,
     ...appMessages.id,
     ...stockMessages.id,
+    ...stockOpnameMessages.id,
     ...cooperativeMessages.id,
 
     'transaction.title': 'Transaksi',
@@ -987,6 +989,7 @@ export const messages = {
     'home.menu.purchasesDesc': 'Kelola request, RFQ, order, receipt, invoice, dan retur purchase',
     'home.menu.financeDesc': 'Lihat ringkasan keuangan bisnis Anda secara real-time',
     'home.menu.stockDesc': 'Tambah, edit, dan kelola inventori produk',
+    'home.stockOpnameDesc': 'Cocokkan stok fisik dengan stok sistem',
     'home.operationalMenu': 'Operasional',
     'home.masterDataDesc': 'Kelola data dasar seperti produk, contact, gudang, department, dsb.',
     'home.historyDesc': 'Lihat dan analisis semua transaksi sebelumnya',
@@ -1478,6 +1481,7 @@ export const messages = {
     ...navigationMessages.en,
     ...appMessages.en,
     ...stockMessages.en,
+    ...stockOpnameMessages.en,
     ...cooperativeMessages.en,
 
     'transaction.title': 'Transaction',
@@ -2455,6 +2459,7 @@ export const messages = {
     'home.menu.purchasesDesc': 'Manage requests, RFQs, orders, receipts, invoices, and purchase returns',
     'home.menu.financeDesc': 'View your business finance summary in real time',
     'home.menu.stockDesc': 'Add, edit, and manage product inventory',
+    'home.stockOpnameDesc': 'Match physical stock with system stock',
     'home.operationalMenu': 'Operations',
     'home.masterDataDesc': 'Manage core data such as products, contacts, warehouses, departments, etc.',
     'home.historyDesc': 'View and analyze all previous transactions',

@@ -1008,4 +1008,20 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
   this.version(52).stores({
     employees: 'id, name, email, phone, user_id, login_role_id, field_cash_account_id, is_active, updated_at, created_at',
   });
+
+  this.version(53).stores({
+    stockOpnames: 'id, opname_number, status, counted_at, posted_at, warehouse_id, sync_status, updated_at, created_at',
+    stockOpnameItems: 'id, opname_id, product_id, quantity_delta, created_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingRolePermissions = await rolePermissionTable.toArray();
+    const existingRolePermissionIds = new Set(existingRolePermissions.map((permission) => permission.id));
+    const missingSystemRolePermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingRolePermissionIds.has(permission.id));
+
+    if (missingSystemRolePermissions.length > 0) {
+      await rolePermissionTable.bulkPut(missingSystemRolePermissions);
+    }
+  });
 }
