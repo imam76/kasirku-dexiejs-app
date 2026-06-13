@@ -5,6 +5,7 @@ import {
   type RecordCashBankTransferResult,
 } from '@/services/cashBankTransferService';
 import type {
+  AuthUser,
   ChartOfAccount,
   CooperativeFieldCashMovementKind,
   CooperativeFieldCashSession,
@@ -35,7 +36,7 @@ export interface RecordFieldCashTransferInput {
 
 export interface CooperativeFieldCashContext {
   employee: Employee;
-  session: CooperativeFieldCashSession;
+  session?: CooperativeFieldCashSession;
 }
 
 export interface CooperativeFieldCashReconciliation {
@@ -49,6 +50,12 @@ export interface CooperativeFieldCashReconciliation {
   deposit_to_finance_amount: number;
   total_storting_amount: number;
   expected_closing_cash_amount: number;
+}
+
+export interface CooperativeFieldCashAccessScope {
+  currentUser: AuthUser;
+  canViewAll: boolean;
+  employeeId?: string;
 }
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -73,6 +80,35 @@ export const requireFieldCashView = async () => {
   }
 
   return currentUser;
+};
+
+const getEmployeeIdForFieldCashUser = async (user: AuthUser) => {
+  if (user.employee_id) return user.employee_id;
+
+  const employee = await db.employees.get(user.id);
+  return employee?.id;
+};
+
+export const getFieldCashAccessScope = async (): Promise<CooperativeFieldCashAccessScope> => {
+  const currentUser = await requireFieldCashView();
+  if (!currentUser) {
+    throw new Error('Session user tidak ditemukan.');
+  }
+
+  const role = currentUser.role_id ? await db.roles.get(currentUser.role_id) : undefined;
+  const canManageFieldCash = await hasUserPermission(currentUser, 'COOPERATIVE_FIELD_CASH_MANAGE');
+  const canViewAll = Boolean(
+    role?.is_owner ||
+    currentUser.role === 'OWNER' ||
+    currentUser.role === 'ADMIN' ||
+    canManageFieldCash
+  );
+
+  return {
+    currentUser,
+    canViewAll,
+    employeeId: canViewAll ? undefined : await getEmployeeIdForFieldCashUser(currentUser),
+  };
 };
 
 const assertFieldCashAccount = (account: ChartOfAccount | undefined, label = 'Akun kas petugas') => {
@@ -217,11 +253,11 @@ export const getFieldCashContextForCashAccount = async (
   if (!employee || !cashAccountId) return undefined;
 
   const session = await getOpenFieldCashSessionForCashAccount(cashAccountId);
-  if (!session || session.employee_id !== employee.id) {
-    throw new Error(`Sesi kas petugas ${employee.name} belum dibuka.`);
-  }
 
-  return { employee, session };
+  return {
+    employee,
+    session: session?.employee_id === employee.id ? session : undefined,
+  };
 };
 
 export const buildFieldCashFinanceTransactionFields = (
@@ -235,11 +271,15 @@ export const buildFieldCashFinanceTransactionFields = (
   | 'field_employee_name'
   | 'field_cash_movement_kind'
 > => ({
-  field_cash_session_id: context.session.id,
-  field_cash_session_number: context.session.session_number,
   field_employee_id: context.employee.id,
   field_employee_name: context.employee.name,
   field_cash_movement_kind: movementKind,
+  ...(context.session
+    ? {
+        field_cash_session_id: context.session.id,
+        field_cash_session_number: context.session.session_number,
+      }
+    : {}),
 });
 
 const getSessionFinanceTransactions = async (session: CooperativeFieldCashSession) => (
@@ -463,12 +503,7 @@ const assertFieldCashTransferInput = async (input: RecordFieldCashTransferInput)
     throw new Error('Akun kas petugas dan akun finance harus berbeda.');
   }
 
-  const session = await getOpenFieldCashSessionForEmployee(employee.id);
-  if (!session || session.cash_account_id !== cashAccount.id) {
-    throw new Error(`Sesi kas petugas ${employee.name} belum dibuka.`);
-  }
-
-  return { employee, cashAccount, financeAccount, session };
+  return { employee, cashAccount, financeAccount };
 };
 
 export const recordDroppingFromFinanceToPetugas = async (

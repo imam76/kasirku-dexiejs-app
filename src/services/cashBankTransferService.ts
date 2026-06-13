@@ -109,7 +109,7 @@ const assertFieldCashBalanceForTransferOut = async (
 
 const buildFieldCashFinanceFields = (
   employee: Employee,
-  session: CooperativeFieldCashSession,
+  session: CooperativeFieldCashSession | undefined,
   movementKind: CooperativeFieldCashMovementKind,
 ): Pick<
   FinanceTransaction,
@@ -119,11 +119,15 @@ const buildFieldCashFinanceFields = (
   | 'field_employee_name'
   | 'field_cash_movement_kind'
 > => ({
-  field_cash_session_id: session.id,
-  field_cash_session_number: session.session_number,
   field_employee_id: employee.id,
   field_employee_name: employee.name,
   field_cash_movement_kind: movementKind,
+  ...(session
+    ? {
+        field_cash_session_id: session.id,
+        field_cash_session_number: session.session_number,
+      }
+    : {}),
 });
 
 export const recordCashBankTransfer = async (
@@ -172,12 +176,6 @@ export const recordCashBankTransfer = async (
       toFieldEmployee ? getOpenFieldCashSessionForEmployee(toFieldEmployee, toAccount.id) : undefined,
     ]);
 
-    if (fromFieldEmployee && !fromFieldSession) {
-      throw new Error(`Sesi kas petugas ${fromFieldEmployee.name} belum dibuka.`);
-    }
-    if (toFieldEmployee && !toFieldSession) {
-      throw new Error(`Sesi kas petugas ${toFieldEmployee.name} belum dibuka.`);
-    }
     if (fromFieldEmployee) {
       await assertFieldCashBalanceForTransferOut(fromFieldEmployee, fromAccount.id, parsedInput.amount);
     }
@@ -200,7 +198,7 @@ export const recordCashBankTransfer = async (
       account_type: fromAccount.type,
       transfer_group_id: transferGroupId,
       transfer_direction: 'OUT',
-      ...(fromFieldEmployee && fromFieldSession
+      ...(fromFieldEmployee
         ? buildFieldCashFinanceFields(fromFieldEmployee, fromFieldSession, 'DEPOSIT_TO_FINANCE')
         : {}),
     }, currentUser, transferDate);
@@ -221,7 +219,7 @@ export const recordCashBankTransfer = async (
       account_type: toAccount.type,
       transfer_group_id: transferGroupId,
       transfer_direction: 'IN',
-      ...(toFieldEmployee && toFieldSession
+      ...(toFieldEmployee
         ? buildFieldCashFinanceFields(toFieldEmployee, toFieldSession, 'DROPPING_FROM_FINANCE')
         : {}),
     }, currentUser, transferDate);

@@ -911,7 +911,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
   this.version(50).stores({
     cooperativeFieldCashSessions: 'id, session_number, status, employee_id, cash_account_id, opened_at, closed_at, balance_status, created_at, updated_at',
     financeTransactions: 'id, type, category, account_id, cash_account_id, field_cash_session_id, field_employee_id, transfer_group_id, sync_status, updated_at, created_at, reference_id',
-    employees: 'id, name, email, phone, login_role_id, field_cash_account_id, is_active, updated_at, created_at',
+    employees: 'id, name, email, phone, user_id, login_role_id, field_cash_account_id, is_active, updated_at, created_at',
   }).upgrade(async (tx) => {
     const now = new Date().toISOString();
     const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
@@ -1003,5 +1003,9 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     if (migratedQueueItems.length > 0) {
       await syncQueue.bulkPut(migratedQueueItems);
     }
+  });
+
+  this.version(52).stores({
+    employees: 'id, name, email, phone, user_id, login_role_id, field_cash_account_id, is_active, updated_at, created_at',
   });
 }

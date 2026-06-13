@@ -86,9 +86,6 @@ export default function CooperativeBillingManagement() {
     const remaining = getInstallmentRemainingAmounts(installment);
     const fieldCashStatus = getFieldCashPaymentStatusForInstallment(installment);
     const rememberedFields = getRememberedCashAccountFields(paymentAccounts);
-    if (fieldCashStatus && !fieldCashStatus.session) {
-      message.warning(fieldCashStatus.badge);
-    }
     form.setFieldsValue({
       installment_id: installment.id,
       amount: remaining.total_amount,
@@ -97,9 +94,9 @@ export default function CooperativeBillingManagement() {
       remember_cash_account: true,
       collector_id: getDefaultCollectorIdForInstallment(installment),
       ...rememberedFields,
-      ...(fieldCashStatus?.session ? { cash_account_id: fieldCashStatus.cash_account_id } : {}),
+      ...(fieldCashStatus ? { cash_account_id: fieldCashStatus.cash_account_id } : {}),
     });
-    setFieldCashPaymentBadge(fieldCashStatus?.session ? fieldCashStatus.badge : undefined);
+    setFieldCashPaymentBadge(fieldCashStatus?.badge);
     setPayingInstallment(installment);
     setIsPaymentModalOpen(true);
   };

@@ -71,6 +71,13 @@ function Cooperative() {
       desc: t('cooperative.index.reportsDesc'),
     },
     {
+      to: '/koperasi/laporan-drop-harian',
+      label: t('nav.cooperative.dailyDrop'),
+      icon: FileTextOutlined,
+      color: 'text-orange-700',
+      desc: t('cooperative.index.dailyDropDesc'),
+    },
+    {
       to: '/koperasi/arus-kas',
       label: t('cooperative.reports.tabs.cashFlowStatement'),
       icon: BankOutlined,

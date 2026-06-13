@@ -47,12 +47,6 @@ export const useCooperativeBilling = () => {
     [],
     [] as Employee[],
   );
-  const fieldCashSessions = useLiveQuery(
-    () => db.cooperativeFieldCashSessions.where('status').equals('OPEN').toArray(),
-    [],
-    [],
-  );
-
   const loans = useLiveQuery(
     () => db.cooperativeLoans.orderBy('loan_number').toArray(),
     [],
@@ -81,9 +75,6 @@ export const useCooperativeBilling = () => {
   const activeCollectors = useMemo(() => (
     employees.filter((employee) => employee.is_active)
   ), [employees]);
-  const openFieldCashSessionByEmployee = useMemo(() => (
-    new Map(fieldCashSessions.map((session) => [session.employee_id, session]))
-  ), [fieldCashSessions]);
   const visibleMemberIds = useMemo(() => {
     if (!areaScope.isScoped) return null;
     const allowedAreaIds = new Set(areaScope.areaIds);
@@ -209,23 +200,12 @@ export const useCooperativeBilling = () => {
   const getFieldCashPaymentStatusForInstallment = (installment: CooperativeLoanInstallment) => {
     const member = memberById.get(installment.member_id);
     const employee = member?.officer_id ? employeeById.get(member.officer_id) : undefined;
-    if (!employee?.field_cash_account_id) return undefined;
-
-    const session = openFieldCashSessionByEmployee.get(employee.id);
-    if (!session) {
-      return {
-        employee,
-        cash_account_id: employee.field_cash_account_id,
-        session: undefined,
-        badge: `Sesi setoran kolektor ${employee.name} belum dibuka.`,
-      };
-    }
+    if (!employee?.is_active || !employee.field_cash_account_id) return undefined;
 
     return {
       employee,
-      cash_account_id: session.cash_account_id,
-      session,
-      badge: `Setoran kolektor ${employee.name} - ${session.cash_account_code}`,
+      cash_account_id: employee.field_cash_account_id,
+      badge: `Setoran kolektor ${employee.name} - ${employee.field_cash_account_code ?? '-'}`,
     };
   };
 
