@@ -78,6 +78,13 @@ function Cooperative() {
       desc: t('cooperative.index.dailyDropDesc'),
     },
     {
+      to: '/koperasi/laporan-drop-mingguan',
+      label: t('nav.cooperative.weeklyDrop'),
+      icon: FileTextOutlined,
+      color: 'text-fuchsia-700',
+      desc: t('cooperative.index.weeklyDropDesc'),
+    },
+    {
       to: '/koperasi/arus-kas',
       label: t('cooperative.reports.tabs.cashFlowStatement'),
       icon: BankOutlined,

@@ -51,6 +51,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/koperasi/kas-petugas': 'COOPERATIVE_FIELD_CASH_VIEW',
   '/koperasi/laporan': 'COOPERATIVE_REPORT_VIEW',
   '/koperasi/laporan-drop-harian': 'COOPERATIVE_REPORT_VIEW',
+  '/koperasi/laporan-drop-mingguan': 'COOPERATIVE_REPORT_VIEW',
   '/koperasi/laporan-induk-anggota': 'COOPERATIVE_REPORT_VIEW',
   '/koperasi/arus-kas': 'COOPERATIVE_REPORT_VIEW',
   '/koperasi/buku-besar': 'COOPERATIVE_REPORT_VIEW',

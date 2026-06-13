@@ -69,7 +69,7 @@ export interface CooperativeDailyDropReport {
   summary: CooperativeDailyDropReportSummary;
 }
 
-const createEmptySummary = (): CooperativeDailyDropReportSummary => ({
+export const createEmptyCooperativeDailyDropReportSummary = (): CooperativeDailyDropReportSummary => ({
   row_count: 0,
   old_member_count: 0,
   new_member_count: 0,
@@ -166,7 +166,7 @@ const getLoanPaidOffDateByLoanId = (
   return paidOffDateByLoanId;
 };
 
-const summarizeRows = (
+export const summarizeCooperativeDailyDropReportRows = (
   rows: CooperativeDailyDropReportRow[],
 ): CooperativeDailyDropReportSummary => rows.reduce((summary, row) => ({
   row_count: summary.row_count + 1,
@@ -179,7 +179,7 @@ const summarizeRows = (
   admin_fee_amount: roundCurrency(summary.admin_fee_amount + row.admin_fee_amount),
   mandatory_saving_amount: roundCurrency(summary.mandatory_saving_amount + row.mandatory_saving_amount),
   total_payable_amount: roundCurrency(summary.total_payable_amount + row.total_payable_amount),
-}), createEmptySummary());
+}), createEmptyCooperativeDailyDropReportSummary());
 
 const createRowFromLoan = ({
   loan,
@@ -293,7 +293,7 @@ export const getCooperativeDailyDropReport = async (
         officer_name: firstRow.officer_name,
         officer_position: firstRow.officer_position,
         rows: groupRows,
-        summary: summarizeRows(groupRows),
+        summary: summarizeCooperativeDailyDropReportRows(groupRows),
       } satisfies CooperativeDailyDropReportGroup;
     })
     .sort((left, right) => {
@@ -305,6 +305,6 @@ export const getCooperativeDailyDropReport = async (
   return {
     rows,
     groups,
-    summary: summarizeRows(rows),
+    summary: summarizeCooperativeDailyDropReportRows(rows),
   };
 };
