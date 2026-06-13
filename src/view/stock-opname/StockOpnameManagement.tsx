@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react';
 import { App, Button, Card, DatePicker, Input, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ClipboardCheck, Edit, Eye, Plus, RefreshCw } from 'lucide-react';
+import StockOpnameCreateModal from '@/components/stock-opname/StockOpnameCreateModal';
 import StockOpnameStatusBadge from '@/components/stock-opname/StockOpnameStatusBadge';
 import { useI18n } from '@/hooks/useI18n';
 import { useStockOpnames } from '@/hooks/useStockOpnames';
 import dayjs from '@/lib/dayjs';
+import type { CreateStockOpnameDraftInput } from '@/services/stockOpnameService';
 import type { StockOpname, StockOpnameStatus } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import StockOpnameDetail from './StockOpnameDetail';
@@ -18,12 +20,14 @@ type ScreenState =
   | { type: 'editor'; opnameId: string }
   | { type: 'detail'; opnameId: string };
 
+type OpnameDocumentScreenType = Extract<ScreenState, { opnameId: string }>['type'];
 type StatusFilter = StockOpnameStatus | 'ALL';
 
 export default function StockOpnameManagement() {
   const { t } = useI18n();
   const { message } = App.useApp();
   const [screen, setScreen] = useState<ScreenState>({ type: 'list' });
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>([
@@ -66,14 +70,19 @@ export default function StockOpnameManagement() {
     );
   }
 
-  const handleCreateDraft = async () => {
+  const handleCreateDraft = async (input: CreateStockOpnameDraftInput) => {
     try {
-      const result = await createDraft({});
+      const result = await createDraft(input);
+      setIsCreateModalOpen(false);
       setScreen({ type: 'editor', opnameId: result.opname.id });
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('stockOpname.createFailed'));
     }
   };
+
+  const getScreenTypeForOpname = (opname: StockOpname): OpnameDocumentScreenType => (
+    opname.status === 'DRAFT' || opname.status === 'REVIEWED' ? 'editor' : 'detail'
+  );
 
   const columns: ColumnsType<StockOpname> = [
     {
@@ -83,7 +92,7 @@ export default function StockOpnameManagement() {
       width: 180,
       render: (value: string, opname) => (
         <Button type="link" className="!px-0" onClick={() => setScreen({
-          type: opname.status === 'DRAFT' ? 'editor' : 'detail',
+          type: getScreenTypeForOpname(opname),
           opnameId: opname.id,
         })}>
           {value}
@@ -141,13 +150,13 @@ export default function StockOpnameManagement() {
       render: (_value, opname) => (
         <Button
           type="text"
-          icon={opname.status === 'DRAFT' ? <Edit size={16} /> : <Eye size={16} />}
+          icon={opname.status === 'DRAFT' || opname.status === 'REVIEWED' ? <Edit size={16} /> : <Eye size={16} />}
           onClick={() => setScreen({
-            type: opname.status === 'DRAFT' ? 'editor' : 'detail',
+            type: getScreenTypeForOpname(opname),
             opnameId: opname.id,
           })}
         >
-          {opname.status === 'DRAFT' ? t('stockOpname.edit') : t('stockOpname.view')}
+          {opname.status === 'DRAFT' || opname.status === 'REVIEWED' ? t('stockOpname.edit') : t('stockOpname.view')}
         </Button>
       ),
     },
@@ -165,7 +174,7 @@ export default function StockOpnameManagement() {
         </div>
       )}
       extra={(
-        <Button type="primary" icon={<Plus size={16} />} loading={isCreatingDraft} onClick={handleCreateDraft}>
+        <Button type="primary" icon={<Plus size={16} />} loading={isCreatingDraft} onClick={() => setIsCreateModalOpen(true)}>
           {t('stockOpname.create')}
         </Button>
       )}
@@ -183,6 +192,7 @@ export default function StockOpnameManagement() {
           options={[
             { value: 'ALL', label: t('stockOpname.status.ALL') },
             { value: 'DRAFT', label: t('stockOpname.status.DRAFT') },
+            { value: 'REVIEWED', label: t('stockOpname.status.REVIEWED') },
             { value: 'POSTED', label: t('stockOpname.status.POSTED') },
             { value: 'CANCELLED', label: t('stockOpname.status.CANCELLED') },
           ]}
@@ -213,6 +223,12 @@ export default function StockOpnameManagement() {
         loading={isLoadingOpnames}
         scroll={{ x: 1200 }}
         pagination={{ pageSize: 20, showSizeChanger: true }}
+      />
+      <StockOpnameCreateModal
+        open={isCreateModalOpen}
+        loading={isCreatingDraft}
+        onCancel={() => setIsCreateModalOpen(false)}
+        onCreate={handleCreateDraft}
       />
     </Card>
   );

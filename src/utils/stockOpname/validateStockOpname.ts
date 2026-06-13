@@ -6,6 +6,12 @@ export const assertStockOpnameDraft = (opname: Pick<StockOpname, 'status'>) => {
   }
 };
 
+export const assertStockOpnameReviewed = (opname: Pick<StockOpname, 'status'>) => {
+  if (opname.status !== 'REVIEWED') {
+    throw new Error('Stock opname harus direview sebelum posting.');
+  }
+};
+
 export const validateCountedQuantity = (countedQuantity: unknown) => {
   if (countedQuantity === undefined || countedQuantity === null || countedQuantity === '') {
     return;
@@ -42,6 +48,6 @@ export const validateStockOpnameItemsForPost = (
   }
 
   if (countedItemCount === 0) {
-    throw new Error('Minimal satu produk harus memiliki stok fisik sebelum posting.');
+    throw new Error('Minimal satu produk harus memiliki stok fisik sebelum review atau posting.');
   }
 };

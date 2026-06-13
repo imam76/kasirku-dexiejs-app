@@ -5,12 +5,14 @@ import type { StockOpnameStatus } from '@/types';
 
 const statusColor: Record<StockOpnameStatus, string> = {
   DRAFT: 'default',
+  REVIEWED: 'blue',
   POSTED: 'green',
   CANCELLED: 'red',
 };
 
 const statusLabelKey: Record<StockOpnameStatus, TranslationKey> = {
   DRAFT: 'stockOpname.status.DRAFT',
+  REVIEWED: 'stockOpname.status.REVIEWED',
   POSTED: 'stockOpname.status.POSTED',
   CANCELLED: 'stockOpname.status.CANCELLED',
 };

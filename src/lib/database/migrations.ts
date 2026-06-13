@@ -1024,4 +1024,9 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       await rolePermissionTable.bulkPut(missingSystemRolePermissions);
     }
   });
+
+  this.version(54).stores({
+    stockOpnames: 'id, opname_number, status, counted_at, reviewed_at, posted_at, warehouse_id, sync_status, updated_at, created_at',
+    stockOpnameItems: 'id, opname_id, product_id, quantity_delta, created_at',
+  });
 }

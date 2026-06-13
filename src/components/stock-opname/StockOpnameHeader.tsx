@@ -57,6 +57,9 @@ export default function StockOpnameHeader({
       <Descriptions.Item label={t('stockOpname.createdBy')}>
         {opname.created_by_name || '-'}
       </Descriptions.Item>
+      <Descriptions.Item label={t('stockOpname.reviewedBy')}>
+        {opname.reviewed_by_name || '-'}
+      </Descriptions.Item>
       <Descriptions.Item label={t('stockOpname.postedBy')}>
         {opname.posted_by_name || '-'}
       </Descriptions.Item>

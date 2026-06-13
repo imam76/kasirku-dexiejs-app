@@ -144,7 +144,7 @@ export const stockMessages = {
         'stock.category.household_cleaning': 'Household Cleaning',
         'stock.category.laundry': 'Laundry',
         'stock.category.personal_care': 'Personal Care',
-        'stock.category.non_consumable': 'Non-consumable / General Goods',
+        'stock.category.non_consumable': 'Barang Non-Konsumsi / Umum',
         'stock.category.lainnya': 'Lain-lain',
 
         'stock.validation.nameRequired': 'Nama produk harus diisi',

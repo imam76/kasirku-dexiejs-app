@@ -9,6 +9,7 @@ pub mod product;
 pub mod project;
 pub mod purchase_document;
 pub mod sales_document;
+pub mod stock_opname;
 pub mod stock_mutation;
 pub mod tax;
 pub mod warehouse;

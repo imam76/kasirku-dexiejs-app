@@ -9,6 +9,7 @@ pub mod product_repository;
 pub mod project_repository;
 pub mod purchase_document_repository;
 pub mod sales_document_repository;
+pub mod stock_opname_repository;
 pub mod stock_mutation_repository;
 pub mod tax_repository;
 pub mod warehouse_repository;

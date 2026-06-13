@@ -1,6 +1,7 @@
 import { Input, InputNumber, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useI18n } from '@/hooks/useI18n';
+import { getProductCategoryLabel } from '@/i18n/stock';
 import type { StockOpnameItem } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 
@@ -42,7 +43,11 @@ export default function StockOpnameItemTable({
       render: (value: string, item) => (
         <div>
           <Text strong>{value}</Text>
-          {item.category && <div className="text-xs text-gray-500">{item.category}</div>}
+          {item.category && (
+            <div className="text-xs text-gray-500">
+              {getProductCategoryLabel(item.category, t)}
+            </div>
+          )}
         </div>
       ),
     },

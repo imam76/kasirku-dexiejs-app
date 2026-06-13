@@ -1196,6 +1196,7 @@ export interface StockPurchase {
 
 export type StockOpnameStatus =
   | 'DRAFT'
+  | 'REVIEWED'
   | 'POSTED'
   | 'CANCELLED';
 
@@ -1204,6 +1205,7 @@ export interface StockOpname {
   opname_number: string;
   status: StockOpnameStatus;
   counted_at: string;
+  reviewed_at?: string;
   posted_at?: string;
   cancelled_at?: string;
   warehouse_id?: string;
@@ -1212,6 +1214,8 @@ export interface StockOpname {
   notes?: string;
   created_by?: string;
   created_by_name?: string;
+  reviewed_by?: string;
+  reviewed_by_name?: string;
   posted_by?: string;
   posted_by_name?: string;
   cancelled_by?: string;

@@ -2,6 +2,17 @@
 
 Dokumen ini adalah panduan implementasi Stock Opname untuk project Kasirku. Targetnya: stok fisik bisa dicocokkan dengan stok sistem tanpa menumpuk logic di komponen UI, tanpa merusak FIFO lot, dan tetap mengikuti struktur project saat ini.
 
+## Update Implementasi
+
+Opsi lanjutan yang sudah diimplementasikan:
+
+- Sync dokumen Stock Opname ke Postgres sebagai bundle `stockOpnames` + `stockOpnameItems`.
+- Pull remote Stock Opname ke Dexie lewat refresh sync global.
+- Create draft sekarang bisa dibatasi dengan filter produk/kategori dan tanggal hitung.
+- Editor punya filter item, pencarian item, bulk "stok fisik = stok sistem" untuk item yang tampil, dan clear count untuk item yang tampil.
+- Workflow kontrol bisnis ringan: `DRAFT -> REVIEWED -> POSTED`, dengan opsi reopen dari `REVIEWED` ke `DRAFT` sebelum posting.
+- Posting hanya boleh dari status `REVIEWED`.
+
 SoC di dokumen ini berarti Separation of Concerns:
 
 - UI hanya menampilkan data, input, dan action.
@@ -27,8 +38,8 @@ Yang belum ada:
 - Belum ada table `stockOpnames` dan `stockOpnameItems`.
 - Belum ada source type `STOCK_OPNAME` untuk `StockMutation`.
 - Belum ada source type opname untuk `InventoryLot` dan `InventoryLotConsumption`.
-- Belum ada UI khusus untuk counting sheet, input stok fisik, review selisih, dan posting.
-- Belum ada sync dokumen Stock Opname ke Postgres.
+- UI counting sheet, input stok fisik, review selisih, dan posting sudah tersedia untuk scope stok global.
+- Sync dokumen Stock Opname ke Postgres sudah tersedia sebagai audit remote. Efek stok remote tetap lewat `stockMutations`.
 - Belum ada jurnal variance persediaan untuk General Ledger.
 - Stok masih global per produk, belum per gudang. Field gudang boleh menjadi metadata, tetapi belum boleh diklaim sebagai saldo per gudang.
 
@@ -41,18 +52,20 @@ MVP yang disarankan:
 - Membuat draft Stock Opname.
 - Mengisi stok fisik per produk dalam base unit produk.
 - Menampilkan stok sistem, stok fisik, selisih, dan estimasi nilai selisih.
+- Mereview hasil hitung sebelum posting.
 - Posting opname secara atomik.
 - Selisih plus menambah `products.stock`, membuat FIFO lot baru, dan membuat stock mutation.
 - Selisih minus mengurangi `products.stock`, consume FIFO lot, dan membuat stock mutation.
 - Hasil opname muncul di Kartu Stok.
 - Export counting sheet CSV dan import hasil hitung fisik CSV.
-- Activity log untuk create/post/cancel draft.
+- Activity log untuk create/update/review/reopen/post/cancel.
 
 Di luar MVP:
 
 - Perhitungan saldo per warehouse.
 - Approval bertingkat.
 - Void posted opname. Koreksi posted opname dibuat lewat opname baru.
+- Approval bertingkat di atas status `REVIEWED`.
 - Barcode batch counting.
 - Jurnal otomatis selisih persediaan.
 - Cycle count per kategori/rak/bin.
@@ -178,6 +191,7 @@ Tambahkan tipe di `src/types/index.ts`.
 ```ts
 export type StockOpnameStatus =
   | 'DRAFT'
+  | 'REVIEWED'
   | 'POSTED'
   | 'CANCELLED';
 
@@ -186,6 +200,7 @@ export interface StockOpname {
   opname_number: string;
   status: StockOpnameStatus;
   counted_at: string;
+  reviewed_at?: string;
   posted_at?: string;
   cancelled_at?: string;
   warehouse_id?: string;
@@ -194,6 +209,8 @@ export interface StockOpname {
   notes?: string;
   created_by?: string;
   created_by_name?: string;
+  reviewed_by?: string;
+  reviewed_by_name?: string;
   posted_by?: string;
   posted_by_name?: string;
   cancelled_by?: string;
@@ -323,7 +340,8 @@ Tanggung jawab:
 
 Tanggung jawab:
 
-- Memastikan status draft sebelum edit/post.
+- Memastikan status draft sebelum edit/review.
+- Memastikan status reviewed sebelum post.
 - Memastikan `counted_quantity` finite dan tidak negatif.
 - Memastikan minimal satu item punya counted quantity.
 - Memastikan tidak ada product duplicate.
@@ -363,6 +381,8 @@ Public API:
 createStockOpnameDraft(input)
 updateStockOpnameDraft(input)
 postStockOpname(input)
+reviewStockOpnameDraft(input)
+reopenStockOpnameReview(input)
 cancelStockOpnameDraft(input)
 ```
 
@@ -394,13 +414,36 @@ Langkah:
 6. Jangan membuat FIFO lot.
 7. Jangan enqueue sync stock mutation.
 
-### postStockOpname
+### reviewStockOpnameDraft
 
 Langkah di dalam satu transaksi Dexie:
 
 1. Cek user dan permission.
 2. Ambil opname + items.
 3. Cek status `DRAFT`.
+4. Validasi semua item yang akan direview.
+5. Update opname status menjadi `REVIEWED`.
+6. Simpan `reviewed_at`, `reviewed_by`, summary final, dan sync status pending.
+7. Tulis activity log.
+8. Enqueue bundle stock opname untuk audit remote.
+
+### reopenStockOpnameReview
+
+Langkah:
+
+1. Cek status `REVIEWED`.
+2. Update status kembali menjadi `DRAFT`.
+3. Kosongkan snapshot reviewer.
+4. Tulis activity log.
+5. Enqueue bundle stock opname untuk audit remote.
+
+### postStockOpname
+
+Langkah di dalam satu transaksi Dexie:
+
+1. Cek user dan permission.
+2. Ambil opname + items.
+3. Cek status `REVIEWED`.
 4. Validasi semua item yang akan diposting.
 5. Untuk setiap item yang `counted_quantity` terisi:
    - Ambil product terkini.
@@ -416,7 +459,7 @@ Langkah di dalam satu transaksi Dexie:
 Setelah transaksi Dexie selesai:
 
 1. `enqueueStockMutations(stockMutations)`.
-2. `enqueueStockOpnameBundleSync(opname, items)` jika sync dokumen opname sudah dibuat.
+2. `enqueueStockOpnameBundleSync(opname, items)`.
 3. Invalidate query produk, opname, dan stock card.
 
 Aturan penting:
@@ -430,7 +473,7 @@ Aturan penting:
 
 Langkah:
 
-1. Cek status masih `DRAFT`.
+1. Cek status masih `DRAFT` atau `REVIEWED`.
 2. Update status menjadi `CANCELLED`.
 3. Simpan alasan.
 4. Tulis activity log.
@@ -685,15 +728,18 @@ Acceptance:
 1. Buat `stockOpnameService.ts`.
 2. Implement create draft.
 3. Implement update draft.
-4. Implement post opname dengan transaksi Dexie.
-5. Implement cancel draft.
-6. Tulis activity log.
-7. Enqueue stock mutations setelah transaksi selesai.
+4. Implement review draft.
+5. Implement reopen review.
+6. Implement post opname dengan transaksi Dexie.
+7. Implement cancel draft/reviewed.
+8. Tulis activity log.
+9. Enqueue stock mutations dan bundle stock opname setelah transaksi selesai.
 
 Acceptance:
 
 - Delta plus menambah stok dan FIFO lot.
 - Delta minus mengurangi stok dan consume FIFO.
+- Posting hanya dari status `REVIEWED`.
 - Posting terblokir jika stok product berubah sejak draft dibuat.
 - No-op item tetap tersimpan sebagai audit, tetapi tidak membuat stock mutation.
 
@@ -716,13 +762,16 @@ Acceptance:
 3. Buat editor draft.
 4. Buat detail read-only.
 5. Tambah import/export CSV.
-6. Tambah state empty/loading/error.
+6. Tambah modal create draft dengan filter produk/kategori.
+7. Tambah filter item, pencarian item, dan bulk count untuk item yang tampil.
+8. Tambah state empty/loading/error.
 
 Acceptance:
 
 - Component tidak memanggil service langsung.
 - Tabel tetap usable di mobile dan desktop.
 - Tidak ada logic posting di file view.
+- Draft bisa dibatasi scope produk tanpa membuat semua produk otomatis.
 
 ### Fase 6 - Route, Permission, Navigation
 
@@ -751,6 +800,8 @@ Acceptance:
 - Saldo akhir kartu stok sama dengan `products.stock`.
 
 ### Fase 8 - Sync Postgres
+
+Status: selesai untuk audit dokumen.
 
 1. Tambah migration `0022_stock_opnames.sql`.
 2. Tambah model/repository/command Tauri.

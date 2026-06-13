@@ -21,6 +21,7 @@ import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
 import { mergeRemotePurchaseDocumentBundlesIntoDexie } from '@/services/purchaseDocumentReadService';
 import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
 import { mergeRemoteSalesDocumentBundlesIntoDexie } from '@/services/salesDocumentReadService';
+import { mergeRemoteStockOpnameBundlesIntoDexie } from '@/services/stockOpnameReadService';
 import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
 import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
 import {
@@ -46,6 +47,7 @@ import {
   rolePermissionPostgresAdapter,
   rolePostgresAdapter,
   salesDocumentPostgresAdapter,
+  stockOpnamePostgresAdapter,
   stockMutationPostgresAdapter,
   taxPostgresAdapter,
   warehousePostgresAdapter,
@@ -75,11 +77,14 @@ import {
   type RemoteSalesDocumentBundleDto,
   type RemoteSalesDocumentDto,
   type RemoteSalesDocumentItemDto,
+  type RemoteStockOpnameBundleDto,
+  type RemoteStockOpnameDto,
+  type RemoteStockOpnameItemDto,
   type RemoteStockMutationDto,
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -104,6 +109,7 @@ const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
 const ROLE_ENTITY = 'roles';
 const ROLE_PERMISSION_ENTITY = 'rolePermissions';
 const SALES_DOCUMENT_ENTITY = 'salesDocuments';
+const STOCK_OPNAME_ENTITY = 'stockOpnames';
 const STOCK_MUTATION_ENTITY = 'stockMutations';
 const TAX_ENTITY = 'taxes';
 const WAREHOUSE_ENTITY = 'warehouses';
@@ -466,6 +472,61 @@ const mapStockMutationToRemoteDto = (mutation: StockMutation): RemoteStockMutati
   actor_user_name: mutation.actor_user_name,
   occurred_at: mutation.occurred_at,
   created_at: mutation.created_at,
+});
+
+const mapStockOpnameToRemoteDto = (opname: StockOpname): RemoteStockOpnameDto => ({
+  id: opname.id,
+  opname_number: opname.opname_number,
+  status: opname.status,
+  counted_at: opname.counted_at,
+  reviewed_at: opname.reviewed_at,
+  posted_at: opname.posted_at,
+  cancelled_at: opname.cancelled_at,
+  warehouse_id: opname.warehouse_id,
+  warehouse_code: opname.warehouse_code,
+  warehouse_name: opname.warehouse_name,
+  notes: opname.notes,
+  created_by: opname.created_by,
+  created_by_name: opname.created_by_name,
+  reviewed_by: opname.reviewed_by,
+  reviewed_by_name: opname.reviewed_by_name,
+  posted_by: opname.posted_by,
+  posted_by_name: opname.posted_by_name,
+  cancelled_by: opname.cancelled_by,
+  cancelled_by_name: opname.cancelled_by_name,
+  cancel_reason: opname.cancel_reason,
+  total_items: opname.total_items,
+  total_adjustment_in: opname.total_adjustment_in,
+  total_adjustment_out: opname.total_adjustment_out,
+  total_variance_value: opname.total_variance_value,
+  created_at: opname.created_at,
+  updated_at: opname.updated_at,
+});
+
+const mapStockOpnameItemToRemoteDto = (item: StockOpnameItem): RemoteStockOpnameItemDto => ({
+  id: item.id,
+  opname_id: item.opname_id,
+  product_id: item.product_id,
+  product_name: item.product_name,
+  sku: item.sku,
+  category: item.category,
+  system_quantity: item.system_quantity,
+  counted_quantity: item.counted_quantity,
+  quantity_delta: item.quantity_delta,
+  unit: item.unit,
+  cost_per_unit: item.cost_per_unit,
+  variance_value: item.variance_value,
+  notes: item.notes,
+  created_at: item.created_at,
+  updated_at: item.updated_at,
+});
+
+const mapStockOpnameBundleToRemoteDto = (
+  opname: StockOpname,
+  items: StockOpnameItem[],
+): RemoteStockOpnameBundleDto => ({
+  opname: mapStockOpnameToRemoteDto(opname),
+  items: items.map(mapStockOpnameItemToRemoteDto),
 });
 
 const mapFinanceTransactionToRemoteDto = (transaction: FinanceTransaction): RemoteFinanceTransactionDto => ({
@@ -1132,6 +1193,56 @@ const isRemoteStockMutationDto = (payload: unknown): payload is RemoteStockMutat
   );
 };
 
+const isRemoteStockOpnameDto = (payload: unknown): payload is RemoteStockOpnameDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteStockOpnameDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.opname_number === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.counted_at === 'string' &&
+    typeof candidate.total_items === 'number' &&
+    typeof candidate.total_adjustment_in === 'number' &&
+    typeof candidate.total_adjustment_out === 'number' &&
+    typeof candidate.total_variance_value === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteStockOpnameItemDto = (payload: unknown): payload is RemoteStockOpnameItemDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteStockOpnameItemDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.opname_id === 'string' &&
+    typeof candidate.product_id === 'string' &&
+    typeof candidate.product_name === 'string' &&
+    typeof candidate.system_quantity === 'number' &&
+    typeof candidate.quantity_delta === 'number' &&
+    typeof candidate.unit === 'string' &&
+    typeof candidate.cost_per_unit === 'number' &&
+    typeof candidate.variance_value === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteStockOpnameBundleDto = (
+  payload: unknown,
+): payload is RemoteStockOpnameBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteStockOpnameBundleDto>;
+  return (
+    isRemoteStockOpnameDto(candidate.opname) &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every(isRemoteStockOpnameItemDto)
+  );
+};
+
 const isRemoteFinanceTransactionDto = (payload: unknown): payload is RemoteFinanceTransactionDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -1537,6 +1648,17 @@ const updateSalesDocumentSyncMetadata = async (
   await db.salesDocuments.update(documentId, syncMetadata);
 };
 
+const updateStockOpnameSyncMetadata = async (
+  opnameId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<StockOpname, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentOpname = await db.stockOpnames.get(opnameId);
+  if (!currentOpname || currentOpname.updated_at !== sourceUpdatedAt) return;
+
+  await db.stockOpnames.update(opnameId, syncMetadata);
+};
+
 const updateTaxSyncMetadata = async (
   taxId: string,
   sourceUpdatedAt: string,
@@ -1743,6 +1865,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === SALES_DOCUMENT_ENTITY && isRemoteSalesDocumentBundleDto(queueItem.payload)) {
     await updateSalesDocumentSyncMetadata(queueItem.entity_id, queueItem.payload.document.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === STOCK_OPNAME_ENTITY && isRemoteStockOpnameBundleDto(queueItem.payload)) {
+    await updateStockOpnameSyncMetadata(queueItem.entity_id, queueItem.payload.opname.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -1987,6 +2116,18 @@ const processStockMutationQueueItem = async (queueItem: SyncQueueItem) => {
   return stockMutationPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processStockOpnameQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Stock opname sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteStockOpnameBundleDto(queueItem.payload)) {
+    throw new Error('Payload stock opname sync queue tidak valid.');
+  }
+
+  return stockOpnamePostgresAdapter.upsert(queueItem.payload);
+};
+
 const processTaxQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     return taxPostgresAdapter.delete(queueItem.entity_id);
@@ -2090,6 +2231,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteRole: RemoteRoleDto | null = null;
     let remoteRolePermission: RemoteRolePermissionDto | null = null;
     let remoteSalesDocumentBundle: RemoteSalesDocumentBundleDto | null = null;
+    let remoteStockOpnameBundle: RemoteStockOpnameBundleDto | null = null;
     let remoteStockMutation: RemoteStockMutationDto | null = null;
     let remoteTax: RemoteTaxDto | null = null;
     let remoteWarehouse: RemoteWarehouseDto | null = null;
@@ -2134,6 +2276,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteRolePermission = await processRolePermissionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === SALES_DOCUMENT_ENTITY) {
       remoteSalesDocumentBundle = await processSalesDocumentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === STOCK_OPNAME_ENTITY) {
+      remoteStockOpnameBundle = await processStockOpnameQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === STOCK_MUTATION_ENTITY) {
       remoteStockMutation = await processStockMutationQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === TAX_ENTITY) {
@@ -2505,6 +2649,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteSalesDocumentBundle.document.updated_at,
       });
       await mergeRemoteSalesDocumentBundlesIntoDexie([remoteSalesDocumentBundle], syncedAt);
+      return;
+    }
+
+    if (remoteStockOpnameBundle && isRemoteStockOpnameBundleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateStockOpnameSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.opname.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteStockOpnameBundle.opname.updated_at,
+      });
+      await mergeRemoteStockOpnameBundlesIntoDexie([remoteStockOpnameBundle], syncedAt);
       return;
     }
 
@@ -3255,6 +3411,30 @@ export const enqueueSalesDocumentBundleSync = async (
   return queueItem;
 };
 
+export const enqueueStockOpnameBundleSync = async (
+  opname: StockOpname,
+  items: StockOpnameItem[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: STOCK_OPNAME_ENTITY,
+    entity_id: opname.id,
+    operation,
+    payload: mapStockOpnameBundleToRemoteDto(opname, items),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueuePurchaseDocumentBundleSync = async (
   document: PurchaseDocument,
   items: PurchaseDocumentItem[],
@@ -3325,6 +3505,30 @@ export const enqueuePendingSalesDocumentsForSync = async () => {
     if (!existingQueueItem) {
       const items = await db.salesDocumentItems.where('document_id').equals(document.id).toArray();
       await enqueueSalesDocumentBundleSync(document, items, 'update');
+    }
+  }
+};
+
+export const enqueuePendingStockOpnamesForSync = async () => {
+  const stockOpnames = (await db.stockOpnames.toArray())
+    .filter((opname) => opname.sync_status === 'pending' || opname.sync_status === 'failed');
+
+  const stockOpnameQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(STOCK_OPNAME_ENTITY)
+    .toArray();
+
+  for (const opname of stockOpnames) {
+    const existingQueueItem = stockOpnameQueueItems.find((queueItem) => (
+      queueItem.entity_id === opname.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteStockOpnameBundleDto(queueItem.payload) &&
+      queueItem.payload.opname.updated_at === opname.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      const items = await db.stockOpnameItems.where('opname_id').equals(opname.id).toArray();
+      await enqueueStockOpnameBundleSync(opname, items, 'update');
     }
   }
 };

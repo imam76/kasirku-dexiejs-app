@@ -1,5 +1,6 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
+import { enqueueStockOpnameBundleSync } from '@/services/syncQueueService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import type { AuthUser, Product, StockMutation, StockOpname, StockOpnameItem } from '@/types';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
@@ -11,6 +12,7 @@ import {
 import { createStockOpnameNumber } from '@/utils/stockOpname/createStockOpnameNumber';
 import {
   assertStockOpnameDraft,
+  assertStockOpnameReviewed,
   validateCountedQuantity,
   validateStockOpnameItemsForPost,
 } from '@/utils/stockOpname/validateStockOpname';
@@ -41,6 +43,14 @@ export interface PostStockOpnameInput {
   opnameId: string;
 }
 
+export interface ReviewStockOpnameInput {
+  opnameId: string;
+}
+
+export interface ReopenStockOpnameReviewInput {
+  opnameId: string;
+}
+
 export interface CancelStockOpnameDraftInput {
   opnameId: string;
   reason?: string;
@@ -65,6 +75,12 @@ const normalizeCountedQuantity = (value: number | null | undefined) => {
 const getActorSnapshot = (actor: AuthUser | null) => ({
   id: actor?.id,
   name: actor?.name,
+});
+
+const withPendingStockOpnameSync = <T extends StockOpname>(opname: T): T => ({
+  ...opname,
+  sync_status: 'pending',
+  sync_error: undefined,
 });
 
 const filterProductsForDraft = (products: Product[], input: CreateStockOpnameDraftInput) => {
@@ -125,6 +141,12 @@ const getRequiredOpname = async (opnameId: string) => {
   return opname;
 };
 
+const assertStockOpnameOpenForCancel = (opname: Pick<StockOpname, 'status'>) => {
+  if (opname.status !== 'DRAFT' && opname.status !== 'REVIEWED') {
+    throw new Error('Hanya stock opname draft atau reviewed yang bisa dibatalkan.');
+  }
+};
+
 const getOpnameItems = async (opnameId: string) => (
   db.stockOpnameItems.where('opname_id').equals(opnameId).toArray()
 );
@@ -144,7 +166,7 @@ export const createStockOpnameDraft = async (
   const opnameId = crypto.randomUUID();
   const items = products.map((product) => buildOpnameItem(opnameId, product, now));
   const summary = calculateStockOpnameSummary(items);
-  const opname: StockOpname = {
+  const opname: StockOpname = withPendingStockOpnameSync({
     id: opnameId,
     opname_number: createStockOpnameNumber(new Date(now)),
     status: 'DRAFT',
@@ -161,7 +183,7 @@ export const createStockOpnameDraft = async (
     total_variance_value: summary.total_variance_value,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.transaction('rw', [db.stockOpnames, db.stockOpnameItems], async () => {
     await db.stockOpnames.add(opname);
@@ -175,6 +197,8 @@ export const createStockOpnameDraft = async (
     entity_id: opname.id,
     description: `${currentUser?.name ?? 'User'} membuat draft stock opname ${opname.opname_number}.`,
   });
+
+  await enqueueStockOpnameBundleSync(opname, items, 'create');
 
   return { opname, items };
 };
@@ -218,7 +242,7 @@ export const updateStockOpnameDraft = async ({
     });
 
     const summary = calculateStockOpnameSummary(updatedItems);
-    updatedOpname = {
+    updatedOpname = withPendingStockOpnameSync({
       ...opname,
       counted_at: countedAt ?? opname.counted_at,
       notes,
@@ -227,7 +251,7 @@ export const updateStockOpnameDraft = async ({
       total_adjustment_out: summary.total_adjustment_out,
       total_variance_value: summary.total_variance_value,
       updated_at: new Date().toISOString(),
-    };
+    });
 
     await db.stockOpnameItems.bulkPut(updatedItems);
     await db.stockOpnames.put(updatedOpname);
@@ -245,9 +269,119 @@ export const updateStockOpnameDraft = async ({
     description: `${currentUser?.name ?? 'User'} memperbarui draft stock opname ${updatedOpname.opname_number}.`,
   });
 
+  await enqueueStockOpnameBundleSync(updatedOpname, updatedItems, 'update');
+
   return {
     opname: updatedOpname,
     items: updatedItems,
+  };
+};
+
+export const reviewStockOpnameDraft = async ({
+  opnameId,
+}: ReviewStockOpnameInput): Promise<StockOpnameDetailResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'STOCK_OPNAME_MANAGE');
+  const now = new Date().toISOString();
+  let reviewedOpname: StockOpname | undefined;
+  let reviewedItems: StockOpnameItem[] = [];
+
+  await db.transaction('rw', [db.products, db.stockOpnames, db.stockOpnameItems], async () => {
+    const opname = await getRequiredOpname(opnameId);
+    assertStockOpnameDraft(opname);
+    const items = await getOpnameItems(opnameId);
+    const products = await db.products.bulkGet(items.map((item) => item.product_id));
+    const productsById = new Map(
+      products
+        .filter((product): product is Product => Boolean(product))
+        .map((product) => [product.id, product]),
+    );
+
+    if (productsById.size !== new Set(items.map((item) => item.product_id)).size) {
+      throw new Error('Ada produk opname yang tidak ditemukan.');
+    }
+
+    validateStockOpnameItemsForPost(items, productsById);
+    const summary = calculateStockOpnameSummary(items);
+    reviewedItems = items;
+    reviewedOpname = withPendingStockOpnameSync({
+      ...opname,
+      status: 'REVIEWED',
+      reviewed_at: now,
+      reviewed_by: currentUser?.id,
+      reviewed_by_name: currentUser?.name,
+      total_items: summary.total_items,
+      total_adjustment_in: summary.total_adjustment_in,
+      total_adjustment_out: summary.total_adjustment_out,
+      total_variance_value: summary.total_variance_value,
+      updated_at: now,
+    });
+
+    await db.stockOpnames.put(reviewedOpname);
+  });
+
+  if (!reviewedOpname) {
+    throw new Error('Stock opname gagal direview.');
+  }
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'STOCK_OPNAME_REVIEWED',
+    entity: 'stockOpnames',
+    entity_id: reviewedOpname.id,
+    description: `${currentUser?.name ?? 'User'} mereview stock opname ${reviewedOpname.opname_number}.`,
+  });
+
+  await enqueueStockOpnameBundleSync(reviewedOpname, reviewedItems, 'update');
+
+  return {
+    opname: reviewedOpname,
+    items: reviewedItems,
+  };
+};
+
+export const reopenStockOpnameReview = async ({
+  opnameId,
+}: ReopenStockOpnameReviewInput): Promise<StockOpnameDetailResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'STOCK_OPNAME_MANAGE');
+  const now = new Date().toISOString();
+  let reopenedOpname: StockOpname | undefined;
+  let reopenedItems: StockOpnameItem[] = [];
+
+  await db.transaction('rw', [db.stockOpnames, db.stockOpnameItems], async () => {
+    const opname = await getRequiredOpname(opnameId);
+    assertStockOpnameReviewed(opname);
+    reopenedItems = await getOpnameItems(opnameId);
+    reopenedOpname = withPendingStockOpnameSync({
+      ...opname,
+      status: 'DRAFT',
+      reviewed_at: undefined,
+      reviewed_by: undefined,
+      reviewed_by_name: undefined,
+      updated_at: now,
+    });
+
+    await db.stockOpnames.put(reopenedOpname);
+  });
+
+  if (!reopenedOpname) {
+    throw new Error('Stock opname gagal dibuka ulang.');
+  }
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'STOCK_OPNAME_REOPENED',
+    entity: 'stockOpnames',
+    entity_id: reopenedOpname.id,
+    description: `${currentUser?.name ?? 'User'} membuka ulang review stock opname ${reopenedOpname.opname_number}.`,
+  });
+
+  await enqueueStockOpnameBundleSync(reopenedOpname, reopenedItems, 'update');
+
+  return {
+    opname: reopenedOpname,
+    items: reopenedItems,
   };
 };
 
@@ -269,7 +403,7 @@ export const postStockOpname = async ({
     db.inventoryLotConsumptions,
   ], async () => {
     const opname = await getRequiredOpname(opnameId);
-    assertStockOpnameDraft(opname);
+    assertStockOpnameReviewed(opname);
     const items = await getOpnameItems(opnameId);
     const products = await db.products.bulkGet(items.map((item) => item.product_id));
     const productsById = new Map(
@@ -364,7 +498,7 @@ export const postStockOpname = async ({
     }
 
     const summary = calculateStockOpnameSummary(postedItems);
-    postedOpname = {
+    postedOpname = withPendingStockOpnameSync({
       ...opname,
       status: 'POSTED',
       posted_at: now,
@@ -375,7 +509,7 @@ export const postStockOpname = async ({
       total_adjustment_out: summary.total_adjustment_out,
       total_variance_value: summary.total_variance_value,
       updated_at: now,
-    };
+    });
 
     await db.stockOpnameItems.bulkPut(postedItems);
     await db.stockOpnames.put(postedOpname);
@@ -386,6 +520,7 @@ export const postStockOpname = async ({
   }
 
   await enqueueStockMutations(stockMutations);
+  await enqueueStockOpnameBundleSync(postedOpname, postedItems, 'update');
   await writeActivityLog({
     user: currentUser,
     action: 'STOCK_OPNAME_POSTED',
@@ -409,11 +544,14 @@ export const cancelStockOpnameDraft = async ({
   const now = new Date().toISOString();
   let cancelledOpname: StockOpname | undefined;
 
-  await db.transaction('rw', [db.stockOpnames], async () => {
-    const opname = await getRequiredOpname(opnameId);
-    assertStockOpnameDraft(opname);
+  let cancelledItems: StockOpnameItem[] = [];
 
-    cancelledOpname = {
+  await db.transaction('rw', [db.stockOpnames, db.stockOpnameItems], async () => {
+    const opname = await getRequiredOpname(opnameId);
+    assertStockOpnameOpenForCancel(opname);
+    cancelledItems = await getOpnameItems(opnameId);
+
+    cancelledOpname = withPendingStockOpnameSync({
       ...opname,
       status: 'CANCELLED',
       cancelled_at: now,
@@ -421,7 +559,7 @@ export const cancelStockOpnameDraft = async ({
       cancelled_by_name: currentUser?.name,
       cancel_reason: reason,
       updated_at: now,
-    };
+    });
 
     await db.stockOpnames.put(cancelledOpname);
   });
@@ -437,6 +575,8 @@ export const cancelStockOpnameDraft = async ({
     entity_id: cancelledOpname.id,
     description: `${currentUser?.name ?? 'User'} membatalkan stock opname ${cancelledOpname.opname_number}.`,
   });
+
+  await enqueueStockOpnameBundleSync(cancelledOpname, cancelledItems, 'update');
 
   return cancelledOpname;
 };

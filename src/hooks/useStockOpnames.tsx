@@ -4,10 +4,14 @@ import {
   cancelStockOpnameDraft,
   createStockOpnameDraft,
   postStockOpname,
+  reopenStockOpnameReview,
+  reviewStockOpnameDraft,
   updateStockOpnameDraft,
   type CancelStockOpnameDraftInput,
   type CreateStockOpnameDraftInput,
   type PostStockOpnameInput,
+  type ReopenStockOpnameReviewInput,
+  type ReviewStockOpnameInput,
   type UpdateStockOpnameDraftInput,
 } from '@/services/stockOpnameService';
 import {
@@ -91,6 +95,22 @@ export const useStockOpnames = (options: UseStockOpnamesOptions = {}) => {
     },
   });
 
+  const reviewMutation = useMutation({
+    mutationFn: (input: ReviewStockOpnameInput) => reviewStockOpnameDraft(input),
+    onSuccess: async (result) => {
+      await invalidateStockOpnameQueries(result.opname.id);
+      message.success(t('stockOpname.reviewSuccess'));
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: (input: ReopenStockOpnameReviewInput) => reopenStockOpnameReview(input),
+    onSuccess: async (result) => {
+      await invalidateStockOpnameQueries(result.opname.id);
+      message.success(t('stockOpname.reopenSuccess'));
+    },
+  });
+
   const cancelMutation = useMutation({
     mutationFn: (input: CancelStockOpnameDraftInput) => cancelStockOpnameDraft(input),
     onSuccess: async (opname) => {
@@ -113,10 +133,14 @@ export const useStockOpnames = (options: UseStockOpnamesOptions = {}) => {
     isFetchingCandidates: candidatesQuery.isFetching,
     createDraft: createMutation.mutateAsync,
     updateDraft: updateMutation.mutateAsync,
+    reviewDraft: reviewMutation.mutateAsync,
+    reopenReview: reopenMutation.mutateAsync,
     postDraft: postMutation.mutateAsync,
     cancelDraft: cancelMutation.mutateAsync,
     isCreatingDraft: createMutation.isPending,
     isUpdatingDraft: updateMutation.isPending,
+    isReviewingDraft: reviewMutation.isPending,
+    isReopeningReview: reopenMutation.isPending,
     isPostingDraft: postMutation.isPending,
     isCancellingDraft: cancelMutation.isPending,
   };

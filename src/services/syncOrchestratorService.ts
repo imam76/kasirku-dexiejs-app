@@ -10,6 +10,7 @@ import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
+import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import {
   enqueuePendingAuthUsersForSync,
   enqueuePendingCooperativeDataForSync,
@@ -19,6 +20,7 @@ import {
   enqueuePendingRolePermissionsForSync,
   enqueuePendingRolesForSync,
   enqueuePendingSalesDocumentsForSync,
+  enqueuePendingStockOpnamesForSync,
   processPendingSyncQueue,
   recoverStaleProcessingSyncQueueItems,
   retryFailedSyncQueueItems,
@@ -41,6 +43,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingJournalEntriesForSync();
   await enqueuePendingPurchaseDocumentsForSync();
   await enqueuePendingSalesDocumentsForSync();
+  await enqueuePendingStockOpnamesForSync();
 };
 
 export const refreshAllDataFromPostgres = async () => {
@@ -72,6 +75,7 @@ export const refreshAllDataFromPostgres = async () => {
     cooperative: await refreshCooperativeDataFromPostgres(),
     purchaseDocuments: await refreshPurchaseDocumentsFromPostgres(),
     salesDocuments: await refreshSalesDocumentsFromPostgres(),
+    stockOpnames: await refreshStockOpnamesFromPostgres(),
   };
 
   console.info('[PostgreSQL sync] read refresh completed', refreshResults);

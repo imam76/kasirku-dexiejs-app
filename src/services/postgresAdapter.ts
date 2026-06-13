@@ -33,6 +33,7 @@ import type {
   SalesDocumentType,
   SalesInvoicePaymentStatus,
   StockMutationSourceType,
+  StockOpnameStatus,
   TaxCalculationMode,
   UserRole,
   WholesalePrice,
@@ -243,6 +244,58 @@ export interface RemoteStockMutationDto {
   actor_user_name?: string | null;
   occurred_at: string;
   created_at: string;
+}
+
+export interface RemoteStockOpnameDto {
+  id: string;
+  opname_number: string;
+  status: StockOpnameStatus;
+  counted_at: string;
+  reviewed_at?: string | null;
+  posted_at?: string | null;
+  cancelled_at?: string | null;
+  warehouse_id?: string | null;
+  warehouse_code?: string | null;
+  warehouse_name?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  reviewed_by?: string | null;
+  reviewed_by_name?: string | null;
+  posted_by?: string | null;
+  posted_by_name?: string | null;
+  cancelled_by?: string | null;
+  cancelled_by_name?: string | null;
+  cancel_reason?: string | null;
+  total_items: number;
+  total_adjustment_in: number;
+  total_adjustment_out: number;
+  total_variance_value: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteStockOpnameItemDto {
+  id: string;
+  opname_id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string | null;
+  category?: string | null;
+  system_quantity: number;
+  counted_quantity?: number | null;
+  quantity_delta: number;
+  unit: ProductUnit;
+  cost_per_unit: number;
+  variance_value: number;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteStockOpnameBundleDto {
+  opname: RemoteStockOpnameDto;
+  items: RemoteStockOpnameItemDto[];
 }
 
 export interface RemoteSalesDocumentDto {
@@ -1081,6 +1134,26 @@ export const stockMutationPostgresAdapter = {
   async upsert(input: RemoteStockMutationDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteStockMutationDto>('postgres_upsert_stock_mutation', { input });
+  },
+};
+
+export const stockOpnamePostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteStockOpnameBundleDto[]>('postgres_list_stock_opname_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteStockOpnameBundleDto | null>('postgres_get_stock_opname_bundle', { id });
+  },
+
+  async upsert(input: RemoteStockOpnameBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteStockOpnameBundleDto>('postgres_upsert_stock_opname_bundle', { input });
   },
 };
 
