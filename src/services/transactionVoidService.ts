@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import type { FinanceTransaction, Product, StockMutation, TransactionItem } from '@/types';
+import type { Contact, FinanceTransaction, Product, StockMutation, TransactionItem } from '@/types';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
@@ -10,6 +10,7 @@ import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } fro
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { normalisasiHargaProduk } from '@/utils/pricing';
 import { recordMembershipPointTransaction } from '@/services/membershipService';
+import { enqueueContactSync } from '@/services/syncQueueService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -44,6 +45,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   let transactionNumber = transactionId;
   const stockMutations: StockMutation[] = [];
   const deletedFinanceTransactions: FinanceTransaction[] = [];
+  let updatedMemberForSync: Contact | undefined;
 
   await db.transaction(
     'rw',
@@ -177,10 +179,15 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
           });
         }
 
-        await db.contacts.update(member.id, {
+        updatedMemberForSync = {
+          ...member,
           membership_points_balance: runningBalance,
           updated_at: now,
-        });
+          sync_status: 'pending',
+          sync_error: undefined,
+        };
+
+        await db.contacts.put(updatedMemberForSync);
       }
 
       const totalProfit = getTransactionProfit(items);
@@ -236,6 +243,9 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   await enqueueStockMutations(stockMutations);
   if (deletedFinanceTransactions.length > 0) {
     await enqueueFinanceTransactionsSync(deletedFinanceTransactions, 'delete');
+  }
+  if (updatedMemberForSync) {
+    await enqueueContactSync(updatedMemberForSync, 'update');
   }
 
   await writeActivityLog({

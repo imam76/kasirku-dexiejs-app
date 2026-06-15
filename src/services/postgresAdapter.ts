@@ -25,6 +25,7 @@ import type {
   CurrencyRateSource,
   PurchaseDocumentStatus,
   PurchaseDocumentType,
+  RetailMembershipStatus,
   PurchaseAdditionalCostTreatment,
   PurchaseCostEstimateSource,
   PurchaseCostStatus,
@@ -148,6 +149,11 @@ export interface RemoteContactDto {
   tax_number?: string | null;
   notes?: string | null;
   is_active: boolean;
+  is_member?: boolean | null;
+  membership_number?: string | null;
+  membership_status?: RetailMembershipStatus | null;
+  membership_joined_at?: string | null;
+  membership_points_balance?: number | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

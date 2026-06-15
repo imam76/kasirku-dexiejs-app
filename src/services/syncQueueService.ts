@@ -204,6 +204,11 @@ const mapContactToRemoteDto = (contact: Contact): RemoteContactDto => ({
   tax_number: contact.tax_number,
   notes: contact.notes,
   is_active: contact.is_active,
+  is_member: Boolean(contact.is_member),
+  membership_number: contact.membership_number,
+  membership_status: contact.membership_status,
+  membership_joined_at: contact.membership_joined_at,
+  membership_points_balance: normalizeRemoteNumber(contact.membership_points_balance),
   created_at: contact.created_at,
   updated_at: contact.updated_at,
 });
@@ -2927,6 +2932,29 @@ export const enqueueContactSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueuePendingContactsForSync = async () => {
+  const contacts = (await db.contacts.toArray())
+    .filter((contact) => contact.sync_status === 'pending' || contact.sync_status === 'failed');
+
+  const contactQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(CONTACT_ENTITY)
+    .toArray();
+
+  for (const contact of contacts) {
+    const existingQueueItem = contactQueueItems.find((queueItem) => (
+      queueItem.entity_id === contact.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteContactDto(queueItem.payload) &&
+      queueItem.payload.updated_at === contact.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueContactSync(contact, 'update');
+    }
+  }
 };
 
 export const enqueueCooperativeMemberSync = async (

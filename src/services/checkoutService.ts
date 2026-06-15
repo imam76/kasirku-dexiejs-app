@@ -1,6 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, FinanceTransaction, PaymentMethod, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
+import type { CartItem, Contact, FinanceTransaction, PaymentMethod, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
@@ -17,6 +17,7 @@ import {
   isActiveRetailMember,
   recordMembershipPointTransaction,
 } from '@/services/membershipService';
+import { enqueueContactSync } from '@/services/syncQueueService';
 
 interface CheckoutInput {
   cart: CartItem[];
@@ -279,6 +280,7 @@ export const checkout = async ({
   const activePromos = await getActivePromos(now);
   let stockMutations: StockMutation[] = [];
   let financeTransaction: FinanceTransaction | undefined;
+  let updatedMemberForSync: Contact | undefined;
 
   const result = await db.transaction(
     'rw',
@@ -411,10 +413,15 @@ export const checkout = async ({
           });
         }
 
-        await db.contacts.update(membershipEvaluation.member.id, {
+        updatedMemberForSync = {
+          ...membershipEvaluation.member,
           membership_points_balance: memberBalanceAfter,
           updated_at: createdAt,
-        });
+          sync_status: 'pending',
+          sync_error: undefined,
+        };
+
+        await db.contacts.put(updatedMemberForSync);
       }
 
       await recordProfit(transaction, items, createdAt);
@@ -429,6 +436,9 @@ export const checkout = async ({
   await enqueueStockMutations(stockMutations);
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  }
+  if (updatedMemberForSync) {
+    await enqueueContactSync(updatedMemberForSync, 'update');
   }
 
   return result;

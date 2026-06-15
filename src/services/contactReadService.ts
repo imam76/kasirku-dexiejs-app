@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { contactPostgresAdapter, isTauriRuntime, type RemoteContactDto } from '@/services/postgresAdapter';
-import type { Contact, ContactType } from '@/types';
+import type { Contact, ContactType, RetailMembershipStatus } from '@/types';
 
 export interface ContactReadSyncResult {
   fetched: number;
@@ -22,42 +22,91 @@ const isContactType = (contactType: string): contactType is ContactType => (
   ['CUSTOMER', 'SUPPLIER', 'CUSTOMER_SUPPLIER', 'OTHER'].includes(contactType)
 );
 
-const mapRemoteContactToLocal = (
-  remoteContact: RemoteContactDto,
-  syncedAt: string,
-  localContact?: Contact,
-): Contact => ({
-  id: remoteContact.id,
-  name: remoteContact.name,
-  contact_type: isContactType(remoteContact.contact_type) ? remoteContact.contact_type : 'OTHER',
-  phone: remoteContact.phone ?? undefined,
-  email: remoteContact.email ?? undefined,
-  address: remoteContact.address ?? undefined,
-  company_name: remoteContact.company_name ?? undefined,
-  tax_number: remoteContact.tax_number ?? undefined,
-  notes: remoteContact.notes ?? undefined,
-  is_active: remoteContact.deleted_at ? false : remoteContact.is_active,
-  is_member: localContact?.is_member,
-  membership_number: localContact?.membership_number,
-  membership_status: localContact?.membership_status,
-  membership_joined_at: localContact?.membership_joined_at,
-  membership_points_balance: localContact?.membership_points_balance,
-  created_at: remoteContact.created_at,
-  updated_at: remoteContact.updated_at,
-  sync_status: 'synced',
-  sync_error: undefined,
-  last_synced_at: syncedAt,
-  remote_updated_at: remoteContact.updated_at,
-});
+const isRetailMembershipStatus = (status?: string | null): status is RetailMembershipStatus => (
+  status === 'ACTIVE' || status === 'INACTIVE'
+);
 
-const hasLocalUnsyncedChanges = (contact: Contact) => (
-  contact.sync_status === 'pending' || contact.sync_status === 'failed'
+interface MembershipSnapshotLike {
+  is_member?: boolean | null;
+  membership_number?: string | null;
+  membership_status?: RetailMembershipStatus | string | null;
+  membership_joined_at?: string | null;
+  membership_points_balance?: number | null;
+}
+
+const hasMembershipSnapshot = (contact?: MembershipSnapshotLike | null) => (
+  Boolean(
+    contact?.is_member ||
+    contact?.membership_number ||
+    contact?.membership_status ||
+    contact?.membership_joined_at ||
+    Number(contact?.membership_points_balance || 0) > 0,
+  )
 );
 
 const toTimestamp = (value: string) => {
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? null : timestamp;
 };
+
+const shouldKeepLocalMembershipSnapshot = (
+  remoteContact: RemoteContactDto,
+  localContact?: Contact,
+) => {
+  if (!hasMembershipSnapshot(localContact) || hasMembershipSnapshot(remoteContact)) return false;
+
+  const localRemoteUpdatedAt = localContact?.remote_updated_at ?? localContact?.updated_at;
+  if (!localRemoteUpdatedAt) return true;
+
+  const remoteTimestamp = toTimestamp(remoteContact.updated_at);
+  const localTimestamp = toTimestamp(localRemoteUpdatedAt);
+
+  if (remoteTimestamp !== null && localTimestamp !== null) {
+    return remoteTimestamp <= localTimestamp;
+  }
+
+  return remoteContact.updated_at <= localRemoteUpdatedAt;
+};
+
+const mapRemoteContactToLocal = (
+  remoteContact: RemoteContactDto,
+  syncedAt: string,
+  localContact?: Contact,
+): Contact => {
+  const keepLocalMembership = shouldKeepLocalMembershipSnapshot(remoteContact, localContact);
+
+  return {
+    id: remoteContact.id,
+    name: remoteContact.name,
+    contact_type: isContactType(remoteContact.contact_type) ? remoteContact.contact_type : 'OTHER',
+    phone: remoteContact.phone ?? undefined,
+    email: remoteContact.email ?? undefined,
+    address: remoteContact.address ?? undefined,
+    company_name: remoteContact.company_name ?? undefined,
+    tax_number: remoteContact.tax_number ?? undefined,
+    notes: remoteContact.notes ?? undefined,
+    is_active: remoteContact.deleted_at ? false : remoteContact.is_active,
+    is_member: keepLocalMembership ? localContact?.is_member : Boolean(remoteContact.is_member),
+    membership_number: keepLocalMembership ? localContact?.membership_number : remoteContact.membership_number ?? undefined,
+    membership_status: keepLocalMembership
+      ? localContact?.membership_status
+      : isRetailMembershipStatus(remoteContact.membership_status)
+        ? remoteContact.membership_status
+        : undefined,
+    membership_joined_at: keepLocalMembership ? localContact?.membership_joined_at : remoteContact.membership_joined_at ?? undefined,
+    membership_points_balance: keepLocalMembership ? localContact?.membership_points_balance : Number(remoteContact.membership_points_balance ?? 0),
+    created_at: remoteContact.created_at,
+    updated_at: remoteContact.updated_at,
+    sync_status: keepLocalMembership ? 'pending' : 'synced',
+    sync_error: undefined,
+    last_synced_at: syncedAt,
+    remote_updated_at: remoteContact.updated_at,
+  };
+};
+
+const hasLocalUnsyncedChanges = (contact: Contact) => (
+  contact.sync_status === 'pending' || contact.sync_status === 'failed'
+);
 
 const shouldApplyRemoteContact = (
   localContact: Contact | undefined,

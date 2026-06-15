@@ -15,6 +15,11 @@ pub async fn list_contacts(pool: &PgPool) -> Result<Vec<ContactDto>, sqlx::Error
             tax_number,
             notes,
             is_active,
+            is_member,
+            membership_number,
+            membership_status,
+            membership_joined_at::TEXT AS membership_joined_at,
+            membership_points_balance,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
@@ -41,6 +46,11 @@ pub async fn get_contact(pool: &PgPool, id: String) -> Result<Option<ContactDto>
             tax_number,
             notes,
             is_active,
+            is_member,
+            membership_number,
+            membership_status,
+            membership_joined_at::TEXT AS membership_joined_at,
+            membership_points_balance,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
@@ -70,6 +80,11 @@ async fn get_contact_including_deleted(
             tax_number,
             notes,
             is_active,
+            is_member,
+            membership_number,
+            membership_status,
+            membership_joined_at::TEXT AS membership_joined_at,
+            membership_points_balance,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
@@ -97,11 +112,16 @@ pub async fn upsert_contact(pool: &PgPool, input: ContactDto) -> Result<ContactD
             tax_number,
             notes,
             is_active,
+            is_member,
+            membership_number,
+            membership_status,
+            membership_joined_at,
+            membership_points_balance,
             created_at,
             updated_at,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::TIMESTAMPTZ, $12::TIMESTAMPTZ, $13::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::TIMESTAMPTZ, $15, $16::TIMESTAMPTZ, $17::TIMESTAMPTZ, $18::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             contact_type = EXCLUDED.contact_type,
@@ -112,6 +132,11 @@ pub async fn upsert_contact(pool: &PgPool, input: ContactDto) -> Result<ContactD
             tax_number = EXCLUDED.tax_number,
             notes = EXCLUDED.notes,
             is_active = EXCLUDED.is_active,
+            is_member = EXCLUDED.is_member,
+            membership_number = EXCLUDED.membership_number,
+            membership_status = EXCLUDED.membership_status,
+            membership_joined_at = EXCLUDED.membership_joined_at,
+            membership_points_balance = EXCLUDED.membership_points_balance,
             updated_at = EXCLUDED.updated_at,
             deleted_at = EXCLUDED.deleted_at
         WHERE EXCLUDED.updated_at >= contacts.updated_at
@@ -126,6 +151,11 @@ pub async fn upsert_contact(pool: &PgPool, input: ContactDto) -> Result<ContactD
             tax_number,
             notes,
             is_active,
+            is_member,
+            membership_number,
+            membership_status,
+            membership_joined_at::TEXT AS membership_joined_at,
+            membership_points_balance,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
@@ -141,6 +171,11 @@ pub async fn upsert_contact(pool: &PgPool, input: ContactDto) -> Result<ContactD
     .bind(input.tax_number)
     .bind(input.notes)
     .bind(input.is_active)
+    .bind(input.is_member)
+    .bind(input.membership_number)
+    .bind(input.membership_status)
+    .bind(input.membership_joined_at)
+    .bind(input.membership_points_balance)
     .bind(input.created_at)
     .bind(input.updated_at)
     .bind(input.deleted_at)
@@ -176,6 +211,11 @@ pub async fn delete_contact(pool: &PgPool, id: String) -> Result<Option<ContactD
             tax_number,
             notes,
             is_active,
+            is_member,
+            membership_number,
+            membership_status,
+            membership_joined_at::TEXT AS membership_joined_at,
+            membership_points_balance,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at

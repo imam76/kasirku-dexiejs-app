@@ -13,6 +13,7 @@ import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadS
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import {
   enqueuePendingAuthUsersForSync,
+  enqueuePendingContactsForSync,
   enqueuePendingCooperativeDataForSync,
   enqueuePendingFinanceTransactionsForSync,
   enqueuePendingJournalEntriesForSync,
@@ -38,6 +39,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingRolesForSync();
   await enqueuePendingRolePermissionsForSync();
   await enqueuePendingAuthUsersForSync();
+  await enqueuePendingContactsForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingFinanceTransactionsForSync();
   await enqueuePendingJournalEntriesForSync();
