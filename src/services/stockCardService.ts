@@ -292,13 +292,77 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
     });
   }
 
-  // 8. Sort by date ASC
+  // 8. Production orders
+  if (db.productionOrderItems && db.productionOrders) {
+    const productionItems = await db.productionOrderItems.where('material_product_id').equals(productId).toArray();
+    for (const item of productionItems) {
+      const order = await db.productionOrders.get(item.production_order_id);
+      if (!order || (order.status !== 'POSTED' && order.status !== 'VOIDED') || !order.posted_at) continue;
+
+      const quantity = toFiniteNumber(item.stock_quantity_used);
+      if (quantity <= 0) continue;
+
+      allMutations.push({
+        id: `production_consumption_${item.id}`,
+        date: order.posted_at,
+        sourceType: 'PRODUCTION_CONSUMPTION',
+        sourceNumber: order.production_number,
+        qtyIn: 0,
+        qtyOut: quantity,
+        unit: baseUnit,
+      });
+
+      if (order.status === 'VOIDED' && order.voided_at) {
+        allMutations.push({
+          id: `production_void_material_${item.id}`,
+          date: order.voided_at,
+          sourceType: 'PRODUCTION_VOID',
+          sourceNumber: order.production_number,
+          qtyIn: quantity,
+          qtyOut: 0,
+          unit: baseUnit,
+        });
+      }
+    }
+
+    const productionOutputs = await db.productionOrders.where('finished_product_id').equals(productId).toArray();
+    for (const order of productionOutputs) {
+      if ((order.status !== 'POSTED' && order.status !== 'VOIDED') || !order.posted_at) continue;
+
+      const quantity = toFiniteNumber(order.quantity_produced);
+      if (quantity <= 0) continue;
+
+      allMutations.push({
+        id: `production_output_${order.id}`,
+        date: order.posted_at,
+        sourceType: 'PRODUCTION_OUTPUT',
+        sourceNumber: order.production_number,
+        qtyIn: quantity,
+        qtyOut: 0,
+        unit: baseUnit,
+      });
+
+      if (order.status === 'VOIDED' && order.voided_at) {
+        allMutations.push({
+          id: `production_void_output_${order.id}`,
+          date: order.voided_at,
+          sourceType: 'PRODUCTION_VOID',
+          sourceNumber: order.production_number,
+          qtyIn: 0,
+          qtyOut: quantity,
+          unit: baseUnit,
+        });
+      }
+    }
+  }
+
+  // 9. Sort by date ASC
   allMutations.sort((a, b) => {
     const dateDiff = getMovementTime(a) - getMovementTime(b);
     return dateDiff !== 0 ? dateDiff : a.id.localeCompare(b.id);
   });
 
-  // 9. Calculate balances from the product stock snapshot.
+  // 10. Calculate balances from the product stock snapshot.
   // FIFO opening lots are migration snapshots, not true transaction history.
   // Anchoring to products.stock prevents those snapshots from being counted
   // again together with POS/Purchase/Sales movements.

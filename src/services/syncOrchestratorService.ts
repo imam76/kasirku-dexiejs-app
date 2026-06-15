@@ -7,6 +7,7 @@ import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransa
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
 import { postgresAdapter } from '@/services/postgresAdapter';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
+import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
@@ -17,6 +18,7 @@ import {
   enqueuePendingCooperativeDataForSync,
   enqueuePendingFinanceTransactionsForSync,
   enqueuePendingJournalEntriesForSync,
+  enqueuePendingProductionOrdersForSync,
   enqueuePendingPurchaseDocumentsForSync,
   enqueuePendingRolePermissionsForSync,
   enqueuePendingRolesForSync,
@@ -43,6 +45,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingFinanceTransactionsForSync();
   await enqueuePendingJournalEntriesForSync();
+  await enqueuePendingProductionOrdersForSync();
   await enqueuePendingPurchaseDocumentsForSync();
   await enqueuePendingSalesDocumentsForSync();
   await enqueuePendingStockOpnamesForSync();
@@ -74,6 +77,7 @@ export const refreshAllDataFromPostgres = async () => {
     products: await refreshProductsFromPostgres(),
     financeTransactions: await refreshFinanceTransactionsFromPostgres(),
     journalEntries: await refreshJournalEntriesFromPostgres(),
+    productionOrders: await refreshProductionOrdersFromPostgres(),
     cooperative: await refreshCooperativeDataFromPostgres(),
     purchaseDocuments: await refreshPurchaseDocumentsFromPostgres(),
     salesDocuments: await refreshSalesDocumentsFromPostgres(),

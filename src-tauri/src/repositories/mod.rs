@@ -6,6 +6,7 @@ pub mod department_repository;
 pub mod finance_transaction_repository;
 pub mod journal_entry_repository;
 pub mod product_repository;
+pub mod production_order_repository;
 pub mod project_repository;
 pub mod purchase_document_repository;
 pub mod sales_document_repository;

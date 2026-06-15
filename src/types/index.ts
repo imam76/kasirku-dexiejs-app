@@ -161,6 +161,7 @@ export type Permission =
   | 'PROFIT_VIEW'
   | 'CASHIER_ACCESS'
   | 'STOCK_ACCESS'
+  | 'PRODUCTION_MANAGE'
   | 'STOCK_OPNAME_MANAGE'
   | 'STOCK_PURCHASE_ACCESS'
   | 'FINANCE_ACCESS'
@@ -1298,6 +1299,85 @@ export interface StockOpnameItem {
   updated_at: string;
 }
 
+export type ProductionOrderStatus = 'DRAFT' | 'POSTED' | 'VOIDED';
+
+export interface ProductRecipe {
+  id: string;
+  finished_product_id: string;
+  finished_product_name: string;
+  output_quantity: number;
+  output_unit: ProductUnit;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductRecipeItem {
+  id: string;
+  recipe_id: string;
+  material_product_id: string;
+  material_product_name: string;
+  quantity: number;
+  unit: ProductUnit;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductionOrder {
+  id: string;
+  production_number: string;
+  status: ProductionOrderStatus;
+  finished_product_id: string;
+  finished_product_name: string;
+  quantity_produced: number;
+  unit: ProductUnit;
+  material_cost: number;
+  additional_cost: number;
+  total_cost: number;
+  unit_cost: number;
+  produced_at: string;
+  posted_at?: string;
+  voided_at?: string;
+  void_reason?: string;
+  notes?: string;
+  created_by?: string;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: EntitySyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface ProductionOrderItem {
+  id: string;
+  production_order_id: string;
+  material_product_id: string;
+  material_product_name: string;
+  sku?: string;
+  quantity_used: number;
+  unit: ProductUnit;
+  stock_quantity_used: number;
+  stock_unit: ProductUnit;
+  cost_per_unit: number;
+  total_cost: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductionOrderCost {
+  id: string;
+  production_order_id: string;
+  name: string;
+  amount: number;
+  account_id?: string;
+  account_code?: string;
+  account_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type StockMutationSourceType =
   | 'POS_TRANSACTION'
   | 'POS_TRANSACTION_VOID'
@@ -1312,6 +1392,9 @@ export type StockMutationSourceType =
   | 'SALES_RETURN'
   | 'SALES_RETURN_VOID'
   | 'STOCK_OPNAME'
+  | 'PRODUCTION_CONSUMPTION'
+  | 'PRODUCTION_OUTPUT'
+  | 'PRODUCTION_VOID'
   | 'SHOPPING_NOTE';
 
 export interface StockMutation {
@@ -1737,6 +1820,7 @@ export type JournalSourceType =
   | 'COOPERATIVE_SAVING'
   | 'COOPERATIVE_LOAN'
   | 'MANUAL_JOURNAL'
+  | 'PRODUCTION_ORDER'
   | 'OPENING_BALANCE';
 
 export type AccountingProfileCode =
@@ -1984,12 +2068,16 @@ export type InventoryLotSourceType =
   | 'PURCHASE_RETURN_VOID'
   | 'SALES_DELIVERY_VOID'
   | 'STOCK_OPNAME'
+  | 'PRODUCTION_OUTPUT'
+  | 'PRODUCTION_VOID'
   | 'OPENING';
 
 export type InventoryLotConsumptionSourceType =
   | 'POS_TRANSACTION'
   | 'SALES_DELIVERY'
-  | 'STOCK_OPNAME';
+  | 'STOCK_OPNAME'
+  | 'PRODUCTION_CONSUMPTION'
+  | 'PRODUCTION_VOID';
 
 /**
  * Represents a single batch (lot) of inventory received at a specific cost.

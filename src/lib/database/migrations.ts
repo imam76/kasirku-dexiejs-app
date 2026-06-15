@@ -1052,4 +1052,23 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       });
     }
   });
+
+  this.version(56).stores({
+    productRecipes: 'id, finished_product_id, finished_product_name, created_at, updated_at',
+    productRecipeItems: 'id, recipe_id, material_product_id',
+    productionOrders: 'id, production_number, status, finished_product_id, produced_at, sync_status, updated_at, created_at',
+    productionOrderItems: 'id, production_order_id, material_product_id',
+    productionOrderCosts: 'id, production_order_id',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingRolePermissions = await rolePermissionTable.toArray();
+    const existingRolePermissionIds = new Set(existingRolePermissions.map((permission) => permission.id));
+    const missingSystemRolePermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingRolePermissionIds.has(permission.id));
+
+    if (missingSystemRolePermissions.length > 0) {
+      await rolePermissionTable.bulkPut(missingSystemRolePermissions);
+    }
+  });
 }

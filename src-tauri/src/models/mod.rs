@@ -6,6 +6,7 @@ pub mod department;
 pub mod finance_transaction;
 pub mod journal_entry;
 pub mod product;
+pub mod production_order;
 pub mod project;
 pub mod purchase_document;
 pub mod sales_document;

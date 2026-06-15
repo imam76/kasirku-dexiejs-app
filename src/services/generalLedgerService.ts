@@ -13,6 +13,9 @@ import type {
   JournalEntryLine,
   JournalSourceType,
   PaymentMethod,
+  ProductionOrder,
+  ProductionOrderCost,
+  ProductionOrderItem,
   PurchaseDocument,
   PurchaseInvoicePayment,
   SalesDocument,
@@ -45,6 +48,7 @@ const SOURCE_EVENTS = {
   COOPERATIVE_SAVING_WITHDRAWAL_POSTED: 'COOPERATIVE_SAVING_WITHDRAWAL_POSTED',
   COOPERATIVE_LOAN_DISBURSED: 'COOPERATIVE_LOAN_DISBURSED',
   COOPERATIVE_LOAN_PAYMENT_POSTED: 'COOPERATIVE_LOAN_PAYMENT_POSTED',
+  PRODUCTION_ORDER_POSTED: 'PRODUCTION_ORDER_POSTED',
   OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
   MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
 } as const;
@@ -817,6 +821,73 @@ export const postStockPurchaseJournal = async (
       createDebitLine(inventoryAccount, amount, 'Persediaan bertambah dari pembelian stok'),
       createCreditLine(cashAccount, amount, 'Pembayaran pembelian stok'),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const postProductionOrderJournal = async (
+  order: ProductionOrder,
+  items: ProductionOrderItem[],
+  costs: ProductionOrderCost[],
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (order.status !== 'POSTED') return undefined;
+  const entryDate = order.posted_at ?? order.produced_at;
+  if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+  const cashAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cash, 'Kas');
+  const materialCost = amountOrZero(order.material_cost);
+  const additionalCost = amountOrZero(order.additional_cost);
+  const totalCost = amountOrZero(order.total_cost);
+  const itemCount = items.length;
+  const lines: JournalLineDraft[] = [
+    createDebitLine(inventoryAccount, totalCost, `Barang jadi produksi ${order.production_number}`),
+    createCreditLine(inventoryAccount, materialCost, `Bahan baku keluar untuk ${itemCount} item produksi`),
+  ].filter((line): line is JournalLineDraft => Boolean(line));
+
+  for (const cost of costs) {
+    const amount = amountOrZero(cost.amount);
+    if (amount <= 0) continue;
+
+    const account = cost.account_id
+      ? getPostableAccount(accounts, { ids: [cost.account_id], codes: cost.account_code ? [cost.account_code] : [] }, cost.name)
+      : cashAccount;
+    const line = createCreditLine(account, amount, cost.name);
+    if (line) lines.push(line);
+  }
+
+  if (additionalCost > 0 && costs.length === 0) {
+    const line = createCreditLine(cashAccount, additionalCost, 'Biaya tambahan produksi');
+    if (line) lines.push(line);
+  }
+
+  if (totalCost <= 0) return undefined;
+
+  return postBalancedJournalEntry({
+    source_type: 'PRODUCTION_ORDER',
+    source_id: order.id,
+    source_number: order.production_number,
+    source_event: SOURCE_EVENTS.PRODUCTION_ORDER_POSTED,
+    entry_date: entryDate,
+    description: `Produksi ${order.production_number} - ${order.finished_product_name}`,
+    lines,
+    actor,
+  });
+};
+
+export const reverseProductionOrderJournal = async (
+  order: ProductionOrder,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  return reverseJournalEntriesForSource({
+    source_type: 'PRODUCTION_ORDER',
+    source_id: order.id,
+    source_event: SOURCE_EVENTS.PRODUCTION_ORDER_POSTED,
+    reason: `Pembalikan jurnal produksi ${order.production_number}: ${reason}`,
+    entry_date: order.voided_at,
     actor,
   });
 };

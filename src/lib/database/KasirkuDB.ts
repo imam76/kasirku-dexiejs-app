@@ -35,6 +35,11 @@ import type {
   PurchaseDocument,
   PurchaseDocumentItem,
   PurchaseInvoicePayment,
+  ProductRecipe,
+  ProductRecipeItem,
+  ProductionOrder,
+  ProductionOrderCost,
+  ProductionOrderItem,
   ChartOfAccount,
   FinanceAccountMapping,
   AccountingProfileSetting,
@@ -103,6 +108,11 @@ export class KasirkuDB extends Dexie {
   purchaseDocuments!: Table<PurchaseDocument>;
   purchaseDocumentItems!: Table<PurchaseDocumentItem>;
   purchaseInvoicePayments!: Table<PurchaseInvoicePayment>;
+  productRecipes!: Table<ProductRecipe>;
+  productRecipeItems!: Table<ProductRecipeItem>;
+  productionOrders!: Table<ProductionOrder>;
+  productionOrderItems!: Table<ProductionOrderItem>;
+  productionOrderCosts!: Table<ProductionOrderCost>;
   chartOfAccounts!: Table<ChartOfAccount>;
   financeAccountMappings!: Table<FinanceAccountMapping>;
   accountingProfileSetting!: Table<AccountingProfileSetting>;

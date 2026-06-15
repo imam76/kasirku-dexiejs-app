@@ -78,6 +78,9 @@ const MasterDataProjectsLazyRouteImport = createFileRoute(
 const MasterDataProductsLazyRouteImport = createFileRoute(
   '/master-data/products',
 )()
+const MasterDataProductionLazyRouteImport = createFileRoute(
+  '/master-data/production',
+)()
 const MasterDataEmployeesLazyRouteImport = createFileRoute(
   '/master-data/employees',
 )()
@@ -394,6 +397,14 @@ const MasterDataProductsLazyRoute = MasterDataProductsLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/master-data/products.lazy').then((d) => d.Route),
 )
+const MasterDataProductionLazyRoute =
+  MasterDataProductionLazyRouteImport.update({
+    id: '/master-data/production',
+    path: '/master-data/production',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/master-data/production.lazy').then((d) => d.Route),
+  )
 const MasterDataEmployeesLazyRoute = MasterDataEmployeesLazyRouteImport.update({
   id: '/master-data/employees',
   path: '/master-data/employees',
@@ -836,6 +847,7 @@ export interface FileRoutesByFullPath {
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/employees': typeof MasterDataEmployeesLazyRoute
+  '/master-data/production': typeof MasterDataProductionLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
@@ -922,6 +934,7 @@ export interface FileRoutesByTo {
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/employees': typeof MasterDataEmployeesLazyRoute
+  '/master-data/production': typeof MasterDataProductionLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
@@ -1009,6 +1022,7 @@ export interface FileRoutesById {
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
   '/master-data/departments': typeof MasterDataDepartmentsLazyRoute
   '/master-data/employees': typeof MasterDataEmployeesLazyRoute
+  '/master-data/production': typeof MasterDataProductionLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
@@ -1097,6 +1111,7 @@ export interface FileRouteTypes {
     | '/master-data/currencies'
     | '/master-data/departments'
     | '/master-data/employees'
+    | '/master-data/production'
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
@@ -1183,6 +1198,7 @@ export interface FileRouteTypes {
     | '/master-data/currencies'
     | '/master-data/departments'
     | '/master-data/employees'
+    | '/master-data/production'
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
@@ -1269,6 +1285,7 @@ export interface FileRouteTypes {
     | '/master-data/currencies'
     | '/master-data/departments'
     | '/master-data/employees'
+    | '/master-data/production'
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
@@ -1356,6 +1373,7 @@ export interface RootRouteChildren {
   MasterDataCurrenciesLazyRoute: typeof MasterDataCurrenciesLazyRoute
   MasterDataDepartmentsLazyRoute: typeof MasterDataDepartmentsLazyRoute
   MasterDataEmployeesLazyRoute: typeof MasterDataEmployeesLazyRoute
+  MasterDataProductionLazyRoute: typeof MasterDataProductionLazyRoute
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
   MasterDataProjectsLazyRoute: typeof MasterDataProjectsLazyRoute
   MasterDataPromosLazyRoute: typeof MasterDataPromosLazyRoute
@@ -1633,6 +1651,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data/products'
       fullPath: '/master-data/products'
       preLoaderRoute: typeof MasterDataProductsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/master-data/production': {
+      id: '/master-data/production'
+      path: '/master-data/production'
+      fullPath: '/master-data/production'
+      preLoaderRoute: typeof MasterDataProductionLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/master-data/employees': {
@@ -2077,6 +2102,7 @@ const rootRouteChildren: RootRouteChildren = {
   MasterDataCurrenciesLazyRoute: MasterDataCurrenciesLazyRoute,
   MasterDataDepartmentsLazyRoute: MasterDataDepartmentsLazyRoute,
   MasterDataEmployeesLazyRoute: MasterDataEmployeesLazyRoute,
+  MasterDataProductionLazyRoute: MasterDataProductionLazyRoute,
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
   MasterDataProjectsLazyRoute: MasterDataProjectsLazyRoute,
   MasterDataPromosLazyRoute: MasterDataPromosLazyRoute,

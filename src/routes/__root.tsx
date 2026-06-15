@@ -43,6 +43,7 @@ import {
   ListTree,
   MapPinned,
   Moon,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
   Percent,
@@ -238,6 +239,7 @@ const RootLayout = () => {
       key: 'master-data-group',
       children: [
         { to: '/master-data/products', label: t('nav.product'), icon: Box },
+        { to: '/master-data/production', label: t('nav.production'), icon: Package },
         { to: '/master-data/stock-opname', label: t('nav.stockOpname'), icon: ClipboardCheck },
         { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
         { to: '/master-data/contacts', label: t('nav.contacts'), icon: Users },

@@ -18,6 +18,7 @@ import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadServic
 import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
 import { mergeRemoteJournalEntryBundlesIntoDexie } from '@/services/journalEntryReadService';
 import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
+import { mergeRemoteProductionOrderBundlesIntoDexie } from '@/services/productionReadService';
 import { mergeRemotePurchaseDocumentBundlesIntoDexie } from '@/services/purchaseDocumentReadService';
 import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
 import { mergeRemoteSalesDocumentBundlesIntoDexie } from '@/services/salesDocumentReadService';
@@ -42,6 +43,7 @@ import {
   journalEntryPostgresAdapter,
   postgresAdapter,
   productPostgresAdapter,
+  productionOrderPostgresAdapter,
   purchaseDocumentPostgresAdapter,
   projectPostgresAdapter,
   rolePermissionPostgresAdapter,
@@ -68,6 +70,10 @@ import {
   type RemoteJournalEntryDto,
   type RemoteJournalEntryLineDto,
   type RemoteProductDto,
+  type RemoteProductionOrderBundleDto,
+  type RemoteProductionOrderCostDto,
+  type RemoteProductionOrderDto,
+  type RemoteProductionOrderItemDto,
   type RemotePurchaseDocumentBundleDto,
   type RemotePurchaseDocumentDto,
   type RemotePurchaseDocumentItemDto,
@@ -84,7 +90,7 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -104,6 +110,7 @@ const DEPARTMENT_ENTITY = 'departments';
 const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
 const JOURNAL_ENTRY_ENTITY = 'journalEntries';
 const PRODUCT_ENTITY = 'products';
+const PRODUCTION_ORDER_ENTITY = 'productionOrders';
 const PROJECT_ENTITY = 'projects';
 const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
 const ROLE_ENTITY = 'roles';
@@ -532,6 +539,67 @@ const mapStockOpnameBundleToRemoteDto = (
 ): RemoteStockOpnameBundleDto => ({
   opname: mapStockOpnameToRemoteDto(opname),
   items: items.map(mapStockOpnameItemToRemoteDto),
+});
+
+const mapProductionOrderToRemoteDto = (order: ProductionOrder): RemoteProductionOrderDto => ({
+  id: order.id,
+  production_number: order.production_number,
+  status: order.status,
+  finished_product_id: order.finished_product_id,
+  finished_product_name: order.finished_product_name,
+  quantity_produced: normalizeRemoteNumber(order.quantity_produced),
+  unit: order.unit,
+  material_cost: normalizeRemoteNumber(order.material_cost),
+  additional_cost: normalizeRemoteNumber(order.additional_cost),
+  total_cost: normalizeRemoteNumber(order.total_cost),
+  unit_cost: normalizeRemoteNumber(order.unit_cost),
+  produced_at: order.produced_at,
+  posted_at: order.posted_at,
+  voided_at: order.voided_at,
+  void_reason: order.void_reason,
+  notes: order.notes,
+  created_by: order.created_by,
+  created_by_name: order.created_by_name,
+  created_at: order.created_at,
+  updated_at: order.updated_at,
+});
+
+const mapProductionOrderItemToRemoteDto = (item: ProductionOrderItem): RemoteProductionOrderItemDto => ({
+  id: item.id,
+  production_order_id: item.production_order_id,
+  material_product_id: item.material_product_id,
+  material_product_name: item.material_product_name,
+  sku: item.sku,
+  quantity_used: normalizeRemoteNumber(item.quantity_used),
+  unit: item.unit,
+  stock_quantity_used: normalizeRemoteNumber(item.stock_quantity_used),
+  stock_unit: item.stock_unit,
+  cost_per_unit: normalizeRemoteNumber(item.cost_per_unit),
+  total_cost: normalizeRemoteNumber(item.total_cost),
+  created_at: item.created_at,
+  updated_at: item.updated_at,
+});
+
+const mapProductionOrderCostToRemoteDto = (cost: ProductionOrderCost): RemoteProductionOrderCostDto => ({
+  id: cost.id,
+  production_order_id: cost.production_order_id,
+  name: cost.name,
+  amount: normalizeRemoteNumber(cost.amount),
+  account_id: cost.account_id,
+  account_code: cost.account_code,
+  account_name: cost.account_name,
+  created_at: cost.created_at,
+  updated_at: cost.updated_at,
+});
+
+const mapProductionOrderBundleToRemoteDto = (
+  order: ProductionOrder,
+  items: ProductionOrderItem[],
+  costs: ProductionOrderCost[],
+): RemoteProductionOrderBundleDto => ({
+  order: mapProductionOrderToRemoteDto(order),
+  items: items.map(mapProductionOrderItemToRemoteDto),
+  costs: costs.map(mapProductionOrderCostToRemoteDto),
 });
 
 const mapFinanceTransactionToRemoteDto = (transaction: FinanceTransaction): RemoteFinanceTransactionDto => ({
@@ -1248,6 +1316,77 @@ const isRemoteStockOpnameBundleDto = (
   );
 };
 
+const isRemoteProductionOrderDto = (payload: unknown): payload is RemoteProductionOrderDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteProductionOrderDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.production_number === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.finished_product_id === 'string' &&
+    typeof candidate.finished_product_name === 'string' &&
+    typeof candidate.quantity_produced === 'number' &&
+    typeof candidate.unit === 'string' &&
+    typeof candidate.material_cost === 'number' &&
+    typeof candidate.additional_cost === 'number' &&
+    typeof candidate.total_cost === 'number' &&
+    typeof candidate.unit_cost === 'number' &&
+    typeof candidate.produced_at === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteProductionOrderItemDto = (payload: unknown): payload is RemoteProductionOrderItemDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteProductionOrderItemDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.production_order_id === 'string' &&
+    typeof candidate.material_product_id === 'string' &&
+    typeof candidate.material_product_name === 'string' &&
+    typeof candidate.quantity_used === 'number' &&
+    typeof candidate.unit === 'string' &&
+    typeof candidate.stock_quantity_used === 'number' &&
+    typeof candidate.stock_unit === 'string' &&
+    typeof candidate.cost_per_unit === 'number' &&
+    typeof candidate.total_cost === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteProductionOrderCostDto = (payload: unknown): payload is RemoteProductionOrderCostDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteProductionOrderCostDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.production_order_id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.amount === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteProductionOrderBundleDto = (
+  payload: unknown,
+): payload is RemoteProductionOrderBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteProductionOrderBundleDto>;
+  return (
+    isRemoteProductionOrderDto(candidate.order) &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every(isRemoteProductionOrderItemDto) &&
+    Array.isArray(candidate.costs) &&
+    candidate.costs.every(isRemoteProductionOrderCostDto)
+  );
+};
+
 const isRemoteFinanceTransactionDto = (payload: unknown): payload is RemoteFinanceTransactionDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -1664,6 +1803,17 @@ const updateStockOpnameSyncMetadata = async (
   await db.stockOpnames.update(opnameId, syncMetadata);
 };
 
+const updateProductionOrderSyncMetadata = async (
+  productionOrderId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<ProductionOrder, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentOrder = await db.productionOrders.get(productionOrderId);
+  if (!currentOrder || currentOrder.updated_at !== sourceUpdatedAt) return;
+
+  await db.productionOrders.update(productionOrderId, syncMetadata);
+};
+
 const updateTaxSyncMetadata = async (
   taxId: string,
   sourceUpdatedAt: string,
@@ -1877,6 +2027,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === STOCK_OPNAME_ENTITY && isRemoteStockOpnameBundleDto(queueItem.payload)) {
     await updateStockOpnameSyncMetadata(queueItem.entity_id, queueItem.payload.opname.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === PRODUCTION_ORDER_ENTITY && isRemoteProductionOrderBundleDto(queueItem.payload)) {
+    await updateProductionOrderSyncMetadata(queueItem.entity_id, queueItem.payload.order.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -2133,6 +2290,18 @@ const processStockOpnameQueueItem = async (queueItem: SyncQueueItem) => {
   return stockOpnamePostgresAdapter.upsert(queueItem.payload);
 };
 
+const processProductionOrderQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Production order sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteProductionOrderBundleDto(queueItem.payload)) {
+    throw new Error('Payload production order sync queue tidak valid.');
+  }
+
+  return productionOrderPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processTaxQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     return taxPostgresAdapter.delete(queueItem.entity_id);
@@ -2231,6 +2400,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
     let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
+    let remoteProductionOrderBundle: RemoteProductionOrderBundleDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
     let remotePurchaseDocumentBundle: RemotePurchaseDocumentBundleDto | null = null;
     let remoteRole: RemoteRoleDto | null = null;
@@ -2271,6 +2441,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteJournalEntryBundle = await processJournalEntryQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PRODUCT_ENTITY) {
       remoteProduct = await processProductQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === PRODUCTION_ORDER_ENTITY) {
+      remoteProductionOrderBundle = await processProductionOrderQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
       remoteProject = await processProjectQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PURCHASE_DOCUMENT_ENTITY) {
@@ -2666,6 +2838,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteStockOpnameBundle.opname.updated_at,
       });
       await mergeRemoteStockOpnameBundlesIntoDexie([remoteStockOpnameBundle], syncedAt);
+      return;
+    }
+
+    if (remoteProductionOrderBundle && isRemoteProductionOrderBundleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateProductionOrderSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.order.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteProductionOrderBundle.order.updated_at,
+      });
+      await mergeRemoteProductionOrderBundlesIntoDexie([remoteProductionOrderBundle], syncedAt);
       return;
     }
 
@@ -3463,6 +3647,31 @@ export const enqueueStockOpnameBundleSync = async (
   return queueItem;
 };
 
+export const enqueueProductionOrderBundleSync = async (
+  order: ProductionOrder,
+  items: ProductionOrderItem[],
+  costs: ProductionOrderCost[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: PRODUCTION_ORDER_ENTITY,
+    entity_id: order.id,
+    operation,
+    payload: mapProductionOrderBundleToRemoteDto(order, items, costs),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueuePurchaseDocumentBundleSync = async (
   document: PurchaseDocument,
   items: PurchaseDocumentItem[],
@@ -3557,6 +3766,33 @@ export const enqueuePendingStockOpnamesForSync = async () => {
     if (!existingQueueItem) {
       const items = await db.stockOpnameItems.where('opname_id').equals(opname.id).toArray();
       await enqueueStockOpnameBundleSync(opname, items, 'update');
+    }
+  }
+};
+
+export const enqueuePendingProductionOrdersForSync = async () => {
+  const productionOrders = (await db.productionOrders.toArray())
+    .filter((order) => order.sync_status === 'pending' || order.sync_status === 'failed');
+
+  const productionOrderQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(PRODUCTION_ORDER_ENTITY)
+    .toArray();
+
+  for (const order of productionOrders) {
+    const existingQueueItem = productionOrderQueueItems.find((queueItem) => (
+      queueItem.entity_id === order.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteProductionOrderBundleDto(queueItem.payload) &&
+      queueItem.payload.order.updated_at === order.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      const [items, costs] = await Promise.all([
+        db.productionOrderItems.where('production_order_id').equals(order.id).toArray(),
+        db.productionOrderCosts.where('production_order_id').equals(order.id).toArray(),
+      ]);
+      await enqueueProductionOrderBundleSync(order, items, costs, 'update');
     }
   }
 };

@@ -21,6 +21,7 @@ import type {
   ProductUnit,
   ProductUnitMapping,
   PromoType,
+  ProductionOrderStatus,
   CurrencyRateBasis,
   CurrencyRateSource,
   PurchaseDocumentStatus,
@@ -302,6 +303,63 @@ export interface RemoteStockOpnameItemDto {
 export interface RemoteStockOpnameBundleDto {
   opname: RemoteStockOpnameDto;
   items: RemoteStockOpnameItemDto[];
+}
+
+export interface RemoteProductionOrderDto {
+  id: string;
+  production_number: string;
+  status: ProductionOrderStatus;
+  finished_product_id: string;
+  finished_product_name: string;
+  quantity_produced: number;
+  unit: ProductUnit;
+  material_cost: number;
+  additional_cost: number;
+  total_cost: number;
+  unit_cost: number;
+  produced_at: string;
+  posted_at?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
+  notes?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteProductionOrderItemDto {
+  id: string;
+  production_order_id: string;
+  material_product_id: string;
+  material_product_name: string;
+  sku?: string | null;
+  quantity_used: number;
+  unit: ProductUnit;
+  stock_quantity_used: number;
+  stock_unit: ProductUnit;
+  cost_per_unit: number;
+  total_cost: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteProductionOrderCostDto {
+  id: string;
+  production_order_id: string;
+  name: string;
+  amount: number;
+  account_id?: string | null;
+  account_code?: string | null;
+  account_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteProductionOrderBundleDto {
+  order: RemoteProductionOrderDto;
+  items: RemoteProductionOrderItemDto[];
+  costs: RemoteProductionOrderCostDto[];
 }
 
 export interface RemoteSalesDocumentDto {
@@ -1160,6 +1218,26 @@ export const stockOpnamePostgresAdapter = {
   async upsert(input: RemoteStockOpnameBundleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteStockOpnameBundleDto>('postgres_upsert_stock_opname_bundle', { input });
+  },
+};
+
+export const productionOrderPostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteProductionOrderBundleDto[]>('postgres_list_production_order_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteProductionOrderBundleDto | null>('postgres_get_production_order_bundle', { id });
+  },
+
+  async upsert(input: RemoteProductionOrderBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteProductionOrderBundleDto>('postgres_upsert_production_order_bundle', { input });
   },
 };
 

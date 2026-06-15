@@ -64,6 +64,9 @@ export default function StockCard() {
           'SALES_RETURN': 'Retur Penjualan',
           'SALES_RETURN_VOID': 'Batal Retur Penjualan',
           'STOCK_OPNAME': 'Stock Opname',
+          'PRODUCTION_CONSUMPTION': 'Produksi - Bahan Keluar',
+          'PRODUCTION_OUTPUT': 'Produksi - Barang Jadi',
+          'PRODUCTION_VOID': 'Void Produksi',
         };
         return types[type] || type;
       },

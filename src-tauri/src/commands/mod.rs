@@ -7,6 +7,7 @@ pub mod finance_transaction_commands;
 pub mod journal_entry_commands;
 pub mod postgres_health;
 pub mod product_commands;
+pub mod production_order_commands;
 pub mod project_commands;
 pub mod purchase_document_commands;
 pub mod sales_document_commands;
