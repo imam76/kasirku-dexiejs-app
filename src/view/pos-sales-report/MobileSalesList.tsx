@@ -51,6 +51,11 @@ export default function MobileSalesList({ transactions, totalRevenue, totalDisco
                 <span className="text-[12px] font-bold text-gray-900">
                   {transaction.transaction_number}
                 </span>
+                {transaction.member_name && (
+                  <span className="text-[10px] font-semibold text-blue-700">
+                    {transaction.member_number ? `${transaction.member_number} - ` : ''}{transaction.member_name}
+                  </span>
+                )}
                 <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold w-fit uppercase tracking-tight ${
                   transaction.payment_method === 'NON_TUNAI'
                     ? 'bg-[#EBF5FF] text-[#2563EB]'

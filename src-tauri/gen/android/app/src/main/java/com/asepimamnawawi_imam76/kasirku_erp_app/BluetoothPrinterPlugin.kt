@@ -54,9 +54,15 @@ class ReceiptPayloadArg {
   var merchantName: String = ""
   var createdAt: String = ""
   var paymentMethod: String = ""
+  var memberName: String = ""
+  var memberNumber: String = ""
   var items: List<ReceiptLineItemArg> = emptyList()
   var subtotalAmount: Double = 0.0
   var discountAmount: Double = 0.0
+  var membershipPointsEarned: Double = 0.0
+  var membershipPointsRedeemed: Double = 0.0
+  var membershipPointDiscountAmount: Double = 0.0
+  var membershipPointsBalanceAfter: Double = 0.0
   var totalAmount: Double = 0.0
   var paymentAmount: Double = 0.0
   var changeAmount: Double = 0.0
@@ -368,6 +374,12 @@ object EscPosReceiptRenderer {
     output.writeLine(twoColumns("No", receipt.transactionNumber))
     output.writeLine(twoColumns("Tanggal", formatIsoReceiptDate(receipt.createdAt)))
     output.writeLine(twoColumns("Metode", receipt.paymentMethod))
+    if (receipt.memberName.isNotBlank()) {
+      output.writeLine(twoColumns("Member", receipt.memberNumber.ifBlank { receipt.memberName }))
+      if (receipt.memberNumber.isNotBlank()) {
+        wrap(receipt.memberName, PAPER_WIDTH).forEach { output.writeLine(it) }
+      }
+    }
     output.writeLine(separator())
 
     receipt.items.forEach { item ->
@@ -387,6 +399,16 @@ object EscPosReceiptRenderer {
     output.writeCommand(0x1B, 0x45, 0x00)
     output.writeLine(twoColumns("BAYAR", formatCurrency(receipt.paymentAmount)))
     output.writeLine(twoColumns("KEMBALI", formatCurrency(receipt.changeAmount)))
+    if (receipt.membershipPointsEarned > 0.0 || receipt.membershipPointsRedeemed > 0.0) {
+      output.writeLine(separator())
+      if (receipt.membershipPointsRedeemed > 0.0) {
+        output.writeLine(twoColumns("POIN DIPAKAI", formatQuantity(receipt.membershipPointsRedeemed)))
+      }
+      if (receipt.membershipPointsEarned > 0.0) {
+        output.writeLine(twoColumns("POIN DIDAPAT", formatQuantity(receipt.membershipPointsEarned)))
+      }
+      output.writeLine(twoColumns("SALDO POIN", formatQuantity(receipt.membershipPointsBalanceAfter)))
+    }
     output.writeLine(separator())
     output.writeCommand(0x1B, 0x61, 0x01)
     output.writeLine(receipt.footer?.ifBlank { "Terima kasih" } ?: "Terima kasih")

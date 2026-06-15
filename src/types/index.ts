@@ -90,6 +90,13 @@ export type UserRole = 'OWNER' | 'ADMIN' | 'KASIR' | 'GUDANG';
 export type PromoType = 'percent' | 'fixed';
 export type PromoAppliesTo = 'all' | 'product' | 'category';
 export type ContactType = 'CUSTOMER' | 'SUPPLIER' | 'CUSTOMER_SUPPLIER' | 'OTHER';
+export type RetailMembershipStatus = 'ACTIVE' | 'INACTIVE';
+export type MembershipPointTransactionType =
+  | 'EARN'
+  | 'REDEEM'
+  | 'VOID_EARN_REVERSAL'
+  | 'VOID_REDEEM_REVERSAL'
+  | 'ADJUSTMENT';
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type TaxRateType = 'PERCENTAGE';
 export type TaxCalculationMode = 'EXCLUSIVE' | 'INCLUSIVE';
@@ -286,12 +293,44 @@ export interface Contact {
   tax_number?: string;
   notes?: string;
   is_active: boolean;
+  is_member?: boolean;
+  membership_number?: string;
+  membership_status?: RetailMembershipStatus;
+  membership_joined_at?: string;
+  membership_points_balance?: number;
   created_at: string;
   updated_at: string;
   sync_status?: ContactSyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
+}
+
+export interface MembershipSetting {
+  id: string;
+  earning_amount: number;
+  earning_points: number;
+  point_value: number;
+  redeem_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MembershipPointTransaction {
+  id: string;
+  contact_id: string;
+  membership_number?: string;
+  member_name: string;
+  transaction_id?: string;
+  transaction_number?: string;
+  type: MembershipPointTransactionType;
+  points_delta: number;
+  amount_value: number;
+  balance_after: number;
+  reason: string;
+  created_at: string;
+  created_by?: string;
+  created_by_name?: string;
 }
 
 export interface Warehouse {
@@ -1066,6 +1105,14 @@ export interface Transaction {
   cashier_session_number?: string;
   cashier_user_id?: string;
   cashier_user_name?: string;
+  member_contact_id?: string;
+  member_number?: string;
+  member_name?: string;
+  member_phone?: string;
+  membership_points_earned?: number;
+  membership_points_redeemed?: number;
+  membership_point_discount_amount?: number;
+  membership_points_balance_after?: number;
   subtotal_amount?: number;
   discount_amount?: number;
   discount_breakdown?: Array<{ label: string; amount: number }>;
@@ -1341,10 +1388,16 @@ export interface ReceiptPayload {
   merchantName: string;
   createdAt: string;
   paymentMethod: PaymentMethod;
+  memberName?: string;
+  memberNumber?: string;
   items: ReceiptLineItem[];
   subtotalAmount?: number;
   discountAmount?: number;
   discountBreakdown?: Array<{ label: string; amount: number }>;
+  membershipPointsEarned?: number;
+  membershipPointsRedeemed?: number;
+  membershipPointDiscountAmount?: number;
+  membershipPointsBalanceAfter?: number;
   totalAmount: number;
   paymentAmount: number;
   changeAmount: number;

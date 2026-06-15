@@ -7,6 +7,7 @@ import type { Contact, ContactType } from '@/types';
 
 export type ContactTypeFilter = ContactType | 'ALL';
 export type ContactStatusFilter = 'active' | 'inactive' | 'all';
+export type ContactMembershipFilter = 'members' | 'non_members' | 'all';
 
 export const useContacts = () => {
   const queryClient = useQueryClient();
@@ -14,6 +15,7 @@ export const useContacts = () => {
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<ContactTypeFilter>('ALL');
   const [statusFilter, setStatusFilter] = useState<ContactStatusFilter>('active');
+  const [membershipFilter, setMembershipFilter] = useState<ContactMembershipFilter>('all');
 
   const contacts = useLiveQuery(
     () => db.contacts.orderBy('name').toArray(),
@@ -30,15 +32,19 @@ export const useContacts = () => {
         contact.company_name,
         contact.phone,
         contact.email,
+        contact.membership_number,
       ].some((value) => value?.toLowerCase().includes(query));
       const matchesType = typeFilter === 'ALL' || contact.contact_type === typeFilter;
       const matchesStatus =
         statusFilter === 'all' ||
         (statusFilter === 'active' ? contact.is_active : !contact.is_active);
+      const matchesMembership =
+        membershipFilter === 'all' ||
+        (membershipFilter === 'members' ? contact.is_member : !contact.is_member);
 
-      return matchesSearch && matchesType && matchesStatus;
+      return matchesSearch && matchesType && matchesStatus && matchesMembership;
     });
-  }, [contacts, searchText, statusFilter, typeFilter]);
+  }, [contacts, membershipFilter, searchText, statusFilter, typeFilter]);
 
   const invalidateContacts = () => {
     queryClient.invalidateQueries({ queryKey: ['contacts'] });
@@ -81,6 +87,8 @@ export const useContacts = () => {
     setTypeFilter,
     statusFilter,
     setStatusFilter,
+    membershipFilter,
+    setMembershipFilter,
     handleEdit,
     resetForm,
     submitForm,

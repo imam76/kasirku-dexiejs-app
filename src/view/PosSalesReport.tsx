@@ -71,7 +71,7 @@ export default function PosSalesReport() {
             return [
               dayjs(t.created_at).tz().format('DD/MM/YYYY'),
               t.transaction_number || String(index + 1),
-              '-',
+              t.member_name ? `${t.member_number ? `${t.member_number} - ` : ''}${t.member_name}` : '-',
               formatCurrency(subtotal),
               formatCurrency(discount),
               formatCurrency(t.total_amount),
@@ -159,16 +159,19 @@ export default function PosSalesReport() {
       ];
       const csvRows = [
         ['SECTION 1: TRANSACTION SUMMARY'],
-        [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), t('cart.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.change')],
+        [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), 'Member', t('cart.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.change'), 'Poin Didapat', 'Poin Dipakai'],
         ...data.transactions.map((t) => [
           t.transaction_number,
           dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
           t.payment_method || 'TUNAI',
+          t.member_name ? `${t.member_number ? `${t.member_number} - ` : ''}${t.member_name}` : '',
           t.subtotal_amount ?? t.total_amount + (t.discount_amount ?? 0),
           t.discount_amount ?? 0,
           t.total_amount,
           t.payment_amount,
           t.change_amount,
+          t.membership_points_earned ?? 0,
+          t.membership_points_redeemed ?? 0,
         ]),
         [],
         ['SECTION 2: TRANSACTION ITEM DETAILS'],

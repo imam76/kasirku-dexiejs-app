@@ -1,8 +1,9 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { contactSchema } from '@/lib/validations/contact';
+import { generateMembershipNumber } from '@/services/membershipService';
 import { enqueueContactSync } from '@/services/syncQueueService';
-import type { Contact, ContactType } from '@/types';
+import type { Contact, ContactType, RetailMembershipStatus } from '@/types';
 
 export interface ContactUpsertInput {
   name: string;
@@ -14,6 +15,10 @@ export interface ContactUpsertInput {
   tax_number?: string;
   notes?: string;
   is_active?: boolean;
+  is_member?: boolean;
+  membership_number?: string;
+  membership_status?: RetailMembershipStatus;
+  membership_joined_at?: string;
 }
 
 const sanitizeContactInput = (input: ContactUpsertInput): Required<Pick<ContactUpsertInput, 'name' | 'contact_type' | 'is_active'>> & Omit<ContactUpsertInput, 'name' | 'contact_type' | 'is_active'> => {
@@ -36,9 +41,18 @@ export const createContact = async (input: ContactUpsertInput): Promise<Contact>
   requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
 
   const now = new Date().toISOString();
+  const sanitizedInput = sanitizeContactInput(input);
+  const isMember = Boolean(sanitizedInput.is_member);
   const contact: Contact = withPendingSync({
     id: crypto.randomUUID(),
-    ...sanitizeContactInput(input),
+    ...sanitizedInput,
+    is_member: isMember,
+    membership_number: isMember
+      ? sanitizedInput.membership_number ?? await generateMembershipNumber(new Date(now))
+      : undefined,
+    membership_status: isMember ? sanitizedInput.membership_status ?? 'ACTIVE' : undefined,
+    membership_joined_at: isMember ? sanitizedInput.membership_joined_at ?? now : undefined,
+    membership_points_balance: isMember ? 0 : undefined,
     created_at: now,
     updated_at: now,
   });
@@ -65,9 +79,23 @@ export const updateContact = async (id: string, input: ContactUpsertInput): Prom
     throw new Error('Contact tidak ditemukan.');
   }
 
+  const sanitizedInput = sanitizeContactInput(input);
+  const isMember = Boolean(sanitizedInput.is_member);
+  const shouldKeepMembershipSnapshot = isMember || Boolean(existingContact.is_member || existingContact.membership_number);
   const updatedContact: Contact = withPendingSync({
     ...existingContact,
-    ...sanitizeContactInput(input),
+    ...sanitizedInput,
+    is_member: isMember,
+    membership_number: isMember
+      ? sanitizedInput.membership_number ?? existingContact.membership_number ?? await generateMembershipNumber()
+      : shouldKeepMembershipSnapshot ? existingContact.membership_number : undefined,
+    membership_status: isMember
+      ? sanitizedInput.membership_status ?? existingContact.membership_status ?? 'ACTIVE'
+      : shouldKeepMembershipSnapshot ? existingContact.membership_status ?? 'INACTIVE' : undefined,
+    membership_joined_at: isMember
+      ? sanitizedInput.membership_joined_at ?? existingContact.membership_joined_at ?? new Date().toISOString()
+      : shouldKeepMembershipSnapshot ? existingContact.membership_joined_at : undefined,
+    membership_points_balance: shouldKeepMembershipSnapshot ? existingContact.membership_points_balance ?? 0 : undefined,
     updated_at: new Date().toISOString(),
   });
 

@@ -1,21 +1,33 @@
 import { useEffect, useMemo, useCallback, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import { useTransactionStore, type TransactionError } from '@/store/transactionStore';
-import { Product } from '@/types';
+import { Contact, MembershipSetting, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getCartItemPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { checkout } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
 import { evaluatePromos, getActivePromos } from '@/services/promoService';
+import {
+  DEFAULT_MEMBERSHIP_SETTING,
+  createRetailMemberFromPos,
+  evaluateMembershipCheckoutSync,
+  getMembershipSetting,
+  type QuickCreateMemberInput,
+} from '@/services/membershipService';
 
 const TRANSACTION_PRODUCT_PAGE_SIZE = 9;
 const EMPTY_TRANSACTION_PRODUCT_PAGE = {
   products: [] as Product[],
   total: 0,
+};
+const FALLBACK_MEMBERSHIP_SETTING: MembershipSetting = {
+  ...DEFAULT_MEMBERSHIP_SETTING,
+  created_at: '',
+  updated_at: '',
 };
 
 export const useTransaction = () => {
@@ -29,12 +41,16 @@ export const useTransaction = () => {
     paymentAmount,
     paymentMethod,
     voucherCode,
+    memberContactId,
+    redeemPoints,
     showPayment,
     setProducts,
     setSearchTerm,
     setPaymentAmount,
     setPaymentMethod,
     setVoucherCode,
+    setMemberContactId,
+    setRedeemPoints,
     setShowPayment,
     addToCart: storeAddToCart,
     updateQuantity: storeUpdateQuantity,
@@ -102,6 +118,29 @@ export const useTransaction = () => {
     queryKey: ['activePromos'],
     queryFn: () => getActivePromos(new Date()),
   });
+  const { data: membershipSetting = FALLBACK_MEMBERSHIP_SETTING } = useQuery({
+    queryKey: ['membershipSetting'],
+    queryFn: getMembershipSetting,
+  });
+  const activeMembers = useLiveQuery(
+    () => db.contacts
+      .orderBy('name')
+      .filter((contact) => Boolean(contact.is_member && contact.is_active && (contact.membership_status ?? 'ACTIVE') === 'ACTIVE'))
+      .toArray(),
+    [],
+    [] as Contact[],
+  );
+  const selectedMember = useMemo(
+    () => activeMembers.find((member) => member.id === memberContactId) ?? null,
+    [activeMembers, memberContactId],
+  );
+  const createMemberMutation = useMutation({
+    mutationFn: createRetailMemberFromPos,
+    onSuccess: (member) => {
+      setMemberContactId(member.id);
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+  });
 
   const filteredProducts = products;
   const productPagination = productSearchTerm
@@ -124,10 +163,19 @@ export const useTransaction = () => {
       voucherCode,
     });
   }, [activePromos, cart, voucherCode]);
+  const membershipPreview = useMemo(() => {
+    return evaluateMembershipCheckoutSync({
+      cart,
+      promoEvaluation: promoPreview,
+      member: selectedMember,
+      redeemPoints: Number(redeemPoints || 0),
+      setting: membershipSetting,
+    });
+  }, [cart, membershipSetting, promoPreview, redeemPoints, selectedMember]);
 
   const calculateTotal = useCallback(() => {
-    return promoPreview.total_amount;
-  }, [promoPreview.total_amount]);
+    return membershipPreview.total_after_redeem;
+  }, [membershipPreview.total_after_redeem]);
 
   const getTransactionErrorContent = (error: TransactionError) => {
     if (error.code === 'OUT_OF_STOCK') {
@@ -189,7 +237,7 @@ export const useTransaction = () => {
   }, []);
 
   const handleCheckout = async () => {
-    const total = promoPreview.total_amount;
+    const total = membershipPreview.total_after_redeem;
     const payment = paymentMethod === 'NON_TUNAI' ? total : parseFloat(paymentAmount);
 
     if (isNaN(payment) || payment < total) {
@@ -206,6 +254,8 @@ export const useTransaction = () => {
         payment,
         paymentMethod,
         voucherCode,
+        memberContactId,
+        redeemPoints: Number(redeemPoints || 0),
       });
       const { transaction, items, warnings } = checkoutResult;
 
@@ -227,6 +277,21 @@ export const useTransaction = () => {
                 <span className="font-semibold"> {t('cart.discount')}:</span> -Rp {formatCurrency(transaction.discount_amount ?? 0)}
               </p>
             )}
+            {transaction.member_name && (
+              <p className="text-gray-700">
+                <span className="font-semibold">Member:</span> {transaction.member_number ? `${transaction.member_number} - ` : ''}{transaction.member_name}
+              </p>
+            )}
+            {(transaction.membership_points_earned ?? 0) > 0 && (
+              <p className="text-gray-700">
+                <span className="font-semibold">Poin didapat:</span> {transaction.membership_points_earned}
+              </p>
+            )}
+            {(transaction.membership_points_redeemed ?? 0) > 0 && (
+              <p className="text-gray-700">
+                <span className="font-semibold">Poin dipakai:</span> {transaction.membership_points_redeemed}
+              </p>
+            )}
             < p className="text-gray-700" >
               <span className="font-semibold" > {t('checkout.paid')}: </span> Rp {formatCurrency(transaction.payment_amount)}
             </p>
@@ -246,6 +311,8 @@ export const useTransaction = () => {
       queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
       queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
       queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['membershipSetting'] });
       reset();
 
       void printReceiptAfterTransaction({ ...transaction, items })
@@ -282,10 +349,18 @@ export const useTransaction = () => {
     paymentAmount,
     paymentMethod,
     voucherCode,
+    memberContactId,
+    redeemPoints,
     showPayment,
     filteredProducts,
     productPagination,
     promoPreview,
+    membershipPreview,
+    activeMembers,
+    selectedMember,
+    membershipSetting,
+    createMember: createMemberMutation.mutateAsync as (input: QuickCreateMemberInput) => Promise<Contact>,
+    isCreatingMember: createMemberMutation.isPending,
     addToCart,
     updateQuantity,
     updateUnit,
@@ -299,6 +374,8 @@ export const useTransaction = () => {
     setPaymentAmount,
     setPaymentMethod,
     setVoucherCode,
+    setMemberContactId,
+    setRedeemPoints,
     setShowPayment,
   };
 };

@@ -41,6 +41,8 @@ export const buildReceiptPayload = (transaction: TransactionReceiptInput): Recei
   merchantName: DEFAULT_MERCHANT_NAME,
   createdAt: transaction.created_at,
   paymentMethod: transaction.payment_method,
+  memberName: transaction.member_name,
+  memberNumber: transaction.member_number,
   items: transaction.items.map((item) => ({
     name: item.product_name,
     quantity: item.quantity,
@@ -54,6 +56,10 @@ export const buildReceiptPayload = (transaction: TransactionReceiptInput): Recei
   subtotalAmount: transaction.subtotal_amount,
   discountAmount: transaction.discount_amount,
   discountBreakdown: transaction.discount_breakdown,
+  membershipPointsEarned: transaction.membership_points_earned,
+  membershipPointsRedeemed: transaction.membership_points_redeemed,
+  membershipPointDiscountAmount: transaction.membership_point_discount_amount,
+  membershipPointsBalanceAfter: transaction.membership_points_balance_after,
   totalAmount: transaction.total_amount,
   paymentAmount: transaction.payment_amount,
   changeAmount: transaction.change_amount,
@@ -96,4 +102,3 @@ export const printReceiptAfterTransaction = async (
     return { success: false, status: 'print_failed', error: printerError.message };
   }
 };
-

@@ -4,6 +4,7 @@ import { Archive, Edit2, RotateCcw } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { Contact, ContactType } from '@/types';
 import { contactTypeOptions } from './contactOptions';
+import { formatCurrency } from '@/utils/formatters';
 
 const { Text } = Typography;
 
@@ -29,6 +30,14 @@ export default function ContactTable({ contacts, onEdit, onArchive, onRestore }:
       render: (name: string, contact) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
+          {contact.is_member && (
+            <div className="flex flex-wrap items-center gap-1">
+              <Tag color={contact.membership_status === 'INACTIVE' ? 'default' : 'blue'} className="m-0">
+                {contact.membership_number ?? 'Member'}
+              </Tag>
+              <Text type="secondary">{formatCurrency(contact.membership_points_balance ?? 0)} poin</Text>
+            </div>
+          )}
           {contact.company_name && <Text type="secondary">{contact.company_name}</Text>}
         </Space>
       ),

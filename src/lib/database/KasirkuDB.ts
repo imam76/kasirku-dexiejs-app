@@ -59,6 +59,8 @@ import type {
   EmployeeArea,
   CashierSession,
   CooperativeFieldCashSession,
+  MembershipPointTransaction,
+  MembershipSetting,
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
@@ -123,6 +125,8 @@ export class KasirkuDB extends Dexie {
   cooperativeAreas!: Table<CooperativeArea>;
   employees!: Table<Employee>;
   employeeAreas!: Table<EmployeeArea>;
+  membershipPointTransactions!: Table<MembershipPointTransaction>;
+  membershipSettings!: Table<MembershipSetting>;
 
   constructor() {
     super('KasirkuDB');

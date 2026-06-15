@@ -107,6 +107,12 @@ const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
   push(ALIGN_CENTER, BOLD_ON, text(receipt.merchantName), BOLD_OFF);
   push(text(`#${receipt.transactionNumber}`));
   push(text(new Date(receipt.createdAt).toLocaleString('id-ID')));
+  if (receipt.memberName) {
+    push(text(padLine('Member', receipt.memberNumber ? `${receipt.memberNumber}` : receipt.memberName)));
+    if (receipt.memberNumber) {
+      push(text(`  ${receipt.memberName}`));
+    }
+  }
   push(ALIGN_LEFT, line());
 
   for (const item of receipt.items) {
@@ -132,6 +138,21 @@ const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
   push(BOLD_ON, text(padLine('TOTAL', `Rp ${currencyFormat(receipt.totalAmount)}`)), BOLD_OFF);
   push(text(padLine('Bayar', `Rp ${currencyFormat(receipt.paymentAmount)}`)));
   push(text(padLine('Kembali', `Rp ${currencyFormat(receipt.changeAmount)}`)));
+  if (
+    (receipt.membershipPointsEarned ?? 0) > 0 ||
+    (receipt.membershipPointsRedeemed ?? 0) > 0
+  ) {
+    push(line());
+    if ((receipt.membershipPointsRedeemed ?? 0) > 0) {
+      push(text(padLine('Poin dipakai', `${receipt.membershipPointsRedeemed}`)));
+    }
+    if ((receipt.membershipPointsEarned ?? 0) > 0) {
+      push(text(padLine('Poin didapat', `${receipt.membershipPointsEarned}`)));
+    }
+    if (receipt.membershipPointsBalanceAfter !== undefined) {
+      push(text(padLine('Saldo poin', `${receipt.membershipPointsBalanceAfter}`)));
+    }
+  }
 
   push(line());
   push(ALIGN_CENTER, text(receipt.footer ?? 'Terima kasih'), ALIGN_LEFT);

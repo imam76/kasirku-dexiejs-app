@@ -106,10 +106,18 @@ export default function Transaction() {
     paymentAmount,
     paymentMethod,
     voucherCode,
+    memberContactId,
+    redeemPoints,
     showPayment,
     filteredProducts,
     productPagination,
     promoPreview,
+    membershipPreview,
+    activeMembers,
+    selectedMember,
+    membershipSetting,
+    createMember,
+    isCreatingMember,
     addToCart,
     updateQuantity,
     updateUnit,
@@ -122,6 +130,8 @@ export default function Transaction() {
     setPaymentAmount,
     setPaymentMethod,
     setVoucherCode,
+    setMemberContactId,
+    setRedeemPoints,
     setShowPayment,
   } = useTransaction();
 
@@ -375,11 +385,21 @@ export default function Transaction() {
           paymentAmount={paymentAmount}
           paymentMethod={paymentMethod}
           voucherCode={voucherCode}
+          memberContactId={memberContactId}
+          redeemPoints={redeemPoints}
           promoPreview={promoPreview}
+          membershipPreview={membershipPreview}
+          activeMembers={activeMembers}
+          selectedMember={selectedMember}
+          membershipSetting={membershipSetting}
           setShowPayment={setShowPayment}
           setPaymentAmount={setPaymentAmount}
           setPaymentMethod={setPaymentMethod}
           setVoucherCode={setVoucherCode}
+          setMemberContactId={setMemberContactId}
+          setRedeemPoints={setRedeemPoints}
+          createMember={createMember}
+          isCreatingMember={isCreatingMember}
           handleCheckout={handleCheckout}
         />
       </div>
@@ -416,11 +436,21 @@ export default function Transaction() {
         paymentAmount={paymentAmount}
         paymentMethod={paymentMethod}
         voucherCode={voucherCode}
+        memberContactId={memberContactId}
+        redeemPoints={redeemPoints}
         promoPreview={promoPreview}
+        membershipPreview={membershipPreview}
+        activeMembers={activeMembers}
+        selectedMember={selectedMember}
+        membershipSetting={membershipSetting}
         setShowPayment={setShowPayment}
         setPaymentAmount={setPaymentAmount}
         setPaymentMethod={setPaymentMethod}
         setVoucherCode={setVoucherCode}
+        setMemberContactId={setMemberContactId}
+        setRedeemPoints={setRedeemPoints}
+        createMember={createMember}
+        isCreatingMember={isCreatingMember}
         handleCheckout={handleCheckout}
       />
 

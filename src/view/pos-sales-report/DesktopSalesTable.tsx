@@ -19,6 +19,7 @@ export default function DesktopSalesTable({ transactions, totalRevenue, totalDis
           <tr className="text-gray-500 font-normal">
             <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 rounded-tl-lg">{t('report.transactionNo')}</th>
             <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">{t('report.date')}</th>
+            <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">Member</th>
             <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50">{t('report.method')}</th>
             <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.payment')}</th>
             <th className="py-3 px-4 font-semibold border-b border-gray-100 bg-gray-50/50 text-right">{t('report.change')}</th>
@@ -36,6 +37,14 @@ export default function DesktopSalesTable({ transactions, totalRevenue, totalDis
                   </td>
                   <td className="py-4 px-4 text-gray-600">
                     {dayjs(transaction.created_at).tz().format('DD MMM YYYY, HH:mm')}
+                  </td>
+                  <td className="py-4 px-4 text-gray-600">
+                    {transaction.member_name ? (
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-800">{transaction.member_name}</span>
+                        <span className="text-xs text-gray-400">{transaction.member_number}</span>
+                      </div>
+                    ) : '-'}
                   </td>
                   <td className="py-4 px-4">
                     <span className={`px-3 py-1 rounded-full text-[11px] font-medium inline-block ${
@@ -61,7 +70,7 @@ export default function DesktopSalesTable({ transactions, totalRevenue, totalDis
                 </tr>
               ))}
               <tr className="font-bold text-gray-900 bg-gray-50/30">
-                <td colSpan={5} className="py-6 px-4 text-base rounded-bl-lg border-t border-gray-100">{t('report.salesTotal')}</td>
+                <td colSpan={6} className="py-6 px-4 text-base rounded-bl-lg border-t border-gray-100">{t('report.salesTotal')}</td>
                 <td className="py-6 px-4 text-right text-base border-t border-gray-100 text-green-700">
                   {totalDiscount > 0 ? `-${formatCurrency(totalDiscount)}` : '-'}
                 </td>
@@ -72,7 +81,7 @@ export default function DesktopSalesTable({ transactions, totalRevenue, totalDis
             </>
           ) : (
             <tr>
-              <td colSpan={7} className="py-12 text-center text-gray-400 italic bg-white rounded-b-lg">
+              <td colSpan={8} className="py-12 text-center text-gray-400 italic bg-white rounded-b-lg">
                 {t('report.noTransactionsForPeriod')}
               </td>
             </tr>

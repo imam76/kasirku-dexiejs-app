@@ -9,6 +9,7 @@ import { createStockMutation, enqueueStockMutations } from '@/services/stockMuta
 import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { normalisasiHargaProduk } from '@/utils/pricing';
+import { recordMembershipPointTransaction } from '@/services/membershipService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -59,6 +60,8 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       db.journalEntries,
       db.journalEntryLines,
       db.inventoryLots,
+      db.contacts,
+      db.membershipPointTransactions,
     ],
     async () => {
       const transaction = await db.transactions.get(transactionId);
@@ -70,6 +73,10 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       if (isTransactionVoided(transaction)) {
         throw new Error('Transaksi sudah dibatalkan');
       }
+
+      const member = transaction.member_contact_id
+        ? await db.contacts.get(transaction.member_contact_id)
+        : undefined;
 
       const items = await db.transactionItems
         .where('transaction_id')
@@ -128,6 +135,53 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         voided_at: now,
         void_reason: normalizedReason,
       });
+
+      if (member && (
+        Number(transaction.membership_points_earned || 0) > 0 ||
+        Number(transaction.membership_points_redeemed || 0) > 0
+      )) {
+        const earnedPoints = Math.max(0, Math.floor(Number(transaction.membership_points_earned || 0)));
+        const redeemedPoints = Math.max(0, Math.floor(Number(transaction.membership_points_redeemed || 0)));
+        const redeemedAmount = Number(transaction.membership_point_discount_amount || 0);
+        let runningBalance = Number(member.membership_points_balance || 0);
+
+        if (earnedPoints > 0) {
+          runningBalance -= earnedPoints;
+          await recordMembershipPointTransaction({
+            member,
+            transactionId: transaction.id,
+            transactionNumber: transaction.transaction_number,
+            type: 'VOID_EARN_REVERSAL',
+            pointsDelta: -earnedPoints,
+            amountValue: 0,
+            balanceAfter: runningBalance,
+            reason: `Pembatalan poin transaksi ${transaction.transaction_number}: ${normalizedReason}`,
+            actor: currentUser,
+            createdAt: now,
+          });
+        }
+
+        if (redeemedPoints > 0) {
+          runningBalance += redeemedPoints;
+          await recordMembershipPointTransaction({
+            member,
+            transactionId: transaction.id,
+            transactionNumber: transaction.transaction_number,
+            type: 'VOID_REDEEM_REVERSAL',
+            pointsDelta: redeemedPoints,
+            amountValue: redeemedAmount,
+            balanceAfter: runningBalance,
+            reason: `Pengembalian poin redeem transaksi ${transaction.transaction_number}: ${normalizedReason}`,
+            actor: currentUser,
+            createdAt: now,
+          });
+        }
+
+        await db.contacts.update(member.id, {
+          membership_points_balance: runningBalance,
+          updated_at: now,
+        });
+      }
 
       const totalProfit = getTransactionProfit(items);
       const currentProfitBalance = await db.profitBalance.get('current');

@@ -1,7 +1,7 @@
 import { Form, Input, Modal, Select, Switch } from 'antd';
 import type { FormInstance } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
-import type { ContactType } from '@/types';
+import type { ContactType, RetailMembershipStatus } from '@/types';
 import { contactTypeOptions } from './contactOptions';
 
 const { TextArea } = Input;
@@ -16,6 +16,10 @@ export interface ContactFormValues {
   tax_number?: string;
   notes?: string;
   is_active?: boolean;
+  is_member?: boolean;
+  membership_number?: string;
+  membership_status?: RetailMembershipStatus;
+  membership_joined_at?: string;
 }
 
 interface ContactFormModalProps {
@@ -36,6 +40,7 @@ export default function ContactFormModal({
   onSubmit,
 }: ContactFormModalProps) {
   const { t } = useI18n();
+  const isMember = Form.useWatch('is_member', form);
 
   return (
     <Modal
@@ -88,6 +93,26 @@ export default function ContactFormModal({
         <Form.Item name="notes" label={t('contacts.form.notes')}>
           <TextArea rows={3} placeholder={t('contacts.form.notesPlaceholder')} />
         </Form.Item>
+        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+          <Form.Item name="is_member" label="Membership Retail" valuePropName="checked" className="mb-0">
+            <Switch checkedChildren="Member" unCheckedChildren="Non-member" />
+          </Form.Item>
+          {isMember && (
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Form.Item name="membership_number" label="Nomor Member">
+                <Input placeholder="Otomatis jika kosong" />
+              </Form.Item>
+              <Form.Item name="membership_status" label="Status Member" initialValue="ACTIVE">
+                <Select
+                  options={[
+                    { value: 'ACTIVE', label: 'Aktif' },
+                    { value: 'INACTIVE', label: 'Nonaktif' },
+                  ]}
+                />
+              </Form.Item>
+            </div>
+          )}
+        </div>
         <Form.Item name="is_active" label={t('contacts.form.status')} valuePropName="checked">
           <Switch checkedChildren={t('contacts.status.active')} unCheckedChildren={t('contacts.status.inactive')} />
         </Form.Item>

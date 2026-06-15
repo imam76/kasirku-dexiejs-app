@@ -21,6 +21,7 @@ import type {
   GeneralLedgerSetting,
   InventoryLot,
   JournalEntry,
+  MembershipSetting,
   Product,
   Project,
   PurchaseDocument,
@@ -1028,5 +1029,27 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
   this.version(54).stores({
     stockOpnames: 'id, opname_number, status, counted_at, reviewed_at, posted_at, warehouse_id, sync_status, updated_at, created_at',
     stockOpnameItems: 'id, opname_id, product_id, quantity_delta, created_at',
+  });
+
+  this.version(55).stores({
+    contacts: 'id, name, contact_type, phone, email, is_active, is_member, membership_number, sync_status, created_at',
+    transactions: 'id, transaction_number, payment_method, cashier_session_id, cashier_user_id, member_contact_id, member_number, created_at',
+    membershipPointTransactions: 'id, contact_id, membership_number, transaction_id, transaction_number, type, created_at',
+    membershipSettings: 'id, updated_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const membershipSettings = tx.table<MembershipSetting, string>('membershipSettings');
+
+    if (!await membershipSettings.get('default')) {
+      await membershipSettings.put({
+        id: 'default',
+        earning_amount: 1000,
+        earning_points: 1,
+        point_value: 1,
+        redeem_enabled: true,
+        created_at: now,
+        updated_at: now,
+      });
+    }
   });
 }

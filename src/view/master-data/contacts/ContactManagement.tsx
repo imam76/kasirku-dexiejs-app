@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select } from 'antd';
 import { Plus, Users } from 'lucide-react';
-import { useContacts, type ContactStatusFilter, type ContactTypeFilter } from '@/hooks/useContacts';
+import { useContacts, type ContactMembershipFilter, type ContactStatusFilter, type ContactTypeFilter } from '@/hooks/useContacts';
 import { useI18n } from '@/hooks/useI18n';
 import type { Contact } from '@/types';
 import ContactFormModal, { type ContactFormValues } from './ContactFormModal';
@@ -22,6 +22,8 @@ export default function ContactManagement() {
     setTypeFilter,
     statusFilter,
     setStatusFilter,
+    membershipFilter,
+    setMembershipFilter,
     handleEdit,
     resetForm,
     submitForm,
@@ -39,7 +41,7 @@ export default function ContactManagement() {
   const openAddModal = () => {
     resetForm();
     form.resetFields();
-    form.setFieldsValue({ contact_type: 'CUSTOMER', is_active: true });
+    form.setFieldsValue({ contact_type: 'CUSTOMER', is_active: true, is_member: false, membership_status: 'ACTIVE' });
     setIsModalOpen(true);
   };
 
@@ -56,6 +58,10 @@ export default function ContactManagement() {
       tax_number: contact.tax_number,
       notes: contact.notes,
       is_active: contact.is_active,
+      is_member: contact.is_member,
+      membership_number: contact.membership_number,
+      membership_status: contact.membership_status ?? 'ACTIVE',
+      membership_joined_at: contact.membership_joined_at,
     });
     setIsModalOpen(true);
   };
@@ -113,7 +119,7 @@ export default function ContactManagement() {
         </Button>
       )}
     >
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_220px_180px]">
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_220px_180px_180px]">
         <Input.Search
           allowClear
           value={searchText}
@@ -135,6 +141,15 @@ export default function ContactManagement() {
             { value: 'active', label: t('contacts.filter.active') },
             { value: 'inactive', label: t('contacts.filter.inactive') },
             { value: 'all', label: t('contacts.filter.allStatuses') },
+          ]}
+        />
+        <Select<ContactMembershipFilter>
+          value={membershipFilter}
+          onChange={setMembershipFilter}
+          options={[
+            { value: 'all', label: 'Semua membership' },
+            { value: 'members', label: 'Member' },
+            { value: 'non_members', label: 'Non-member' },
           ]}
         />
       </div>

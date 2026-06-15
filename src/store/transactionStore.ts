@@ -15,6 +15,8 @@ interface TransactionState {
   paymentAmount: string;
   paymentMethod: PaymentMethod;
   voucherCode: string;
+  memberContactId?: string;
+  redeemPoints: string;
   showPayment: boolean;
 
   // Actions
@@ -24,6 +26,8 @@ interface TransactionState {
   setPaymentAmount: (amount: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
   setVoucherCode: (voucherCode: string) => void;
+  setMemberContactId: (memberContactId?: string) => void;
+  setRedeemPoints: (points: string) => void;
   setShowPayment: (show: boolean) => void;
 
   // Logical State Actions (Non-DB)
@@ -41,6 +45,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   paymentAmount: '',
   paymentMethod: 'TUNAI',
   voucherCode: '',
+  memberContactId: undefined,
+  redeemPoints: '',
   showPayment: false,
 
   setProducts: (products) => set({ products }),
@@ -51,6 +57,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   setPaymentAmount: (paymentAmount) => set({ paymentAmount }),
   setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
   setVoucherCode: (voucherCode) => set({ voucherCode }),
+  setMemberContactId: (memberContactId) => set({ memberContactId, redeemPoints: memberContactId ? get().redeemPoints : '' }),
+  setRedeemPoints: (redeemPoints) => set({ redeemPoints }),
   setShowPayment: (showPayment) => set({ showPayment }),
 
   addToCart: (product) => {
@@ -176,6 +184,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       paymentAmount: '',
       paymentMethod: 'TUNAI',
       voucherCode: '',
+      memberContactId: undefined,
+      redeemPoints: '',
       showPayment: false,
     });
   }

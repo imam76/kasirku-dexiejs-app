@@ -7,6 +7,7 @@ import { useNavigate } from '@tanstack/react-router'
 import PrinterSettingsCard from '@/components/PrinterSettingsCard'
 import UsbPrinterCard from '@/components/UsbPrinterCard'
 import CompanyProfileSettingsCard from '@/components/CompanyProfileSettingsCard'
+import MembershipSettingsCard from '@/components/MembershipSettingsCard'
 import { useI18n } from '@/hooks/useI18n'
 import { useAuth } from '@/auth/useAuth'
 import { ActivityLogViewer } from '@/view/auth/ActivityLogViewer'
@@ -93,6 +94,10 @@ function Settings() {
 
       <div className="mb-6">
         <CompanyProfileSettingsCard />
+      </div>
+
+      <div className="mb-6">
+        <MembershipSettingsCard />
       </div>
 
       <Row gutter={[16, 16]} className="mb-6">

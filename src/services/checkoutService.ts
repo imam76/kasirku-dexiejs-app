@@ -11,12 +11,20 @@ import { createStockMutation, enqueueStockMutations } from '@/services/stockMuta
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
 import { getOpenCashierSessionForCurrentUser } from '@/services/cashierSessionService';
+import {
+  ensureMembershipSetting,
+  evaluateMembershipCheckout,
+  isActiveRetailMember,
+  recordMembershipPointTransaction,
+} from '@/services/membershipService';
 
 interface CheckoutInput {
   cart: CartItem[];
   payment: number;
   paymentMethod: PaymentMethod;
   voucherCode?: string;
+  memberContactId?: string;
+  redeemPoints?: number;
 }
 
 export interface CheckoutResult {
@@ -35,6 +43,7 @@ const createTransactionItems = async (
   transactionId: string,
   createdAt: string,
   promoEvaluation: PromoEvaluationResult,
+  lineRedeemDiscounts: number[] = [],
 ): Promise<CreateTransactionItemsResult> => {
   const items: TransactionItem[] = [];
   const warnings: string[] = [];
@@ -49,13 +58,18 @@ const createTransactionItems = async (
     const subtotalBeforeDiscount =
       promoLine?.subtotal_before_discount ?? priceBeforeDiscount * item.quantity;
 
-    const discountAmount = promoLine?.discount_amount ?? 0;
+    const promoDiscountAmount = promoLine?.discount_amount ?? 0;
+    const redeemDiscountAmount = lineRedeemDiscounts[index] ?? 0;
+    const discountAmount = promoDiscountAmount + redeemDiscountAmount;
 
-    const sellingPrice =
-      promoLine?.final_unit_price ?? priceBeforeDiscount;
+    const finalSubtotal = Math.max(
+      0,
+      (promoLine?.final_subtotal ?? priceBeforeDiscount * item.quantity) - redeemDiscountAmount,
+    );
 
-    const finalSubtotal =
-      promoLine?.final_subtotal ?? sellingPrice * item.quantity;
+    const sellingPrice = item.quantity > 0
+      ? Math.round((finalSubtotal / item.quantity + Number.EPSILON) * 100) / 100
+      : 0;
 
     const unitSnapshot = createSalesUnitSnapshot(item.unit, item.product);
 
@@ -81,7 +95,7 @@ const createTransactionItems = async (
     const hasEstimatedCost = fifoResult.consumedLots.some((lot) => lot.costStatus !== 'FINAL');
     const estimatedProfit = finalSubtotal - fifoResult.totalCost;
 
-    if (finalSubtotal <= 0) {
+    if (finalSubtotal < 0) {
       throw new Error(`Harga jual ${item.product.name} belum valid.`);
     }
 
@@ -247,6 +261,8 @@ export const checkout = async ({
   payment,
   paymentMethod,
   voucherCode,
+  memberContactId,
+  redeemPoints,
 }: CheckoutInput): Promise<CheckoutResult> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'CASHIER_ACCESS');
@@ -261,21 +277,8 @@ export const checkout = async ({
   const transactionNumber = `TRX-${Date.now()}`;
   const createdAt = now.toISOString();
   const activePromos = await getActivePromos(now);
-  const promoEvaluation = evaluatePromos({
-    cart,
-    promos: activePromos,
-    voucherCode,
-    now,
-  });
-  const finalTotal = promoEvaluation.total_amount;
-  const finalPayment = paymentMethod === 'NON_TUNAI' ? finalTotal : payment;
-  const change = paymentMethod === 'NON_TUNAI' ? 0 : finalPayment - finalTotal;
   let stockMutations: StockMutation[] = [];
   let financeTransaction: FinanceTransaction | undefined;
-
-  if (!Number.isFinite(finalPayment) || finalPayment < finalTotal) {
-    throw new Error('Jumlah pembayaran tidak valid atau kurang.');
-  }
 
   const result = await db.transaction(
     'rw',
@@ -296,8 +299,44 @@ export const checkout = async ({
       db.inventoryLots,
       db.inventoryLotConsumptions,
       db.cashierSessions,
+      db.contacts,
+      db.membershipPointTransactions,
+      db.membershipSettings,
     ],
     async () => {
+      const member = memberContactId ? await db.contacts.get(memberContactId) : undefined;
+      if (memberContactId && !isActiveRetailMember(member)) {
+        throw new Error('Member tidak ditemukan atau tidak aktif.');
+      }
+
+      const membershipSetting = await ensureMembershipSetting();
+      const promoEvaluation = evaluatePromos({
+        cart,
+        promos: activePromos,
+        voucherCode,
+        now,
+      });
+      const membershipEvaluation = await evaluateMembershipCheckout({
+        cart,
+        promoEvaluation,
+        member,
+        redeemPoints,
+        setting: membershipSetting,
+      });
+      const finalTotal = membershipEvaluation.total_after_redeem;
+      const finalPayment = paymentMethod === 'NON_TUNAI' ? finalTotal : payment;
+      const change = paymentMethod === 'NON_TUNAI' ? 0 : finalPayment - finalTotal;
+      const memberStartingBalance = membershipEvaluation.member
+        ? Math.max(0, Math.floor(Number(membershipEvaluation.member.membership_points_balance || 0)))
+        : 0;
+      const memberBalanceAfter = membershipEvaluation.member
+        ? memberStartingBalance - membershipEvaluation.redeem_points + membershipEvaluation.earned_points
+        : undefined;
+
+      if (!Number.isFinite(finalPayment) || finalPayment < finalTotal) {
+        throw new Error('Jumlah pembayaran tidak valid atau kurang.');
+      }
+
       const transaction: Transaction = {
         id: transactionId,
         transaction_number: transactionNumber,
@@ -305,9 +344,17 @@ export const checkout = async ({
         cashier_session_number: cashierSession.session_number,
         cashier_user_id: currentUser?.id,
         cashier_user_name: currentUser?.name,
+        member_contact_id: membershipEvaluation.member?.id,
+        member_number: membershipEvaluation.member?.membership_number,
+        member_name: membershipEvaluation.member?.name,
+        member_phone: membershipEvaluation.member?.phone,
+        membership_points_earned: membershipEvaluation.earned_points,
+        membership_points_redeemed: membershipEvaluation.redeem_points,
+        membership_point_discount_amount: membershipEvaluation.redeem_amount,
+        membership_points_balance_after: memberBalanceAfter,
         subtotal_amount: promoEvaluation.subtotal_before_discount,
-        discount_amount: promoEvaluation.discount_amount,
-        discount_breakdown: promoEvaluation.discount_breakdown,
+        discount_amount: promoEvaluation.discount_amount + membershipEvaluation.redeem_amount,
+        discount_breakdown: membershipEvaluation.discount_breakdown,
         applied_promos_snapshot: promoEvaluation.applied_promos_snapshot,
         total_amount: finalTotal,
         payment_amount: finalPayment,
@@ -318,10 +365,58 @@ export const checkout = async ({
         created_at: createdAt,
       };
 
-      const { items, warnings } = await createTransactionItems(cart, transactionId, createdAt, promoEvaluation);
+      const { items, warnings } = await createTransactionItems(
+        cart,
+        transactionId,
+        createdAt,
+        promoEvaluation,
+        membershipEvaluation.line_redeem_discounts,
+      );
 
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);
+
+      if (membershipEvaluation.member && memberBalanceAfter !== undefined) {
+        let runningBalance = memberStartingBalance;
+
+        if (membershipEvaluation.redeem_points > 0) {
+          runningBalance -= membershipEvaluation.redeem_points;
+          await recordMembershipPointTransaction({
+            member: membershipEvaluation.member,
+            transactionId,
+            transactionNumber,
+            type: 'REDEEM',
+            pointsDelta: -membershipEvaluation.redeem_points,
+            amountValue: membershipEvaluation.redeem_amount,
+            balanceAfter: runningBalance,
+            reason: `Redeem poin transaksi ${transactionNumber}`,
+            actor: currentUser,
+            createdAt,
+          });
+        }
+
+        if (membershipEvaluation.earned_points > 0) {
+          runningBalance += membershipEvaluation.earned_points;
+          await recordMembershipPointTransaction({
+            member: membershipEvaluation.member,
+            transactionId,
+            transactionNumber,
+            type: 'EARN',
+            pointsDelta: membershipEvaluation.earned_points,
+            amountValue: 0,
+            balanceAfter: runningBalance,
+            reason: `Poin dari transaksi ${transactionNumber}`,
+            actor: currentUser,
+            createdAt,
+          });
+        }
+
+        await db.contacts.update(membershipEvaluation.member.id, {
+          membership_points_balance: memberBalanceAfter,
+          updated_at: createdAt,
+        });
+      }
+
       await recordProfit(transaction, items, createdAt);
       financeTransaction = await recordFinanceIncome(transaction, createdAt, currentUser);
       await postPosSaleJournal(transaction, items, currentUser);

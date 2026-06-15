@@ -277,6 +277,11 @@ export default function History() {
                                   {t('history.printPendingBadge')}
                                 </span>
                               )}
+                              {transaction.member_name && (
+                                <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-blue-100 text-blue-700">
+                                  {transaction.member_number ?? 'MEMBER'}
+                                </span>
+                              )}
                             </div>
                             {/* Tanggal di baris sendiri */}
                             <p className="text-sm text-gray-600 mb-2">
@@ -352,6 +357,21 @@ export default function History() {
                               <div className="flex justify-between font-bold text-gray-800">
                                 <span>{t('cart.total')}</span>
                                 <span>Rp {formatCurrency(transaction.total_amount)}</span>
+                              </div>
+                            </div>
+                          )}
+                          {transaction.member_name && (
+                            <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm">
+                              <div className="flex justify-between gap-3 text-blue-900">
+                                <span>Member</span>
+                                <span className="font-semibold text-right">
+                                  {transaction.member_number ? `${transaction.member_number} - ` : ''}{transaction.member_name}
+                                </span>
+                              </div>
+                              <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-blue-800">
+                                <span>Earn: {transaction.membership_points_earned ?? 0}</span>
+                                <span>Redeem: {transaction.membership_points_redeemed ?? 0}</span>
+                                <span>Saldo: {transaction.membership_points_balance_after ?? '-'}</span>
                               </div>
                             </div>
                           )}

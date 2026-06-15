@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react';
-import { CartItem as CartItemType, PaymentMethod } from '@/types';
+import { CartItem as CartItemType, Contact, MembershipSetting, PaymentMethod } from '@/types';
 import type { PromoEvaluationResult } from '@/services/promoService';
+import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
 import { useI18n } from '@/hooks/useI18n';
@@ -16,11 +17,21 @@ interface CartSidebarProps {
   paymentAmount: string;
   paymentMethod: PaymentMethod;
   voucherCode: string;
+  memberContactId?: string;
+  redeemPoints: string;
   promoPreview: PromoEvaluationResult;
+  membershipPreview: MembershipCheckoutEvaluation;
+  activeMembers: Contact[];
+  selectedMember: Contact | null;
+  membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
   setPaymentAmount: (amount: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
   setVoucherCode: (voucherCode: string) => void;
+  setMemberContactId: (memberContactId?: string) => void;
+  setRedeemPoints: (points: string) => void;
+  createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
+  isCreatingMember: boolean;
   handleCheckout: () => void;
 }
 
@@ -35,11 +46,21 @@ export default function CartSidebar({
   paymentAmount,
   paymentMethod,
   voucherCode,
+  memberContactId,
+  redeemPoints,
   promoPreview,
+  membershipPreview,
+  activeMembers,
+  selectedMember,
+  membershipSetting,
   setShowPayment,
   setPaymentAmount,
   setPaymentMethod,
   setVoucherCode,
+  setMemberContactId,
+  setRedeemPoints,
+  createMember,
+  isCreatingMember,
   handleCheckout,
 }: CartSidebarProps) {
   const { t } = useI18n();
@@ -88,11 +109,21 @@ export default function CartSidebar({
             paymentAmount={paymentAmount}
             paymentMethod={paymentMethod}
             voucherCode={voucherCode}
+            memberContactId={memberContactId}
+            redeemPoints={redeemPoints}
             promoPreview={promoPreview}
+            membershipPreview={membershipPreview}
+            activeMembers={activeMembers}
+            selectedMember={selectedMember}
+            membershipSetting={membershipSetting}
             setShowPayment={setShowPayment}
             setPaymentAmount={setPaymentAmount}
             setPaymentMethod={setPaymentMethod}
             setVoucherCode={setVoucherCode}
+            setMemberContactId={setMemberContactId}
+            setRedeemPoints={setRedeemPoints}
+            createMember={createMember}
+            isCreatingMember={isCreatingMember}
             handleCheckout={handleCheckout}
           />
         </div>

@@ -25,6 +25,7 @@ const isContactType = (contactType: string): contactType is ContactType => (
 const mapRemoteContactToLocal = (
   remoteContact: RemoteContactDto,
   syncedAt: string,
+  localContact?: Contact,
 ): Contact => ({
   id: remoteContact.id,
   name: remoteContact.name,
@@ -36,6 +37,11 @@ const mapRemoteContactToLocal = (
   tax_number: remoteContact.tax_number ?? undefined,
   notes: remoteContact.notes ?? undefined,
   is_active: remoteContact.deleted_at ? false : remoteContact.is_active,
+  is_member: localContact?.is_member,
+  membership_number: localContact?.membership_number,
+  membership_status: localContact?.membership_status,
+  membership_joined_at: localContact?.membership_joined_at,
+  membership_points_balance: localContact?.membership_points_balance,
   created_at: remoteContact.created_at,
   updated_at: remoteContact.updated_at,
   sync_status: 'synced',
@@ -96,7 +102,7 @@ export const mergeRemoteContactsIntoDexie = async (
         continue;
       }
 
-      contactsToPut.push(mapRemoteContactToLocal(remoteContact, syncedAt));
+      contactsToPut.push(mapRemoteContactToLocal(remoteContact, syncedAt, localContact));
       if (localContact) {
         result.updated += 1;
       } else {
