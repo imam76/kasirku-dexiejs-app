@@ -7,21 +7,18 @@ import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import { useProductionOrders } from '@/hooks/useProductionOrders';
 import { useUnits } from '@/hooks/useUnits';
-import type { ProductUnit } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { konversiSatuanProduk } from '@/utils/pricing';
+import {
+  ProductionMaterialRowsVirtualTable,
+  type ProductionMaterialDraftRow,
+  type ProductionMaterialPreviewRow,
+} from './ProductionMaterialRowsVirtualTable';
 
 interface ProductionOrderFormProps {
   onBack: () => void;
   onSaved: (productionOrderId: string) => void;
   onPosted: (productionOrderId: string) => void;
-}
-
-interface MaterialDraftRow {
-  id: string;
-  productId?: string;
-  quantity: number;
-  unit?: ProductUnit;
 }
 
 interface CostDraftRow {
@@ -32,7 +29,7 @@ interface CostDraftRow {
 
 const { Title, Text } = Typography;
 
-const createMaterialRow = (): MaterialDraftRow => ({
+const createMaterialRow = (): ProductionMaterialDraftRow => ({
   id: crypto.randomUUID(),
   quantity: 1,
 });
@@ -48,23 +45,25 @@ const formatMoney = (value: number) => `Rp ${formatCurrency(Math.round(value || 
 export default function ProductionOrderForm({ onBack, onSaved, onPosted }: ProductionOrderFormProps) {
   const { message } = App.useApp();
   const { unitOptions } = useUnits();
-  const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], []) ?? [];
+  const liveProducts = useLiveQuery(() => db.products.orderBy('name').toArray(), [], []);
+  const products = useMemo(() => liveProducts ?? [], [liveProducts]);
   const { createDraft, postDraft, isCreatingDraft, isPostingDraft } = useProductionOrders();
   const [finishedProductId, setFinishedProductId] = useState<string>();
   const [quantityProduced, setQuantityProduced] = useState<number | null>(1);
   const [producedAt, setProducedAt] = useState(dayjs());
   const [notes, setNotes] = useState('');
-  const [materials, setMaterials] = useState<MaterialDraftRow[]>([createMaterialRow()]);
+  const [materials, setMaterials] = useState<ProductionMaterialDraftRow[]>([createMaterialRow()]);
   const [costs, setCosts] = useState<CostDraftRow[]>([]);
+  const [materialScrollToLastRequest, setMaterialScrollToLastRequest] = useState(0);
 
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const finishedProduct = finishedProductId ? productById.get(finishedProductId) : undefined;
-  const productOptions = products.map((product) => ({
+  const productOptions = useMemo(() => products.map((product) => ({
     value: product.id,
     label: `${product.name}${product.sku ? ` (${product.sku})` : ''}`,
-  }));
+  })), [products]);
 
-  const materialPreviewRows = materials.map((row) => {
+  const materialPreviewRows = useMemo<ProductionMaterialPreviewRow[]>(() => materials.map((row) => {
     const product = row.productId ? productById.get(row.productId) : undefined;
     const unit = row.unit ?? product?.purchase_unit ?? 'pcs';
     const quantity = Number(row.quantity || 0);
@@ -80,15 +79,14 @@ export default function ProductionOrderForm({ onBack, onSaved, onPosted }: Produ
       stockQuantity,
       estimatedCost,
     };
-  });
+  }), [materials, productById]);
 
   const materialCost = materialPreviewRows.reduce((sum, row) => sum + row.estimatedCost, 0);
   const additionalCost = costs.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const totalCost = materialCost + additionalCost;
   const unitCost = Number(quantityProduced || 0) > 0 ? totalCost / Number(quantityProduced || 1) : 0;
-  type MaterialPreviewRow = (typeof materialPreviewRows)[number];
 
-  const updateMaterial = (id: string, patch: Partial<MaterialDraftRow>) => {
+  const updateMaterial = (id: string, patch: Partial<ProductionMaterialDraftRow>) => {
     setMaterials((current) => current.map((row) => {
       if (row.id !== id) return row;
       const next = { ...row, ...patch };
@@ -98,6 +96,19 @@ export default function ProductionOrderForm({ onBack, onSaved, onPosted }: Produ
       }
       return next;
     }));
+  };
+
+  const addMaterial = () => {
+    setMaterials((current) => [...current, createMaterialRow()]);
+    setMaterialScrollToLastRequest((current) => current + 1);
+  };
+
+  const removeMaterial = (id: string) => {
+    setMaterials((current) => (
+      current.length === 1
+        ? current
+        : current.filter((item) => item.id !== id)
+    ));
   };
 
   const updateCost = (id: string, patch: Partial<CostDraftRow>) => {
@@ -140,81 +151,6 @@ export default function ProductionOrderForm({ onBack, onSaved, onPosted }: Produ
       message.error(error instanceof Error ? error.message : 'Gagal posting produksi.');
     }
   };
-
-  const materialColumns: ColumnsType<MaterialPreviewRow> = [
-    {
-      title: 'Bahan baku',
-      dataIndex: 'productId',
-      width: 280,
-      render: (_value, row) => (
-        <Select
-          showSearch
-          className="w-full"
-          value={row.productId}
-          placeholder="Pilih produk bahan"
-          options={productOptions}
-          optionFilterProp="label"
-          onChange={(value) => updateMaterial(row.id, { productId: value })}
-        />
-      ),
-    },
-    {
-      title: 'Jumlah',
-      dataIndex: 'quantity',
-      width: 140,
-      render: (_value, row) => (
-        <InputNumber
-          min={0}
-          className="w-full"
-          value={row.quantity}
-          onChange={(value) => updateMaterial(row.id, { quantity: Number(value || 0) })}
-        />
-      ),
-    },
-    {
-      title: 'Satuan',
-      dataIndex: 'unit',
-      width: 140,
-      render: (_value, row) => (
-        <Select
-          className="w-full"
-          value={row.unit}
-          options={unitOptions}
-          onChange={(value) => updateMaterial(row.id, { unit: value })}
-        />
-      ),
-    },
-    {
-      title: 'Stok terpakai',
-      key: 'stockQuantity',
-      width: 160,
-      render: (_value, row) => (
-        <span>{row.stockQuantity.toLocaleString('id-ID')} {row.product?.purchase_unit ?? ''}</span>
-      ),
-    },
-    {
-      title: 'Estimasi biaya',
-      key: 'estimatedCost',
-      align: 'right',
-      width: 160,
-      render: (_value, row) => formatMoney(row.estimatedCost),
-    },
-    {
-      title: '',
-      key: 'action',
-      width: 64,
-      render: (_value, row) => (
-        <Button
-          type="text"
-          danger
-          aria-label="Hapus bahan"
-          icon={<Trash2 size={16} />}
-          disabled={materials.length === 1}
-          onClick={() => setMaterials((current) => current.filter((item) => item.id !== row.id))}
-        />
-      ),
-    },
-  ];
 
   const costColumns: ColumnsType<CostDraftRow> = [
     {
@@ -314,17 +250,18 @@ export default function ProductionOrderForm({ onBack, onSaved, onPosted }: Produ
         className="rounded-md shadow-md"
         title="Bahan Baku"
         extra={(
-          <Button icon={<Plus size={16} />} onClick={() => setMaterials((current) => [...current, createMaterialRow()])}>
+          <Button icon={<Plus size={16} />} onClick={addMaterial}>
             Tambah Bahan
           </Button>
         )}
       >
-        <Table
-          rowKey="id"
-          columns={materialColumns}
-          dataSource={materialPreviewRows}
-          pagination={false}
-          scroll={{ x: 960 }}
+        <ProductionMaterialRowsVirtualTable
+          rows={materialPreviewRows}
+          productOptions={productOptions}
+          unitOptions={unitOptions}
+          scrollToLastRequest={materialScrollToLastRequest}
+          onUpdateMaterial={updateMaterial}
+          onRemoveMaterial={removeMaterial}
         />
       </Card>
 
