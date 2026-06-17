@@ -24,6 +24,7 @@ export interface CooperativeLedgerReportFilters {
   endDate?: string;
   fromAccountId?: string;
   toAccountId?: string;
+  hideZeroBalance?: boolean;
 }
 
 export interface CooperativeLedgerReportMovementRow {
@@ -95,6 +96,8 @@ type JournalLinePair = {
   line: JournalEntryLine;
 };
 
+const MONEY_TOLERANCE = 0.01;
+
 const getDateKey = (value: string) => dayjs(value).tz().format('YYYY-MM-DD');
 
 const isDateKeyInRange = (value: string, startDate?: string, endDate?: string) => {
@@ -147,6 +150,15 @@ const getAccountMovement = (
 ) => account.normal_balance === 'DEBIT'
   ? debit - credit
   : credit - debit;
+
+const isZeroAmount = (value: number) => Math.abs(value) <= MONEY_TOLERANCE;
+
+const isZeroAccountGroup = (group: CooperativeLedgerReportAccountGroup) => (
+  isZeroAmount(group.opening_balance) &&
+  isZeroAmount(group.total_debit) &&
+  isZeroAmount(group.total_credit) &&
+  isZeroAmount(group.ending_balance)
+);
 
 const getPostedLinePairs = (journalEntries: JournalEntryWithLines[]) => (
   journalEntries
@@ -290,7 +302,9 @@ export const getCooperativeLedgerReportData = async (
     .filter((account) => !selectedAccountIds || selectedAccountIds.has(account.id))
     .sort(compareByCode);
   const filteredPairs = getPostedLinePairs(journalEntries);
-  const groups = selectedAccounts.map((account) => buildAccountGroup(account, filteredPairs, filters));
+  const groups = selectedAccounts
+    .map((account) => buildAccountGroup(account, filteredPairs, filters))
+    .filter((group) => !filters.hideZeroBalance || !isZeroAccountGroup(group));
 
   return {
     accounts,

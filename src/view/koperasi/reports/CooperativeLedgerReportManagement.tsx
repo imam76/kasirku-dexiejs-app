@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
-import { App, Alert, Button, DatePicker, Empty, Modal, Select, Space, Tag, Typography } from 'antd';
+import { App, Alert, Button, Checkbox, DatePicker, Empty, Modal, Select, Space, Tag, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -159,7 +159,8 @@ const toSelectOptions = (items: Array<{ id: string; code?: string; name: string 
 
 const getFilterCount = (filters: CooperativeLedgerReportFilters) => (
   (filters.startDate || filters.endDate ? 1 : 0) +
-  (filters.fromAccountId || filters.toAccountId ? 1 : 0)
+  (filters.fromAccountId || filters.toAccountId ? 1 : 0) +
+  (filters.hideZeroBalance ? 1 : 0)
 );
 
 const getDefaultFilters = (): CooperativeLedgerReportFilters => ({
@@ -554,6 +555,16 @@ export default function CooperativeLedgerReportManagement() {
               />
             </div>
           </div>
+
+          <Checkbox
+            checked={Boolean(draftFilters.hideZeroBalance)}
+            onChange={(event) => setDraftFilters((current) => ({
+              ...current,
+              hideZeroBalance: event.target.checked ? true : undefined,
+            }))}
+          >
+            {t('cooperative.ledger.hideZeroBalance')}
+          </Checkbox>
         </Space>
       </Modal>
     </div>

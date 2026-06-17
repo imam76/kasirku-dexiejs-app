@@ -12,6 +12,7 @@ export const useCooperativeLedgerReport = (filters: CooperativeLedgerReportFilte
       filters.endDate,
       filters.fromAccountId,
       filters.toAccountId,
+      filters.hideZeroBalance,
     ],
     queryFn: () => getCooperativeLedgerReportData(filters),
   })
