@@ -11,6 +11,8 @@ import {
 import { getCashAccountBalance } from '@/services/cooperativeFieldCashService';
 import type {
   ChartOfAccount,
+  CooperativeLoan,
+  CooperativeLoanPayment,
   CooperativeMember,
   CooperativeMemberSavingBalance,
   CooperativeSavingTransaction,
@@ -23,6 +25,17 @@ export type CooperativeSavingTypeFilter = CooperativeSavingType | 'ALL';
 export type CooperativeSavingTransactionTypeFilter = CooperativeSavingTransactionType | 'ALL';
 export type CooperativeSavingStatusFilter = CooperativeSavingTransaction['status'] | 'ALL';
 
+export interface CooperativeSavingPendingReturn {
+  key: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  saving_type: 'WAJIB';
+  amount: number;
+  loan_numbers: string[];
+  tokens: string[];
+}
+
 const COOPERATIVE_SAVING_RELATED_QUERY_KEYS = [
   'cooperativeSavings',
   'cooperativeFieldCashReport',
@@ -33,6 +46,108 @@ const COOPERATIVE_SAVING_RELATED_QUERY_KEYS = [
   'incomeStatement',
   'balanceSheet',
 ];
+const AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX = 'AUTO_MANDATORY_SAVING_RETURN_PAYMENT';
+
+const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+const getAutoMandatorySavingReturnToken = (paymentId: string) => (
+  `[${AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX}:${paymentId}]`
+);
+
+const isPostedLoanPayment = (payment: CooperativeLoanPayment) => (
+  payment.status === 'POSTED' &&
+  payment.payment_type !== 'REVERSAL' &&
+  !payment.reversal_of_payment_id
+);
+
+const compareDateAsc = (left?: string, right?: string) => (
+  (left ?? '').localeCompare(right ?? '')
+);
+
+const getLoanPaidOffPaymentByLoanId = (
+  loans: CooperativeLoan[],
+  payments: CooperativeLoanPayment[],
+) => {
+  const paidOffLoanIds = new Set(
+    loans
+      .filter((loan) => loan.status === 'PAID_OFF')
+      .map((loan) => loan.id),
+  );
+  const paymentByLoanId = new Map<string, CooperativeLoanPayment>();
+
+  payments
+    .filter((payment) => paidOffLoanIds.has(payment.loan_id))
+    .filter(isPostedLoanPayment)
+    .forEach((payment) => {
+      const currentPayment = paymentByLoanId.get(payment.loan_id);
+      if (
+        !currentPayment ||
+        compareDateAsc(currentPayment.payment_date, payment.payment_date) < 0 ||
+        (
+          compareDateAsc(currentPayment.payment_date, payment.payment_date) === 0 &&
+          compareDateAsc(currentPayment.created_at, payment.created_at) < 0
+        )
+      ) {
+        paymentByLoanId.set(payment.loan_id, payment);
+      }
+    });
+
+  return paymentByLoanId;
+};
+
+const buildPendingMandatorySavingReturns = (
+  loans: CooperativeLoan[],
+  payments: CooperativeLoanPayment[],
+  transactions: CooperativeSavingTransaction[],
+) => {
+  const paidTokens = new Set(
+    transactions
+      .filter((transaction) => (
+        transaction.status === 'POSTED' &&
+        transaction.transaction_type === 'WITHDRAWAL' &&
+        transaction.saving_type === 'WAJIB'
+      ))
+      .flatMap((transaction) => (
+        transaction.notes?.match(/\[AUTO_MANDATORY_SAVING_RETURN_PAYMENT:[^\]]+\]/g) ?? []
+      )),
+  );
+  const paidOffPaymentByLoanId = getLoanPaidOffPaymentByLoanId(loans, payments);
+  const pendingByKey = new Map<string, CooperativeSavingPendingReturn>();
+
+  loans
+    .filter((loan) => loan.status === 'PAID_OFF')
+    .forEach((loan) => {
+      const amount = roundCurrency(Number(loan.mandatory_saving_amount || 0));
+      if (amount <= 0) return;
+      const payment = paidOffPaymentByLoanId.get(loan.id);
+      if (!payment) return;
+
+      const token = getAutoMandatorySavingReturnToken(payment.id);
+      if (paidTokens.has(token)) return;
+
+      const key = `${loan.member_id}:WAJIB`;
+      const current = pendingByKey.get(key);
+      if (!current) {
+        pendingByKey.set(key, {
+          key,
+          member_id: loan.member_id,
+          member_number: loan.member_number,
+          member_name: loan.member_name,
+          saving_type: 'WAJIB',
+          amount,
+          loan_numbers: [loan.loan_number],
+          tokens: [token],
+        });
+        return;
+      }
+
+      current.amount = roundCurrency(current.amount + amount);
+      current.loan_numbers.push(loan.loan_number);
+      current.tokens.push(token);
+    });
+
+  return pendingByKey;
+};
 
 export const useCooperativeSavings = () => {
   const queryClient = useQueryClient();
@@ -54,6 +169,16 @@ export const useCooperativeSavings = () => {
   );
   const balances = useLiveQuery(
     () => db.cooperativeMemberSavingBalances.orderBy('member_number').toArray(),
+    [],
+    [],
+  );
+  const loans = useLiveQuery(
+    () => db.cooperativeLoans.orderBy('loan_number').toArray(),
+    [],
+    [],
+  );
+  const loanPayments = useLiveQuery(
+    () => db.cooperativeLoanPayments.orderBy('payment_date').toArray(),
     [],
     [],
   );
@@ -129,6 +254,10 @@ export const useCooperativeSavings = () => {
     });
   }, [balances, savingTypeFilter, searchText]);
 
+  const pendingReturnByBalanceKey = useMemo(() => (
+    buildPendingMandatorySavingReturns(loans, loanPayments, transactions)
+  ), [loanPayments, loans, transactions]);
+
   const invalidate = () => {
     COOPERATIVE_SAVING_RELATED_QUERY_KEYS.forEach((queryKey) => {
       queryClient.invalidateQueries({ queryKey: [queryKey] });
@@ -151,6 +280,7 @@ export const useCooperativeSavings = () => {
     filteredTransactions,
     balances,
     filteredBalances,
+    pendingReturnByBalanceKey,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
     fieldCashEmployees: fieldCashEmployees as Employee[],
     fieldCashAccountIds,

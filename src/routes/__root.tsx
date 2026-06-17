@@ -286,6 +286,7 @@ const RootLayout = () => {
           key: 'cooperative-reports-group',
           children: [
             { to: '/koperasi/laporan', label: t('nav.cooperative.reportsOverview'), icon: FileText },
+            { to: '/koperasi/laporan-storting-harian', label: t('nav.cooperative.dailyStorting'), icon: FileText },
             { to: '/koperasi/laporan-drop-harian', label: t('nav.cooperative.dailyDrop'), icon: FileText },
             { to: '/koperasi/laporan-drop-mingguan', label: t('nav.cooperative.weeklyDrop'), icon: FileText },
             { to: '/koperasi/laporan-induk-anggota', label: t('nav.cooperative.memberRegister'), icon: FileText },

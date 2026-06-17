@@ -1,9 +1,10 @@
-import { Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select, Tag } from 'antd';
+import { Button, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Tag } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useEffect, useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { ChartOfAccount, CooperativeMember, CooperativeSavingTransactionType, CooperativeSavingType, Employee, PaymentMethod } from '@/types';
+import type { CooperativeSavingPendingReturn } from '@/hooks/useCooperativeSavings';
+import type { ChartOfAccount, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransactionType, CooperativeSavingType, Employee, PaymentMethod } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getResponsibleFieldCashAccountId } from '@/utils/koperasi/fieldCashDefaults';
 import {
@@ -12,6 +13,11 @@ import {
 } from './savingOptions';
 
 const { TextArea } = Input;
+const AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX = 'AUTO_MANDATORY_SAVING_RETURN_PAYMENT';
+
+const buildPendingReturnNotes = (pendingReturn: CooperativeSavingPendingReturn) => (
+  `Pembayaran pengembalian simpanan wajib pelunasan pinjaman ${pendingReturn.loan_numbers.join(', ')}. ${pendingReturn.tokens.join(' ')}`
+);
 
 export interface CooperativeSavingFormValues {
   member_id: string;
@@ -31,6 +37,8 @@ interface CooperativeSavingFormModalProps {
   open: boolean;
   isSubmitting: boolean;
   activeMembers: CooperativeMember[];
+  savingBalances: CooperativeMemberSavingBalance[];
+  pendingReturnByBalanceKey: Map<string, CooperativeSavingPendingReturn>;
   paymentAccounts: ChartOfAccount[];
   fieldCashEmployees: Employee[];
   fieldCashAccountIds: Set<string>;
@@ -45,6 +53,8 @@ export default function CooperativeSavingFormModal({
   open,
   isSubmitting,
   activeMembers,
+  savingBalances,
+  pendingReturnByBalanceKey,
   paymentAccounts,
   fieldCashEmployees,
   fieldCashAccountIds,
@@ -56,6 +66,8 @@ export default function CooperativeSavingFormModal({
   const { t } = useI18n();
   const selectedMemberId = Form.useWatch('member_id', form);
   const selectedCashAccountId = Form.useWatch('cash_account_id', form);
+  const selectedTransactionType = Form.useWatch('transaction_type', form);
+  const selectedSavingType = Form.useWatch('saving_type', form);
   const memberOptions = useMemo(() => activeMembers.map((member) => ({
     value: member.id,
     label: `${member.member_number} - ${member.name}`,
@@ -70,9 +82,23 @@ export default function CooperativeSavingFormModal({
   const selectedMember = useMemo(() => (
     activeMembers.find((member) => member.id === selectedMemberId)
   ), [activeMembers, selectedMemberId]);
+  const selectedSavingBalance = useMemo(() => (
+    selectedMemberId && selectedSavingType
+      ? savingBalances.find((balance) => (
+          balance.member_id === selectedMemberId && balance.saving_type === selectedSavingType
+        ))
+      : undefined
+  ), [savingBalances, selectedMemberId, selectedSavingType]);
+  const selectedPendingReturn = selectedSavingBalance
+    ? pendingReturnByBalanceKey.get(selectedSavingBalance.id)
+    : undefined;
   const responsibleCashAccountId = useMemo(() => (
     getResponsibleFieldCashAccountId(selectedMember, fieldCashEmployees, paymentAccounts)
   ), [fieldCashEmployees, paymentAccounts, selectedMember]);
+
+  const selectedCashAccountBalance = selectedCashAccountId
+    ? Number(fieldCashBalances.get(selectedCashAccountId) || 0)
+    : 0;
 
   useEffect(() => {
     if (!open || !selectedMemberId) return;
@@ -83,9 +109,42 @@ export default function CooperativeSavingFormModal({
     }
   }, [defaultCashAccountId, form, open, responsibleCashAccountId, selectedMemberId]);
 
+  useEffect(() => {
+    if (!open || selectedTransactionType !== 'WITHDRAWAL') return;
+
+    if (!selectedSavingBalance) {
+      form.setFieldValue('amount', undefined);
+      const currentNotes = form.getFieldValue('notes');
+      if (typeof currentNotes === 'string' && currentNotes.includes(AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX)) {
+        form.setFieldValue('notes', undefined);
+      }
+      return;
+    }
+
+    const nextAmount = selectedPendingReturn?.amount ?? Number(selectedSavingBalance.balance || 0);
+    if (nextAmount > 0) {
+      form.setFieldValue('amount', nextAmount);
+    }
+
+    const currentNotes = form.getFieldValue('notes');
+    if (selectedPendingReturn) {
+      form.setFieldValue('notes', buildPendingReturnNotes(selectedPendingReturn));
+    } else if (typeof currentNotes === 'string' && currentNotes.includes(AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX)) {
+      form.setFieldValue('notes', undefined);
+    }
+  }, [
+    form,
+    open,
+    selectedPendingReturn,
+    selectedSavingBalance,
+    selectedTransactionType,
+  ]);
+
   return (
     <Modal
-      title={t('cooperative.savings.addTitle')}
+      title={selectedTransactionType === 'WITHDRAWAL'
+        ? t('cooperative.savings.withdrawTitle')
+        : t('cooperative.savings.addTitle')}
       open={open}
       onCancel={onCancel}
       onOk={() => form.submit()}
@@ -129,6 +188,19 @@ export default function CooperativeSavingFormModal({
           </Form.Item>
         </div>
 
+        {selectedTransactionType === 'WITHDRAWAL' && selectedMemberId && selectedSavingType && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Tag color="blue">
+              {t('cooperative.savings.memberSavingBalance')}: Rp {formatCurrency(Number(selectedSavingBalance?.balance || 0))}
+            </Tag>
+            {selectedPendingReturn && (
+              <Tag color="gold">
+                {t('cooperative.savings.pendingReturn')}: Rp {formatCurrency(selectedPendingReturn.amount)}
+              </Tag>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Form.Item
             name="saving_type"
@@ -142,10 +214,35 @@ export default function CooperativeSavingFormModal({
           </Form.Item>
           <Form.Item
             name="amount"
-            label={t('cooperative.savings.form.amount')}
+            label={(
+              <Space size={8}>
+                <span>{t('cooperative.savings.form.amount')}</span>
+                {selectedTransactionType === 'WITHDRAWAL' && selectedSavingBalance && (
+                  <Button
+                    type="link"
+                    size="small"
+                    className="h-auto p-0"
+                    onClick={() => form.setFieldValue('amount', Number(selectedSavingBalance.balance || 0))}
+                  >
+                    {t('cooperative.savings.withdrawAll')}
+                  </Button>
+                )}
+              </Space>
+            )}
             rules={[
               { required: true, message: t('finance.amountRequired') },
               { type: 'number', min: 1, message: t('finance.amountMin') },
+              {
+                validator: async (_rule, value) => {
+                  if (selectedTransactionType !== 'WITHDRAWAL') return;
+                  const availableBalance = Number(selectedSavingBalance?.balance || 0);
+                  const requestedAmount = Number(value || 0);
+                  if (requestedAmount <= availableBalance + 0.01) return;
+                  throw new Error(t('cooperative.savings.validation.withdrawalMax', {
+                    amount: formatCurrency(availableBalance),
+                  }));
+                },
+              },
             ]}
           >
             <InputNumber<number>
@@ -204,9 +301,14 @@ export default function CooperativeSavingFormModal({
         </Form.Item>
 
         {selectedAccount && fieldCashAccountIds.has(selectedAccount.id) && (
-          <Tag color="green">
-            Kas Petugas {selectedAccount.code} - saldo Rp {formatCurrency(Number(fieldCashBalances.get(selectedAccount.id) || 0))}
-          </Tag>
+          <div className="flex flex-wrap gap-2">
+            <Tag color="green">
+              {t('cooperative.savings.selectedFieldCash')}: {selectedAccount.code} - {selectedAccount.name}
+            </Tag>
+            <Tag color="cyan">
+              {t('cooperative.savings.selectedFieldCashBalance')}: Rp {formatCurrency(selectedCashAccountBalance)}
+            </Tag>
+          </div>
         )}
       </Form>
     </Modal>

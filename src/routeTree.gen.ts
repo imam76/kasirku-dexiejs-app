@@ -99,6 +99,9 @@ const KoperasiPinjamanLazyRouteImport = createFileRoute('/koperasi/pinjaman')()
 const KoperasiPenagihanLazyRouteImport = createFileRoute(
   '/koperasi/penagihan',
 )()
+const KoperasiLaporanStortingHarianLazyRouteImport = createFileRoute(
+  '/koperasi/laporan-storting-harian',
+)()
 const KoperasiLaporanIndukAnggotaLazyRouteImport = createFileRoute(
   '/koperasi/laporan-induk-anggota',
 )()
@@ -463,6 +466,16 @@ const KoperasiPenagihanLazyRoute = KoperasiPenagihanLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/koperasi/penagihan.lazy').then((d) => d.Route),
 )
+const KoperasiLaporanStortingHarianLazyRoute =
+  KoperasiLaporanStortingHarianLazyRouteImport.update({
+    id: '/koperasi/laporan-storting-harian',
+    path: '/koperasi/laporan-storting-harian',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan-storting-harian.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const KoperasiLaporanIndukAnggotaLazyRoute =
   KoperasiLaporanIndukAnggotaLazyRouteImport.update({
     id: '/koperasi/laporan-induk-anggota',
@@ -839,6 +852,7 @@ export interface FileRoutesByFullPath {
   '/koperasi/laporan-drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
   '/koperasi/laporan-drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
   '/koperasi/laporan-induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
+  '/koperasi/laporan-storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -926,6 +940,7 @@ export interface FileRoutesByTo {
   '/koperasi/laporan-drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
   '/koperasi/laporan-drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
   '/koperasi/laporan-induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
+  '/koperasi/laporan-storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -1014,6 +1029,7 @@ export interface FileRoutesById {
   '/koperasi/laporan-drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
   '/koperasi/laporan-drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
   '/koperasi/laporan-induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
+  '/koperasi/laporan-storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -1103,6 +1119,7 @@ export interface FileRouteTypes {
     | '/koperasi/laporan-drop-harian'
     | '/koperasi/laporan-drop-mingguan'
     | '/koperasi/laporan-induk-anggota'
+    | '/koperasi/laporan-storting-harian'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1190,6 +1207,7 @@ export interface FileRouteTypes {
     | '/koperasi/laporan-drop-harian'
     | '/koperasi/laporan-drop-mingguan'
     | '/koperasi/laporan-induk-anggota'
+    | '/koperasi/laporan-storting-harian'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1277,6 +1295,7 @@ export interface FileRouteTypes {
     | '/koperasi/laporan-drop-harian'
     | '/koperasi/laporan-drop-mingguan'
     | '/koperasi/laporan-induk-anggota'
+    | '/koperasi/laporan-storting-harian'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1365,6 +1384,7 @@ export interface RootRouteChildren {
   KoperasiLaporanDropHarianLazyRoute: typeof KoperasiLaporanDropHarianLazyRoute
   KoperasiLaporanDropMingguanLazyRoute: typeof KoperasiLaporanDropMingguanLazyRoute
   KoperasiLaporanIndukAnggotaLazyRoute: typeof KoperasiLaporanIndukAnggotaLazyRoute
+  KoperasiLaporanStortingHarianLazyRoute: typeof KoperasiLaporanStortingHarianLazyRoute
   KoperasiPenagihanLazyRoute: typeof KoperasiPenagihanLazyRoute
   KoperasiPinjamanLazyRoute: typeof KoperasiPinjamanLazyRoute
   KoperasiSimpananLazyRoute: typeof KoperasiSimpananLazyRoute
@@ -1714,6 +1734,13 @@ declare module '@tanstack/react-router' {
       path: '/koperasi/penagihan'
       fullPath: '/koperasi/penagihan'
       preLoaderRoute: typeof KoperasiPenagihanLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan-storting-harian': {
+      id: '/koperasi/laporan-storting-harian'
+      path: '/koperasi/laporan-storting-harian'
+      fullPath: '/koperasi/laporan-storting-harian'
+      preLoaderRoute: typeof KoperasiLaporanStortingHarianLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/koperasi/laporan-induk-anggota': {
@@ -2094,6 +2121,8 @@ const rootRouteChildren: RootRouteChildren = {
   KoperasiLaporanDropHarianLazyRoute: KoperasiLaporanDropHarianLazyRoute,
   KoperasiLaporanDropMingguanLazyRoute: KoperasiLaporanDropMingguanLazyRoute,
   KoperasiLaporanIndukAnggotaLazyRoute: KoperasiLaporanIndukAnggotaLazyRoute,
+  KoperasiLaporanStortingHarianLazyRoute:
+    KoperasiLaporanStortingHarianLazyRoute,
   KoperasiPenagihanLazyRoute: KoperasiPenagihanLazyRoute,
   KoperasiPinjamanLazyRoute: KoperasiPinjamanLazyRoute,
   KoperasiSimpananLazyRoute: KoperasiSimpananLazyRoute,

@@ -111,10 +111,6 @@ const assertSavingBusinessRules = async (
   transactionType: CooperativeSavingTransactionType,
   amount: number,
 ) => {
-  if (transactionType === 'WITHDRAWAL' && savingType !== 'SUKARELA') {
-    throw new Error('Penarikan hanya boleh dari simpanan sukarela.');
-  }
-
   if (transactionType === 'DEPOSIT' && savingType === 'POKOK') {
     const existingPokokDeposit = await db.cooperativeSavingTransactions
       .where('member_id')
@@ -134,7 +130,8 @@ const assertSavingBusinessRules = async (
   if (transactionType === 'WITHDRAWAL') {
     const balance = await db.cooperativeMemberSavingBalances.get(getSavingBalanceId(member.id, savingType));
     if (roundCurrency(Number(balance?.balance || 0)) < amount) {
-      throw new Error('Penarikan tidak boleh melebihi saldo simpanan sukarela.');
+      const savingLabel = savingType === 'POKOK' ? 'pokok' : savingType === 'WAJIB' ? 'wajib' : 'sukarela';
+      throw new Error(`Penarikan tidak boleh melebihi saldo simpanan ${savingLabel}.`);
     }
   }
 };

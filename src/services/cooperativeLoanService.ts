@@ -15,13 +15,17 @@ import {
   getCashOrBankAccountForPayment,
   postCooperativeLoanDisbursementJournal,
   postCooperativeLoanPaymentJournal,
+  postCooperativeSavingTransactionJournal,
   reverseCooperativeLoanPaymentJournal,
+  reverseCooperativeSavingTransactionJournal,
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import {
   assertSufficientCashAccountBalance,
   buildFieldCashFinanceTransactionFields,
+  getCashAccountBalance,
   getFieldCashContextForCashAccount,
+  type CooperativeFieldCashContext,
 } from '@/services/cooperativeFieldCashService';
 import {
   enqueueCooperativeMemberSavingBalancesSync,
@@ -199,6 +203,11 @@ const createCooperativeLoanPaymentNumber = async (date = new Date()) => {
 };
 
 const getMandatorySavingBalanceId = (memberId: string) => `${memberId}:WAJIB`;
+const AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX = 'AUTO_MANDATORY_SAVING_RETURN_PAYMENT';
+
+const getAutoMandatorySavingReturnToken = (paymentId: string) => (
+  `[${AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX}:${paymentId}]`
+);
 
 const resolveLoanCalculationType = (
   loan: Pick<CooperativeLoan, 'interest_calculation_type'>,
@@ -265,6 +274,312 @@ const updateFinanceBalanceForPayment = async (
     amount: nextFinanceBalance,
     updated_at: now,
   });
+};
+
+const updateFinanceBalanceForSavingWithdrawal = async (
+  amount: number,
+  now: string,
+  isReversal = false,
+) => {
+  const currentFinanceBalance = await db.financeBalance.get('current');
+  const nextFinanceBalance = roundCurrency(
+    Number(currentFinanceBalance?.amount || 0) + (isReversal ? amount : -amount),
+  );
+
+  await db.financeBalance.put({
+    id: 'current',
+    amount: nextFinanceBalance,
+    updated_at: now,
+  });
+};
+
+const updateMandatorySavingBalance = async ({
+  memberId,
+  memberNumber,
+  memberName,
+  amountDelta,
+  now,
+}: {
+  memberId: string;
+  memberNumber: string;
+  memberName: string;
+  amountDelta: number;
+  now: string;
+}) => {
+  const balanceId = getMandatorySavingBalanceId(memberId);
+  const existingBalance = await db.cooperativeMemberSavingBalances.get(balanceId);
+  const nextBalance = roundCurrency(Number(existingBalance?.balance || 0) + amountDelta);
+  if (nextBalance < -0.01) {
+    throw new Error('Saldo simpanan wajib anggota tidak cukup untuk pengembalian pelunasan pinjaman.');
+  }
+
+  const balance: CooperativeMemberSavingBalance = withPendingCooperativeSync({
+    id: balanceId,
+    member_id: memberId,
+    member_number: memberNumber,
+    member_name: memberName,
+    saving_type: 'WAJIB',
+    balance: Math.max(0, nextBalance),
+    updated_at: now,
+  });
+
+  await db.cooperativeMemberSavingBalances.put(balance);
+  return balance;
+};
+
+const findAutoMandatorySavingReturnTransaction = async (
+  payment: Pick<CooperativeLoanPayment, 'id' | 'member_id'>,
+) => {
+  const token = getAutoMandatorySavingReturnToken(payment.id);
+
+  return db.cooperativeSavingTransactions
+    .where('member_id')
+    .equals(payment.member_id)
+    .filter((transaction) => (
+      transaction.saving_type === 'WAJIB' &&
+      transaction.transaction_type === 'WITHDRAWAL' &&
+      Boolean(transaction.notes?.includes(token))
+    ))
+    .first();
+};
+
+const recordMandatorySavingReturnOnPaidOff = async ({
+  loan,
+  payment,
+  amount,
+  now,
+  fieldCashContext,
+  currentUser,
+}: {
+  loan: CooperativeLoan;
+  payment: CooperativeLoanPayment;
+  amount: number;
+  now: string;
+  fieldCashContext?: CooperativeFieldCashContext;
+  currentUser?: { id: string; name: string } | null;
+}): Promise<{
+  transaction?: CooperativeSavingTransaction;
+  balance?: CooperativeMemberSavingBalance;
+  financeTransaction?: FinanceTransaction;
+}> => {
+  const mandatorySavingAmount = roundCurrency(amount);
+  if (mandatorySavingAmount <= 0) return {};
+  if (await findAutoMandatorySavingReturnTransaction(payment)) return {};
+  if (!fieldCashContext || !payment.cash_account_id) return {};
+
+  const cashBalance = await getCashAccountBalance(payment.cash_account_id);
+  if (cashBalance + 0.01 < mandatorySavingAmount) return {};
+
+  const token = getAutoMandatorySavingReturnToken(payment.id);
+  const savingTransactionId = crypto.randomUUID();
+  const financeTransactionId = crypto.randomUUID();
+  const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL);
+  const description = `Pengembalian simpanan wajib pelunasan pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`;
+  const savingTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
+    id: savingTransactionId,
+    member_id: loan.member_id,
+    member_number: loan.member_number,
+    member_name: loan.member_name,
+    saving_type: 'WAJIB',
+    transaction_type: 'WITHDRAWAL',
+    amount: mandatorySavingAmount,
+    transaction_date: payment.payment_date,
+    status: 'POSTED',
+    cash_account_id: payment.cash_account_id,
+    cash_account_code: payment.cash_account_code,
+    cash_account_name: payment.cash_account_name,
+    payment_method: payment.payment_method,
+    payment_channel: payment.payment_channel,
+    finance_transaction_id: financeTransactionId,
+    notes: `${description}. ${token}`,
+    created_at: now,
+    updated_at: now,
+    created_by: currentUser?.id,
+    created_by_name: currentUser?.name,
+    updated_by: currentUser?.id,
+    updated_by_name: currentUser?.name,
+  });
+  const financeTransaction = withPendingFinanceTransactionSync({
+    id: financeTransactionId,
+    type: 'EXPENSE',
+    category: FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL,
+    amount: mandatorySavingAmount,
+    description,
+    created_at: payment.payment_date,
+    reference_id: savingTransaction.id,
+    payment_method: payment.payment_method,
+    payment_channel: payment.payment_channel,
+    cash_account_id: payment.cash_account_id,
+    cash_account_code: payment.cash_account_code,
+    cash_account_name: payment.cash_account_name,
+    ...accountSnapshot,
+    ...(fieldCashContext
+      ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'SAVING_WITHDRAWAL')
+      : {}),
+  }, currentUser, now);
+
+  await updateFinanceBalanceForSavingWithdrawal(mandatorySavingAmount, now);
+  const balance = await updateMandatorySavingBalance({
+    memberId: loan.member_id,
+    memberNumber: loan.member_number,
+    memberName: loan.member_name,
+    amountDelta: -mandatorySavingAmount,
+    now,
+  });
+  await db.financeTransactions.add(financeTransaction);
+  await db.cooperativeSavingTransactions.add(savingTransaction);
+
+  const journalEntry = await postCooperativeSavingTransactionJournal(savingTransaction, currentUser);
+  if (!journalEntry) {
+    return { transaction: savingTransaction, balance, financeTransaction };
+  }
+
+  const transactionWithJournal: CooperativeSavingTransaction = {
+    ...savingTransaction,
+    journal_entry_id: journalEntry.id,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  };
+  await db.cooperativeSavingTransactions.update(savingTransaction.id, {
+    journal_entry_id: journalEntry.id,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  });
+
+  return { transaction: transactionWithJournal, balance, financeTransaction };
+};
+
+const reverseAutoMandatorySavingReturn = async ({
+  payment,
+  reason,
+  now,
+  currentUser,
+}: {
+  payment: CooperativeLoanPayment;
+  reason: string;
+  now: string;
+  currentUser?: { id: string; name: string } | null;
+}): Promise<{
+  reversalTransaction?: CooperativeSavingTransaction;
+  updatedOriginalTransaction?: CooperativeSavingTransaction;
+  balance?: CooperativeMemberSavingBalance;
+  financeTransaction?: FinanceTransaction;
+}> => {
+  const originalTransaction = await findAutoMandatorySavingReturnTransaction(payment);
+  if (!originalTransaction || originalTransaction.status !== 'POSTED') return {};
+
+  const amount = roundCurrency(Number(originalTransaction.amount || 0));
+  if (amount <= 0) return {};
+
+  const reversalTransactionId = crypto.randomUUID();
+  const reversalFinanceTransactionId = crypto.randomUUID();
+  const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL);
+  const financeTransaction = withPendingFinanceTransactionSync({
+    id: reversalFinanceTransactionId,
+    type: 'INCOME',
+    category: FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL,
+    amount,
+    description: `Reversal pengembalian simpanan wajib ${payment.payment_number}. ${reason}`,
+    created_at: now,
+    reference_id: reversalTransactionId,
+    payment_method: originalTransaction.payment_method,
+    payment_channel: originalTransaction.payment_channel,
+    cash_account_id: originalTransaction.cash_account_id,
+    cash_account_code: originalTransaction.cash_account_code,
+    cash_account_name: originalTransaction.cash_account_name,
+    ...accountSnapshot,
+  }, currentUser, now);
+  const reversalTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
+    id: reversalTransactionId,
+    member_id: originalTransaction.member_id,
+    member_number: originalTransaction.member_number,
+    member_name: originalTransaction.member_name,
+    saving_type: originalTransaction.saving_type,
+    transaction_type: 'REVERSAL',
+    amount,
+    transaction_date: now,
+    status: 'POSTED',
+    cash_account_id: originalTransaction.cash_account_id,
+    cash_account_code: originalTransaction.cash_account_code,
+    cash_account_name: originalTransaction.cash_account_name,
+    payment_method: originalTransaction.payment_method,
+    payment_channel: originalTransaction.payment_channel,
+    finance_transaction_id: reversalFinanceTransactionId,
+    reversal_of_transaction_id: originalTransaction.id,
+    notes: reason,
+    created_at: now,
+    updated_at: now,
+    created_by: currentUser?.id,
+    created_by_name: currentUser?.name,
+    updated_by: currentUser?.id,
+    updated_by_name: currentUser?.name,
+  });
+
+  await updateFinanceBalanceForSavingWithdrawal(amount, now, true);
+  const balance = await updateMandatorySavingBalance({
+    memberId: originalTransaction.member_id,
+    memberNumber: originalTransaction.member_number,
+    memberName: originalTransaction.member_name,
+    amountDelta: amount,
+    now,
+  });
+  await db.financeTransactions.add(financeTransaction);
+  await db.cooperativeSavingTransactions.add(reversalTransaction);
+
+  const reversalEntries = originalTransaction.journal_entry_id
+    ? await reverseCooperativeSavingTransactionJournal(
+        originalTransaction,
+        `Reversal pengembalian simpanan wajib ${payment.payment_number}: ${reason}`,
+        currentUser,
+        now,
+      )
+    : [];
+  const reversalJournalEntryId = reversalEntries[0]?.id;
+  const updatedOriginalTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
+    ...originalTransaction,
+    status: 'REVERSED' as const,
+    reversal_transaction_id: reversalTransaction.id,
+    reversal_finance_transaction_id: reversalFinanceTransactionId,
+    reversal_journal_entry_id: reversalJournalEntryId,
+    reversed_at: now,
+    reversal_reason: reason,
+    updated_at: now,
+    updated_by: currentUser?.id,
+    updated_by_name: currentUser?.name,
+  });
+  await db.cooperativeSavingTransactions.put(updatedOriginalTransaction);
+
+  if (!reversalJournalEntryId) {
+    return {
+      reversalTransaction,
+      updatedOriginalTransaction,
+      balance,
+      financeTransaction,
+    };
+  }
+
+  const reversalTransactionWithJournal: CooperativeSavingTransaction = {
+    ...reversalTransaction,
+    journal_entry_id: reversalJournalEntryId,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  };
+  await db.cooperativeSavingTransactions.update(reversalTransaction.id, {
+    journal_entry_id: reversalJournalEntryId,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  });
+
+  return {
+    reversalTransaction: reversalTransactionWithJournal,
+    updatedOriginalTransaction,
+    balance,
+    financeTransaction,
+  };
 };
 
 const buildInstallments = (
@@ -792,6 +1107,9 @@ export const recordCooperativeLoanPayment = async (
   let savedInstallment: CooperativeLoanInstallment | undefined;
   let savedLoan: CooperativeLoan | undefined;
   let financeTransaction: FinanceTransaction | undefined;
+  let mandatorySavingReturnTransaction: CooperativeSavingTransaction | undefined;
+  let mandatorySavingReturnBalance: CooperativeMemberSavingBalance | undefined;
+  let mandatorySavingReturnFinanceTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const installment = await db.cooperativeLoanInstallments.get(parsedInput.installment_id);
@@ -940,6 +1258,20 @@ export const recordCooperativeLoanPayment = async (
     await db.cooperativeLoanInstallments.put(nextInstallment);
     await db.cooperativeLoans.put(nextLoan);
 
+    if (nextLoan.status === 'PAID_OFF') {
+      const mandatorySavingReturn = await recordMandatorySavingReturnOnPaidOff({
+        loan: nextLoan,
+        payment,
+        amount: Number(nextLoan.mandatory_saving_amount || 0),
+        now,
+        fieldCashContext,
+        currentUser,
+      });
+      mandatorySavingReturnTransaction = mandatorySavingReturn.transaction;
+      mandatorySavingReturnBalance = mandatorySavingReturn.balance;
+      mandatorySavingReturnFinanceTransaction = mandatorySavingReturn.financeTransaction;
+    }
+
     const journalEntry = await postCooperativeLoanPaymentJournal(payment, currentUser);
     savedPayment = journalEntry
       ? {
@@ -978,6 +1310,15 @@ export const recordCooperativeLoanPayment = async (
 
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  }
+  if (mandatorySavingReturnFinanceTransaction) {
+    await enqueueFinanceTransactionsSync([mandatorySavingReturnFinanceTransaction], 'create');
+  }
+  if (mandatorySavingReturnTransaction) {
+    await enqueueCooperativeSavingTransactionsSync([mandatorySavingReturnTransaction], 'create');
+  }
+  if (mandatorySavingReturnBalance) {
+    await enqueueCooperativeMemberSavingBalancesSync([mandatorySavingReturnBalance], 'update');
   }
   await enqueueCooperativeLoanPaymentsSync([savedPayment], 'create');
   await enqueueCooperativeLoanInstallmentsSync([savedInstallment], 'update');
@@ -1064,6 +1405,10 @@ export const reverseCooperativeLoanPayment = async (
   let updatedOriginalPayment: CooperativeLoanPayment | undefined;
   let updatedInstallment: CooperativeLoanInstallment | undefined;
   let updatedLoan: CooperativeLoan | undefined;
+  let autoReturnReversalTransaction: CooperativeSavingTransaction | undefined;
+  let autoReturnOriginalTransaction: CooperativeSavingTransaction | undefined;
+  let autoReturnBalance: CooperativeMemberSavingBalance | undefined;
+  let autoReturnFinanceTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const payment = await db.cooperativeLoanPayments.get(input.payment_id);
@@ -1137,6 +1482,17 @@ export const reverseCooperativeLoanPayment = async (
       outstanding_interest_amount: Math.min(loan.total_interest_amount, nextLoanDraft.outstanding_interest_amount),
       outstanding_penalty_amount: Math.max(0, nextLoanDraft.outstanding_penalty_amount),
     });
+
+    const autoReturnReversal = await reverseAutoMandatorySavingReturn({
+      payment,
+      reason: parsedInput.reason,
+      now,
+      currentUser,
+    });
+    autoReturnReversalTransaction = autoReturnReversal.reversalTransaction;
+    autoReturnOriginalTransaction = autoReturnReversal.updatedOriginalTransaction;
+    autoReturnBalance = autoReturnReversal.balance;
+    autoReturnFinanceTransaction = autoReturnReversal.financeTransaction;
 
     await updateFinanceBalanceForPayment(payment.amount, now, true);
     reversalFinanceTransaction = withPendingFinanceTransactionSync({
@@ -1263,6 +1619,18 @@ export const reverseCooperativeLoanPayment = async (
 
   if (reversalFinanceTransaction) {
     await enqueueFinanceTransactionsSync([reversalFinanceTransaction], 'create');
+  }
+  if (autoReturnFinanceTransaction) {
+    await enqueueFinanceTransactionsSync([autoReturnFinanceTransaction], 'create');
+  }
+  if (autoReturnReversalTransaction) {
+    await enqueueCooperativeSavingTransactionsSync([autoReturnReversalTransaction], 'create');
+  }
+  if (autoReturnOriginalTransaction) {
+    await enqueueCooperativeSavingTransactionsSync([autoReturnOriginalTransaction], 'update');
+  }
+  if (autoReturnBalance) {
+    await enqueueCooperativeMemberSavingBalancesSync([autoReturnBalance], 'update');
   }
   await enqueueCooperativeLoanPaymentsSync([reversalPayment], 'create');
   await enqueueCooperativeLoanPaymentsSync([updatedOriginalPayment], 'update');

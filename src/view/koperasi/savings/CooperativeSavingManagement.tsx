@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import { App, Button, Card, Form, Input, Select, Tabs } from 'antd';
-import { Plus, WalletCards } from 'lucide-react';
+import { App, Button, Card, Form, Input, Select, Space, Tabs } from 'antd';
+import { ArrowUpRight, Plus, WalletCards } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
 import {
   useCooperativeSavings,
+  type CooperativeSavingPendingReturn,
   type CooperativeSavingStatusFilter,
   type CooperativeSavingTransactionTypeFilter,
   type CooperativeSavingTypeFilter,
 } from '@/hooks/useCooperativeSavings';
 import { useI18n } from '@/hooks/useI18n';
-import type { CooperativeSavingTransaction } from '@/types';
+import type { CooperativeMemberSavingBalance, CooperativeSavingTransaction, CooperativeSavingTransactionType } from '@/types';
 import CooperativeSavingBalanceTable from './CooperativeSavingBalanceTable';
 import CooperativeSavingDetailDrawer from './CooperativeSavingDetailDrawer';
 import CooperativeSavingFormModal, { type CooperativeSavingFormValues } from './CooperativeSavingFormModal';
@@ -20,6 +21,10 @@ import {
   cooperativeSavingTransactionTypeOptions,
   cooperativeSavingTypeOptions,
 } from './savingOptions';
+
+const buildPendingReturnNotes = (pendingReturn: CooperativeSavingPendingReturn) => (
+  `Pembayaran pengembalian simpanan wajib pelunasan pinjaman ${pendingReturn.loan_numbers.join(', ')}. ${pendingReturn.tokens.join(' ')}`
+);
 
 export default function CooperativeSavingManagement() {
   const { message, modal } = App.useApp();
@@ -31,6 +36,8 @@ export default function CooperativeSavingManagement() {
     activeMembers,
     filteredTransactions,
     filteredBalances,
+    balances,
+    pendingReturnByBalanceKey,
     paymentAccounts,
     fieldCashEmployees,
     fieldCashAccountIds,
@@ -55,17 +62,33 @@ export default function CooperativeSavingManagement() {
     form.resetFields();
   };
 
-  const openAddModal = () => {
+  const openSavingModal = (
+    transactionType: Extract<CooperativeSavingTransactionType, 'DEPOSIT' | 'WITHDRAWAL'> = 'DEPOSIT',
+    balance?: CooperativeMemberSavingBalance,
+  ) => {
+    const pendingReturn = balance ? pendingReturnByBalanceKey.get(balance.id) : undefined;
+    const withdrawalAmount = (pendingReturn?.amount ?? Number(balance?.balance || 0)) || undefined;
     form.resetFields();
     form.setFieldsValue({
-      transaction_type: 'DEPOSIT',
-      saving_type: 'SUKARELA',
+      member_id: balance?.member_id,
+      transaction_type: transactionType,
+      saving_type: balance?.saving_type ?? 'SUKARELA',
+      amount: transactionType === 'WITHDRAWAL' ? withdrawalAmount : undefined,
       transaction_date: dayjs(),
       payment_method: 'TUNAI',
       remember_cash_account: true,
+      notes: pendingReturn
+        ? buildPendingReturnNotes(pendingReturn)
+        : undefined,
       ...getRememberedCashAccountFields(paymentAccounts),
     });
     setIsModalOpen(true);
+  };
+
+  const openAddModal = () => openSavingModal('DEPOSIT');
+
+  const openWithdrawModal = (balance?: CooperativeMemberSavingBalance) => {
+    openSavingModal('WITHDRAWAL', balance);
   };
 
   const handleSubmit = async (values: CooperativeSavingFormValues) => {
@@ -148,14 +171,23 @@ export default function CooperativeSavingManagement() {
         </div>
       )}
       extra={(
-        <Button
-          type="primary"
-          icon={<Plus size={16} />}
-          data-testid="koperasi-saving-add-button"
-          onClick={openAddModal}
-        >
-          {t('cooperative.savings.add')}
-        </Button>
+        <Space wrap>
+          <Button
+            icon={<ArrowUpRight size={16} />}
+            data-testid="koperasi-saving-withdraw-button"
+            onClick={() => openWithdrawModal()}
+          >
+            {t('cooperative.savings.withdraw')}
+          </Button>
+          <Button
+            type="primary"
+            icon={<Plus size={16} />}
+            data-testid="koperasi-saving-add-button"
+            onClick={openAddModal}
+          >
+            {t('cooperative.savings.add')}
+          </Button>
+        </Space>
       )}
     >
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_160px_170px_150px]">
@@ -209,7 +241,14 @@ export default function CooperativeSavingManagement() {
           {
             key: 'balances',
             label: t('cooperative.savings.tab.balances'),
-            children: <CooperativeSavingBalanceTable balances={filteredBalances} />,
+            children: (
+              <CooperativeSavingBalanceTable
+                balances={filteredBalances}
+                pendingReturnByBalanceKey={pendingReturnByBalanceKey}
+                loading={isMutating}
+                onWithdraw={openWithdrawModal}
+              />
+            ),
           },
         ]}
       />
@@ -219,6 +258,8 @@ export default function CooperativeSavingManagement() {
         open={isModalOpen}
         isSubmitting={isMutating}
         activeMembers={activeMembers}
+        savingBalances={balances}
+        pendingReturnByBalanceKey={pendingReturnByBalanceKey}
         paymentAccounts={paymentAccounts}
         fieldCashEmployees={fieldCashEmployees}
         fieldCashAccountIds={fieldCashAccountIds}
