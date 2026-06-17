@@ -29,6 +29,7 @@ import { FinanceTransaction, FinanceTransactionType } from '@/types';
 import {
   FINANCE_CATEGORIES,
   getFinanceTransactionBusinessType,
+  isInternalCashMovementFinanceCategory,
 } from '@/constants/finance';
 
 const { Title, Text } = Typography;
@@ -46,6 +47,8 @@ export default function FinanceManagement() {
 
   const summary = useMemo(() => {
     return transactions.reduce((acc, t) => {
+      if (isInternalCashMovementFinanceCategory(t.category)) return acc;
+
       const businessType = getFinanceTransactionBusinessType(t);
 
       if (businessType === 'OPENING_BALANCE') acc.opening += t.amount;
@@ -151,7 +154,17 @@ export default function FinanceManagement() {
     setIsModalOpen(true);
   };
 
-  const getFinanceTypeMeta = (transaction: Pick<FinanceTransaction, 'type' | 'category'>) => {
+  const getFinanceTypeMeta = (transaction: Pick<FinanceTransaction, 'type' | 'category' | 'transfer_direction'>) => {
+    if (transaction.category === FINANCE_CATEGORIES.CASH_BANK_TRANSFER && transaction.transfer_direction) {
+      const isTransferOut = transaction.transfer_direction === 'OUT';
+
+      return {
+        color: isTransferOut ? 'orange' : 'cyan',
+        icon: <ArrowLeftRight size={14} className={isTransferOut ? 'text-orange-500' : 'text-cyan-600'} />,
+        label: isTransferOut ? t('finance.transferOut') : t('finance.transferIn'),
+      };
+    }
+
     const businessType = getFinanceTransactionBusinessType(transaction);
 
     if (businessType === 'EXPENSE') {
@@ -185,6 +198,7 @@ export default function FinanceManagement() {
 
   const getTransferDirectionTag = (transaction: FinanceTransaction) => {
     if (!transaction.transfer_group_id || !transaction.transfer_direction) return null;
+    if (transaction.category === FINANCE_CATEGORIES.CASH_BANK_TRANSFER) return null;
 
     return (
       <Tag color={transaction.transfer_direction === 'OUT' ? 'orange' : 'cyan'} className="m-0">
@@ -570,7 +584,7 @@ export default function FinanceManagement() {
                             ? `${transaction.account_code} - ${transaction.account_name}`
                             : t('finance.unmappedAccount')}
                         </Tag>
-                        {transaction.transfer_group_id && transaction.transfer_direction && (
+                        {transaction.transfer_group_id && transaction.transfer_direction && transaction.category !== FINANCE_CATEGORIES.CASH_BANK_TRANSFER && (
                           <Tag
                             color={transaction.transfer_direction === 'OUT' ? 'orange' : 'cyan'}
                             className="w-fit m-0 text-[10px] px-1.5 py-0"

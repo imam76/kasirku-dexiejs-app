@@ -47,8 +47,38 @@ export const NON_PROFIT_FINANCE_CATEGORIES = [
   ...FINANCE_FUNDING_CATEGORIES,
 ] as const;
 
+export const INTERNAL_CASH_MOVEMENT_FINANCE_CATEGORIES = [
+  FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
+] as const;
+
+export const NON_EXPENSE_REPORT_FINANCE_CATEGORIES = [
+  FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
+  FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT,
+  FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL,
+  FINANCE_CATEGORIES.PURCHASE_INVOICE_PAYMENT,
+  FINANCE_CATEGORIES.SALES_REFUND,
+  FINANCE_CATEGORIES.WITHDRAWAL,
+] as const;
+
 export const isFundingFinanceCategory = (category: string) => {
   return FINANCE_FUNDING_CATEGORIES.includes(category as typeof FINANCE_FUNDING_CATEGORIES[number]);
+};
+
+export const isInternalCashMovementFinanceCategory = (category: string) => {
+  return INTERNAL_CASH_MOVEMENT_FINANCE_CATEGORIES.includes(
+    category as typeof INTERNAL_CASH_MOVEMENT_FINANCE_CATEGORIES[number],
+  );
+};
+
+export const isExpenseReportFinanceTransaction = (
+  transaction: { type: string; category: string },
+) => {
+  return (
+    transaction.type === 'EXPENSE' &&
+    !NON_EXPENSE_REPORT_FINANCE_CATEGORIES.includes(
+      transaction.category as typeof NON_EXPENSE_REPORT_FINANCE_CATEGORIES[number],
+    )
+  );
 };
 
 export const normalizeFinanceTransactionType = (

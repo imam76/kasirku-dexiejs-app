@@ -1,8 +1,9 @@
 import { DatePicker, Form, Input, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
+import { useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { CooperativeArea, CooperativeMemberStatus, Employee } from '@/types';
+import type { CooperativeArea, CooperativeMemberStatus, Employee, EmployeeArea } from '@/types';
 import { cooperativeMemberStatusOptions } from './memberOptions';
 
 const { TextArea } = Input;
@@ -25,6 +26,7 @@ interface CooperativeMemberFormModalProps {
   open: boolean;
   areas: CooperativeArea[];
   employees: Employee[];
+  employeeAreaAssignments: EmployeeArea[];
   isEditing: boolean;
   isSubmitting: boolean;
   onCancel: () => void;
@@ -36,12 +38,36 @@ export default function CooperativeMemberFormModal({
   open,
   areas,
   employees,
+  employeeAreaAssignments,
   isEditing,
   isSubmitting,
   onCancel,
   onSubmit,
 }: CooperativeMemberFormModalProps) {
   const { t } = useI18n();
+  const defaultAreaByEmployeeId = useMemo(() => {
+    const areaRankById = new Map(areas.map((area, index) => [area.id, index]));
+    const activeAreaIds = new Set(areas.filter((area) => area.is_active).map((area) => area.id));
+    const sortedAssignments = [...employeeAreaAssignments].sort((left, right) => (
+      (areaRankById.get(left.area_id) ?? Number.MAX_SAFE_INTEGER) -
+      (areaRankById.get(right.area_id) ?? Number.MAX_SAFE_INTEGER)
+    ));
+    const defaults = new Map<string, string>();
+
+    sortedAssignments.forEach((assignment) => {
+      if (defaults.has(assignment.employee_id) || !activeAreaIds.has(assignment.area_id)) return;
+      defaults.set(assignment.employee_id, assignment.area_id);
+    });
+
+    return defaults;
+  }, [areas, employeeAreaAssignments]);
+
+  const handleOfficerChange = (officerId?: string) => {
+    const defaultAreaId = officerId ? defaultAreaByEmployeeId.get(officerId) : undefined;
+    if (!defaultAreaId) return;
+
+    form.setFieldsValue({ area_id: defaultAreaId });
+  };
 
   return (
     <Modal
@@ -117,6 +143,21 @@ export default function CooperativeMemberFormModal({
           </Form.Item>
         </div>
 
+        <Form.Item name="officer_id" label={t('cooperative.members.form.officer')}>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('cooperative.members.form.officerPlaceholder')}
+            onChange={handleOfficerChange}
+            options={employees.map((employee) => ({
+              value: employee.id,
+              label: employee.position ? `${employee.name} - ${employee.position}` : employee.name,
+              disabled: !employee.is_active,
+            }))}
+          />
+        </Form.Item>
+
         <Form.Item
           name="area_id"
           label={t('cooperative.members.form.area')}
@@ -130,20 +171,6 @@ export default function CooperativeMemberFormModal({
               value: area.id,
               label: area.code ? `${area.code} - ${area.name}` : area.name,
               disabled: !area.is_active,
-            }))}
-          />
-        </Form.Item>
-
-        <Form.Item name="officer_id" label={t('cooperative.members.form.officer')}>
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder={t('cooperative.members.form.officerPlaceholder')}
-            options={employees.map((employee) => ({
-              value: employee.id,
-              label: employee.position ? `${employee.name} - ${employee.position}` : employee.name,
-              disabled: !employee.is_active,
             }))}
           />
         </Form.Item>

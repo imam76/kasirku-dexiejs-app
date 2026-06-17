@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem } from '@/types';
-import { FINANCE_CATEGORIES } from '@/constants/finance';
+import { isExpenseReportFinanceTransaction } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
@@ -711,26 +711,26 @@ export const useExpenseReport = (startDate?: string, endDate?: string, categorie
         collection = db.financeTransactions
           .where('created_at')
           .between(startISO, endISO, true, true)
-          .filter((t) => t.type === 'EXPENSE')
+          .filter(isExpenseReportFinanceTransaction)
           .reverse();
       } else if (startDate) {
         const startISO = dayjs.tz(startDate).startOf('day').toISOString();
         collection = db.financeTransactions
           .where('created_at')
           .aboveOrEqual(startISO)
-          .filter((t) => t.type === 'EXPENSE')
+          .filter(isExpenseReportFinanceTransaction)
           .reverse();
       } else if (endDate) {
         const endISO = dayjs.tz(endDate).endOf('day').toISOString();
         collection = db.financeTransactions
           .where('created_at')
           .belowOrEqual(endISO)
-          .filter((t) => t.type === 'EXPENSE')
+          .filter(isExpenseReportFinanceTransaction)
           .reverse();
       }
 
       let transactions = (await collection.toArray())
-        .filter((transaction) => transaction.category !== FINANCE_CATEGORIES.SALES_REFUND);
+        .filter(isExpenseReportFinanceTransaction);
 
       // Filter by category if provided
       if (categories && categories.length > 0) {
@@ -758,7 +758,7 @@ export const useExpenseCategories = () => {
     queryKey: ['expenseCategories'],
     queryFn: async () => {
       const transactions = (await db.financeTransactions.where('type').equals('EXPENSE').toArray())
-        .filter((transaction) => transaction.category !== FINANCE_CATEGORIES.SALES_REFUND);
+        .filter(isExpenseReportFinanceTransaction);
       const categories = [...new Set(transactions.map((t) => t.category))];
       return categories.sort();
     },

@@ -23,6 +23,7 @@ export default function CooperativeMemberManagement() {
     filteredMembers,
     areas,
     employees,
+    employeeAreaAssignments,
     visibleAreas,
     editingMember,
     selectedMember,
@@ -186,6 +187,7 @@ export default function CooperativeMemberManagement() {
         open={isModalOpen}
         areas={areas}
         employees={employees}
+        employeeAreaAssignments={employeeAreaAssignments}
         isEditing={Boolean(editingMember)}
         isSubmitting={isSubmitting}
         onCancel={closeModal}
