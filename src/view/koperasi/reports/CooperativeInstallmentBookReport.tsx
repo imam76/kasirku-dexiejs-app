@@ -329,13 +329,18 @@ const CooperativeInstallmentBookReport = forwardRef<
   const { t } = useI18n();
   const groups = data?.groups ?? [];
   const totalSummary = data?.summary ?? emptySummary;
+  const collectionWeekdayLabel = data
+    ? getCollectionWeekdayLabel(data.collection_weekday)
+    : '-';
   const labels = {
     date: t('cooperative.installmentBook.table.date'),
     memberNumber: t('cooperative.installmentBook.table.memberNumber'),
     name: t('cooperative.installmentBook.table.name'),
     principal: t('cooperative.installmentBook.table.principal'),
     openingBalance: t('cooperative.installmentBook.table.openingBalance'),
-    collectionDay: t('cooperative.installmentBook.table.collectionDay'),
+    collectionDay: t('cooperative.installmentBook.table.collectionDay', {
+      day: collectionWeekdayLabel,
+    }),
     installment: t('cooperative.installmentBook.table.installment'),
     endingBalance: t('cooperative.installmentBook.table.endingBalance'),
   };

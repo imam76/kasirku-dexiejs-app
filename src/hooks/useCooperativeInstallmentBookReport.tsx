@@ -10,6 +10,7 @@ export const useCooperativeInstallmentBookReport = (
   queryKey: [
     'cooperativeInstallmentBookReport',
     filters.monthDate,
+    filters.collectionWeekday,
     filters.employeeId,
     filters.visibleAreaIds,
   ],

@@ -9,16 +9,6 @@ export const COOPERATIVE_COLLECTION_WEEKDAYS: CooperativeCollectionWeekday[] = [
   1, 2, 3, 4, 5, 6, 7,
 ];
 
-const WEEKDAY_LABELS = [
-  'Senin',
-  'Selasa',
-  'Rabu',
-  'Kamis',
-  'Jumat',
-  'Sabtu',
-  'Minggu',
-] as const;
-
 export const getIsoWeekday = (value: string | dayjs.Dayjs): CooperativeCollectionWeekday => {
   const day = dayjs.isDayjs(value) ? value.day() : dayjs(value).tz().day();
   return (day === 0 ? 7 : day) as CooperativeCollectionWeekday;
@@ -26,7 +16,7 @@ export const getIsoWeekday = (value: string | dayjs.Dayjs): CooperativeCollectio
 
 export const getCollectionWeekdayLabel = (
   weekday: CooperativeCollectionWeekday,
-) => WEEKDAY_LABELS[weekday - 1];
+) => dayjs('2024-01-01').add(weekday - 1, 'day').format('dddd');
 
 const getDateKey = (value: string | dayjs.Dayjs) => (
   dayjs.isDayjs(value) ? value : dayjs(value).tz()

@@ -21,6 +21,7 @@ import {
   type CooperativeInstallmentBookAgingCategory,
   type CooperativeInstallmentBookReportGroup,
 } from '@/services/cooperativeInstallmentBookReportService';
+import type { CooperativeCollectionWeekday } from '@/types';
 import {
   exportCsv,
   exportHtmlPdf,
@@ -29,6 +30,11 @@ import {
   type ExportRows,
   type ExportTarget,
 } from '@/utils/export';
+import {
+  COOPERATIVE_COLLECTION_WEEKDAYS,
+  getCollectionWeekdayLabel,
+  getIsoWeekday,
+} from '@/utils/koperasi/collectionSchedule';
 import CooperativeInstallmentBookReport from './CooperativeInstallmentBookReport';
 
 const { Text, Title } = Typography;
@@ -67,12 +73,16 @@ export default function CooperativeInstallmentBookReportManagement() {
   const areaScope = useCooperativeAreaScope();
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [month, setMonth] = useState<Dayjs>(() => dayjs().tz().startOf('month'));
+  const [collectionWeekday, setCollectionWeekday] = useState<CooperativeCollectionWeekday>(
+    () => getIsoWeekday(dayjs().tz()),
+  );
   const [employeeId, setEmployeeId] = useState<string>();
   const filters = useMemo<CooperativeInstallmentBookReportFilters>(() => ({
     monthDate: month.toISOString(),
+    collectionWeekday,
     employeeId,
     visibleAreaIds: areaScope.isScoped ? areaScope.areaIds : undefined,
-  }), [areaScope.areaIds, areaScope.isScoped, employeeId, month]);
+  }), [areaScope.areaIds, areaScope.isScoped, collectionWeekday, employeeId, month]);
   const reportQuery = useCooperativeInstallmentBookReport(filters);
   const report = reportQuery.data;
   const isLoading = reportQuery.isLoading || reportQuery.isFetching;
@@ -80,6 +90,12 @@ export default function CooperativeInstallmentBookReportManagement() {
   const companyName = profile?.company_name || t('cooperative.ledger.companyFallback');
   const printDateText = dayjs().tz().format('YYYY-MM-DD HH:mm:ss');
   const periodText = month.format('MMMM YYYY');
+  const collectionWeekdayLabel = getCollectionWeekdayLabel(collectionWeekday);
+  const reportFileStem = report
+    ? `buku-angsuran-${report.month_key}-${getCollectionWeekdayLabel(
+      report.collection_weekday,
+    ).toLowerCase()}`
+    : 'buku-angsuran';
   const categoryLabels: Record<CooperativeInstallmentBookAgingCategory, string> = {
     CURRENT: t('cooperative.installmentBook.category.current'),
     WATCHLIST: t('cooperative.installmentBook.category.watchlist'),
@@ -93,7 +109,9 @@ export default function CooperativeInstallmentBookReportManagement() {
     name: t('cooperative.installmentBook.table.name'),
     principal: t('cooperative.installmentBook.table.principal'),
     openingBalance: t('cooperative.installmentBook.table.openingBalance'),
-    collectionDay: t('cooperative.installmentBook.table.collectionDay'),
+    collectionDay: t('cooperative.installmentBook.table.collectionDay', {
+      day: collectionWeekdayLabel,
+    }),
     installment: t('cooperative.installmentBook.table.installment'),
     endingBalance: t('cooperative.installmentBook.table.endingBalance'),
   };
@@ -108,6 +126,10 @@ export default function CooperativeInstallmentBookReportManagement() {
       label: getEmployeeLabel(employee),
     })),
   ], [areaScope.isScoped, report?.employeeOptions, t]);
+  const collectionWeekdayOptions = COOPERATIVE_COLLECTION_WEEKDAYS.map((weekday) => ({
+    value: weekday,
+    label: getCollectionWeekdayLabel(weekday),
+  }));
 
   const buildGroupRows = (
     group: CooperativeInstallmentBookReportGroup,
@@ -203,7 +225,7 @@ export default function CooperativeInstallmentBookReportManagement() {
     if (!report) return;
     try {
       const exported = await exportCsv({
-        filename: `buku-angsuran-${report.month_key}.csv`,
+        filename: `${reportFileStem}.csv`,
         rows: buildCsvRows(),
         target,
       });
@@ -219,7 +241,7 @@ export default function CooperativeInstallmentBookReportManagement() {
     if (!report) return;
     try {
       const exported = await exportXlsx({
-        filename: `buku-angsuran-${report.month_key}.xlsx`,
+        filename: `${reportFileStem}.xlsx`,
         target,
         sheets: report.groups.map((group, index) => ({
           name: getGroupEmployeeLabel(
@@ -241,7 +263,7 @@ export default function CooperativeInstallmentBookReportManagement() {
     if (!report || !reportRef.current) return;
     try {
       const exported = await saveExportFile({
-        filename: `buku-angsuran-${report.month_key}.html`,
+        filename: `${reportFileStem}.html`,
         mimeType: 'text/html',
         content: buildHtmlDocument(),
         target,
@@ -258,7 +280,7 @@ export default function CooperativeInstallmentBookReportManagement() {
     if (!report || !reportRef.current) return;
     try {
       const exported = await exportHtmlPdf({
-        filename: `buku-angsuran-${report.month_key}.pdf`,
+        filename: `${reportFileStem}.pdf`,
         element: reportRef.current,
         orientation: 'landscape',
         target,
@@ -338,7 +360,7 @@ export default function CooperativeInstallmentBookReportManagement() {
         />
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div>
           <Text strong>{t('cooperative.installmentBook.month')}</Text>
           <DatePicker
@@ -349,6 +371,15 @@ export default function CooperativeInstallmentBookReportManagement() {
             onChange={(value) => {
               if (value) setMonth(value.startOf('month'));
             }}
+          />
+        </div>
+        <div>
+          <Text strong>{t('cooperative.installmentBook.collectionDayFilter')}</Text>
+          <Select
+            className="mt-2 w-full"
+            value={collectionWeekday}
+            options={collectionWeekdayOptions}
+            onChange={(value: CooperativeCollectionWeekday) => setCollectionWeekday(value)}
           />
         </div>
         <div>

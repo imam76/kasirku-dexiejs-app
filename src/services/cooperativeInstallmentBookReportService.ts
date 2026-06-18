@@ -23,6 +23,7 @@ export interface CooperativeInstallmentBookReportFilters {
   monthDate?: string;
   employeeId?: string;
   visibleAreaIds?: string[];
+  collectionWeekday?: CooperativeCollectionWeekday;
 }
 
 export interface CooperativeInstallmentBookReportSummary {
@@ -86,6 +87,7 @@ export interface CooperativeInstallmentBookReport {
   month_key: string;
   start_date: string;
   end_date: string;
+  collection_weekday: CooperativeCollectionWeekday;
   groups: CooperativeInstallmentBookReportGroup[];
   employeeOptions: CooperativeInstallmentBookEmployeeOption[];
   summary: CooperativeInstallmentBookReportSummary;
@@ -220,11 +222,20 @@ const buildEmployeeOptions = (
 };
 
 const matchesFilters = (
-  row: Pick<CooperativeInstallmentBookReportRow, 'officer_id' | 'area_id'>,
+  row: Pick<
+    CooperativeInstallmentBookReportRow,
+    'officer_id' | 'area_id' | 'collection_weekday'
+  >,
   filters: CooperativeInstallmentBookReportFilters,
 ) => {
   if (filters.visibleAreaIds) {
     if (!row.area_id || !filters.visibleAreaIds.includes(row.area_id)) return false;
+  }
+  if (
+    filters.collectionWeekday &&
+    row.collection_weekday !== filters.collectionWeekday
+  ) {
+    return false;
   }
   if (!filters.employeeId) return true;
   if (filters.employeeId === COOPERATIVE_INSTALLMENT_BOOK_UNASSIGNED_EMPLOYEE) {
@@ -319,6 +330,11 @@ export const getCooperativeInstallmentBookReport = async (
 ): Promise<CooperativeInstallmentBookReport> => {
   const reportMonth = (filters.monthDate ? dayjs(filters.monthDate).tz() : dayjs().tz())
     .startOf('month');
+  const collectionWeekday = filters.collectionWeekday ?? getIsoWeekday(dayjs().tz());
+  const effectiveFilters: CooperativeInstallmentBookReportFilters = {
+    ...filters,
+    collectionWeekday,
+  };
   const monthStart = reportMonth.startOf('month');
   const monthEnd = reportMonth.endOf('month');
   const startDateKey = monthStart.format('YYYY-MM-DD');
@@ -351,7 +367,7 @@ export const getCooperativeInstallmentBookReport = async (
     }))
     .filter((row): row is CooperativeInstallmentBookReportRow => Boolean(row));
   const rows = allRows
-    .filter((row) => matchesFilters(row, filters))
+    .filter((row) => matchesFilters(row, effectiveFilters))
     .sort((left, right) => {
       const categoryCompare =
         CATEGORY_ORDER.indexOf(left.aging_category) -
@@ -371,11 +387,6 @@ export const getCooperativeInstallmentBookReport = async (
   const groups = Array.from(rowsByEmployee.entries())
     .map(([key, employeeRows]): CooperativeInstallmentBookReportGroup => {
       const firstRow = employeeRows[0];
-      const collectionWeekdays = Array.from(new Set(
-        employeeRows
-          .map((row) => row.collection_weekday)
-          .filter((weekday): weekday is CooperativeCollectionWeekday => Boolean(weekday)),
-      )).sort((left, right) => left - right);
       const areaNames = Array.from(new Set(employeeRows.map((row) => {
         if (row.area_code && row.area_name) return `${row.area_code} - ${row.area_name}`;
         return row.area_code ?? row.area_name;
@@ -397,8 +408,8 @@ export const getCooperativeInstallmentBookReport = async (
         officer_name: firstRow?.officer_name,
         officer_position: firstRow?.officer_position,
         area_names: areaNames,
-        collection_weekdays: collectionWeekdays,
-        collection_dates: getCollectionDatesInMonth(reportMonth, collectionWeekdays),
+        collection_weekdays: [collectionWeekday],
+        collection_dates: getCollectionDatesInMonth(reportMonth, [collectionWeekday]),
         sections,
         summary: summarizeRows(employeeRows),
       };
@@ -417,6 +428,7 @@ export const getCooperativeInstallmentBookReport = async (
     month_key: reportMonth.format('YYYY-MM'),
     start_date: monthStart.toISOString(),
     end_date: monthEnd.toISOString(),
+    collection_weekday: collectionWeekday,
     groups,
     employeeOptions: buildEmployeeOptions(employees, allRows),
     summary: summarizeRows(rows),
