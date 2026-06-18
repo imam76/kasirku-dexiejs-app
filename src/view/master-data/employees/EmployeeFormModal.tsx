@@ -1,8 +1,18 @@
-import { Button, Form, Input, Modal, Select, Switch } from 'antd';
+import { Button, DatePicker, Form, Input, Modal, Select, Space, Switch } from 'antd';
 import type { FormInstance } from 'antd';
+import type { Dayjs } from 'dayjs';
 import { Plus } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
-import type { ChartOfAccount, CooperativeArea, Role } from '@/types';
+import type {
+  ChartOfAccount,
+  CooperativeArea,
+  CooperativeCollectionWeekday,
+  Role,
+} from '@/types';
+import {
+  COOPERATIVE_COLLECTION_WEEKDAYS,
+  getCollectionWeekdayLabel,
+} from '@/utils/koperasi/collectionSchedule';
 
 const { TextArea } = Input;
 
@@ -17,6 +27,14 @@ export interface EmployeeFormValues {
   login_pin?: string;
   confirm_login_pin?: string;
   area_ids?: string[];
+  collection_schedules?: Array<{
+    id?: string;
+    area_id: string;
+    weekday: CooperativeCollectionWeekday;
+    effective_from?: Dayjs;
+    effective_until?: Dayjs;
+    is_active?: boolean;
+  }>;
   notes?: string;
   is_active?: boolean;
 }
@@ -53,6 +71,7 @@ export default function EmployeeFormModal({
   const { t } = useI18n();
   const loginPinValue = Form.useWatch('login_pin', form);
   const employeeNameValue = Form.useWatch('name', form);
+  const selectedAreaIds = Form.useWatch('area_ids', form) ?? [];
   const isPinRequired = !isEditing || Boolean(loginPinValue);
 
   return (
@@ -118,6 +137,93 @@ export default function EmployeeFormModal({
             />
           </Form.Item>
         </div>
+
+        <div className="mb-2 mt-4 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-gray-900">
+              {t('employees.form.collectionSchedules')}
+            </div>
+            <div className="text-xs text-gray-500">
+              {t('employees.form.collectionSchedulesHint')}
+            </div>
+          </div>
+        </div>
+        <Form.List name="collection_schedules">
+          {(fields, { add, remove }) => (
+            <Space orientation="vertical" className="w-full" size="middle">
+              {fields.map((field) => (
+                <div
+                  key={field.key}
+                  className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 p-3 md:grid-cols-[minmax(180px,1fr)_140px_150px_150px_auto]"
+                >
+                  <Form.Item name={[field.name, 'id']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item
+                    name={[field.name, 'area_id']}
+                    label={t('employees.form.scheduleArea')}
+                    rules={[{ required: true, message: t('employees.validation.scheduleAreaRequired') }]}
+                    className="mb-0"
+                  >
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      options={areas
+                        .filter((area) => selectedAreaIds.includes(area.id))
+                        .map((area) => ({
+                          value: area.id,
+                          label: area.code ? `${area.code} - ${area.name}` : area.name,
+                        }))}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name={[field.name, 'weekday']}
+                    label={t('employees.form.scheduleDay')}
+                    rules={[{ required: true, message: t('employees.validation.scheduleDayRequired') }]}
+                    className="mb-0"
+                  >
+                    <Select
+                      options={COOPERATIVE_COLLECTION_WEEKDAYS.map((weekday) => ({
+                        value: weekday,
+                        label: getCollectionWeekdayLabel(weekday),
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name={[field.name, 'effective_from']}
+                    label={t('employees.form.effectiveFrom')}
+                    className="mb-0"
+                  >
+                    <DatePicker className="w-full" />
+                  </Form.Item>
+                  <Form.Item
+                    name={[field.name, 'effective_until']}
+                    label={t('employees.form.effectiveUntil')}
+                    className="mb-0"
+                  >
+                    <DatePicker className="w-full" />
+                  </Form.Item>
+                  <Button
+                    danger
+                    type="text"
+                    className="self-end"
+                    onClick={() => remove(field.name)}
+                  >
+                    Hapus
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="dashed"
+                icon={<Plus size={16} />}
+                disabled={selectedAreaIds.length === 0}
+                onClick={() => add({ is_active: true })}
+              >
+                {t('employees.form.addCollectionSchedule')}
+              </Button>
+            </Space>
+          )}
+        </Form.List>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <Form.Item name="field_cash_account_id" label="Akun Kas Petugas" className="mb-0">

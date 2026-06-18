@@ -412,6 +412,24 @@ export interface EmployeeArea {
   updated_at: string;
 }
 
+export type CooperativeCollectionWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export interface EmployeeCollectionSchedule {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_position?: string;
+  area_id: string;
+  area_name: string;
+  area_code?: string;
+  weekday: CooperativeCollectionWeekday;
+  effective_from?: string;
+  effective_until?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Currency {
   id: string;
   code: string;
@@ -1686,6 +1704,14 @@ export interface CooperativeLoan {
   rejected_by_name?: string;
   rejection_reason?: string;
   disbursed_at?: string;
+  officer_id?: string;
+  officer_name?: string;
+  officer_position?: string;
+  area_id?: string;
+  area_name?: string;
+  area_code?: string;
+  collection_schedule_id?: string;
+  collection_weekday?: CooperativeCollectionWeekday;
   cash_account_id?: string;
   cash_account_code?: string;
   cash_account_name?: string;

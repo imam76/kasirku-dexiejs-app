@@ -1,10 +1,20 @@
-import { Checkbox, DatePicker, Descriptions, Form, Input, Modal, Select, Tag, Typography } from 'antd';
+import { Alert, Checkbox, DatePicker, Descriptions, Form, Input, Modal, Select, Tag, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { ChartOfAccount, CooperativeLoan, PaymentMethod } from '@/types';
+import type {
+  ChartOfAccount,
+  CooperativeLoan,
+  EmployeeCollectionSchedule,
+  PaymentMethod,
+} from '@/types';
 import { formatCurrency } from '@/utils/formatters';
+import {
+  findMatchingCollectionSchedule,
+  getCollectionWeekdayLabel,
+  getFirstScheduledDueDate,
+} from '@/utils/koperasi/collectionSchedule';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -27,6 +37,7 @@ interface CooperativeLoanDisbursementModalProps {
   paymentAccounts: ChartOfAccount[];
   fieldCashAccountIds: Set<string>;
   fieldCashBalances: Map<string, number>;
+  collectionSchedules: EmployeeCollectionSchedule[];
   onCancel: () => void;
   onSubmit: (values: CooperativeLoanDisbursementFormValues) => void;
 }
@@ -39,11 +50,13 @@ export default function CooperativeLoanDisbursementModal({
   paymentAccounts,
   fieldCashAccountIds,
   fieldCashBalances,
+  collectionSchedules,
   onCancel,
   onSubmit,
 }: CooperativeLoanDisbursementModalProps) {
   const { t } = useI18n();
   const selectedCashAccountId = Form.useWatch('cash_account_id', form);
+  const selectedDisbursementDate = Form.useWatch('disbursement_date', form);
   const accountOptions = useMemo(() => paymentAccounts.map((account) => ({
     value: account.id,
     label: `${account.code} - ${account.name}`,
@@ -55,6 +68,26 @@ export default function CooperativeLoanDisbursementModal({
   const netDisbursementAmount = loan
     ? loan.net_disbursement_amount ?? loan.principal_amount
     : 0;
+  const scheduleText = useMemo(() => Array.from(new Set(
+    collectionSchedules.map((schedule) => getCollectionWeekdayLabel(schedule.weekday)),
+  )).join(', '), [collectionSchedules]);
+
+  useEffect(() => {
+    if (!loan || !selectedDisbursementDate) return;
+    const schedule = findMatchingCollectionSchedule(
+      collectionSchedules,
+      selectedDisbursementDate,
+    );
+    if (!schedule) {
+      form.setFieldValue('first_due_date', undefined);
+      return;
+    }
+    form.setFieldValue('first_due_date', getFirstScheduledDueDate({
+      disbursementDate: selectedDisbursementDate,
+      frequency: loan.billing_frequency ?? 'MONTHLY',
+      weekday: schedule.weekday,
+    }));
+  }, [collectionSchedules, form, loan, selectedDisbursementDate]);
 
   return (
     <Modal
@@ -76,20 +109,37 @@ export default function CooperativeLoanDisbursementModal({
         requiredMark={false}
         className="mt-4"
       >
+        <Alert
+          type="info"
+          showIcon
+          className="mb-4"
+          message={t('cooperative.loans.collectionScheduleInfo', {
+            days: scheduleText || '-',
+          })}
+        />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Form.Item
             name="disbursement_date"
             label={t('cooperative.loans.form.disbursementDate')}
             rules={[{ required: true, message: t('cooperative.loans.validation.disbursementDateRequired') }]}
           >
-            <DatePicker showTime className="w-full" data-testid="koperasi-loan-disbursement-date-input" />
+            <DatePicker
+              showTime
+              className="w-full"
+              disabledDate={(current) => !findMatchingCollectionSchedule(collectionSchedules, current)}
+              data-testid="koperasi-loan-disbursement-date-input"
+            />
           </Form.Item>
           <Form.Item
             name="first_due_date"
             label={t('cooperative.loans.form.firstDueDate')}
             rules={[{ required: true, message: t('cooperative.loans.validation.firstDueDateRequired') }]}
           >
-            <DatePicker className="w-full" data-testid="koperasi-loan-first-due-date-input" />
+            <DatePicker
+              disabled
+              className="w-full"
+              data-testid="koperasi-loan-first-due-date-input"
+            />
           </Form.Item>
         </div>
 

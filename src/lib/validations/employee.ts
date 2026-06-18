@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CooperativeCollectionWeekday } from '@/types';
 
 const optionalTrimmedString = z
   .string()
@@ -21,6 +22,14 @@ export const employeeSchema = z.object({
   login_pin: optionalTrimmedString,
   notes: optionalTrimmedString,
   area_ids: z.array(z.string().trim().min(1)).optional(),
+  collection_schedules: z.array(z.object({
+    id: optionalTrimmedString,
+    area_id: z.string().trim().min(1, 'Area jadwal penagihan wajib dipilih.'),
+    weekday: z.number().int().min(1).max(7) as z.ZodType<CooperativeCollectionWeekday>,
+    effective_from: optionalTrimmedString,
+    effective_until: optionalTrimmedString,
+    is_active: z.boolean().optional(),
+  })).optional(),
   is_active: z.boolean().optional(),
 });
 

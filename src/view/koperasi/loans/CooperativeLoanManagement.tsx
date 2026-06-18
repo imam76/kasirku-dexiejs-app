@@ -10,17 +10,15 @@ import {
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan } from '@/types';
 import { getResponsibleFieldCashAccountFields } from '@/utils/koperasi/fieldCashDefaults';
+import {
+  getFirstScheduledDueDate,
+  getNextCollectionDate,
+} from '@/utils/koperasi/collectionSchedule';
 import CooperativeLoanDetailDrawer from './CooperativeLoanDetailDrawer';
 import CooperativeLoanDisbursementModal, { type CooperativeLoanDisbursementFormValues } from './CooperativeLoanDisbursementModal';
 import CooperativeLoanFormModal, { type CooperativeLoanFormValues } from './CooperativeLoanFormModal';
 import CooperativeLoanTable from './CooperativeLoanTable';
 import { cooperativeLoanStatusOptions } from './loanOptions';
-
-const getDefaultFirstDueDate = (loan: CooperativeLoan) => {
-  if (loan.billing_frequency === 'WEEKLY') return dayjs().add(1, 'week');
-  if (loan.billing_frequency === 'BIWEEKLY') return dayjs().add(2, 'week');
-  return dayjs().add(1, 'month');
-};
 
 export default function CooperativeLoanManagement() {
   const { message, modal } = App.useApp();
@@ -40,6 +38,7 @@ export default function CooperativeLoanManagement() {
     setDisbursingLoan,
     paymentAccounts,
     fieldCashEmployees,
+    employeeCollectionSchedules,
     fieldCashAccountIds,
     fieldCashBalances,
     searchText,
@@ -82,9 +81,26 @@ export default function CooperativeLoanManagement() {
   const openDisbursementModal = (loan: CooperativeLoan) => {
     disbursementForm.resetFields();
     const member = members.find((item) => item.id === loan.member_id);
+    const schedules = employeeCollectionSchedules.filter((schedule) => (
+      schedule.employee_id === member?.officer_id &&
+      schedule.area_id === member?.area_id &&
+      schedule.is_active
+    ));
+    const disbursementDate = getNextCollectionDate(schedules, dayjs().tz(), true);
+    if (!member?.officer_id || !member.area_id || !disbursementDate) {
+      message.error(t('cooperative.loans.collectionScheduleMissing'));
+      return;
+    }
+    const firstDueDate = getFirstScheduledDueDate({
+      disbursementDate,
+      frequency: loan.billing_frequency ?? 'MONTHLY',
+      weekday: schedules.find((schedule) => schedule.weekday === (
+        disbursementDate.day() === 0 ? 7 : disbursementDate.day()
+      ))?.weekday ?? schedules[0].weekday,
+    });
     disbursementForm.setFieldsValue({
-      disbursement_date: dayjs(),
-      first_due_date: getDefaultFirstDueDate(loan),
+      disbursement_date: disbursementDate,
+      first_due_date: firstDueDate,
       payment_method: 'TUNAI',
       remember_cash_account: true,
       ...getRememberedCashAccountFields(paymentAccounts),
@@ -272,6 +288,11 @@ export default function CooperativeLoanManagement() {
         paymentAccounts={paymentAccounts}
         fieldCashAccountIds={fieldCashAccountIds}
         fieldCashBalances={fieldCashBalances}
+        collectionSchedules={employeeCollectionSchedules.filter((schedule) => (
+          schedule.employee_id === members.find((member) => member.id === disbursingLoan?.member_id)?.officer_id &&
+          schedule.area_id === members.find((member) => member.id === disbursingLoan?.member_id)?.area_id &&
+          schedule.is_active
+        ))}
         onCancel={closeDisbursementModal}
         onSubmit={handleDisburse}
       />

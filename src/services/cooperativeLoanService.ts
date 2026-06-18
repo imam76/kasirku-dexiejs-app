@@ -46,6 +46,7 @@ import type {
   CooperativeMember,
   CooperativeMemberSavingBalance,
   CooperativeSavingTransaction,
+  EmployeeCollectionSchedule,
   FinanceTransaction,
   PaymentMethod,
 } from '@/types';
@@ -61,6 +62,12 @@ import {
   calculateTotalPercentLoanSummary,
   roundCurrency,
 } from '@/utils/koperasi/loanSchedule';
+import {
+  findMatchingCollectionSchedule,
+  getCollectionWeekdayLabel,
+  getFirstScheduledDueDate,
+  getScheduledInstallmentDate,
+} from '@/utils/koperasi/collectionSchedule';
 
 export interface CreateCooperativeLoanApplicationInput {
   member_id: string;
@@ -146,6 +153,8 @@ const cooperativeLoanTables = [
   db.cooperativeLoanPayments,
   db.cooperativeFieldCashSessions,
   db.employees,
+  db.employeeAreas,
+  db.employeeCollectionSchedules,
   db.financeTransactions,
   db.financeBalance,
   db.chartOfAccounts,
@@ -609,7 +618,14 @@ const buildInstallments = (
     member_number: loan.member_number,
     member_name: loan.member_name,
     installment_number: amount.installment_number,
-    due_date: addBillingInterval(baseDueDate, billingFrequency, amount.installment_number - 1).toISOString(),
+    due_date: loan.collection_weekday
+      ? getScheduledInstallmentDate({
+          firstDueDate: baseDueDate,
+          frequency: billingFrequency,
+          weekday: loan.collection_weekday,
+          installmentOffset: amount.installment_number - 1,
+        }).toISOString()
+      : addBillingInterval(baseDueDate, billingFrequency, amount.installment_number - 1).toISOString(),
     principal_amount: amount.principal_amount,
     interest_amount: amount.interest_amount,
     penalty_amount: 0,
@@ -967,6 +983,45 @@ export const disburseCooperativeLoan = async (
       throw new Error('Jadwal angsuran pinjaman ini sudah pernah dibuat.');
     }
 
+    const member = await db.cooperativeMembers.get(loan.member_id);
+    if (!member) {
+      throw new Error('Anggota pinjaman tidak ditemukan.');
+    }
+    if (!member.officer_id) {
+      throw new Error('Petugas/Resort anggota wajib ditentukan sebelum pencairan.');
+    }
+    if (!member.area_id) {
+      throw new Error('Area anggota wajib ditentukan sebelum pencairan.');
+    }
+    const officer = await db.employees.get(member.officer_id);
+    if (!officer || !officer.is_active) {
+      throw new Error('Petugas/Resort anggota tidak ditemukan atau sudah nonaktif.');
+    }
+    const areaAssignment = await db.employeeAreas
+      .where('employee_id')
+      .equals(officer.id)
+      .and((assignment) => assignment.area_id === member.area_id)
+      .first();
+    if (!areaAssignment) {
+      throw new Error('Area anggota belum termasuk wilayah tugas petugas/Resort.');
+    }
+    const collectionSchedules = await db.employeeCollectionSchedules
+      .where('[employee_id+area_id]')
+      .equals([officer.id, member.area_id])
+      .toArray() as EmployeeCollectionSchedule[];
+    const matchingSchedule = findMatchingCollectionSchedule(
+      collectionSchedules,
+      disbursementDate,
+    );
+    if (!matchingSchedule) {
+      const weekday = getCollectionWeekdayLabel(
+        ((dayjs(disbursementDate).tz().day() || 7)) as 1 | 2 | 3 | 4 | 5 | 6 | 7,
+      );
+      throw new Error(
+        `Pencairan tidak dapat dilakukan pada hari ${weekday}. Pilih tanggal sesuai jadwal penagihan ${officer.name} untuk area ${member.area_name ?? member.area_code ?? member.area_id}.`,
+      );
+    }
+
     const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
     const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT);
     const disbursementAmount = resolveNetDisbursementAmount(loan);
@@ -979,14 +1034,25 @@ export const disburseCooperativeLoan = async (
     if (fieldCashContext && disbursementAmount > 0) {
       await assertSufficientCashAccountBalance(cashAccount.id, disbursementAmount);
     }
-    const firstDueDate = parsedInput.first_due_date
-      ?? addBillingInterval(dayjs(disbursementDate), resolveLoanBillingFrequency(loan), 1).toISOString();
+    const firstDueDate = getFirstScheduledDueDate({
+      disbursementDate: dayjs(disbursementDate).tz(),
+      frequency: resolveLoanBillingFrequency(loan),
+      weekday: matchingSchedule.weekday,
+    }).toISOString();
     await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
 
     const nextDisbursedLoan: CooperativeLoan = withPendingCooperativeSync({
       ...loan,
       status: 'DISBURSED' as const,
       disbursed_at: disbursementDate,
+      officer_id: officer.id,
+      officer_name: officer.name,
+      officer_position: officer.position,
+      area_id: member.area_id,
+      area_name: member.area_name,
+      area_code: member.area_code,
+      collection_schedule_id: matchingSchedule.id,
+      collection_weekday: matchingSchedule.weekday,
       cash_account_id: cashAccount.id,
       cash_account_code: cashAccount.code,
       cash_account_name: cashAccount.name,

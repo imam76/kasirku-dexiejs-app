@@ -45,6 +45,17 @@ export default function CooperativeMemberFormModal({
   onSubmit,
 }: CooperativeMemberFormModalProps) {
   const { t } = useI18n();
+  const selectedOfficerId = Form.useWatch('officer_id', form);
+  const selectedAreaId = Form.useWatch('area_id', form);
+  const assignedAreaIdsByEmployee = useMemo(() => {
+    const result = new Map<string, Set<string>>();
+    employeeAreaAssignments.forEach((assignment) => {
+      const areaIds = result.get(assignment.employee_id) ?? new Set<string>();
+      areaIds.add(assignment.area_id);
+      result.set(assignment.employee_id, areaIds);
+    });
+    return result;
+  }, [employeeAreaAssignments]);
   const defaultAreaByEmployeeId = useMemo(() => {
     const areaRankById = new Map(areas.map((area, index) => [area.id, index]));
     const activeAreaIds = new Set(areas.filter((area) => area.is_active).map((area) => area.id));
@@ -67,6 +78,13 @@ export default function CooperativeMemberFormModal({
     if (!defaultAreaId) return;
 
     form.setFieldsValue({ area_id: defaultAreaId });
+  };
+
+  const handleAreaChange = (areaId: string) => {
+    const officerId = form.getFieldValue('officer_id');
+    if (officerId && !assignedAreaIdsByEmployee.get(officerId)?.has(areaId)) {
+      form.setFieldsValue({ officer_id: undefined });
+    }
   };
 
   return (
@@ -153,7 +171,10 @@ export default function CooperativeMemberFormModal({
             options={employees.map((employee) => ({
               value: employee.id,
               label: employee.position ? `${employee.name} - ${employee.position}` : employee.name,
-              disabled: !employee.is_active,
+              disabled: !employee.is_active || Boolean(
+                selectedAreaId &&
+                !assignedAreaIdsByEmployee.get(employee.id)?.has(selectedAreaId),
+              ),
             }))}
           />
         </Form.Item>
@@ -167,10 +188,14 @@ export default function CooperativeMemberFormModal({
             showSearch
             optionFilterProp="label"
             placeholder={t('cooperative.members.form.areaPlaceholder')}
+            onChange={handleAreaChange}
             options={areas.map((area) => ({
               value: area.id,
               label: area.code ? `${area.code} - ${area.name}` : area.name,
-              disabled: !area.is_active,
+              disabled: !area.is_active || Boolean(
+                selectedOfficerId &&
+                !assignedAreaIdsByEmployee.get(selectedOfficerId)?.has(area.id),
+              ),
             }))}
           />
         </Form.Item>

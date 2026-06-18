@@ -39,6 +39,7 @@ import type {
   UnitDefinition,
   Warehouse,
 } from '@/types';
+import dayjs from '@/lib/dayjs';
 import { createUnitDefinition, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
 import { BASE_CURRENCY_CODE, buildBaseCurrency, buildBaseCurrencyRate } from '@/constants/currencies';
@@ -1069,6 +1070,88 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
 
     if (missingSystemRolePermissions.length > 0) {
       await rolePermissionTable.bulkPut(missingSystemRolePermissions);
+    }
+  });
+
+  this.version(57).stores({
+    employeeCollectionSchedules: 'id, employee_id, area_id, weekday, [employee_id+area_id], [employee_id+area_id+weekday], is_active, effective_from, effective_until, updated_at, created_at',
+    cooperativeLoans: 'id, loan_number, member_id, member_number, officer_id, area_id, collection_schedule_id, collection_weekday, status, interest_calculation_type, billing_frequency, application_date, disbursed_at, finance_transaction_id, journal_entry_id, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const loanTable = tx.table<CooperativeLoan, string>('cooperativeLoans');
+    const [loans, members, installments] = await Promise.all([
+      loanTable.toArray(),
+      tx.table<CooperativeMember, string>('cooperativeMembers').toArray(),
+      tx.table<CooperativeLoanInstallment, string>('cooperativeLoanInstallments').toArray(),
+    ]);
+    const memberById = new Map(members.map((member) => [member.id, member]));
+    const firstInstallmentByLoanId = new Map<string, CooperativeLoanInstallment>();
+
+    installments.forEach((installment) => {
+      const current = firstInstallmentByLoanId.get(installment.loan_id);
+      if (
+        !current ||
+        installment.installment_number < current.installment_number ||
+        (
+          installment.installment_number === current.installment_number &&
+          installment.due_date < current.due_date
+        )
+      ) {
+        firstInstallmentByLoanId.set(installment.loan_id, installment);
+      }
+    });
+
+    const migratedLoans = loans.flatMap((loan): CooperativeLoan[] => {
+      if (loan.status !== 'DISBURSED' && loan.status !== 'PAID_OFF') return [];
+
+      const member = memberById.get(loan.member_id);
+      const officerId = loan.officer_id ?? member?.officer_id;
+      const areaId = loan.area_id ?? member?.area_id;
+      const firstInstallment = firstInstallmentByLoanId.get(loan.id);
+      const firstDueDate = firstInstallment
+        ? dayjs(firstInstallment.due_date).tz()
+        : undefined;
+      const dueDateWeekday = firstDueDate?.isValid()
+        ? ((firstDueDate.day() || 7) as CooperativeLoan['collection_weekday'])
+        : undefined;
+      const migratedLoan: CooperativeLoan = {
+        ...loan,
+        officer_id: officerId,
+        officer_name: loan.officer_name ?? (
+          member && officerId === member.officer_id ? member.officer_name : undefined
+        ),
+        officer_position: loan.officer_position ?? (
+          member && officerId === member.officer_id ? member.officer_position : undefined
+        ),
+        area_id: areaId,
+        area_name: loan.area_name ?? (
+          member && areaId === member.area_id ? member.area_name : undefined
+        ),
+        area_code: loan.area_code ?? (
+          member && areaId === member.area_id ? member.area_code : undefined
+        ),
+        collection_weekday: loan.collection_weekday ?? dueDateWeekday,
+      };
+      const changed =
+        migratedLoan.officer_id !== loan.officer_id ||
+        migratedLoan.officer_name !== loan.officer_name ||
+        migratedLoan.officer_position !== loan.officer_position ||
+        migratedLoan.area_id !== loan.area_id ||
+        migratedLoan.area_name !== loan.area_name ||
+        migratedLoan.area_code !== loan.area_code ||
+        migratedLoan.collection_weekday !== loan.collection_weekday;
+
+      if (!changed) return [];
+      return [{
+        ...migratedLoan,
+        sync_status: 'pending',
+        sync_error: undefined,
+        updated_at: now,
+      }];
+    });
+
+    if (migratedLoans.length > 0) {
+      await loanTable.bulkPut(migratedLoans);
     }
   });
 }

@@ -9,13 +9,22 @@ import {
   updateEmployee,
   type EmployeeUpsertInput,
 } from '@/services/employeeService';
-import type { AuthUser, ChartOfAccount, CooperativeArea, Employee, EmployeeArea, Role } from '@/types';
+import type {
+  AuthUser,
+  ChartOfAccount,
+  CooperativeArea,
+  Employee,
+  EmployeeArea,
+  EmployeeCollectionSchedule,
+  Role,
+} from '@/types';
 
 export type EmployeeStatusFilter = 'active' | 'inactive' | 'all';
 
 export interface EmployeeWithAreas extends Employee {
   area_assignments: EmployeeArea[];
   area_names: string[];
+  collection_schedules: EmployeeCollectionSchedule[];
 }
 
 export const useEmployees = () => {
@@ -50,14 +59,22 @@ export const useEmployees = () => {
   );
   const employees = useLiveQuery(
     async () => {
-      const [employeeRows, assignments] = await Promise.all([
+      const [employeeRows, assignments, collectionSchedules] = await Promise.all([
         db.employees.orderBy('name').toArray(),
         db.employeeAreas.toArray(),
+        db.employeeCollectionSchedules.toArray(),
       ]);
       const assignmentsByEmployee = assignments.reduce<Record<string, EmployeeArea[]>>((acc, assignment) => {
         acc[assignment.employee_id] = [...(acc[assignment.employee_id] ?? []), assignment];
         return acc;
       }, {});
+      const schedulesByEmployee = collectionSchedules.reduce<Record<string, EmployeeCollectionSchedule[]>>(
+        (acc, schedule) => {
+          acc[schedule.employee_id] = [...(acc[schedule.employee_id] ?? []), schedule];
+          return acc;
+        },
+        {},
+      );
 
       return employeeRows.map<EmployeeWithAreas>((employee) => {
         const employeeAssignments = assignmentsByEmployee[employee.id] ?? [];
@@ -66,6 +83,11 @@ export const useEmployees = () => {
           ...employee,
           area_assignments: employeeAssignments,
           area_names: employeeAssignments.map((assignment) => assignment.area_name),
+          collection_schedules: (schedulesByEmployee[employee.id] ?? []).sort((left, right) => {
+            const areaCompare = left.area_name.localeCompare(right.area_name);
+            if (areaCompare !== 0) return areaCompare;
+            return left.weekday - right.weekday;
+          }),
         };
       });
     },

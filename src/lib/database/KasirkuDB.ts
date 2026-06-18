@@ -62,6 +62,7 @@ import type {
   CooperativeArea,
   Employee,
   EmployeeArea,
+  EmployeeCollectionSchedule,
   CashierSession,
   CooperativeFieldCashSession,
   MembershipPointTransaction,
@@ -135,6 +136,7 @@ export class KasirkuDB extends Dexie {
   cooperativeAreas!: Table<CooperativeArea>;
   employees!: Table<Employee>;
   employeeAreas!: Table<EmployeeArea>;
+  employeeCollectionSchedules!: Table<EmployeeCollectionSchedule>;
   membershipPointTransactions!: Table<MembershipPointTransaction>;
   membershipSettings!: Table<MembershipSetting>;
 

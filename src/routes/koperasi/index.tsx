@@ -92,6 +92,13 @@ function Cooperative() {
       desc: t('cooperative.index.weeklyDropDesc'),
     },
     {
+      to: '/koperasi/buku-angsuran',
+      label: t('nav.cooperative.installmentBook'),
+      icon: BookOutlined,
+      color: 'text-rose-700',
+      desc: t('cooperative.index.installmentBookDesc'),
+    },
+    {
       to: '/koperasi/arus-kas',
       label: t('cooperative.reports.tabs.cashFlowStatement'),
       icon: BankOutlined,

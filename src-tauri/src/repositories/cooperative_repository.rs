@@ -127,6 +127,14 @@ macro_rules! cooperative_loan_select {
             rejected_by_name,
             rejection_reason,
             disbursed_at,
+            officer_id,
+            officer_name,
+            officer_position,
+            area_id,
+            area_name,
+            area_code,
+            collection_schedule_id,
+            collection_weekday,
             cash_account_id,
             cash_account_code,
             cash_account_name,
@@ -729,6 +737,14 @@ pub async fn upsert_cooperative_loan(
             rejected_by_name,
             rejection_reason,
             disbursed_at,
+            officer_id,
+            officer_name,
+            officer_position,
+            area_id,
+            area_name,
+            area_code,
+            collection_schedule_id,
+            collection_weekday,
             cash_account_id,
             cash_account_code,
             cash_account_name,
@@ -790,12 +806,20 @@ pub async fn upsert_cooperative_loan(
             $42,
             $43,
             $44,
-            $45::TIMESTAMPTZ,
-            $46::TIMESTAMPTZ,
+            $45,
+            $46,
             $47,
             $48,
             $49,
-            $50
+            $50,
+            $51,
+            $52,
+            $53::TIMESTAMPTZ,
+            $54::TIMESTAMPTZ,
+            $55,
+            $56,
+            $57,
+            $58
         )
         ON CONFLICT (id) DO UPDATE SET
             loan_number = EXCLUDED.loan_number,
@@ -832,6 +856,14 @@ pub async fn upsert_cooperative_loan(
             rejected_by_name = EXCLUDED.rejected_by_name,
             rejection_reason = EXCLUDED.rejection_reason,
             disbursed_at = EXCLUDED.disbursed_at,
+            officer_id = EXCLUDED.officer_id,
+            officer_name = EXCLUDED.officer_name,
+            officer_position = EXCLUDED.officer_position,
+            area_id = EXCLUDED.area_id,
+            area_name = EXCLUDED.area_name,
+            area_code = EXCLUDED.area_code,
+            collection_schedule_id = EXCLUDED.collection_schedule_id,
+            collection_weekday = EXCLUDED.collection_weekday,
             cash_account_id = EXCLUDED.cash_account_id,
             cash_account_code = EXCLUDED.cash_account_code,
             cash_account_name = EXCLUDED.cash_account_name,
@@ -883,6 +915,14 @@ pub async fn upsert_cooperative_loan(
             rejected_by_name,
             rejection_reason,
             disbursed_at,
+            officer_id,
+            officer_name,
+            officer_position,
+            area_id,
+            area_name,
+            area_code,
+            collection_schedule_id,
+            collection_weekday,
             cash_account_id,
             cash_account_code,
             cash_account_name,
@@ -935,6 +975,14 @@ pub async fn upsert_cooperative_loan(
     .bind(input.rejected_by_name)
     .bind(input.rejection_reason)
     .bind(input.disbursed_at)
+    .bind(input.officer_id)
+    .bind(input.officer_name)
+    .bind(input.officer_position)
+    .bind(input.area_id)
+    .bind(input.area_name)
+    .bind(input.area_code)
+    .bind(input.collection_schedule_id)
+    .bind(input.collection_weekday)
     .bind(input.cash_account_id)
     .bind(input.cash_account_code)
     .bind(input.cash_account_name)

@@ -5,6 +5,7 @@ import { useEmployees, type EmployeeStatusFilter, type EmployeeWithAreas } from 
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
 import { createFieldCashAccountForEmployee } from '@/services/employeeService';
+import dayjs from '@/lib/dayjs';
 import EmployeeFormModal, { type EmployeeFormValues } from './EmployeeFormModal';
 import EmployeeTable from './EmployeeTable';
 
@@ -42,7 +43,7 @@ export default function EmployeeManagement() {
   const openAddModal = () => {
     resetForm();
     form.resetFields();
-    form.setFieldsValue({ area_ids: [], is_active: true });
+    form.setFieldsValue({ area_ids: [], collection_schedules: [], is_active: true });
     setIsModalOpen(true);
   };
 
@@ -58,6 +59,14 @@ export default function EmployeeManagement() {
       login_role_id: employee.login_role_id,
       field_cash_account_id: employee.field_cash_account_id,
       area_ids: employee.area_assignments.map((assignment) => assignment.area_id),
+      collection_schedules: employee.collection_schedules.map((schedule) => ({
+        id: schedule.id,
+        area_id: schedule.area_id,
+        weekday: schedule.weekday,
+        effective_from: schedule.effective_from ? dayjs(schedule.effective_from).tz() : undefined,
+        effective_until: schedule.effective_until ? dayjs(schedule.effective_until).tz() : undefined,
+        is_active: schedule.is_active,
+      })),
       notes: employee.notes,
       is_active: employee.is_active,
     });
@@ -81,10 +90,18 @@ export default function EmployeeManagement() {
   const handleSubmit = async (values: EmployeeFormValues) => {
     try {
       const wasEditing = Boolean(editingEmployee);
+      const normalizedValues = {
+        ...values,
+        collection_schedules: values.collection_schedules?.map((schedule) => ({
+          ...schedule,
+          effective_from: schedule.effective_from?.startOf('day').toISOString(),
+          effective_until: schedule.effective_until?.endOf('day').toISOString(),
+        })),
+      };
       const payload = can('USER_MANAGE')
-        ? values
+        ? normalizedValues
         : {
-          ...values,
+          ...normalizedValues,
           login_role_id: undefined,
           login_pin: undefined,
           confirm_login_pin: undefined,

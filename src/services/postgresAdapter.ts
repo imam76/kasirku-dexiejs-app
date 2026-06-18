@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
+  CooperativeCollectionWeekday,
   CooperativeLoanBillingFrequency,
   CooperativeLoanDeductionMethod,
   CooperativeLoanInstallmentCollectionStatus,
@@ -800,6 +801,14 @@ export interface RemoteCooperativeLoanDto {
   rejected_by_name?: string | null;
   rejection_reason?: string | null;
   disbursed_at?: string | null;
+  officer_id?: string | null;
+  officer_name?: string | null;
+  officer_position?: string | null;
+  area_id?: string | null;
+  area_name?: string | null;
+  area_code?: string | null;
+  collection_schedule_id?: string | null;
+  collection_weekday?: CooperativeCollectionWeekday | null;
   cash_account_id?: string | null;
   cash_account_code?: string | null;
   cash_account_name?: string | null;

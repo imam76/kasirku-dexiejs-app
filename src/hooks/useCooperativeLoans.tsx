@@ -19,6 +19,7 @@ import type {
   CooperativeLoanInstallment,
   CooperativeLoanStatus,
   Employee,
+  EmployeeCollectionSchedule,
 } from '@/types';
 
 export type CooperativeLoanStatusFilter = CooperativeLoanStatus | 'ALL';
@@ -72,6 +73,13 @@ export const useCooperativeLoans = () => {
       .where('field_cash_account_id')
       .above('')
       .filter((employee) => employee.is_active && Boolean(employee.field_cash_account_id))
+      .toArray(),
+    [],
+    [],
+  );
+  const employeeCollectionSchedules = useLiveQuery(
+    () => db.employeeCollectionSchedules
+      .filter((schedule) => schedule.is_active)
       .toArray(),
     [],
     [],
@@ -159,6 +167,7 @@ export const useCooperativeLoans = () => {
     setDisbursingLoan,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
     fieldCashEmployees: fieldCashEmployees as Employee[],
+    employeeCollectionSchedules: employeeCollectionSchedules as EmployeeCollectionSchedule[],
     fieldCashAccountIds,
     fieldCashBalances,
     searchText,

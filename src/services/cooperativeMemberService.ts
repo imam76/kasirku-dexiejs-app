@@ -65,12 +65,23 @@ const resolveActiveArea = async (areaId: string) => {
   return area;
 };
 
-const resolveOfficer = async (officerId?: string) => {
+const resolveOfficer = async (officerId: string | undefined, areaId: string) => {
   if (!officerId) return undefined;
 
   const officer = await db.employees.get(officerId);
   if (!officer) {
     throw new Error('Petugas anggota tidak ditemukan.');
+  }
+  if (!officer.is_active) {
+    throw new Error('Petugas anggota sudah nonaktif.');
+  }
+  const areaAssignment = await db.employeeAreas
+    .where('employee_id')
+    .equals(officerId)
+    .and((assignment) => assignment.area_id === areaId)
+    .first();
+  if (!areaAssignment) {
+    throw new Error('Area anggota belum termasuk wilayah tugas petugas yang dipilih.');
   }
 
   return officer;
@@ -82,7 +93,7 @@ export const createCooperativeMember = async (
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
   const area = await resolveActiveArea(sanitizedInput.area_id);
-  const officer = await resolveOfficer(sanitizedInput.officer_id);
+  const officer = await resolveOfficer(sanitizedInput.officer_id, sanitizedInput.area_id);
   const now = new Date().toISOString();
   const member: CooperativeMember = withPendingCooperativeSync({
     id: crypto.randomUUID(),
@@ -126,7 +137,7 @@ export const updateCooperativeMember = async (
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
   const area = await resolveActiveArea(sanitizedInput.area_id);
-  const officer = await resolveOfficer(sanitizedInput.officer_id);
+  const officer = await resolveOfficer(sanitizedInput.officer_id, sanitizedInput.area_id);
   const updatedAt = new Date().toISOString();
   let updatedMember: CooperativeMember | undefined;
 

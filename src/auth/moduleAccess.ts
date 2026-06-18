@@ -56,6 +56,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/koperasi/laporan-drop-harian': ['KOPERASI_SHU'],
   '/koperasi/laporan-drop-mingguan': ['KOPERASI_SHU'],
   '/koperasi/laporan-induk-anggota': ['KOPERASI_SHU'],
+  '/koperasi/buku-angsuran': ['KOPERASI_SHU'],
   '/koperasi/arus-kas': ['KOPERASI_SHU'],
   '/koperasi': [
     'KOPERASI_ANGGOTA',

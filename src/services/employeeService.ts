@@ -8,7 +8,23 @@ import {
 import { db } from '@/lib/db';
 import { employeeSchema } from '@/lib/validations/employee';
 import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
-import type { ChartOfAccount, CooperativeArea, Employee, EmployeeArea } from '@/types';
+import type {
+  ChartOfAccount,
+  CooperativeArea,
+  CooperativeCollectionWeekday,
+  Employee,
+  EmployeeArea,
+  EmployeeCollectionSchedule,
+} from '@/types';
+
+export interface EmployeeCollectionScheduleInput {
+  id?: string;
+  area_id: string;
+  weekday: CooperativeCollectionWeekday;
+  effective_from?: string;
+  effective_until?: string;
+  is_active?: boolean;
+}
 
 export interface EmployeeUpsertInput {
   name: string;
@@ -22,12 +38,13 @@ export interface EmployeeUpsertInput {
   confirm_login_pin?: string;
   notes?: string;
   area_ids?: string[];
+  collection_schedules?: EmployeeCollectionScheduleInput[];
   is_active?: boolean;
 }
 
 type SanitizedEmployeeInput =
-  Required<Pick<EmployeeUpsertInput, 'name' | 'area_ids' | 'is_active'>> &
-  Omit<EmployeeUpsertInput, 'name' | 'area_ids' | 'is_active'>;
+  Required<Pick<EmployeeUpsertInput, 'name' | 'area_ids' | 'collection_schedules' | 'is_active'>> &
+  Omit<EmployeeUpsertInput, 'name' | 'area_ids' | 'collection_schedules' | 'is_active'>;
 
 const sanitizeEmployeeInput = (input: EmployeeUpsertInput): SanitizedEmployeeInput => {
   const parsed = employeeSchema.parse(input);
@@ -37,6 +54,7 @@ const sanitizeEmployeeInput = (input: EmployeeUpsertInput): SanitizedEmployeeInp
     name: parsed.name.trim(),
     email: normalizeAuthEmail(parsed.email),
     area_ids: Array.from(new Set(parsed.area_ids ?? [])),
+    collection_schedules: parsed.collection_schedules ?? [],
     is_active: parsed.is_active ?? true,
   };
 };
@@ -208,6 +226,73 @@ const buildEmployeeAreaAssignments = (
   updated_at: now,
 }));
 
+const assertCollectionSchedulesValid = (
+  schedules: EmployeeCollectionScheduleInput[],
+  areaIds: string[],
+) => {
+  const allowedAreaIds = new Set(areaIds);
+
+  schedules.forEach((schedule) => {
+    if (!allowedAreaIds.has(schedule.area_id)) {
+      throw new Error('Area jadwal penagihan harus termasuk wilayah karyawan.');
+    }
+    if (
+      schedule.effective_from &&
+      schedule.effective_until &&
+      schedule.effective_from.slice(0, 10) > schedule.effective_until.slice(0, 10)
+    ) {
+      throw new Error('Tanggal mulai jadwal tidak boleh setelah tanggal selesai.');
+    }
+  });
+
+  const activeSchedules = schedules.filter((schedule) => schedule.is_active !== false);
+  activeSchedules.forEach((schedule, index) => {
+    const start = schedule.effective_from?.slice(0, 10) ?? '0000-01-01';
+    const end = schedule.effective_until?.slice(0, 10) ?? '9999-12-31';
+    const hasOverlap = activeSchedules.some((candidate, candidateIndex) => {
+      if (candidateIndex === index) return false;
+      if (candidate.area_id !== schedule.area_id || candidate.weekday !== schedule.weekday) return false;
+      const candidateStart = candidate.effective_from?.slice(0, 10) ?? '0000-01-01';
+      const candidateEnd = candidate.effective_until?.slice(0, 10) ?? '9999-12-31';
+      return start <= candidateEnd && candidateStart <= end;
+    });
+
+    if (hasOverlap) {
+      throw new Error('Jadwal aktif pada area dan hari yang sama tidak boleh memiliki periode tumpang tindih.');
+    }
+  });
+};
+
+const buildEmployeeCollectionSchedules = (
+  employee: Employee,
+  areas: CooperativeArea[],
+  inputs: EmployeeCollectionScheduleInput[],
+  now: string,
+): EmployeeCollectionSchedule[] => {
+  const areaById = new Map(areas.map((area) => [area.id, area]));
+
+  return inputs.map((input) => {
+    const area = areaById.get(input.area_id);
+    if (!area) throw new Error('Area jadwal penagihan tidak ditemukan.');
+
+    return {
+      id: input.id ?? crypto.randomUUID(),
+      employee_id: employee.id,
+      employee_name: employee.name,
+      employee_position: employee.position,
+      area_id: area.id,
+      area_name: area.name,
+      area_code: area.code,
+      weekday: input.weekday,
+      effective_from: input.effective_from,
+      effective_until: input.effective_until,
+      is_active: input.is_active ?? true,
+      created_at: now,
+      updated_at: now,
+    };
+  });
+};
+
 export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employee> => {
   const currentUser = await requireEmployeeActor();
   const sanitizedInput = sanitizeEmployeeInput(input);
@@ -217,6 +302,7 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
   }
 
   const areas = await getSelectedAreas(sanitizedInput.area_ids);
+  assertCollectionSchedulesValid(sanitizedInput.collection_schedules, sanitizedInput.area_ids);
   await assertFieldCashAccountAvailable(
     sanitizedInput.field_cash_account_id,
     undefined,
@@ -252,11 +338,25 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
     updated_at: now,
   };
   const assignments = buildEmployeeAreaAssignments(employee, areas, now);
+  const collectionSchedules = buildEmployeeCollectionSchedules(
+    employee,
+    areas,
+    sanitizedInput.collection_schedules,
+    now,
+  );
 
-  await db.transaction('rw', [db.employees, db.employeeAreas, db.activityLogs], async () => {
+  await db.transaction('rw', [
+    db.employees,
+    db.employeeAreas,
+    db.employeeCollectionSchedules,
+    db.activityLogs,
+  ], async () => {
     await db.employees.add(employee);
     if (assignments.length > 0) {
       await db.employeeAreas.bulkAdd(assignments);
+    }
+    if (collectionSchedules.length > 0) {
+      await db.employeeCollectionSchedules.bulkAdd(collectionSchedules);
     }
     await writeActivityLog({
       user: currentUser,
@@ -284,6 +384,7 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
   }
 
   const areas = await getSelectedAreas(sanitizedInput.area_ids);
+  assertCollectionSchedulesValid(sanitizedInput.collection_schedules, sanitizedInput.area_ids);
   await assertFieldCashAccountAvailable(
     sanitizedInput.field_cash_account_id,
     id,
@@ -323,12 +424,35 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     updated_at: updatedAt,
   };
   const assignments = buildEmployeeAreaAssignments(updatedEmployee, areas, updatedAt);
+  const existingSchedules = await db.employeeCollectionSchedules
+    .where('employee_id')
+    .equals(id)
+    .toArray();
+  const existingScheduleById = new Map(existingSchedules.map((schedule) => [schedule.id, schedule]));
+  const collectionSchedules = buildEmployeeCollectionSchedules(
+    updatedEmployee,
+    areas,
+    sanitizedInput.collection_schedules,
+    updatedAt,
+  ).map((schedule) => ({
+    ...schedule,
+    created_at: existingScheduleById.get(schedule.id)?.created_at ?? schedule.created_at,
+  }));
 
-  await db.transaction('rw', [db.employees, db.employeeAreas, db.activityLogs], async () => {
+  await db.transaction('rw', [
+    db.employees,
+    db.employeeAreas,
+    db.employeeCollectionSchedules,
+    db.activityLogs,
+  ], async () => {
     await db.employees.put(updatedEmployee);
     await db.employeeAreas.where('employee_id').equals(id).delete();
     if (assignments.length > 0) {
       await db.employeeAreas.bulkAdd(assignments);
+    }
+    await db.employeeCollectionSchedules.where('employee_id').equals(id).delete();
+    if (collectionSchedules.length > 0) {
+      await db.employeeCollectionSchedules.bulkAdd(collectionSchedules);
     }
     await writeActivityLog({
       user: currentUser,

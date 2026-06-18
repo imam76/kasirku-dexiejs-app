@@ -290,6 +290,7 @@ const RootLayout = () => {
             { to: '/koperasi/laporan-drop-harian', label: t('nav.cooperative.dailyDrop'), icon: FileText },
             { to: '/koperasi/laporan-drop-mingguan', label: t('nav.cooperative.weeklyDrop'), icon: FileText },
             { to: '/koperasi/laporan-induk-anggota', label: t('nav.cooperative.memberRegister'), icon: FileText },
+            { to: '/koperasi/buku-angsuran', label: t('nav.cooperative.installmentBook'), icon: BookOpen },
             {
               to: '/koperasi/arus-kas',
               label: t('cooperative.reports.tabs.cashFlowStatement'),

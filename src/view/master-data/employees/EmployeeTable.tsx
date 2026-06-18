@@ -3,6 +3,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { Archive, Edit2, RotateCcw } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { EmployeeWithAreas } from '@/hooks/useEmployees';
+import { getCollectionWeekdayLabel } from '@/utils/koperasi/collectionSchedule';
 
 const { Text } = Typography;
 
@@ -70,6 +71,24 @@ export default function EmployeeTable({
                 {assignment.area_code ? `${assignment.area_code} - ${assignment.area_name}` : assignment.area_name}
               </Tag>
             ))
+            : '-'}
+        </Space>
+      ),
+    },
+    {
+      title: t('employees.table.collectionSchedules'),
+      key: 'collection_schedules',
+      width: 260,
+      render: (_value: unknown, employee) => (
+        <Space wrap size={[4, 4]}>
+          {employee.collection_schedules.filter((schedule) => schedule.is_active).length > 0
+            ? employee.collection_schedules
+              .filter((schedule) => schedule.is_active)
+              .map((schedule) => (
+                <Tag key={schedule.id} color="purple">
+                  {schedule.area_code ?? schedule.area_name} · {getCollectionWeekdayLabel(schedule.weekday)}
+                </Tag>
+              ))
             : '-'}
         </Space>
       ),
