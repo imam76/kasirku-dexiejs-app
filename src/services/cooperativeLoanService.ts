@@ -1,5 +1,11 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
-import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
+import {
+  getCurrentServerSessionToken,
+  getCurrentSessionUser,
+  hasUserPermission,
+  requireUserPermission,
+  writeActivityLog,
+} from '@/auth/authService';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import {
@@ -20,6 +26,21 @@ import {
   reverseCooperativeSavingTransactionJournal,
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
+import { mergeRemoteJournalEntryBundlesIntoDexie } from '@/services/journalEntryReadService';
+import {
+  mergeRemoteCooperativeLoanInstallmentsIntoDexie,
+  mergeRemoteCooperativeLoanPaymentsIntoDexie,
+  mergeRemoteCooperativeLoansIntoDexie,
+} from '@/services/cooperativeReadService';
+import {
+  mapRemoteCooperativeCollectionEventToLocal,
+} from '@/services/cooperativeCollectionEventService';
+import {
+  cooperativeCollectionEventPostgresAdapter,
+  cooperativePostingPostgresAdapter,
+  postgresAdapter,
+} from '@/services/postgresAdapter';
 import {
   assertSufficientCashAccountBalance,
   buildFieldCashFinanceTransactionFields,
@@ -41,6 +62,7 @@ import type {
   CooperativeLoanDeductionMethod,
   CooperativeLoanInstallment,
   CooperativeLoanInstallmentCollectionStatus,
+  CooperativeLoanCollectionEvent,
   CooperativeLoanInterestCalculationType,
   CooperativeLoanPayment,
   CooperativeMember,
@@ -115,6 +137,7 @@ export interface DisburseCooperativeLoanResult {
 }
 
 export interface RecordCooperativeLoanPaymentInput {
+  idempotency_key?: string;
   installment_id: string;
   amount: number;
   payment_date?: string;
@@ -126,6 +149,7 @@ export interface RecordCooperativeLoanPaymentInput {
 }
 
 export interface RecordCooperativeLoanInstallmentCollectionInput {
+  event_id?: string;
   installment_id: string;
   collection_status: Exclude<CooperativeLoanInstallmentCollectionStatus, 'NONE'>;
   follow_up_date?: string;
@@ -144,6 +168,7 @@ export interface RecordCooperativeLoanPaymentResult {
 }
 
 export interface RecordCooperativeLoanInstallmentCollectionResult {
+  event: CooperativeLoanCollectionEvent;
   installment: CooperativeLoanInstallment;
 }
 
@@ -154,6 +179,7 @@ const cooperativeLoanTables = [
   db.cooperativeLoans,
   db.cooperativeLoanInstallments,
   db.cooperativeLoanPayments,
+  db.cooperativeLoanCollectionEvents,
   db.cooperativeFieldCashSessions,
   db.employees,
   db.employeeAreas,
@@ -847,7 +873,7 @@ export const approveCooperativeLoan = async (
   input: ApproveCooperativeLoanInput,
 ): Promise<CooperativeLoan> => {
   const currentUser = await getCurrentSessionUser();
-  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
 
   const parsedInput = cooperativeLoanApprovalSchema.parse({
     approval_date: input.approval_date,
@@ -1184,7 +1210,139 @@ export const disburseCooperativeLoan = async (
   };
 };
 
-export const recordCooperativeLoanPayment = async (
+const findPostingAccount = async (
+  ids: string[],
+  codes: string[],
+) => {
+  const accounts = await db.chartOfAccounts.toArray();
+  const account = ids
+    .map((id) => accounts.find((item) => item.id === id))
+    .find(Boolean) ?? codes
+    .map((code) => accounts.find((item) => item.code === code))
+    .find(Boolean);
+
+  if (!account || !account.is_active || !account.is_postable) {
+    throw new Error(`Akun posting ${codes.join('/')} belum aktif dan postable.`);
+  }
+
+  return account;
+};
+
+const ensureServerPostingAccounts = async (
+  sessionToken: string,
+  currentUser: Awaited<ReturnType<typeof getCurrentSessionUser>>,
+  cashAccount: Awaited<ReturnType<typeof getCashOrBankAccountForPayment>>,
+) => {
+  if (!await hasUserPermission(currentUser, 'FINANCE_ACCESS')) return;
+
+  const [receivableAccount, interestAccount, penaltyAccount] = await Promise.all([
+    findPostingAccount(['cooperative-loan-receivable'], ['1120']),
+    findPostingAccount(['cooperative-loan-interest-income'], ['4040']),
+    findPostingAccount(['cooperative-loan-penalty-income'], ['4050']),
+  ]);
+
+  await cooperativePostingPostgresAdapter.registerAccounts(sessionToken, [
+    {
+      id: cashAccount.id,
+      code: cashAccount.code,
+      name: cashAccount.name,
+      account_type: cashAccount.type,
+      is_postable: cashAccount.is_postable,
+      is_active: cashAccount.is_active,
+      is_cash_or_bank: true,
+      updated_at: cashAccount.updated_at,
+    },
+    {
+      id: receivableAccount.id,
+      account_key: 'COOPERATIVE_LOAN_RECEIVABLE',
+      code: receivableAccount.code,
+      name: receivableAccount.name,
+      account_type: receivableAccount.type,
+      is_postable: receivableAccount.is_postable,
+      is_active: receivableAccount.is_active,
+      is_cash_or_bank: false,
+      updated_at: receivableAccount.updated_at,
+    },
+    {
+      id: interestAccount.id,
+      account_key: 'COOPERATIVE_LOAN_INTEREST_INCOME',
+      code: interestAccount.code,
+      name: interestAccount.name,
+      account_type: interestAccount.type,
+      is_postable: interestAccount.is_postable,
+      is_active: interestAccount.is_active,
+      is_cash_or_bank: false,
+      updated_at: interestAccount.updated_at,
+    },
+    {
+      id: penaltyAccount.id,
+      account_key: 'COOPERATIVE_LOAN_PENALTY_INCOME',
+      code: penaltyAccount.code,
+      name: penaltyAccount.name,
+      account_type: penaltyAccount.type,
+      is_postable: penaltyAccount.is_postable,
+      is_active: penaltyAccount.is_active,
+      is_cash_or_bank: false,
+      updated_at: penaltyAccount.updated_at,
+    },
+  ]);
+};
+
+const recordCooperativeLoanPaymentOnServer = async (
+  input: RecordCooperativeLoanPaymentInput,
+): Promise<RecordCooperativeLoanPaymentResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
+  const parsedInput = cooperativeLoanPaymentSchema.parse(input);
+  const sessionToken = await getCurrentServerSessionToken();
+  if (!sessionToken) {
+    throw new Error('Sesi server tidak tersedia. Silakan logout lalu login kembali.');
+  }
+
+  const paymentMethod = parsedInput.payment_method ?? 'TUNAI';
+  const cashAccount = await getCashOrBankAccountForPayment(
+    paymentMethod,
+    parsedInput.cash_account_id,
+  );
+  await ensureServerPostingAccounts(sessionToken, currentUser, cashAccount);
+
+  const remoteResult = await cooperativePostingPostgresAdapter.postPayment({
+    session_token: sessionToken,
+    idempotency_key: parsedInput.idempotency_key ?? crypto.randomUUID(),
+    installment_id: parsedInput.installment_id,
+    amount: roundCurrency(parsedInput.amount),
+    payment_date: parsedInput.payment_date ?? new Date().toISOString(),
+    payment_method: paymentMethod,
+    cash_account_id: cashAccount.id,
+    payment_channel: parsedInput.payment_channel,
+    collector_id: parsedInput.collector_id,
+    notes: parsedInput.notes,
+  });
+  if (!remoteResult) {
+    throw new Error('Posting pembayaran server tidak menghasilkan data.');
+  }
+
+  await Promise.all([
+    mergeRemoteCooperativeLoanPaymentsIntoDexie([remoteResult.payment]),
+    mergeRemoteCooperativeLoanInstallmentsIntoDexie([remoteResult.installment]),
+    mergeRemoteCooperativeLoansIntoDexie([remoteResult.loan]),
+    mergeRemoteFinanceTransactionsIntoDexie([remoteResult.finance_transaction]),
+    mergeRemoteJournalEntryBundlesIntoDexie([remoteResult.journal_entry]),
+  ]);
+
+  const [payment, installment, loan] = await Promise.all([
+    db.cooperativeLoanPayments.get(remoteResult.payment.id),
+    db.cooperativeLoanInstallments.get(remoteResult.installment.id),
+    db.cooperativeLoans.get(remoteResult.loan.id),
+  ]);
+  if (!payment || !installment || !loan) {
+    throw new Error('Hasil posting pembayaran gagal diterapkan ke database lokal.');
+  }
+
+  return { payment, installment, loan };
+};
+
+const recordCooperativeLoanPaymentLocally = async (
   input: RecordCooperativeLoanPaymentInput,
 ): Promise<RecordCooperativeLoanPaymentResult> => {
   const currentUser = await getCurrentSessionUser();
@@ -1290,6 +1448,7 @@ export const recordCooperativeLoanPayment = async (
       received_by_name: currentUser?.name,
       posted_at: now,
       finance_transaction_id: financeTransactionId,
+      idempotency_key: parsedInput.idempotency_key ?? paymentId,
       notes: parsedInput.notes,
       created_at: now,
       updated_at: now,
@@ -1425,7 +1584,23 @@ export const recordCooperativeLoanPayment = async (
   };
 };
 
-export const recordCooperativeLoanInstallmentCollection = async (
+export const recordCooperativeLoanPayment = async (
+  input: RecordCooperativeLoanPaymentInput,
+): Promise<RecordCooperativeLoanPaymentResult> => {
+  const health = await postgresAdapter.healthCheck();
+  if (health.available) {
+    return recordCooperativeLoanPaymentOnServer(input);
+  }
+  if (health.status !== 'unconfigured') {
+    throw new Error(
+      'PostgreSQL sedang tidak dapat dijangkau. Pembayaran diblokir untuk mencegah duplikasi lintas perangkat.',
+    );
+  }
+
+  return recordCooperativeLoanPaymentLocally(input);
+};
+
+const recordCooperativeLoanInstallmentCollectionLocally = async (
   input: RecordCooperativeLoanInstallmentCollectionInput,
 ): Promise<RecordCooperativeLoanInstallmentCollectionResult> => {
   const currentUser = await getCurrentSessionUser();
@@ -1434,6 +1609,7 @@ export const recordCooperativeLoanInstallmentCollection = async (
   const parsedInput = cooperativeLoanInstallmentCollectionSchema.parse(input);
   const now = new Date().toISOString();
   let savedInstallment: CooperativeLoanInstallment | undefined;
+  let savedEvent: CooperativeLoanCollectionEvent | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const installment = await db.cooperativeLoanInstallments.get(parsedInput.installment_id);
@@ -1460,9 +1636,30 @@ export const recordCooperativeLoanInstallmentCollection = async (
       last_contacted_at: now,
       updated_at: now,
     });
+    const collectionEvent: CooperativeLoanCollectionEvent = {
+      id: parsedInput.event_id ?? crypto.randomUUID(),
+      installment_id: installment.id,
+      loan_id: loan.id,
+      loan_number: loan.loan_number,
+      member_id: loan.member_id,
+      member_number: loan.member_number,
+      member_name: loan.member_name,
+      collection_status: parsedInput.collection_status,
+      follow_up_date: parsedInput.follow_up_date,
+      collection_notes: parsedInput.collection_notes,
+      contacted_at: now,
+      actor_user_id: currentUser?.id,
+      actor_user_name: currentUser?.name,
+      actor_employee_id: currentUser?.employee_id,
+      created_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    };
 
     await db.cooperativeLoanInstallments.put(nextInstallment);
+    await db.cooperativeLoanCollectionEvents.add(collectionEvent);
     savedInstallment = nextInstallment;
+    savedEvent = collectionEvent;
 
     await writeActivityLog({
       user: currentUser,
@@ -1473,15 +1670,71 @@ export const recordCooperativeLoanInstallmentCollection = async (
     });
   });
 
-  if (!savedInstallment) {
+  if (!savedInstallment || !savedEvent) {
     throw new Error('Tindak lanjut penagihan gagal disimpan.');
   }
 
   await enqueueCooperativeLoanInstallmentsSync([savedInstallment], 'update');
 
   return {
+    event: savedEvent,
     installment: savedInstallment,
   };
+};
+
+const recordCooperativeLoanInstallmentCollectionOnServer = async (
+  input: RecordCooperativeLoanInstallmentCollectionInput,
+): Promise<RecordCooperativeLoanInstallmentCollectionResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
+  const parsedInput = cooperativeLoanInstallmentCollectionSchema.parse(input);
+  const sessionToken = await getCurrentServerSessionToken();
+  if (!sessionToken) {
+    throw new Error('Sesi server tidak tersedia. Silakan logout lalu login kembali.');
+  }
+
+  const remoteResult = await cooperativeCollectionEventPostgresAdapter.record({
+    session_token: sessionToken,
+    event_id: parsedInput.event_id ?? crypto.randomUUID(),
+    installment_id: parsedInput.installment_id,
+    collection_status: parsedInput.collection_status,
+    follow_up_date: parsedInput.follow_up_date,
+    collection_notes: parsedInput.collection_notes,
+  });
+  if (!remoteResult) {
+    throw new Error('Pencatatan tindak lanjut server tidak menghasilkan data.');
+  }
+
+  await Promise.all([
+    mergeRemoteCooperativeLoanInstallmentsIntoDexie([remoteResult.installment]),
+    db.cooperativeLoanCollectionEvents.put(
+      mapRemoteCooperativeCollectionEventToLocal(remoteResult.event),
+    ),
+  ]);
+
+  const installment = await db.cooperativeLoanInstallments.get(remoteResult.installment.id);
+  const event = await db.cooperativeLoanCollectionEvents.get(remoteResult.event.id);
+  if (!installment || !event) {
+    throw new Error('Hasil tindak lanjut gagal diterapkan ke database lokal.');
+  }
+
+  return { event, installment };
+};
+
+export const recordCooperativeLoanInstallmentCollection = async (
+  input: RecordCooperativeLoanInstallmentCollectionInput,
+): Promise<RecordCooperativeLoanInstallmentCollectionResult> => {
+  const health = await postgresAdapter.healthCheck();
+  if (health.available) {
+    return recordCooperativeLoanInstallmentCollectionOnServer(input);
+  }
+  if (health.status !== 'unconfigured') {
+    throw new Error(
+      'PostgreSQL sedang tidak dapat dijangkau. Tindak lanjut diblokir agar histori penagihan tidak terpecah.',
+    );
+  }
+
+  return recordCooperativeLoanInstallmentCollectionLocally(input);
 };
 
 export const reverseCooperativeLoanPayment = async (
@@ -1489,6 +1742,17 @@ export const reverseCooperativeLoanPayment = async (
 ): Promise<CooperativeLoanPayment> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
+  const postgresHealth = await postgresAdapter.healthCheck();
+  if (postgresHealth.available) {
+    throw new Error(
+      'Reversal pembayaran pada mode PostgreSQL diblokir sampai workflow maker-checker server tersedia.',
+    );
+  }
+  if (postgresHealth.status !== 'unconfigured') {
+    throw new Error(
+      'PostgreSQL sedang tidak dapat dijangkau. Reversal diblokir agar data keuangan tidak terpecah.',
+    );
+  }
 
   const parsedInput = cooperativeLoanPaymentReversalSchema.parse({ reason: input.reason });
   const now = new Date().toISOString();

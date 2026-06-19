@@ -7,6 +7,7 @@ import type { CooperativeLoanInstallmentCollectionStatus } from '@/types';
 const { TextArea } = Input;
 
 export interface CooperativeBillingCollectionFormValues {
+  event_id: string;
   collection_status: Exclude<CooperativeLoanInstallmentCollectionStatus, 'NONE'>;
   follow_up_date?: Dayjs;
   collection_notes: string;

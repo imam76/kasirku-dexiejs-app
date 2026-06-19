@@ -1,6 +1,7 @@
 import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshCooperativeDataFromPostgres } from '@/services/cooperativeReadService';
+import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
@@ -79,6 +80,7 @@ export const refreshAllDataFromPostgres = async () => {
     journalEntries: await refreshJournalEntriesFromPostgres(),
     productionOrders: await refreshProductionOrdersFromPostgres(),
     cooperative: await refreshCooperativeDataFromPostgres(),
+    cooperativeCollectionEvents: await refreshCooperativeCollectionEventsFromPostgres(),
     purchaseDocuments: await refreshPurchaseDocumentsFromPostgres(),
     salesDocuments: await refreshSalesDocumentsFromPostgres(),
     stockOpnames: await refreshStockOpnamesFromPostgres(),

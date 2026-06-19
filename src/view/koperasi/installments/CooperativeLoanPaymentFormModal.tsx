@@ -10,6 +10,7 @@ import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllo
 const { TextArea } = Input;
 
 export interface CooperativeLoanPaymentFormValues {
+  idempotency_key: string;
   installment_id: string;
   amount: number;
   payment_date: Dayjs;

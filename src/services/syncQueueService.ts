@@ -30,7 +30,6 @@ import {
   authUserPostgresAdapter,
   contactPostgresAdapter,
   cooperativeLoanInstallmentPostgresAdapter,
-  cooperativeLoanPaymentPostgresAdapter,
   cooperativeLoanPostgresAdapter,
   cooperativeMemberPostgresAdapter,
   cooperativeMemberSavingBalancePostgresAdapter,
@@ -422,6 +421,7 @@ const mapCooperativeLoanPaymentToRemoteDto = (
   created_by_name: payment.created_by_name,
   updated_by: payment.updated_by,
   updated_by_name: payment.updated_by_name,
+  idempotency_key: payment.idempotency_key,
 });
 
 const mapDepartmentToRemoteDto = (department: Department): RemoteDepartmentDto => ({
@@ -2162,12 +2162,16 @@ const processCooperativeLoanInstallmentQueueItem = async (queueItem: SyncQueueIt
   return cooperativeLoanInstallmentPostgresAdapter.upsert(queueItem.payload);
 };
 
-const processCooperativeLoanPaymentQueueItem = async (queueItem: SyncQueueItem) => {
+const processCooperativeLoanPaymentQueueItem = async (
+  queueItem: SyncQueueItem,
+): Promise<RemoteCooperativeLoanPaymentDto> => {
   if (!isRemoteCooperativeLoanPaymentDto(queueItem.payload)) {
     throw new Error('Payload pembayaran angsuran koperasi sync queue tidak valid.');
   }
 
-  return cooperativeLoanPaymentPostgresAdapter.upsert(queueItem.payload);
+  throw new Error(
+    'Sinkronisasi upsert pembayaran koperasi dinonaktifkan. Gunakan command posting pembayaran atomik.',
+  );
 };
 
 const processCurrencyQueueItem = async (queueItem: SyncQueueItem) => {

@@ -77,6 +77,7 @@ export default function CooperativeInstallmentManagement() {
     const remaining = installment ? getInstallmentRemainingAmounts(installment) : undefined;
     const paymentDefaults = getPaymentDefaultFields(installment);
     form.setFieldsValue({
+      idempotency_key: crypto.randomUUID(),
       installment_id: installment?.id,
       amount: remaining?.total_amount,
       payment_date: dayjs(),
@@ -103,6 +104,7 @@ export default function CooperativeInstallmentManagement() {
   const handleSubmit = async (values: CooperativeLoanPaymentFormValues) => {
     try {
       const result = await recordPayment({
+        idempotency_key: values.idempotency_key,
         installment_id: values.installment_id,
         amount: Number(values.amount || 0),
         payment_date: values.payment_date?.toISOString(),

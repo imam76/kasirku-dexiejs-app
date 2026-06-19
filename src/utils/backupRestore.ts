@@ -60,13 +60,14 @@ export const backupDatabase = async () => {
       cooperativeLoans: await db.cooperativeLoans.toArray(),
       cooperativeLoanInstallments: await db.cooperativeLoanInstallments.toArray(),
       cooperativeLoanPayments: await db.cooperativeLoanPayments.toArray(),
+      cooperativeLoanCollectionEvents: await db.cooperativeLoanCollectionEvents.toArray(),
       cooperativeSettings: await db.cooperativeSettings.toArray(),
       companyProfileSetting: await db.companyProfileSetting.toArray(),
       membershipPointTransactions: await db.membershipPointTransactions.toArray(),
       membershipSettings: await db.membershipSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 18,
+      version: 19,
       timestamp: new Date().toISOString(),
     };
 
@@ -91,7 +92,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'financeBalance', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -159,6 +160,7 @@ export const restoreDatabase = async (file: File) => {
           db.cooperativeLoans,
           db.cooperativeLoanInstallments,
           db.cooperativeLoanPayments,
+          db.cooperativeLoanCollectionEvents,
           db.cooperativeSettings,
           db.companyProfileSetting,
           db.membershipPointTransactions,
@@ -215,6 +217,7 @@ export const restoreDatabase = async (file: File) => {
           await db.cooperativeLoans.clear();
           await db.cooperativeLoanInstallments.clear();
           await db.cooperativeLoanPayments.clear();
+          await db.cooperativeLoanCollectionEvents.clear();
           await db.cooperativeSettings.clear();
           await db.companyProfileSetting.clear();
           await db.membershipPointTransactions.clear();
@@ -275,6 +278,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.cooperativeLoans?.length) await db.cooperativeLoans.bulkAdd(data.cooperativeLoans);
           if (data.cooperativeLoanInstallments?.length) await db.cooperativeLoanInstallments.bulkAdd(data.cooperativeLoanInstallments);
           if (data.cooperativeLoanPayments?.length) await db.cooperativeLoanPayments.bulkAdd(data.cooperativeLoanPayments);
+          if (data.cooperativeLoanCollectionEvents?.length) await db.cooperativeLoanCollectionEvents.bulkAdd(data.cooperativeLoanCollectionEvents);
           if (data.cooperativeSettings?.length) await db.cooperativeSettings.bulkAdd(data.cooperativeSettings);
           if (!data.cooperativeSettings?.length) {
             const now = new Date().toISOString();

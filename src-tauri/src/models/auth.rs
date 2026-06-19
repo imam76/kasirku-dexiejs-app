@@ -53,3 +53,16 @@ pub struct RolePermissionDto {
     pub updated_at: String,
     pub deleted_at: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthenticateServerSessionInput {
+    pub email: String,
+    pub pin: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerAuthSessionDto {
+    pub token: String,
+    pub user: AuthUserDto,
+    pub expires_at: String,
+}

@@ -4,6 +4,7 @@ import type {
   CooperativeCollectionWeekday,
   CooperativeLoanBillingFrequency,
   CooperativeLoanDeductionMethod,
+  CooperativeLoanCollectionEvent,
   CooperativeLoanInstallmentCollectionStatus,
   CooperativeLoanInstallmentStatus,
   CooperativeLoanInterestCalculationType,
@@ -56,6 +57,12 @@ export interface RemoteAuthUserDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+}
+
+export interface RemoteServerAuthSessionDto {
+  token: string;
+  user: RemoteAuthUserDto;
+  expires_at: string;
 }
 
 export interface RemoteActivityLogDto {
@@ -893,6 +900,72 @@ export interface RemoteCooperativeLoanPaymentDto {
   created_by_name?: string | null;
   updated_by?: string | null;
   updated_by_name?: string | null;
+  idempotency_key?: string | null;
+}
+
+export interface RemoteCooperativePostingAccountDto {
+  id: string;
+  account_key?: string | null;
+  code: string;
+  name: string;
+  account_type: AccountType;
+  is_postable: boolean;
+  is_active: boolean;
+  is_cash_or_bank: boolean;
+  updated_at: string;
+}
+
+export interface RemotePostCooperativeLoanPaymentInput {
+  session_token: string;
+  idempotency_key: string;
+  installment_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  cash_account_id: string;
+  payment_channel?: string | null;
+  collector_id?: string | null;
+  notes?: string | null;
+}
+
+export interface RemotePostCooperativeLoanPaymentResult {
+  payment: RemoteCooperativeLoanPaymentDto;
+  installment: RemoteCooperativeLoanInstallmentDto;
+  loan: RemoteCooperativeLoanDto;
+  finance_transaction: RemoteFinanceTransactionDto;
+  journal_entry: RemoteJournalEntryBundleDto;
+}
+
+export interface RemoteCooperativeLoanCollectionEventDto {
+  id: string;
+  installment_id: string;
+  loan_id: string;
+  loan_number: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  collection_status: CooperativeLoanCollectionEvent['collection_status'];
+  follow_up_date?: string | null;
+  collection_notes: string;
+  contacted_at: string;
+  actor_user_id?: string | null;
+  actor_user_name?: string | null;
+  actor_employee_id?: string | null;
+  created_at: string;
+}
+
+export interface RemoteRecordCooperativeLoanCollectionEventInput {
+  session_token: string;
+  event_id: string;
+  installment_id: string;
+  collection_status: CooperativeLoanCollectionEvent['collection_status'];
+  follow_up_date?: string | null;
+  collection_notes: string;
+}
+
+export interface RemoteRecordCooperativeLoanCollectionEventResult {
+  event: RemoteCooperativeLoanCollectionEventDto;
+  installment: RemoteCooperativeLoanInstallmentDto;
 }
 
 export type PostgresHealthStatus = 'available' | 'unconfigured' | 'unreachable' | 'migration_failed';
@@ -959,6 +1032,20 @@ export const authUserPostgresAdapter = {
   async upsert(input: RemoteAuthUserDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteAuthUserDto>('postgres_upsert_auth_user', { input });
+  },
+};
+
+export const serverAuthSessionPostgresAdapter = {
+  async authenticate(email: string, pin: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteServerAuthSessionDto>('postgres_authenticate_server_session', {
+      input: { email, pin },
+    });
+  },
+
+  async revoke(token: string) {
+    if (!isTauriRuntime()) return;
+    await invoke<void>('postgres_revoke_server_session', { token });
   },
 };
 
@@ -1419,9 +1506,47 @@ export const cooperativeLoanPaymentPostgresAdapter = {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteCooperativeLoanPaymentDto | null>('postgres_get_cooperative_loan_payment', { id });
   },
+};
 
-  async upsert(input: RemoteCooperativeLoanPaymentDto) {
+export const cooperativePostingPostgresAdapter = {
+  async registerAccounts(
+    sessionToken: string,
+    accounts: RemoteCooperativePostingAccountDto[],
+  ) {
+    if (!isTauriRuntime()) return accounts;
+    return invoke<RemoteCooperativePostingAccountDto[]>(
+      'postgres_register_cooperative_posting_accounts',
+      {
+        input: {
+          session_token: sessionToken,
+          accounts,
+        },
+      },
+    );
+  },
+
+  async postPayment(input: RemotePostCooperativeLoanPaymentInput) {
     if (!isTauriRuntime()) return null;
-    return invoke<RemoteCooperativeLoanPaymentDto>('postgres_upsert_cooperative_loan_payment', { input });
+    return invoke<RemotePostCooperativeLoanPaymentResult>(
+      'postgres_post_cooperative_loan_payment',
+      { input },
+    );
+  },
+};
+
+export const cooperativeCollectionEventPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeLoanCollectionEventDto[]>(
+      'postgres_list_cooperative_loan_collection_events',
+    );
+  },
+
+  async record(input: RemoteRecordCooperativeLoanCollectionEventInput) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteRecordCooperativeLoanCollectionEventResult>(
+      'postgres_record_cooperative_loan_collection_event',
+      { input },
+    );
   },
 };

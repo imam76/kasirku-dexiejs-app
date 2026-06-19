@@ -167,6 +167,7 @@ export const cooperativeLoanDisbursementSchema = z.object({
 });
 
 export const cooperativeLoanPaymentSchema = z.object({
+  idempotency_key: z.string().uuid('Idempotency key pembayaran tidak valid.').optional(),
   installment_id: z.string().min(1, 'Angsuran wajib dipilih.'),
   amount: z.number().positive('Nominal pembayaran wajib lebih dari 0.'),
   payment_date: z.string().optional(),
@@ -184,6 +185,7 @@ export const cooperativeLoanInstallmentCollectionStatusValues = [
 ] as const;
 
 export const cooperativeLoanInstallmentCollectionSchema = z.object({
+  event_id: z.string().uuid('ID event penagihan tidak valid.').optional(),
   installment_id: z.string().min(1, 'Angsuran wajib dipilih.'),
   collection_status: z.enum(cooperativeLoanInstallmentCollectionStatusValues),
   follow_up_date: z.string().optional(),

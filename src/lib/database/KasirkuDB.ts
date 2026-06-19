@@ -57,6 +57,7 @@ import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
   CooperativeLoanPayment,
+  CooperativeLoanCollectionEvent,
   CooperativeSettings,
   CompanyProfileSetting,
   CooperativeArea,
@@ -127,6 +128,7 @@ export class KasirkuDB extends Dexie {
   cooperativeLoans!: Table<CooperativeLoan>;
   cooperativeLoanInstallments!: Table<CooperativeLoanInstallment>;
   cooperativeLoanPayments!: Table<CooperativeLoanPayment>;
+  cooperativeLoanCollectionEvents!: Table<CooperativeLoanCollectionEvent>;
   cooperativeSettings!: Table<CooperativeSettings>;
   companyProfileSetting!: Table<CompanyProfileSetting>;
   inventoryLots!: Table<InventoryLot>;

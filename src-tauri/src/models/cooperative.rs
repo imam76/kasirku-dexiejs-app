@@ -1,3 +1,6 @@
+use crate::models::{
+    finance_transaction::FinanceTransactionDto, journal_entry::JournalEntryBundleDto,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -200,4 +203,82 @@ pub struct CooperativeLoanPaymentDto {
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
+    pub idempotency_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CooperativePostingAccountDto {
+    pub id: String,
+    pub account_key: Option<String>,
+    pub code: String,
+    pub name: String,
+    pub account_type: String,
+    pub is_postable: bool,
+    pub is_active: bool,
+    pub is_cash_or_bank: bool,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterCooperativePostingAccountsInput {
+    pub session_token: String,
+    pub accounts: Vec<CooperativePostingAccountDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostCooperativeLoanPaymentInput {
+    pub session_token: String,
+    pub idempotency_key: String,
+    pub installment_id: String,
+    pub amount: f64,
+    pub payment_date: String,
+    pub payment_method: String,
+    pub cash_account_id: String,
+    pub payment_channel: Option<String>,
+    pub collector_id: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostCooperativeLoanPaymentResult {
+    pub payment: CooperativeLoanPaymentDto,
+    pub installment: CooperativeLoanInstallmentDto,
+    pub loan: CooperativeLoanDto,
+    pub finance_transaction: FinanceTransactionDto,
+    pub journal_entry: JournalEntryBundleDto,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CooperativeLoanCollectionEventDto {
+    pub id: String,
+    pub installment_id: String,
+    pub loan_id: String,
+    pub loan_number: String,
+    pub member_id: String,
+    pub member_number: String,
+    pub member_name: String,
+    pub collection_status: String,
+    pub follow_up_date: Option<String>,
+    pub collection_notes: String,
+    pub contacted_at: String,
+    pub actor_user_id: Option<String>,
+    pub actor_user_name: Option<String>,
+    pub actor_employee_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordCooperativeLoanCollectionEventInput {
+    pub session_token: String,
+    pub event_id: String,
+    pub installment_id: String,
+    pub collection_status: String,
+    pub follow_up_date: Option<String>,
+    pub collection_notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordCooperativeLoanCollectionEventResult {
+    pub event: CooperativeLoanCollectionEventDto,
+    pub installment: CooperativeLoanInstallmentDto,
 }

@@ -1,5 +1,129 @@
-use crate::models::auth::{ActivityLogDto, AuthUserDto, RoleDto, RolePermissionDto};
+use crate::models::auth::{
+    ActivityLogDto, AuthUserDto, RoleDto, RolePermissionDto, ServerAuthSessionDto,
+};
+use chrono::{Duration, Utc};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
+use uuid::Uuid;
+
+fn hash_pin(pin: &str, salt: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{salt}:{pin}").as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+pub async fn authenticate_server_session(
+    pool: &PgPool,
+    email: String,
+    pin: String,
+) -> Result<Option<ServerAuthSessionDto>, sqlx::Error> {
+    let normalized_email = email.trim().to_lowercase();
+    let user = sqlx::query_as::<_, AuthUserDto>(
+        r#"
+        SELECT
+            id,
+            name,
+            email,
+            role,
+            role_id,
+            role_name,
+            employee_id,
+            pin_hash,
+            pin_salt,
+            is_active,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at,
+            deleted_at::TEXT AS deleted_at
+        FROM auth_users
+        WHERE deleted_at IS NULL
+          AND is_active = TRUE
+          AND (
+            LOWER(COALESCE(email, '')) = $1 OR
+            (
+              email IS NULL AND
+              LOWER(REGEXP_REPLACE(BTRIM(name), '\s+', '', 'g') || '@kasirku.com') = $1
+            )
+          )
+        LIMIT 1
+        "#,
+    )
+    .bind(normalized_email)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(user) = user else {
+        return Ok(None);
+    };
+
+    if hash_pin(&pin, &user.pin_salt) != user.pin_hash {
+        return Ok(None);
+    }
+
+    if let Some(role_id) = &user.role_id {
+        let role_is_active = sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT EXISTS (
+              SELECT 1
+              FROM roles
+              WHERE id = $1
+                AND is_active = TRUE
+                AND deleted_at IS NULL
+            )
+            "#,
+        )
+        .bind(role_id)
+        .fetch_one(pool)
+        .await?;
+
+        if !role_is_active {
+            return Ok(None);
+        }
+    }
+
+    let token = Uuid::new_v4().to_string();
+    let now = Utc::now();
+    let expires_at = now + Duration::hours(12);
+    sqlx::query(
+        r#"
+        INSERT INTO server_auth_sessions (
+          token,
+          user_id,
+          created_at,
+          last_active_at,
+          expires_at
+        )
+        VALUES ($1, $2, $3, $3, $4)
+        "#,
+    )
+    .bind(&token)
+    .bind(&user.id)
+    .bind(now)
+    .bind(expires_at)
+    .execute(pool)
+    .await?;
+
+    Ok(Some(ServerAuthSessionDto {
+        token,
+        user,
+        expires_at: expires_at.to_rfc3339(),
+    }))
+}
+
+pub async fn revoke_server_session(pool: &PgPool, token: String) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE server_auth_sessions
+        SET revoked_at = NOW()
+        WHERE token = $1
+          AND revoked_at IS NULL
+        "#,
+    )
+    .bind(token)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
 
 pub async fn list_auth_users(pool: &PgPool) -> Result<Vec<AuthUserDto>, sqlx::Error> {
     sqlx::query_as::<_, AuthUserDto>(

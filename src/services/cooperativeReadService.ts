@@ -315,6 +315,7 @@ const mapRemoteCooperativeLoanPaymentToLocal = (
   created_by_name: optionalString(remotePayment.created_by_name),
   updated_by: optionalString(remotePayment.updated_by),
   updated_by_name: optionalString(remotePayment.updated_by_name),
+  idempotency_key: optionalString(remotePayment.idempotency_key),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,

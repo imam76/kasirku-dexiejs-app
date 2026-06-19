@@ -1,9 +1,37 @@
 use crate::{
     db::{PostgresCommandResult, PostgresState},
-    models::auth::{ActivityLogDto, AuthUserDto, RoleDto, RolePermissionDto},
+    models::auth::{
+        ActivityLogDto, AuthUserDto, AuthenticateServerSessionInput, RoleDto, RolePermissionDto,
+        ServerAuthSessionDto,
+    },
     repositories::auth_repository,
 };
 use tauri::State;
+
+#[tauri::command]
+pub async fn postgres_authenticate_server_session(
+    state: State<'_, PostgresState>,
+    input: AuthenticateServerSessionInput,
+) -> PostgresCommandResult<ServerAuthSessionDto> {
+    let pool = state.pool()?;
+    auth_repository::authenticate_server_session(pool, input.email, input.pin)
+        .await?
+        .ok_or(crate::db::PostgresCommandError {
+            code: "invalid_credentials",
+            status: None,
+            message: "Email atau PIN tidak valid atau user tidak aktif.".to_string(),
+        })
+}
+
+#[tauri::command]
+pub async fn postgres_revoke_server_session(
+    state: State<'_, PostgresState>,
+    token: String,
+) -> PostgresCommandResult<()> {
+    let pool = state.pool()?;
+    auth_repository::revoke_server_session(pool, token).await?;
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn postgres_list_auth_users(

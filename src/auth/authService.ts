@@ -3,7 +3,13 @@ import type { ActivityLog, AuthUser, Permission, UserRole } from '@/types';
 import { hasPermission } from './permissions';
 import { refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from './authReadService';
 import { enqueueActivityLogSync, enqueueAuthUserSync } from '@/services/syncQueueService';
-import { authUserPostgresAdapter, type RemoteAuthUserDto } from '@/services/postgresAdapter';
+import {
+  authUserPostgresAdapter,
+  postgresAdapter,
+  serverAuthSessionPostgresAdapter,
+  type RemoteAuthUserDto,
+  type RemoteServerAuthSessionDto,
+} from '@/services/postgresAdapter';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './roleSeed';
 import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
@@ -434,7 +440,10 @@ const remoteAuthUserEmailMatches = (user: RemoteAuthUserDto, email: string) => (
   normalizeAuthEmail(user.email ?? undefined) === email || (!user.email && buildLegacyAuthUserEmail(user.name) === email)
 );
 
-const createLoginSession = async (user: AuthUser): Promise<AuthUser> => {
+const createLoginSession = async (
+  user: AuthUser,
+  serverSession?: RemoteServerAuthSessionDto | null,
+): Promise<AuthUser> => {
   const now = new Date().toISOString();
   const sessionId = crypto.randomUUID();
 
@@ -443,6 +452,8 @@ const createLoginSession = async (user: AuthUser): Promise<AuthUser> => {
     user_id: user.id,
     created_at: now,
     last_active_at: now,
+    server_session_token: serverSession?.token,
+    server_session_expires_at: serverSession?.expires_at,
   });
   setActiveSessionId(sessionId);
 
@@ -574,6 +585,19 @@ export const loginWithEmailAndPin = async (email: string, pin: string): Promise<
     throw new Error('Email wajib diisi.');
   }
 
+  const postgresHealth = await postgresAdapter.healthCheck();
+  if (postgresHealth.available) {
+    const serverSession = await serverAuthSessionPostgresAdapter.authenticate(normalizedEmail, pin);
+    if (!serverSession) {
+      throw new Error('Sesi server gagal dibuat.');
+    }
+
+    await refreshRolesFromPostgres();
+    const user = mapRemoteAuthUserForLogin(serverSession.user);
+    await db.authUsers.put(user);
+    return createLoginSession(user, serverSession);
+  }
+
   const localLogin = await tryLoginWithLocalData(normalizedEmail, pin);
   if (localLogin) return localLogin;
 
@@ -601,12 +625,20 @@ export const loginWithEmailAndPin = async (email: string, pin: string): Promise<
 
 export const logout = async (): Promise<void> => {
   const sessionId = getActiveSessionId();
+  const session = sessionId ? await db.authSessions.get(sessionId) : undefined;
   const currentUser = await getCurrentSessionUser({
     touchSession: false,
     cleanupInvalidSession: false,
   });
 
   if (sessionId) {
+    if (session?.server_session_token) {
+      try {
+        await serverAuthSessionPostgresAdapter.revoke(session.server_session_token);
+      } catch (error) {
+        console.error('Failed to revoke server session', error);
+      }
+    }
     await db.authSessions.delete(sessionId);
   }
   clearActiveSessionId();
@@ -620,6 +652,22 @@ export const logout = async (): Promise<void> => {
       description: `${currentUser.name} logout.`,
     });
   }
+};
+
+export const getCurrentServerSessionToken = async (): Promise<string | undefined> => {
+  const sessionId = getActiveSessionId();
+  if (!sessionId) return undefined;
+
+  const session = await db.authSessions.get(sessionId);
+  if (!session?.server_session_token) return undefined;
+  if (
+    session.server_session_expires_at &&
+    Date.parse(session.server_session_expires_at) <= Date.now()
+  ) {
+    return undefined;
+  }
+
+  return session.server_session_token;
 };
 
 export const getCurrentSessionUser = async (options: CurrentSessionUserOptions = {}): Promise<AuthUser | null> => {

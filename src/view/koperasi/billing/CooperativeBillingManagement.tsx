@@ -87,6 +87,7 @@ export default function CooperativeBillingManagement() {
     const fieldCashStatus = getFieldCashPaymentStatusForInstallment(installment);
     const rememberedFields = getRememberedCashAccountFields(paymentAccounts);
     form.setFieldsValue({
+      idempotency_key: crypto.randomUUID(),
       installment_id: installment.id,
       amount: remaining.total_amount,
       payment_date: dayjs(),
@@ -115,6 +116,7 @@ export default function CooperativeBillingManagement() {
 
     collectionForm.resetFields();
     collectionForm.setFieldsValue({
+      event_id: crypto.randomUUID(),
       collection_status: installment.collection_status && installment.collection_status !== 'NONE'
         ? installment.collection_status
         : 'UNABLE_TO_PAY',
@@ -128,6 +130,7 @@ export default function CooperativeBillingManagement() {
   const handleSubmit = async (values: CooperativeLoanPaymentFormValues) => {
     try {
       const result = await recordPayment({
+        idempotency_key: values.idempotency_key,
         installment_id: values.installment_id,
         amount: Number(values.amount || 0),
         payment_date: values.payment_date?.toISOString(),
@@ -154,6 +157,7 @@ export default function CooperativeBillingManagement() {
 
     try {
       await recordCollection({
+        event_id: values.event_id,
         installment_id: collectingInstallment.id,
         collection_status: values.collection_status,
         follow_up_date: values.follow_up_date?.toISOString(),

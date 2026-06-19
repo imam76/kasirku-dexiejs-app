@@ -236,6 +236,8 @@ export interface AuthSession {
   user_id: string;
   created_at: string;
   last_active_at: string;
+  server_session_token?: string;
+  server_session_expires_at?: string;
 }
 
 export interface ActivityLog {
@@ -370,6 +372,7 @@ export type CooperativeMemberSavingBalanceSyncStatus = EntitySyncStatus;
 export type CooperativeLoanSyncStatus = EntitySyncStatus;
 export type CooperativeLoanInstallmentSyncStatus = EntitySyncStatus;
 export type CooperativeLoanPaymentSyncStatus = EntitySyncStatus;
+export type CooperativeLoanCollectionEventSyncStatus = EntitySyncStatus;
 
 export interface CooperativeArea {
   id: string;
@@ -1804,7 +1807,30 @@ export interface CooperativeLoanPayment {
   created_by_name?: string;
   updated_by?: string;
   updated_by_name?: string;
+  idempotency_key?: string;
   sync_status?: CooperativeLoanPaymentSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CooperativeLoanCollectionEvent {
+  id: string;
+  installment_id: string;
+  loan_id: string;
+  loan_number: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  collection_status: Exclude<CooperativeLoanInstallmentCollectionStatus, 'NONE'>;
+  follow_up_date?: string;
+  collection_notes: string;
+  contacted_at: string;
+  actor_user_id?: string;
+  actor_user_name?: string;
+  actor_employee_id?: string;
+  created_at: string;
+  sync_status?: CooperativeLoanCollectionEventSyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;

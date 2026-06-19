@@ -7,6 +7,7 @@ import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
   CooperativeLoanPayment,
+  CooperativeLoanCollectionEvent,
   CooperativeMember,
   CooperativeMemberSavingBalance,
   CooperativeSavingTransaction,
@@ -1152,6 +1153,48 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
 
     if (migratedLoans.length > 0) {
       await loanTable.bulkPut(migratedLoans);
+    }
+  });
+
+  this.version(58).stores({
+    authSessions: 'id, user_id, last_active_at, server_session_expires_at',
+    cooperativeLoanPayments: 'id, payment_number, payment_type, loan_id, loan_number, installment_id, member_id, member_number, collector_id, received_by, payment_date, posted_at, status, reversal_of_payment_id, finance_transaction_id, journal_entry_id, idempotency_key, sync_status, updated_at, created_at',
+    cooperativeLoanCollectionEvents: 'id, installment_id, loan_id, member_id, collection_status, contacted_at, actor_user_id, actor_employee_id, created_at',
+  }).upgrade(async (tx) => {
+    const installments = await tx
+      .table<CooperativeLoanInstallment, string>('cooperativeLoanInstallments')
+      .toArray();
+    const events = installments.flatMap((installment): CooperativeLoanCollectionEvent[] => {
+      if (
+        !installment.collection_status ||
+        installment.collection_status === 'NONE' ||
+        !installment.collection_notes?.trim()
+      ) {
+        return [];
+      }
+
+      const contactedAt = installment.last_contacted_at ?? installment.updated_at;
+      return [{
+        id: `legacy-${installment.id}-${contactedAt}`,
+        installment_id: installment.id,
+        loan_id: installment.loan_id,
+        loan_number: installment.loan_number,
+        member_id: installment.member_id,
+        member_number: installment.member_number,
+        member_name: installment.member_name,
+        collection_status: installment.collection_status,
+        follow_up_date: installment.follow_up_date,
+        collection_notes: installment.collection_notes,
+        contacted_at: contactedAt,
+        created_at: contactedAt,
+        sync_status: 'pending',
+      }];
+    });
+
+    if (events.length > 0) {
+      await tx
+        .table<CooperativeLoanCollectionEvent, string>('cooperativeLoanCollectionEvents')
+        .bulkPut(events);
     }
   });
 }

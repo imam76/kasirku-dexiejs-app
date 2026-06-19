@@ -230,7 +230,8 @@ macro_rules! cooperative_loan_payment_select {
             created_by,
             created_by_name,
             updated_by,
-            updated_by_name
+            updated_by_name,
+            idempotency_key
         FROM cooperative_loan_payments
         "#
     };
@@ -879,6 +880,7 @@ pub async fn upsert_cooperative_loan(
             updated_by_name = EXCLUDED.updated_by_name,
             updated_at = EXCLUDED.updated_at
         WHERE EXCLUDED.updated_at >= cooperative_loans.updated_at
+          AND cooperative_loans.status NOT IN ('DISBURSED', 'PAID_OFF')
         RETURNING
             id,
             loan_number,
@@ -1111,6 +1113,12 @@ pub async fn upsert_cooperative_loan_installment(
             last_contacted_at = EXCLUDED.last_contacted_at,
             updated_at = EXCLUDED.updated_at
         WHERE EXCLUDED.updated_at >= cooperative_loan_installments.updated_at
+          AND NOT EXISTS (
+            SELECT 1
+            FROM cooperative_loans AS protected_loan
+            WHERE protected_loan.id = cooperative_loan_installments.loan_id
+              AND protected_loan.status IN ('DISBURSED', 'PAID_OFF')
+          )
         RETURNING
             id,
             loan_id,
@@ -1192,235 +1200,4 @@ pub async fn get_cooperative_loan_payment(
     .bind(id)
     .fetch_optional(pool)
     .await
-}
-
-pub async fn upsert_cooperative_loan_payment(
-    pool: &PgPool,
-    input: CooperativeLoanPaymentDto,
-) -> Result<CooperativeLoanPaymentDto, sqlx::Error> {
-    let id = input.id.clone();
-    let upserted = sqlx::query_as::<_, CooperativeLoanPaymentDto>(
-        r#"
-        INSERT INTO cooperative_loan_payments (
-            id,
-            payment_number,
-            payment_type,
-            loan_id,
-            loan_number,
-            installment_id,
-            member_id,
-            member_number,
-            member_name,
-            amount,
-            principal_amount,
-            interest_amount,
-            penalty_amount,
-            payment_date,
-            status,
-            cash_account_id,
-            cash_account_code,
-            cash_account_name,
-            payment_method,
-            payment_channel,
-            collector_id,
-            collector_name,
-            collector_position,
-            received_by,
-            received_by_name,
-            posted_at,
-            finance_transaction_id,
-            journal_entry_id,
-            reversal_of_payment_id,
-            reversal_payment_id,
-            reversal_finance_transaction_id,
-            reversal_journal_entry_id,
-            reversed_at,
-            reversal_reason,
-            notes,
-            created_at,
-            updated_at,
-            created_by,
-            created_by_name,
-            updated_by,
-            updated_by_name
-        )
-        VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6,
-            $7,
-            $8,
-            $9,
-            $10,
-            $11,
-            $12,
-            $13,
-            $14,
-            $15,
-            $16,
-            $17,
-            $18,
-            $19,
-            $20,
-            $21,
-            $22,
-            $23,
-            $24,
-            $25,
-            $26::TIMESTAMPTZ,
-            $27,
-            $28,
-            $29,
-            $30,
-            $31,
-            $32,
-            $33,
-            $34,
-            $35,
-            $36::TIMESTAMPTZ,
-            $37::TIMESTAMPTZ,
-            $38,
-            $39,
-            $40,
-            $41
-        )
-        ON CONFLICT (id) DO UPDATE SET
-            payment_number = EXCLUDED.payment_number,
-            payment_type = EXCLUDED.payment_type,
-            loan_id = EXCLUDED.loan_id,
-            loan_number = EXCLUDED.loan_number,
-            installment_id = EXCLUDED.installment_id,
-            member_id = EXCLUDED.member_id,
-            member_number = EXCLUDED.member_number,
-            member_name = EXCLUDED.member_name,
-            amount = EXCLUDED.amount,
-            principal_amount = EXCLUDED.principal_amount,
-            interest_amount = EXCLUDED.interest_amount,
-            penalty_amount = EXCLUDED.penalty_amount,
-            payment_date = EXCLUDED.payment_date,
-            status = EXCLUDED.status,
-            cash_account_id = EXCLUDED.cash_account_id,
-            cash_account_code = EXCLUDED.cash_account_code,
-            cash_account_name = EXCLUDED.cash_account_name,
-            payment_method = EXCLUDED.payment_method,
-            payment_channel = EXCLUDED.payment_channel,
-            collector_id = EXCLUDED.collector_id,
-            collector_name = EXCLUDED.collector_name,
-            collector_position = EXCLUDED.collector_position,
-            received_by = EXCLUDED.received_by,
-            received_by_name = EXCLUDED.received_by_name,
-            posted_at = EXCLUDED.posted_at,
-            finance_transaction_id = EXCLUDED.finance_transaction_id,
-            journal_entry_id = EXCLUDED.journal_entry_id,
-            reversal_of_payment_id = EXCLUDED.reversal_of_payment_id,
-            reversal_payment_id = EXCLUDED.reversal_payment_id,
-            reversal_finance_transaction_id = EXCLUDED.reversal_finance_transaction_id,
-            reversal_journal_entry_id = EXCLUDED.reversal_journal_entry_id,
-            reversed_at = EXCLUDED.reversed_at,
-            reversal_reason = EXCLUDED.reversal_reason,
-            notes = EXCLUDED.notes,
-            created_by = COALESCE(cooperative_loan_payments.created_by, EXCLUDED.created_by),
-            created_by_name = COALESCE(cooperative_loan_payments.created_by_name, EXCLUDED.created_by_name),
-            updated_by = EXCLUDED.updated_by,
-            updated_by_name = EXCLUDED.updated_by_name,
-            updated_at = EXCLUDED.updated_at
-        WHERE EXCLUDED.updated_at >= cooperative_loan_payments.updated_at
-        RETURNING
-            id,
-            payment_number,
-            payment_type,
-            loan_id,
-            loan_number,
-            installment_id,
-            member_id,
-            member_number,
-            member_name,
-            amount,
-            principal_amount,
-            interest_amount,
-            penalty_amount,
-            payment_date,
-            status,
-            cash_account_id,
-            cash_account_code,
-            cash_account_name,
-            payment_method,
-            payment_channel,
-            collector_id,
-            collector_name,
-            collector_position,
-            received_by,
-            received_by_name,
-            posted_at,
-            finance_transaction_id,
-            journal_entry_id,
-            reversal_of_payment_id,
-            reversal_payment_id,
-            reversal_finance_transaction_id,
-            reversal_journal_entry_id,
-            reversed_at,
-            reversal_reason,
-            notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            created_by,
-            created_by_name,
-            updated_by,
-            updated_by_name
-        "#,
-    )
-    .bind(input.id)
-    .bind(input.payment_number)
-    .bind(input.payment_type)
-    .bind(input.loan_id)
-    .bind(input.loan_number)
-    .bind(input.installment_id)
-    .bind(input.member_id)
-    .bind(input.member_number)
-    .bind(input.member_name)
-    .bind(input.amount)
-    .bind(input.principal_amount)
-    .bind(input.interest_amount)
-    .bind(input.penalty_amount)
-    .bind(input.payment_date)
-    .bind(input.status)
-    .bind(input.cash_account_id)
-    .bind(input.cash_account_code)
-    .bind(input.cash_account_name)
-    .bind(input.payment_method)
-    .bind(input.payment_channel)
-    .bind(input.collector_id)
-    .bind(input.collector_name)
-    .bind(input.collector_position)
-    .bind(input.received_by)
-    .bind(input.received_by_name)
-    .bind(input.posted_at)
-    .bind(input.finance_transaction_id)
-    .bind(input.journal_entry_id)
-    .bind(input.reversal_of_payment_id)
-    .bind(input.reversal_payment_id)
-    .bind(input.reversal_finance_transaction_id)
-    .bind(input.reversal_journal_entry_id)
-    .bind(input.reversed_at)
-    .bind(input.reversal_reason)
-    .bind(input.notes)
-    .bind(input.created_at)
-    .bind(input.updated_at)
-    .bind(input.created_by)
-    .bind(input.created_by_name)
-    .bind(input.updated_by)
-    .bind(input.updated_by_name)
-    .fetch_optional(pool)
-    .await?;
-
-    if let Some(payment) = upserted {
-        return Ok(payment);
-    }
-
-    get_cooperative_loan_payment(pool, id)
-        .await?
-        .ok_or(sqlx::Error::RowNotFound)
 }
