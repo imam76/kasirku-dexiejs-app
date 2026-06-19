@@ -16,7 +16,7 @@ export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
   await page.getByLabel('Konfirmasi PIN').fill(pin);
   await page.getByRole('button', { name: 'Simpan Owner' }).click();
 
-  await expect(page.getByLabel('Logout')).toBeVisible();
+  await expect(page.getByLabel(/Profil login|Logged-in profile/)).toBeVisible();
 }
 
 export async function logout(page: Page) {
@@ -35,7 +35,7 @@ export async function loginWithCredentials(page: Page, email: string, pin: strin
   await page.getByLabel('PIN').fill(pin);
   await page.getByRole('button', { name: 'Masuk' }).click();
 
-  await expect(page.getByLabel('Logout')).toBeVisible();
+  await expect(page.getByLabel(/Profil login|Logged-in profile/)).toBeVisible();
 }
 
 export async function logoutAndLoginAgain(page: Page, pin = demoOwner.pin) {

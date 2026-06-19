@@ -71,6 +71,13 @@ function Cooperative() {
       desc: t('cooperative.index.reportsDesc'),
     },
     {
+      to: '/koperasi/laporan-target-harian',
+      label: t('nav.cooperative.dailyTarget'),
+      icon: FileTextOutlined,
+      color: 'text-slate-700',
+      desc: t('cooperative.index.dailyTargetDesc'),
+    },
+    {
       to: '/koperasi/laporan-storting-harian',
       label: t('nav.cooperative.dailyStorting'),
       icon: FileTextOutlined,

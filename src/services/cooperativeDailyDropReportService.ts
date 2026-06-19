@@ -2,10 +2,10 @@ import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import type {
   CooperativeLoan,
-  CooperativeLoanPayment,
   CooperativeMember,
   Employee,
 } from '@/types';
+import { getCooperativeLoanPaidOffDateByLoanId } from '@/utils/koperasi/loanReport';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
 
 export interface CooperativeDailyDropReportFilters {
@@ -141,31 +141,6 @@ const buildLoanSequenceByLoanId = (loans: CooperativeLoan[]) => {
   return sequenceByLoanId;
 };
 
-const getLoanPaidOffDateByLoanId = (
-  loans: CooperativeLoan[],
-  payments: CooperativeLoanPayment[],
-) => {
-  const paidOffLoanIds = new Set(
-    loans
-      .filter((loan) => loan.status === 'PAID_OFF')
-      .map((loan) => loan.id),
-  );
-  const paidOffDateByLoanId = new Map<string, string>();
-
-  payments
-    .filter((payment) => paidOffLoanIds.has(payment.loan_id))
-    .filter((payment) => payment.status === 'POSTED')
-    .filter((payment) => payment.payment_type !== 'REVERSAL')
-    .forEach((payment) => {
-      const currentDate = paidOffDateByLoanId.get(payment.loan_id);
-      if (!currentDate || compareDateAsc(currentDate, payment.payment_date) < 0) {
-        paidOffDateByLoanId.set(payment.loan_id, payment.payment_date);
-      }
-    });
-
-  return paidOffDateByLoanId;
-};
-
 export const summarizeCooperativeDailyDropReportRows = (
   rows: CooperativeDailyDropReportRow[],
 ): CooperativeDailyDropReportSummary => rows.reduce((summary, row) => ({
@@ -230,16 +205,21 @@ const createRowFromLoan = ({
 export const getCooperativeDailyDropReport = async (
   filters: CooperativeDailyDropReportFilters = {},
 ): Promise<CooperativeDailyDropReport> => {
-  const [loans, members, employees, payments] = await Promise.all([
+  const [loans, members, employees, payments, installments] = await Promise.all([
     db.cooperativeLoans.orderBy('loan_number').toArray(),
     db.cooperativeMembers.orderBy('member_number').toArray(),
     db.employees.orderBy('name').toArray(),
     db.cooperativeLoanPayments.orderBy('payment_date').reverse().toArray(),
+    db.cooperativeLoanInstallments.orderBy('loan_id').toArray(),
   ]);
   const memberById = new Map(members.map((member) => [member.id, member]));
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
   const loanSequenceByLoanId = buildLoanSequenceByLoanId(loans);
-  const paidOffDateByLoanId = getLoanPaidOffDateByLoanId(loans, payments);
+  const paidOffDateByLoanId = getCooperativeLoanPaidOffDateByLoanId(
+    loans,
+    payments,
+    installments,
+  );
   const dropRows = loans
     .filter(isDroppedLoan)
     .filter((loan) => loan.disbursed_at && isDateKeyInRange(loan.disbursed_at, filters.startDate, filters.endDate))
