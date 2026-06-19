@@ -83,21 +83,22 @@ export default function CooperativeLoanManagement() {
     const member = members.find((item) => item.id === loan.member_id);
     const schedules = employeeCollectionSchedules.filter((schedule) => (
       schedule.employee_id === member?.officer_id &&
-      schedule.area_id === member?.area_id &&
-      schedule.is_active
+      schedule.area_id === member?.area_id
     ));
     const disbursementDate = getNextCollectionDate(schedules, dayjs().tz(), true);
-    if (!member?.officer_id || !member.area_id || !disbursementDate) {
+    if (!member?.officer_id || !member.area_id) {
       message.error(t('cooperative.loans.collectionScheduleMissing'));
       return;
     }
-    const firstDueDate = getFirstScheduledDueDate({
-      disbursementDate,
-      frequency: loan.billing_frequency ?? 'MONTHLY',
-      weekday: schedules.find((schedule) => schedule.weekday === (
-        disbursementDate.day() === 0 ? 7 : disbursementDate.day()
-      ))?.weekday ?? schedules[0].weekday,
-    });
+    const firstDueDate = disbursementDate
+      ? getFirstScheduledDueDate({
+          disbursementDate,
+          frequency: loan.billing_frequency ?? 'MONTHLY',
+          weekday: schedules.find((schedule) => schedule.weekday === (
+            disbursementDate.day() === 0 ? 7 : disbursementDate.day()
+          ))?.weekday ?? schedules[0]?.weekday ?? 1,
+        })
+      : undefined;
     disbursementForm.setFieldsValue({
       disbursement_date: disbursementDate,
       first_due_date: firstDueDate,
@@ -209,6 +210,7 @@ export default function CooperativeLoanManagement() {
         loan_id: disbursingLoan.id,
         disbursement_date: values.disbursement_date?.toISOString(),
         first_due_date: values.first_due_date?.toISOString(),
+        historical_entry: values.disbursement_date?.isBefore(dayjs().tz(), 'day'),
         payment_method: values.payment_method,
         cash_account_id: values.cash_account_id,
         payment_channel: values.payment_channel,
@@ -290,8 +292,7 @@ export default function CooperativeLoanManagement() {
         fieldCashBalances={fieldCashBalances}
         collectionSchedules={employeeCollectionSchedules.filter((schedule) => (
           schedule.employee_id === members.find((member) => member.id === disbursingLoan?.member_id)?.officer_id &&
-          schedule.area_id === members.find((member) => member.id === disbursingLoan?.member_id)?.area_id &&
-          schedule.is_active
+          schedule.area_id === members.find((member) => member.id === disbursingLoan?.member_id)?.area_id
         ))}
         onCancel={closeDisbursementModal}
         onSubmit={handleDisburse}

@@ -169,6 +169,7 @@ export default function CooperativeLoanFormModal({
           <Form.Item
             name="application_date"
             label={t('cooperative.loans.form.applicationDate')}
+            extra={t('cooperative.loans.form.applicationDateHelp')}
             rules={[{ required: true, message: t('cooperative.loans.validation.applicationDateRequired') }]}
           >
             <DatePicker showTime className="w-full" data-testid="koperasi-loan-application-date-input" />

@@ -78,9 +78,7 @@ export const useCooperativeLoans = () => {
     [],
   );
   const employeeCollectionSchedules = useLiveQuery(
-    () => db.employeeCollectionSchedules
-      .filter((schedule) => schedule.is_active)
-      .toArray(),
+    () => db.employeeCollectionSchedules.toArray(),
     [],
     [],
   );

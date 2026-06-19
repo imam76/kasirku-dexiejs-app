@@ -63,10 +63,12 @@ import {
   roundCurrency,
 } from '@/utils/koperasi/loanSchedule';
 import {
-  findMatchingCollectionSchedule,
+  findCollectionScheduleByWeekday,
   getCollectionWeekdayLabel,
   getFirstScheduledDueDate,
+  getIsoWeekday,
   getScheduledInstallmentDate,
+  resolveCollectionScheduleForDisbursement,
 } from '@/utils/koperasi/collectionSchedule';
 
 export interface CreateCooperativeLoanApplicationInput {
@@ -100,6 +102,7 @@ export interface DisburseCooperativeLoanInput {
   loan_id: string;
   disbursement_date?: string;
   first_due_date?: string;
+  historical_entry?: boolean;
   payment_method?: PaymentMethod;
   cash_account_id?: string;
   payment_channel?: string;
@@ -177,21 +180,20 @@ const assertActiveMember = (member: CooperativeMember | undefined) => {
   return member;
 };
 
-const createCooperativeLoanNumber = async (date = new Date()) => {
+const createCooperativeLoanNumber = async (date: string | Date = new Date()) => {
   const prefix = 'KSP-PJ';
-  const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(23, 59, 59, 999);
+  const datePart = dayjs(date).tz().format('YYYYMMDD');
+  const numberPrefix = `${prefix}-${datePart}-`;
+  const existingNumbers = await db.cooperativeLoans
+    .where('loan_number')
+    .startsWith(numberPrefix)
+    .toArray();
+  const nextSequence = existingNumbers.reduce((highestSequence, loan) => {
+    const sequence = Number(loan.loan_number.slice(numberPrefix.length));
+    return Number.isInteger(sequence) ? Math.max(highestSequence, sequence) : highestSequence;
+  }, 0) + 1;
 
-  const count = await db.cooperativeLoans
-    .where('created_at')
-    .between(dayStart.toISOString(), dayEnd.toISOString(), true, true)
-    .and((loan) => loan.loan_number.startsWith(`${prefix}-${datePart}`))
-    .count();
-
-  return `${prefix}-${datePart}-${String(count + 1).padStart(4, '0')}`;
+  return `${numberPrefix}${String(nextSequence).padStart(4, '0')}`;
 };
 
 const createCooperativeLoanPaymentNumber = async (date = new Date()) => {
@@ -782,7 +784,7 @@ export const createCooperativeLoanApplication = async (
     const member = assertActiveMember(await db.cooperativeMembers.get(parsedInput.member_id));
     const loan: CooperativeLoan = withPendingCooperativeSync({
       id: crypto.randomUUID(),
-      loan_number: await createCooperativeLoanNumber(new Date(now)),
+      loan_number: await createCooperativeLoanNumber(applicationDate),
       member_id: member.id,
       member_number: member.member_number,
       member_name: member.name,
@@ -1009,17 +1011,27 @@ export const disburseCooperativeLoan = async (
       .where('[employee_id+area_id]')
       .equals([officer.id, member.area_id])
       .toArray() as EmployeeCollectionSchedule[];
-    const matchingSchedule = findMatchingCollectionSchedule(
-      collectionSchedules,
-      disbursementDate,
-    );
-    if (!matchingSchedule) {
+    const resolvedSchedule = resolveCollectionScheduleForDisbursement({
+      schedules: collectionSchedules,
+      value: disbursementDate,
+      allowHistoricalFallback: parsedInput.historical_entry,
+    });
+    if (!resolvedSchedule) {
       const weekday = getCollectionWeekdayLabel(
         ((dayjs(disbursementDate).tz().day() || 7)) as 1 | 2 | 3 | 4 | 5 | 6 | 7,
       );
       throw new Error(
         `Pencairan tidak dapat dilakukan pada hari ${weekday}. Pilih tanggal sesuai jadwal penagihan ${officer.name} untuk area ${member.area_name ?? member.area_code ?? member.area_id}.`,
       );
+    }
+    if (
+      parsedInput.historical_entry &&
+      !dayjs(disbursementDate).tz().isBefore(dayjs().tz(), 'day')
+    ) {
+      throw new Error('Mode data historis hanya dapat digunakan untuk tanggal pencairan sebelum hari ini.');
+    }
+    if (dayjs(disbursementDate).tz().isBefore(dayjs(loan.application_date).tz(), 'day')) {
+      throw new Error('Tanggal pencairan tidak boleh sebelum tanggal pengajuan.');
     }
 
     const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
@@ -1034,11 +1046,27 @@ export const disburseCooperativeLoan = async (
     if (fieldCashContext && disbursementAmount > 0) {
       await assertSufficientCashAccountBalance(cashAccount.id, disbursementAmount);
     }
-    const firstDueDate = getFirstScheduledDueDate({
-      disbursementDate: dayjs(disbursementDate).tz(),
-      frequency: resolveLoanBillingFrequency(loan),
-      weekday: matchingSchedule.weekday,
-    }).toISOString();
+    const firstDueDate = parsedInput.historical_entry && parsedInput.first_due_date
+      ? parsedInput.first_due_date
+      : getFirstScheduledDueDate({
+          disbursementDate: dayjs(disbursementDate).tz(),
+          frequency: resolveLoanBillingFrequency(loan),
+          weekday: resolvedSchedule.weekday,
+        }).toISOString();
+    if (!dayjs(firstDueDate).tz().isAfter(dayjs(disbursementDate).tz(), 'day')) {
+      throw new Error('Jatuh tempo pertama harus setelah tanggal pencairan.');
+    }
+    const collectionWeekday = parsedInput.historical_entry && parsedInput.first_due_date
+      ? getIsoWeekday(firstDueDate)
+      : resolvedSchedule.weekday;
+    const collectionSchedule = parsedInput.historical_entry
+      ? findCollectionScheduleByWeekday(collectionSchedules, firstDueDate)
+      : resolvedSchedule.schedule;
+    if (!collectionSchedule) {
+      throw new Error(
+        `Jatuh tempo pertama harus mengikuti salah satu hari jadwal penagihan ${officer.name}.`,
+      );
+    }
     await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
 
     const nextDisbursedLoan: CooperativeLoan = withPendingCooperativeSync({
@@ -1051,8 +1079,8 @@ export const disburseCooperativeLoan = async (
       area_id: member.area_id,
       area_name: member.area_name,
       area_code: member.area_code,
-      collection_schedule_id: matchingSchedule.id,
-      collection_weekday: matchingSchedule.weekday,
+      collection_schedule_id: collectionSchedule?.id,
+      collection_weekday: collectionWeekday,
       cash_account_id: cashAccount.id,
       cash_account_code: cashAccount.code,
       cash_account_name: cashAccount.name,

@@ -159,6 +159,7 @@ export const cooperativeLoanRejectionSchema = z.object({
 export const cooperativeLoanDisbursementSchema = z.object({
   disbursement_date: z.string().optional(),
   first_due_date: z.string().optional(),
+  historical_entry: z.boolean().optional().default(false),
   payment_method: z.enum(cooperativeLoanPaymentMethodValues).optional(),
   cash_account_id: z.string().optional(),
   payment_channel: z.string().optional(),

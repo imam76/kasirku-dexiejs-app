@@ -50,6 +50,49 @@ export const findMatchingCollectionSchedule = (
   ));
 };
 
+export const findCollectionScheduleByWeekday = (
+  schedules: EmployeeCollectionSchedule[],
+  value: string | dayjs.Dayjs,
+) => {
+  const weekday = getIsoWeekday(value);
+  return schedules.find((schedule) => schedule.weekday === weekday);
+};
+
+export const resolveCollectionScheduleForDisbursement = ({
+  schedules,
+  value,
+  allowHistoricalFallback = false,
+  today = dayjs().tz(),
+}: {
+  schedules: EmployeeCollectionSchedule[];
+  value: string | dayjs.Dayjs;
+  allowHistoricalFallback?: boolean;
+  today?: dayjs.Dayjs;
+}) => {
+  const exactSchedule = findMatchingCollectionSchedule(schedules, value);
+  if (exactSchedule) {
+    return {
+      schedule: exactSchedule,
+      weekday: exactSchedule.weekday,
+      is_historical_fallback: false,
+    };
+  }
+
+  const selectedDate = dayjs.isDayjs(value) ? value : dayjs(value).tz();
+  if (!allowHistoricalFallback || !selectedDate.isBefore(today, 'day')) {
+    return undefined;
+  }
+
+  const sameWeekdaySchedule = findCollectionScheduleByWeekday(schedules, selectedDate);
+  if (!sameWeekdaySchedule) return undefined;
+
+  return {
+    schedule: sameWeekdaySchedule,
+    weekday: sameWeekdaySchedule.weekday,
+    is_historical_fallback: true,
+  };
+};
+
 export const getNextCollectionDate = (
   schedules: EmployeeCollectionSchedule[],
   from: dayjs.Dayjs,
