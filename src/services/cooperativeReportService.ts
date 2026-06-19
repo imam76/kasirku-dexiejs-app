@@ -306,6 +306,7 @@ export type CooperativeReconciliationStatus = 'OK' | 'WARNING';
 export type CooperativeReconciliationKey =
   | 'SAVING_BALANCE'
   | 'LOAN_OUTSTANDING'
+  | 'PAYMENT_INSTALLMENT'
   | 'FINANCE_TRANSACTION'
   | 'JOURNAL_ENTRY';
 
@@ -1224,6 +1225,75 @@ const buildLoanOutstandingReconciliation = (
   return createReconciliationRow('LOAN_OUTSTANDING', mismatchCount, expectedAmount, actualAmount);
 };
 
+const buildPaymentInstallmentReconciliation = (
+  installments: CooperativeLoanInstallment[],
+  payments: CooperativeLoanPayment[],
+) => {
+  const activePayments = payments.filter((payment) => (
+    payment.status === 'POSTED' &&
+    (payment.payment_type ?? 'PAYMENT') === 'PAYMENT' &&
+    !payment.reversal_of_payment_id
+  ));
+  const expectedByInstallmentId = new Map<string, {
+    principal: number;
+    interest: number;
+    penalty: number;
+  }>();
+  let orphanPaymentCount = 0;
+
+  activePayments.forEach((payment) => {
+    if (!payment.installment_id) {
+      orphanPaymentCount += 1;
+      return;
+    }
+    const current = expectedByInstallmentId.get(payment.installment_id) ?? {
+      principal: 0,
+      interest: 0,
+      penalty: 0,
+    };
+    expectedByInstallmentId.set(payment.installment_id, {
+      principal: roundCurrency(current.principal + Number(payment.principal_amount || 0)),
+      interest: roundCurrency(current.interest + Number(payment.interest_amount || 0)),
+      penalty: roundCurrency(current.penalty + Number(payment.penalty_amount || 0)),
+    });
+  });
+
+  const installmentIds = new Set(installments.map((installment) => installment.id));
+  expectedByInstallmentId.forEach((_amounts, installmentId) => {
+    if (!installmentIds.has(installmentId)) orphanPaymentCount += 1;
+  });
+
+  let mismatchCount = orphanPaymentCount;
+  installments.forEach((installment) => {
+    const expected = expectedByInstallmentId.get(installment.id) ?? {
+      principal: 0,
+      interest: 0,
+      penalty: 0,
+    };
+    if (
+      isBalanceMismatch(Number(installment.paid_principal_amount || 0) - expected.principal) ||
+      isBalanceMismatch(Number(installment.paid_interest_amount || 0) - expected.interest) ||
+      isBalanceMismatch(Number(installment.paid_penalty_amount || 0) - expected.penalty)
+    ) {
+      mismatchCount += 1;
+    }
+  });
+
+  const expectedAmount = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const actualAmount = installments.reduce((sum, installment) => (
+    sum +
+    Number(installment.paid_principal_amount || 0) +
+    Number(installment.paid_interest_amount || 0) +
+    Number(installment.paid_penalty_amount || 0)
+  ), 0);
+  return createReconciliationRow(
+    'PAYMENT_INSTALLMENT',
+    mismatchCount,
+    expectedAmount,
+    actualAmount,
+  );
+};
+
 const buildFinanceTransactionReconciliation = (
   savingTransactions: CooperativeSavingTransaction[],
   loans: CooperativeLoan[],
@@ -1319,6 +1389,7 @@ const buildReconciliationSummary = (
   const rows = [
     buildSavingBalanceReconciliation(savingBalances, savingTransactions),
     buildLoanOutstandingReconciliation(loans, installments),
+    buildPaymentInstallmentReconciliation(installments, payments),
     buildFinanceTransactionReconciliation(savingTransactions, loans, payments, financeTransactions),
     buildJournalEntryReconciliation(savingTransactions, loans, payments, journalEntries),
   ];

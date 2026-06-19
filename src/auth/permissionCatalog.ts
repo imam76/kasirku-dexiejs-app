@@ -144,6 +144,14 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'COOPERATIVE_PAYMENT_APPROVE',
+    label: 'Approve Backdate/Reversal Pembayaran',
+    description: 'Menyetujui atau menolak request backdate dan reversal pembayaran koperasi.',
+    group: 'Koperasi',
+    moduleCodes: ['KOPERASI_ANGSURAN'],
+    isSensitive: true,
+  },
+  {
     code: 'COOPERATIVE_BILLING_ACCESS',
     label: 'Akses Penagihan Koperasi',
     group: 'Koperasi',

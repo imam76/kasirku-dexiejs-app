@@ -140,6 +140,11 @@ export default function CooperativeBillingManagement() {
         collector_id: values.collector_id,
         notes: values.notes,
       });
+      if (result.status === 'PENDING_APPROVAL') {
+        message.success(t('cooperative.installments.backdateApprovalRequested'));
+        closePaymentModal();
+        return;
+      }
       if (values.remember_cash_account) {
         rememberCashAccount({
           cash_account_id: result.payment.cash_account_id ?? values.cash_account_id,

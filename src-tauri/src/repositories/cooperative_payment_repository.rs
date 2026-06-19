@@ -1,8 +1,10 @@
 use crate::models::cooperative::{
     CooperativeLoanCollectionEventDto, CooperativeLoanInstallmentDto, CooperativeLoanPaymentDto,
-    CooperativePostingAccountDto, PostCooperativeLoanPaymentInput,
+    CooperativePaymentApprovalRequestDto, CooperativePaymentInstallmentReconciliationDto,
+    CooperativePostingAccountDto, DecideCooperativePaymentApprovalInput,
+    PostCooperativeLoanPaymentInput, PostCooperativeLoanPaymentOutcome,
     PostCooperativeLoanPaymentResult, RecordCooperativeLoanCollectionEventInput,
-    RecordCooperativeLoanCollectionEventResult,
+    RecordCooperativeLoanCollectionEventResult, RequestCooperativeLoanPaymentReversalInput,
 };
 use crate::repositories::{
     cooperative_repository, finance_transaction_repository, journal_entry_repository,
@@ -13,6 +15,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 const PAYMENT_PERMISSION: &str = "COOPERATIVE_PAYMENT_CREATE";
+const PAYMENT_APPROVAL_PERMISSION: &str = "COOPERATIVE_PAYMENT_APPROVE";
 const ALL_AREA_PERMISSION: &str = "COOPERATIVE_AREA_ALL";
 const FINANCE_PERMISSION: &str = "FINANCE_ACCESS";
 const RECEIVABLE_ACCOUNT_KEY: &str = "COOPERATIVE_LOAN_RECEIVABLE";
@@ -65,6 +68,38 @@ struct LockedLoan {
 struct PaymentPolicy {
     max_backdate_days: i32,
     max_future_minutes: i32,
+}
+
+macro_rules! cooperative_payment_approval_select {
+    () => {
+        r#"
+        SELECT
+          id,
+          action_type,
+          status,
+          payment_id,
+          installment_id,
+          idempotency_key,
+          amount,
+          payment_date::TEXT AS payment_date,
+          payment_method,
+          cash_account_id,
+          payment_channel,
+          collector_id,
+          maker_reason,
+          maker_user_id,
+          maker_user_name,
+          requested_at::TEXT AS requested_at,
+          checker_user_id,
+          checker_user_name,
+          checker_notes,
+          decided_at::TEXT AS decided_at,
+          result_payment_id,
+          created_at::TEXT AS created_at,
+          updated_at::TEXT AS updated_at
+        FROM cooperative_payment_approval_requests
+        "#
+    };
 }
 
 fn round_currency(value: f64) -> f64 {
@@ -138,6 +173,7 @@ async fn require_actor(
             (actor.legacy_role.as_str(), permission),
             ("OWNER", _)
                 | ("ADMIN", "COOPERATIVE_PAYMENT_CREATE")
+                | ("ADMIN", "COOPERATIVE_PAYMENT_APPROVE")
                 | ("ADMIN", "COOPERATIVE_AREA_ALL")
                 | ("ADMIN", "FINANCE_ACCESS")
         )
@@ -192,7 +228,10 @@ async fn actor_has_permission(
     Ok(actor.legacy_role == "ADMIN"
         && matches!(
             permission,
-            ALL_AREA_PERMISSION | FINANCE_PERMISSION | PAYMENT_PERMISSION
+            ALL_AREA_PERMISSION
+                | FINANCE_PERMISSION
+                | PAYMENT_PERMISSION
+                | PAYMENT_APPROVAL_PERMISSION
         ))
 }
 
@@ -292,6 +331,37 @@ async fn get_locked_loan(
     .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(|| CooperativeMutationError::NotFound("Pinjaman tidak ditemukan.".to_string()))
+}
+
+async fn get_locked_payment(
+    tx: &mut Transaction<'_, Postgres>,
+    payment_id: &str,
+) -> Result<CooperativeLoanPaymentDto, CooperativeMutationError> {
+    sqlx::query_as::<_, CooperativeLoanPaymentDto>(
+        r#"
+        SELECT
+          id, payment_number, payment_type, loan_id, loan_number, installment_id,
+          member_id, member_number, member_name, amount, principal_amount,
+          interest_amount, penalty_amount, payment_date, status, cash_account_id,
+          cash_account_code, cash_account_name, payment_method, payment_channel,
+          collector_id, collector_name, collector_position, received_by,
+          received_by_name, posted_at, finance_transaction_id, journal_entry_id,
+          reversal_of_payment_id, reversal_payment_id,
+          reversal_finance_transaction_id, reversal_journal_entry_id, reversed_at,
+          reversal_reason, notes, created_at::TEXT AS created_at,
+          updated_at::TEXT AS updated_at, created_by, created_by_name, updated_by,
+          updated_by_name, idempotency_key
+        FROM cooperative_loan_payments
+        WHERE id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(payment_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| {
+        CooperativeMutationError::NotFound("Pembayaran angsuran tidak ditemukan.".to_string())
+    })
 }
 
 async fn get_posting_account_by_id(
@@ -519,7 +589,15 @@ async fn load_payment_result(
 pub async fn post_loan_payment(
     pool: &PgPool,
     input: PostCooperativeLoanPaymentInput,
-) -> Result<PostCooperativeLoanPaymentResult, CooperativeMutationError> {
+) -> Result<PostCooperativeLoanPaymentOutcome, CooperativeMutationError> {
+    post_loan_payment_internal(pool, input, None).await
+}
+
+async fn post_loan_payment_internal(
+    pool: &PgPool,
+    input: PostCooperativeLoanPaymentInput,
+    approved_request_id: Option<&str>,
+) -> Result<PostCooperativeLoanPaymentOutcome, CooperativeMutationError> {
     if input.idempotency_key.trim().is_empty() {
         return Err(CooperativeMutationError::Invalid(
             "Idempotency key pembayaran wajib diisi.".to_string(),
@@ -536,15 +614,19 @@ pub async fn post_loan_payment(
         ));
     }
 
-    let payment_date = DateTime::parse_from_rfc3339(&input.payment_date)
-        .map_err(|_| {
-            CooperativeMutationError::Invalid("Tanggal pembayaran tidak valid.".to_string())
-        })?
-        .with_timezone(&Utc);
+    let parsed_payment_date = DateTime::parse_from_rfc3339(&input.payment_date).map_err(|_| {
+        CooperativeMutationError::Invalid("Tanggal pembayaran tidak valid.".to_string())
+    })?;
+    let payment_date = parsed_payment_date.with_timezone(&Utc);
     let now = Utc::now();
 
     let mut tx = pool.begin().await?;
-    let actor = require_actor(&mut tx, &input.session_token, PAYMENT_PERMISSION).await?;
+    let required_permission = if approved_request_id.is_some() {
+        PAYMENT_APPROVAL_PERMISSION
+    } else {
+        PAYMENT_PERMISSION
+    };
+    let actor = require_actor(&mut tx, &input.session_token, required_permission).await?;
     let can_access_all_areas = actor_has_permission(&mut tx, &actor, ALL_AREA_PERMISSION).await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1))")
         .bind(&input.idempotency_key)
@@ -602,7 +684,26 @@ pub async fn post_loan_payment(
         }
 
         tx.commit().await?;
-        return load_payment_result(pool, existing_payment).await;
+        return Ok(PostCooperativeLoanPaymentOutcome::Posted {
+            result: load_payment_result(pool, existing_payment).await?,
+        });
+    }
+
+    let existing_approval_request =
+        sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+            cooperative_payment_approval_select!(),
+            " WHERE action_type = 'BACKDATE' AND idempotency_key = $1"
+        ))
+        .bind(&input.idempotency_key)
+        .fetch_optional(&mut *tx)
+        .await?;
+    if let Some(existing_request) = &existing_approval_request {
+        if approved_request_id != Some(existing_request.id.as_str()) {
+            tx.commit().await?;
+            return Ok(PostCooperativeLoanPaymentOutcome::PendingApproval {
+                approval_request: existing_request.clone(),
+            });
+        }
     }
 
     let policy = sqlx::query_as::<_, PaymentPolicy>(
@@ -625,6 +726,8 @@ pub async fn post_loan_payment(
             "Tanggal pembayaran tidak boleh berada di masa depan.".to_string(),
         ));
     }
+    let is_backdated = parsed_payment_date.date_naive()
+        < now.with_timezone(parsed_payment_date.offset()).date_naive();
 
     let installment = get_locked_installment(&mut tx, &input.installment_id).await?;
     if installment.status == "PAID" {
@@ -690,6 +793,117 @@ pub async fn post_loan_payment(
         return Err(CooperativeMutationError::Invalid(
             "Alokasi pembayaran tidak valid.".to_string(),
         ));
+    }
+
+    if is_backdated {
+        let maker_reason = input.notes.as_deref().map(str::trim).unwrap_or("");
+        if maker_reason.len() < 3 {
+            return Err(CooperativeMutationError::Invalid(
+                "Alasan pembayaran backdate minimal 3 karakter dan wajib diisi pada catatan."
+                    .to_string(),
+            ));
+        }
+
+        if let Some(request_id) = approved_request_id {
+            let request = existing_approval_request.as_ref().ok_or_else(|| {
+                CooperativeMutationError::NotFound(
+                    "Request approval backdate tidak ditemukan.".to_string(),
+                )
+            })?;
+            let same_payment_date =
+                sqlx::query_scalar::<_, bool>("SELECT $1::TIMESTAMPTZ = $2::TIMESTAMPTZ")
+                    .bind(&request.payment_date)
+                    .bind(&input.payment_date)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            let request_matches = request.id == request_id
+                && request.status == "APPROVED"
+                && request.installment_id.as_deref() == Some(input.installment_id.as_str())
+                && request
+                    .amount
+                    .is_some_and(|amount| (amount - payment_amount).abs() <= AMOUNT_TOLERANCE)
+                && same_payment_date
+                && request.payment_method.as_deref() == Some(input.payment_method.as_str())
+                && request.cash_account_id.as_deref() == Some(input.cash_account_id.as_str())
+                && request.payment_channel == input.payment_channel
+                && request.collector_id == collector_id;
+            if !request_matches {
+                return Err(CooperativeMutationError::Conflict(
+                    "Payload pembayaran tidak sama dengan request backdate yang disetujui."
+                        .to_string(),
+                ));
+            }
+        } else {
+            let request_id = Uuid::new_v4().to_string();
+            let now_text = now.to_rfc3339();
+            sqlx::query(
+                r#"
+                INSERT INTO cooperative_payment_approval_requests (
+                  id, action_type, status, installment_id, idempotency_key,
+                  amount, payment_date, payment_method, cash_account_id,
+                  payment_channel, collector_id, maker_reason, maker_user_id,
+                  maker_user_name, requested_at, created_at, updated_at
+                )
+                VALUES (
+                  $1, 'BACKDATE', 'PENDING', $2, $3, $4, $5::TIMESTAMPTZ,
+                  $6, $7, $8, $9, $10, $11, $12, $13::TIMESTAMPTZ,
+                  $13::TIMESTAMPTZ, $13::TIMESTAMPTZ
+                )
+                "#,
+            )
+            .bind(&request_id)
+            .bind(&installment.id)
+            .bind(&input.idempotency_key)
+            .bind(payment_amount)
+            .bind(&input.payment_date)
+            .bind(&input.payment_method)
+            .bind(&input.cash_account_id)
+            .bind(&input.payment_channel)
+            .bind(&collector_id)
+            .bind(maker_reason)
+            .bind(&actor.user_id)
+            .bind(&actor.user_name)
+            .bind(&now_text)
+            .execute(&mut *tx)
+            .await?;
+
+            sqlx::query(
+                r#"
+                INSERT INTO activity_logs (
+                  id, user_id, user_name, role, action, entity, entity_id,
+                  description, created_at
+                )
+                VALUES (
+                  $1, $2, $3, $4, 'COOPERATIVE_PAYMENT_BACKDATE_REQUESTED',
+                  'cooperativePaymentApprovalRequests', $5, $6, $7::TIMESTAMPTZ
+                )
+                "#,
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(&actor.user_id)
+            .bind(&actor.user_name)
+            .bind(&actor.legacy_role)
+            .bind(&request_id)
+            .bind(format!(
+                "{} meminta approval pembayaran backdate pinjaman {}.",
+                actor.user_name, loan.loan_number
+            ))
+            .bind(&now_text)
+            .execute(&mut *tx)
+            .await?;
+
+            let request = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+                cooperative_payment_approval_select!(),
+                " WHERE id = $1"
+            ))
+            .bind(&request_id)
+            .fetch_one(&mut *tx)
+            .await?;
+            tx.commit().await?;
+            return Ok(PostCooperativeLoanPaymentOutcome::PendingApproval {
+                approval_request: request,
+            });
+        }
     }
 
     let paid_principal = round_currency(installment.paid_principal_amount + principal_amount);
@@ -990,6 +1204,22 @@ pub async fn post_loan_payment(
     .execute(&mut *tx)
     .await?;
 
+    if let Some(request_id) = approved_request_id {
+        sqlx::query(
+            r#"
+            UPDATE cooperative_payment_approval_requests
+            SET result_payment_id = $2, updated_at = $3::TIMESTAMPTZ
+            WHERE id = $1
+              AND status = 'APPROVED'
+            "#,
+        )
+        .bind(request_id)
+        .bind(&payment_id)
+        .bind(&now_text)
+        .execute(&mut *tx)
+        .await?;
+    }
+
     tx.commit().await?;
 
     let payment = cooperative_repository::get_cooperative_loan_payment(pool, payment_id)
@@ -999,7 +1229,731 @@ pub async fn post_loan_payment(
                 "Pembayaran yang baru diposting tidak ditemukan.".to_string(),
             )
         })?;
-    load_payment_result(pool, payment).await
+    Ok(PostCooperativeLoanPaymentOutcome::Posted {
+        result: load_payment_result(pool, payment).await?,
+    })
+}
+
+pub async fn list_payment_approval_requests(
+    pool: &PgPool,
+    session_token: String,
+) -> Result<Vec<CooperativePaymentApprovalRequestDto>, CooperativeMutationError> {
+    let mut tx = pool.begin().await?;
+    require_actor(&mut tx, &session_token, PAYMENT_APPROVAL_PERMISSION).await?;
+    let requests = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+        cooperative_payment_approval_select!(),
+        " ORDER BY requested_at DESC, created_at DESC"
+    ))
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(requests)
+}
+
+pub async fn request_payment_reversal(
+    pool: &PgPool,
+    input: RequestCooperativeLoanPaymentReversalInput,
+) -> Result<CooperativePaymentApprovalRequestDto, CooperativeMutationError> {
+    let reason = input.reason.trim();
+    if reason.len() < 3 {
+        return Err(CooperativeMutationError::Invalid(
+            "Alasan reversal minimal 3 karakter.".to_string(),
+        ));
+    }
+
+    let mut tx = pool.begin().await?;
+    let actor = require_actor(&mut tx, &input.session_token, PAYMENT_PERMISSION).await?;
+    let can_access_all_areas = actor_has_permission(&mut tx, &actor, ALL_AREA_PERMISSION).await?;
+    let payment = get_locked_payment(&mut tx, &input.payment_id).await?;
+    if payment.status != "POSTED"
+        || payment.payment_type.as_deref() == Some("REVERSAL")
+        || payment.reversal_of_payment_id.is_some()
+    {
+        return Err(CooperativeMutationError::Conflict(
+            "Hanya pembayaran aktif yang dapat dimintakan reversal.".to_string(),
+        ));
+    }
+    let loan = get_locked_loan(&mut tx, &payment.loan_id).await?;
+    assert_actor_scope(&actor, can_access_all_areas, &loan)?;
+
+    if let Some(existing) = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+        cooperative_payment_approval_select!(),
+        " WHERE action_type = 'REVERSAL' AND payment_id = $1 AND status = 'PENDING'"
+    ))
+    .bind(&payment.id)
+    .fetch_optional(&mut *tx)
+    .await?
+    {
+        tx.commit().await?;
+        return Ok(existing);
+    }
+
+    let request_id = Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+    sqlx::query(
+        r#"
+        INSERT INTO cooperative_payment_approval_requests (
+          id, action_type, status, payment_id, installment_id, maker_reason,
+          maker_user_id, maker_user_name, requested_at, created_at, updated_at
+        )
+        VALUES (
+          $1, 'REVERSAL', 'PENDING', $2, $3, $4, $5, $6,
+          $7::TIMESTAMPTZ, $7::TIMESTAMPTZ, $7::TIMESTAMPTZ
+        )
+        "#,
+    )
+    .bind(&request_id)
+    .bind(&payment.id)
+    .bind(&payment.installment_id)
+    .bind(reason)
+    .bind(&actor.user_id)
+    .bind(&actor.user_name)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO activity_logs (
+          id, user_id, user_name, role, action, entity, entity_id,
+          description, created_at
+        )
+        VALUES (
+          $1, $2, $3, $4, 'COOPERATIVE_LOAN_PAYMENT_REVERSAL_REQUESTED',
+          'cooperativePaymentApprovalRequests', $5, $6, $7::TIMESTAMPTZ
+        )
+        "#,
+    )
+    .bind(Uuid::new_v4().to_string())
+    .bind(&actor.user_id)
+    .bind(&actor.user_name)
+    .bind(&actor.legacy_role)
+    .bind(&request_id)
+    .bind(format!(
+        "{} meminta reversal pembayaran {}.",
+        actor.user_name, payment.payment_number
+    ))
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    let request = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+        cooperative_payment_approval_select!(),
+        " WHERE id = $1"
+    ))
+    .bind(&request_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(request)
+}
+
+pub async fn reject_payment_approval(
+    pool: &PgPool,
+    input: DecideCooperativePaymentApprovalInput,
+) -> Result<CooperativePaymentApprovalRequestDto, CooperativeMutationError> {
+    let notes = input.notes.as_deref().map(str::trim).unwrap_or("");
+    if notes.len() < 3 {
+        return Err(CooperativeMutationError::Invalid(
+            "Alasan penolakan minimal 3 karakter.".to_string(),
+        ));
+    }
+
+    let mut tx = pool.begin().await?;
+    let checker = require_actor(&mut tx, &input.session_token, PAYMENT_APPROVAL_PERMISSION).await?;
+    let request = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+        cooperative_payment_approval_select!(),
+        " WHERE id = $1 FOR UPDATE"
+    ))
+    .bind(&input.request_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| {
+        CooperativeMutationError::NotFound(
+            "Request approval pembayaran tidak ditemukan.".to_string(),
+        )
+    })?;
+    if request.status != "PENDING"
+        && !(request.status == "APPROVED" && request.result_payment_id.is_none())
+    {
+        return Err(CooperativeMutationError::Conflict(
+            "Request approval sudah diproses.".to_string(),
+        ));
+    }
+    if request.maker_user_id == checker.user_id {
+        return Err(CooperativeMutationError::Unauthorized(
+            "Maker tidak boleh menjadi checker untuk request yang sama.".to_string(),
+        ));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    sqlx::query(
+        r#"
+        UPDATE cooperative_payment_approval_requests
+        SET status = 'REJECTED', checker_user_id = $2, checker_user_name = $3,
+            checker_notes = $4, decided_at = $5::TIMESTAMPTZ,
+            updated_at = $5::TIMESTAMPTZ
+        WHERE id = $1
+        "#,
+    )
+    .bind(&request.id)
+    .bind(&checker.user_id)
+    .bind(&checker.user_name)
+    .bind(notes)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(
+        sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+            cooperative_payment_approval_select!(),
+            " WHERE id = $1"
+        ))
+        .bind(&request.id)
+        .fetch_one(pool)
+        .await?,
+    )
+}
+
+pub async fn approve_payment_request(
+    pool: &PgPool,
+    input: DecideCooperativePaymentApprovalInput,
+) -> Result<CooperativePaymentApprovalRequestDto, CooperativeMutationError> {
+    let mut tx = pool.begin().await?;
+    let checker = require_actor(&mut tx, &input.session_token, PAYMENT_APPROVAL_PERMISSION).await?;
+    let request = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+        cooperative_payment_approval_select!(),
+        " WHERE id = $1 FOR UPDATE"
+    ))
+    .bind(&input.request_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| {
+        CooperativeMutationError::NotFound(
+            "Request approval pembayaran tidak ditemukan.".to_string(),
+        )
+    })?;
+    if request.status == "APPROVED" && request.result_payment_id.is_some() {
+        tx.commit().await?;
+        return Ok(request);
+    }
+    if request.status != "PENDING" && request.status != "APPROVED" {
+        return Err(CooperativeMutationError::Conflict(
+            "Request approval sudah ditolak.".to_string(),
+        ));
+    }
+    if request.maker_user_id == checker.user_id {
+        return Err(CooperativeMutationError::Unauthorized(
+            "Maker tidak boleh menjadi checker untuk request yang sama.".to_string(),
+        ));
+    }
+
+    if request.status == "PENDING" {
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            r#"
+            UPDATE cooperative_payment_approval_requests
+            SET status = 'APPROVED', checker_user_id = $2, checker_user_name = $3,
+                checker_notes = $4, decided_at = $5::TIMESTAMPTZ,
+                updated_at = $5::TIMESTAMPTZ
+            WHERE id = $1
+            "#,
+        )
+        .bind(&request.id)
+        .bind(&checker.user_id)
+        .bind(&checker.user_name)
+        .bind(
+            input
+                .notes
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty()),
+        )
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+
+    if request.action_type == "BACKDATE" {
+        let payment_input = PostCooperativeLoanPaymentInput {
+            session_token: input.session_token.clone(),
+            idempotency_key: request.idempotency_key.clone().ok_or_else(|| {
+                CooperativeMutationError::Invalid(
+                    "Request backdate tidak memiliki idempotency key.".to_string(),
+                )
+            })?,
+            installment_id: request.installment_id.clone().ok_or_else(|| {
+                CooperativeMutationError::Invalid(
+                    "Request backdate tidak memiliki angsuran.".to_string(),
+                )
+            })?,
+            amount: request.amount.ok_or_else(|| {
+                CooperativeMutationError::Invalid(
+                    "Request backdate tidak memiliki nominal.".to_string(),
+                )
+            })?,
+            payment_date: request.payment_date.clone().ok_or_else(|| {
+                CooperativeMutationError::Invalid(
+                    "Request backdate tidak memiliki tanggal.".to_string(),
+                )
+            })?,
+            payment_method: request.payment_method.clone().ok_or_else(|| {
+                CooperativeMutationError::Invalid(
+                    "Request backdate tidak memiliki metode pembayaran.".to_string(),
+                )
+            })?,
+            cash_account_id: request.cash_account_id.clone().ok_or_else(|| {
+                CooperativeMutationError::Invalid(
+                    "Request backdate tidak memiliki akun kas/bank.".to_string(),
+                )
+            })?,
+            payment_channel: request.payment_channel.clone(),
+            collector_id: request.collector_id.clone(),
+            notes: Some(request.maker_reason.clone()),
+        };
+        post_loan_payment_internal(pool, payment_input, Some(&request.id)).await?;
+    } else if request.action_type == "REVERSAL" {
+        execute_approved_payment_reversal(pool, &input.session_token, &request.id).await?;
+    } else {
+        return Err(CooperativeMutationError::Invalid(
+            "Tipe request approval tidak valid.".to_string(),
+        ));
+    }
+
+    Ok(
+        sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+            cooperative_payment_approval_select!(),
+            " WHERE id = $1"
+        ))
+        .bind(&request.id)
+        .fetch_one(pool)
+        .await?,
+    )
+}
+
+async fn execute_approved_payment_reversal(
+    pool: &PgPool,
+    session_token: &str,
+    request_id: &str,
+) -> Result<(), CooperativeMutationError> {
+    let mut tx = pool.begin().await?;
+    let checker = require_actor(&mut tx, session_token, PAYMENT_APPROVAL_PERMISSION).await?;
+    let request = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+        cooperative_payment_approval_select!(),
+        " WHERE id = $1 FOR UPDATE"
+    ))
+    .bind(request_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if request.status != "APPROVED" || request.action_type != "REVERSAL" {
+        return Err(CooperativeMutationError::Conflict(
+            "Request reversal belum disetujui.".to_string(),
+        ));
+    }
+    if request.result_payment_id.is_some() {
+        tx.commit().await?;
+        return Ok(());
+    }
+
+    let payment_id = request.payment_id.as_deref().ok_or_else(|| {
+        CooperativeMutationError::Invalid("Request reversal tidak memiliki pembayaran.".to_string())
+    })?;
+    let payment = get_locked_payment(&mut tx, payment_id).await?;
+    if payment.status != "POSTED"
+        || payment.payment_type.as_deref() == Some("REVERSAL")
+        || payment.reversal_of_payment_id.is_some()
+    {
+        return Err(CooperativeMutationError::Conflict(
+            "Pembayaran sudah tidak dapat direversal.".to_string(),
+        ));
+    }
+    let installment_id = payment.installment_id.as_deref().ok_or_else(|| {
+        CooperativeMutationError::Invalid("Pembayaran tidak memiliki angsuran.".to_string())
+    })?;
+    let installment = get_locked_installment(&mut tx, installment_id).await?;
+    let loan = get_locked_loan(&mut tx, &payment.loan_id).await?;
+
+    let paid_principal =
+        round_currency(installment.paid_principal_amount - payment.principal_amount);
+    let paid_interest = round_currency(installment.paid_interest_amount - payment.interest_amount);
+    let paid_penalty = round_currency(installment.paid_penalty_amount - payment.penalty_amount);
+    if paid_principal < -AMOUNT_TOLERANCE
+        || paid_interest < -AMOUNT_TOLERANCE
+        || paid_penalty < -AMOUNT_TOLERANCE
+    {
+        return Err(CooperativeMutationError::Conflict(
+            "Reversal membuat paid amount angsuran negatif.".to_string(),
+        ));
+    }
+    let paid_total = paid_principal.max(0.0) + paid_interest.max(0.0) + paid_penalty.max(0.0);
+    let installment_status = if paid_total <= AMOUNT_TOLERANCE {
+        "UNPAID"
+    } else {
+        "PARTIAL"
+    };
+    let now = Utc::now();
+    let now_text = now.to_rfc3339();
+    sqlx::query(
+        r#"
+        UPDATE cooperative_loan_installments
+        SET paid_principal_amount = $2, paid_interest_amount = $3,
+            paid_penalty_amount = $4, status = $5, paid_at = NULL,
+            updated_at = $6::TIMESTAMPTZ
+        WHERE id = $1
+        "#,
+    )
+    .bind(&installment.id)
+    .bind(paid_principal.max(0.0))
+    .bind(paid_interest.max(0.0))
+    .bind(paid_penalty.max(0.0))
+    .bind(installment_status)
+    .bind(&now_text)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE cooperative_loans
+        SET outstanding_principal_amount = LEAST(principal_amount, outstanding_principal_amount + $2),
+            outstanding_interest_amount = LEAST(total_interest_amount, outstanding_interest_amount + $3),
+            outstanding_penalty_amount = GREATEST(0, outstanding_penalty_amount + $4),
+            status = 'DISBURSED', updated_at = $5::TIMESTAMPTZ,
+            updated_by = $6, updated_by_name = $7
+        WHERE id = $1
+        "#,
+    )
+    .bind(&loan.id)
+    .bind(payment.principal_amount)
+    .bind(payment.interest_amount)
+    .bind(payment.penalty_amount)
+    .bind(&now_text)
+    .bind(&checker.user_id)
+    .bind(&checker.user_name)
+    .execute(&mut *tx)
+    .await?;
+
+    let reversal_payment_id = Uuid::new_v4().to_string();
+    let reversal_finance_id = Uuid::new_v4().to_string();
+    let reversal_journal_id = Uuid::new_v4().to_string();
+    let reversal_payment_number = format!(
+        "KSP-ANG-{}-{}",
+        now.format("%Y%m%d"),
+        &reversal_payment_id[..8]
+    );
+    let reason = request.maker_reason.clone();
+    sqlx::query(
+        r#"
+        INSERT INTO cooperative_loan_payments (
+          id, payment_number, payment_type, loan_id, loan_number, installment_id,
+          member_id, member_number, member_name, amount, principal_amount,
+          interest_amount, penalty_amount, payment_date, status, cash_account_id,
+          cash_account_code, cash_account_name, payment_method, payment_channel,
+          collector_id, collector_name, collector_position, received_by,
+          received_by_name, posted_at, finance_transaction_id, journal_entry_id,
+          reversal_of_payment_id, notes, created_at, updated_at, created_by,
+          created_by_name, updated_by, updated_by_name
+        )
+        VALUES (
+          $1, $2, 'REVERSAL', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+          $13::TIMESTAMPTZ, 'POSTED', $14, $15, $16, $17, $18, $19, $20,
+          $21, $22, $23, $13::TIMESTAMPTZ, $24, $25, $26, $27,
+          $13::TIMESTAMPTZ, $13::TIMESTAMPTZ, $22, $23, $22, $23
+        )
+        "#,
+    )
+    .bind(&reversal_payment_id)
+    .bind(&reversal_payment_number)
+    .bind(&payment.loan_id)
+    .bind(&payment.loan_number)
+    .bind(&payment.installment_id)
+    .bind(&payment.member_id)
+    .bind(&payment.member_number)
+    .bind(&payment.member_name)
+    .bind(payment.amount)
+    .bind(payment.principal_amount)
+    .bind(payment.interest_amount)
+    .bind(payment.penalty_amount)
+    .bind(&now_text)
+    .bind(&payment.cash_account_id)
+    .bind(&payment.cash_account_code)
+    .bind(&payment.cash_account_name)
+    .bind(&payment.payment_method)
+    .bind(&payment.payment_channel)
+    .bind(&payment.collector_id)
+    .bind(&payment.collector_name)
+    .bind(&payment.collector_position)
+    .bind(&checker.user_id)
+    .bind(&checker.user_name)
+    .bind(&reversal_finance_id)
+    .bind(&reversal_journal_id)
+    .bind(&payment.id)
+    .bind(&reason)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE cooperative_loan_payments
+        SET status = 'REVERSED', reversal_payment_id = $2,
+            reversal_finance_transaction_id = $3, reversal_journal_entry_id = $4,
+            reversed_at = $5::TIMESTAMPTZ, reversal_reason = $6,
+            updated_at = $5::TIMESTAMPTZ, updated_by = $7, updated_by_name = $8
+        WHERE id = $1
+        "#,
+    )
+    .bind(&payment.id)
+    .bind(&reversal_payment_id)
+    .bind(&reversal_finance_id)
+    .bind(&reversal_journal_id)
+    .bind(&now_text)
+    .bind(&reason)
+    .bind(&checker.user_id)
+    .bind(&checker.user_name)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO finance_transactions (
+          id, type, category, amount, description, reference_id, account_id,
+          account_code, account_name, account_type, payment_method,
+          payment_channel, cash_account_id, cash_account_code, cash_account_name,
+          version, created_by, created_by_name, updated_by, updated_by_name,
+          created_at, updated_at
+        )
+        VALUES (
+          $1, 'EXPENSE', 'KSP_PEMBAYARAN_ANGSURAN', $2, $3, $4, $5, $6, $7,
+          'ASSET', $8, $9, $5, $6, $7, 1, $10, $11, $10, $11,
+          $12::TIMESTAMPTZ, $12::TIMESTAMPTZ
+        )
+        "#,
+    )
+    .bind(&reversal_finance_id)
+    .bind(payment.amount)
+    .bind(format!(
+        "Reversal pembayaran angsuran {}. {}",
+        payment.payment_number, reason
+    ))
+    .bind(&reversal_payment_id)
+    .bind(&payment.cash_account_id)
+    .bind(&payment.cash_account_code)
+    .bind(&payment.cash_account_name)
+    .bind(&payment.payment_method)
+    .bind(&payment.payment_channel)
+    .bind(&checker.user_id)
+    .bind(&checker.user_name)
+    .bind(&now_text)
+    .execute(&mut *tx)
+    .await?;
+
+    let original_journal_id = payment.journal_entry_id.as_deref().ok_or_else(|| {
+        CooperativeMutationError::Conflict(
+            "Pembayaran tidak memiliki jurnal untuk direversal.".to_string(),
+        )
+    })?;
+    let original_lines =
+        sqlx::query_as::<_, (String, String, String, String, f64, f64, Option<String>)>(
+            r#"
+        SELECT account_id, account_code, account_name, account_type,
+               debit, credit, description
+        FROM journal_entry_lines
+        WHERE journal_entry_id = $1
+        ORDER BY id
+        "#,
+        )
+        .bind(original_journal_id)
+        .fetch_all(&mut *tx)
+        .await?;
+    if original_lines.is_empty() {
+        return Err(CooperativeMutationError::Conflict(
+            "Baris jurnal pembayaran tidak ditemukan.".to_string(),
+        ));
+    }
+    let reversal_journal_number =
+        format!("JRN-{}-{}", now.format("%Y%m%d"), &reversal_journal_id[..8]);
+    sqlx::query(
+        r#"
+        INSERT INTO journal_entries (
+          id, entry_number, entry_date, status, source_type, source_id,
+          source_number, source_event, description, total_debit, total_credit,
+          posted_at, reversed_entry_id, version, created_by, created_by_name,
+          updated_by, updated_by_name, created_at, updated_at
+        )
+        VALUES (
+          $1, $2, $3::TIMESTAMPTZ, 'POSTED', 'COOPERATIVE_LOAN', $4, $5,
+          'COOPERATIVE_LOAN_PAYMENT_REVERSED', $6, $7, $7, $3::TIMESTAMPTZ,
+          $8, 1, $9, $10, $9, $10, $3::TIMESTAMPTZ, $3::TIMESTAMPTZ
+        )
+        "#,
+    )
+    .bind(&reversal_journal_id)
+    .bind(&reversal_journal_number)
+    .bind(&now_text)
+    .bind(&reversal_payment_id)
+    .bind(&reversal_payment_number)
+    .bind(format!(
+        "Reversal pembayaran {}: {}",
+        payment.payment_number, reason
+    ))
+    .bind(payment.amount)
+    .bind(original_journal_id)
+    .bind(&checker.user_id)
+    .bind(&checker.user_name)
+    .execute(&mut *tx)
+    .await?;
+    for (account_id, account_code, account_name, account_type, debit, credit, description) in
+        original_lines
+    {
+        sqlx::query(
+            r#"
+            INSERT INTO journal_entry_lines (
+              id, journal_entry_id, account_id, account_code, account_name,
+              account_type, debit, credit, description, created_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::TIMESTAMPTZ)
+            "#,
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&reversal_journal_id)
+        .bind(account_id)
+        .bind(account_code)
+        .bind(account_name)
+        .bind(account_type)
+        .bind(credit)
+        .bind(debit)
+        .bind(description)
+        .bind(&now_text)
+        .execute(&mut *tx)
+        .await?;
+    }
+    sqlx::query(
+        r#"
+        UPDATE journal_entries
+        SET status = 'REVERSED', reversed_entry_id = $2,
+            updated_at = $3::TIMESTAMPTZ, updated_by = $4, updated_by_name = $5,
+            version = version + 1
+        WHERE id = $1
+          AND status = 'POSTED'
+        "#,
+    )
+    .bind(original_journal_id)
+    .bind(&reversal_journal_id)
+    .bind(&now_text)
+    .bind(&checker.user_id)
+    .bind(&checker.user_name)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE cooperative_payment_approval_requests
+        SET result_payment_id = $2, updated_at = $3::TIMESTAMPTZ
+        WHERE id = $1
+        "#,
+    )
+    .bind(&request.id)
+    .bind(&reversal_payment_id)
+    .bind(&now_text)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO activity_logs (
+          id, user_id, user_name, role, action, entity, entity_id,
+          description, created_at
+        )
+        VALUES (
+          $1, $2, $3, $4, 'COOPERATIVE_LOAN_PAYMENT_REVERSED',
+          'cooperativeLoanPayments', $5, $6, $7::TIMESTAMPTZ
+        )
+        "#,
+    )
+    .bind(Uuid::new_v4().to_string())
+    .bind(&checker.user_id)
+    .bind(&checker.user_name)
+    .bind(&checker.legacy_role)
+    .bind(&payment.id)
+    .bind(format!(
+        "{} menyetujui reversal pembayaran {}.",
+        checker.user_name, payment.payment_number
+    ))
+    .bind(&now_text)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn list_payment_installment_reconciliation(
+    pool: &PgPool,
+    session_token: String,
+) -> Result<Vec<CooperativePaymentInstallmentReconciliationDto>, CooperativeMutationError> {
+    let mut tx = pool.begin().await?;
+    require_actor(&mut tx, &session_token, PAYMENT_APPROVAL_PERMISSION).await?;
+    let rows = sqlx::query_as::<_, CooperativePaymentInstallmentReconciliationDto>(
+        r#"
+        WITH payment_totals AS (
+          SELECT
+            installment_id,
+            SUM(principal_amount) AS principal_amount,
+            SUM(interest_amount) AS interest_amount,
+            SUM(penalty_amount) AS penalty_amount
+          FROM cooperative_loan_payments
+          WHERE COALESCE(payment_type, 'PAYMENT') = 'PAYMENT'
+            AND status = 'POSTED'
+          GROUP BY installment_id
+        )
+        SELECT
+          installment.id AS installment_id,
+          installment.loan_id,
+          installment.loan_number,
+          installment.installment_number,
+          COALESCE(payment.principal_amount, 0) AS expected_principal_amount,
+          installment.paid_principal_amount AS actual_principal_amount,
+          COALESCE(payment.interest_amount, 0) AS expected_interest_amount,
+          installment.paid_interest_amount AS actual_interest_amount,
+          COALESCE(payment.penalty_amount, 0) AS expected_penalty_amount,
+          installment.paid_penalty_amount AS actual_penalty_amount,
+          (
+            installment.paid_principal_amount + installment.paid_interest_amount +
+            installment.paid_penalty_amount - COALESCE(payment.principal_amount, 0) -
+            COALESCE(payment.interest_amount, 0) - COALESCE(payment.penalty_amount, 0)
+          ) AS difference_amount
+        FROM cooperative_loan_installments AS installment
+        LEFT JOIN payment_totals AS payment
+          ON payment.installment_id = installment.id
+        WHERE
+          ABS(installment.paid_principal_amount - COALESCE(payment.principal_amount, 0)) > 0.01 OR
+          ABS(installment.paid_interest_amount - COALESCE(payment.interest_amount, 0)) > 0.01 OR
+          ABS(installment.paid_penalty_amount - COALESCE(payment.penalty_amount, 0)) > 0.01
+        UNION ALL
+        SELECT
+          COALESCE(payment.installment_id, 'ORPHAN:' || payment.id) AS installment_id,
+          payment.loan_id,
+          payment.loan_number,
+          0 AS installment_number,
+          payment.principal_amount AS expected_principal_amount,
+          0 AS actual_principal_amount,
+          payment.interest_amount AS expected_interest_amount,
+          0 AS actual_interest_amount,
+          payment.penalty_amount AS expected_penalty_amount,
+          0 AS actual_penalty_amount,
+          -payment.amount AS difference_amount
+        FROM cooperative_loan_payments AS payment
+        LEFT JOIN cooperative_loan_installments AS installment
+          ON installment.id = payment.installment_id
+        WHERE COALESCE(payment.payment_type, 'PAYMENT') = 'PAYMENT'
+          AND payment.status = 'POSTED'
+          AND installment.id IS NULL
+        ORDER BY loan_number, installment_number
+        "#,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(rows)
 }
 
 async fn insert_journal_line(

@@ -3,10 +3,12 @@ use crate::{
     models::cooperative::{
         CooperativeLoanCollectionEventDto, CooperativeLoanDto, CooperativeLoanInstallmentDto,
         CooperativeLoanPaymentDto, CooperativeMemberDto, CooperativeMemberSavingBalanceDto,
+        CooperativePaymentApprovalRequestDto, CooperativePaymentInstallmentReconciliationDto,
         CooperativePostingAccountDto, CooperativeSavingTransactionDto,
-        PostCooperativeLoanPaymentInput, PostCooperativeLoanPaymentResult,
-        RecordCooperativeLoanCollectionEventInput, RecordCooperativeLoanCollectionEventResult,
-        RegisterCooperativePostingAccountsInput,
+        DecideCooperativePaymentApprovalInput, PostCooperativeLoanPaymentInput,
+        PostCooperativeLoanPaymentOutcome, RecordCooperativeLoanCollectionEventInput,
+        RecordCooperativeLoanCollectionEventResult, RegisterCooperativePostingAccountsInput,
+        RequestCooperativeLoanPaymentReversalInput,
     },
     repositories::{cooperative_payment_repository, cooperative_repository},
 };
@@ -51,9 +53,64 @@ pub async fn postgres_register_cooperative_posting_accounts(
 pub async fn postgres_post_cooperative_loan_payment(
     state: State<'_, PostgresState>,
     input: PostCooperativeLoanPaymentInput,
-) -> PostgresCommandResult<PostCooperativeLoanPaymentResult> {
+) -> PostgresCommandResult<PostCooperativeLoanPaymentOutcome> {
     let pool = state.pool()?;
     cooperative_payment_repository::post_loan_payment(pool, input)
+        .await
+        .map_err(cooperative_mutation_error)
+}
+
+#[tauri::command]
+pub async fn postgres_list_cooperative_payment_approval_requests(
+    state: State<'_, PostgresState>,
+    session_token: String,
+) -> PostgresCommandResult<Vec<CooperativePaymentApprovalRequestDto>> {
+    let pool = state.pool()?;
+    cooperative_payment_repository::list_payment_approval_requests(pool, session_token)
+        .await
+        .map_err(cooperative_mutation_error)
+}
+
+#[tauri::command]
+pub async fn postgres_request_cooperative_payment_reversal(
+    state: State<'_, PostgresState>,
+    input: RequestCooperativeLoanPaymentReversalInput,
+) -> PostgresCommandResult<CooperativePaymentApprovalRequestDto> {
+    let pool = state.pool()?;
+    cooperative_payment_repository::request_payment_reversal(pool, input)
+        .await
+        .map_err(cooperative_mutation_error)
+}
+
+#[tauri::command]
+pub async fn postgres_approve_cooperative_payment_request(
+    state: State<'_, PostgresState>,
+    input: DecideCooperativePaymentApprovalInput,
+) -> PostgresCommandResult<CooperativePaymentApprovalRequestDto> {
+    let pool = state.pool()?;
+    cooperative_payment_repository::approve_payment_request(pool, input)
+        .await
+        .map_err(cooperative_mutation_error)
+}
+
+#[tauri::command]
+pub async fn postgres_reject_cooperative_payment_request(
+    state: State<'_, PostgresState>,
+    input: DecideCooperativePaymentApprovalInput,
+) -> PostgresCommandResult<CooperativePaymentApprovalRequestDto> {
+    let pool = state.pool()?;
+    cooperative_payment_repository::reject_payment_approval(pool, input)
+        .await
+        .map_err(cooperative_mutation_error)
+}
+
+#[tauri::command]
+pub async fn postgres_list_cooperative_payment_installment_reconciliation(
+    state: State<'_, PostgresState>,
+    session_token: String,
+) -> PostgresCommandResult<Vec<CooperativePaymentInstallmentReconciliationDto>> {
+    let pool = state.pool()?;
+    cooperative_payment_repository::list_payment_installment_reconciliation(pool, session_token)
         .await
         .map_err(cooperative_mutation_error)
 }

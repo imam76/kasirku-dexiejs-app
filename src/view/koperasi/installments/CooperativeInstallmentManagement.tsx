@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { App, Button, Card, Form, Input, Select, Tabs } from 'antd';
+import { App, Button, Card, Form, Input, Select, Space, Table, Tabs, Tag, Typography } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { CreditCard, Plus } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
@@ -10,7 +11,11 @@ import {
   type CooperativeLoanPaymentStatusFilter,
 } from '@/hooks/useCooperativeInstallments';
 import { useI18n } from '@/hooks/useI18n';
-import type { CooperativeLoanInstallment, CooperativeLoanPayment } from '@/types';
+import type {
+  CooperativeLoanInstallment,
+  CooperativeLoanPayment,
+  CooperativePaymentApprovalRequest,
+} from '@/types';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 import CooperativeInstallmentTable from './CooperativeInstallmentTable';
 import CooperativeLoanPaymentDetailDrawer from './CooperativeLoanPaymentDetailDrawer';
@@ -45,12 +50,128 @@ export default function CooperativeInstallmentManagement() {
     setInstallmentStatusFilter,
     paymentStatusFilter,
     setPaymentStatusFilter,
+    approvalRequests,
+    canApprovePayment,
     recordPayment,
     reversePayment,
+    approvePaymentRequest,
+    rejectPaymentRequest,
     getFieldCashPaymentStatusForInstallment,
     getDefaultCollectorIdForInstallment,
     isMutating,
   } = useCooperativeInstallments();
+  const approvalColumns: ColumnsType<CooperativePaymentApprovalRequest> = [
+    {
+      title: t('cooperative.installments.approval.requestedAt'),
+      dataIndex: 'requested_at',
+      key: 'requested_at',
+      render: (value: string) => dayjs(value).format('DD/MM/YYYY HH:mm'),
+    },
+    {
+      title: t('cooperative.installments.approval.action'),
+      dataIndex: 'action_type',
+      key: 'action_type',
+      render: (value: CooperativePaymentApprovalRequest['action_type']) => (
+        <Tag color={value === 'REVERSAL' ? 'orange' : 'blue'}>
+          {t(value === 'REVERSAL'
+            ? 'cooperative.installments.approval.reversal'
+            : 'cooperative.installments.approval.backdate')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('cooperative.installments.approval.reference'),
+      key: 'reference',
+      render: (_value, request) => request.payment_id ?? request.installment_id ?? '-',
+    },
+    {
+      title: t('cooperative.installments.approval.maker'),
+      dataIndex: 'maker_user_name',
+      key: 'maker_user_name',
+    },
+    {
+      title: t('cooperative.installments.approval.reason'),
+      dataIndex: 'maker_reason',
+      key: 'maker_reason',
+      render: (value: string) => <Typography.Text>{value}</Typography.Text>,
+    },
+    {
+      title: t('cooperative.installments.approval.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (value: CooperativePaymentApprovalRequest['status']) => (
+        <Tag color={value === 'APPROVED' ? 'green' : value === 'REJECTED' ? 'red' : 'gold'}>
+          {t(value === 'APPROVED'
+            ? 'cooperative.installments.approval.status.approved'
+            : value === 'REJECTED'
+              ? 'cooperative.installments.approval.status.rejected'
+              : 'cooperative.installments.approval.status.pending')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('cooperative.installments.table.action'),
+      key: 'action',
+      render: (_value, request) => request.status === 'PENDING' || (
+        request.status === 'APPROVED' && !request.result_payment_id
+      ) ? (
+        <Space>
+          <Button
+            type="primary"
+            size="small"
+            onClick={() => {
+              modal.confirm({
+                title: t('cooperative.installments.approval.approveTitle'),
+                content: t('cooperative.installments.approval.approveContent'),
+                okText: t('cooperative.installments.approval.approve'),
+                cancelText: t('common.cancel'),
+                onOk: async () => {
+                  await approvePaymentRequest(request.id);
+                  message.success(t('cooperative.installments.approval.approveSuccess'));
+                },
+              });
+            }}
+          >
+            {t('cooperative.installments.approval.approve')}
+          </Button>
+          {(request.status === 'PENDING' || !request.result_payment_id) && (
+            <Button
+              danger
+              size="small"
+              onClick={() => {
+                let rejectionReason = '';
+                modal.confirm({
+                  title: t('cooperative.installments.approval.rejectTitle'),
+                  content: (
+                    <Input.TextArea
+                      rows={3}
+                      placeholder={t('cooperative.installments.approval.rejectReason')}
+                      onChange={(event) => {
+                        rejectionReason = event.target.value;
+                      }}
+                    />
+                  ),
+                  okText: t('cooperative.installments.approval.reject'),
+                  okButtonProps: { danger: true },
+                  cancelText: t('common.cancel'),
+                  onOk: async () => {
+                    const reason = rejectionReason.trim();
+                    if (reason.length < 3) {
+                      throw new Error(t('cooperative.installments.approval.rejectReasonRequired'));
+                    }
+                    await rejectPaymentRequest(request.id, reason);
+                    message.success(t('cooperative.installments.approval.rejectSuccess'));
+                  },
+                });
+              }}
+            >
+              {t('cooperative.installments.approval.reject')}
+            </Button>
+          )}
+        </Space>
+      ) : '-',
+    },
+  ];
 
   const getPaymentDefaultFields = (installment?: CooperativeLoanInstallment) => {
     const fieldCashStatus = installment ? getFieldCashPaymentStatusForInstallment(installment) : undefined;
@@ -114,6 +235,11 @@ export default function CooperativeInstallmentManagement() {
         collector_id: values.collector_id,
         notes: values.notes,
       });
+      if (result.status === 'PENDING_APPROVAL') {
+        message.success(t('cooperative.installments.backdateApprovalRequested'));
+        closePaymentModal();
+        return;
+      }
       if (values.remember_cash_account) {
         rememberCashAccount({
           cash_account_id: result.payment.cash_account_id ?? values.cash_account_id,
@@ -162,7 +288,7 @@ export default function CooperativeInstallmentManagement() {
             payment_id: payment.id,
             reason,
           });
-          message.success(t('cooperative.installments.reverseSuccess'));
+          message.success(t('cooperative.installments.reverseApprovalRequested'));
         } catch (error) {
           message.error(error instanceof Error ? error.message : t('cooperative.installments.reverseFailed'));
           throw error;
@@ -249,6 +375,21 @@ export default function CooperativeInstallmentManagement() {
               />
             ),
           },
+          ...(canApprovePayment ? [{
+            key: 'approvals',
+            label: `${t('cooperative.installments.approval.tab')} (${approvalRequests.filter((request) => request.status === 'PENDING').length})`,
+            children: (
+              <Table
+                rowKey="id"
+                dataSource={approvalRequests}
+                columns={approvalColumns}
+                loading={isMutating}
+                pagination={{ pageSize: 8 }}
+                scroll={{ x: 1200 }}
+                locale={{ emptyText: t('cooperative.installments.approval.empty') }}
+              />
+            ),
+          }] : []),
         ]}
       />
 

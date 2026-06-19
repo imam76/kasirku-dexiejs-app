@@ -26,12 +26,19 @@ import {
   reverseCooperativeSavingTransactionJournal,
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
-import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
-import { mergeRemoteJournalEntryBundlesIntoDexie } from '@/services/journalEntryReadService';
+import {
+  mergeRemoteFinanceTransactionsIntoDexie,
+  refreshFinanceTransactionsFromPostgres,
+} from '@/services/financeTransactionReadService';
+import {
+  mergeRemoteJournalEntryBundlesIntoDexie,
+  refreshJournalEntriesFromPostgres,
+} from '@/services/journalEntryReadService';
 import {
   mergeRemoteCooperativeLoanInstallmentsIntoDexie,
   mergeRemoteCooperativeLoanPaymentsIntoDexie,
   mergeRemoteCooperativeLoansIntoDexie,
+  refreshCooperativeDataFromPostgres,
 } from '@/services/cooperativeReadService';
 import {
   mapRemoteCooperativeCollectionEventToLocal,
@@ -65,6 +72,7 @@ import type {
   CooperativeLoanCollectionEvent,
   CooperativeLoanInterestCalculationType,
   CooperativeLoanPayment,
+  CooperativePaymentApprovalRequest,
   CooperativeMember,
   CooperativeMemberSavingBalance,
   CooperativeSavingTransaction,
@@ -162,15 +170,53 @@ export interface ReverseCooperativeLoanPaymentInput {
 }
 
 export interface RecordCooperativeLoanPaymentResult {
+  status: 'POSTED';
   payment: CooperativeLoanPayment;
   installment: CooperativeLoanInstallment;
   loan: CooperativeLoan;
 }
 
+export interface PendingCooperativeLoanPaymentApprovalResult {
+  status: 'PENDING_APPROVAL';
+  approval_request: CooperativePaymentApprovalRequest;
+}
+
+export type RecordCooperativeLoanPaymentOutcome =
+  | RecordCooperativeLoanPaymentResult
+  | PendingCooperativeLoanPaymentApprovalResult;
+
 export interface RecordCooperativeLoanInstallmentCollectionResult {
   event: CooperativeLoanCollectionEvent;
   installment: CooperativeLoanInstallment;
 }
+
+const mapRemotePaymentApprovalRequest = (
+  request: Awaited<ReturnType<typeof cooperativePostingPostgresAdapter.listApprovalRequests>>[number],
+): CooperativePaymentApprovalRequest => ({
+  id: request.id,
+  action_type: request.action_type,
+  status: request.status,
+  payment_id: request.payment_id ?? undefined,
+  installment_id: request.installment_id ?? undefined,
+  idempotency_key: request.idempotency_key ?? undefined,
+  amount: request.amount ?? undefined,
+  payment_date: request.payment_date ?? undefined,
+  payment_method: request.payment_method ?? undefined,
+  cash_account_id: request.cash_account_id ?? undefined,
+  payment_channel: request.payment_channel ?? undefined,
+  collector_id: request.collector_id ?? undefined,
+  maker_reason: request.maker_reason,
+  maker_user_id: request.maker_user_id,
+  maker_user_name: request.maker_user_name,
+  requested_at: request.requested_at,
+  checker_user_id: request.checker_user_id ?? undefined,
+  checker_user_name: request.checker_user_name ?? undefined,
+  checker_notes: request.checker_notes ?? undefined,
+  decided_at: request.decided_at ?? undefined,
+  result_payment_id: request.result_payment_id ?? undefined,
+  created_at: request.created_at,
+  updated_at: request.updated_at,
+});
 
 const cooperativeLoanTables = [
   db.cooperativeMembers,
@@ -1290,7 +1336,7 @@ const ensureServerPostingAccounts = async (
 
 const recordCooperativeLoanPaymentOnServer = async (
   input: RecordCooperativeLoanPaymentInput,
-): Promise<RecordCooperativeLoanPaymentResult> => {
+): Promise<RecordCooperativeLoanPaymentOutcome> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
   const parsedInput = cooperativeLoanPaymentSchema.parse(input);
@@ -1321,25 +1367,32 @@ const recordCooperativeLoanPaymentOnServer = async (
   if (!remoteResult) {
     throw new Error('Posting pembayaran server tidak menghasilkan data.');
   }
+  if (remoteResult.status === 'PENDING_APPROVAL') {
+    return {
+      status: 'PENDING_APPROVAL',
+      approval_request: mapRemotePaymentApprovalRequest(remoteResult.approval_request),
+    };
+  }
+  const postedResult = remoteResult.result;
 
   await Promise.all([
-    mergeRemoteCooperativeLoanPaymentsIntoDexie([remoteResult.payment]),
-    mergeRemoteCooperativeLoanInstallmentsIntoDexie([remoteResult.installment]),
-    mergeRemoteCooperativeLoansIntoDexie([remoteResult.loan]),
-    mergeRemoteFinanceTransactionsIntoDexie([remoteResult.finance_transaction]),
-    mergeRemoteJournalEntryBundlesIntoDexie([remoteResult.journal_entry]),
+    mergeRemoteCooperativeLoanPaymentsIntoDexie([postedResult.payment]),
+    mergeRemoteCooperativeLoanInstallmentsIntoDexie([postedResult.installment]),
+    mergeRemoteCooperativeLoansIntoDexie([postedResult.loan]),
+    mergeRemoteFinanceTransactionsIntoDexie([postedResult.finance_transaction]),
+    mergeRemoteJournalEntryBundlesIntoDexie([postedResult.journal_entry]),
   ]);
 
   const [payment, installment, loan] = await Promise.all([
-    db.cooperativeLoanPayments.get(remoteResult.payment.id),
-    db.cooperativeLoanInstallments.get(remoteResult.installment.id),
-    db.cooperativeLoans.get(remoteResult.loan.id),
+    db.cooperativeLoanPayments.get(postedResult.payment.id),
+    db.cooperativeLoanInstallments.get(postedResult.installment.id),
+    db.cooperativeLoans.get(postedResult.loan.id),
   ]);
   if (!payment || !installment || !loan) {
     throw new Error('Hasil posting pembayaran gagal diterapkan ke database lokal.');
   }
 
-  return { payment, installment, loan };
+  return { status: 'POSTED', payment, installment, loan };
 };
 
 const recordCooperativeLoanPaymentLocally = async (
@@ -1352,6 +1405,11 @@ const recordCooperativeLoanPaymentLocally = async (
   const amount = roundCurrency(parsedInput.amount);
   const now = new Date().toISOString();
   const paymentDate = parsedInput.payment_date ?? now;
+  if (!dayjs(paymentDate).isSame(dayjs(now), 'day')) {
+    throw new Error(
+      'Pembayaran backdate membutuhkan maker-checker dan hanya tersedia saat PostgreSQL aktif.',
+    );
+  }
   const paymentMethod = parsedInput.payment_method ?? 'TUNAI';
   const paymentId = crypto.randomUUID();
   const financeTransactionId = crypto.randomUUID();
@@ -1578,6 +1636,7 @@ const recordCooperativeLoanPaymentLocally = async (
   await enqueueCooperativeLoansSync([savedLoan], 'update');
 
   return {
+    status: 'POSTED',
     payment: savedPayment,
     installment: savedInstallment,
     loan: savedLoan,
@@ -1586,7 +1645,7 @@ const recordCooperativeLoanPaymentLocally = async (
 
 export const recordCooperativeLoanPayment = async (
   input: RecordCooperativeLoanPaymentInput,
-): Promise<RecordCooperativeLoanPaymentResult> => {
+): Promise<RecordCooperativeLoanPaymentOutcome> => {
   const health = await postgresAdapter.healthCheck();
   if (health.available) {
     return recordCooperativeLoanPaymentOnServer(input);
@@ -1739,18 +1798,33 @@ export const recordCooperativeLoanInstallmentCollection = async (
 
 export const reverseCooperativeLoanPayment = async (
   input: ReverseCooperativeLoanPaymentInput,
-): Promise<CooperativeLoanPayment> => {
+): Promise<CooperativeLoanPayment | CooperativePaymentApprovalRequest> => {
   const currentUser = await getCurrentSessionUser();
-  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
   const postgresHealth = await postgresAdapter.healthCheck();
   if (postgresHealth.available) {
-    throw new Error(
-      'Reversal pembayaran pada mode PostgreSQL diblokir sampai workflow maker-checker server tersedia.',
-    );
+    const sessionToken = await getCurrentServerSessionToken();
+    if (!sessionToken) {
+      throw new Error('Sesi server tidak tersedia. Silakan logout lalu login kembali.');
+    }
+    const request = await cooperativePostingPostgresAdapter.requestReversal({
+      session_token: sessionToken,
+      payment_id: input.payment_id,
+      reason: input.reason,
+    });
+    if (!request) {
+      throw new Error('Request reversal tidak menghasilkan data.');
+    }
+    return mapRemotePaymentApprovalRequest(request);
   }
   if (postgresHealth.status !== 'unconfigured') {
     throw new Error(
       'PostgreSQL sedang tidak dapat dijangkau. Reversal diblokir agar data keuangan tidak terpecah.',
+    );
+  }
+  if (postgresHealth.status === 'unconfigured') {
+    throw new Error(
+      'Reversal membutuhkan maker-checker dan hanya tersedia saat PostgreSQL aktif.',
     );
   }
 
@@ -1996,4 +2070,67 @@ export const reverseCooperativeLoanPayment = async (
   await enqueueCooperativeLoansSync([updatedLoan], 'update');
 
   return reversalPayment;
+};
+
+export const listCooperativePaymentApprovalRequests = async () => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_APPROVE');
+  const sessionToken = await getCurrentServerSessionToken();
+  if (!sessionToken) return [];
+
+  const requests = await cooperativePostingPostgresAdapter.listApprovalRequests(sessionToken);
+  return requests.map(mapRemotePaymentApprovalRequest);
+};
+
+const refreshApprovedCooperativePaymentData = async () => {
+  await Promise.all([
+    refreshCooperativeDataFromPostgres(),
+    refreshFinanceTransactionsFromPostgres(),
+    refreshJournalEntriesFromPostgres(),
+  ]);
+};
+
+export const approveCooperativePaymentRequest = async (
+  requestId: string,
+  notes?: string,
+) => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_APPROVE');
+  const sessionToken = await getCurrentServerSessionToken();
+  if (!sessionToken) {
+    throw new Error('Sesi server tidak tersedia. Silakan logout lalu login kembali.');
+  }
+
+  const request = await cooperativePostingPostgresAdapter.approveRequest({
+    session_token: sessionToken,
+    request_id: requestId,
+    notes,
+  });
+  if (!request) {
+    throw new Error('Approval pembayaran tidak menghasilkan data.');
+  }
+  await refreshApprovedCooperativePaymentData();
+  return mapRemotePaymentApprovalRequest(request);
+};
+
+export const rejectCooperativePaymentRequest = async (
+  requestId: string,
+  notes: string,
+) => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_APPROVE');
+  const sessionToken = await getCurrentServerSessionToken();
+  if (!sessionToken) {
+    throw new Error('Sesi server tidak tersedia. Silakan logout lalu login kembali.');
+  }
+
+  const request = await cooperativePostingPostgresAdapter.rejectRequest({
+    session_token: sessionToken,
+    request_id: requestId,
+    notes,
+  });
+  if (!request) {
+    throw new Error('Penolakan approval pembayaran tidak menghasilkan data.');
+  }
+  return mapRemotePaymentApprovalRequest(request);
 };

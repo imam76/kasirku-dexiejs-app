@@ -249,6 +249,73 @@ pub struct PostCooperativeLoanPaymentResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CooperativePaymentApprovalRequestDto {
+    pub id: String,
+    pub action_type: String,
+    pub status: String,
+    pub payment_id: Option<String>,
+    pub installment_id: Option<String>,
+    pub idempotency_key: Option<String>,
+    pub amount: Option<f64>,
+    pub payment_date: Option<String>,
+    pub payment_method: Option<String>,
+    pub cash_account_id: Option<String>,
+    pub payment_channel: Option<String>,
+    pub collector_id: Option<String>,
+    pub maker_reason: String,
+    pub maker_user_id: String,
+    pub maker_user_name: String,
+    pub requested_at: String,
+    pub checker_user_id: Option<String>,
+    pub checker_user_name: Option<String>,
+    pub checker_notes: Option<String>,
+    pub decided_at: Option<String>,
+    pub result_payment_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PostCooperativeLoanPaymentOutcome {
+    Posted {
+        result: PostCooperativeLoanPaymentResult,
+    },
+    PendingApproval {
+        approval_request: CooperativePaymentApprovalRequestDto,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestCooperativeLoanPaymentReversalInput {
+    pub session_token: String,
+    pub payment_id: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecideCooperativePaymentApprovalInput {
+    pub session_token: String,
+    pub request_id: String,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CooperativePaymentInstallmentReconciliationDto {
+    pub installment_id: String,
+    pub loan_id: String,
+    pub loan_number: String,
+    pub installment_number: i32,
+    pub expected_principal_amount: f64,
+    pub actual_principal_amount: f64,
+    pub expected_interest_amount: f64,
+    pub actual_interest_amount: f64,
+    pub expected_penalty_amount: f64,
+    pub actual_penalty_amount: f64,
+    pub difference_amount: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CooperativeLoanCollectionEventDto {
     pub id: String,
     pub installment_id: String,

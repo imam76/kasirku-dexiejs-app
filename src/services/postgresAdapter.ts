@@ -12,6 +12,8 @@ import type {
   CooperativeLoanPaymentType,
   CooperativeLoanStatus,
   CooperativeMemberStatus,
+  CooperativePaymentApprovalAction,
+  CooperativePaymentApprovalStatus,
   CooperativeSavingTransactionStatus,
   CooperativeSavingTransactionType,
   CooperativeSavingType,
@@ -936,6 +938,56 @@ export interface RemotePostCooperativeLoanPaymentResult {
   journal_entry: RemoteJournalEntryBundleDto;
 }
 
+export interface RemoteCooperativePaymentApprovalRequestDto {
+  id: string;
+  action_type: CooperativePaymentApprovalAction;
+  status: CooperativePaymentApprovalStatus;
+  payment_id?: string | null;
+  installment_id?: string | null;
+  idempotency_key?: string | null;
+  amount?: number | null;
+  payment_date?: string | null;
+  payment_method?: PaymentMethod | null;
+  cash_account_id?: string | null;
+  payment_channel?: string | null;
+  collector_id?: string | null;
+  maker_reason: string;
+  maker_user_id: string;
+  maker_user_name: string;
+  requested_at: string;
+  checker_user_id?: string | null;
+  checker_user_name?: string | null;
+  checker_notes?: string | null;
+  decided_at?: string | null;
+  result_payment_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RemotePostCooperativeLoanPaymentOutcome =
+  | {
+      status: 'POSTED';
+      result: RemotePostCooperativeLoanPaymentResult;
+    }
+  | {
+      status: 'PENDING_APPROVAL';
+      approval_request: RemoteCooperativePaymentApprovalRequestDto;
+    };
+
+export interface RemoteCooperativePaymentInstallmentReconciliationDto {
+  installment_id: string;
+  loan_id: string;
+  loan_number: string;
+  installment_number: number;
+  expected_principal_amount: number;
+  actual_principal_amount: number;
+  expected_interest_amount: number;
+  actual_interest_amount: number;
+  expected_penalty_amount: number;
+  actual_penalty_amount: number;
+  difference_amount: number;
+}
+
 export interface RemoteCooperativeLoanCollectionEventDto {
   id: string;
   installment_id: string;
@@ -1527,9 +1579,61 @@ export const cooperativePostingPostgresAdapter = {
 
   async postPayment(input: RemotePostCooperativeLoanPaymentInput) {
     if (!isTauriRuntime()) return null;
-    return invoke<RemotePostCooperativeLoanPaymentResult>(
+    return invoke<RemotePostCooperativeLoanPaymentOutcome>(
       'postgres_post_cooperative_loan_payment',
       { input },
+    );
+  },
+
+  async listApprovalRequests(sessionToken: string) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativePaymentApprovalRequestDto[]>(
+      'postgres_list_cooperative_payment_approval_requests',
+      { sessionToken },
+    );
+  },
+
+  async requestReversal(input: {
+    session_token: string;
+    payment_id: string;
+    reason: string;
+  }) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativePaymentApprovalRequestDto>(
+      'postgres_request_cooperative_payment_reversal',
+      { input },
+    );
+  },
+
+  async approveRequest(input: {
+    session_token: string;
+    request_id: string;
+    notes?: string;
+  }) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativePaymentApprovalRequestDto>(
+      'postgres_approve_cooperative_payment_request',
+      { input },
+    );
+  },
+
+  async rejectRequest(input: {
+    session_token: string;
+    request_id: string;
+    notes?: string;
+  }) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativePaymentApprovalRequestDto>(
+      'postgres_reject_cooperative_payment_request',
+      { input },
+    );
+  },
+
+  async listPaymentInstallmentReconciliation(sessionToken: string) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativePaymentInstallmentReconciliationDto[]>(
+      'postgres_list_cooperative_payment_installment_reconciliation',
+      { sessionToken },
     );
   },
 };

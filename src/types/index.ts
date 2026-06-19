@@ -175,6 +175,7 @@ export type Permission =
   | 'COOPERATIVE_LOAN_MANAGE'
   | 'COOPERATIVE_INSTALLMENT_VIEW'
   | 'COOPERATIVE_PAYMENT_CREATE'
+  | 'COOPERATIVE_PAYMENT_APPROVE'
   | 'COOPERATIVE_BILLING_ACCESS'
   | 'COOPERATIVE_FIELD_CASH_VIEW'
   | 'COOPERATIVE_FIELD_CASH_MANAGE'
@@ -1589,6 +1590,8 @@ export type CooperativeLoanInstallmentStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | '
 export type CooperativeLoanInstallmentCollectionStatus = 'NONE' | 'PROMISED_TO_PAY' | 'UNABLE_TO_PAY' | 'FOLLOW_UP';
 export type CooperativeLoanPaymentType = 'PAYMENT' | 'REVERSAL';
 export type CooperativeLoanPaymentStatus = 'POSTED' | 'REVERSED';
+export type CooperativePaymentApprovalAction = 'BACKDATE' | 'REVERSAL';
+export type CooperativePaymentApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type CooperativeLoanInterestCalculationType = 'MONTHLY_RATE' | 'TOTAL_PERCENT';
 export type CooperativeLoanBillingFrequency = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
 export type CooperativeLoanDeductionMethod = 'NONE' | 'DEDUCT_ON_DISBURSEMENT';
@@ -1812,6 +1815,32 @@ export interface CooperativeLoanPayment {
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
+}
+
+export interface CooperativePaymentApprovalRequest {
+  id: string;
+  action_type: CooperativePaymentApprovalAction;
+  status: CooperativePaymentApprovalStatus;
+  payment_id?: string;
+  installment_id?: string;
+  idempotency_key?: string;
+  amount?: number;
+  payment_date?: string;
+  payment_method?: PaymentMethod;
+  cash_account_id?: string;
+  payment_channel?: string;
+  collector_id?: string;
+  maker_reason: string;
+  maker_user_id: string;
+  maker_user_name: string;
+  requested_at: string;
+  checker_user_id?: string;
+  checker_user_name?: string;
+  checker_notes?: string;
+  decided_at?: string;
+  result_payment_id?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CooperativeLoanCollectionEvent {

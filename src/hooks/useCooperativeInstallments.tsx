@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useAuth } from '@/auth/useAuth';
 import { db } from '@/lib/db';
 import {
+  approveCooperativePaymentRequest,
+  listCooperativePaymentApprovalRequests,
   recordCooperativeLoanPayment,
+  rejectCooperativePaymentRequest,
   reverseCooperativeLoanPayment,
   type RecordCooperativeLoanPaymentInput,
   type ReverseCooperativeLoanPaymentInput,
@@ -47,6 +51,8 @@ const COOPERATIVE_INSTALLMENT_RELATED_QUERY_KEYS = [
 
 export const useCooperativeInstallments = () => {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
+  const canApprovePayment = can('COOPERATIVE_PAYMENT_APPROVE');
   const [payingInstallment, setPayingInstallment] = useState<CooperativeLoanInstallment | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<CooperativeLoanPayment | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -88,6 +94,11 @@ export const useCooperativeInstallments = () => {
     [],
     [],
   );
+  const approvalRequestsQuery = useQuery({
+    queryKey: ['cooperativePaymentApprovalRequests'],
+    queryFn: listCooperativePaymentApprovalRequests,
+    enabled: canApprovePayment,
+  });
 
   const loanById = useMemo(() => new Map(loans.map((loan) => [loan.id, loan])), [loans]);
   const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
@@ -191,11 +202,34 @@ export const useCooperativeInstallments = () => {
 
   const recordMutation = useMutation({
     mutationFn: recordCooperativeLoanPayment,
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['cooperativePaymentApprovalRequests'] });
+    },
   });
   const reverseMutation = useMutation({
     mutationFn: reverseCooperativeLoanPayment,
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['cooperativePaymentApprovalRequests'] });
+    },
+  });
+  const approveMutation = useMutation({
+    mutationFn: ({ requestId, notes }: { requestId: string; notes?: string }) => (
+      approveCooperativePaymentRequest(requestId, notes)
+    ),
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['cooperativePaymentApprovalRequests'] });
+    },
+  });
+  const rejectMutation = useMutation({
+    mutationFn: ({ requestId, notes }: { requestId: string; notes: string }) => (
+      rejectCooperativePaymentRequest(requestId, notes)
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cooperativePaymentApprovalRequests'] });
+    },
   });
 
   return {
@@ -221,10 +255,19 @@ export const useCooperativeInstallments = () => {
     setInstallmentStatusFilter,
     paymentStatusFilter,
     setPaymentStatusFilter,
+    approvalRequests: approvalRequestsQuery.data ?? [],
+    canApprovePayment,
     recordPayment: (input: RecordCooperativeLoanPaymentInput) => recordMutation.mutateAsync(input),
     reversePayment: (input: ReverseCooperativeLoanPaymentInput) => reverseMutation.mutateAsync(input),
+    approvePaymentRequest: (requestId: string, notes?: string) => (
+      approveMutation.mutateAsync({ requestId, notes })
+    ),
+    rejectPaymentRequest: (requestId: string, notes: string) => (
+      rejectMutation.mutateAsync({ requestId, notes })
+    ),
     getFieldCashPaymentStatusForInstallment,
     getDefaultCollectorIdForInstallment,
-    isMutating: recordMutation.isPending || reverseMutation.isPending,
+    isMutating: recordMutation.isPending || reverseMutation.isPending ||
+      approveMutation.isPending || rejectMutation.isPending,
   };
 };

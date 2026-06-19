@@ -165,6 +165,7 @@ const cooperativeReportTabKeys = new Set([
 const reconciliationLabelKey: Record<CooperativeReconciliationKey, TranslationKey> = {
   SAVING_BALANCE: 'cooperative.reports.reconciliation.savingBalance',
   LOAN_OUTSTANDING: 'cooperative.reports.reconciliation.loanOutstanding',
+  PAYMENT_INSTALLMENT: 'cooperative.reports.reconciliation.paymentInstallment',
   FINANCE_TRANSACTION: 'cooperative.reports.reconciliation.financeTransaction',
   JOURNAL_ENTRY: 'cooperative.reports.reconciliation.journalEntry',
 };
