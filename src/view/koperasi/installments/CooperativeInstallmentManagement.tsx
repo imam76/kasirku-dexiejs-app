@@ -228,7 +228,7 @@ export default function CooperativeInstallmentManagement() {
         idempotency_key: values.idempotency_key,
         installment_id: values.installment_id,
         amount: Number(values.amount || 0),
-        payment_date: values.payment_date?.toISOString(),
+        payment_date: values.payment_date?.tz().format(),
         payment_method: values.payment_method,
         cash_account_id: values.cash_account_id,
         payment_channel: values.payment_channel,

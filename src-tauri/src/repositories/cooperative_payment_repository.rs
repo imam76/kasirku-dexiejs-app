@@ -795,7 +795,37 @@ async fn post_loan_payment_internal(
         ));
     }
 
-    if is_backdated {
+    if let Some(request_id) = approved_request_id {
+        let request = existing_approval_request.as_ref().ok_or_else(|| {
+            CooperativeMutationError::NotFound(
+                "Request approval backdate tidak ditemukan.".to_string(),
+            )
+        })?;
+        let same_payment_date =
+            sqlx::query_scalar::<_, bool>("SELECT $1::TIMESTAMPTZ = $2::TIMESTAMPTZ")
+                .bind(&request.payment_date)
+                .bind(&input.payment_date)
+                .fetch_one(&mut *tx)
+                .await?;
+        let request_matches = request.id == request_id
+            && request.action_type == "BACKDATE"
+            && request.status == "APPROVED"
+            && request.installment_id.as_deref() == Some(input.installment_id.as_str())
+            && request
+                .amount
+                .is_some_and(|amount| (amount - payment_amount).abs() <= AMOUNT_TOLERANCE)
+            && same_payment_date
+            && request.payment_method.as_deref() == Some(input.payment_method.as_str())
+            && request.cash_account_id.as_deref() == Some(input.cash_account_id.as_str())
+            && request.payment_channel == input.payment_channel
+            && request.collector_id == collector_id
+            && request.maker_reason == input.notes.as_deref().unwrap_or_default();
+        if !request_matches {
+            return Err(CooperativeMutationError::Conflict(
+                "Payload pembayaran tidak sama dengan request backdate yang disetujui.".to_string(),
+            ));
+        }
+    } else if is_backdated {
         let maker_reason = input.notes.as_deref().map(str::trim).unwrap_or("");
         if maker_reason.len() < 3 {
             return Err(CooperativeMutationError::Invalid(
@@ -804,40 +834,10 @@ async fn post_loan_payment_internal(
             ));
         }
 
-        if let Some(request_id) = approved_request_id {
-            let request = existing_approval_request.as_ref().ok_or_else(|| {
-                CooperativeMutationError::NotFound(
-                    "Request approval backdate tidak ditemukan.".to_string(),
-                )
-            })?;
-            let same_payment_date =
-                sqlx::query_scalar::<_, bool>("SELECT $1::TIMESTAMPTZ = $2::TIMESTAMPTZ")
-                    .bind(&request.payment_date)
-                    .bind(&input.payment_date)
-                    .fetch_one(&mut *tx)
-                    .await?;
-            let request_matches = request.id == request_id
-                && request.status == "APPROVED"
-                && request.installment_id.as_deref() == Some(input.installment_id.as_str())
-                && request
-                    .amount
-                    .is_some_and(|amount| (amount - payment_amount).abs() <= AMOUNT_TOLERANCE)
-                && same_payment_date
-                && request.payment_method.as_deref() == Some(input.payment_method.as_str())
-                && request.cash_account_id.as_deref() == Some(input.cash_account_id.as_str())
-                && request.payment_channel == input.payment_channel
-                && request.collector_id == collector_id;
-            if !request_matches {
-                return Err(CooperativeMutationError::Conflict(
-                    "Payload pembayaran tidak sama dengan request backdate yang disetujui."
-                        .to_string(),
-                ));
-            }
-        } else {
-            let request_id = Uuid::new_v4().to_string();
-            let now_text = now.to_rfc3339();
-            sqlx::query(
-                r#"
+        let request_id = Uuid::new_v4().to_string();
+        let now_text = now.to_rfc3339();
+        sqlx::query(
+            r#"
                 INSERT INTO cooperative_payment_approval_requests (
                   id, action_type, status, installment_id, idempotency_key,
                   amount, payment_date, payment_method, cash_account_id,
@@ -850,25 +850,25 @@ async fn post_loan_payment_internal(
                   $13::TIMESTAMPTZ, $13::TIMESTAMPTZ
                 )
                 "#,
-            )
-            .bind(&request_id)
-            .bind(&installment.id)
-            .bind(&input.idempotency_key)
-            .bind(payment_amount)
-            .bind(&input.payment_date)
-            .bind(&input.payment_method)
-            .bind(&input.cash_account_id)
-            .bind(&input.payment_channel)
-            .bind(&collector_id)
-            .bind(maker_reason)
-            .bind(&actor.user_id)
-            .bind(&actor.user_name)
-            .bind(&now_text)
-            .execute(&mut *tx)
-            .await?;
+        )
+        .bind(&request_id)
+        .bind(&installment.id)
+        .bind(&input.idempotency_key)
+        .bind(payment_amount)
+        .bind(&input.payment_date)
+        .bind(&input.payment_method)
+        .bind(&input.cash_account_id)
+        .bind(&input.payment_channel)
+        .bind(&collector_id)
+        .bind(maker_reason)
+        .bind(&actor.user_id)
+        .bind(&actor.user_name)
+        .bind(&now_text)
+        .execute(&mut *tx)
+        .await?;
 
-            sqlx::query(
-                r#"
+        sqlx::query(
+            r#"
                 INSERT INTO activity_logs (
                   id, user_id, user_name, role, action, entity, entity_id,
                   description, created_at
@@ -878,32 +878,31 @@ async fn post_loan_payment_internal(
                   'cooperativePaymentApprovalRequests', $5, $6, $7::TIMESTAMPTZ
                 )
                 "#,
-            )
-            .bind(Uuid::new_v4().to_string())
-            .bind(&actor.user_id)
-            .bind(&actor.user_name)
-            .bind(&actor.legacy_role)
-            .bind(&request_id)
-            .bind(format!(
-                "{} meminta approval pembayaran backdate pinjaman {}.",
-                actor.user_name, loan.loan_number
-            ))
-            .bind(&now_text)
-            .execute(&mut *tx)
-            .await?;
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&actor.user_id)
+        .bind(&actor.user_name)
+        .bind(&actor.legacy_role)
+        .bind(&request_id)
+        .bind(format!(
+            "{} meminta approval pembayaran backdate pinjaman {}.",
+            actor.user_name, loan.loan_number
+        ))
+        .bind(&now_text)
+        .execute(&mut *tx)
+        .await?;
 
-            let request = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
-                cooperative_payment_approval_select!(),
-                " WHERE id = $1"
-            ))
-            .bind(&request_id)
-            .fetch_one(&mut *tx)
-            .await?;
-            tx.commit().await?;
-            return Ok(PostCooperativeLoanPaymentOutcome::PendingApproval {
-                approval_request: request,
-            });
-        }
+        let request = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
+            cooperative_payment_approval_select!(),
+            " WHERE id = $1"
+        ))
+        .bind(&request_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        return Ok(PostCooperativeLoanPaymentOutcome::PendingApproval {
+            approval_request: request,
+        });
     }
 
     let paid_principal = round_currency(installment.paid_principal_amount + principal_amount);
