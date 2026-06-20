@@ -71,6 +71,13 @@ function Cooperative() {
       desc: t('cooperative.index.reportsDesc'),
     },
     {
+      to: '/koperasi/laporan-tunai',
+      label: t('nav.cooperative.cashReport'),
+      icon: BankOutlined,
+      color: 'text-emerald-700',
+      desc: t('cooperative.index.cashReportDesc'),
+    },
+    {
       to: '/koperasi/laporan-target-harian',
       label: t('nav.cooperative.dailyTarget'),
       icon: FileTextOutlined,

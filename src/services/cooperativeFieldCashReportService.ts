@@ -1,5 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
+import dayjs from '@/lib/dayjs';
 import {
   getFieldCashAccessScope,
   getCashAccountBalance,
@@ -21,10 +22,13 @@ export interface CooperativeFieldCashReportRow {
   cash_account_name: string;
   dropping_from_finance_amount: number;
   storting_loan_payment_amount: number;
+  storting_loan_payment_reversal_amount: number;
   storting_saving_deposit_amount: number;
+  storting_saving_deposit_reversal_amount: number;
   total_storting_amount: number;
   loan_disbursement_amount: number;
   saving_withdrawal_amount: number;
+  saving_withdrawal_reversal_amount: number;
   deposit_to_finance_amount: number;
   balance_amount: number;
   last_movement_at?: string;
@@ -38,8 +42,9 @@ const isInDateRange = (
   transaction: FinanceTransaction,
   filters: CooperativeFieldCashReportFilters,
 ) => {
-  if (filters.fromDate && transaction.created_at < filters.fromDate) return false;
-  if (filters.toDate && transaction.created_at > filters.toDate) return false;
+  const transactionDate = dayjs(transaction.created_at);
+  if (filters.fromDate && transactionDate.isBefore(dayjs(filters.fromDate))) return false;
+  if (filters.toDate && transactionDate.isAfter(dayjs(filters.toDate))) return false;
   return true;
 };
 
@@ -60,20 +65,16 @@ const matchesMovementKind = (
       transaction.transfer_direction === 'OUT';
   }
   if (kind === 'STORTING_LOAN_PAYMENT') {
-    return transaction.category === FINANCE_CATEGORIES.KSP_LOAN_PAYMENT &&
-      transaction.type === 'INCOME';
+    return transaction.category === FINANCE_CATEGORIES.KSP_LOAN_PAYMENT;
   }
   if (kind === 'STORTING_SAVING_DEPOSIT') {
-    return transaction.category === FINANCE_CATEGORIES.KSP_SAVING_DEPOSIT &&
-      transaction.type === 'INCOME';
+    return transaction.category === FINANCE_CATEGORIES.KSP_SAVING_DEPOSIT;
   }
   if (kind === 'LOAN_DISBURSEMENT') {
-    return transaction.category === FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT &&
-      transaction.type === 'EXPENSE';
+    return transaction.category === FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT;
   }
   if (kind === 'SAVING_WITHDRAWAL') {
-    return transaction.category === FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL &&
-      transaction.type === 'EXPENSE';
+    return transaction.category === FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL;
   }
 
   return false;
@@ -82,9 +83,13 @@ const matchesMovementKind = (
 const sumByKind = (
   transactions: FinanceTransaction[],
   kind: CooperativeFieldCashMovementKind,
+  type: FinanceTransaction['type'],
 ) => roundCurrency(
   transactions
-    .filter((transaction) => matchesMovementKind(transaction, kind))
+    .filter((transaction) => (
+      matchesMovementKind(transaction, kind) &&
+      transaction.type === type
+    ))
     .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0),
 );
 
@@ -124,12 +129,15 @@ export const getCooperativeFieldCashReport = async (
     const employeeTransactions = transactions.filter((transaction) => (
       transaction.cash_account_id === employee.field_cash_account_id
     ));
-    const droppingFromFinance = sumByKind(employeeTransactions, 'DROPPING_FROM_FINANCE');
-    const stortingLoanPayment = sumByKind(employeeTransactions, 'STORTING_LOAN_PAYMENT');
-    const stortingSavingDeposit = sumByKind(employeeTransactions, 'STORTING_SAVING_DEPOSIT');
-    const loanDisbursement = sumByKind(employeeTransactions, 'LOAN_DISBURSEMENT');
-    const savingWithdrawal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL');
-    const depositToFinance = sumByKind(employeeTransactions, 'DEPOSIT_TO_FINANCE');
+    const droppingFromFinance = sumByKind(employeeTransactions, 'DROPPING_FROM_FINANCE', 'INCOME');
+    const stortingLoanPayment = sumByKind(employeeTransactions, 'STORTING_LOAN_PAYMENT', 'INCOME');
+    const stortingLoanPaymentReversal = sumByKind(employeeTransactions, 'STORTING_LOAN_PAYMENT', 'EXPENSE');
+    const stortingSavingDeposit = sumByKind(employeeTransactions, 'STORTING_SAVING_DEPOSIT', 'INCOME');
+    const stortingSavingDepositReversal = sumByKind(employeeTransactions, 'STORTING_SAVING_DEPOSIT', 'EXPENSE');
+    const loanDisbursement = sumByKind(employeeTransactions, 'LOAN_DISBURSEMENT', 'EXPENSE');
+    const savingWithdrawal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL', 'EXPENSE');
+    const savingWithdrawalReversal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL', 'INCOME');
+    const depositToFinance = sumByKind(employeeTransactions, 'DEPOSIT_TO_FINANCE', 'EXPENSE');
     const movementDates = employeeTransactions
       .map((transaction) => transaction.created_at)
       .sort();
@@ -144,10 +152,13 @@ export const getCooperativeFieldCashReport = async (
       cash_account_name: employee.field_cash_account_name ?? 'Akun Kas Petugas',
       dropping_from_finance_amount: droppingFromFinance,
       storting_loan_payment_amount: stortingLoanPayment,
+      storting_loan_payment_reversal_amount: stortingLoanPaymentReversal,
       storting_saving_deposit_amount: stortingSavingDeposit,
+      storting_saving_deposit_reversal_amount: stortingSavingDepositReversal,
       total_storting_amount: roundCurrency(stortingLoanPayment + stortingSavingDeposit),
       loan_disbursement_amount: loanDisbursement,
       saving_withdrawal_amount: savingWithdrawal,
+      saving_withdrawal_reversal_amount: savingWithdrawalReversal,
       deposit_to_finance_amount: depositToFinance,
       balance_amount: await getCashAccountBalance(employee.field_cash_account_id),
       last_movement_at: lastMovementAt,
