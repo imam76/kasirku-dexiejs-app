@@ -11,8 +11,12 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
     iconName: 'Database',
     modules: [
       { code: 'PRODUCT', label: 'Product', description: 'Manajemen produk, stok, & harga' },
+      { code: 'PRODUCTION', label: 'Produksi', description: 'Resep dan proses produksi barang' },
+      { code: 'STOCK_OPNAME', label: 'Stock Opname', description: 'Perhitungan dan penyesuaian stok fisik' },
       { code: 'CONTACT', label: 'Contact', description: 'Pelanggan & supplier' },
       { code: 'WAREHOUSE', label: 'Warehouse', description: 'Gudang & lokasi stok' },
+      { code: 'AREA', label: 'Area', description: 'Wilayah operasional dan penagihan' },
+      { code: 'EMPLOYEE', label: 'Karyawan', description: 'Data karyawan dan penugasan' },
       { code: 'DEPARTMENT', label: 'Department', description: 'Departemen organisasi' },
       { code: 'PROJECT', label: 'Project', description: 'Proyek & cost center' },
       { code: 'TAX', label: 'Tax', description: 'Pajak & tarif perpajakan' },
@@ -103,7 +107,11 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
 export const DEFAULT_SELECTED_MODULES: string[] = [
   // Data Master essentials
   'PRODUCT',
+  'PRODUCTION',
+  'STOCK_OPNAME',
   'CONTACT',
+  'AREA',
+  'EMPLOYEE',
   'ROLE_PERMISSION',
   // POS
   'POS_TRANSACTION',

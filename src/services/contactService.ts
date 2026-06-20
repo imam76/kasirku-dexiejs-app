@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { contactSchema } from '@/lib/validations/contact';
 import { generateMembershipNumber } from '@/services/membershipService';
@@ -38,7 +38,7 @@ const withPendingSync = (contact: Contact): Contact => ({
 
 export const createContact = async (input: ContactUpsertInput): Promise<Contact> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'CONTACT_MANAGE');
 
   const now = new Date().toISOString();
   const sanitizedInput = sanitizeContactInput(input);
@@ -72,7 +72,7 @@ export const createContact = async (input: ContactUpsertInput): Promise<Contact>
 
 export const updateContact = async (id: string, input: ContactUpsertInput): Promise<Contact> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'CONTACT_MANAGE');
 
   const existingContact = await db.contacts.get(id);
   if (!existingContact) {
@@ -114,7 +114,7 @@ export const updateContact = async (id: string, input: ContactUpsertInput): Prom
 
 export const archiveContact = async (id: string): Promise<Contact> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'CONTACT_MANAGE');
 
   const contact = await db.contacts.get(id);
   if (!contact) {
@@ -142,7 +142,7 @@ export const archiveContact = async (id: string): Promise<Contact> => {
 
 export const restoreContact = async (id: string): Promise<Contact> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'CONTACT_MANAGE');
 
   const contact = await db.contacts.get(id);
   if (!contact) {

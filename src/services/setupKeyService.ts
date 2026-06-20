@@ -4,6 +4,8 @@ import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'kasirku-setup-config-changed';
+const CURRENT_MODULE_CATALOG_VERSION = 2;
+const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
  * The expected hash of the license key (SHA-256, base64-encoded).
@@ -60,7 +62,28 @@ export const getSetupConfig = (): SetupConfig | null => {
   try {
     const raw = localStorage.getItem(SETUP_CONFIG_STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as SetupConfig;
+    const config = JSON.parse(raw) as SetupConfig;
+    if ((config.moduleCatalogVersion ?? 1) >= CURRENT_MODULE_CATALOG_VERSION) {
+      return config;
+    }
+
+    const enabledModules = new Set(config.enabledModules);
+    if (enabledModules.has('PRODUCT')) {
+      enabledModules.add('PRODUCTION');
+      enabledModules.add('STOCK_OPNAME');
+    }
+    if (LEGACY_SETTINGS_MODULES.some((moduleCode) => enabledModules.has(moduleCode))) {
+      enabledModules.add('AREA');
+      enabledModules.add('EMPLOYEE');
+    }
+
+    const migratedConfig: SetupConfig = {
+      ...config,
+      enabledModules: Array.from(enabledModules),
+      moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
+    };
+    localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify(migratedConfig));
+    return migratedConfig;
   } catch {
     return null;
   }
@@ -70,7 +93,10 @@ export const getSetupConfig = (): SetupConfig | null => {
  * Save setup config to localStorage.
  */
 export const saveSetupConfig = (config: SetupConfig): void => {
-  localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify(config));
+  localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify({
+    ...config,
+    moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
+  }));
   window.dispatchEvent(new Event(SETUP_CONFIG_CHANGED_EVENT));
 };
 

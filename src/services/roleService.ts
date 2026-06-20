@@ -235,14 +235,29 @@ export const updateRolePermissions = async (
   }
 
   const actorRole = actor.role_id ? await db.roles.get(actor.role_id) : undefined;
-  const sanitizedPermissions = sanitizePermissions(permissions, {
-    bypassSetupModuleLock: canBypassSetupModuleLockForUser(actor, actorRole),
-  });
-  const now = new Date().toISOString();
   const existingPermissions = await db.rolePermissions
     .where('role_id')
     .equals(roleId)
     .toArray();
+  const bypassSetupModuleLock = canBypassSetupModuleLockForUser(actor, actorRole);
+  const catalogCodes = new Set(PERMISSION_CATALOG.map((item) => item.code));
+  const uniqueRequestedPermissions = Array.from(new Set(permissions));
+  const invalidPermission = uniqueRequestedPermissions.find((permission) => !catalogCodes.has(permission));
+  if (invalidPermission) {
+    throw new Error(`Permission ${invalidPermission} tidak ada di catalog.`);
+  }
+
+  const allowedPermissions = getAllowedPermissionSet({ bypassSetupModuleLock });
+  const preservedDisabledPermissions = existingPermissions
+    .map((permission) => permission.permission_code)
+    .filter((permission) => !allowedPermissions.has(permission));
+  const editablePermissions = uniqueRequestedPermissions
+    .filter((permission) => allowedPermissions.has(permission));
+  const sanitizedPermissions = Array.from(new Set([
+    ...preservedDisabledPermissions,
+    ...sanitizePermissions(editablePermissions, { bypassSetupModuleLock }),
+  ]));
+  const now = new Date().toISOString();
   const nextPermissionIds = new Set(sanitizedPermissions.map((permission) => `${roleId}:${permission}`));
   const deletedPermissions = existingPermissions.filter((permission) => !nextPermissionIds.has(permission.id));
   const records: RolePermission[] = sanitizedPermissions.map((permission) => ({

@@ -8,6 +8,7 @@ import {
   ProjectOutlined,
   SettingOutlined,
   MoneyCollectOutlined,
+  ExperimentOutlined,
   SwapOutlined,
   ShopOutlined,
   TeamOutlined,
@@ -37,6 +38,7 @@ function MasterData() {
   const { currentUser, currentRole, permissionSet } = useAuth()
   const menuItems: MasterDataMenuItem[] = [
     { to: '/master-data/products', label: t('nav.product'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.menu.stockDesc'), tour: 'dashboard-stock' },
+    { to: '/master-data/production', label: t('nav.production'), icon: ExperimentOutlined, color: 'text-purple-600', desc: t('home.productionDesc') },
     { to: '/master-data/stock-opname', label: t('nav.stockOpname'), icon: ProductOutlined, color: 'text-blue-600', desc: t('home.stockOpnameDesc') },
     { to: '/master-data/promos', label: t('nav.promos'), icon: DollarOutlined, color: 'text-rose-600', desc: t('home.promosDesc') },
     { to: '/master-data/contacts', label: t('nav.contacts'), icon: ContactsOutlined, color: 'text-amber-600', desc: t('home.contactsDesc') },

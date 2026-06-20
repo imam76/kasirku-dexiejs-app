@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { projectSchema } from '@/lib/validations/project';
 import { enqueueProjectSync } from '@/services/syncQueueService';
@@ -61,7 +61,7 @@ const withPendingSync = (project: Project): Project => ({
 
 export const createProject = async (input: ProjectUpsertInput): Promise<Project> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'PROJECT_MANAGE');
 
   const sanitizedInput = sanitizeProjectInput(input);
   await assertProjectCodeAvailable(sanitizedInput.code);
@@ -89,7 +89,7 @@ export const createProject = async (input: ProjectUpsertInput): Promise<Project>
 
 export const updateProject = async (id: string, input: ProjectUpsertInput): Promise<Project> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'PROJECT_MANAGE');
 
   const existingProject = await db.projects.get(id);
   if (!existingProject) {
@@ -120,7 +120,7 @@ export const updateProject = async (id: string, input: ProjectUpsertInput): Prom
 
 export const archiveProject = async (id: string): Promise<Project> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'PROJECT_MANAGE');
 
   const project = await db.projects.get(id);
   if (!project) {
@@ -148,7 +148,7 @@ export const archiveProject = async (id: string): Promise<Project> => {
 
 export const restoreProject = async (id: string): Promise<Project> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'PROJECT_MANAGE');
 
   const project = await db.projects.get(id);
   if (!project) {

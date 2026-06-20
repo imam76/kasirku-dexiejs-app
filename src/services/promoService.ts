@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type {
   AppliedPromoSnapshot,
@@ -353,7 +353,7 @@ export const evaluatePromos = ({
 
 export const createPromo = async (input: PromoFormInput): Promise<Promo> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'PROMO_MANAGE');
 
   const now = new Date().toISOString();
   const promo: Promo = {
@@ -378,7 +378,7 @@ export const createPromo = async (input: PromoFormInput): Promise<Promo> => {
 
 export const updatePromo = async (promoId: string, input: PromoFormInput): Promise<Promo> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'PROMO_MANAGE');
 
   const existingPromo = await db.promos.get(promoId);
   if (!existingPromo) {
@@ -405,7 +405,7 @@ export const updatePromo = async (promoId: string, input: PromoFormInput): Promi
 
 export const deletePromo = async (promoId: string): Promise<void> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'PROMO_MANAGE');
 
   const promo = await db.promos.get(promoId);
   if (!promo) {

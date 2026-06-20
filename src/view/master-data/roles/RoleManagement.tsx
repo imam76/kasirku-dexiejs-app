@@ -184,7 +184,7 @@ export default function RoleManagement() {
       dataIndex: 'permission_count',
       key: 'permission_count',
       render: (count: number, role) => (
-        role.is_owner ? <Text type="secondary">Semua module aktif</Text> : <Tag>{count} permission</Tag>
+        role.is_owner ? <Text type="secondary">Semua permission aktif</Text> : <Tag>{count} permission</Tag>
       ),
     },
     {

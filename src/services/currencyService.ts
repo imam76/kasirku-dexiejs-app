@@ -1,5 +1,5 @@
 import dayjs from '@/lib/dayjs';
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { BASE_CURRENCY_CODE, buildBaseCurrency, buildBaseCurrencyRate } from '@/constants/currencies';
 import { db } from '@/lib/db';
 import { currencyRateSchema, currencySchema } from '@/lib/validations/currency';
@@ -77,7 +77,7 @@ export const ensureBaseCurrency = async () => {
 
 export const createCurrency = async (input: CurrencyUpsertInput): Promise<Currency> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'CURRENCY_MANAGE');
 
   const parsed = normalizeCurrencyInput(input);
   const existing = await db.currencies.get(parsed.code);
@@ -113,7 +113,7 @@ export const createCurrency = async (input: CurrencyUpsertInput): Promise<Curren
 
 export const updateCurrency = async (id: string, input: CurrencyUpsertInput): Promise<Currency> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'CURRENCY_MANAGE');
 
   const existing = await db.currencies.get(id);
   if (!existing) {
@@ -145,7 +145,7 @@ export const updateCurrency = async (id: string, input: CurrencyUpsertInput): Pr
 
 export const archiveCurrency = async (id: string): Promise<Currency> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'CURRENCY_MANAGE');
 
   const currency = await db.currencies.get(id);
   if (!currency) {
@@ -176,7 +176,7 @@ export const archiveCurrency = async (id: string): Promise<Currency> => {
 
 export const restoreCurrency = async (id: string): Promise<Currency> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'CURRENCY_MANAGE');
 
   const currency = await db.currencies.get(id);
   if (!currency) {
@@ -204,10 +204,10 @@ export const restoreCurrency = async (id: string): Promise<Currency> => {
 
 export const upsertCurrencyRate = async (
   input: CurrencyRateUpsertInput,
-  permission: Permission = 'SETTINGS_ACCESS',
+  permission: Permission = 'CURRENCY_MANAGE',
 ): Promise<CurrencyRate> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, permission);
+  await requireUserPermission(currentUser, permission);
 
   const parsed = normalizeRateInput(input);
   const currency = await db.currencies.get(parsed.currency_code);

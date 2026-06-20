@@ -9,6 +9,7 @@ import type { UnitConversion, UnitDefinition, UnitDefinitionType } from '@/types
 import type { TranslationKey } from '@/i18n/messages';
 import { setConversionRegistry } from '@/utils/pricing';
 import { useI18n } from '@/hooks/useI18n';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 import {
   areUnitsInSameCategory,
   DEFAULT_CONVERSIONS,
@@ -109,6 +110,11 @@ const getDefaultFlagsForType = (type: UnitDefinitionType) => ({
   canBeConversionUnit: type !== 'count',
 });
 
+const requireUnitManageAccess = async () => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'UNIT_MANAGE');
+};
+
 export default function UnitManagement() {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
@@ -180,6 +186,7 @@ export default function UnitManagement() {
 
   const upsertUnitMutation = useMutation({
     mutationFn: async (values: UnitFormValues) => {
+      await requireUnitManageAccess();
       const id = normalizeUnitKey(values.name);
       const type = values.type ?? inferUnitDefinitionType(id);
       const now = new Date().toISOString();
@@ -230,6 +237,7 @@ export default function UnitManagement() {
 
   const deleteUnitMutation = useMutation({
     mutationFn: async (unitId: string) => {
+      await requireUnitManageAccess();
       const unit = await db.units.get(unitId);
       if (unit?.isPreset) {
         throw new Error(t('units.validation.presetDeleteBlocked'));
@@ -265,6 +273,7 @@ export default function UnitManagement() {
 
   const restoreUnitsMutation = useMutation({
     mutationFn: async () => {
+      await requireUnitManageAccess();
       await db.units.bulkPut(DEFAULT_UNITS);
     },
     onSuccess: () => {
@@ -275,6 +284,7 @@ export default function UnitManagement() {
 
   const upsertConversionMutation = useMutation({
     mutationFn: async (values: ConversionFormValues) => {
+      await requireUnitManageAccess();
       const baseUnit = normalizeUnitKey(values.baseUnit);
       const conversionUnit = normalizeUnitKey(values.conversionUnit);
       const ratio = Number(values.ratio);
@@ -372,6 +382,7 @@ export default function UnitManagement() {
 
   const deleteConversionMutation = useMutation({
     mutationFn: async (id: string) => {
+      await requireUnitManageAccess();
       await db.unitConversions.delete(id);
     },
     onSuccess: () => {
@@ -382,6 +393,7 @@ export default function UnitManagement() {
 
   const restoreConversionsMutation = useMutation({
     mutationFn: async () => {
+      await requireUnitManageAccess();
       await db.unitConversions.bulkPut(DEFAULT_CONVERSIONS);
     },
     onSuccess: () => {

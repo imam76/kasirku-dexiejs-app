@@ -2,7 +2,7 @@ import {
   createPinHash,
   getCurrentSessionUser,
   normalizeAuthEmail,
-  requireRolePermission,
+  requireUserPermission,
   writeActivityLog,
 } from '@/auth/authService';
 import { db } from '@/lib/db';
@@ -61,7 +61,7 @@ const sanitizeEmployeeInput = (input: EmployeeUpsertInput): SanitizedEmployeeInp
 
 const requireEmployeeActor = async () => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'EMPLOYEE_MANAGE');
   return currentUser;
 };
 

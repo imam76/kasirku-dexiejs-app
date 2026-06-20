@@ -16,4 +16,5 @@ export interface SetupConfig {
   databaseUrl: string;
   configuredAt: string;
   configuredBy: string; // license fingerprint (first 8 chars of hash)
+  moduleCatalogVersion?: number;
 }

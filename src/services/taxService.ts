@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { taxSchema } from '@/lib/validations/tax';
 import { enqueueTaxSync } from '@/services/syncQueueService';
@@ -63,7 +63,7 @@ const clearOtherDefaultTaxes = async (taxId: string, updatedAt = new Date().toIS
 
 export const createTax = async (input: TaxUpsertInput): Promise<Tax> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'TAX_MANAGE');
 
   const sanitizedInput = sanitizeTaxInput(input);
   const now = new Date().toISOString();
@@ -100,7 +100,7 @@ export const createTax = async (input: TaxUpsertInput): Promise<Tax> => {
 
 export const updateTax = async (id: string, input: TaxUpsertInput): Promise<Tax> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'TAX_MANAGE');
 
   const existingTax = await db.taxes.get(id);
   if (!existingTax) {
@@ -140,7 +140,7 @@ export const updateTax = async (id: string, input: TaxUpsertInput): Promise<Tax>
 
 export const archiveTax = async (id: string): Promise<Tax> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'TAX_MANAGE');
 
   const tax = await db.taxes.get(id);
   if (!tax) {
@@ -169,7 +169,7 @@ export const archiveTax = async (id: string): Promise<Tax> => {
 
 export const restoreTax = async (id: string): Promise<Tax> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'TAX_MANAGE');
 
   const tax = await db.taxes.get(id);
   if (!tax) {
@@ -197,7 +197,7 @@ export const restoreTax = async (id: string): Promise<Tax> => {
 
 export const setDefaultTax = async (id: string): Promise<Tax> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'TAX_MANAGE');
 
   const tax = await db.taxes.get(id);
   if (!tax) {

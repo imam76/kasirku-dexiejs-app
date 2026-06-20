@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { departmentSchema } from '@/lib/validations/department';
 import { enqueueDepartmentSync } from '@/services/syncQueueService';
@@ -45,7 +45,7 @@ const withPendingSync = (department: Department): Department => ({
 
 export const createDepartment = async (input: DepartmentUpsertInput): Promise<Department> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'DEPARTMENT_MANAGE');
 
   const sanitizedInput = sanitizeDepartmentInput(input);
   await assertDepartmentCodeAvailable(sanitizedInput.code);
@@ -73,7 +73,7 @@ export const createDepartment = async (input: DepartmentUpsertInput): Promise<De
 
 export const updateDepartment = async (id: string, input: DepartmentUpsertInput): Promise<Department> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'DEPARTMENT_MANAGE');
 
   const existingDepartment = await db.departments.get(id);
   if (!existingDepartment) {
@@ -104,7 +104,7 @@ export const updateDepartment = async (id: string, input: DepartmentUpsertInput)
 
 export const archiveDepartment = async (id: string): Promise<Department> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'DEPARTMENT_MANAGE');
 
   const department = await db.departments.get(id);
   if (!department) {
@@ -132,7 +132,7 @@ export const archiveDepartment = async (id: string): Promise<Department> => {
 
 export const restoreDepartment = async (id: string): Promise<Department> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'DEPARTMENT_MANAGE');
 
   const department = await db.departments.get(id);
   if (!department) {

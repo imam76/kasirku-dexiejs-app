@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { cooperativeAreaSchema } from '@/lib/validations/cooperativeArea';
 import type { CooperativeArea } from '@/types';
@@ -41,7 +41,7 @@ const assertAreaCodeAvailable = async (code: string | undefined, excludeAreaId?:
 
 const requireAreaActor = async () => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'AREA_MANAGE');
   return currentUser;
 };
 

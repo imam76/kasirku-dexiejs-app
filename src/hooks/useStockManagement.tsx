@@ -9,7 +9,7 @@ import { db } from '@/lib/db';
 import { enqueueProductSync } from '@/services/syncQueueService';
 import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import type { FinanceTransaction, Product, ProductUnit } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
@@ -74,7 +74,7 @@ export const useStockManagement = () => {
   const upsertMutation = useMutation({
     mutationFn: async (productData: ProductUpsertData & { purchase_quantity?: number }) => {
       const currentUser = await getCurrentSessionUser();
-      requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
+      await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
       const purchase_quantity = productData.purchase_quantity || 0;
       const now = new Date().toISOString();
       let productId = editingId ?? '';
@@ -214,7 +214,7 @@ export const useStockManagement = () => {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const currentUser = await getCurrentSessionUser();
-      requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
+      await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
       const product = await db.products.get(id);
       const now = new Date().toISOString();
       const deletedProduct = product ? withPendingSync({
@@ -243,7 +243,7 @@ export const useStockManagement = () => {
   const openingStockMutation = useMutation({
     mutationFn: async ({ productId, quantity }: { productId: string; quantity: number }) => {
       const currentUser = await getCurrentSessionUser();
-      requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
+      await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
 
       const normalizedQuantity = Number(quantity);
       if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
@@ -304,7 +304,7 @@ export const useStockManagement = () => {
   const importCsvMutation = useMutation({
     mutationFn: async (items: ProductCsvImportItem[]) => {
       const currentUser = await getCurrentSessionUser();
-      requireRolePermission(currentUser?.role, 'STOCK_ACCESS');
+      await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
       const now = new Date().toISOString();
       let createdCount = 0;
       let updatedCount = 0;

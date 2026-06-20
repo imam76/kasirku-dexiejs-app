@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { warehouseSchema } from '@/lib/validations/warehouse';
 import { enqueueWarehouseSync } from '@/services/syncQueueService';
@@ -32,7 +32,7 @@ const withPendingSync = (warehouse: Warehouse): Warehouse => ({
 
 export const createWarehouse = async (input: WarehouseUpsertInput): Promise<Warehouse> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'WAREHOUSE_MANAGE');
 
   const now = new Date().toISOString();
   const warehouse: Warehouse = withPendingSync({
@@ -57,7 +57,7 @@ export const createWarehouse = async (input: WarehouseUpsertInput): Promise<Ware
 
 export const updateWarehouse = async (id: string, input: WarehouseUpsertInput): Promise<Warehouse> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'WAREHOUSE_MANAGE');
 
   const existingWarehouse = await db.warehouses.get(id);
   if (!existingWarehouse) {
@@ -85,7 +85,7 @@ export const updateWarehouse = async (id: string, input: WarehouseUpsertInput): 
 
 export const archiveWarehouse = async (id: string): Promise<Warehouse> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'WAREHOUSE_MANAGE');
 
   const warehouse = await db.warehouses.get(id);
   if (!warehouse) {
@@ -113,7 +113,7 @@ export const archiveWarehouse = async (id: string): Promise<Warehouse> => {
 
 export const restoreWarehouse = async (id: string): Promise<Warehouse> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'WAREHOUSE_MANAGE');
 
   const warehouse = await db.warehouses.get(id);
   if (!warehouse) {
