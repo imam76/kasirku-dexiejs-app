@@ -1,4 +1,4 @@
-import { DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select, Typography } from 'antd';
+import { Checkbox, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
@@ -31,6 +31,7 @@ export interface CooperativeLoanFormValues {
   loan_service_rate?: number;
   admin_fee_rate?: number;
   mandatory_saving_rate?: number;
+  remember_total_percent_rates?: boolean;
   installment_count?: number;
   billing_frequency?: CooperativeLoanBillingFrequency;
   application_date: Dayjs;
@@ -169,7 +170,6 @@ export default function CooperativeLoanFormModal({
           <Form.Item
             name="application_date"
             label={t('cooperative.loans.form.applicationDate')}
-            extra={t('cooperative.loans.form.applicationDateHelp')}
             rules={[{ required: true, message: t('cooperative.loans.validation.applicationDateRequired') }]}
           >
             <DatePicker showTime className="w-full" data-testid="koperasi-loan-application-date-input" />
@@ -304,6 +304,15 @@ export default function CooperativeLoanFormModal({
                 />
               </Form.Item>
             </div>
+            <Form.Item
+              name="remember_total_percent_rates"
+              valuePropName="checked"
+              className="mb-4"
+            >
+              <Checkbox data-testid="koperasi-loan-remember-total-percent-rates-checkbox">
+                {t('cooperative.loans.form.rememberTotalPercentRates')}
+              </Checkbox>
+            </Form.Item>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Form.Item
                 name="installment_count"

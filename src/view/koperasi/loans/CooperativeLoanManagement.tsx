@@ -3,6 +3,7 @@ import { App, Button, Card, Form, Input, Select } from 'antd';
 import { Banknote, Plus } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
+import { useCooperativeLoanRatePreference } from '@/hooks/useCooperativeLoanRatePreference';
 import {
   useCooperativeLoans,
   type CooperativeLoanStatusFilter,
@@ -27,6 +28,7 @@ export default function CooperativeLoanManagement() {
   const [disbursementForm] = Form.useForm<CooperativeLoanDisbursementFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanDisbursement');
+  const { loanRatePreference, rememberLoanRates } = useCooperativeLoanRatePreference();
   const {
     activeMembers,
     members,
@@ -68,7 +70,9 @@ export default function CooperativeLoanManagement() {
       admin_fee_rate: 0,
       mandatory_saving_rate: 0,
       installment_count: 12,
-      billing_frequency: 'MONTHLY',
+      billing_frequency: 'WEEKLY',
+      ...loanRatePreference,
+      remember_total_percent_rates: Boolean(loanRatePreference),
     });
     setIsModalOpen(true);
   };
@@ -135,6 +139,15 @@ export default function CooperativeLoanManagement() {
             interest_rate_per_month: Number(values.interest_rate_per_month || 0),
             tenor_months: Number(values.tenor_months || 0),
           });
+      if (calculationType === 'TOTAL_PERCENT') {
+        rememberLoanRates(values.remember_total_percent_rates
+          ? {
+              loan_service_rate: Number(values.loan_service_rate || 0),
+              admin_fee_rate: Number(values.admin_fee_rate || 0),
+              mandatory_saving_rate: Number(values.mandatory_saving_rate || 0),
+            }
+          : undefined);
+      }
       message.success(t('cooperative.loans.createSuccess'));
       closeModal();
     } catch (error) {
