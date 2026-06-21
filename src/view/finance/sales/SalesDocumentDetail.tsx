@@ -11,6 +11,7 @@ import {
 } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
+import { getSalesDocumentPermission } from '@/auth/documentPermissions';
 import { useAccountsReceivable } from '@/hooks/useAccountsReceivable';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
@@ -202,7 +203,12 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const hasActiveInvoicePayments = invoicePayments.some((payment) => payment.status === 'ACTIVE');
   const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
     !(document.type === 'SALES_INVOICE' && (document.finance_transaction_id || hasActiveInvoicePayments));
-  const canRecordPayment = Boolean(receivableRow && config.behavior.hasPaymentStatus && document.status === 'ISSUED' && receivableRow.balance_due > 0);
+  const canRecordPayment = can('FINANCE_ACCESS') && Boolean(
+    receivableRow &&
+    config.behavior.hasPaymentStatus &&
+    document.status === 'ISSUED' &&
+    receivableRow.balance_due > 0
+  );
   const canCreateReturn = can('SALES_RETURN_MANAGE') &&
     document.status === 'ISSUED' &&
     (document.type === 'SALES_DELIVERY' || document.type === 'SALES_INVOICE') &&
@@ -302,7 +308,9 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               {t('salesDocuments.issue')}
             </Button>
           )}
-          {nextConvertOptions.map((targetType) => (
+          {nextConvertOptions
+            .filter((targetType) => can(getSalesDocumentPermission(targetType)))
+            .map((targetType) => (
             <Button
               key={targetType}
               loading={isMutating}
@@ -321,7 +329,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
                 type: t(SALES_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === targetType)?.labelKey ?? 'salesDocuments.table.type'),
               })}
             </Button>
-          ))}
+            ))}
           {canCreateReturn && (
             <Button
               icon={<RotateCcw size={16} />}
@@ -556,6 +564,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
             <ReceivablePaymentHistory
               payments={invoicePayments}
               loading={isReceivableMutating}
+              allowVoid={can('FINANCE_ACCESS')}
               onVoidPayment={async (paymentId, reason) => {
                 await voidPayment({ paymentId, reason });
                 await loadDocument();

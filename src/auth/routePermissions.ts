@@ -2,6 +2,7 @@ import type { AuthUser, Permission, Role, UserRole } from '@/types';
 import { hasPermission } from './permissions';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { canBypassSetupModuleLockForUser, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
+import { getDocumentPermissionRuleForPath } from './documentPermissions';
 
 type RoutePermissionRule = Permission | Permission[];
 
@@ -38,19 +39,13 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/departments': 'DEPARTMENT_MANAGE',
   '/master-data/projects': 'PROJECT_MANAGE',
   '/master-data/taxes': 'TAX_MANAGE',
-  '/shopping-note': 'FINANCE_ACCESS',
-  '/sales': 'FINANCE_ACCESS',
-  '/sales/returns': 'SALES_RETURN_MANAGE',
-  '/purchases': 'FINANCE_ACCESS',
+  '/shopping-note': 'PURCHASE_RECEIPT_MANAGE',
   '/finance': 'FINANCE_ACCESS',
   '/finance/cash-flow': 'FINANCE_ACCESS',
   '/finance/receivables': 'FINANCE_ACCESS',
   '/finance/payables': 'FINANCE_ACCESS',
   '/finance/chart-of-accounts': 'FINANCE_ACCESS',
   '/finance/general-ledger': 'FINANCE_ACCESS',
-  '/finance/sales': 'FINANCE_ACCESS',
-  '/finance/purchases': 'FINANCE_ACCESS',
-  '/finance/sales/returns': 'SALES_RETURN_MANAGE',
   '/koperasi': [
     'COOPERATIVE_MEMBER_VIEW',
     'COOPERATIVE_SAVING_VIEW',
@@ -101,6 +96,8 @@ const normalizePath = (path: string) => {
 
 export const getRequiredPermissionForPath = (path: string): RoutePermissionRule | undefined => {
   const normalizedPath = normalizePath(path);
+  const documentPermissionRule = getDocumentPermissionRuleForPath(normalizedPath);
+  if (documentPermissionRule) return documentPermissionRule;
 
   return routeEntries.find(([routePath]) => {
     return normalizedPath === routePath || normalizedPath.startsWith(`${routePath}/`);

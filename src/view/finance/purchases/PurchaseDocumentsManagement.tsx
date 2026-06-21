@@ -18,6 +18,8 @@ import {
 } from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { purchaseDocumentStatusLabelKeys, purchaseInvoicePaymentStatusLabelKeys } from '@/utils/purchaseDocuments/i18n';
+import { canAccessPath } from '@/auth/routePermissions';
+import { useAuth } from '@/auth/useAuth';
 
 const { Title, Text } = Typography;
 
@@ -133,10 +135,16 @@ const hasPricing = (document: Pick<PurchaseDocument, 'type'>) => (
 
 function PurchaseDocumentMenuGrid() {
   const { t } = useI18n();
+  const { currentUser, currentRole, permissionSet } = useAuth();
+  const visibleMenuItems = purchaseDocumentMenuItems.filter((item) => canAccessPath(
+    currentUser ?? undefined,
+    `/purchases/${getPurchaseDocumentTypePathSegment(item.type)}`,
+    { currentRole, permissionSet },
+  ));
 
   return (
     <div className="grid grid-cols-2 gap-[10px] sm:gap-[14px] lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]">
-      {purchaseDocumentMenuItems.map((item) => (
+      {visibleMenuItems.map((item) => (
         <Link
           key={item.type}
           to="/purchases/$documentType"
@@ -185,10 +193,18 @@ function PurchaseDocumentMenuGrid() {
 
 function PurchaseFinanceActionGrid() {
   const { t } = useI18n();
+  const { currentUser, currentRole, permissionSet } = useAuth();
+  const canAccess = (path: string) => canAccessPath(
+    currentUser ?? undefined,
+    path,
+    { currentRole, permissionSet },
+  );
+  const canAccessPendingCosts = canAccess('/purchases/pending-costs');
+  const canAccessPayables = canAccess('/finance/payables');
 
   return (
     <div className="grid grid-cols-1 gap-[10px] sm:grid-cols-2 sm:gap-[14px] lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]">
-      <Link
+      {canAccessPendingCosts && <Link
         to="/purchases/pending-costs"
         className="
           app-menu-card relative flex min-h-[96px] items-center justify-center overflow-hidden rounded-[10px] border border-gray-100 bg-white p-4
@@ -219,8 +235,8 @@ function PurchaseFinanceActionGrid() {
             <ArrowRight size={12} />
           </span>
         </span>
-      </Link>
-      <Link
+      </Link>}
+      {canAccessPayables && <Link
         to="/finance/payables"
         className="
           app-menu-card relative flex min-h-[96px] items-center justify-center overflow-hidden rounded-[10px] border border-gray-100 bg-white p-4
@@ -251,7 +267,7 @@ function PurchaseFinanceActionGrid() {
             <ArrowRight size={12} />
           </span>
         </span>
-      </Link>
+      </Link>}
     </div>
   );
 }

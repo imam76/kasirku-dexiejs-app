@@ -1,4 +1,5 @@
 import { getSetupConfig } from '@/services/setupKeyService';
+import { getDocumentModuleCodesForPath } from './documentPermissions';
 
 /**
  * Mapping from route paths to setup module codes.
@@ -26,11 +27,6 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/history': ['POS_TRANSACTION'],
   // Legacy stock shopping route redirects to Purchase Receipt.
   '/shopping-note': ['PURCHASE_RECEIPT'],
-  // Sales
-  '/sales': ['SALES_QUOTATION', 'SALES_ORDER', 'SALES_DELIVERY', 'SALES_INVOICE', 'SALES_RETURN'],
-  '/sales/returns': ['SALES_RETURN'],
-  // Purchases
-  '/purchases': ['PURCHASE_ORDER', 'PURCHASE_RECEIPT', 'PURCHASE_INVOICE', 'PURCHASE_RETURN'],
   // Finance
   '/finance/cash-flow': ['CASH_FLOW'],
   '/finance/receivables': ['RECEIVABLES'],
@@ -86,6 +82,8 @@ const normalizePath = (path: string) => {
 
 export const getModuleCodesForPath = (path: string): string[] | undefined => {
   const normalizedPath = normalizePath(path);
+  const documentModuleCodes = getDocumentModuleCodesForPath(normalizedPath);
+  if (documentModuleCodes) return documentModuleCodes;
 
   return routeModuleEntries.find(([routePath]) => {
     return normalizedPath === routePath || normalizedPath.startsWith(`${routePath}/`);

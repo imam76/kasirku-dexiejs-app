@@ -4,7 +4,7 @@ import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'kasirku-setup-config-changed';
-const CURRENT_MODULE_CATALOG_VERSION = 2;
+const CURRENT_MODULE_CATALOG_VERSION = 3;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
@@ -75,6 +75,11 @@ export const getSetupConfig = (): SetupConfig | null => {
     if (LEGACY_SETTINGS_MODULES.some((moduleCode) => enabledModules.has(moduleCode))) {
       enabledModules.add('AREA');
       enabledModules.add('EMPLOYEE');
+    }
+    if (['PURCHASE_ORDER', 'PURCHASE_RECEIPT', 'PURCHASE_INVOICE', 'PURCHASE_RETURN']
+      .some((moduleCode) => enabledModules.has(moduleCode))) {
+      enabledModules.add('PURCHASE_REQUEST');
+      enabledModules.add('PURCHASE_RFQ');
     }
 
     const migratedConfig: SetupConfig = {

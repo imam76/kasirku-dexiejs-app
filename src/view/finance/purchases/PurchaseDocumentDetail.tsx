@@ -9,6 +9,8 @@ import {
   PURCHASE_DOCUMENT_TYPE_OPTIONS,
 } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
+import { useAuth } from '@/auth/useAuth';
+import { getPurchaseDocumentPermission } from '@/auth/documentPermissions';
 import { useAccountsPayable } from '@/hooks/useAccountsPayable';
 import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
 import { db } from '@/lib/db';
@@ -74,6 +76,7 @@ interface PurchaseDocumentDetailProps {
 export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentDetailProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { can } = useAuth();
   const { issueDocument, voidDocument, convertDocument, isMutating } = usePurchaseDocuments();
   const {
     getInvoicePayments,
@@ -135,7 +138,8 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
   const canEdit = document.status === 'DRAFT';
   const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
     !(document.type === 'PURCHASE_INVOICE' && (document.finance_transaction_id || Number(document.paid_amount || 0) > 0));
-  const canReconcileCost = document.type === 'PURCHASE_RECEIPT' &&
+  const canReconcileCost = can('PURCHASE_RECEIPT_MANAGE') &&
+    document.type === 'PURCHASE_RECEIPT' &&
     document.status === 'ISSUED' &&
     (document.cost_status ?? 'FINAL') !== 'FINAL';
   const statusStyle = statusColor[document.status];
@@ -255,7 +259,9 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
               Rekonsiliasi HPP
             </Button>
           )}
-          {nextConvertOptions.map((targetType) => (
+          {nextConvertOptions
+            .filter((targetType) => can(getPurchaseDocumentPermission(targetType)))
+            .map((targetType) => (
             <Button
               key={targetType}
               loading={isMutating}
@@ -274,7 +280,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                 type: t(PURCHASE_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === targetType)?.labelKey ?? 'purchaseDocuments.table.type'),
               })}
             </Button>
-          ))}
+            ))}
           {canVoid && (
             <Button danger icon={<AlertTriangle size={16} />} onClick={handleVoid}>
               {t('purchaseDocuments.void')}
@@ -546,6 +552,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
             <PayablePaymentHistory
               payments={invoicePayments}
               loading={isPayableMutating}
+              allowVoid={can('FINANCE_ACCESS')}
               onVoidPayment={async (paymentId, reason) => {
                 await voidPayment({ paymentId, reason });
                 await loadDocument();

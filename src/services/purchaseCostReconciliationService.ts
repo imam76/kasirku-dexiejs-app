@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
 import type {
@@ -197,7 +197,7 @@ const rebuildTransactionItemCosts = async (
 
 export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseReceiptCostInput) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'PURCHASE_RECEIPT_MANAGE');
 
   if (input.items.length < 1) {
     throw new Error('Minimal ada 1 item untuk rekonsiliasi harga.');

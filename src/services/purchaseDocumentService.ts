@@ -1,5 +1,6 @@
 import { getPurchaseDocumentConfig, type PurchaseDocumentConfig } from '@/configs/purchase-document';
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
+import { getPurchaseDocumentPermission } from '@/auth/documentPermissions';
 import { db } from '@/lib/db';
 import type {
   Product,
@@ -555,11 +556,11 @@ const calculatePurchaseTotal = async (
 
 export const createPurchaseDocument = async ({ document, items, pendingProducts }: PurchaseDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
 
   if (!document.type) {
     throw new Error('Tipe dokumen wajib diisi.');
   }
+  await requireUserPermission(currentUser, getPurchaseDocumentPermission(document.type));
 
   const config = getPurchaseDocumentConfig(document.type);
   const now = new Date();
@@ -639,9 +640,9 @@ export const createPurchaseDocument = async ({ document, items, pendingProducts 
 
 export const updatePurchaseDocument = async (id: string, { document, items, pendingProducts }: PurchaseDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const existing = await db.purchaseDocuments.get(id);
   if (!existing) throw new Error('Dokumen tidak ditemukan.');
+  await requireUserPermission(currentUser, getPurchaseDocumentPermission(existing.type));
   assertDraft(existing);
 
   const config = getPurchaseDocumentConfig(existing.type);
@@ -721,9 +722,9 @@ export const updatePurchaseDocument = async (id: string, { document, items, pend
 
 export const issuePurchaseDocument = async (id: string) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const document = await db.purchaseDocuments.get(id);
   if (!document) throw new Error('Dokumen tidak ditemukan.');
+  await requireUserPermission(currentUser, getPurchaseDocumentPermission(document.type));
   assertDraft(document);
 
   const config = getPurchaseDocumentConfig(document.type);
@@ -769,9 +770,10 @@ export const issuePurchaseDocument = async (id: string) => {
 
 export const convertPurchaseDocument = async (sourceId: string, targetType: PurchaseDocumentType) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const source = await db.purchaseDocuments.get(sourceId);
   if (!source) throw new Error('Dokumen sumber tidak ditemukan.');
+  await requireUserPermission(currentUser, getPurchaseDocumentPermission(source.type));
+  await requireUserPermission(currentUser, getPurchaseDocumentPermission(targetType));
   if (source.status !== 'ISSUED') {
     throw new Error('Hanya dokumen terbit yang bisa di-convert.');
   }
@@ -865,9 +867,9 @@ export const convertPurchaseDocument = async (sourceId: string, targetType: Purc
 
 export const voidPurchaseDocument = async (id: string, reason: string) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const document = await db.purchaseDocuments.get(id);
   if (!document) throw new Error('Dokumen tidak ditemukan.');
+  await requireUserPermission(currentUser, getPurchaseDocumentPermission(document.type));
   if (document.status === 'VOIDED') return;
   if (document.status !== 'DRAFT' && document.status !== 'ISSUED') {
     throw new Error('Hanya dokumen draft atau posted yang bisa di-void.');

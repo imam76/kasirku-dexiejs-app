@@ -51,8 +51,10 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
     label: 'Purchases',
     iconName: 'ShoppingBag',
     modules: [
+      { code: 'PURCHASE_REQUEST', label: 'Purchase Request (PR)', description: 'Permintaan pembelian internal' },
+      { code: 'PURCHASE_RFQ', label: 'Request for Quotation (RFQ)', description: 'Permintaan penawaran ke supplier' },
       { code: 'PURCHASE_ORDER', label: 'Purchase Order (PO)', description: 'Pesanan pembelian ke supplier' },
-      { code: 'PURCHASE_RECEIPT', label: 'Purchase Receipt (PR)', description: 'Penerimaan barang dari supplier' },
+      { code: 'PURCHASE_RECEIPT', label: 'Purchase Receipt (GR)', description: 'Penerimaan barang dari supplier' },
       { code: 'PURCHASE_INVOICE', label: 'Purchase Invoice (PI)', description: 'Faktur pembelian' },
       { code: 'PURCHASE_RETURN', label: 'Purchase Return', description: 'Retur pembelian' },
     ],
@@ -120,6 +122,8 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   'SALES_ORDER',
   'SALES_INVOICE',
   // Purchases core flow
+  'PURCHASE_REQUEST',
+  'PURCHASE_RFQ',
   'PURCHASE_ORDER',
   'PURCHASE_INVOICE',
   // Finance essentials

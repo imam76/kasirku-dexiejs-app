@@ -1,5 +1,6 @@
 import { getSalesDocumentConfig, type SalesDocumentConfig } from '@/configs/sales-document';
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
+import { getSalesDocumentPermission } from '@/auth/documentPermissions';
 import { db } from '@/lib/db';
 import {
   recalculateSalesInvoicePaidAmount,
@@ -309,11 +310,11 @@ const withUpdatedSalesDocumentSync = (
 
 export const createSalesDocument = async ({ document, items }: SalesDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
 
   if (!document.type) {
     throw new Error('Tipe dokumen wajib diisi.');
   }
+  await requireUserPermission(currentUser, getSalesDocumentPermission(document.type));
 
   const config = getSalesDocumentConfig(document.type);
   const now = new Date();
@@ -373,9 +374,9 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
 
 export const updateSalesDocument = async (id: string, { document, items }: SalesDocumentUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const existing = await db.salesDocuments.get(id);
   if (!existing) throw new Error('Dokumen tidak ditemukan.');
+  await requireUserPermission(currentUser, getSalesDocumentPermission(existing.type));
   assertDraft(existing);
 
   const config = getSalesDocumentConfig(existing.type);
@@ -435,9 +436,9 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
 
 export const issueSalesDocument = async (id: string) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const document = await db.salesDocuments.get(id);
   if (!document) throw new Error('Dokumen tidak ditemukan.');
+  await requireUserPermission(currentUser, getSalesDocumentPermission(document.type));
   assertDraft(document);
 
   const config = getSalesDocumentConfig(document.type);
@@ -477,9 +478,10 @@ export const issueSalesDocument = async (id: string) => {
 
 export const convertSalesDocument = async (sourceId: string, targetType: SalesDocumentType) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const source = await db.salesDocuments.get(sourceId);
   if (!source) throw new Error('Dokumen sumber tidak ditemukan.');
+  await requireUserPermission(currentUser, getSalesDocumentPermission(source.type));
+  await requireUserPermission(currentUser, getSalesDocumentPermission(targetType));
 
   const targetConfig = getSalesDocumentConfig(targetType);
   const now = new Date();
@@ -560,9 +562,9 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
 
 export const voidSalesDocument = async (id: string, reason: string) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
   const document = await db.salesDocuments.get(id);
   if (!document) throw new Error('Dokumen tidak ditemukan.');
+  await requireUserPermission(currentUser, getSalesDocumentPermission(document.type));
   if (document.status === 'VOIDED') return;
   if (document.status !== 'DRAFT' && document.status !== 'ISSUED') {
     throw new Error('Hanya dokumen draft atau posted yang bisa di-void.');

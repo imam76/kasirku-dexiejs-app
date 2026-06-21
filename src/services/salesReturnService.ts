@@ -1,5 +1,5 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
-import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import type {
   SalesDocument,
@@ -513,7 +513,7 @@ const applyPosProfitReversal = async (
 
 export const createSalesReturn = async (input: SalesReturnUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SALES_RETURN_MANAGE');
+  await requireUserPermission(currentUser, 'SALES_RETURN_MANAGE');
   const { salesReturn, items } = await buildSalesReturnDraft(input);
 
   await db.transaction('rw', salesReturnTables, async () => {
@@ -533,7 +533,7 @@ export const createSalesReturn = async (input: SalesReturnUpsertInput) => {
 
 export const updateSalesReturn = async (id: string, input: SalesReturnUpsertInput) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SALES_RETURN_MANAGE');
+  await requireUserPermission(currentUser, 'SALES_RETURN_MANAGE');
   const existing = await db.salesReturns.get(id);
   if (!existing) throw new Error('Retur tidak ditemukan.');
   assertDraft(existing);
@@ -558,7 +558,7 @@ export const updateSalesReturn = async (id: string, input: SalesReturnUpsertInpu
 
 export const issueSalesReturn = async (id: string) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SALES_RETURN_MANAGE');
+  await requireUserPermission(currentUser, 'SALES_RETURN_MANAGE');
   const salesReturn = await db.salesReturns.get(id);
   if (!salesReturn) throw new Error('Retur tidak ditemukan.');
   assertDraft(salesReturn);
@@ -631,7 +631,7 @@ export const issueSalesReturn = async (id: string) => {
 
 export const voidSalesReturn = async (id: string, reason: string) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SALES_RETURN_MANAGE');
+  await requireUserPermission(currentUser, 'SALES_RETURN_MANAGE');
   const salesReturn = await db.salesReturns.get(id);
   if (!salesReturn) throw new Error('Retur tidak ditemukan.');
   if (salesReturn.status === 'VOIDED') return;
