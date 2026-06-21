@@ -27,6 +27,7 @@ const emptySummary: CooperativeDailyStortingReportSummary = {
   drop_margin_amount: 0,
   drop_amount: 0,
   saving_withdrawal_amount: 0,
+  iptw_amount: 0,
   cash_amount: 0,
 };
 
@@ -81,7 +82,7 @@ const reportTitleStyle: CSSProperties = {
 const summaryGridStyle: CSSProperties = {
   border: '1px solid #d1d5db',
   display: 'grid',
-  gridTemplateColumns: 'repeat(5, 1fr)',
+  gridTemplateColumns: 'repeat(6, 1fr)',
   marginBottom: 18,
 };
 
@@ -184,6 +185,7 @@ const summaryItems = (
     dropMargin: string;
     drop: string;
     savingWithdrawal: string;
+    iptw: string;
     cash: string;
   },
 ) => [
@@ -191,18 +193,20 @@ const summaryItems = (
   { key: 'dropMargin', label: labels.dropMargin, value: money(summary.drop_margin_amount) },
   { key: 'drop', label: labels.drop, value: money(summary.drop_amount) },
   { key: 'savingWithdrawal', label: labels.savingWithdrawal, value: money(summary.saving_withdrawal_amount) },
+  { key: 'iptw', label: labels.iptw, value: money(summary.iptw_amount) },
   { key: 'cash', label: labels.cash, value: money(summary.cash_amount) },
 ];
 
 const renderAmountCells = (summary: Pick<
   CooperativeDailyStortingReportSummary,
-  'storting_amount' | 'drop_margin_amount' | 'drop_amount' | 'saving_withdrawal_amount' | 'cash_amount'
+  'storting_amount' | 'drop_margin_amount' | 'drop_amount' | 'saving_withdrawal_amount' | 'iptw_amount' | 'cash_amount'
 >) => (
   <>
     <td style={numberCellStyle}>{moneyOrDash(summary.storting_amount)}</td>
     <td style={numberCellStyle}>{moneyOrDash(summary.drop_margin_amount)}</td>
     <td style={numberCellStyle}>{moneyOrDash(summary.drop_amount)}</td>
     <td style={numberCellStyle}>{moneyOrDash(summary.saving_withdrawal_amount)}</td>
+    <td style={numberCellStyle}>{moneyOrDash(summary.iptw_amount)}</td>
     <td style={numberCellStyle}>{money(summary.cash_amount)}</td>
   </>
 );
@@ -250,6 +254,7 @@ const CooperativeDailyStortingReport = forwardRef<HTMLDivElement, CooperativeDai
       dropMargin: t('cooperative.reports.dailyStorting.dropMargin'),
       drop: t('cooperative.reports.dailyStorting.drop'),
       savingWithdrawal: t('cooperative.reports.dailyStorting.savingWithdrawal'),
+      iptw: t('cooperative.reports.dailyStorting.iptw'),
       cash: t('cooperative.reports.dailyStorting.cash'),
     };
 
@@ -297,7 +302,7 @@ const CooperativeDailyStortingReport = forwardRef<HTMLDivElement, CooperativeDai
               key={item.key}
               style={{
                 ...summaryCellStyle,
-                borderRight: index === 4 ? 0 : summaryCellStyle.borderRight,
+                borderRight: index === 5 ? 0 : summaryCellStyle.borderRight,
               }}
             >
               <div style={summaryLabelStyle}>{item.label}</div>
@@ -359,6 +364,7 @@ const CooperativeDailyStortingReport = forwardRef<HTMLDivElement, CooperativeDai
                     <th style={{ ...thStyle, textAlign: 'right' }}>{labels.dropMargin}</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>{labels.drop}</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>{labels.savingWithdrawal}</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>{labels.iptw}</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>{labels.cash}</th>
                   </tr>
                 </thead>

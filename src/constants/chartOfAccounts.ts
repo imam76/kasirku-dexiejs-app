@@ -211,6 +211,15 @@ export const DEFAULT_FINANCE_ACCOUNT_MAPPINGS: DefaultMappingSeed[] = [
     is_system: true,
   },
   {
+    key: FINANCE_CATEGORIES.KSP_IPTW,
+    category: FINANCE_CATEGORIES.KSP_IPTW,
+    account_id: 'other-expense',
+    account_code: '6900',
+    account_name: 'Beban Lainnya',
+    account_type: 'EXPENSE',
+    is_system: true,
+  },
+  {
     key: FINANCE_CATEGORIES.WITHDRAWAL,
     category: FINANCE_CATEGORIES.WITHDRAWAL,
     account_id: 'cash-and-bank',
@@ -437,6 +446,11 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createEtapTemplateLine('transport-expense', '6060', 'Beban Transport', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createEtapTemplateLine('supplies-expense', '6070', 'Beban Perlengkapan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createEtapTemplateLine('depreciation-expense', '6080', 'Beban Penyusutan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createEtapTemplateLine('cooperative-iptw-expense', '6090', 'Beban Insentif Pembayaran Tepat Waktu (IPTW)', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    mapping_keys: [FINANCE_CATEGORIES.KSP_IPTW],
+    description: 'Insentif 5% dari pokok pinjaman bagi anggota yang melunasi seluruh angsuran tepat waktu',
+  }),
   createEtapTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
     mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
   }),
@@ -536,6 +550,10 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('electricity-expense', '6030', 'Beban Listrik', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('transport-expense', '6040', 'Beban Transport', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('supplies-expense', '6050', 'Beban Perlengkapan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createTemplateLine('cooperative-iptw-expense', '6090', 'Beban Insentif Pembayaran Tepat Waktu (IPTW)', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    mapping_keys: [FINANCE_CATEGORIES.KSP_IPTW],
+  }),
   createTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
     mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
   }),

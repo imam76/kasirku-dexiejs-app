@@ -92,6 +92,7 @@ const rowLabelKeys = {
   STORTING: 'cooperative.cashReport.storting',
   DROPING: 'cooperative.cashReport.dropping',
   TABUNGAN: 'cooperative.cashReport.saving',
+  IPTW: 'cooperative.cashReport.iptw',
 } as const satisfies Record<CooperativeCashReportRowKey, string>;
 
 const EmployeeCashReport = ({

@@ -47,6 +47,7 @@ export interface CooperativeFieldCashReconciliation {
   storting_saving_deposit_amount: number;
   loan_disbursement_amount: number;
   saving_withdrawal_amount: number;
+  iptw_payout_amount: number;
   deposit_to_finance_amount: number;
   total_storting_amount: number;
   expected_closing_cash_amount: number;
@@ -294,17 +295,23 @@ const buildReconciliation = (
   session: CooperativeFieldCashSession,
   transactions: FinanceTransaction[],
 ): CooperativeFieldCashReconciliation => {
-  const sumByKind = (kind: CooperativeFieldCashMovementKind) => roundCurrency(
+  const sumByKind = (
+    kind: CooperativeFieldCashMovementKind,
+    normalType: FinanceTransaction['type'],
+  ) => roundCurrency(
     transactions
       .filter((transaction) => transaction.field_cash_movement_kind === kind)
-      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0),
+      .reduce((sum, transaction) => (
+        sum + (transaction.type === normalType ? 1 : -1) * Number(transaction.amount || 0)
+      ), 0),
   );
-  const droppingFromFinance = sumByKind('DROPPING_FROM_FINANCE');
-  const stortingLoanPayment = sumByKind('STORTING_LOAN_PAYMENT');
-  const stortingSavingDeposit = sumByKind('STORTING_SAVING_DEPOSIT');
-  const loanDisbursement = sumByKind('LOAN_DISBURSEMENT');
-  const savingWithdrawal = sumByKind('SAVING_WITHDRAWAL');
-  const depositToFinance = sumByKind('DEPOSIT_TO_FINANCE');
+  const droppingFromFinance = sumByKind('DROPPING_FROM_FINANCE', 'INCOME');
+  const stortingLoanPayment = sumByKind('STORTING_LOAN_PAYMENT', 'INCOME');
+  const stortingSavingDeposit = sumByKind('STORTING_SAVING_DEPOSIT', 'INCOME');
+  const loanDisbursement = sumByKind('LOAN_DISBURSEMENT', 'EXPENSE');
+  const savingWithdrawal = sumByKind('SAVING_WITHDRAWAL', 'EXPENSE');
+  const iptwPayout = sumByKind('IPTW_PAYOUT', 'EXPENSE');
+  const depositToFinance = sumByKind('DEPOSIT_TO_FINANCE', 'EXPENSE');
   const expectedClosingCashAmount = roundCurrency(
     Number(session.opening_cash_amount || 0) +
     droppingFromFinance +
@@ -312,6 +319,7 @@ const buildReconciliation = (
     stortingSavingDeposit -
     loanDisbursement -
     savingWithdrawal -
+    iptwPayout -
     depositToFinance,
   );
 
@@ -323,6 +331,7 @@ const buildReconciliation = (
     storting_saving_deposit_amount: stortingSavingDeposit,
     loan_disbursement_amount: loanDisbursement,
     saving_withdrawal_amount: savingWithdrawal,
+    iptw_payout_amount: iptwPayout,
     deposit_to_finance_amount: depositToFinance,
     total_storting_amount: roundCurrency(stortingLoanPayment + stortingSavingDeposit),
     expected_closing_cash_amount: expectedClosingCashAmount,
@@ -462,6 +471,7 @@ export const closeCooperativeFieldCashSession = async (
       storting_saving_deposit_amount: reconciliation.storting_saving_deposit_amount,
       loan_disbursement_amount: reconciliation.loan_disbursement_amount,
       saving_withdrawal_amount: reconciliation.saving_withdrawal_amount,
+      iptw_payout_amount: reconciliation.iptw_payout_amount,
       deposit_to_finance_amount: reconciliation.deposit_to_finance_amount,
       updated_at: now,
       updated_by: currentUser?.id,

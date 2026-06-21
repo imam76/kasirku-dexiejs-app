@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { FINANCE_CATEGORIES } from '@/constants/finance';
 import dayjs from '@/lib/dayjs';
 import type { Dayjs } from 'dayjs';
 import type {
@@ -25,6 +26,7 @@ export interface CooperativeDailyStortingReportSummary {
   drop_margin_amount: number;
   drop_amount: number;
   saving_withdrawal_amount: number;
+  iptw_amount: number;
   cash_amount: number;
 }
 
@@ -38,6 +40,7 @@ export interface CooperativeDailyStortingReportRow {
   drop_margin_amount: number;
   drop_amount: number;
   saving_withdrawal_amount: number;
+  iptw_amount: number;
   cash_amount: number;
 }
 
@@ -96,6 +99,7 @@ export const createEmptyCooperativeDailyStortingReportSummary = (): CooperativeD
   drop_margin_amount: 0,
   drop_amount: 0,
   saving_withdrawal_amount: 0,
+  iptw_amount: 0,
   cash_amount: 0,
 });
 
@@ -262,6 +266,7 @@ const summarizeRows = (
   drop_margin_amount: roundCurrency(summary.drop_margin_amount + row.drop_margin_amount),
   drop_amount: roundCurrency(summary.drop_amount + row.drop_amount),
   saving_withdrawal_amount: roundCurrency(summary.saving_withdrawal_amount + row.saving_withdrawal_amount),
+  iptw_amount: roundCurrency(summary.iptw_amount + row.iptw_amount),
   cash_amount: roundCurrency(summary.cash_amount + row.cash_amount),
 }), createEmptyCooperativeDailyStortingReportSummary());
 
@@ -369,10 +374,15 @@ export const getCooperativeDailyStortingReport = async (
   const startDateKey = startDate.format(DATE_KEY_FORMAT);
   const endDateKey = endDate.format(DATE_KEY_FORMAT);
   const weekRanges = buildWeekRanges(startDate, endDate);
-  const [payments, loans, savingTransactions, members, employees, employeeAreas] = await Promise.all([
+  const [payments, loans, savingTransactions, financeTransactions, members, employees, employeeAreas] = await Promise.all([
     db.cooperativeLoanPayments.orderBy('payment_date').toArray(),
     db.cooperativeLoans.orderBy('loan_number').toArray(),
     db.cooperativeSavingTransactions.orderBy('transaction_date').toArray(),
+    db.financeTransactions
+      .where('category')
+      .equals(FINANCE_CATEGORIES.KSP_IPTW)
+      .filter((transaction) => !transaction.deleted_at)
+      .toArray(),
     db.cooperativeMembers.orderBy('member_number').toArray(),
     db.employees.orderBy('name').toArray(),
     db.employeeAreas.orderBy('employee_id').toArray(),
@@ -385,6 +395,7 @@ export const getCooperativeDailyStortingReport = async (
       .map((employee) => [employee.field_cash_account_id as string, employee]),
   );
   const paymentById = new Map(payments.map((payment) => [payment.id, payment]));
+  const financeTransactionById = new Map(financeTransactions.map((transaction) => [transaction.id, transaction]));
   const employeeOptions = buildEmployeeOptions(employees, members, payments);
   const selectedEmployee = filters.employeeId && filters.employeeId !== COOPERATIVE_DAILY_STORTING_UNASSIGNED_EMPLOYEE
     ? employeeOptions.find((employee) => employee.id === filters.employeeId)
@@ -397,6 +408,7 @@ export const getCooperativeDailyStortingReport = async (
   const stortingByKey = new Map<string, number>();
   const dropByKey = new Map<string, number>();
   const tabKeluarByKey = new Map<string, number>();
+  const iptwByKey = new Map<string, number>();
 
   const registerEmployee = (
     date: string,
@@ -447,10 +459,42 @@ export const getCooperativeDailyStortingReport = async (
       addAmountByDateAndEmployee(tabKeluarByKey, transaction.transaction_date, employee, transaction.amount);
     });
 
+  financeTransactions
+    .filter((transaction) => isDateKeyInRange(transaction.created_at, startDateKey, endDateKey))
+    .forEach((transaction) => {
+      const originalPayout = transaction.type === 'INCOME' && transaction.reference_id
+        ? financeTransactionById.get(transaction.reference_id)
+        : undefined;
+      const payment = paymentById.get(
+        transaction.type === 'EXPENSE'
+          ? transaction.reference_id ?? ''
+          : originalPayout?.reference_id ?? '',
+      );
+      const member = payment ? memberById.get(payment.member_id) : undefined;
+      const fieldEmployee = transaction.field_employee_id
+        ? employeeById.get(transaction.field_employee_id)
+        : undefined;
+      const cashEmployee = employeeByFieldCashAccountId.get(transaction.cash_account_id ?? '');
+      const employee = fieldEmployee || cashEmployee
+        ? getEmployeeSnapshot(fieldEmployee ?? cashEmployee)
+        : payment
+          ? getPaymentCollector(payment, member, employeeById)
+          : getMemberOfficer(member, employeeById);
+      const key = registerEmployee(transaction.created_at, employee);
+      if (!key) return;
+      addAmountByDateAndEmployee(
+        iptwByKey,
+        transaction.created_at,
+        employee,
+        transaction.type === 'INCOME' ? -transaction.amount : transaction.amount,
+      );
+    });
+
   const bucketKeys = Array.from(new Set([
     ...stortingByKey.keys(),
     ...dropByKey.keys(),
     ...tabKeluarByKey.keys(),
+    ...iptwByKey.keys(),
   ])).sort();
 
   const rows = bucketKeys.map((bucketKey): CooperativeDailyStortingReportRow => {
@@ -460,8 +504,9 @@ export const getCooperativeDailyStortingReport = async (
     const dropAmount = roundCurrency(dropByKey.get(bucketKey) ?? 0);
     const dropMarginAmount = roundCurrency(dropAmount * DROP_MARGIN_RATE);
     const savingWithdrawalAmount = roundCurrency(tabKeluarByKey.get(bucketKey) ?? 0);
+    const iptwAmount = roundCurrency(iptwByKey.get(bucketKey) ?? 0);
     const cashAmount = roundCurrency(
-      stortingAmount + dropMarginAmount - dropAmount - savingWithdrawalAmount,
+      stortingAmount + dropMarginAmount - dropAmount - savingWithdrawalAmount - iptwAmount,
     );
 
     return {
@@ -474,6 +519,7 @@ export const getCooperativeDailyStortingReport = async (
       drop_margin_amount: dropMarginAmount,
       drop_amount: dropAmount,
       saving_withdrawal_amount: savingWithdrawalAmount,
+      iptw_amount: iptwAmount,
       cash_amount: cashAmount,
     };
   });

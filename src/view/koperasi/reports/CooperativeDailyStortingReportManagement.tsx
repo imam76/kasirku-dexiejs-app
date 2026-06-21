@@ -112,6 +112,7 @@ export default function CooperativeDailyStortingReportManagement() {
     dropMargin: t('cooperative.reports.dailyStorting.dropMargin'),
     drop: t('cooperative.reports.dailyStorting.drop'),
     savingWithdrawal: t('cooperative.reports.dailyStorting.savingWithdrawal'),
+    iptw: t('cooperative.reports.dailyStorting.iptw'),
     cash: t('cooperative.reports.dailyStorting.cash'),
   };
 
@@ -128,6 +129,7 @@ export default function CooperativeDailyStortingReportManagement() {
         report.summary.drop_margin_amount,
         report.summary.drop_amount,
         report.summary.saving_withdrawal_amount,
+        report.summary.iptw_amount,
         report.summary.cash_amount,
       ],
     ];
@@ -153,6 +155,7 @@ export default function CooperativeDailyStortingReportManagement() {
           labels.dropMargin,
           labels.drop,
           labels.savingWithdrawal,
+          labels.iptw,
           labels.cash,
         ]);
         week.rows.forEach((row) => {
@@ -163,6 +166,7 @@ export default function CooperativeDailyStortingReportManagement() {
             row.drop_margin_amount,
             row.drop_amount,
             row.saving_withdrawal_amount,
+            row.iptw_amount,
             row.cash_amount,
           ]);
         });
@@ -173,6 +177,7 @@ export default function CooperativeDailyStortingReportManagement() {
           week.summary.drop_margin_amount,
           week.summary.drop_amount,
           week.summary.saving_withdrawal_amount,
+          week.summary.iptw_amount,
           week.summary.cash_amount,
         ]);
       });
@@ -184,6 +189,7 @@ export default function CooperativeDailyStortingReportManagement() {
         group.summary.drop_margin_amount,
         group.summary.drop_amount,
         group.summary.saving_withdrawal_amount,
+        group.summary.iptw_amount,
         group.summary.cash_amount,
       ]);
     });

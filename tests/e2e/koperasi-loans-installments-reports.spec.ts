@@ -10,6 +10,7 @@ import {
   disburseLoan,
   expectCooperativeReportSummary,
   expectInstallmentSchedule,
+  payRemainingInstallments,
   payFirstInstallment,
 } from './helpers/koperasi';
 
@@ -34,5 +35,14 @@ test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
     await page.goto('/finance/general-ledger');
     await expect(page.getByText(/Pencairan pinjaman .*KSU-002 - Budi Hartono/)).toBeVisible();
     await expect(page.getByText(/Pembayaran angsuran/)).toBeVisible();
+
+    await payRemainingInstallments(page, demoMembers.budi);
+    await page.goto('/koperasi/pinjaman');
+    await expect(page.getByTestId(`koperasi-loan-row-${demoMembers.budi.memberNumber}`).first())
+      .toContainText('Paid Off');
+
+    await page.goto('/finance/general-ledger');
+    await expect(page.getByText(/IPTW 5% pelunasan tepat waktu/)).toBeVisible();
+    await expect(page.getByText(/Rp 150.000/).first()).toBeVisible();
   });
 });

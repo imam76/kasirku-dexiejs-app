@@ -25,6 +25,23 @@ async function fillOpeningBalanceAmount(page: Page, accountCode: string, side: '
   await fillControlByTestId(page, testId, amount);
 }
 
+async function expectFinanceMappingVisible(page: Page, label: string) {
+  const mapping = page.getByText(label, { exact: true });
+  const firstPage = page.locator('li[title="1"]').last();
+  if (await firstPage.count()) {
+    await firstPage.click();
+  }
+
+  for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+    if (await mapping.isVisible()) return;
+    const nextButton = page.locator('li[title="Next Page"]').last().getByRole('button');
+    if (!await nextButton.isEnabled()) break;
+    await nextButton.click();
+  }
+
+  await expect(mapping).toBeVisible();
+}
+
 export async function expectDefaultKspAccounts(page: Page) {
   await page.goto('/finance/chart-of-accounts');
   await expect(page.getByText('Daftar Akun').first()).toBeVisible();
@@ -48,10 +65,11 @@ export async function expectAccountingMappingReady(page: Page) {
   await expect(page.getByText('Module Activation')).toBeVisible();
   await expect(page.getByTestId('accounting-module-general-ledger-switch')).toBeVisible();
 
-  await expect(page.getByText('KSP Setoran Simpanan')).toBeVisible();
-  await expect(page.getByText('KSP Penarikan Simpanan')).toBeVisible();
-  await expect(page.getByText('KSP_PENCAIRAN_PINJAMAN')).toBeVisible();
-  await expect(page.getByText('KSP_PEMBAYARAN_ANGSURAN')).toBeVisible();
+  await expectFinanceMappingVisible(page, 'KSP Setoran Simpanan');
+  await expectFinanceMappingVisible(page, 'KSP Penarikan Simpanan');
+  await expectFinanceMappingVisible(page, 'KSP Pencairan Pinjaman');
+  await expectFinanceMappingVisible(page, 'KSP Pembayaran Angsuran');
+  await expectFinanceMappingVisible(page, 'KSP_INSENTIF_PEMBAYARAN_TEPAT_WAKTU');
 }
 
 export async function postOpeningBalance(page: Page) {

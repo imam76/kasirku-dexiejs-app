@@ -214,6 +214,20 @@ export async function payFirstInstallment(page: Page, member: DemoMemberInput) {
   await expect(paymentRow).toContainText('Posted');
 }
 
+export async function payRemainingInstallments(page: Page, member: DemoMemberInput) {
+  await page.goto('/koperasi/angsuran');
+
+  for (const installmentNumber of [2, 3, 4, 5, 6]) {
+    const installmentRow = page.getByTestId(
+      `koperasi-installment-row-${member.memberNumber}-${installmentNumber}`,
+    );
+    await installmentRow.getByRole('button', { name: 'Bayar' }).click();
+    await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeVisible();
+    await page.getByTestId('koperasi-installment-payment-submit-button').click();
+    await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeHidden();
+  }
+}
+
 export async function expectCooperativeReportSummary(page: Page) {
   await page.goto('/koperasi/laporan');
 

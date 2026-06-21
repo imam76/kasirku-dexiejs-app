@@ -29,6 +29,8 @@ export interface CooperativeFieldCashReportRow {
   loan_disbursement_amount: number;
   saving_withdrawal_amount: number;
   saving_withdrawal_reversal_amount: number;
+  iptw_payout_amount: number;
+  iptw_payout_reversal_amount: number;
   deposit_to_finance_amount: number;
   balance_amount: number;
   last_movement_at?: string;
@@ -75,6 +77,9 @@ const matchesMovementKind = (
   }
   if (kind === 'SAVING_WITHDRAWAL') {
     return transaction.category === FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL;
+  }
+  if (kind === 'IPTW_PAYOUT') {
+    return transaction.category === FINANCE_CATEGORIES.KSP_IPTW;
   }
 
   return false;
@@ -137,6 +142,8 @@ export const getCooperativeFieldCashReport = async (
     const loanDisbursement = sumByKind(employeeTransactions, 'LOAN_DISBURSEMENT', 'EXPENSE');
     const savingWithdrawal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL', 'EXPENSE');
     const savingWithdrawalReversal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL', 'INCOME');
+    const iptwPayout = sumByKind(employeeTransactions, 'IPTW_PAYOUT', 'EXPENSE');
+    const iptwPayoutReversal = sumByKind(employeeTransactions, 'IPTW_PAYOUT', 'INCOME');
     const depositToFinance = sumByKind(employeeTransactions, 'DEPOSIT_TO_FINANCE', 'EXPENSE');
     const movementDates = employeeTransactions
       .map((transaction) => transaction.created_at)
@@ -159,6 +166,8 @@ export const getCooperativeFieldCashReport = async (
       loan_disbursement_amount: loanDisbursement,
       saving_withdrawal_amount: savingWithdrawal,
       saving_withdrawal_reversal_amount: savingWithdrawalReversal,
+      iptw_payout_amount: iptwPayout,
+      iptw_payout_reversal_amount: iptwPayoutReversal,
       deposit_to_finance_amount: depositToFinance,
       balance_amount: await getCashAccountBalance(employee.field_cash_account_id),
       last_movement_at: lastMovementAt,

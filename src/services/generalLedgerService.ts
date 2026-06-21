@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import type {
   AccountNormalBalance,
@@ -8,6 +9,7 @@ import type {
   CooperativeLoan,
   CooperativeLoanPayment,
   CooperativeSavingTransaction,
+  FinanceTransaction,
   InventoryAccountingPolicy,
   JournalEntry,
   JournalEntryLine,
@@ -48,6 +50,7 @@ const SOURCE_EVENTS = {
   COOPERATIVE_SAVING_WITHDRAWAL_POSTED: 'COOPERATIVE_SAVING_WITHDRAWAL_POSTED',
   COOPERATIVE_LOAN_DISBURSED: 'COOPERATIVE_LOAN_DISBURSED',
   COOPERATIVE_LOAN_PAYMENT_POSTED: 'COOPERATIVE_LOAN_PAYMENT_POSTED',
+  COOPERATIVE_IPTW_PAID: 'COOPERATIVE_IPTW_PAID',
   PRODUCTION_ORDER_POSTED: 'PRODUCTION_ORDER_POSTED',
   OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
   MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
@@ -203,6 +206,8 @@ const ACCOUNT_CANDIDATES = {
   cooperativeLoanInterestIncome: { ids: ['cooperative-loan-interest-income'], codes: ['4040'] },
   cooperativeLoanPenaltyIncome: { ids: ['cooperative-loan-penalty-income'], codes: ['4050'] },
   cooperativeLoanAdminIncome: { ids: ['cooperative-loan-admin-income', 'template-loan-admin-income'], codes: ['4060'] },
+  cooperativeIptwExpense: { ids: ['cooperative-iptw-expense', 'template-cooperative-iptw-expense'], codes: ['6090'] },
+  otherExpense: { ids: ['other-expense', 'template-other-expense'], codes: ['6900'] },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
 } satisfies Record<string, AccountCandidate>;
 
@@ -1324,6 +1329,63 @@ export const reverseCooperativeLoanPaymentJournal = async (
     actor,
   });
 };
+
+export const postCooperativeIptwJournal = async (
+  transaction: FinanceTransaction,
+  payment: CooperativeLoanPayment,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (
+    transaction.type !== 'EXPENSE' ||
+    transaction.category !== FINANCE_CATEGORIES.KSP_IPTW ||
+    transaction.amount <= 0
+  ) {
+    return undefined;
+  }
+  if (!await isGeneralLedgerPostingEnabled(transaction.created_at)) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cashAccount = transaction.cash_account_id
+    ? accounts.find((account) => account.id === transaction.cash_account_id)
+    : getPostableAccount(accounts, getCashAccountCandidate(transaction.payment_method), 'Kas/Bank');
+  if (!cashAccount) {
+    throw new Error('Akun kas/bank pembayaran IPTW tidak ditemukan.');
+  }
+  if (cashAccount.type !== 'ASSET' || !cashAccount.is_active || !cashAccount.is_postable) {
+    throw new Error('Akun kas/bank pembayaran IPTW harus bertipe aset, aktif, dan postable.');
+  }
+
+  const expenseAccount = tryGetPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeIptwExpense)
+    ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.otherExpense, 'Beban IPTW');
+
+  return postBalancedJournalEntry({
+    source_type: 'COOPERATIVE_LOAN',
+    source_id: transaction.id,
+    source_number: payment.payment_number,
+    source_event: SOURCE_EVENTS.COOPERATIVE_IPTW_PAID,
+    entry_date: transaction.created_at,
+    description: transaction.description,
+    lines: [
+      createDebitLine(expenseAccount, transaction.amount, 'Beban IPTW anggota'),
+      createCreditLine(cashAccount, transaction.amount, 'Kas/bank berkurang karena pembayaran IPTW'),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const reverseCooperativeIptwJournal = async (
+  transaction: FinanceTransaction,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  entryDate?: string,
+) => reverseJournalEntriesForSource({
+  source_type: 'COOPERATIVE_LOAN',
+  source_id: transaction.id,
+  source_event: SOURCE_EVENTS.COOPERATIVE_IPTW_PAID,
+  reason,
+  entry_date: entryDate,
+  actor,
+});
 
 export const reverseSalesInvoiceJournal = async (
   document: SalesDocument,

@@ -83,6 +83,7 @@ export type CooperativeFieldCashMovementKind =
   | 'STORTING_SAVING_DEPOSIT'
   | 'LOAN_DISBURSEMENT'
   | 'SAVING_WITHDRAWAL'
+  | 'IPTW_PAYOUT'
   | 'DEPOSIT_TO_FINANCE';
 export type SyncQueueOperation = 'create' | 'update' | 'delete';
 export type SyncQueueStatus = 'pending' | 'processing' | 'synced' | 'failed';
@@ -1250,6 +1251,7 @@ export interface CooperativeFieldCashSession {
   storting_saving_deposit_amount?: number;
   loan_disbursement_amount?: number;
   saving_withdrawal_amount?: number;
+  iptw_payout_amount?: number;
   deposit_to_finance_amount?: number;
 
   created_at: string;

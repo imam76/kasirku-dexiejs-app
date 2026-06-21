@@ -9,7 +9,7 @@ use crate::models::cooperative::{
 use crate::repositories::{
     cooperative_repository, finance_transaction_repository, journal_entry_repository,
 };
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, FixedOffset, Utc};
 use sqlx::{FromRow, PgPool, Postgres, Transaction};
 use thiserror::Error;
 use uuid::Uuid;
@@ -21,6 +21,9 @@ const FINANCE_PERMISSION: &str = "FINANCE_ACCESS";
 const RECEIVABLE_ACCOUNT_KEY: &str = "COOPERATIVE_LOAN_RECEIVABLE";
 const INTEREST_ACCOUNT_KEY: &str = "COOPERATIVE_LOAN_INTEREST_INCOME";
 const PENALTY_ACCOUNT_KEY: &str = "COOPERATIVE_LOAN_PENALTY_INCOME";
+const IPTW_EXPENSE_ACCOUNT_KEY: &str = "COOPERATIVE_IPTW_EXPENSE";
+const IPTW_FINANCE_CATEGORY: &str = "KSP_INSENTIF_PEMBAYARAN_TEPAT_WAKTU";
+const IPTW_RATE: f64 = 0.05;
 const AMOUNT_TOLERANCE: f64 = 0.01;
 
 #[derive(Debug, Error)]
@@ -54,6 +57,7 @@ struct LockedLoan {
     member_id: String,
     member_number: String,
     member_name: String,
+    principal_amount: f64,
     outstanding_principal_amount: f64,
     outstanding_interest_amount: f64,
     outstanding_penalty_amount: f64,
@@ -68,6 +72,21 @@ struct LockedLoan {
 struct PaymentPolicy {
     max_backdate_days: i32,
     max_future_minutes: i32,
+}
+
+#[derive(Debug, Clone, FromRow)]
+struct IptwPayout {
+    id: String,
+    amount: f64,
+    cash_account_id: Option<String>,
+    cash_account_code: Option<String>,
+    cash_account_name: Option<String>,
+    payment_method: Option<String>,
+    payment_channel: Option<String>,
+    account_id: Option<String>,
+    account_code: Option<String>,
+    account_name: Option<String>,
+    account_type: Option<String>,
 }
 
 macro_rules! cooperative_payment_approval_select {
@@ -108,6 +127,15 @@ fn round_currency(value: f64) -> f64 {
 
 fn is_positive_amount(value: f64) -> bool {
     value.is_finite() && value > 0.0
+}
+
+fn cooperative_date(value: &str) -> Result<chrono::NaiveDate, CooperativeMutationError> {
+    let jakarta_offset = FixedOffset::east_opt(7 * 60 * 60).ok_or_else(|| {
+        CooperativeMutationError::Invalid("Zona waktu Asia/Jakarta tidak valid.".to_string())
+    })?;
+    DateTime::parse_from_rfc3339(value)
+        .map(|date| date.with_timezone(&jakarta_offset).date_naive())
+        .map_err(|_| CooperativeMutationError::Invalid("Tanggal angsuran tidak valid.".to_string()))
 }
 
 async fn require_actor(
@@ -314,6 +342,7 @@ async fn get_locked_loan(
           member_id,
           member_number,
           member_name,
+          principal_amount,
           outstanding_principal_amount,
           outstanding_interest_amount,
           outstanding_penalty_amount,
@@ -584,6 +613,178 @@ async fn load_payment_result(
         finance_transaction,
         journal_entry,
     })
+}
+
+async fn is_loan_eligible_for_iptw(
+    tx: &mut Transaction<'_, Postgres>,
+    loan_id: &str,
+) -> Result<bool, CooperativeMutationError> {
+    let installments = sqlx::query_as::<_, (String, String, Option<String>)>(
+        r#"
+        SELECT status, due_date, paid_at
+        FROM cooperative_loan_installments
+        WHERE loan_id = $1
+        ORDER BY installment_number
+        "#,
+    )
+    .bind(loan_id)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    if installments.is_empty() {
+        return Ok(false);
+    }
+
+    for (status, due_date, paid_at) in installments {
+        let Some(paid_at) = paid_at else {
+            return Ok(false);
+        };
+        if status != "PAID" || cooperative_date(&paid_at)? > cooperative_date(&due_date)? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn create_iptw_payout(
+    tx: &mut Transaction<'_, Postgres>,
+    loan: &LockedLoan,
+    payment_id: &str,
+    payment_number: &str,
+    payment_date: &str,
+    cash_account: &CooperativePostingAccountDto,
+    expense_account: &CooperativePostingAccountDto,
+    payment_method: &str,
+    payment_channel: &Option<String>,
+    actor: &ActorAccess,
+    now_text: &str,
+) -> Result<(), CooperativeMutationError> {
+    let amount = round_currency(loan.principal_amount * IPTW_RATE);
+    if amount <= AMOUNT_TOLERANCE {
+        return Ok(());
+    }
+
+    let already_paid = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+          SELECT 1
+          FROM finance_transactions
+          WHERE category = $1
+            AND type = 'EXPENSE'
+            AND reference_id = $2
+            AND deleted_at IS NULL
+        )
+        "#,
+    )
+    .bind(IPTW_FINANCE_CATEGORY)
+    .bind(payment_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    if already_paid {
+        return Ok(());
+    }
+
+    let finance_transaction_id = Uuid::new_v4().to_string();
+    let journal_entry_id = Uuid::new_v4().to_string();
+    let journal_number = format!(
+        "JRN-{}-{}",
+        Utc::now().format("%Y%m%d"),
+        &journal_entry_id[..8]
+    );
+    let description = format!(
+        "IPTW 5% pelunasan tepat waktu {} {} - {}",
+        loan.loan_number, loan.member_number, loan.member_name
+    );
+
+    sqlx::query(
+        r#"
+        INSERT INTO finance_transactions (
+          id, type, category, amount, description, reference_id, account_id,
+          account_code, account_name, account_type, payment_method,
+          payment_channel, cash_account_id, cash_account_code, cash_account_name,
+          version, created_by, created_by_name, updated_by, updated_by_name,
+          created_at, updated_at
+        )
+        VALUES (
+          $1, 'EXPENSE', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+          $12, $13, $14, 1, $15, $16, $15, $16,
+          $17::TIMESTAMPTZ, $18::TIMESTAMPTZ
+        )
+        "#,
+    )
+    .bind(&finance_transaction_id)
+    .bind(IPTW_FINANCE_CATEGORY)
+    .bind(amount)
+    .bind(&description)
+    .bind(payment_id)
+    .bind(&expense_account.id)
+    .bind(&expense_account.code)
+    .bind(&expense_account.name)
+    .bind(&expense_account.account_type)
+    .bind(payment_method)
+    .bind(payment_channel)
+    .bind(&cash_account.id)
+    .bind(&cash_account.code)
+    .bind(&cash_account.name)
+    .bind(&actor.user_id)
+    .bind(&actor.user_name)
+    .bind(payment_date)
+    .bind(now_text)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO journal_entries (
+          id, entry_number, entry_date, status, source_type, source_id,
+          source_number, source_event, description, total_debit, total_credit,
+          posted_at, version, created_by, created_by_name, updated_by,
+          updated_by_name, created_at, updated_at
+        )
+        VALUES (
+          $1, $2, $3::TIMESTAMPTZ, 'POSTED', 'COOPERATIVE_LOAN', $4, $5,
+          'COOPERATIVE_IPTW_PAID', $6, $7, $7, $8::TIMESTAMPTZ, 1,
+          $9, $10, $9, $10, $8::TIMESTAMPTZ, $8::TIMESTAMPTZ
+        )
+        "#,
+    )
+    .bind(&journal_entry_id)
+    .bind(&journal_number)
+    .bind(payment_date)
+    .bind(&finance_transaction_id)
+    .bind(payment_number)
+    .bind(&description)
+    .bind(amount)
+    .bind(now_text)
+    .bind(&actor.user_id)
+    .bind(&actor.user_name)
+    .execute(&mut **tx)
+    .await?;
+
+    insert_journal_line(
+        tx,
+        &journal_entry_id,
+        expense_account,
+        amount,
+        0.0,
+        "Beban IPTW anggota",
+        now_text,
+    )
+    .await?;
+    insert_journal_line(
+        tx,
+        &journal_entry_id,
+        cash_account,
+        0.0,
+        amount,
+        "Kas/bank berkurang karena pembayaran IPTW",
+        now_text,
+    )
+    .await?;
+
+    Ok(())
 }
 
 pub async fn post_loan_payment(
@@ -1179,6 +1380,24 @@ async fn post_loan_payment_internal(
         )
         .await?;
     }
+    if loan_status == "PAID_OFF" && is_loan_eligible_for_iptw(&mut tx, &loan.id).await? {
+        let iptw_expense_account =
+            get_posting_account_by_key(&mut tx, IPTW_EXPENSE_ACCOUNT_KEY, "EXPENSE").await?;
+        create_iptw_payout(
+            &mut tx,
+            &loan,
+            &payment_id,
+            &payment_number,
+            &payment_date_text,
+            &cash_account,
+            &iptw_expense_account,
+            &input.payment_method,
+            &input.payment_channel,
+            &actor,
+            &now_text,
+        )
+        .await?;
+    }
 
     sqlx::query(
         r#"
@@ -1532,6 +1751,208 @@ pub async fn approve_payment_request(
     )
 }
 
+async fn reverse_iptw_payout(
+    tx: &mut Transaction<'_, Postgres>,
+    payment: &CooperativeLoanPaymentDto,
+    reason: &str,
+    actor: &ActorAccess,
+    now: &DateTime<Utc>,
+    now_text: &str,
+) -> Result<(), CooperativeMutationError> {
+    let payout = sqlx::query_as::<_, IptwPayout>(
+        r#"
+        SELECT
+          id, amount, cash_account_id, cash_account_code,
+          cash_account_name, payment_method, payment_channel, account_id,
+          account_code, account_name, account_type
+        FROM finance_transactions
+        WHERE category = $1
+          AND type = 'EXPENSE'
+          AND reference_id = $2
+          AND deleted_at IS NULL
+        FOR UPDATE
+        "#,
+    )
+    .bind(IPTW_FINANCE_CATEGORY)
+    .bind(&payment.id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(payout) = payout else {
+        return Ok(());
+    };
+
+    let already_reversed = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+          SELECT 1
+          FROM finance_transactions
+          WHERE category = $1
+            AND type = 'INCOME'
+            AND reference_id = $2
+            AND deleted_at IS NULL
+        )
+        "#,
+    )
+    .bind(IPTW_FINANCE_CATEGORY)
+    .bind(&payout.id)
+    .fetch_one(&mut **tx)
+    .await?;
+    if already_reversed {
+        return Ok(());
+    }
+
+    let original_journal_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT id
+        FROM journal_entries
+        WHERE source_type = 'COOPERATIVE_LOAN'
+          AND source_id = $1
+          AND source_event = 'COOPERATIVE_IPTW_PAID'
+          AND status = 'POSTED'
+          AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE
+        "#,
+    )
+    .bind(&payout.id)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let reversal_finance_id = Uuid::new_v4().to_string();
+    let reversal_description = format!(
+        "Reversal IPTW pembayaran {}. {}",
+        payment.payment_number, reason
+    );
+    sqlx::query(
+        r#"
+        INSERT INTO finance_transactions (
+          id, type, category, amount, description, reference_id, account_id,
+          account_code, account_name, account_type, payment_method,
+          payment_channel, cash_account_id, cash_account_code, cash_account_name,
+          version, created_by, created_by_name, updated_by, updated_by_name,
+          created_at, updated_at
+        )
+        VALUES (
+          $1, 'INCOME', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+          $12, $13, $14, 1, $15, $16, $15, $16,
+          $17::TIMESTAMPTZ, $17::TIMESTAMPTZ
+        )
+        "#,
+    )
+    .bind(&reversal_finance_id)
+    .bind(IPTW_FINANCE_CATEGORY)
+    .bind(payout.amount)
+    .bind(&reversal_description)
+    .bind(&payout.id)
+    .bind(&payout.account_id)
+    .bind(&payout.account_code)
+    .bind(&payout.account_name)
+    .bind(&payout.account_type)
+    .bind(&payout.payment_method)
+    .bind(&payout.payment_channel)
+    .bind(&payout.cash_account_id)
+    .bind(&payout.cash_account_code)
+    .bind(&payout.cash_account_name)
+    .bind(&actor.user_id)
+    .bind(&actor.user_name)
+    .bind(now_text)
+    .execute(&mut **tx)
+    .await?;
+
+    if let Some(original_journal_id) = original_journal_id {
+        let original_lines =
+            sqlx::query_as::<_, (String, String, String, String, f64, f64, Option<String>)>(
+                r#"
+                SELECT account_id, account_code, account_name, account_type,
+                       debit, credit, description
+                FROM journal_entry_lines
+                WHERE journal_entry_id = $1
+                ORDER BY id
+                "#,
+            )
+            .bind(&original_journal_id)
+            .fetch_all(&mut **tx)
+            .await?;
+        let reversal_journal_id = Uuid::new_v4().to_string();
+        let reversal_journal_number =
+            format!("JRN-{}-{}", now.format("%Y%m%d"), &reversal_journal_id[..8]);
+        sqlx::query(
+            r#"
+            INSERT INTO journal_entries (
+              id, entry_number, entry_date, status, source_type, source_id,
+              source_number, source_event, description, total_debit, total_credit,
+              posted_at, reversed_entry_id, version, created_by, created_by_name,
+              updated_by, updated_by_name, created_at, updated_at
+            )
+            VALUES (
+              $1, $2, $3::TIMESTAMPTZ, 'POSTED', 'COOPERATIVE_LOAN', $4, $5,
+              'COOPERATIVE_IPTW_REVERSED', $6, $7, $7, $3::TIMESTAMPTZ,
+              $8, 1, $9, $10, $9, $10, $3::TIMESTAMPTZ, $3::TIMESTAMPTZ
+            )
+            "#,
+        )
+        .bind(&reversal_journal_id)
+        .bind(&reversal_journal_number)
+        .bind(now_text)
+        .bind(&reversal_finance_id)
+        .bind(&payment.payment_number)
+        .bind(&reversal_description)
+        .bind(payout.amount)
+        .bind(&original_journal_id)
+        .bind(&actor.user_id)
+        .bind(&actor.user_name)
+        .execute(&mut **tx)
+        .await?;
+
+        for (account_id, account_code, account_name, account_type, debit, credit, description) in
+            original_lines
+        {
+            sqlx::query(
+                r#"
+                INSERT INTO journal_entry_lines (
+                  id, journal_entry_id, account_id, account_code, account_name,
+                  account_type, debit, credit, description, created_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::TIMESTAMPTZ)
+                "#,
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(&reversal_journal_id)
+            .bind(account_id)
+            .bind(account_code)
+            .bind(account_name)
+            .bind(account_type)
+            .bind(credit)
+            .bind(debit)
+            .bind(description)
+            .bind(now_text)
+            .execute(&mut **tx)
+            .await?;
+        }
+
+        sqlx::query(
+            r#"
+            UPDATE journal_entries
+            SET status = 'REVERSED', reversed_entry_id = $2,
+                updated_at = $3::TIMESTAMPTZ, updated_by = $4,
+                updated_by_name = $5, version = version + 1
+            WHERE id = $1
+              AND status = 'POSTED'
+            "#,
+        )
+        .bind(&original_journal_id)
+        .bind(&reversal_journal_id)
+        .bind(now_text)
+        .bind(&actor.user_id)
+        .bind(&actor.user_name)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    Ok(())
+}
+
 async fn execute_approved_payment_reversal(
     pool: &PgPool,
     session_token: &str,
@@ -1844,6 +2265,8 @@ async fn execute_approved_payment_reversal(
     .bind(&checker.user_name)
     .execute(&mut *tx)
     .await?;
+
+    reverse_iptw_payout(&mut tx, &payment, &reason, &checker, &now, &now_text).await?;
 
     sqlx::query(
         r#"

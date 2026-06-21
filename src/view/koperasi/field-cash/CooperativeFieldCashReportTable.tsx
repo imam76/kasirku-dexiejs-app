@@ -119,6 +119,14 @@ export default function CooperativeFieldCashReportTable({
       render: money,
     },
     {
+      title: 'IPTW',
+      dataIndex: 'iptw_payout_amount',
+      key: 'iptw_payout_amount',
+      align: 'right',
+      width: 130,
+      render: money,
+    },
+    {
       title: 'Terakhir',
       dataIndex: 'last_movement_at',
       key: 'last_movement_at',

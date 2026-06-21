@@ -10,6 +10,10 @@ import type {
 } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import {
+  calculateCooperativeIptwAmount,
+  isCooperativeLoanEligibleForIptw,
+} from '@/utils/koperasi/iptw';
+import {
   cooperativeLoanBillingFrequencyOptions,
   cooperativeLoanCalculationTypeOptions,
   cooperativeLoanInstallmentStatusOptions,
@@ -58,6 +62,8 @@ export default function CooperativeLoanDetailDrawer({
   const outstandingInterestLabel = calculationType === 'TOTAL_PERCENT'
     ? t('cooperative.loans.outstandingLoanService')
     : t('cooperative.loans.outstandingInterest');
+  const iptwAmount = loan ? calculateCooperativeIptwAmount(loan.principal_amount) : 0;
+  const isIptwEligible = isCooperativeLoanEligibleForIptw(installments);
 
   const installmentColumns = useMemo<ColumnsType<CooperativeLoanInstallment>>(() => [
     {
@@ -177,6 +183,13 @@ export default function CooperativeLoanDetailDrawer({
             )}
             <Descriptions.Item label={calculationType === 'TOTAL_PERCENT' ? t('cooperative.loans.table.totalLoanService') : t('cooperative.loans.table.totalInterest')}>
               Rp {formatCurrency(loan.total_interest_amount)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.loans.iptw')}>
+              {loan.status === 'PAID_OFF'
+                ? isIptwEligible
+                  ? t('cooperative.loans.iptwPaid', { amount: formatCurrency(iptwAmount) })
+                  : t('cooperative.loans.iptwNotEligible')
+                : t('cooperative.loans.iptwPotential', { amount: formatCurrency(iptwAmount) })}
             </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.loans.table.totalPayable')}>
               Rp {formatCurrency(loan.total_payable_amount)}

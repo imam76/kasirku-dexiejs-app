@@ -6,7 +6,7 @@ import {
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
-export type CooperativeCashReportRowKey = 'STORTING' | 'DROPING' | 'TABUNGAN';
+export type CooperativeCashReportRowKey = 'STORTING' | 'DROPING' | 'TABUNGAN' | 'IPTW';
 
 export interface CooperativeCashReportFilters {
   date?: string;
@@ -77,6 +77,11 @@ const createEmployeeReport = (
         source.saving_withdrawal_amount +
         source.storting_saving_deposit_reversal_amount,
       ),
+    },
+    {
+      key: 'IPTW',
+      incoming_amount: source.iptw_payout_reversal_amount,
+      outgoing_amount: source.iptw_payout_amount,
     },
   ];
   const totalIncoming = roundCurrency(

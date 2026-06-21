@@ -20,8 +20,10 @@ import {
 import {
   getCashOrBankAccountForPayment,
   postCooperativeLoanDisbursementJournal,
+  postCooperativeIptwJournal,
   postCooperativeLoanPaymentJournal,
   postCooperativeSavingTransactionJournal,
+  reverseCooperativeIptwJournal,
   reverseCooperativeLoanPaymentJournal,
   reverseCooperativeSavingTransactionJournal,
 } from '@/services/generalLedgerService';
@@ -51,7 +53,6 @@ import {
 import {
   assertSufficientCashAccountBalance,
   buildFieldCashFinanceTransactionFields,
-  getCashAccountBalance,
   getFieldCashContextForCashAccount,
   type CooperativeFieldCashContext,
 } from '@/services/cooperativeFieldCashService';
@@ -92,6 +93,10 @@ import {
   calculateTotalPercentLoanSummary,
   roundCurrency,
 } from '@/utils/koperasi/loanSchedule';
+import {
+  calculateCooperativeIptwAmount,
+  isCooperativeLoanEligibleForIptw,
+} from '@/utils/koperasi/iptw';
 import {
   findCollectionScheduleByWeekday,
   getCollectionWeekdayLabel,
@@ -448,10 +453,7 @@ const recordMandatorySavingReturnOnPaidOff = async ({
   const mandatorySavingAmount = roundCurrency(amount);
   if (mandatorySavingAmount <= 0) return {};
   if (await findAutoMandatorySavingReturnTransaction(payment)) return {};
-  if (!fieldCashContext || !payment.cash_account_id) return {};
-
-  const cashBalance = await getCashAccountBalance(payment.cash_account_id);
-  if (cashBalance + 0.01 < mandatorySavingAmount) return {};
+  if (!payment.cash_account_id) return {};
 
   const token = getAutoMandatorySavingReturnToken(payment.id);
   const savingTransactionId = crypto.randomUUID();
@@ -663,6 +665,157 @@ const reverseAutoMandatorySavingReturn = async ({
     balance,
     financeTransaction,
   };
+};
+
+const findIptwPayoutTransaction = async (
+  payment: Pick<CooperativeLoanPayment, 'id'>,
+) => db.financeTransactions
+  .where('reference_id')
+  .equals(payment.id)
+  .filter((transaction) => (
+    transaction.category === FINANCE_CATEGORIES.KSP_IPTW &&
+    transaction.type === 'EXPENSE' &&
+    !transaction.deleted_at
+  ))
+  .first();
+
+const getIptwExpenseAccountSnapshot = async () => {
+  const mappedSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_IPTW);
+  if (mappedSnapshot) return mappedSnapshot;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const account = accounts.find((item) => (
+    item.is_active &&
+    item.is_postable &&
+    item.type === 'EXPENSE' &&
+    (
+      item.id === 'cooperative-iptw-expense' ||
+      item.id === 'template-cooperative-iptw-expense' ||
+      item.code === '6090'
+    )
+  )) ?? accounts.find((item) => (
+    item.is_active &&
+    item.is_postable &&
+    item.type === 'EXPENSE' &&
+    (item.id === 'other-expense' || item.id === 'template-other-expense' || item.code === '6900')
+  ));
+
+  return account
+    ? {
+        account_id: account.id,
+        account_code: account.code,
+        account_name: account.name,
+        account_type: account.type,
+      }
+    : undefined;
+};
+
+const recordIptwPayoutOnPaidOff = async ({
+  loan,
+  payment,
+  amount,
+  now,
+  fieldCashContext,
+  currentUser,
+}: {
+  loan: CooperativeLoan;
+  payment: CooperativeLoanPayment;
+  amount: number;
+  now: string;
+  fieldCashContext?: CooperativeFieldCashContext;
+  currentUser?: { id: string; name: string } | null;
+}): Promise<FinanceTransaction | undefined> => {
+  const iptwAmount = roundCurrency(amount);
+  if (iptwAmount <= 0 || !payment.cash_account_id) return undefined;
+  if (await findIptwPayoutTransaction(payment)) return undefined;
+
+  const financeTransactionId = crypto.randomUUID();
+  const description = `IPTW 5% pelunasan tepat waktu ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`;
+  const financeTransaction = withPendingFinanceTransactionSync({
+    id: financeTransactionId,
+    type: 'EXPENSE',
+    category: FINANCE_CATEGORIES.KSP_IPTW,
+    amount: iptwAmount,
+    description,
+    created_at: payment.payment_date,
+    reference_id: payment.id,
+    payment_method: payment.payment_method,
+    payment_channel: payment.payment_channel,
+    cash_account_id: payment.cash_account_id,
+    cash_account_code: payment.cash_account_code,
+    cash_account_name: payment.cash_account_name,
+    ...await getIptwExpenseAccountSnapshot(),
+    ...(fieldCashContext
+      ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'IPTW_PAYOUT')
+      : {}),
+  }, currentUser, now);
+
+  await updateFinanceBalanceForSavingWithdrawal(iptwAmount, now);
+  await db.financeTransactions.add(financeTransaction);
+  await postCooperativeIptwJournal(financeTransaction, payment, currentUser);
+
+  return financeTransaction;
+};
+
+const reverseAutoIptwPayout = async ({
+  payment,
+  reason,
+  now,
+  currentUser,
+}: {
+  payment: CooperativeLoanPayment;
+  reason: string;
+  now: string;
+  currentUser?: { id: string; name: string } | null;
+}): Promise<FinanceTransaction | undefined> => {
+  const originalTransaction = await findIptwPayoutTransaction(payment);
+  if (!originalTransaction) return undefined;
+
+  const existingReversal = await db.financeTransactions
+    .where('reference_id')
+    .equals(originalTransaction.id)
+    .filter((transaction) => (
+      transaction.category === FINANCE_CATEGORIES.KSP_IPTW &&
+      transaction.type === 'INCOME' &&
+      !transaction.deleted_at
+    ))
+    .first();
+  if (existingReversal) return undefined;
+
+  const financeTransaction = withPendingFinanceTransactionSync({
+    id: crypto.randomUUID(),
+    type: 'INCOME',
+    category: FINANCE_CATEGORIES.KSP_IPTW,
+    amount: originalTransaction.amount,
+    description: `Reversal IPTW pembayaran ${payment.payment_number}. ${reason}`,
+    created_at: now,
+    reference_id: originalTransaction.id,
+    payment_method: originalTransaction.payment_method,
+    payment_channel: originalTransaction.payment_channel,
+    cash_account_id: originalTransaction.cash_account_id,
+    cash_account_code: originalTransaction.cash_account_code,
+    cash_account_name: originalTransaction.cash_account_name,
+    account_id: originalTransaction.account_id,
+    account_code: originalTransaction.account_code,
+    account_name: originalTransaction.account_name,
+    account_type: originalTransaction.account_type,
+    field_cash_session_id: originalTransaction.field_cash_session_id,
+    field_cash_session_number: originalTransaction.field_cash_session_number,
+    field_employee_id: originalTransaction.field_employee_id,
+    field_employee_name: originalTransaction.field_employee_name,
+    field_cash_movement_kind: originalTransaction.field_cash_movement_kind,
+  }, currentUser, now);
+
+  await updateFinanceBalanceForSavingWithdrawal(originalTransaction.amount, now, true);
+  await db.financeTransactions.add(financeTransaction);
+  await reverseCooperativeIptwJournal(
+    originalTransaction,
+    `Reversal IPTW pembayaran ${payment.payment_number}: ${reason}`,
+    currentUser,
+    now,
+  );
+
+  return financeTransaction;
 };
 
 const buildInstallments = (
@@ -1281,10 +1434,14 @@ const ensureServerPostingAccounts = async (
 ) => {
   if (!await hasUserPermission(currentUser, 'FINANCE_ACCESS')) return;
 
-  const [receivableAccount, interestAccount, penaltyAccount] = await Promise.all([
+  const [receivableAccount, interestAccount, penaltyAccount, iptwExpenseAccount] = await Promise.all([
     findPostingAccount(['cooperative-loan-receivable'], ['1120']),
     findPostingAccount(['cooperative-loan-interest-income'], ['4040']),
     findPostingAccount(['cooperative-loan-penalty-income'], ['4050']),
+    findPostingAccount(
+      ['cooperative-iptw-expense', 'template-cooperative-iptw-expense', 'other-expense', 'template-other-expense'],
+      ['6090', '6900'],
+    ),
   ]);
 
   await cooperativePostingPostgresAdapter.registerAccounts(sessionToken, [
@@ -1330,6 +1487,17 @@ const ensureServerPostingAccounts = async (
       is_active: penaltyAccount.is_active,
       is_cash_or_bank: false,
       updated_at: penaltyAccount.updated_at,
+    },
+    {
+      id: iptwExpenseAccount.id,
+      account_key: 'COOPERATIVE_IPTW_EXPENSE',
+      code: iptwExpenseAccount.code,
+      name: iptwExpenseAccount.name,
+      account_type: iptwExpenseAccount.type,
+      is_postable: iptwExpenseAccount.is_postable,
+      is_active: iptwExpenseAccount.is_active,
+      is_cash_or_bank: false,
+      updated_at: iptwExpenseAccount.updated_at,
     },
   ]);
 };
@@ -1382,6 +1550,12 @@ const recordCooperativeLoanPaymentOnServer = async (
     mergeRemoteFinanceTransactionsIntoDexie([postedResult.finance_transaction]),
     mergeRemoteJournalEntryBundlesIntoDexie([postedResult.journal_entry]),
   ]);
+  if (postedResult.loan.status === 'PAID_OFF') {
+    await Promise.all([
+      refreshFinanceTransactionsFromPostgres(),
+      refreshJournalEntriesFromPostgres(),
+    ]);
+  }
 
   const [payment, installment, loan] = await Promise.all([
     db.cooperativeLoanPayments.get(postedResult.payment.id),
@@ -1420,6 +1594,7 @@ const recordCooperativeLoanPaymentLocally = async (
   let mandatorySavingReturnTransaction: CooperativeSavingTransaction | undefined;
   let mandatorySavingReturnBalance: CooperativeMemberSavingBalance | undefined;
   let mandatorySavingReturnFinanceTransaction: FinanceTransaction | undefined;
+  let iptwFinanceTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const installment = await db.cooperativeLoanInstallments.get(parsedInput.installment_id);
@@ -1570,10 +1745,22 @@ const recordCooperativeLoanPaymentLocally = async (
     await db.cooperativeLoans.put(nextLoan);
 
     if (nextLoan.status === 'PAID_OFF') {
+      const iptwAmount = isCooperativeLoanEligibleForIptw(nextInstallments)
+        ? calculateCooperativeIptwAmount(nextLoan.principal_amount)
+        : 0;
+      const mandatorySavingAmount = roundCurrency(Number(nextLoan.mandatory_saving_amount || 0));
+      if (fieldCashContext) {
+        await assertSufficientCashAccountBalance(
+          cashAccount.id,
+          roundCurrency(mandatorySavingAmount + iptwAmount),
+          { actionLabel: 'pengembalian simpanan wajib dan pembayaran IPTW' },
+        );
+      }
+
       const mandatorySavingReturn = await recordMandatorySavingReturnOnPaidOff({
         loan: nextLoan,
         payment,
-        amount: Number(nextLoan.mandatory_saving_amount || 0),
+        amount: mandatorySavingAmount,
         now,
         fieldCashContext,
         currentUser,
@@ -1581,6 +1768,14 @@ const recordCooperativeLoanPaymentLocally = async (
       mandatorySavingReturnTransaction = mandatorySavingReturn.transaction;
       mandatorySavingReturnBalance = mandatorySavingReturn.balance;
       mandatorySavingReturnFinanceTransaction = mandatorySavingReturn.financeTransaction;
+      iptwFinanceTransaction = await recordIptwPayoutOnPaidOff({
+        loan: nextLoan,
+        payment,
+        amount: iptwAmount,
+        now,
+        fieldCashContext,
+        currentUser,
+      });
     }
 
     const journalEntry = await postCooperativeLoanPaymentJournal(payment, currentUser);
@@ -1624,6 +1819,9 @@ const recordCooperativeLoanPaymentLocally = async (
   }
   if (mandatorySavingReturnFinanceTransaction) {
     await enqueueFinanceTransactionsSync([mandatorySavingReturnFinanceTransaction], 'create');
+  }
+  if (iptwFinanceTransaction) {
+    await enqueueFinanceTransactionsSync([iptwFinanceTransaction], 'create');
   }
   if (mandatorySavingReturnTransaction) {
     await enqueueCooperativeSavingTransactionsSync([mandatorySavingReturnTransaction], 'create');
@@ -1841,6 +2039,7 @@ export const reverseCooperativeLoanPayment = async (
   let autoReturnOriginalTransaction: CooperativeSavingTransaction | undefined;
   let autoReturnBalance: CooperativeMemberSavingBalance | undefined;
   let autoReturnFinanceTransaction: FinanceTransaction | undefined;
+  let iptwReversalFinanceTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const payment = await db.cooperativeLoanPayments.get(input.payment_id);
@@ -1925,6 +2124,12 @@ export const reverseCooperativeLoanPayment = async (
     autoReturnOriginalTransaction = autoReturnReversal.updatedOriginalTransaction;
     autoReturnBalance = autoReturnReversal.balance;
     autoReturnFinanceTransaction = autoReturnReversal.financeTransaction;
+    iptwReversalFinanceTransaction = await reverseAutoIptwPayout({
+      payment,
+      reason: parsedInput.reason,
+      now,
+      currentUser,
+    });
 
     await updateFinanceBalanceForPayment(payment.amount, now, true);
     reversalFinanceTransaction = withPendingFinanceTransactionSync({
@@ -2054,6 +2259,9 @@ export const reverseCooperativeLoanPayment = async (
   }
   if (autoReturnFinanceTransaction) {
     await enqueueFinanceTransactionsSync([autoReturnFinanceTransaction], 'create');
+  }
+  if (iptwReversalFinanceTransaction) {
+    await enqueueFinanceTransactionsSync([iptwReversalFinanceTransaction], 'create');
   }
   if (autoReturnReversalTransaction) {
     await enqueueCooperativeSavingTransactionsSync([autoReturnReversalTransaction], 'create');
