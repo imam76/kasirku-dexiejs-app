@@ -1,5 +1,6 @@
 import { getSetupConfig } from '@/services/setupKeyService';
 import { getDocumentModuleCodesForPath } from './documentPermissions';
+import { getReportAccessForPath } from './reportPermissions';
 
 /**
  * Mapping from route paths to setup module codes.
@@ -34,14 +35,6 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/finance/chart-of-accounts': ['CHART_OF_ACCOUNTS'],
   '/finance/general-ledger': ['GENERAL_LEDGER'],
   // Reports
-  '/report/pos-sales-report': ['REPORT_POS_SALES'],
-  '/report/deposit-report': ['REPORT_POS_SALES'],
-  '/report/transaction-detail-report': ['REPORT_TRANSACTION_DETAIL'],
-  '/report/purchase-report': ['REPORT_PURCHASE'],
-  '/report/expense-report': ['REPORT_EXPENSE'],
-  '/report/profit-loss-report': ['REPORT_PROFIT'],
-  '/report/aging-report': ['REPORT_AGING'],
-  '/report/stock-card': ['REPORT_STOCK_CARD'],
   '/profit': ['REPORT_PROFIT'],
   // Koperasi
   '/koperasi/anggota': ['KOPERASI_ANGGOTA'],
@@ -50,15 +43,6 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/koperasi/angsuran': ['KOPERASI_ANGSURAN'],
   '/koperasi/penagihan': ['KOPERASI_PENAGIHAN'],
   '/koperasi/kas-petugas': ['KOPERASI_KAS_PETUGAS'],
-  '/koperasi/laporan': ['KOPERASI_SHU'],
-  '/koperasi/laporan-tunai': ['KOPERASI_SHU'],
-  '/koperasi/laporan-target-harian': ['KOPERASI_SHU'],
-  '/koperasi/laporan-storting-harian': ['KOPERASI_SHU'],
-  '/koperasi/laporan-drop-harian': ['KOPERASI_SHU'],
-  '/koperasi/laporan-drop-mingguan': ['KOPERASI_SHU'],
-  '/koperasi/laporan-induk-anggota': ['KOPERASI_SHU'],
-  '/koperasi/buku-angsuran': ['KOPERASI_SHU'],
-  '/koperasi/arus-kas': ['KOPERASI_SHU'],
   '/koperasi': [
     'KOPERASI_ANGGOTA',
     'KOPERASI_SIMPANAN_POKOK',
@@ -68,7 +52,16 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'KOPERASI_ANGSURAN',
     'KOPERASI_PENAGIHAN',
     'KOPERASI_KAS_PETUGAS',
-    'KOPERASI_SHU'
+    'KOPERASI_SHU',
+    'KOPERASI_REPORT_CASH',
+    'KOPERASI_REPORT_DAILY_TARGET',
+    'KOPERASI_REPORT_DAILY_STORTING',
+    'KOPERASI_REPORT_DAILY_DROP',
+    'KOPERASI_REPORT_WEEKLY_DROP',
+    'KOPERASI_REPORT_MEMBER_REGISTER',
+    'KOPERASI_REPORT_INSTALLMENT_BOOK',
+    'KOPERASI_REPORT_CASH_FLOW',
+    'KOPERASI_REPORT_LEDGER'
   ],
 };
 
@@ -84,6 +77,8 @@ export const getModuleCodesForPath = (path: string): string[] | undefined => {
   const normalizedPath = normalizePath(path);
   const documentModuleCodes = getDocumentModuleCodesForPath(normalizedPath);
   if (documentModuleCodes) return documentModuleCodes;
+  const reportAccess = getReportAccessForPath(normalizedPath);
+  if (reportAccess) return [reportAccess.moduleCode];
 
   return routeModuleEntries.find(([routePath]) => {
     return normalizedPath === routePath || normalizedPath.startsWith(`${routePath}/`);

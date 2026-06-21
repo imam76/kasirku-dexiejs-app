@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { konversiSatuanProduk } from '@/utils/pricing';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export interface StockCardRow {
   id: string;
@@ -45,6 +46,7 @@ const isPurchaseStockInDocument = (document: { type: string; source_document_typ
 );
 
 export const getStockCard = async (productId: string, startDate: Date, endDate: Date): Promise<{ openingBalance: number; rows: StockCardRow[] }> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'REPORT_STOCK_CARD_VIEW');
   const product = await db.products.get(productId);
   if (!product) {
     throw new Error('Produk tidak ditemukan');

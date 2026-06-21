@@ -113,6 +113,13 @@ function Cooperative() {
       desc: t('cooperative.index.installmentBookDesc'),
     },
     {
+      to: '/koperasi/laporan-induk-anggota',
+      label: t('nav.cooperative.memberRegister'),
+      icon: FileTextOutlined,
+      color: 'text-indigo-700',
+      desc: t('cooperative.memberRegister.subtitle'),
+    },
+    {
       to: '/koperasi/arus-kas',
       label: t('cooperative.reports.tabs.cashFlowStatement'),
       icon: BankOutlined,

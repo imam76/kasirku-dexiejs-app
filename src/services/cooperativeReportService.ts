@@ -27,6 +27,7 @@ import type {
   JournalEntryLine,
   JournalSourceType,
 } from '@/types';
+import { getCurrentSessionUser, requireAnyUserPermission } from '@/auth/authService';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
 
@@ -1433,6 +1434,10 @@ const buildOperationalSummary = (
 export const getCooperativeReportData = async (
   filters: CooperativeReportFilters = {},
 ): Promise<CooperativeReportData> => {
+  await requireAnyUserPermission(await getCurrentSessionUser(), [
+    'COOPERATIVE_OVERVIEW_REPORT_VIEW',
+    'COOPERATIVE_CASH_FLOW_REPORT_VIEW',
+  ]);
   const periodLedgerFilters = {
     startDate: filters.startDate,
     endDate: filters.endDate,

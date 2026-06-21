@@ -7,6 +7,7 @@ import type {
 } from '@/types';
 import { getCooperativeLoanPaidOffDateByLoanId } from '@/utils/koperasi/loanReport';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
+import { getCurrentSessionUser, requireAnyUserPermission } from '@/auth/authService';
 
 export interface CooperativeDailyDropReportFilters {
   startDate?: string;
@@ -205,6 +206,10 @@ const createRowFromLoan = ({
 export const getCooperativeDailyDropReport = async (
   filters: CooperativeDailyDropReportFilters = {},
 ): Promise<CooperativeDailyDropReport> => {
+  await requireAnyUserPermission(await getCurrentSessionUser(), [
+    'COOPERATIVE_DAILY_DROP_REPORT_VIEW',
+    'COOPERATIVE_WEEKLY_DROP_REPORT_VIEW',
+  ]);
   const [loans, members, employees, payments, installments] = await Promise.all([
     db.cooperativeLoans.orderBy('loan_number').toArray(),
     db.cooperativeMembers.orderBy('member_number').toArray(),

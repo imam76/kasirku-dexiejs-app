@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { isReportDateInRange } from '@/hooks/useReports';
 import type { CashierSession } from '@/types';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export interface DepositReportData {
   sessions: CashierSession[];
@@ -17,6 +18,7 @@ export const useDepositReport = (
   return useQuery({
     queryKey: ['depositReport', startDate, endDate, cashierUserId],
     queryFn: async (): Promise<DepositReportData> => {
+      await requireUserPermission(await getCurrentSessionUser(), 'REPORT_DEPOSIT_VIEW');
       // 1. Get all closed cashier sessions
       let sessions = await db.cashierSessions
         .where('status')

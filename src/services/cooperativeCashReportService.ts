@@ -4,6 +4,7 @@ import {
   type CooperativeFieldCashReportRow,
 } from '@/services/cooperativeFieldCashReportService';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export type CooperativeCashReportRowKey = 'STORTING' | 'DROPING' | 'TABUNGAN';
 
@@ -100,6 +101,7 @@ const createEmployeeReport = (
 export const getCooperativeCashReport = async (
   filters: CooperativeCashReportFilters = {},
 ): Promise<CooperativeCashReport> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'COOPERATIVE_CASH_REPORT_VIEW');
   const selectedDate = filters.date ? dayjs(filters.date).tz() : dayjs().tz();
   const dateKey = selectedDate.format('YYYY-MM-DD');
   const sourceRows = await getCooperativeFieldCashReport({

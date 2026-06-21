@@ -22,6 +22,7 @@ import {
   isReportableCooperativeLoanPayment,
 } from '@/utils/koperasi/loanReport';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export const COOPERATIVE_DAILY_TARGET_UNASSIGNED_EMPLOYEE = '__UNASSIGNED__';
 
@@ -561,6 +562,7 @@ const buildCollectionSchedulesByEmployeeId = (
 export const getCooperativeDailyTargetReport = async (
   filters: CooperativeDailyTargetReportFilters = {},
 ): Promise<CooperativeDailyTargetReport> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'COOPERATIVE_DAILY_TARGET_REPORT_VIEW');
   const { monthKey, startDate, endDate } = getMonthRange(filters.monthDate);
   const startDateKey = startDate.format(DATE_KEY_FORMAT);
   const endDateKey = endDate.format(DATE_KEY_FORMAT);

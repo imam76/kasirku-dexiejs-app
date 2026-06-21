@@ -10,6 +10,7 @@ import type {
   EmployeeArea,
 } from '@/types';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export const COOPERATIVE_DAILY_STORTING_UNASSIGNED_EMPLOYEE = '__UNASSIGNED__';
 
@@ -363,6 +364,7 @@ const buildAreaNamesByEmployeeId = (
 export const getCooperativeDailyStortingReport = async (
   filters: CooperativeDailyStortingReportFilters = {},
 ): Promise<CooperativeDailyStortingReport> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'COOPERATIVE_DAILY_STORTING_REPORT_VIEW');
   const { monthKey, startDate, endDate } = getMonthRange(filters.monthDate);
   const startDateKey = startDate.format(DATE_KEY_FORMAT);
   const endDateKey = endDate.format(DATE_KEY_FORMAT);

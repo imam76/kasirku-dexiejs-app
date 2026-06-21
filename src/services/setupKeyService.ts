@@ -4,7 +4,7 @@ import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'kasirku-setup-config-changed';
-const CURRENT_MODULE_CATALOG_VERSION = 3;
+const CURRENT_MODULE_CATALOG_VERSION = 4;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
@@ -80,6 +80,22 @@ export const getSetupConfig = (): SetupConfig | null => {
       .some((moduleCode) => enabledModules.has(moduleCode))) {
       enabledModules.add('PURCHASE_REQUEST');
       enabledModules.add('PURCHASE_RFQ');
+    }
+    if (enabledModules.has('REPORT_POS_SALES')) {
+      enabledModules.add('REPORT_DEPOSIT');
+    }
+    if (enabledModules.has('KOPERASI_SHU')) {
+      [
+        'KOPERASI_REPORT_CASH',
+        'KOPERASI_REPORT_DAILY_TARGET',
+        'KOPERASI_REPORT_DAILY_STORTING',
+        'KOPERASI_REPORT_DAILY_DROP',
+        'KOPERASI_REPORT_WEEKLY_DROP',
+        'KOPERASI_REPORT_MEMBER_REGISTER',
+        'KOPERASI_REPORT_INSTALLMENT_BOOK',
+        'KOPERASI_REPORT_CASH_FLOW',
+        'KOPERASI_REPORT_LEDGER',
+      ].forEach((moduleCode) => enabledModules.add(moduleCode));
     }
 
     const migratedConfig: SetupConfig = {

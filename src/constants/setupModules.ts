@@ -77,6 +77,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
     iconName: 'BarChart3',
     modules: [
       { code: 'REPORT_POS_SALES', label: 'POS Sales Report', description: 'Laporan penjualan POS' },
+      { code: 'REPORT_DEPOSIT', label: 'Cashier Deposit Report', description: 'Laporan setoran kasir' },
       { code: 'REPORT_TRANSACTION_DETAIL', label: 'Transaction Detail', description: 'Laporan detail transaksi' },
       { code: 'REPORT_PURCHASE', label: 'Purchase Report', description: 'Laporan pembelian' },
       { code: 'REPORT_EXPENSE', label: 'Expense Report', description: 'Laporan pengeluaran' },
@@ -98,7 +99,16 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'KOPERASI_ANGSURAN', label: 'Angsuran', description: 'Cicilan & pembayaran pinjaman' },
       { code: 'KOPERASI_PENAGIHAN', label: 'Penagihan', description: 'Daftar tagihan jatuh tempo & tunggakan anggota' },
       { code: 'KOPERASI_KAS_PETUGAS', label: 'Kas Petugas', description: 'Sesi, dropping, storting, dan setor kas petugas lapangan' },
-      { code: 'KOPERASI_SHU', label: 'SHU', description: 'Sisa Hasil Usaha & pembagian' },
+      { code: 'KOPERASI_SHU', label: 'Overview & SHU', description: 'Ringkasan laporan dan Sisa Hasil Usaha' },
+      { code: 'KOPERASI_REPORT_CASH', label: 'Laporan Tunai', description: 'Laporan arus tunai petugas koperasi' },
+      { code: 'KOPERASI_REPORT_DAILY_TARGET', label: 'Target Harian', description: 'Laporan target penagihan harian' },
+      { code: 'KOPERASI_REPORT_DAILY_STORTING', label: 'Storting Harian', description: 'Laporan storting harian petugas' },
+      { code: 'KOPERASI_REPORT_DAILY_DROP', label: 'Drop Harian', description: 'Laporan drop pinjaman harian' },
+      { code: 'KOPERASI_REPORT_WEEKLY_DROP', label: 'Drop Mingguan', description: 'Laporan drop pinjaman mingguan' },
+      { code: 'KOPERASI_REPORT_MEMBER_REGISTER', label: 'Induk Anggota', description: 'Laporan register induk anggota' },
+      { code: 'KOPERASI_REPORT_INSTALLMENT_BOOK', label: 'Buku Angsuran', description: 'Laporan buku angsuran anggota' },
+      { code: 'KOPERASI_REPORT_CASH_FLOW', label: 'Arus Kas Koperasi', description: 'Laporan arus kas koperasi' },
+      { code: 'KOPERASI_REPORT_LEDGER', label: 'Buku Besar Koperasi', description: 'Laporan buku besar koperasi' },
     ],
   },
 ];
@@ -131,6 +141,7 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   'CHART_OF_ACCOUNTS',
   // Reports
   'REPORT_POS_SALES',
+  'REPORT_DEPOSIT',
   'REPORT_PROFIT',
 ];
 

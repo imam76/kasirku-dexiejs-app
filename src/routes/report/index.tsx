@@ -26,6 +26,7 @@ function Laporan() {
     { to: '/report/expense-report', label: t('report.index.expenseShort'), icon: FileExcelOutlined, color: 'text-red-600', desc: t('report.index.expenseDesc') },
     { to: '/report/profit-loss-report', label: t('report.index.profitLossShort'), icon: LineChartOutlined, color: 'text-indigo-600', desc: t('report.index.profitLossDesc') },
     { to: '/report/aging-report', label: t('report.index.agingShort'), icon: ReconciliationOutlined, color: 'text-emerald-600', desc: t('report.index.agingDesc') },
+    { to: '/report/stock-card', label: 'Kartu Stok', icon: FileSearchOutlined, color: 'text-cyan-700', desc: 'Lihat mutasi dan saldo stok per produk' },
   ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }))
 
   return (

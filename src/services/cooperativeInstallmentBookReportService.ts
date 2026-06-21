@@ -11,6 +11,7 @@ import {
   getIsoWeekday,
 } from '@/utils/koperasi/collectionSchedule';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export const COOPERATIVE_INSTALLMENT_BOOK_UNASSIGNED_EMPLOYEE = '__UNASSIGNED__';
 
@@ -328,6 +329,7 @@ const createReportRow = ({
 export const getCooperativeInstallmentBookReport = async (
   filters: CooperativeInstallmentBookReportFilters = {},
 ): Promise<CooperativeInstallmentBookReport> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'COOPERATIVE_INSTALLMENT_BOOK_REPORT_VIEW');
   const reportMonth = (filters.monthDate ? dayjs(filters.monthDate).tz() : dayjs().tz())
     .startOf('month');
   const collectionWeekday = filters.collectionWeekday ?? getIsoWeekday(dayjs().tz());

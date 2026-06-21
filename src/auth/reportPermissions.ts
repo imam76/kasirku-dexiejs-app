@@ -1,0 +1,107 @@
+import type { Permission } from '@/types';
+
+export interface ReportAccessDefinition {
+  permission: Permission;
+  moduleCode: string;
+}
+
+export const GENERAL_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
+  '/report/pos-sales-report': {
+    permission: 'REPORT_POS_SALES_VIEW',
+    moduleCode: 'REPORT_POS_SALES',
+  },
+  '/report/sales-report': {
+    permission: 'REPORT_POS_SALES_VIEW',
+    moduleCode: 'REPORT_POS_SALES',
+  },
+  '/report/deposit-report': {
+    permission: 'REPORT_DEPOSIT_VIEW',
+    moduleCode: 'REPORT_DEPOSIT',
+  },
+  '/report/transaction-detail-report': {
+    permission: 'REPORT_TRANSACTION_DETAIL_VIEW',
+    moduleCode: 'REPORT_TRANSACTION_DETAIL',
+  },
+  '/report/purchase-report': {
+    permission: 'REPORT_PURCHASE_VIEW',
+    moduleCode: 'REPORT_PURCHASE',
+  },
+  '/report/expense-report': {
+    permission: 'REPORT_EXPENSE_VIEW',
+    moduleCode: 'REPORT_EXPENSE',
+  },
+  '/report/profit-loss-report': {
+    permission: 'REPORT_PROFIT_LOSS_VIEW',
+    moduleCode: 'REPORT_PROFIT',
+  },
+  '/report/aging-report': {
+    permission: 'REPORT_AGING_VIEW',
+    moduleCode: 'REPORT_AGING',
+  },
+  '/report/stock-card': {
+    permission: 'REPORT_STOCK_CARD_VIEW',
+    moduleCode: 'REPORT_STOCK_CARD',
+  },
+};
+
+export const COOPERATIVE_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
+  '/koperasi/laporan': {
+    permission: 'COOPERATIVE_OVERVIEW_REPORT_VIEW',
+    moduleCode: 'KOPERASI_SHU',
+  },
+  '/koperasi/laporan-tunai': {
+    permission: 'COOPERATIVE_CASH_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_CASH',
+  },
+  '/koperasi/laporan-target-harian': {
+    permission: 'COOPERATIVE_DAILY_TARGET_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_DAILY_TARGET',
+  },
+  '/koperasi/laporan-storting-harian': {
+    permission: 'COOPERATIVE_DAILY_STORTING_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_DAILY_STORTING',
+  },
+  '/koperasi/laporan-drop-harian': {
+    permission: 'COOPERATIVE_DAILY_DROP_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_DAILY_DROP',
+  },
+  '/koperasi/laporan-drop-mingguan': {
+    permission: 'COOPERATIVE_WEEKLY_DROP_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_WEEKLY_DROP',
+  },
+  '/koperasi/laporan-induk-anggota': {
+    permission: 'COOPERATIVE_MEMBER_REGISTER_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_MEMBER_REGISTER',
+  },
+  '/koperasi/buku-angsuran': {
+    permission: 'COOPERATIVE_INSTALLMENT_BOOK_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_INSTALLMENT_BOOK',
+  },
+  '/koperasi/arus-kas': {
+    permission: 'COOPERATIVE_CASH_FLOW_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_CASH_FLOW',
+  },
+  '/koperasi/buku-besar': {
+    permission: 'COOPERATIVE_LEDGER_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_LEDGER',
+  },
+};
+
+export const GENERAL_REPORT_PERMISSION_LIST = Array.from(new Set(
+  Object.values(GENERAL_REPORT_ACCESS).map((item) => item.permission),
+));
+export const COOPERATIVE_REPORT_PERMISSION_LIST = Object.values(COOPERATIVE_REPORT_ACCESS)
+  .map((item) => item.permission);
+
+const findReportDefinition = (
+  path: string,
+  definitions: Record<string, ReportAccessDefinition>,
+) => Object.entries(definitions)
+  .sort(([left], [right]) => right.length - left.length)
+  .find(([routePath]) => path === routePath || path.startsWith(`${routePath}/`))
+  ?.[1];
+
+export const getReportAccessForPath = (path: string) => (
+  findReportDefinition(path, GENERAL_REPORT_ACCESS) ??
+  findReportDefinition(path, COOPERATIVE_REPORT_ACCESS)
+);

@@ -3,6 +3,11 @@ import { hasPermission } from './permissions';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { canBypassSetupModuleLockForUser, shouldBypassSetupModuleLock } from '@/services/setupKeyService';
 import { getDocumentPermissionRuleForPath } from './documentPermissions';
+import {
+  COOPERATIVE_REPORT_PERMISSION_LIST,
+  GENERAL_REPORT_PERMISSION_LIST,
+  getReportAccessForPath,
+} from './reportPermissions';
 
 type RoutePermissionRule = Permission | Permission[];
 
@@ -53,7 +58,6 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
     'COOPERATIVE_INSTALLMENT_VIEW',
     'COOPERATIVE_BILLING_ACCESS',
     'COOPERATIVE_FIELD_CASH_VIEW',
-    'COOPERATIVE_REPORT_VIEW',
   ],
   '/koperasi/anggota': 'COOPERATIVE_MEMBER_VIEW',
   '/koperasi/simpanan': 'COOPERATIVE_SAVING_VIEW',
@@ -61,29 +65,10 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/koperasi/angsuran': 'COOPERATIVE_INSTALLMENT_VIEW',
   '/koperasi/penagihan': 'COOPERATIVE_BILLING_ACCESS',
   '/koperasi/kas-petugas': 'COOPERATIVE_FIELD_CASH_VIEW',
-  '/koperasi/laporan': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/laporan-tunai': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/laporan-target-harian': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/laporan-storting-harian': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/laporan-drop-harian': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/laporan-drop-mingguan': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/laporan-induk-anggota': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/buku-angsuran': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/arus-kas': 'COOPERATIVE_REPORT_VIEW',
-  '/koperasi/buku-besar': 'COOPERATIVE_REPORT_VIEW',
   '/sync-db': 'SETTINGS_ACCESS',
   '/settings': 'SETTINGS_ACCESS',
   '/profit': 'PROFIT_VIEW',
-  '/report': ['CASHIER_ACCESS', 'STOCK_PURCHASE_ACCESS', 'FINANCE_ACCESS'],
-  '/report/pos-sales-report': 'CASHIER_ACCESS',
-  '/report/sales-report': 'CASHIER_ACCESS',
-  '/report/deposit-report': 'CASHIER_ACCESS',
-  '/report/transaction-detail-report': 'CASHIER_ACCESS',
-  '/report/purchase-report': 'STOCK_PURCHASE_ACCESS',
-  '/report/expense-report': 'FINANCE_ACCESS',
-  '/report/profit-loss-report': 'FINANCE_ACCESS',
-  '/report/aging-report': 'FINANCE_ACCESS',
-  '/report/stock-card': 'STOCK_ACCESS',
+  '/report': GENERAL_REPORT_PERMISSION_LIST,
 };
 
 const routeEntries = Object.entries(ROUTE_PERMISSIONS)
@@ -98,6 +83,15 @@ export const getRequiredPermissionForPath = (path: string): RoutePermissionRule 
   const normalizedPath = normalizePath(path);
   const documentPermissionRule = getDocumentPermissionRuleForPath(normalizedPath);
   if (documentPermissionRule) return documentPermissionRule;
+  const reportAccess = getReportAccessForPath(normalizedPath);
+  if (reportAccess) return reportAccess.permission;
+  if (normalizedPath === '/koperasi') {
+    const baseRule = ROUTE_PERMISSIONS['/koperasi'];
+    return [
+      ...(Array.isArray(baseRule) ? baseRule : baseRule ? [baseRule] : []),
+      ...COOPERATIVE_REPORT_PERMISSION_LIST,
+    ];
+  }
 
   return routeEntries.find(([routePath]) => {
     return normalizedPath === routePath || normalizedPath.startsWith(`${routePath}/`);

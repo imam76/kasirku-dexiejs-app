@@ -73,7 +73,7 @@ const requireFieldCashManage = async () => {
 export const requireFieldCashView = async () => {
   const currentUser = await getCurrentSessionUser();
   const canViewFieldCash = await hasUserPermission(currentUser, 'COOPERATIVE_FIELD_CASH_VIEW');
-  const canViewReport = await hasUserPermission(currentUser, 'COOPERATIVE_REPORT_VIEW');
+  const canViewReport = await hasUserPermission(currentUser, 'COOPERATIVE_CASH_REPORT_VIEW');
 
   if (!canViewFieldCash && !canViewReport) {
     throw new Error('Anda tidak memiliki akses untuk aksi ini.');

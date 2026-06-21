@@ -1292,4 +1292,65 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       ]);
     }
   });
+
+  this.version(61).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingPermissions = await rolePermissionTable.toArray();
+    const existingIds = new Set(existingPermissions.map((permission) => permission.id));
+    const legacyPermissionExpansions: Partial<Record<
+      RolePermission['permission_code'],
+      RolePermission['permission_code'][]
+    >> = {
+      CASHIER_ACCESS: [
+        'REPORT_POS_SALES_VIEW',
+        'REPORT_DEPOSIT_VIEW',
+        'REPORT_TRANSACTION_DETAIL_VIEW',
+      ],
+      STOCK_PURCHASE_ACCESS: ['REPORT_PURCHASE_VIEW'],
+      FINANCE_ACCESS: [
+        'REPORT_EXPENSE_VIEW',
+        'REPORT_PROFIT_LOSS_VIEW',
+        'REPORT_AGING_VIEW',
+      ],
+      STOCK_ACCESS: ['REPORT_STOCK_CARD_VIEW'],
+      COOPERATIVE_REPORT_VIEW: [
+        'COOPERATIVE_OVERVIEW_REPORT_VIEW',
+        'COOPERATIVE_CASH_REPORT_VIEW',
+        'COOPERATIVE_DAILY_TARGET_REPORT_VIEW',
+        'COOPERATIVE_DAILY_STORTING_REPORT_VIEW',
+        'COOPERATIVE_DAILY_DROP_REPORT_VIEW',
+        'COOPERATIVE_WEEKLY_DROP_REPORT_VIEW',
+        'COOPERATIVE_MEMBER_REGISTER_REPORT_VIEW',
+        'COOPERATIVE_INSTALLMENT_BOOK_REPORT_VIEW',
+        'COOPERATIVE_CASH_FLOW_REPORT_VIEW',
+        'COOPERATIVE_LEDGER_REPORT_VIEW',
+      ],
+    };
+    const migratedPermissions = existingPermissions.flatMap((legacyPermission) => (
+      (legacyPermissionExpansions[legacyPermission.permission_code] ?? []).flatMap((permissionCode) => {
+        const id = `${legacyPermission.role_id}:${permissionCode}`;
+        if (existingIds.has(id)) return [];
+        existingIds.add(id);
+
+        return [{
+          id,
+          role_id: legacyPermission.role_id,
+          permission_code: permissionCode,
+          created_at: now,
+          updated_at: now,
+          sync_status: 'pending' as const,
+        }];
+      })
+    ));
+    const systemPermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingIds.has(permission.id));
+
+    if (migratedPermissions.length > 0 || systemPermissions.length > 0) {
+      await rolePermissionTable.bulkPut([
+        ...migratedPermissions,
+        ...systemPermissions,
+      ]);
+    }
+  });
 }

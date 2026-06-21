@@ -24,6 +24,7 @@ import type {
   SalesInvoicePaymentStatus,
 } from '@/types';
 import type { SoldItemSummary } from '@/utils/salesUnits';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 interface PosSalesReportData {
   transactions: Transaction[];
@@ -282,6 +283,7 @@ export const usePosSalesReport = (
   return useQuery({
     queryKey: ['posSalesReport', startDate, endDate, paymentMethod, categories],
     queryFn: async (): Promise<PosSalesReportData> => {
+      await requireUserPermission(await getCurrentSessionUser(), 'REPORT_POS_SALES_VIEW');
       let collection = db.transactions.orderBy('created_at').reverse();
 
       if (startDate && endDate) {
@@ -419,6 +421,7 @@ export const useAccountsAgingReport = (filters: AccountsAgingReportFilters = {})
   return useQuery({
     queryKey: ['accountsAgingReport', filters],
     queryFn: async (): Promise<AccountsAgingReportData> => {
+      await requireUserPermission(await getCurrentSessionUser(), 'REPORT_AGING_VIEW');
       const [salesDocuments, purchaseDocuments, purchaseReturnCreditByInvoiceId] = await Promise.all([
         db.salesDocuments.where('type').equals('SALES_INVOICE').toArray(),
         db.purchaseDocuments.where('type').equals('PURCHASE_INVOICE').toArray(),
@@ -508,6 +511,7 @@ export const useTransactionDetailReport = (
   return useQuery({
     queryKey: ['transactionDetailReport', startDate, endDate, paymentMethod, categories, search],
     queryFn: async (): Promise<TransactionDetailReportData> => {
+      await requireUserPermission(await getCurrentSessionUser(), 'REPORT_TRANSACTION_DETAIL_VIEW');
       let collection = db.transactions.orderBy('created_at').reverse();
 
       if (startDate && endDate) {
@@ -653,6 +657,7 @@ export const usePurchaseReport = (startDate?: string, endDate?: string) => {
   return useQuery({
     queryKey: ['purchaseReport', startDate, endDate],
     queryFn: async (): Promise<PurchaseReportData> => {
+      await requireUserPermission(await getCurrentSessionUser(), 'REPORT_PURCHASE_VIEW');
       const stockPurchases = (await db.stockPurchases.toArray())
         .filter((purchase) => isReportDateInRange(purchase.created_at, startDate, endDate))
         .map<PurchaseReportRow>((purchase) => ({
@@ -703,6 +708,7 @@ export const useExpenseReport = (startDate?: string, endDate?: string, categorie
   return useQuery({
     queryKey: ['expenseReport', startDate, endDate, categories],
     queryFn: async (): Promise<ExpenseReportData> => {
+      await requireUserPermission(await getCurrentSessionUser(), 'REPORT_EXPENSE_VIEW');
       let collection = db.financeTransactions.where('type').equals('EXPENSE').reverse();
 
       if (startDate && endDate) {

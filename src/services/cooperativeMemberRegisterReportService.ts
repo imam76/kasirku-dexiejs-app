@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import type { CooperativeMember, Employee } from '@/types';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export const COOPERATIVE_MEMBER_REGISTER_UNASSIGNED_OFFICER = '__UNASSIGNED__';
 
@@ -103,6 +104,7 @@ const buildOfficerOptions = (
 export const getCooperativeMemberRegisterReportData = async (
   filters: CooperativeMemberRegisterReportFilters = {},
 ): Promise<CooperativeMemberRegisterReportData> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'COOPERATIVE_MEMBER_REGISTER_REPORT_VIEW');
   const [members, employees] = await Promise.all([
     db.cooperativeMembers.orderBy('member_number').toArray(),
     db.employees.orderBy('name').toArray(),

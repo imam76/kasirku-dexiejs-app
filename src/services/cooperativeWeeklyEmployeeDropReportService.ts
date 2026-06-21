@@ -6,6 +6,7 @@ import {
   type CooperativeDailyDropReportRow,
   type CooperativeDailyDropReportSummary,
 } from '@/services/cooperativeDailyDropReportService';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export interface CooperativeWeeklyEmployeeDropReportFilters {
   monthDate?: string;
@@ -106,6 +107,7 @@ const findWeekRange = (
 export const getCooperativeWeeklyEmployeeDropReport = async (
   filters: CooperativeWeeklyEmployeeDropReportFilters = {},
 ): Promise<CooperativeWeeklyEmployeeDropReport> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'COOPERATIVE_WEEKLY_DROP_REPORT_VIEW');
   const { monthKey, startDate, endDate } = getMonthRange(filters.monthDate);
   const weekRanges = buildWeekRanges(startDate, endDate);
   const dailyReport = await getCooperativeDailyDropReport({

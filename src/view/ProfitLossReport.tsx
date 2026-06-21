@@ -21,6 +21,7 @@ import {
 import { getGeneralLedgerReadiness } from '@/utils/accounting/getGeneralLedgerReadiness';
 import { exportPdf, exportXlsx, type ExportTarget } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 const { Text, Title } = Typography;
 
@@ -98,7 +99,10 @@ export default function ProfitLossReport() {
   }), [accountFilter, endDate, startDate]);
   const reportQuery = useQuery({
     queryKey: ['profitLossReport', filters.startDate, filters.endDate, filters.accountId],
-    queryFn: () => getIncomeStatementReport(filters),
+    queryFn: async () => {
+      await requireUserPermission(await getCurrentSessionUser(), 'REPORT_PROFIT_LOSS_VIEW');
+      return getIncomeStatementReport(filters);
+    },
     enabled: canShowReport,
   });
   const report = reportQuery.data;

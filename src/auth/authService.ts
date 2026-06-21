@@ -777,3 +777,15 @@ export const requireUserPermission = async (
     throw new Error('Anda tidak memiliki akses untuk aksi ini.');
   }
 };
+
+export const requireAnyUserPermission = async (
+  user: AuthUser | null | undefined,
+  permissions: Permission[],
+) => {
+  const permissionResults = await Promise.all(
+    permissions.map((permission) => hasUserPermission(user, permission)),
+  );
+  if (!permissionResults.some(Boolean)) {
+    throw new Error('Anda tidak memiliki akses untuk aksi ini.');
+  }
+};

@@ -11,6 +11,7 @@ import type {
   JournalSourceType,
 } from '@/types';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
+import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 const COOPERATIVE_JOURNAL_SOURCE_TYPES: JournalSourceType[] = [
   'COOPERATIVE_SAVING',
@@ -289,6 +290,7 @@ export const buildCooperativeLedgerExportRows = (
 export const getCooperativeLedgerReportData = async (
   filters: CooperativeLedgerReportFilters = {},
 ): Promise<CooperativeLedgerReportData> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'COOPERATIVE_LEDGER_REPORT_VIEW');
   const [accounts, journalEntries] = await Promise.all([
     db.chartOfAccounts.orderBy('code').toArray(),
     getJournalEntriesWithLines({
