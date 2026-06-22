@@ -4,9 +4,20 @@ import type { Dayjs } from 'dayjs';
 import { useEffect, useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeSavingPendingReturn } from '@/hooks/useCooperativeSavings';
-import type { ChartOfAccount, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransactionType, CooperativeSavingType, Employee, PaymentMethod } from '@/types';
+import type {
+  ChartOfAccount,
+  CooperativeMember,
+  CooperativeMemberSavingBalance,
+  CooperativeSavingTransaction,
+  CooperativeSavingTransactionType,
+  CooperativeSavingType,
+  CooperativeSavingWithdrawalSource,
+  Employee,
+  PaymentMethod,
+} from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getResponsibleFieldCashAccountId } from '@/utils/koperasi/fieldCashDefaults';
+import { calculateCooperativeSavingInterest } from '@/utils/koperasi/savingInterest';
 import {
   cooperativeSavingTransactionTypeOptions,
   cooperativeSavingTypeOptions,
@@ -23,6 +34,7 @@ export interface CooperativeSavingFormValues {
   member_id: string;
   saving_type: CooperativeSavingType;
   transaction_type: Extract<CooperativeSavingTransactionType, 'DEPOSIT' | 'WITHDRAWAL'>;
+  withdrawal_source: CooperativeSavingWithdrawalSource;
   amount: number;
   transaction_date: Dayjs;
   payment_method: PaymentMethod;
@@ -38,6 +50,7 @@ interface CooperativeSavingFormModalProps {
   isSubmitting: boolean;
   activeMembers: CooperativeMember[];
   savingBalances: CooperativeMemberSavingBalance[];
+  savingTransactions: CooperativeSavingTransaction[];
   pendingReturnByBalanceKey: Map<string, CooperativeSavingPendingReturn>;
   paymentAccounts: ChartOfAccount[];
   fieldCashEmployees: Employee[];
@@ -54,6 +67,7 @@ export default function CooperativeSavingFormModal({
   isSubmitting,
   activeMembers,
   savingBalances,
+  savingTransactions,
   pendingReturnByBalanceKey,
   paymentAccounts,
   fieldCashEmployees,
@@ -67,7 +81,9 @@ export default function CooperativeSavingFormModal({
   const selectedMemberId = Form.useWatch('member_id', form);
   const selectedCashAccountId = Form.useWatch('cash_account_id', form);
   const selectedTransactionType = Form.useWatch('transaction_type', form);
+  const selectedWithdrawalSource = Form.useWatch('withdrawal_source', form);
   const selectedSavingType = Form.useWatch('saving_type', form);
+  const selectedTransactionDate = Form.useWatch('transaction_date', form);
   const memberOptions = useMemo(() => activeMembers.map((member) => ({
     value: member.id,
     label: `${member.member_number} - ${member.name}`,
@@ -92,6 +108,36 @@ export default function CooperativeSavingFormModal({
   const selectedPendingReturn = selectedSavingBalance
     ? pendingReturnByBalanceKey.get(selectedSavingBalance.id)
     : undefined;
+  const selectedInterest = useMemo(() => (
+    selectedMemberId && selectedSavingType
+      ? (() => {
+          const interestAtTransactionDate = calculateCooperativeSavingInterest(
+            savingTransactions,
+            selectedMemberId,
+            selectedSavingType,
+            selectedTransactionDate?.toISOString(),
+          );
+          const currentInterest = calculateCooperativeSavingInterest(
+            savingTransactions,
+            selectedMemberId,
+            selectedSavingType,
+          );
+
+          return {
+            ...interestAtTransactionDate,
+            availableInterest: Math.min(
+              interestAtTransactionDate.availableInterest,
+              currentInterest.availableInterest,
+            ),
+          };
+        })()
+      : undefined
+  ), [
+    savingTransactions,
+    selectedMemberId,
+    selectedSavingType,
+    selectedTransactionDate,
+  ]);
   const responsibleCashAccountId = useMemo(() => (
     getResponsibleFieldCashAccountId(selectedMember, fieldCashEmployees, paymentAccounts)
   ), [fieldCashEmployees, paymentAccounts, selectedMember]);
@@ -111,6 +157,20 @@ export default function CooperativeSavingFormModal({
 
   useEffect(() => {
     if (!open || selectedTransactionType !== 'WITHDRAWAL') return;
+
+    if (selectedWithdrawalSource === 'INTEREST') {
+      if (selectedSavingType === 'WAJIB') {
+        form.setFieldValue('saving_type', 'SUKARELA');
+        return;
+      }
+
+      form.setFieldValue('amount', selectedInterest?.availableInterest || undefined);
+      const currentNotes = form.getFieldValue('notes');
+      if (typeof currentNotes === 'string' && currentNotes.includes(AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX)) {
+        form.setFieldValue('notes', undefined);
+      }
+      return;
+    }
 
     if (!selectedSavingBalance) {
       form.setFieldValue('amount', undefined);
@@ -136,8 +196,11 @@ export default function CooperativeSavingFormModal({
     form,
     open,
     selectedPendingReturn,
+    selectedInterest?.availableInterest,
     selectedSavingBalance,
     selectedTransactionType,
+    selectedWithdrawalSource,
+    selectedSavingType,
   ]);
 
   return (
@@ -188,11 +251,32 @@ export default function CooperativeSavingFormModal({
           </Form.Item>
         </div>
 
+        {selectedTransactionType === 'WITHDRAWAL' && (
+          <Form.Item
+            name="withdrawal_source"
+            label={t('cooperative.savings.form.withdrawalSource')}
+            rules={[{ required: true, message: t('cooperative.savings.validation.withdrawalSourceRequired') }]}
+          >
+            <Select
+              options={[
+                { value: 'INTEREST', label: t('cooperative.savings.withdrawalSource.interest') },
+                { value: 'SAVING', label: t('cooperative.savings.withdrawalSource.saving') },
+              ]}
+              data-testid="koperasi-saving-withdrawal-source-select"
+            />
+          </Form.Item>
+        )}
+
         {selectedTransactionType === 'WITHDRAWAL' && selectedMemberId && selectedSavingType && (
           <div className="mb-4 flex flex-wrap gap-2">
             <Tag color="blue">
               {t('cooperative.savings.memberSavingBalance')}: Rp {formatCurrency(Number(selectedSavingBalance?.balance || 0))}
             </Tag>
+            {selectedSavingType !== 'WAJIB' && (
+              <Tag color="green">
+                {t('cooperative.savings.availableInterest')}: Rp {formatCurrency(selectedInterest?.availableInterest || 0)}
+              </Tag>
+            )}
             {selectedPendingReturn && (
               <Tag color="gold">
                 {t('cooperative.savings.pendingReturn')}: Rp {formatCurrency(selectedPendingReturn.amount)}
@@ -208,7 +292,9 @@ export default function CooperativeSavingFormModal({
             rules={[{ required: true, message: t('cooperative.savings.validation.savingTypeRequired') }]}
           >
             <Select
-              options={cooperativeSavingTypeOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+              options={cooperativeSavingTypeOptions
+                .filter((option) => selectedWithdrawalSource !== 'INTEREST' || option.value !== 'WAJIB')
+                .map((option) => ({ value: option.value, label: t(option.labelKey) }))}
               data-testid="koperasi-saving-type-select"
             />
           </Form.Item>
@@ -217,14 +303,21 @@ export default function CooperativeSavingFormModal({
             label={(
               <Space size={8}>
                 <span>{t('cooperative.savings.form.amount')}</span>
-                {selectedTransactionType === 'WITHDRAWAL' && selectedSavingBalance && (
+                {selectedTransactionType === 'WITHDRAWAL' && (
                   <Button
                     type="link"
                     size="small"
                     className="h-auto p-0"
-                    onClick={() => form.setFieldValue('amount', Number(selectedSavingBalance.balance || 0))}
+                    onClick={() => form.setFieldValue(
+                      'amount',
+                      selectedWithdrawalSource === 'INTEREST'
+                        ? Number(selectedInterest?.availableInterest || 0)
+                        : Number(selectedSavingBalance?.balance || 0),
+                    )}
                   >
-                    {t('cooperative.savings.withdrawAll')}
+                    {selectedWithdrawalSource === 'INTEREST'
+                      ? t('cooperative.savings.withdrawAllInterest')
+                      : t('cooperative.savings.withdrawAll')}
                   </Button>
                 )}
               </Space>
@@ -235,12 +328,19 @@ export default function CooperativeSavingFormModal({
               {
                 validator: async (_rule, value) => {
                   if (selectedTransactionType !== 'WITHDRAWAL') return;
-                  const availableBalance = Number(selectedSavingBalance?.balance || 0);
+                  const availableBalance = selectedWithdrawalSource === 'INTEREST'
+                    ? Number(selectedInterest?.availableInterest || 0)
+                    : Number(selectedSavingBalance?.balance || 0);
                   const requestedAmount = Number(value || 0);
                   if (requestedAmount <= availableBalance + 0.01) return;
-                  throw new Error(t('cooperative.savings.validation.withdrawalMax', {
+                  throw new Error(t(
+                    selectedWithdrawalSource === 'INTEREST'
+                      ? 'cooperative.savings.validation.interestWithdrawalMax'
+                      : 'cooperative.savings.validation.withdrawalMax',
+                    {
                     amount: formatCurrency(availableBalance),
-                  }));
+                    },
+                  ));
                 },
               },
             ]}

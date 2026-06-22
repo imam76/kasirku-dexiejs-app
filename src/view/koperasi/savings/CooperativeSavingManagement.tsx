@@ -11,7 +11,12 @@ import {
   type CooperativeSavingTypeFilter,
 } from '@/hooks/useCooperativeSavings';
 import { useI18n } from '@/hooks/useI18n';
-import type { CooperativeMemberSavingBalance, CooperativeSavingTransaction, CooperativeSavingTransactionType } from '@/types';
+import type {
+  CooperativeMemberSavingBalance,
+  CooperativeSavingTransaction,
+  CooperativeSavingTransactionType,
+  CooperativeSavingWithdrawalSource,
+} from '@/types';
 import CooperativeSavingBalanceTable from './CooperativeSavingBalanceTable';
 import CooperativeSavingDetailDrawer from './CooperativeSavingDetailDrawer';
 import CooperativeSavingFormModal, { type CooperativeSavingFormValues } from './CooperativeSavingFormModal';
@@ -34,10 +39,12 @@ export default function CooperativeSavingManagement() {
   const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('savings');
   const {
     activeMembers,
+    transactions,
     filteredTransactions,
     filteredBalances,
     balances,
     pendingReturnByBalanceKey,
+    interestByBalanceKey,
     paymentAccounts,
     fieldCashEmployees,
     fieldCashAccountIds,
@@ -65,19 +72,23 @@ export default function CooperativeSavingManagement() {
   const openSavingModal = (
     transactionType: Extract<CooperativeSavingTransactionType, 'DEPOSIT' | 'WITHDRAWAL'> = 'DEPOSIT',
     balance?: CooperativeMemberSavingBalance,
+    withdrawalSource: CooperativeSavingWithdrawalSource = 'SAVING',
   ) => {
     const pendingReturn = balance ? pendingReturnByBalanceKey.get(balance.id) : undefined;
-    const withdrawalAmount = (pendingReturn?.amount ?? Number(balance?.balance || 0)) || undefined;
+    const withdrawalAmount = withdrawalSource === 'INTEREST'
+      ? (balance ? interestByBalanceKey.get(balance.id) : 0) || undefined
+      : (pendingReturn?.amount ?? Number(balance?.balance || 0)) || undefined;
     form.resetFields();
     form.setFieldsValue({
       member_id: balance?.member_id,
       transaction_type: transactionType,
+      withdrawal_source: withdrawalSource,
       saving_type: balance?.saving_type ?? 'SUKARELA',
       amount: transactionType === 'WITHDRAWAL' ? withdrawalAmount : undefined,
       transaction_date: dayjs(),
       payment_method: 'TUNAI',
       remember_cash_account: true,
-      notes: pendingReturn
+      notes: withdrawalSource === 'SAVING' && pendingReturn
         ? buildPendingReturnNotes(pendingReturn)
         : undefined,
       ...getRememberedCashAccountFields(paymentAccounts),
@@ -87,8 +98,11 @@ export default function CooperativeSavingManagement() {
 
   const openAddModal = () => openSavingModal('DEPOSIT');
 
-  const openWithdrawModal = (balance?: CooperativeMemberSavingBalance) => {
-    openSavingModal('WITHDRAWAL', balance);
+  const openWithdrawModal = (
+    balance?: CooperativeMemberSavingBalance,
+    withdrawalSource: CooperativeSavingWithdrawalSource = 'SAVING',
+  ) => {
+    openSavingModal('WITHDRAWAL', balance, withdrawalSource);
   };
 
   const handleSubmit = async (values: CooperativeSavingFormValues) => {
@@ -97,6 +111,7 @@ export default function CooperativeSavingManagement() {
         member_id: values.member_id,
         saving_type: values.saving_type,
         transaction_type: values.transaction_type,
+        withdrawal_source: values.withdrawal_source,
         amount: Number(values.amount || 0),
         transaction_date: values.transaction_date?.toISOString(),
         payment_method: values.payment_method,
@@ -245,6 +260,7 @@ export default function CooperativeSavingManagement() {
               <CooperativeSavingBalanceTable
                 balances={filteredBalances}
                 pendingReturnByBalanceKey={pendingReturnByBalanceKey}
+                interestByBalanceKey={interestByBalanceKey}
                 loading={isMutating}
                 onWithdraw={openWithdrawModal}
               />
@@ -259,6 +275,7 @@ export default function CooperativeSavingManagement() {
         isSubmitting={isMutating}
         activeMembers={activeMembers}
         savingBalances={balances}
+        savingTransactions={transactions}
         pendingReturnByBalanceKey={pendingReturnByBalanceKey}
         paymentAccounts={paymentAccounts}
         fieldCashEmployees={fieldCashEmployees}

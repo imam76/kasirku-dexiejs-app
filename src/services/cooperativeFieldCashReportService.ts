@@ -76,7 +76,10 @@ const matchesMovementKind = (
     return transaction.category === FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT;
   }
   if (kind === 'SAVING_WITHDRAWAL') {
-    return transaction.category === FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL;
+    return (
+      transaction.category === FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL ||
+      transaction.category === FINANCE_CATEGORIES.KSP_SAVING_INTEREST_PAYOUT
+    );
   }
   if (kind === 'IPTW_PAYOUT') {
     return transaction.category === FINANCE_CATEGORIES.KSP_IPTW;

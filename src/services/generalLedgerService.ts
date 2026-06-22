@@ -48,6 +48,7 @@ const SOURCE_EVENTS = {
   CASH_BANK_TRANSFER_POSTED: 'CASH_BANK_TRANSFER_POSTED',
   COOPERATIVE_SAVING_DEPOSIT_POSTED: 'COOPERATIVE_SAVING_DEPOSIT_POSTED',
   COOPERATIVE_SAVING_WITHDRAWAL_POSTED: 'COOPERATIVE_SAVING_WITHDRAWAL_POSTED',
+  COOPERATIVE_SAVING_INTEREST_PAID: 'COOPERATIVE_SAVING_INTEREST_PAID',
   COOPERATIVE_LOAN_DISBURSED: 'COOPERATIVE_LOAN_DISBURSED',
   COOPERATIVE_LOAN_PAYMENT_POSTED: 'COOPERATIVE_LOAN_PAYMENT_POSTED',
   COOPERATIVE_IPTW_PAID: 'COOPERATIVE_IPTW_PAID',
@@ -207,6 +208,10 @@ const ACCOUNT_CANDIDATES = {
   cooperativeLoanPenaltyIncome: { ids: ['cooperative-loan-penalty-income'], codes: ['4050'] },
   cooperativeLoanAdminIncome: { ids: ['cooperative-loan-admin-income', 'template-loan-admin-income'], codes: ['4060'] },
   cooperativeIptwExpense: { ids: ['cooperative-iptw-expense', 'template-cooperative-iptw-expense'], codes: ['6090'] },
+  cooperativeSavingInterestExpense: {
+    ids: ['cooperative-saving-interest-expense', 'template-cooperative-saving-interest-expense'],
+    codes: ['6095'],
+  },
   otherExpense: { ids: ['other-expense', 'template-other-expense'], codes: ['6900'] },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
 } satisfies Record<string, AccountCandidate>;
@@ -1107,6 +1112,9 @@ const getCooperativeSavingSourceEvent = (transaction: CooperativeSavingTransacti
     return SOURCE_EVENTS.COOPERATIVE_SAVING_DEPOSIT_POSTED;
   }
   if (transaction.transaction_type === 'WITHDRAWAL') {
+    if (transaction.withdrawal_source === 'INTEREST') {
+      return SOURCE_EVENTS.COOPERATIVE_SAVING_INTEREST_PAID;
+    }
     return SOURCE_EVENTS.COOPERATIVE_SAVING_WITHDRAWAL_POSTED;
   }
 
@@ -1136,6 +1144,10 @@ export const postCooperativeSavingTransactionJournal = async (
     throw new Error('Akun kas/bank simpanan harus bertipe aset, aktif, dan postable.');
   }
 
+  const isInterestWithdrawal = (
+    transaction.transaction_type === 'WITHDRAWAL' &&
+    transaction.withdrawal_source === 'INTEREST'
+  );
   const savingAccountCandidate = (() => {
     switch (transaction.saving_type) {
       case 'POKOK': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsPokok;
@@ -1145,15 +1157,30 @@ export const postCooperativeSavingTransactionJournal = async (
     }
   })();
   const savingAccountLabel = `Simpanan ${transaction.saving_type === 'POKOK' ? 'Pokok' : transaction.saving_type === 'WAJIB' ? 'Wajib' : transaction.saving_type === 'SUKARELA' ? 'Sukarela' : 'Anggota'}`;
-  const savingAccount = tryGetPostableAccount(accounts, savingAccountCandidate)
-    ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeMemberSavings, 'Simpanan Anggota');
+  const savingAccount = isInterestWithdrawal
+    ? undefined
+    : (
+        tryGetPostableAccount(accounts, savingAccountCandidate)
+        ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeMemberSavings, 'Simpanan Anggota')
+      );
+  const interestExpenseAccount = isInterestWithdrawal
+    ? (
+        tryGetPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeSavingInterestExpense)
+        ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.otherExpense, 'Beban Jasa Simpanan')
+      )
+    : undefined;
   const lines = transaction.transaction_type === 'DEPOSIT'
     ? [
         createDebitLine(cashAccount, amount, 'Kas/bank bertambah dari setoran simpanan anggota'),
-        createCreditLine(savingAccount, amount, `Kewajiban ${savingAccountLabel.toLowerCase()} bertambah`),
+        createCreditLine(savingAccount!, amount, `Kewajiban ${savingAccountLabel.toLowerCase()} bertambah`),
       ]
+    : isInterestWithdrawal
+      ? [
+          createDebitLine(interestExpenseAccount!, amount, 'Beban jasa simpanan anggota'),
+          createCreditLine(cashAccount, amount, 'Kas/bank berkurang karena pengambilan jasa simpanan'),
+        ]
     : [
-        createDebitLine(savingAccount, amount, `Kewajiban ${savingAccountLabel.toLowerCase()} berkurang`),
+        createDebitLine(savingAccount!, amount, `Kewajiban ${savingAccountLabel.toLowerCase()} berkurang`),
         createCreditLine(cashAccount, amount, `Kas/bank berkurang karena penarikan ${savingAccountLabel.toLowerCase()}`),
       ];
 
@@ -1163,7 +1190,9 @@ export const postCooperativeSavingTransactionJournal = async (
     source_number: transaction.member_number,
     source_event: getCooperativeSavingSourceEvent(transaction),
     entry_date: transaction.transaction_date,
-    description: `${transaction.transaction_type === 'DEPOSIT' ? 'Setoran' : 'Penarikan'} simpanan ${transaction.saving_type} ${transaction.member_number} - ${transaction.member_name}`,
+    description: isInterestWithdrawal
+      ? `Pengambilan jasa simpanan ${transaction.saving_type} ${transaction.member_number} - ${transaction.member_name}`
+      : `${transaction.transaction_type === 'DEPOSIT' ? 'Setoran' : 'Penarikan'} simpanan ${transaction.saving_type} ${transaction.member_number} - ${transaction.member_name}`,
     lines: lines.filter((line): line is JournalLineDraft => Boolean(line)),
     actor,
   });

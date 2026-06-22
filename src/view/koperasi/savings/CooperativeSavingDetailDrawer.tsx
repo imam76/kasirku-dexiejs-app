@@ -66,6 +66,18 @@ export default function CooperativeSavingDetailDrawer({
             <Descriptions.Item label={t('cooperative.savings.table.transactionType')}>
               {transactionTypeLabels[transaction.transaction_type]}
             </Descriptions.Item>
+            {transaction.transaction_type === 'WITHDRAWAL' && (
+              <Descriptions.Item label={t('cooperative.savings.form.withdrawalSource')}>
+                {transaction.withdrawal_source === 'INTEREST'
+                  ? t('cooperative.savings.withdrawalSource.interest')
+                  : t('cooperative.savings.withdrawalSource.saving')}
+              </Descriptions.Item>
+            )}
+            {transaction.withdrawal_source === 'INTEREST' && (
+              <Descriptions.Item label={t('cooperative.savings.interestRate')}>
+                {transaction.interest_rate_per_month ?? 0.2}% per bulan
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label={t('cooperative.savings.table.amount')}>
               Rp {formatCurrency(transaction.amount)}
             </Descriptions.Item>

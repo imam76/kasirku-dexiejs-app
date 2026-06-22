@@ -4,7 +4,11 @@ import { ArrowUpRight } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeSavingPendingReturn } from '@/hooks/useCooperativeSavings';
-import type { CooperativeMemberSavingBalance, CooperativeSavingType } from '@/types';
+import type {
+  CooperativeMemberSavingBalance,
+  CooperativeSavingType,
+  CooperativeSavingWithdrawalSource,
+} from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cooperativeSavingTypeOptions } from './savingOptions';
 
@@ -13,13 +17,18 @@ const { Text } = Typography;
 interface CooperativeSavingBalanceTableProps {
   balances: CooperativeMemberSavingBalance[];
   pendingReturnByBalanceKey: Map<string, CooperativeSavingPendingReturn>;
-  onWithdraw?: (balance: CooperativeMemberSavingBalance) => void;
+  interestByBalanceKey: Map<string, number>;
+  onWithdraw?: (
+    balance: CooperativeMemberSavingBalance,
+    withdrawalSource: CooperativeSavingWithdrawalSource,
+  ) => void;
   loading?: boolean;
 }
 
 export default function CooperativeSavingBalanceTable({
   balances,
   pendingReturnByBalanceKey,
+  interestByBalanceKey,
   onWithdraw,
   loading,
 }: CooperativeSavingBalanceTableProps) {
@@ -73,6 +82,17 @@ export default function CooperativeSavingBalanceTable({
       },
     },
     {
+      title: t('cooperative.savings.availableInterest'),
+      key: 'available_interest',
+      align: 'right',
+      width: 180,
+      render: (_value: unknown, balance) => (
+        balance.saving_type === 'WAJIB'
+          ? '-'
+          : <span className="font-semibold text-green-700">Rp {formatCurrency(interestByBalanceKey.get(balance.id) || 0)}</span>
+      ),
+    },
+    {
       title: t('cooperative.savings.table.updatedAt'),
       dataIndex: 'updated_at',
       key: 'updated_at',
@@ -83,18 +103,32 @@ export default function CooperativeSavingBalanceTable({
       title: t('cooperative.savings.table.action'),
       key: 'action',
       fixed: 'right',
-      width: 140,
+      width: 240,
       render: (_value: unknown, balance) => (
-        <Button
-          type="text"
-          icon={<ArrowUpRight size={16} />}
-          disabled={Number(balance.balance || 0) <= 0}
-          loading={loading}
-          data-testid={`koperasi-saving-withdraw-${balance.member_number}-${balance.saving_type}`}
-          onClick={() => onWithdraw?.(balance)}
-        >
-          {t('cooperative.savings.withdraw')}
-        </Button>
+        <div className="flex flex-wrap justify-end gap-1">
+          {balance.saving_type !== 'WAJIB' && (
+            <Button
+              type="text"
+              icon={<ArrowUpRight size={16} />}
+              disabled={Number(interestByBalanceKey.get(balance.id) || 0) <= 0}
+              loading={loading}
+              data-testid={`koperasi-saving-withdraw-interest-${balance.member_number}-${balance.saving_type}`}
+              onClick={() => onWithdraw?.(balance, 'INTEREST')}
+            >
+              {t('cooperative.savings.withdrawInterest')}
+            </Button>
+          )}
+          <Button
+            type="text"
+            icon={<ArrowUpRight size={16} />}
+            disabled={Number(balance.balance || 0) <= 0}
+            loading={loading}
+            data-testid={`koperasi-saving-withdraw-${balance.member_number}-${balance.saving_type}`}
+            onClick={() => onWithdraw?.(balance, 'SAVING')}
+          >
+            {t('cooperative.savings.withdrawSaving')}
+          </Button>
+        </div>
       ),
     },
   ];
@@ -108,7 +142,7 @@ export default function CooperativeSavingBalanceTable({
         'data-testid': `koperasi-saving-balance-row-${balance.member_number}-${balance.saving_type}`,
       } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
-      scroll={{ x: 820 }}
+      scroll={{ x: 1100 }}
       locale={{ emptyText: t('cooperative.savings.balanceEmpty') }}
     />
   );

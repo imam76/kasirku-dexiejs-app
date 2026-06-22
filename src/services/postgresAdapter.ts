@@ -17,6 +17,7 @@ import type {
   CooperativeSavingTransactionStatus,
   CooperativeSavingTransactionType,
   CooperativeSavingType,
+  CooperativeSavingWithdrawalSource,
   FinanceTransactionType,
   JournalEntryStatus,
   JournalSourceType,
@@ -739,6 +740,8 @@ export interface RemoteCooperativeSavingTransactionDto {
   member_name: string;
   saving_type: CooperativeSavingType;
   transaction_type: CooperativeSavingTransactionType;
+  withdrawal_source?: CooperativeSavingWithdrawalSource | null;
+  interest_rate_per_month?: number | null;
   amount: number;
   transaction_date: string;
   status: CooperativeSavingTransactionStatus;

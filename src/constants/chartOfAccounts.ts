@@ -62,6 +62,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('stock-purchase', '5100', 'Pembelian Stok', 'EXPENSE'),
   createAccountSeed('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE'),
   createAccountSeed('operational-expense', '6100', 'Beban Operasional', 'EXPENSE'),
+  createAccountSeed('cooperative-saving-interest-expense', '6095', 'Beban Jasa Simpanan Anggota', 'EXPENSE'),
   createAccountSeed('other-expense', '6900', 'Beban Lainnya', 'EXPENSE'),
 ];
 
@@ -181,6 +182,15 @@ export const DEFAULT_FINANCE_ACCOUNT_MAPPINGS: DefaultMappingSeed[] = [
     account_code: '2300',
     account_name: 'Simpanan Anggota',
     account_type: 'LIABILITY',
+    is_system: true,
+  },
+  {
+    key: FINANCE_CATEGORIES.KSP_SAVING_INTEREST_PAYOUT,
+    category: FINANCE_CATEGORIES.KSP_SAVING_INTEREST_PAYOUT,
+    account_id: 'cooperative-saving-interest-expense',
+    account_code: '6095',
+    account_name: 'Beban Jasa Simpanan Anggota',
+    account_type: 'EXPENSE',
     is_system: true,
   },
   {
@@ -451,6 +461,11 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     mapping_keys: [FINANCE_CATEGORIES.KSP_IPTW],
     description: 'Insentif 5% dari pokok pinjaman bagi anggota yang melunasi seluruh angsuran tepat waktu',
   }),
+  createEtapTemplateLine('cooperative-saving-interest-expense', '6095', 'Beban Jasa Simpanan Anggota', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    mapping_keys: [FINANCE_CATEGORIES.KSP_SAVING_INTEREST_PAYOUT],
+    description: 'Jasa simpanan pokok dan sukarela sebesar 0,2% per bulan penuh',
+  }),
   createEtapTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
     mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
   }),
@@ -553,6 +568,10 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('cooperative-iptw-expense', '6090', 'Beban Insentif Pembayaran Tepat Waktu (IPTW)', 'EXPENSE', {
     parent_template_account_id: 'operational-expense',
     mapping_keys: [FINANCE_CATEGORIES.KSP_IPTW],
+  }),
+  createTemplateLine('cooperative-saving-interest-expense', '6095', 'Beban Jasa Simpanan Anggota', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    mapping_keys: [FINANCE_CATEGORIES.KSP_SAVING_INTEREST_PAYOUT],
   }),
   createTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
     mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],

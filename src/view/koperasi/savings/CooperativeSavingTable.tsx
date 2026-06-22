@@ -82,10 +82,19 @@ export default function CooperativeSavingTable({
       dataIndex: 'transaction_type',
       key: 'transaction_type',
       width: 130,
-      render: (transactionType: CooperativeSavingTransactionType) => (
-        <Tag color={getTransactionTypeColor(transactionType)}>
-          {transactionTypeLabels[transactionType]}
-        </Tag>
+      render: (transactionType: CooperativeSavingTransactionType, transaction) => (
+        <Space orientation="vertical" size={0}>
+          <Tag color={getTransactionTypeColor(transactionType)}>
+            {transactionTypeLabels[transactionType]}
+          </Tag>
+          {transactionType === 'WITHDRAWAL' && (
+            <Text type="secondary" className="text-xs">
+              {transaction.withdrawal_source === 'INTEREST'
+                ? t('cooperative.savings.withdrawalSource.interestShort')
+                : t('cooperative.savings.withdrawalSource.savingShort')}
+            </Text>
+          )}
+        </Space>
       ),
     },
     {

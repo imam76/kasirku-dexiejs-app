@@ -43,6 +43,7 @@ import type {
 import dayjs from '@/lib/dayjs';
 import { createUnitDefinition, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
+import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { BASE_CURRENCY_CODE, buildBaseCurrency, buildBaseCurrencyRate } from '@/constants/currencies';
 import { buildSystemRolePermissions, buildSystemRoles, resolveLegacyRoleId, resolveLegacyRoleName } from '@/auth/roleSeed';
 import type { KasirkuDB } from './KasirkuDB';
@@ -1384,6 +1385,36 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
         ...migratedPermissions,
         ...systemPermissions,
       ]);
+    }
+  });
+
+  this.version(63).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const accountSeed = DEFAULT_CHART_OF_ACCOUNTS.find(
+      (account) => account.id === 'cooperative-saving-interest-expense',
+    );
+    const mappingSeed = DEFAULT_FINANCE_ACCOUNT_MAPPINGS.find(
+      (mapping) => mapping.key === FINANCE_CATEGORIES.KSP_SAVING_INTEREST_PAYOUT,
+    );
+    if (!accountSeed || !mappingSeed) return;
+
+    const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const mappingTable = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
+
+    if (!await accountTable.get(accountSeed.id)) {
+      await accountTable.put({
+        ...accountSeed,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+    if (!await mappingTable.get(mappingSeed.key)) {
+      await mappingTable.put({
+        ...mappingSeed,
+        id: mappingSeed.key,
+        created_at: now,
+        updated_at: now,
+      });
     }
   });
 }

@@ -1619,6 +1619,7 @@ export interface ProfitBalance {
 export type CooperativeMemberStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 export type CooperativeSavingType = 'POKOK' | 'WAJIB' | 'SUKARELA';
 export type CooperativeSavingTransactionType = 'DEPOSIT' | 'WITHDRAWAL' | 'REVERSAL';
+export type CooperativeSavingWithdrawalSource = 'SAVING' | 'INTEREST';
 export type CooperativeSavingTransactionStatus = 'POSTED' | 'REVERSED';
 export type CooperativeLoanStatus =
   | 'DRAFT'
@@ -1673,6 +1674,8 @@ export interface CooperativeSavingTransaction {
   member_name: string;
   saving_type: CooperativeSavingType;
   transaction_type: CooperativeSavingTransactionType;
+  withdrawal_source?: CooperativeSavingWithdrawalSource;
+  interest_rate_per_month?: number;
   amount: number;
   transaction_date: string;
   status: CooperativeSavingTransactionStatus;
