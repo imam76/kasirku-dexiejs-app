@@ -24,6 +24,23 @@ const savingTransactionTypeLabels: Record<SavingTransactionType, string> = {
 };
 
 const formatCurrency = (value: number) => value.toLocaleString('id-ID');
+const defaultArea = {
+  code: 'E2E',
+  name: 'Area Demo E2E',
+};
+
+async function ensureDefaultArea(page: Page) {
+  await page.goto('/master-data/areas');
+  await expect(page.getByText('Master Data Area')).toBeVisible();
+
+  if (await page.getByText(defaultArea.name, { exact: true }).isVisible()) return;
+
+  await page.getByTestId('area-add-button').click();
+  await fillControlByTestId(page, 'area-name-input', defaultArea.name);
+  await fillControlByTestId(page, 'area-code-input', defaultArea.code);
+  await page.getByTestId('area-submit-button').click();
+  await expect(page.getByText(defaultArea.name, { exact: true })).toBeVisible();
+}
 
 async function clickCooperativeReportTab(page: Page, name: string) {
   const tab = page.getByRole('tab', { name, exact: true });
@@ -45,6 +62,7 @@ export async function expectCooperativeOverview(page: Page) {
 }
 
 export async function createActiveMember(page: Page, member: DemoMemberInput) {
+  await ensureDefaultArea(page);
   await page.goto('/koperasi/anggota');
   await expect(page.getByText('Master Anggota Koperasi')).toBeVisible();
 
@@ -54,6 +72,11 @@ export async function createActiveMember(page: Page, member: DemoMemberInput) {
   await fillControlByTestId(page, 'koperasi-member-identity-input', member.identityNumber);
   await fillControlByTestId(page, 'koperasi-member-phone-input', member.phone);
   await fillControlByTestId(page, 'koperasi-member-address-input', member.address);
+  await selectAntdOptionByTestId(
+    page,
+    'koperasi-member-area-select',
+    `${defaultArea.code} - ${defaultArea.name}`,
+  );
   await page.getByTestId('koperasi-member-submit-button').click();
 
   const row = memberRow(page, member.memberNumber);
@@ -62,11 +85,17 @@ export async function createActiveMember(page: Page, member: DemoMemberInput) {
 }
 
 export async function expectDuplicateActiveMemberRejected(page: Page, member: DemoMemberInput) {
+  await ensureDefaultArea(page);
   await page.goto('/koperasi/anggota');
   await page.getByTestId('koperasi-member-add-button').click();
   await fillControlByTestId(page, 'koperasi-member-number-input', member.memberNumber);
   await fillControlByTestId(page, 'koperasi-member-name-input', `${member.name} Duplicate`);
   await fillControlByTestId(page, 'koperasi-member-identity-input', '3271010101019999');
+  await selectAntdOptionByTestId(
+    page,
+    'koperasi-member-area-select',
+    `${defaultArea.code} - ${defaultArea.name}`,
+  );
   await page.getByTestId('koperasi-member-submit-button').click();
 
   await expect(page.getByText('Nomor anggota sudah dipakai anggota aktif lain.')).toBeVisible();

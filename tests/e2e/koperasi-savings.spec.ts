@@ -49,7 +49,7 @@ test.describe.serial('simpanan anggota koperasi', () => {
       transactionType: 'WITHDRAWAL',
       savingType: 'SUKARELA',
       amount: 999_000,
-      expectedError: 'Penarikan tidak boleh melebihi saldo simpanan sukarela.',
+      expectedError: 'Penarikan tidak boleh melebihi saldo simpanan anggota Rp 200.000.',
     });
 
     await page.goto('/finance/general-ledger');
@@ -57,4 +57,3 @@ test.describe.serial('simpanan anggota koperasi', () => {
     await expect(page.getByText(/Penarikan simpanan SUKARELA KSU-001 - Siti Aminah/)).toBeVisible();
   });
 });
-

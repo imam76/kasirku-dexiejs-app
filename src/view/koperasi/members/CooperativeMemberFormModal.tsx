@@ -188,6 +188,7 @@ export default function CooperativeMemberFormModal({
             showSearch
             optionFilterProp="label"
             placeholder={t('cooperative.members.form.areaPlaceholder')}
+            data-testid="koperasi-member-area-select"
             onChange={handleAreaChange}
             options={areas.map((area) => ({
               value: area.id,

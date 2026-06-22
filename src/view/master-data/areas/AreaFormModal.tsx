@@ -36,6 +36,7 @@ export default function AreaFormModal({
       open={open}
       onCancel={onCancel}
       onOk={() => form.submit()}
+      okButtonProps={{ 'data-testid': 'area-submit-button' }}
       confirmLoading={isSubmitting}
       destroyOnHidden
       forceRender
@@ -54,14 +55,14 @@ export default function AreaFormModal({
             label={t('areas.form.name')}
             rules={[{ required: true, whitespace: true, message: t('areas.validation.nameRequired') }]}
           >
-            <Input placeholder={t('areas.form.namePlaceholder')} />
+            <Input placeholder={t('areas.form.namePlaceholder')} data-testid="area-name-input" />
           </Form.Item>
           <Form.Item
             name="code"
             label={t('areas.form.code')}
             rules={[{ max: 20, message: t('areas.validation.codeMax') }]}
           >
-            <Input placeholder={t('areas.form.codePlaceholder')} />
+            <Input placeholder={t('areas.form.codePlaceholder')} data-testid="area-code-input" />
           </Form.Item>
         </div>
 
