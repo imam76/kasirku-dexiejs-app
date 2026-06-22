@@ -69,6 +69,10 @@ export const COOPERATIVE_REPORT_ACCESS: Record<string, ReportAccessDefinition> =
     permission: 'COOPERATIVE_WEEKLY_DROP_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_WEEKLY_DROP',
   },
+  '/koperasi/laporan-iptw': {
+    permission: 'COOPERATIVE_IPTW_REPORT_VIEW',
+    moduleCode: 'KOPERASI_REPORT_IPTW',
+  },
   '/koperasi/laporan-induk-anggota': {
     permission: 'COOPERATIVE_MEMBER_REGISTER_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_MEMBER_REGISTER',

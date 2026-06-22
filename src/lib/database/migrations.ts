@@ -1353,4 +1353,37 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       ]);
     }
   });
+
+  this.version(62).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingPermissions = await rolePermissionTable.toArray();
+    const existingIds = new Set(existingPermissions.map((permission) => permission.id));
+    const migratedPermissions = existingPermissions
+      .filter((permission) => permission.permission_code === 'COOPERATIVE_REPORT_VIEW')
+      .flatMap((legacyPermission) => {
+        const permissionCode: RolePermission['permission_code'] = 'COOPERATIVE_IPTW_REPORT_VIEW';
+        const id = `${legacyPermission.role_id}:${permissionCode}`;
+        if (existingIds.has(id)) return [];
+        existingIds.add(id);
+
+        return [{
+          id,
+          role_id: legacyPermission.role_id,
+          permission_code: permissionCode,
+          created_at: now,
+          updated_at: now,
+          sync_status: 'pending' as const,
+        }];
+      });
+    const systemPermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingIds.has(permission.id));
+
+    if (migratedPermissions.length > 0 || systemPermissions.length > 0) {
+      await rolePermissionTable.bulkPut([
+        ...migratedPermissions,
+        ...systemPermissions,
+      ]);
+    }
+  });
 }

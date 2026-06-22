@@ -4,7 +4,7 @@ import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'kasirku-setup-config-changed';
-const CURRENT_MODULE_CATALOG_VERSION = 4;
+const CURRENT_MODULE_CATALOG_VERSION = 5;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
@@ -91,6 +91,7 @@ export const getSetupConfig = (): SetupConfig | null => {
         'KOPERASI_REPORT_DAILY_STORTING',
         'KOPERASI_REPORT_DAILY_DROP',
         'KOPERASI_REPORT_WEEKLY_DROP',
+        'KOPERASI_REPORT_IPTW',
         'KOPERASI_REPORT_MEMBER_REGISTER',
         'KOPERASI_REPORT_INSTALLMENT_BOOK',
         'KOPERASI_REPORT_CASH_FLOW',

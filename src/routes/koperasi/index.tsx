@@ -106,6 +106,13 @@ function Cooperative() {
       desc: t('cooperative.index.weeklyDropDesc'),
     },
     {
+      to: '/koperasi/laporan-iptw',
+      label: t('nav.cooperative.iptwReport'),
+      icon: FileTextOutlined,
+      color: 'text-emerald-700',
+      desc: t('cooperative.index.iptwReportDesc'),
+    },
+    {
       to: '/koperasi/buku-angsuran',
       label: t('nav.cooperative.installmentBook'),
       icon: BookOutlined,

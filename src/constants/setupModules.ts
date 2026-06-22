@@ -105,6 +105,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'KOPERASI_REPORT_DAILY_STORTING', label: 'Storting Harian', description: 'Laporan storting harian petugas' },
       { code: 'KOPERASI_REPORT_DAILY_DROP', label: 'Drop Harian', description: 'Laporan drop pinjaman harian' },
       { code: 'KOPERASI_REPORT_WEEKLY_DROP', label: 'Drop Mingguan', description: 'Laporan drop pinjaman mingguan' },
+      { code: 'KOPERASI_REPORT_IPTW', label: 'Laporan IPTW', description: 'Laporan pembayaran IPTW anggota per karyawan' },
       { code: 'KOPERASI_REPORT_MEMBER_REGISTER', label: 'Induk Anggota', description: 'Laporan register induk anggota' },
       { code: 'KOPERASI_REPORT_INSTALLMENT_BOOK', label: 'Buku Angsuran', description: 'Laporan buku angsuran anggota' },
       { code: 'KOPERASI_REPORT_CASH_FLOW', label: 'Arus Kas Koperasi', description: 'Laporan arus kas koperasi' },

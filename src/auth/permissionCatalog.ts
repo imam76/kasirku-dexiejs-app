@@ -392,6 +392,12 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['KOPERASI_REPORT_WEEKLY_DROP'],
   },
   {
+    code: 'COOPERATIVE_IPTW_REPORT_VIEW',
+    label: 'Lihat Laporan IPTW',
+    group: 'Laporan Koperasi',
+    moduleCodes: ['KOPERASI_REPORT_IPTW'],
+  },
+  {
     code: 'COOPERATIVE_MEMBER_REGISTER_REPORT_VIEW',
     label: 'Lihat Laporan Induk Anggota',
     group: 'Laporan Koperasi',

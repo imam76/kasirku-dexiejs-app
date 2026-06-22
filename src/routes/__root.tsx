@@ -291,6 +291,7 @@ const RootLayout = () => {
             { to: '/koperasi/laporan-storting-harian', label: t('nav.cooperative.dailyStorting'), icon: FileText },
             { to: '/koperasi/laporan-drop-harian', label: t('nav.cooperative.dailyDrop'), icon: FileText },
             { to: '/koperasi/laporan-drop-mingguan', label: t('nav.cooperative.weeklyDrop'), icon: FileText },
+            { to: '/koperasi/laporan-iptw', label: t('nav.cooperative.iptwReport'), icon: FileText },
             { to: '/koperasi/laporan-induk-anggota', label: t('nav.cooperative.memberRegister'), icon: FileText },
             { to: '/koperasi/buku-angsuran', label: t('nav.cooperative.installmentBook'), icon: BookOpen },
             {
