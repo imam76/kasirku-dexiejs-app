@@ -1,10 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import dayjs from '@/lib/dayjs';
-import {
-  getFieldCashAccessScope,
-  getCashAccountBalance,
-} from '@/services/cooperativeFieldCashService';
+import { getFieldCashAccessScope } from '@/services/cooperativeFieldCashService';
 import type { CooperativeFieldCashMovementKind, Employee, FinanceTransaction } from '@/types';
 
 export interface CooperativeFieldCashReportFilters {
@@ -40,17 +36,19 @@ type FieldCashEmployee = Employee & {
   field_cash_account_id: string;
 };
 
-const isInDateRange = (
-  transaction: FinanceTransaction,
-  filters: CooperativeFieldCashReportFilters,
-) => {
-  const transactionDate = dayjs(transaction.created_at);
-  if (filters.fromDate && transactionDate.isBefore(dayjs(filters.fromDate))) return false;
-  if (filters.toDate && transactionDate.isAfter(dayjs(filters.toDate))) return false;
-  return true;
-};
-
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+const sumSessionCashNet = (transactions: FinanceTransaction[]) => roundCurrency(
+  transactions.reduce((sum, transaction) => {
+    if (transaction.type === 'INCOME' || transaction.type === 'OPENING_BALANCE') {
+      return sum + Number(transaction.amount || 0);
+    }
+    if (transaction.type === 'EXPENSE') {
+      return sum - Number(transaction.amount || 0);
+    }
+    return sum;
+  }, 0),
+);
 
 const matchesMovementKind = (
   transaction: FinanceTransaction,
@@ -124,34 +122,50 @@ export const getCooperativeFieldCashReport = async (
   }
 
   const fieldCashEmployees = await getFieldCashEmployees(scopedEmployeeId);
-  const cashAccountIds = fieldCashEmployees.map((employee) => employee.field_cash_account_id);
-  const transactions = cashAccountIds.length > 0
+
+  // Dashboard hanya mencerminkan sesi kas yang sedang OPEN: buka sesi mulai dari nol,
+  // tutup sesi mengembalikan seluruh angka ke nol. Riwayat sesi tertutup dilihat terpisah.
+  const employeeIds = fieldCashEmployees.map((employee) => employee.id);
+  const openSessions = employeeIds.length > 0
+    ? await db.cooperativeFieldCashSessions
+        .where('status')
+        .equals('OPEN')
+        .filter((session) => employeeIds.includes(session.employee_id))
+        .toArray()
+    : [];
+  const sessionByEmployee = new Map(openSessions.map((session) => [session.employee_id, session]));
+  const sessionIds = openSessions.map((session) => session.id);
+  const transactions = sessionIds.length > 0
     ? await db.financeTransactions
-        .where('cash_account_id')
-        .anyOf(cashAccountIds)
-        .filter((transaction) => !transaction.deleted_at && isInDateRange(transaction, filters))
+        .where('field_cash_session_id')
+        .anyOf(sessionIds)
+        .filter((transaction) => !transaction.deleted_at)
         .toArray()
     : [];
 
-  const rows = await Promise.all(fieldCashEmployees.map(async (employee): Promise<CooperativeFieldCashReportRow> => {
-    const employeeTransactions = transactions.filter((transaction) => (
-      transaction.cash_account_id === employee.field_cash_account_id
-    ));
-    const droppingFromFinance = sumByKind(employeeTransactions, 'DROPPING_FROM_FINANCE', 'INCOME');
-    const stortingLoanPayment = sumByKind(employeeTransactions, 'STORTING_LOAN_PAYMENT', 'INCOME');
-    const stortingLoanPaymentReversal = sumByKind(employeeTransactions, 'STORTING_LOAN_PAYMENT', 'EXPENSE');
-    const stortingSavingDeposit = sumByKind(employeeTransactions, 'STORTING_SAVING_DEPOSIT', 'INCOME');
-    const stortingSavingDepositReversal = sumByKind(employeeTransactions, 'STORTING_SAVING_DEPOSIT', 'EXPENSE');
-    const loanDisbursement = sumByKind(employeeTransactions, 'LOAN_DISBURSEMENT', 'EXPENSE');
-    const savingWithdrawal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL', 'EXPENSE');
-    const savingWithdrawalReversal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL', 'INCOME');
-    const iptwPayout = sumByKind(employeeTransactions, 'IPTW_PAYOUT', 'EXPENSE');
-    const iptwPayoutReversal = sumByKind(employeeTransactions, 'IPTW_PAYOUT', 'INCOME');
-    const depositToFinance = sumByKind(employeeTransactions, 'DEPOSIT_TO_FINANCE', 'EXPENSE');
-    const movementDates = employeeTransactions
+  const rows = fieldCashEmployees.map((employee): CooperativeFieldCashReportRow => {
+    const session = sessionByEmployee.get(employee.id);
+    const sessionTransactions = session
+      ? transactions.filter((transaction) => transaction.field_cash_session_id === session.id)
+      : [];
+    const droppingFromFinance = sumByKind(sessionTransactions, 'DROPPING_FROM_FINANCE', 'INCOME');
+    const stortingLoanPayment = sumByKind(sessionTransactions, 'STORTING_LOAN_PAYMENT', 'INCOME');
+    const stortingLoanPaymentReversal = sumByKind(sessionTransactions, 'STORTING_LOAN_PAYMENT', 'EXPENSE');
+    const stortingSavingDeposit = sumByKind(sessionTransactions, 'STORTING_SAVING_DEPOSIT', 'INCOME');
+    const stortingSavingDepositReversal = sumByKind(sessionTransactions, 'STORTING_SAVING_DEPOSIT', 'EXPENSE');
+    const loanDisbursement = sumByKind(sessionTransactions, 'LOAN_DISBURSEMENT', 'EXPENSE');
+    const savingWithdrawal = sumByKind(sessionTransactions, 'SAVING_WITHDRAWAL', 'EXPENSE');
+    const savingWithdrawalReversal = sumByKind(sessionTransactions, 'SAVING_WITHDRAWAL', 'INCOME');
+    const iptwPayout = sumByKind(sessionTransactions, 'IPTW_PAYOUT', 'EXPENSE');
+    const iptwPayoutReversal = sumByKind(sessionTransactions, 'IPTW_PAYOUT', 'INCOME');
+    const depositToFinance = sumByKind(sessionTransactions, 'DEPOSIT_TO_FINANCE', 'EXPENSE');
+    const movementDates = sessionTransactions
       .map((transaction) => transaction.created_at)
       .sort();
-    const lastMovementAt = movementDates[movementDates.length - 1];
+    const lastMovementAt = session ? movementDates[movementDates.length - 1] : undefined;
+    const balanceAmount = session
+      ? roundCurrency(Number(session.opening_cash_amount || 0) + sumSessionCashNet(sessionTransactions))
+      : 0;
 
     return {
       employee_id: employee.id,
@@ -172,10 +186,10 @@ export const getCooperativeFieldCashReport = async (
       iptw_payout_amount: iptwPayout,
       iptw_payout_reversal_amount: iptwPayoutReversal,
       deposit_to_finance_amount: depositToFinance,
-      balance_amount: await getCashAccountBalance(employee.field_cash_account_id),
+      balance_amount: balanceAmount,
       last_movement_at: lastMovementAt,
     };
-  }));
+  });
 
   return rows.sort((left, right) => (
     Math.abs(right.balance_amount) - Math.abs(left.balance_amount) ||

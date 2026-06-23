@@ -1,7 +1,8 @@
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Download, Upload } from 'lucide-react';
+import { Download, Lock, Unlock, Upload } from 'lucide-react';
 import type { CooperativeFieldCashReportRow } from '@/services/cooperativeFieldCashReportService';
+import type { CooperativeFieldCashSession } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 const { Text } = Typography;
@@ -10,8 +11,11 @@ interface CooperativeFieldCashReportTableProps {
   rows: CooperativeFieldCashReportRow[];
   loading?: boolean;
   canManage?: boolean;
+  openSessions?: Map<string, CooperativeFieldCashSession>;
   onDropping?: (row: CooperativeFieldCashReportRow) => void;
   onDeposit?: (row: CooperativeFieldCashReportRow) => void;
+  onOpenSession?: (row: CooperativeFieldCashReportRow) => void;
+  onCloseSession?: (row: CooperativeFieldCashReportRow) => void;
 }
 
 const money = (amount?: number) => `Rp ${formatCurrency(Number(amount || 0))}`;
@@ -20,8 +24,11 @@ export default function CooperativeFieldCashReportTable({
   rows,
   loading,
   canManage = false,
+  openSessions,
   onDropping,
   onDeposit,
+  onOpenSession,
+  onCloseSession,
 }: CooperativeFieldCashReportTableProps) {
   const columns: ColumnsType<CooperativeFieldCashReportRow> = [
     {
@@ -133,21 +140,51 @@ export default function CooperativeFieldCashReportTable({
       width: 160,
       render: (date?: string) => date ? formatDate(date) : '-',
     },
+    {
+      title: 'Sesi Kas',
+      key: 'session',
+      width: 180,
+      render: (_value: unknown, row) => {
+        const session = openSessions?.get(row.employee_id);
+        if (!session) {
+          return <Tag>Belum buka</Tag>;
+        }
+        return (
+          <Space orientation="vertical" size={0}>
+            <Tag color="blue">{session.session_number}</Tag>
+            <Text type="secondary">OPEN sejak {formatDate(session.opened_at)}</Text>
+          </Space>
+        );
+      },
+    },
     ...(canManage ? [{
       title: 'Action',
       key: 'action',
       fixed: 'right' as const,
-      width: 230,
-      render: (_value: unknown, row: CooperativeFieldCashReportRow) => (
-        <Space wrap>
-          <Button icon={<Download size={16} />} onClick={() => onDropping?.(row)}>
-            Dropping
-          </Button>
-          <Button icon={<Upload size={16} />} onClick={() => onDeposit?.(row)}>
-            Setor
-          </Button>
-        </Space>
-      ),
+      width: 280,
+      render: (_value: unknown, row: CooperativeFieldCashReportRow) => {
+        const hasOpenSession = Boolean(openSessions?.get(row.employee_id));
+        if (!hasOpenSession) {
+          return (
+            <Button type="primary" icon={<Unlock size={16} />} onClick={() => onOpenSession?.(row)}>
+              Buka Sesi
+            </Button>
+          );
+        }
+        return (
+          <Space wrap>
+            <Button icon={<Download size={16} />} onClick={() => onDropping?.(row)}>
+              Dropping
+            </Button>
+            <Button icon={<Upload size={16} />} onClick={() => onDeposit?.(row)}>
+              Setor
+            </Button>
+            <Button danger icon={<Lock size={16} />} onClick={() => onCloseSession?.(row)}>
+              Tutup Sesi
+            </Button>
+          </Space>
+        );
+      },
     }] : []),
   ];
 
@@ -158,7 +195,7 @@ export default function CooperativeFieldCashReportTable({
       rowKey="employee_id"
       loading={loading}
       pagination={{ pageSize: 8 }}
-      scroll={{ x: canManage ? 1850 : 1620 }}
+      scroll={{ x: canManage ? 2080 : 1800 }}
       locale={{ emptyText: 'Belum ada akun kas kolektor.' }}
     />
   );

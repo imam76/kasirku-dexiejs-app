@@ -4,7 +4,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/auth/useAuth';
 import { db } from '@/lib/db';
 import {
+  buildFieldCashSessionReconciliation,
+  closeCooperativeFieldCashSession,
   getCashAccountBalance,
+  openCooperativeFieldCashSession,
   recordDepositFromPetugasToFinance,
   recordDroppingFromFinanceToPetugas,
   type RecordFieldCashTransferInput,
@@ -13,11 +16,12 @@ import {
   getCooperativeFieldCashReport,
   type CooperativeFieldCashReportFilters,
 } from '@/services/cooperativeFieldCashReportService';
-import type { ChartOfAccount, Employee } from '@/types';
+import type { ChartOfAccount, CooperativeFieldCashSession, Employee } from '@/types';
 
 const RELATED_QUERY_KEYS = [
   'cooperativeFieldCashSessions',
   'cooperativeFieldCashReport',
+  'cooperativeFieldCashReconciliation',
   'financeTransactions',
   'financeBalance',
   'journalEntries',
@@ -70,6 +74,19 @@ export const useCooperativeFieldCash = () => {
     [allFieldCashAccountIds, paymentAccounts],
   );
 
+  const openSessions = useLiveQuery(
+    async () => {
+      const sessions = await db.cooperativeFieldCashSessions
+        .where('status')
+        .equals('OPEN')
+        .toArray();
+
+      return new Map(sessions.map((session) => [session.employee_id, session]));
+    },
+    [],
+    new Map<string, CooperativeFieldCashSession>(),
+  );
+
   const balances = useLiveQuery(
     async () => {
       const pairs = await Promise.all(fieldCashEmployees.map(async (employee) => {
@@ -102,6 +119,14 @@ export const useCooperativeFieldCash = () => {
     mutationFn: recordDepositFromPetugasToFinance,
     onSuccess: invalidate,
   });
+  const openSessionMutation = useMutation({
+    mutationFn: openCooperativeFieldCashSession,
+    onSuccess: invalidate,
+  });
+  const closeSessionMutation = useMutation({
+    mutationFn: closeCooperativeFieldCashSession,
+    onSuccess: invalidate,
+  });
 
   return {
     employees,
@@ -110,12 +135,19 @@ export const useCooperativeFieldCash = () => {
     paymentAccounts,
     financeAccounts,
     balances,
+    openSessions,
     reportRows: reportQuery.data ?? [],
     reportFilters,
     setReportFilters,
     isReportLoading: reportQuery.isLoading,
     recordDropping: (input: RecordFieldCashTransferInput) => droppingMutation.mutateAsync(input),
     recordDeposit: (input: RecordFieldCashTransferInput) => depositMutation.mutateAsync(input),
-    isMutating: droppingMutation.isPending || depositMutation.isPending,
+    openSession: openSessionMutation.mutateAsync,
+    closeSession: closeSessionMutation.mutateAsync,
+    previewReconciliation: buildFieldCashSessionReconciliation,
+    isMutating: droppingMutation.isPending
+      || depositMutation.isPending
+      || openSessionMutation.isPending
+      || closeSessionMutation.isPending,
   };
 };

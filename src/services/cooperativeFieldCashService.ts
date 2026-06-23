@@ -452,6 +452,11 @@ export const closeCooperativeFieldCashSession = async (
     }
 
     const reconciliation = buildReconciliation(session, await getSessionFinanceTransactions(session));
+    if (reconciliation.expected_closing_cash_amount > 0.01) {
+      throw new Error(
+        `Sisa kas Rp ${formatAmount(reconciliation.expected_closing_cash_amount)} harus disetor ke finance dulu sebelum sesi ditutup.`,
+      );
+    }
     const closingDifferenceAmount = roundCurrency(closingCashAmount - reconciliation.expected_closing_cash_amount);
     if (Math.abs(closingDifferenceAmount) > 0.01 && !input.closing_note?.trim()) {
       throw new Error('Catatan wajib diisi jika uang fisik akhir berbeda dari saldo akhir sistem.');
