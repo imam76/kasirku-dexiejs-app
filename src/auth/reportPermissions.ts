@@ -57,6 +57,10 @@ export const COOPERATIVE_REPORT_ACCESS: Record<string, ReportAccessDefinition> =
     permission: 'COOPERATIVE_DAILY_TARGET_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_DAILY_TARGET',
   },
+  '/koperasi/laporan-kas-harian-pdl': {
+    action: 'COOPERATIVE_CASH_REPORT_VIEW',
+    fallbackPath: '/koperasi/kas',
+  },
   '/koperasi/laporan-storting-harian': {
     permission: 'COOPERATIVE_DAILY_STORTING_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_DAILY_STORTING',

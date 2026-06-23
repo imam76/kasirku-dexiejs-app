@@ -289,6 +289,8 @@ const RootLayout = () => {
             { to: '/koperasi/laporan-tunai', label: t('nav.cooperative.cashReport'), icon: Banknote },
             { to: '/koperasi/laporan-target-harian', label: t('nav.cooperative.dailyTarget'), icon: FileText },
             { to: '/koperasi/laporan-storting-harian', label: t('nav.cooperative.dailyStorting'), icon: FileText },
+            { to: '/koperasi/laporan-kas-harian-pdl', label: t('cooperative.reports.dailyFieldCash.title'), icon: FileText },
+
             { to: '/koperasi/laporan-drop-harian', label: t('nav.cooperative.dailyDrop'), icon: FileText },
             { to: '/koperasi/laporan-drop-mingguan', label: t('nav.cooperative.weeklyDrop'), icon: FileText },
             { to: '/koperasi/laporan-iptw', label: t('nav.cooperative.iptwReport'), icon: FileText },

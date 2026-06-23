@@ -92,6 +92,13 @@ function Cooperative() {
       desc: t('cooperative.index.dailyStortingDesc'),
     },
     {
+      to: '/koperasi/laporan-kas-harian-pdl',
+      label: t('cooperative.reports.dailyFieldCash.title'),
+      icon: FileTextOutlined,
+      color: 'text-blue-700',
+      desc: t('cooperative.reports.dailyFieldCash.subtitle'),
+    },
+    {
       to: '/koperasi/laporan-drop-harian',
       label: t('nav.cooperative.dailyDrop'),
       icon: FileTextOutlined,

@@ -52,7 +52,7 @@ const isInDateRange = (
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-const matchesMovementKind = (
+export const matchesMovementKind = (
   transaction: FinanceTransaction,
   kind: CooperativeFieldCashMovementKind,
 ) => {
@@ -88,7 +88,7 @@ const matchesMovementKind = (
   return false;
 };
 
-const sumByKind = (
+export const sumByKind = (
   transactions: FinanceTransaction[],
   kind: CooperativeFieldCashMovementKind,
   type: FinanceTransaction['type'],
