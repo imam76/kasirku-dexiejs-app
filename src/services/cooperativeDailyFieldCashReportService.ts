@@ -5,7 +5,6 @@ import {
   getCashAccountBalance,
 } from '@/services/cooperativeFieldCashService';
 import {
-  matchesMovementKind,
   sumByKind,
 } from '@/services/cooperativeFieldCashReportService';
 import type { Employee, FinanceTransaction, CooperativeMember } from '@/types';

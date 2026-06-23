@@ -1,4 +1,4 @@
-import { forwardRef, type CSSProperties, type ReactNode } from 'react';
+import { forwardRef, type CSSProperties } from 'react';
 import { Building2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import dayjs from '@/lib/dayjs';
