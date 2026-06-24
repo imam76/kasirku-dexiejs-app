@@ -13,7 +13,7 @@ import {
 import { exportCsv, type ExportTarget } from '@/utils/export';
 import { useI18n } from '@/hooks/useI18n';
 
-const STOCK_SAVED_EVENT = 'kasirku-workflow-tour-stock-saved';
+const STOCK_SAVED_EVENT = 'frayukti-workflow-tour-stock-saved';
 
 export default function StockManagement() {
   const { modal, message } = App.useApp();

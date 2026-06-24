@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import MembershipCheckoutPanel from './MembershipCheckoutPanel';
 
-const PAYMENT_SHORTCUTS_STORAGE_KEY = 'kasirku-show-payment-shortcuts';
+const PAYMENT_SHORTCUTS_STORAGE_KEY = 'frayukti-show-payment-shortcuts';
 
 interface CartSummaryProps {
   total: number;

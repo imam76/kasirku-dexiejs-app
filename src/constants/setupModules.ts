@@ -147,4 +147,4 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
 ];
 
 /** localStorage key for the setup configuration */
-export const SETUP_CONFIG_STORAGE_KEY = 'kasirku-setup-config';
+export const SETUP_CONFIG_STORAGE_KEY = 'frayukti-setup-config';

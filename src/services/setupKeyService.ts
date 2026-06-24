@@ -3,7 +3,7 @@ import type { AuthUser, Role } from '@/types';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 
-export const SETUP_CONFIG_CHANGED_EVENT = 'kasirku-setup-config-changed';
+export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
 const CURRENT_MODULE_CATALOG_VERSION = 5;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 

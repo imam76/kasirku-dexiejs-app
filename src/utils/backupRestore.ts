@@ -71,7 +71,7 @@ export const backupDatabase = async () => {
       timestamp: new Date().toISOString(),
     };
 
-    const fileName = `kasirku-backup-${dayjs().format('YYYY-MM-DD-HH-mm')}.json`;
+    const fileName = `frayukti-backup-${dayjs().format('YYYY-MM-DD-HH-mm')}.json`;
 
     await exportJson({ filename: fileName, data });
     return true;

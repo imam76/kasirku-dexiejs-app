@@ -8,7 +8,7 @@ import type { PromoEvaluationResult } from '@/services/promoService';
 import { formatCurrency } from '@/utils/formatters';
 
 const { Text } = Typography;
-const MEMBERSHIP_PANEL_STORAGE_KEY = 'kasirku-pos-membership-panel-open';
+const MEMBERSHIP_PANEL_STORAGE_KEY = 'frayukti-pos-membership-panel-open';
 
 interface MembershipCheckoutPanelProps {
   members: Contact[];

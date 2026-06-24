@@ -13,7 +13,7 @@ export type { SelectedUsbPrinter, UsbSerialPrinterDevice };
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
-const SELECTED_USB_PRINTER_KEY = 'kasirku-selected-usb-printer';
+const SELECTED_USB_PRINTER_KEY = 'frayukti-selected-usb-printer';
 
 export const getStoredUsbPrinter = (): SelectedUsbPrinter | null => {
   if (typeof window === 'undefined') return null;

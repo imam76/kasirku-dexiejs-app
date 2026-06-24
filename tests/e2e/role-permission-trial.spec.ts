@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { loginWithCredentials, logout, registerFirstOwner } from './helpers/auth';
 
-const SETUP_CONFIG_STORAGE_KEY = 'kasirku-setup-config';
+const SETUP_CONFIG_STORAGE_KEY = 'frayukti-setup-config';
 
 const memberOnlyUser = {
   name: 'Petugas Anggota',

@@ -3,7 +3,7 @@ import { I18nContext, type I18nContextValue } from '@/i18n/I18nContext';
 import { defaultLocale, supportedLocales, translate, type Locale } from '@/i18n/messages';
 import dayjs from '@/lib/dayjs';
 
-const STORAGE_KEY = 'kasirku-locale';
+const STORAGE_KEY = 'frayukti-locale';
 
 const isLocale = (value: string | null): value is Locale => {
   return supportedLocales.includes(value as Locale);

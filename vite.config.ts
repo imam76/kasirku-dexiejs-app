@@ -38,7 +38,7 @@ const withJsonResponseHelpers = (response: ServerResponse): FeedbackResponse => 
 };
 
 const feedbackApiDevPlugin = (): Plugin => ({
-  name: 'kasirku-feedback-api-dev',
+  name: 'frayukti-feedback-api-dev',
   apply: 'serve',
   configureServer(server) {
     server.middlewares.use(FEEDBACK_API_PATH, async (request: IncomingMessage, response: ServerResponse) => {

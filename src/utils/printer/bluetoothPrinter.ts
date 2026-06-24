@@ -7,7 +7,7 @@ import {
   SelectedBluetoothPrinter,
 } from '@/types';
 
-const SELECTED_PRINTER_STORAGE_KEY = 'kasirku-selected-bluetooth-printer';
+const SELECTED_PRINTER_STORAGE_KEY = 'frayukti-selected-bluetooth-printer';
 
 type TauriWindow = Window & {
   __TAURI_INTERNALS__?: unknown;

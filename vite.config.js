@@ -56,7 +56,7 @@ var withJsonResponseHelpers = function (response) {
     return feedbackResponse;
 };
 var feedbackApiDevPlugin = function () { return ({
-    name: 'kasirku-feedback-api-dev',
+    name: 'frayukti-feedback-api-dev',
     apply: 'serve',
     configureServer: function (server) {
         var _this = this;

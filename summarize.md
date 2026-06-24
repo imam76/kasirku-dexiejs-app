@@ -223,7 +223,7 @@ bun run tauri android build --apk --split-per-abi
 - `Fitur Multi Unit — Aplikasi POS.md` - dokumen kebutuhan fitur multi-unit.
 
 ### Folder `public/`
-- Aset publik Vite/Tauri seperti `vite.svg` dan `tauri.svg`.
+- Aset publik Vite/Tauri seperti `frayukti-f.svg` dan `tauri.svg`.
 
 ### Folder `src/`
 - `main.tsx` - entry point React.

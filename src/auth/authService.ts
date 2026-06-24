@@ -14,7 +14,7 @@ import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './roleSeed';
 import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
 
-const SESSION_STORAGE_KEY = 'kasirku-auth-session-id';
+const SESSION_STORAGE_KEY = 'frayukti-auth-session-id';
 const PIN_HASH_ALGORITHM = 'SHA-256';
 
 interface ActivityLogInput {
@@ -429,7 +429,7 @@ export const getActivityLogs = async (input: ActivityLogQueryInput = {}): Promis
 };
 
 const buildLegacyAuthUserEmail = (name: string) => (
-  `${name.trim().toLowerCase().replace(/\s+/g, '')}@kasirku.com`
+  `${name.trim().toLowerCase().replace(/\s+/g, '')}@frayukti.com`
 );
 
 const authUserEmailMatches = (user: AuthUser, email: string) => (

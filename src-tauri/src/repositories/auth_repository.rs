@@ -41,7 +41,7 @@ pub async fn authenticate_server_session(
             LOWER(COALESCE(email, '')) = $1 OR
             (
               email IS NULL AND
-              LOWER(REGEXP_REPLACE(BTRIM(name), '\s+', '', 'g') || '@kasirku.com') = $1
+              LOWER(REGEXP_REPLACE(BTRIM(name), '\s+', '', 'g') || '@frayukti.com') = $1
             )
           )
         LIMIT 1

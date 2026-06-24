@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useI18n } from '@/hooks/useI18n';
 
-const TOUR_STORAGE_KEY = 'kasirku-workflow-tour-dismissed';
-const STOCK_SAVED_EVENT = 'kasirku-workflow-tour-stock-saved';
+const TOUR_STORAGE_KEY = 'frayukti-workflow-tour-dismissed';
+const STOCK_SAVED_EVENT = 'frayukti-workflow-tour-stock-saved';
 const ROUTE_SETTLE_DELAY_MS = 120;
 
 type WorkflowRoute = '/' | '/master-data/products' | '/master-data/units' | '/transaction' | '/history';

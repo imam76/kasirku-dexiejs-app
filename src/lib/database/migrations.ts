@@ -746,7 +746,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       .filter((user) => !user.email)
       .map((user) => ({
         ...user,
-        email: `${user.name.toLowerCase().replace(/\s+/g, '')}@kasirku.com`,
+        email: `${user.name.toLowerCase().replace(/\s+/g, '')}@frayukti.com`,
         sync_status: 'pending' as const,
       }));
 

@@ -1,5 +1,5 @@
 [package]
-name = "kasirku-erp"
+name = "frayukti"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
