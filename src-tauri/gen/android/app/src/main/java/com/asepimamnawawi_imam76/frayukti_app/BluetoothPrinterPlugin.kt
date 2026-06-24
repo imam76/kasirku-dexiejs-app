@@ -1,4 +1,4 @@
-package com.asepimamnawawi_imam76.kasirku_erp_app
+package com.asepimamnawawi_imam76.frayukti_app
 
 import android.Manifest
 import android.annotation.SuppressLint
