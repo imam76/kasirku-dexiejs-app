@@ -1,7 +1,7 @@
 export const cooperativeMessages = {
   id: {
     'cooperative.index.title': 'Koperasi',
-    'cooperative.index.subtitle': 'Kelola data dasar koperasi simpan pinjam dengan pola back-office Kasirku',
+    'cooperative.index.subtitle': 'Kelola data dasar koperasi simpan pinjam dengan pola back-office Frayukti',
     'cooperative.index.membersDesc': 'Kelola master anggota, status, dan informasi kontak koperasi',
     'cooperative.index.savingsDesc': 'Catat setoran, penarikan, saldo, dan reversal simpanan anggota',
     'cooperative.index.loansDesc': 'Kelola pengajuan, approval, pencairan, dan jadwal angsuran pinjaman',
@@ -800,7 +800,7 @@ export const cooperativeMessages = {
 
   en: {
     'cooperative.index.title': 'Cooperative',
-    'cooperative.index.subtitle': 'Manage savings and loan cooperative core data with the Kasirku back-office pattern',
+    'cooperative.index.subtitle': 'Manage savings and loan cooperative core data with the Frayukti back-office pattern',
     'cooperative.index.membersDesc': 'Manage cooperative member master data, status, and contact information',
     'cooperative.index.savingsDesc': 'Record member saving deposits, withdrawals, balances, and reversals',
     'cooperative.index.loansDesc': 'Manage loan applications, approval, disbursement, and installment schedules',

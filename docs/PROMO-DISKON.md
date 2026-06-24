@@ -1,6 +1,6 @@
 # Fitur Promo & Diskon - Spesifikasi Aman
 
-Dokumen ini adalah hasil audit ulang terhadap rencana promo/diskon dengan kondisi project Kasirku saat ini. Targetnya: junior developer bisa mengerjakan fitur ini tanpa merusak transaksi, stok, finance, profit, receipt, dan laporan.
+Dokumen ini adalah hasil audit ulang terhadap rencana promo/diskon dengan kondisi project Frayukti saat ini. Targetnya: junior developer bisa mengerjakan fitur ini tanpa merusak transaksi, stok, finance, profit, receipt, dan laporan.
 
 ## Ringkasan Keputusan
 

@@ -1,7 +1,7 @@
-# Ringkasan Kondisi Terkini Proyek Kasirku Dexie.js App
+# Ringkasan Kondisi Terkini Proyek Frayukti Dexie.js App
 
 ## Deskripsi Proyek
-Kasirku adalah aplikasi Point of Sale (POS) berbasis React untuk kebutuhan transaksi toko, manajemen stok, satuan produk, laporan, dan pencatatan keuangan. Data utama disimpan lokal menggunakan Dexie.js/IndexedDB sehingga aplikasi dapat berjalan offline-first. Proyek juga disiapkan sebagai aplikasi desktop/mobile melalui Tauri v2, termasuk dukungan build Android dan integrasi printer Bluetooth untuk cetak struk.
+Frayukti adalah aplikasi Point of Sale (POS) berbasis React untuk kebutuhan transaksi toko, manajemen stok, satuan produk, laporan, dan pencatatan keuangan. Data utama disimpan lokal menggunakan Dexie.js/IndexedDB sehingga aplikasi dapat berjalan offline-first. Proyek juga disiapkan sebagai aplikasi desktop/mobile melalui Tauri v2, termasuk dukungan build Android dan integrasi printer Bluetooth untuk cetak struk.
 
 ## Teknologi Utama
 - **Frontend**: React 19, TypeScript, Vite 7

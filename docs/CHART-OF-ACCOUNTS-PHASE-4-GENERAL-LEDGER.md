@@ -1,6 +1,6 @@
 # Accounting Core - Fase 4 General Ledger dan Double Entry
 
-Fase ini adalah titik ketika Kasirku mulai masuk ke accounting engine penuh. Jangan mulai fase ini sebelum Fase 1 sampai 3 stabil dan kebutuhan report akuntansi benar-benar jelas.
+Fase ini adalah titik ketika Frayukti mulai masuk ke accounting engine penuh. Jangan mulai fase ini sebelum Fase 1 sampai 3 stabil dan kebutuhan report akuntansi benar-benar jelas.
 
 ## Tujuan
 

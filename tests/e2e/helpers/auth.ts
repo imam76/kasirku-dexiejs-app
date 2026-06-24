@@ -4,7 +4,7 @@ import { demoOwner } from './data';
 export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Masuk Kasirku' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
   await expect(page.getByText('Belum ada user aktif.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Register Owner Pertama' }).click();
@@ -22,14 +22,14 @@ export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
 export async function logout(page: Page) {
   await page.getByLabel('Logout').click();
 
-  const logoutDialog = page.getByRole('dialog').filter({ hasText: 'Logout dari Kasirku?' });
+  const logoutDialog = page.getByRole('dialog').filter({ hasText: 'Logout dari Frayukti?' });
   await expect(logoutDialog).toBeVisible();
   await logoutDialog.getByRole('button', { name: 'Logout' }).click();
-  await expect(page.getByRole('heading', { name: 'Masuk Kasirku' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
 }
 
 export async function loginWithCredentials(page: Page, email: string, pin: string) {
-  await expect(page.getByRole('heading', { name: 'Masuk Kasirku' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
 
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('PIN').fill(pin);

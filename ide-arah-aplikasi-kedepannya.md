@@ -1,5 +1,5 @@
 Apa Langkah Selanjutnya?
-Tergantung arah aplikasi Kasirku ini ke depannya, kita punya dua opsi strategis:
+Tergantung arah aplikasi Frayukti ini ke depannya, kita punya dua opsi strategis:
 
 Opsi 1: Fitur Multi-Company / Multi-Workspace (Jika untuk bisnis terpisah) Kita bisa merombak arsitektur sistem agar user bisa membuat banyak "Toko/Perusahaan" dalam 1 akun login. Setiap perusahaan akan punya database Dexie (atau company_id) masing-masing yang saling terisolasi. Saat login, user akan disambut halaman "Pilih Perusahaan".
 

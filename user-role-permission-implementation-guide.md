@@ -1,6 +1,6 @@
 # Panduan Implementasi User & Hak Akses
 
-Dokumen ini adalah panduan step-by-step untuk junior developer yang akan menambahkan fitur user, role, dan permission di Kasirku.
+Dokumen ini adalah panduan step-by-step untuk junior developer yang akan menambahkan fitur user, role, dan permission di Frayukti.
 
 Target fitur:
 

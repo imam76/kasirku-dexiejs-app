@@ -1,6 +1,6 @@
 # Stock Opname - Langkah Implementasi Berbasis SoC
 
-Dokumen ini adalah panduan implementasi Stock Opname untuk project Kasirku. Targetnya: stok fisik bisa dicocokkan dengan stok sistem tanpa menumpuk logic di komponen UI, tanpa merusak FIFO lot, dan tetap mengikuti struktur project saat ini.
+Dokumen ini adalah panduan implementasi Stock Opname untuk project Frayukti. Targetnya: stok fisik bisa dicocokkan dengan stok sistem tanpa menumpuk logic di komponen UI, tanpa merusak FIFO lot, dan tetap mengikuti struktur project saat ini.
 
 ## Update Implementasi
 

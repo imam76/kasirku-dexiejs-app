@@ -60,7 +60,7 @@ export default function DepositReport() {
 
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
-        doc.text('Kasirku', 105, 18, { align: 'center' });
+        doc.text('Frayukti', 105, 18, { align: 'center' });
         doc.setFontSize(13);
         doc.text(t('report.deposit.title'), 105, 30, { align: 'center' });
         doc.setFontSize(11);

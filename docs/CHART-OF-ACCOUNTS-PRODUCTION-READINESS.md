@@ -1,6 +1,6 @@
 # Accounting Core - Production Readiness
 
-Dokumen ini adalah alur kerja untuk membuat Chart of Accounts dan General Ledger benar-benar siap production di Kasirku. Kondisi kode saat ini sudah punya fondasi `chartOfAccounts`, `financeAccountMappings`, `accountingProfileSetting`, `enabledModules`, `journalEntries`, `journalEntryLines`, posting service, backup/restore, dan UI laporan ledger. Tetapi General Ledger belum boleh dianggap production-ready sebelum blocker bisnis, data migration, inventory accounting, period lock, permission, dan QA berikut selesai.
+Dokumen ini adalah alur kerja untuk membuat Chart of Accounts dan General Ledger benar-benar siap production di Frayukti. Kondisi kode saat ini sudah punya fondasi `chartOfAccounts`, `financeAccountMappings`, `accountingProfileSetting`, `enabledModules`, `journalEntries`, `journalEntryLines`, posting service, backup/restore, dan UI laporan ledger. Tetapi General Ledger belum boleh dianggap production-ready sebelum blocker bisnis, data migration, inventory accounting, period lock, permission, dan QA berikut selesai.
 
 ## Status Saat Ini
 

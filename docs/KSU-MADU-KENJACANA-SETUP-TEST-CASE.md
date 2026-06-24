@@ -1,6 +1,6 @@
 # Tutorial Setup Awal dan Test Case Demo KSP
 
-Dokumen ini disiapkan untuk presentasi project Kasirku modul Koperasi Simpan Pinjam kepada Owner KSU Madu Kenjacana.
+Dokumen ini disiapkan untuk presentasi project Frayukti modul Koperasi Simpan Pinjam kepada Owner KSU Madu Kenjacana.
 
 Fokus demo:
 - Setup awal aplikasi sampai Owner bisa login.
@@ -90,7 +90,7 @@ Kondisi awal: belum ada user aktif.
 Langkah:
 
 1. Buka aplikasi.
-2. Pada halaman Masuk Kasirku, klik `Register Owner Pertama`.
+2. Pada halaman Masuk Frayukti, klik `Register Owner Pertama`.
 3. Isi:
 
 | Field | Contoh isi |
@@ -691,7 +691,7 @@ import { expect, type Page } from '@playwright/test';
 export async function registerFirstOwner(page: Page, pin = '123456') {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Masuk Kasirku' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
   await expect(page.getByText('Belum ada user aktif.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Register Owner Pertama' }).click();
@@ -707,11 +707,11 @@ export async function registerFirstOwner(page: Page, pin = '123456') {
 
 export async function logoutAndLoginAgain(page: Page, pin = '123456') {
   await page.getByLabel('Logout').click();
-  const logoutDialog = page.getByRole('dialog', { name: 'Logout dari Kasirku?' });
+  const logoutDialog = page.getByRole('dialog', { name: 'Logout dari Frayukti?' });
   await expect(logoutDialog).toBeVisible();
   await logoutDialog.getByRole('button', { name: 'Logout' }).click();
 
-  await expect(page.getByRole('heading', { name: 'Masuk Kasirku' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
   await expect(page.getByText('Owner KSU Madu Kenjacana - Owner')).toBeVisible();
 
   await page.getByLabel('PIN').fill(pin);
@@ -735,7 +735,7 @@ Target test case:
 
 | ID manual | Test Playwright | Expected utama |
 | --- | --- | --- |
-| AUTH-01 | Register Owner pertama | Owner dibuat dan app masuk ke shell Kasirku |
+| AUTH-01 | Register Owner pertama | Owner dibuat dan app masuk ke shell Frayukti |
 | AUTH-02 | Validasi PIN register | Pesan `Konfirmasi PIN tidak sama.` muncul |
 | AUTH-03 | Login Owner | Setelah logout, PIN valid bisa login ulang |
 | AUTH-04 | Akses menu Koperasi | Route `/koperasi` menampilkan menu Koperasi |

@@ -72,7 +72,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
             <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg">
               <Store size={32} />
             </div>
-            <h1 className="mb-2 text-3xl font-bold text-gray-900">Selamat Datang di Kasirku</h1>
+            <h1 className="mb-2 text-3xl font-bold text-gray-900">Selamat Datang di Frayukti</h1>
             <p className="mb-8 text-lg text-gray-600">
               Solusi cerdas untuk manajemen bisnis dan operasional kasir Anda.
             </p>

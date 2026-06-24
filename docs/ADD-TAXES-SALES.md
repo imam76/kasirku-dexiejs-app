@@ -1,6 +1,6 @@
 # ADD TAXES SALES - Kebutuhan Upgrade dan Langkah Implementasi
 
-Dokumen ini menyiapkan kebutuhan upgrade pajak untuk modul Sales Document agar pajak tersimpan dan terhitung di level line item, tetap aman terhadap histori, dan tetap mengikuti standar arsitektur project Kasirku.
+Dokumen ini menyiapkan kebutuhan upgrade pajak untuk modul Sales Document agar pajak tersimpan dan terhitung di level line item, tetap aman terhadap histori, dan tetap mengikuti standar arsitektur project Frayukti.
 
 ## Ringkasan Kondisi Saat Ini
 

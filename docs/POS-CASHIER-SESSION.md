@@ -1,6 +1,6 @@
 # POS Cashier Session - Buka/Tutup Kasir dan Rekonsiliasi Kas
 
-Dokumen ini adalah langkah implementasi fitur sesi kasir untuk POS Kasirku. Targetnya: transaksi POS tidak lagi berdiri sendiri per tanggal saja, tetapi terikat ke sesi buka/tutup kasir sehingga saldo awal, uang tunai hasil transaksi, uang fisik saat tutup, dan status balance/non balance bisa diaudit.
+Dokumen ini adalah langkah implementasi fitur sesi kasir untuk POS Frayukti. Targetnya: transaksi POS tidak lagi berdiri sendiri per tanggal saja, tetapi terikat ke sesi buka/tutup kasir sehingga saldo awal, uang tunai hasil transaksi, uang fisik saat tutup, dan status balance/non balance bisa diaudit.
 
 ## Audit Kondisi Project Saat Ini
 

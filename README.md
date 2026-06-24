@@ -1,4 +1,4 @@
-# Kasirku ERP App
+# Frayukti ERP App
 
 Aplikasi kasir/ERP berbasis React, TypeScript, Vite, Tauri 2, dan PostgreSQL.
 Project ini memakai Bun sebagai package manager utama.

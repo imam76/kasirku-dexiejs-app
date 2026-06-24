@@ -1,6 +1,6 @@
 # Sales Return - Production Readiness
 
-Dokumen ini adalah checklist langkah menuju production untuk fitur Sales Return di Kasirku. Fitur sudah punya fondasi module, route, service, table Dexie, permission, dan UI, tetapi belum boleh dianggap production-ready sebelum guard bisnis, audit finance, stok, dan QA berikut selesai.
+Dokumen ini adalah checklist langkah menuju production untuk fitur Sales Return di Frayukti. Fitur sudah punya fondasi module, route, service, table Dexie, permission, dan UI, tetapi belum boleh dianggap production-ready sebelum guard bisnis, audit finance, stok, dan QA berikut selesai.
 
 ## Status Saat Ini
 

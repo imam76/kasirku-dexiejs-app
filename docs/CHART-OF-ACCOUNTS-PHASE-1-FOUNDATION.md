@@ -1,6 +1,6 @@
 # Accounting Core - Fase 1 Fondasi Operasional
 
-Fase ini adalah implementasi pertama yang paling cocok untuk kondisi Kasirku saat ini. Tujuannya membuat fondasi Accounting Core yang tetap ringan: `Daftar Akun` sebagai modul Finance, account snapshot ke transaksi finance, default accounting profile, feature gate awal, dan jalur menuju general ledger tanpa memaksa double-entry sekarang.
+Fase ini adalah implementasi pertama yang paling cocok untuk kondisi Frayukti saat ini. Tujuannya membuat fondasi Accounting Core yang tetap ringan: `Daftar Akun` sebagai modul Finance, account snapshot ke transaksi finance, default accounting profile, feature gate awal, dan jalur menuju general ledger tanpa memaksa double-entry sekarang.
 
 ## Scope
 
@@ -204,7 +204,7 @@ Catatan:
 
 Buat `src/constants/chartOfAccounts.ts`.
 
-Default akun awal yang cukup untuk Kasirku:
+Default akun awal yang cukup untuk Frayukti:
 
 ```txt
 1000 Kas dan Bank                 ASSET

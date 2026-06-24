@@ -1,6 +1,6 @@
 # Master Data Projects - Langkah Pengerjaan Sesuai Struktur Project
 
-Dokumen ini adalah panduan pengerjaan Master Data Projects untuk project Kasirku. Targetnya: project bisa menjadi dimensi pekerjaan/kontrak/campaign untuk sales document, finance, dan report berikutnya, tanpa mengubah flow POS existing dan tanpa mencampurnya dengan contact, department, user login, atau warehouse.
+Dokumen ini adalah panduan pengerjaan Master Data Projects untuk project Frayukti. Targetnya: project bisa menjadi dimensi pekerjaan/kontrak/campaign untuk sales document, finance, dan report berikutnya, tanpa mengubah flow POS existing dan tanpa mencampurnya dengan contact, department, user login, atau warehouse.
 
 ## Ringkasan Keputusan
 

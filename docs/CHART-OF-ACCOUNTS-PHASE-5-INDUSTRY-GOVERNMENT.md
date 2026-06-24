@@ -149,7 +149,7 @@ Report yang mungkin dibutuhkan:
 
 Konsekuensi produk:
 
-- UX retail Kasirku tidak cocok langsung untuk PSAP.
+- UX retail Frayukti tidak cocok langsung untuk PSAP.
 - Modul POS, Sales Invoice, dan Profit Report tidak boleh dipaksa menjadi report PSAP.
 - Kalau PSAP benar-benar ditargetkan, lebih aman buat mode/profile khusus, bukan sekadar template COA.
 

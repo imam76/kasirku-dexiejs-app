@@ -1,4 +1,4 @@
-Saya ingin menambahkan modul Koperasi Simpan Pinjam (KSP) sebagai menu khusus di aplikasi Kasirku yang sudah ada.
+Saya ingin menambahkan modul Koperasi Simpan Pinjam (KSP) sebagai menu khusus di aplikasi Frayukti yang sudah ada.
 
 Modul ini adalah back-office internal untuk staf/admin koperasi, bukan portal anggota.
 

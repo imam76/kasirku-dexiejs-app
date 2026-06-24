@@ -1,6 +1,6 @@
 # Master Data Contact - Langkah Pengerjaan Sesuai Struktur Project
 
-Dokumen ini adalah panduan pengerjaan Master Data Contact untuk project Kasirku. Targetnya: contact bisa dipakai sebagai sumber data customer/supplier untuk fitur sales document berikutnya, tanpa mencampur data pelanggan dengan `AuthUser`, dan tanpa melebar dulu ke department, project, atau warehouse.
+Dokumen ini adalah panduan pengerjaan Master Data Contact untuk project Frayukti. Targetnya: contact bisa dipakai sebagai sumber data customer/supplier untuk fitur sales document berikutnya, tanpa mencampur data pelanggan dengan `AuthUser`, dan tanpa melebar dulu ke department, project, atau warehouse.
 
 ## Ringkasan Keputusan
 

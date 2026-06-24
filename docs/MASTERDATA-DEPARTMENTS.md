@@ -1,6 +1,6 @@
 # Master Data Departments - Langkah Pengerjaan Sesuai Struktur Project
 
-Dokumen ini adalah panduan pengerjaan Master Data Departments untuk project Kasirku. Targetnya: department bisa menjadi dimensi internal/cost center untuk sales document, finance, dan report berikutnya, tanpa mengubah flow POS existing dan tanpa mencampurnya dengan contact, project, user login, atau warehouse.
+Dokumen ini adalah panduan pengerjaan Master Data Departments untuk project Frayukti. Targetnya: department bisa menjadi dimensi internal/cost center untuk sales document, finance, dan report berikutnya, tanpa mengubah flow POS existing dan tanpa mencampurnya dengan contact, project, user login, atau warehouse.
 
 ## Ringkasan Keputusan
 

@@ -331,7 +331,7 @@ export default function TransactionDetailReport() {
         build: (doc) => {
           doc.setFontSize(16);
           doc.setFont('helvetica', 'bold');
-          doc.text('Kasirku', 105, 16, { align: 'center' });
+          doc.text('Frayukti', 105, 16, { align: 'center' });
           doc.setFontSize(13);
           doc.text(t('report.detail.title'), 105, 27, { align: 'center' });
           doc.setFontSize(9);

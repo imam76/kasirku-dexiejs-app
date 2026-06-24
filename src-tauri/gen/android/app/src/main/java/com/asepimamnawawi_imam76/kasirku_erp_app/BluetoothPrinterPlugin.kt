@@ -366,7 +366,7 @@ object EscPosReceiptRenderer {
     output.writeCommand(0x1B, 0x74, 0x00)
     output.writeCommand(0x1B, 0x61, 0x01)
     output.writeCommand(0x1B, 0x45, 0x01)
-    output.writeLine(receipt.merchantName.ifBlank { "Kasirku" }.fit(PAPER_WIDTH))
+    output.writeLine(receipt.merchantName.ifBlank { "Frayukti" }.fit(PAPER_WIDTH))
     output.writeCommand(0x1B, 0x45, 0x00)
     output.writeLine("STRUK PEMBAYARAN")
     output.writeCommand(0x1B, 0x61, 0x00)

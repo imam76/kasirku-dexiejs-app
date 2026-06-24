@@ -15,7 +15,7 @@ Fase ini bukan cuma menambahkan template COA. Fase ini menghubungkan `accounting
 
 ## Keputusan Grooming
 
-- `SAK_EMKM` menjadi default awal Kasirku.
+- `SAK_EMKM` menjadi default awal Frayukti.
 - `SAK_EP` menjadi pengganti arah `SAK_ETAP` untuk target baru.
 - `SAK_ETAP` tidak perlu menjadi template utama baru. Jika perlu, pakai `SAK_ETAP_LEGACY` hanya untuk import/migration.
 - `PSAK_FULL` adalah profile lanjut yang butuh general ledger sebelum bisa diklaim serius.
@@ -121,7 +121,7 @@ Aturan activation:
 
 ### SAK_EMKM + RETAIL
 
-Template default untuk fase awal Kasirku.
+Template default untuk fase awal Frayukti.
 
 Target:
 
@@ -254,7 +254,7 @@ Karakter:
 - Tidak memakai konsep laba/rugi bisnis retail.
 - Butuh struktur akun pendapatan, belanja, beban, aset, kewajiban, ekuitas dana, dan anggaran.
 - Butuh report pemerintahan yang berbeda.
-- Sebaiknya tidak digabung ke UX default Kasirku retail.
+- Sebaiknya tidak digabung ke UX default Frayukti retail.
 
 ## Cara Apply Profile dan Template
 

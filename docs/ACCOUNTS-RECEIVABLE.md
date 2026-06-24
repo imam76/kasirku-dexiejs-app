@@ -1,6 +1,6 @@
 # Piutang Usaha dan Payment Ledger Sales Invoice - Spesifikasi Implementasi
 
-Dokumen ini adalah panduan implementasi fitur Piutang Usaha untuk kondisi Kasirku saat ini. Targetnya: Sales Invoice `ISSUED` bisa dipantau sebagai piutang, pembayaran invoice dicatat sebagai histori append-only, cash-flow tetap akurat, dan General Ledger memakai payment ledger sebagai source posting ketika module ledger sudah ready.
+Dokumen ini adalah panduan implementasi fitur Piutang Usaha untuk kondisi Frayukti saat ini. Targetnya: Sales Invoice `ISSUED` bisa dipantau sebagai piutang, pembayaran invoice dicatat sebagai histori append-only, cash-flow tetap akurat, dan General Ledger memakai payment ledger sebagai source posting ketika module ledger sudah ready.
 
 Kondisi project sudah berubah dari rencana awal: Chart of Accounts, account mapping, General Ledger, Sales Return credit note, dan pemilihan akun kas/bank payment invoice sudah tersedia. Karena itu scope piutang bukan lagi "tanpa COA", melainkan membuat payment ledger yang menjadi source of truth pembayaran invoice dan menyambungkan UI piutang ke fondasi finance/accounting yang sudah ada.
 

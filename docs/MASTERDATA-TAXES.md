@@ -1,6 +1,6 @@
 # Master Data Taxes - Langkah Pengerjaan Sesuai Struktur Project
 
-Dokumen ini adalah panduan pengerjaan Master Data Taxes untuk project Kasirku. Targetnya: tax/pajak bisa menjadi master rule untuk Sales Quotation, Sales Order, dan Sales Invoice berikutnya, tanpa mengubah flow POS existing, tanpa mengubah `Product.selling_price`, dan tanpa membuat asumsi tarif pajak resmi yang hard-coded.
+Dokumen ini adalah panduan pengerjaan Master Data Taxes untuk project Frayukti. Targetnya: tax/pajak bisa menjadi master rule untuk Sales Quotation, Sales Order, dan Sales Invoice berikutnya, tanpa mengubah flow POS existing, tanpa mengubah `Product.selling_price`, dan tanpa membuat asumsi tarif pajak resmi yang hard-coded.
 
 ## Ringkasan Keputusan
 

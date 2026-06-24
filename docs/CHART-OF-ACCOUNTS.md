@@ -1,6 +1,6 @@
 # Accounting Core Roadmap - Chart of Accounts, Operational Finance, dan Ledger Platform
 
-Dokumen ini adalah dokumen induk untuk arah Accounting Core di Kasirku. Chart of Accounts tetap menjadi fondasi awal, tetapi roadmap ini lebih luas dari sekadar daftar akun: ada operational finance, accounting profile, template akun, module activation, feature gate, dan jalur menuju general ledger.
+Dokumen ini adalah dokumen induk untuk arah Accounting Core di Frayukti. Chart of Accounts tetap menjadi fondasi awal, tetapi roadmap ini lebih luas dari sekadar daftar akun: ada operational finance, accounting profile, template akun, module activation, feature gate, dan jalur menuju general ledger.
 
 Target awal bukan "full accounting compliance". Target awal adalah fondasi Accounting Core yang aman: `Daftar Akun` sebagai katalog akun, mapping category finance, account snapshot, default accounting profile, feature gate awal, dan backup/restore yang tidak menjatuhkan data finance. Setelah itu baru masuk profile/template/module activation, reporting ringan, general ledger, dan extension industri/pemerintahan jika produknya memang butuh.
 
@@ -88,7 +88,7 @@ PSAP + NONE
 Catatan grooming:
 
 - Untuk produk baru, gunakan `SAK_EP` sebagai pengganti arah `SAK_ETAP`. `SAK_ETAP` cukup diperlakukan sebagai legacy/import/migration label jika nanti memang dibutuhkan.
-- `SAK_EMKM` adalah default paling cocok untuk Kasirku fase awal karena aplikasinya masih dominan POS, stok, cash-flow, dan invoice sederhana.
+- `SAK_EMKM` adalah default paling cocok untuk Frayukti fase awal karena aplikasinya masih dominan POS, stok, cash-flow, dan invoice sederhana.
 - `PSAK_FULL` jangan disamakan dengan hanya menambah akun lebih banyak. Fase ini butuh general ledger, posting rules, laporan akrual, dan kontrol periode.
 - `MANUFACTURING` dan `CONSTRUCTION` adalah extension industri, bukan standar tunggal. Keduanya harus menempel pada profile seperti `SAK_EP` atau `PSAK_FULL`.
 - Konstruksi baru sebaiknya diarahkan ke model pendapatan kontrak berbasis PSAK 72, bukan menjadikan PSAK 34/44 sebagai fondasi baru.
@@ -106,7 +106,7 @@ enabledModules
 - menyimpan module accounting/finance mana yang aktif untuk toko ini.
 ```
 
-Default awal Kasirku:
+Default awal Frayukti:
 
 ```txt
 accounting_profile: SAK_EMKM

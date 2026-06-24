@@ -419,12 +419,12 @@ const RootLayout = () => {
           <div className="h-full px-4 flex justify-between items-center">
             <div className="flex items-center gap-2">
               {/* Logo */}
-              <div
+              <img
+                src="/frayukti-box-f-logo-transparant.png"
+                alt="Frayukti"
                 onClick={handleLogoClick}
-                className="text-xl font-bold text-blue-600 dark:text-blue-400 cursor-pointer"
-              >
-                Kasirku
-              </div>
+                className="h-8 w-auto cursor-pointer"
+              />
             </div>
 
             {/* Theme Toggle & Settings */}

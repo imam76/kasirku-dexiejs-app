@@ -16,7 +16,7 @@ import {
   printReceiptUsb,
 } from '@/utils/printer/usbSerialPrinter';
 
-const DEFAULT_MERCHANT_NAME = 'Kasirku';
+const DEFAULT_MERCHANT_NAME = 'Frayukti';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
 
 const updateReceiptStatus = async (

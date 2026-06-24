@@ -44,7 +44,7 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
           <LockKeyhole size={24} />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Masuk Kasirku</h1>
+          <h1 className="text-xl font-semibold text-gray-900">Masuk Frayukti</h1>
           <Text type="secondary">Gunakan email dan PIN untuk masuk.</Text>
         </div>
       </div>

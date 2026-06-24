@@ -1,6 +1,6 @@
 # Sales Return - Spesifikasi Bisnis dan Akuntansi
 
-Dokumen ini adalah panduan implementasi Sales Return untuk project Kasirku. Targetnya: retur penjualan bisa dicatat dengan benar tanpa mengubah makna `void`, tanpa merusak flow POS existing, dan tetap mengikuti struktur project saat ini.
+Dokumen ini adalah panduan implementasi Sales Return untuk project Frayukti. Targetnya: retur penjualan bisa dicatat dengan benar tanpa mengubah makna `void`, tanpa merusak flow POS existing, dan tetap mengikuti struktur project saat ini.
 
 ## Audit Kondisi Project Saat Ini
 
@@ -562,4 +562,4 @@ Wajib cek:
 
 ## Ringkasan Keputusan
 
-Sales Return di Kasirku harus menjadi dokumen kontra penjualan yang append-only, punya nomor sendiri, dan mereferensikan transaksi/dokumen asal. Stok, cash flow, dan profit dikoreksi lewat service layer dengan aturan eksplisit. Void tetap dipertahankan sebagai pembatalan, bukan retur.
+Sales Return di Frayukti harus menjadi dokumen kontra penjualan yang append-only, punya nomor sendiri, dan mereferensikan transaksi/dokumen asal. Stok, cash flow, dan profit dikoreksi lewat service layer dengan aturan eksplisit. Void tetap dipertahankan sebagai pembatalan, bukan retur.

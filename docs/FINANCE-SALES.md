@@ -1,6 +1,6 @@
 # Finance Sales Documents - Spesifikasi Sesuai Struktur Project Terbaru
 
-Dokumen ini adalah hasil audit ulang dari draft reusable form Sales Quotation, Sales Order, Sales Delivery, dan Sales Invoice. Targetnya: fitur sales document bisa masuk ke project Kasirku tanpa merusak flow POS yang sudah ada di `/transaction`, finance cash flow, stok, profit, receipt, history, dan report.
+Dokumen ini adalah hasil audit ulang dari draft reusable form Sales Quotation, Sales Order, Sales Delivery, dan Sales Invoice. Targetnya: fitur sales document bisa masuk ke project Frayukti tanpa merusak flow POS yang sudah ada di `/transaction`, finance cash flow, stok, profit, receipt, history, dan report.
 
 ## Audit Kondisi Project Saat Ini
 

@@ -1,6 +1,6 @@
 # Cash & Bank
 
-Dokumen ini adalah panduan pengerjaan modul Cash & Bank untuk kondisi Kasirku saat ini. Targetnya: arus uang operasional tetap sederhana, saldo kas/bank bisa dipantau per akun, payment dari POS/AR/AP tetap tersambung ke cash-flow, dan General Ledger tetap menjadi lapisan akuntansi terpisah.
+Dokumen ini adalah panduan pengerjaan modul Cash & Bank untuk kondisi Frayukti saat ini. Targetnya: arus uang operasional tetap sederhana, saldo kas/bank bisa dipantau per akun, payment dari POS/AR/AP tetap tersambung ke cash-flow, dan General Ledger tetap menjadi lapisan akuntansi terpisah.
 
 ## Ringkasan Keputusan
 
