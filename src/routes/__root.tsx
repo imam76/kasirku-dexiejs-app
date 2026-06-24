@@ -420,10 +420,16 @@ const RootLayout = () => {
             <div className="flex items-center gap-2">
               {/* Logo */}
               <img
+                src="/frayukti-f.svg"
+                alt="Frayukti"
+                onClick={handleLogoClick}
+                className="h-8 w-auto cursor-pointer lg:hidden"
+              />
+              <img
                 src="/frayukti-box-f-logo-transparant.png"
                 alt="Frayukti"
                 onClick={handleLogoClick}
-                className="h-8 w-auto cursor-pointer"
+                className="hidden h-8 w-auto cursor-pointer lg:block"
               />
             </div>
 
