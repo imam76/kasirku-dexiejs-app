@@ -115,6 +115,18 @@ Build APK Android untuk semua arsitektur:
 bun run tauri android build --apk --split-per-abi
 ```
 
+Build Windows:
+```bash
+bun run tauri build --target x86_64-pc-windows-gnu
+bun run tauri build --target i686-pc-windows-gnu
+```
+
+Build Linux:
+```bash
+bun run tauri build --target x86_64-unknown-linux-gnu
+bun run tauri build --target aarch64-unknown-linux-gnu
+```
+
 Untuk testing Android yang terhubung ke PostgreSQL di laptop/PC lewat LAN,
 pakai IP host database, bukan `localhost`:
 
