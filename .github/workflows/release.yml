@@ -1,0 +1,97 @@
+name: release
+
+# Build Tauri app (Windows + Linux) setiap ada push ke main,
+# lalu upload installer ke sebuah draft GitHub Release.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {} # bisa juga dijalankan manual dari tab Actions
+
+# tauri-action butuh izin nulis untuk membuat release
+permissions:
+  contents: write
+
+jobs:
+  build-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- Dependency sistem untuk Tauri di Linux ---
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libssl-dev \
+            file
+
+      # --- Toolchain ---
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      # --- Buat .env dari GitHub Secrets (JANGAN commit .env asli) ---
+      # Vite hanya meng-embed variabel berawalan VITE_ ke dalam frontend.
+      - name: Create root .env from secrets
+        shell: bash
+        run: |
+          cat > .env <<EOF
+          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SETUP_HASH_KEY=${{ secrets.VITE_SETUP_HASH_KEY }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          EOF
+
+      - name: Create src-tauri/.env from secrets
+        shell: bash
+        run: |
+          cat > src-tauri/.env <<EOF
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          SETUP_HASH_KEY=${{ secrets.SETUP_HASH_KEY }}
+          EOF
+
+      # --- Build + upload ke draft release ---
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Var VITE_ juga diekspos ke env supaya Vite tetap dapat nilainya
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SETUP_HASH_KEY: ${{ secrets.VITE_SETUP_HASH_KEY }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: "frayukti v__VERSION__"
+          releaseBody: "Build otomatis dari push ke main. Lihat aset di bawah."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
