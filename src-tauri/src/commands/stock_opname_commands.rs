@@ -12,7 +12,7 @@ pub async fn postgres_list_stock_opname_bundles(
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<StockOpnameBundleDto>> {
     let pool = state.pool()?;
-    Ok(stock_opname_repository::list_stock_opname_bundles(pool, updated_after, limit).await?)
+    Ok(stock_opname_repository::list_stock_opname_bundles(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
@@ -21,7 +21,7 @@ pub async fn postgres_get_stock_opname_bundle(
     id: String,
 ) -> PostgresCommandResult<Option<StockOpnameBundleDto>> {
     let pool = state.pool()?;
-    Ok(stock_opname_repository::get_stock_opname_bundle(pool, id).await?)
+    Ok(stock_opname_repository::get_stock_opname_bundle(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -30,5 +30,5 @@ pub async fn postgres_upsert_stock_opname_bundle(
     input: StockOpnameBundleDto,
 ) -> PostgresCommandResult<StockOpnameBundleDto> {
     let pool = state.pool()?;
-    Ok(stock_opname_repository::upsert_stock_opname_bundle(pool, input).await?)
+    Ok(stock_opname_repository::upsert_stock_opname_bundle(&pool, input).await?)
 }

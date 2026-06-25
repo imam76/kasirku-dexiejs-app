@@ -30,8 +30,6 @@ struct InnerPostgresState {
     message: Option<String>,
 }
 
-pub type PgPoolState = PostgresState;
-
 #[derive(Debug, Error)]
 pub enum PostgresInitError {
     #[error("DATABASE_URL is not configured")]
@@ -170,10 +168,15 @@ fn load_env() {
 }
 
 fn read_database_url() -> Result<String, PostgresInitError> {
-    env::var("DATABASE_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .or_else(read_database_url_from_storage)
+    // The database host is configured from the frontend (developer setup),
+    // so the value persisted there is authoritative. DATABASE_URL from the
+    // environment / .env is only a dev fallback and must not shadow it.
+    read_database_url_from_storage()
+        .or_else(|| {
+            env::var("DATABASE_URL")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
         .or_else(|| {
             option_env!("KASIRKU_DATABASE_URL")
                 .map(str::to_string)

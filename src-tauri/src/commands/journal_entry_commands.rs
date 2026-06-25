@@ -12,7 +12,7 @@ pub async fn postgres_list_journal_entry_bundles(
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<JournalEntryBundleDto>> {
     let pool = state.pool()?;
-    Ok(journal_entry_repository::list_journal_entry_bundles(pool, updated_after, limit).await?)
+    Ok(journal_entry_repository::list_journal_entry_bundles(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
@@ -21,7 +21,7 @@ pub async fn postgres_get_journal_entry_bundle(
     id: String,
 ) -> PostgresCommandResult<Option<JournalEntryBundleDto>> {
     let pool = state.pool()?;
-    Ok(journal_entry_repository::get_journal_entry_bundle(pool, id).await?)
+    Ok(journal_entry_repository::get_journal_entry_bundle(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -30,5 +30,5 @@ pub async fn postgres_upsert_journal_entry_bundle(
     input: JournalEntryBundleDto,
 ) -> PostgresCommandResult<JournalEntryBundleDto> {
     let pool = state.pool()?;
-    Ok(journal_entry_repository::upsert_journal_entry_bundle(pool, input).await?)
+    Ok(journal_entry_repository::upsert_journal_entry_bundle(&pool, input).await?)
 }

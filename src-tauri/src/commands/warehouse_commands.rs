@@ -10,7 +10,7 @@ pub async fn postgres_list_warehouses(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<WarehouseDto>> {
     let pool = state.pool()?;
-    Ok(warehouse_repository::list_warehouses(pool).await?)
+    Ok(warehouse_repository::list_warehouses(&pool).await?)
 }
 
 #[tauri::command]
@@ -19,7 +19,7 @@ pub async fn postgres_get_warehouse(
     id: String,
 ) -> PostgresCommandResult<Option<WarehouseDto>> {
     let pool = state.pool()?;
-    Ok(warehouse_repository::get_warehouse(pool, id).await?)
+    Ok(warehouse_repository::get_warehouse(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -28,7 +28,7 @@ pub async fn postgres_upsert_warehouse(
     input: WarehouseDto,
 ) -> PostgresCommandResult<WarehouseDto> {
     let pool = state.pool()?;
-    Ok(warehouse_repository::upsert_warehouse(pool, input).await?)
+    Ok(warehouse_repository::upsert_warehouse(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -37,5 +37,5 @@ pub async fn postgres_delete_warehouse(
     id: String,
 ) -> PostgresCommandResult<Option<WarehouseDto>> {
     let pool = state.pool()?;
-    Ok(warehouse_repository::delete_warehouse(pool, id).await?)
+    Ok(warehouse_repository::delete_warehouse(&pool, id).await?)
 }

@@ -14,7 +14,7 @@ pub async fn postgres_authenticate_server_session(
     input: AuthenticateServerSessionInput,
 ) -> PostgresCommandResult<ServerAuthSessionDto> {
     let pool = state.pool()?;
-    auth_repository::authenticate_server_session(pool, input.email, input.pin)
+    auth_repository::authenticate_server_session(&pool, input.email, input.pin)
         .await?
         .ok_or(crate::db::PostgresCommandError {
             code: "invalid_credentials",
@@ -29,7 +29,7 @@ pub async fn postgres_revoke_server_session(
     token: String,
 ) -> PostgresCommandResult<()> {
     let pool = state.pool()?;
-    auth_repository::revoke_server_session(pool, token).await?;
+    auth_repository::revoke_server_session(&pool, token).await?;
     Ok(())
 }
 
@@ -38,7 +38,7 @@ pub async fn postgres_list_auth_users(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<AuthUserDto>> {
     let pool = state.pool()?;
-    Ok(auth_repository::list_auth_users(pool).await?)
+    Ok(auth_repository::list_auth_users(&pool).await?)
 }
 
 #[tauri::command]
@@ -47,7 +47,7 @@ pub async fn postgres_get_auth_user(
     id: String,
 ) -> PostgresCommandResult<Option<AuthUserDto>> {
     let pool = state.pool()?;
-    Ok(auth_repository::get_auth_user(pool, id).await?)
+    Ok(auth_repository::get_auth_user(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -56,7 +56,7 @@ pub async fn postgres_upsert_auth_user(
     input: AuthUserDto,
 ) -> PostgresCommandResult<AuthUserDto> {
     let pool = state.pool()?;
-    Ok(auth_repository::upsert_auth_user(pool, input).await?)
+    Ok(auth_repository::upsert_auth_user(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -64,7 +64,7 @@ pub async fn postgres_list_roles(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<RoleDto>> {
     let pool = state.pool()?;
-    Ok(auth_repository::list_roles(pool).await?)
+    Ok(auth_repository::list_roles(&pool).await?)
 }
 
 #[tauri::command]
@@ -73,7 +73,7 @@ pub async fn postgres_get_role(
     id: String,
 ) -> PostgresCommandResult<Option<RoleDto>> {
     let pool = state.pool()?;
-    Ok(auth_repository::get_role(pool, id).await?)
+    Ok(auth_repository::get_role(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -82,7 +82,7 @@ pub async fn postgres_upsert_role(
     input: RoleDto,
 ) -> PostgresCommandResult<RoleDto> {
     let pool = state.pool()?;
-    Ok(auth_repository::upsert_role(pool, input).await?)
+    Ok(auth_repository::upsert_role(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -90,7 +90,7 @@ pub async fn postgres_list_role_permissions(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<RolePermissionDto>> {
     let pool = state.pool()?;
-    Ok(auth_repository::list_role_permissions(pool).await?)
+    Ok(auth_repository::list_role_permissions(&pool).await?)
 }
 
 #[tauri::command]
@@ -99,7 +99,7 @@ pub async fn postgres_get_role_permission(
     id: String,
 ) -> PostgresCommandResult<Option<RolePermissionDto>> {
     let pool = state.pool()?;
-    Ok(auth_repository::get_role_permission(pool, id).await?)
+    Ok(auth_repository::get_role_permission(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -108,7 +108,7 @@ pub async fn postgres_upsert_role_permission(
     input: RolePermissionDto,
 ) -> PostgresCommandResult<RolePermissionDto> {
     let pool = state.pool()?;
-    Ok(auth_repository::upsert_role_permission(pool, input).await?)
+    Ok(auth_repository::upsert_role_permission(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -117,7 +117,7 @@ pub async fn postgres_list_activity_logs(
     limit: i64,
 ) -> PostgresCommandResult<Vec<ActivityLogDto>> {
     let pool = state.pool()?;
-    Ok(auth_repository::list_activity_logs(pool, limit).await?)
+    Ok(auth_repository::list_activity_logs(&pool, limit).await?)
 }
 
 #[tauri::command]
@@ -126,5 +126,5 @@ pub async fn postgres_upsert_activity_log(
     input: ActivityLogDto,
 ) -> PostgresCommandResult<ActivityLogDto> {
     let pool = state.pool()?;
-    Ok(auth_repository::upsert_activity_log(pool, input).await?)
+    Ok(auth_repository::upsert_activity_log(&pool, input).await?)
 }

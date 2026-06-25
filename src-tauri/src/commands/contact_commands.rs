@@ -10,7 +10,7 @@ pub async fn postgres_list_contacts(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<ContactDto>> {
     let pool = state.pool()?;
-    Ok(contact_repository::list_contacts(pool).await?)
+    Ok(contact_repository::list_contacts(&pool).await?)
 }
 
 #[tauri::command]
@@ -19,7 +19,7 @@ pub async fn postgres_get_contact(
     id: String,
 ) -> PostgresCommandResult<Option<ContactDto>> {
     let pool = state.pool()?;
-    Ok(contact_repository::get_contact(pool, id).await?)
+    Ok(contact_repository::get_contact(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -28,7 +28,7 @@ pub async fn postgres_upsert_contact(
     input: ContactDto,
 ) -> PostgresCommandResult<ContactDto> {
     let pool = state.pool()?;
-    Ok(contact_repository::upsert_contact(pool, input).await?)
+    Ok(contact_repository::upsert_contact(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -37,5 +37,5 @@ pub async fn postgres_delete_contact(
     id: String,
 ) -> PostgresCommandResult<Option<ContactDto>> {
     let pool = state.pool()?;
-    Ok(contact_repository::delete_contact(pool, id).await?)
+    Ok(contact_repository::delete_contact(&pool, id).await?)
 }

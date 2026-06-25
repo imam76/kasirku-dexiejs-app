@@ -10,7 +10,7 @@ pub async fn postgres_list_purchase_document_bundles(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<PurchaseDocumentBundleDto>> {
     let pool = state.pool()?;
-    Ok(purchase_document_repository::list_purchase_document_bundles(pool).await?)
+    Ok(purchase_document_repository::list_purchase_document_bundles(&pool).await?)
 }
 
 #[tauri::command]
@@ -19,7 +19,7 @@ pub async fn postgres_get_purchase_document_bundle(
     id: String,
 ) -> PostgresCommandResult<Option<PurchaseDocumentBundleDto>> {
     let pool = state.pool()?;
-    Ok(purchase_document_repository::get_purchase_document_bundle(pool, id).await?)
+    Ok(purchase_document_repository::get_purchase_document_bundle(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -28,5 +28,5 @@ pub async fn postgres_upsert_purchase_document_bundle(
     input: PurchaseDocumentBundleDto,
 ) -> PostgresCommandResult<PurchaseDocumentBundleDto> {
     let pool = state.pool()?;
-    Ok(purchase_document_repository::upsert_purchase_document_bundle(pool, input).await?)
+    Ok(purchase_document_repository::upsert_purchase_document_bundle(&pool, input).await?)
 }

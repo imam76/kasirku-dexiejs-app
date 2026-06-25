@@ -41,7 +41,7 @@ pub async fn postgres_register_cooperative_posting_accounts(
 ) -> PostgresCommandResult<Vec<CooperativePostingAccountDto>> {
     let pool = state.pool()?;
     cooperative_payment_repository::register_posting_accounts(
-        pool,
+        &pool,
         input.session_token,
         input.accounts,
     )
@@ -55,7 +55,7 @@ pub async fn postgres_post_cooperative_loan_payment(
     input: PostCooperativeLoanPaymentInput,
 ) -> PostgresCommandResult<PostCooperativeLoanPaymentOutcome> {
     let pool = state.pool()?;
-    cooperative_payment_repository::post_loan_payment(pool, input)
+    cooperative_payment_repository::post_loan_payment(&pool, input)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -66,7 +66,7 @@ pub async fn postgres_list_cooperative_payment_approval_requests(
     session_token: String,
 ) -> PostgresCommandResult<Vec<CooperativePaymentApprovalRequestDto>> {
     let pool = state.pool()?;
-    cooperative_payment_repository::list_payment_approval_requests(pool, session_token)
+    cooperative_payment_repository::list_payment_approval_requests(&pool, session_token)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -77,7 +77,7 @@ pub async fn postgres_request_cooperative_payment_reversal(
     input: RequestCooperativeLoanPaymentReversalInput,
 ) -> PostgresCommandResult<CooperativePaymentApprovalRequestDto> {
     let pool = state.pool()?;
-    cooperative_payment_repository::request_payment_reversal(pool, input)
+    cooperative_payment_repository::request_payment_reversal(&pool, input)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -88,7 +88,7 @@ pub async fn postgres_approve_cooperative_payment_request(
     input: DecideCooperativePaymentApprovalInput,
 ) -> PostgresCommandResult<CooperativePaymentApprovalRequestDto> {
     let pool = state.pool()?;
-    cooperative_payment_repository::approve_payment_request(pool, input)
+    cooperative_payment_repository::approve_payment_request(&pool, input)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -99,7 +99,7 @@ pub async fn postgres_reject_cooperative_payment_request(
     input: DecideCooperativePaymentApprovalInput,
 ) -> PostgresCommandResult<CooperativePaymentApprovalRequestDto> {
     let pool = state.pool()?;
-    cooperative_payment_repository::reject_payment_approval(pool, input)
+    cooperative_payment_repository::reject_payment_approval(&pool, input)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -110,7 +110,7 @@ pub async fn postgres_list_cooperative_payment_installment_reconciliation(
     session_token: String,
 ) -> PostgresCommandResult<Vec<CooperativePaymentInstallmentReconciliationDto>> {
     let pool = state.pool()?;
-    cooperative_payment_repository::list_payment_installment_reconciliation(pool, session_token)
+    cooperative_payment_repository::list_payment_installment_reconciliation(&pool, session_token)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -120,7 +120,7 @@ pub async fn postgres_list_cooperative_loan_collection_events(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CooperativeLoanCollectionEventDto>> {
     let pool = state.pool()?;
-    cooperative_payment_repository::list_collection_events(pool)
+    cooperative_payment_repository::list_collection_events(&pool)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -131,7 +131,7 @@ pub async fn postgres_record_cooperative_loan_collection_event(
     input: RecordCooperativeLoanCollectionEventInput,
 ) -> PostgresCommandResult<RecordCooperativeLoanCollectionEventResult> {
     let pool = state.pool()?;
-    cooperative_payment_repository::record_collection_event(pool, input)
+    cooperative_payment_repository::record_collection_event(&pool, input)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -141,7 +141,7 @@ pub async fn postgres_list_cooperative_members(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CooperativeMemberDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_members(pool).await?)
+    Ok(cooperative_repository::list_cooperative_members(&pool).await?)
 }
 
 #[tauri::command]
@@ -150,7 +150,7 @@ pub async fn postgres_get_cooperative_member(
     id: String,
 ) -> PostgresCommandResult<Option<CooperativeMemberDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::get_cooperative_member(pool, id).await?)
+    Ok(cooperative_repository::get_cooperative_member(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -159,7 +159,7 @@ pub async fn postgres_upsert_cooperative_member(
     input: CooperativeMemberDto,
 ) -> PostgresCommandResult<CooperativeMemberDto> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::upsert_cooperative_member(pool, input).await?)
+    Ok(cooperative_repository::upsert_cooperative_member(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -167,7 +167,7 @@ pub async fn postgres_list_cooperative_saving_transactions(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CooperativeSavingTransactionDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_saving_transactions(pool).await?)
+    Ok(cooperative_repository::list_cooperative_saving_transactions(&pool).await?)
 }
 
 #[tauri::command]
@@ -176,7 +176,7 @@ pub async fn postgres_get_cooperative_saving_transaction(
     id: String,
 ) -> PostgresCommandResult<Option<CooperativeSavingTransactionDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::get_cooperative_saving_transaction(pool, id).await?)
+    Ok(cooperative_repository::get_cooperative_saving_transaction(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -185,7 +185,7 @@ pub async fn postgres_upsert_cooperative_saving_transaction(
     input: CooperativeSavingTransactionDto,
 ) -> PostgresCommandResult<CooperativeSavingTransactionDto> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::upsert_cooperative_saving_transaction(pool, input).await?)
+    Ok(cooperative_repository::upsert_cooperative_saving_transaction(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -193,7 +193,7 @@ pub async fn postgres_list_cooperative_member_saving_balances(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CooperativeMemberSavingBalanceDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_member_saving_balances(pool).await?)
+    Ok(cooperative_repository::list_cooperative_member_saving_balances(&pool).await?)
 }
 
 #[tauri::command]
@@ -202,7 +202,7 @@ pub async fn postgres_get_cooperative_member_saving_balance(
     id: String,
 ) -> PostgresCommandResult<Option<CooperativeMemberSavingBalanceDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::get_cooperative_member_saving_balance(pool, id).await?)
+    Ok(cooperative_repository::get_cooperative_member_saving_balance(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -211,7 +211,7 @@ pub async fn postgres_upsert_cooperative_member_saving_balance(
     input: CooperativeMemberSavingBalanceDto,
 ) -> PostgresCommandResult<CooperativeMemberSavingBalanceDto> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::upsert_cooperative_member_saving_balance(pool, input).await?)
+    Ok(cooperative_repository::upsert_cooperative_member_saving_balance(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -219,7 +219,7 @@ pub async fn postgres_list_cooperative_loans(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CooperativeLoanDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_loans(pool).await?)
+    Ok(cooperative_repository::list_cooperative_loans(&pool).await?)
 }
 
 #[tauri::command]
@@ -228,7 +228,7 @@ pub async fn postgres_get_cooperative_loan(
     id: String,
 ) -> PostgresCommandResult<Option<CooperativeLoanDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::get_cooperative_loan(pool, id).await?)
+    Ok(cooperative_repository::get_cooperative_loan(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -237,7 +237,7 @@ pub async fn postgres_upsert_cooperative_loan(
     input: CooperativeLoanDto,
 ) -> PostgresCommandResult<CooperativeLoanDto> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::upsert_cooperative_loan(pool, input).await?)
+    Ok(cooperative_repository::upsert_cooperative_loan(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -245,7 +245,7 @@ pub async fn postgres_list_cooperative_loan_installments(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CooperativeLoanInstallmentDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_loan_installments(pool).await?)
+    Ok(cooperative_repository::list_cooperative_loan_installments(&pool).await?)
 }
 
 #[tauri::command]
@@ -254,7 +254,7 @@ pub async fn postgres_get_cooperative_loan_installment(
     id: String,
 ) -> PostgresCommandResult<Option<CooperativeLoanInstallmentDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::get_cooperative_loan_installment(pool, id).await?)
+    Ok(cooperative_repository::get_cooperative_loan_installment(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -263,7 +263,7 @@ pub async fn postgres_upsert_cooperative_loan_installment(
     input: CooperativeLoanInstallmentDto,
 ) -> PostgresCommandResult<CooperativeLoanInstallmentDto> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::upsert_cooperative_loan_installment(pool, input).await?)
+    Ok(cooperative_repository::upsert_cooperative_loan_installment(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -271,7 +271,7 @@ pub async fn postgres_list_cooperative_loan_payments(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CooperativeLoanPaymentDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_loan_payments(pool).await?)
+    Ok(cooperative_repository::list_cooperative_loan_payments(&pool).await?)
 }
 
 #[tauri::command]
@@ -280,5 +280,5 @@ pub async fn postgres_get_cooperative_loan_payment(
     id: String,
 ) -> PostgresCommandResult<Option<CooperativeLoanPaymentDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::get_cooperative_loan_payment(pool, id).await?)
+    Ok(cooperative_repository::get_cooperative_loan_payment(&pool, id).await?)
 }

@@ -35,6 +35,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import type { LucideIcon } from 'lucide-react';
 import { SETUP_MODULE_GROUPS, DEFAULT_SELECTED_MODULES } from '@/constants/setupModules';
+import { isTauriRuntime } from '@/utils/export/platform';
 import {
   verifyLicenseKey,
   getLicenseFingerprint,
@@ -164,18 +165,21 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
     setIsSaving(true);
     try {
       const normalizedDatabaseUrl = databaseUrl.trim();
+
+      // Persist & re-init the Postgres pool from the URL the user pasted.
+      // Run this first: if it fails we don't want to claim the setup succeeded.
+      if (isTauriRuntime()) {
+        await invoke<void>('set_postgres_database_url', {
+          databaseUrl: normalizedDatabaseUrl,
+        });
+      }
+
       saveSetupConfig({
         enabledModules: selectedModules,
         databaseUrl: normalizedDatabaseUrl,
         configuredAt: new Date().toISOString(),
         configuredBy: licenseFingerprint,
       });
-
-      if (isTauriRuntime()) {
-        await invoke<void>('set_postgres_database_url', {
-          database_url: normalizedDatabaseUrl,
-        });
-      }
 
       message.success('Konfigurasi setup berhasil disimpan!');
       onClose();

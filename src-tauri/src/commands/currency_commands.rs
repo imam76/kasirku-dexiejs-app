@@ -13,7 +13,7 @@ pub async fn postgres_list_currencies(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CurrencyDto>> {
     let pool = state.pool()?;
-    Ok(currency_repository::list_currencies(pool).await?)
+    Ok(currency_repository::list_currencies(&pool).await?)
 }
 
 #[tauri::command]
@@ -22,7 +22,7 @@ pub async fn postgres_get_currency(
     id: String,
 ) -> PostgresCommandResult<Option<CurrencyDto>> {
     let pool = state.pool()?;
-    Ok(currency_repository::get_currency(pool, id).await?)
+    Ok(currency_repository::get_currency(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -31,7 +31,7 @@ pub async fn postgres_upsert_currency(
     input: CurrencyDto,
 ) -> PostgresCommandResult<CurrencyDto> {
     let pool = state.pool()?;
-    Ok(currency_repository::upsert_currency(pool, input).await?)
+    Ok(currency_repository::upsert_currency(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -40,7 +40,7 @@ pub async fn postgres_delete_currency(
     id: String,
 ) -> PostgresCommandResult<Option<CurrencyDto>> {
     let pool = state.pool()?;
-    Ok(currency_repository::delete_currency(pool, id).await?)
+    Ok(currency_repository::delete_currency(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -49,7 +49,7 @@ pub async fn postgres_list_currency_rates(
     base_currency_code: Option<String>,
 ) -> PostgresCommandResult<Vec<CurrencyRateDto>> {
     let pool = state.pool()?;
-    Ok(currency_repository::list_currency_rates(pool, base_currency_code).await?)
+    Ok(currency_repository::list_currency_rates(&pool, base_currency_code).await?)
 }
 
 #[tauri::command]
@@ -58,7 +58,7 @@ pub async fn postgres_get_currency_rate(
     id: String,
 ) -> PostgresCommandResult<Option<CurrencyRateDto>> {
     let pool = state.pool()?;
-    Ok(currency_repository::get_currency_rate(pool, id).await?)
+    Ok(currency_repository::get_currency_rate(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -67,7 +67,7 @@ pub async fn postgres_upsert_currency_rate(
     input: CurrencyRateDto,
 ) -> PostgresCommandResult<CurrencyRateDto> {
     let pool = state.pool()?;
-    Ok(currency_repository::upsert_currency_rate(pool, input).await?)
+    Ok(currency_repository::upsert_currency_rate(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -76,7 +76,7 @@ pub async fn postgres_delete_currency_rate(
     id: String,
 ) -> PostgresCommandResult<Option<CurrencyRateDto>> {
     let pool = state.pool()?;
-    Ok(currency_repository::delete_currency_rate(pool, id).await?)
+    Ok(currency_repository::delete_currency_rate(&pool, id).await?)
 }
 
 #[tauri::command]

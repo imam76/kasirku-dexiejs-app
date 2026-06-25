@@ -10,7 +10,7 @@ pub async fn postgres_list_taxes(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<TaxDto>> {
     let pool = state.pool()?;
-    Ok(tax_repository::list_taxes(pool).await?)
+    Ok(tax_repository::list_taxes(&pool).await?)
 }
 
 #[tauri::command]
@@ -19,7 +19,7 @@ pub async fn postgres_get_tax(
     id: String,
 ) -> PostgresCommandResult<Option<TaxDto>> {
     let pool = state.pool()?;
-    Ok(tax_repository::get_tax(pool, id).await?)
+    Ok(tax_repository::get_tax(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -28,7 +28,7 @@ pub async fn postgres_upsert_tax(
     input: TaxDto,
 ) -> PostgresCommandResult<TaxDto> {
     let pool = state.pool()?;
-    Ok(tax_repository::upsert_tax(pool, input).await?)
+    Ok(tax_repository::upsert_tax(&pool, input).await?)
 }
 
 #[tauri::command]
@@ -37,5 +37,5 @@ pub async fn postgres_delete_tax(
     id: String,
 ) -> PostgresCommandResult<Option<TaxDto>> {
     let pool = state.pool()?;
-    Ok(tax_repository::delete_tax(pool, id).await?)
+    Ok(tax_repository::delete_tax(&pool, id).await?)
 }

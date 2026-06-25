@@ -2,6 +2,6 @@ pub mod error;
 pub mod pool;
 
 pub use pool::{
-    create_pg_pool, PgPoolState, PostgresCommandError, PostgresCommandResult, PostgresHealth,
-    PostgresInitError, PostgresState,
+    create_postgres_state, persist_database_url, remove_persisted_database_url,
+    PostgresCommandError, PostgresCommandResult, PostgresHealth, PostgresState,
 };

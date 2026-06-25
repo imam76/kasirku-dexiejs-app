@@ -12,7 +12,7 @@ pub async fn postgres_list_production_order_bundles(
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<ProductionOrderBundleDto>> {
     let pool = state.pool()?;
-    Ok(production_order_repository::list_production_order_bundles(pool, updated_after, limit).await?)
+    Ok(production_order_repository::list_production_order_bundles(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
@@ -21,7 +21,7 @@ pub async fn postgres_get_production_order_bundle(
     id: String,
 ) -> PostgresCommandResult<Option<ProductionOrderBundleDto>> {
     let pool = state.pool()?;
-    Ok(production_order_repository::get_production_order_bundle(pool, id).await?)
+    Ok(production_order_repository::get_production_order_bundle(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -30,5 +30,5 @@ pub async fn postgres_upsert_production_order_bundle(
     input: ProductionOrderBundleDto,
 ) -> PostgresCommandResult<ProductionOrderBundleDto> {
     let pool = state.pool()?;
-    Ok(production_order_repository::upsert_production_order_bundle(pool, input).await?)
+    Ok(production_order_repository::upsert_production_order_bundle(&pool, input).await?)
 }

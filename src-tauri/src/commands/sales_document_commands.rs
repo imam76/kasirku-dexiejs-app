@@ -12,7 +12,7 @@ pub async fn postgres_list_sales_document_bundles(
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<SalesDocumentBundleDto>> {
     let pool = state.pool()?;
-    Ok(sales_document_repository::list_sales_document_bundles(pool, updated_after, limit).await?)
+    Ok(sales_document_repository::list_sales_document_bundles(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
@@ -21,7 +21,7 @@ pub async fn postgres_get_sales_document_bundle(
     id: String,
 ) -> PostgresCommandResult<Option<SalesDocumentBundleDto>> {
     let pool = state.pool()?;
-    Ok(sales_document_repository::get_sales_document_bundle(pool, id).await?)
+    Ok(sales_document_repository::get_sales_document_bundle(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -30,5 +30,5 @@ pub async fn postgres_upsert_sales_document_bundle(
     input: SalesDocumentBundleDto,
 ) -> PostgresCommandResult<SalesDocumentBundleDto> {
     let pool = state.pool()?;
-    Ok(sales_document_repository::upsert_sales_document_bundle(pool, input).await?)
+    Ok(sales_document_repository::upsert_sales_document_bundle(&pool, input).await?)
 }

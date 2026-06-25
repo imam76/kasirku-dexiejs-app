@@ -10,7 +10,7 @@ pub async fn postgres_list_finance_transactions(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<FinanceTransactionDto>> {
     let pool = state.pool()?;
-    Ok(finance_transaction_repository::list_finance_transactions(pool).await?)
+    Ok(finance_transaction_repository::list_finance_transactions(&pool).await?)
 }
 
 #[tauri::command]
@@ -19,7 +19,7 @@ pub async fn postgres_get_finance_transaction(
     id: String,
 ) -> PostgresCommandResult<Option<FinanceTransactionDto>> {
     let pool = state.pool()?;
-    Ok(finance_transaction_repository::get_finance_transaction(pool, id).await?)
+    Ok(finance_transaction_repository::get_finance_transaction(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -28,5 +28,5 @@ pub async fn postgres_upsert_finance_transaction(
     input: FinanceTransactionDto,
 ) -> PostgresCommandResult<FinanceTransactionDto> {
     let pool = state.pool()?;
-    Ok(finance_transaction_repository::upsert_finance_transaction(pool, input).await?)
+    Ok(finance_transaction_repository::upsert_finance_transaction(&pool, input).await?)
 }

@@ -12,7 +12,7 @@ pub async fn postgres_health_check(
     };
 
     let health_result: Result<i32, sqlx::Error> =
-        sqlx::query_scalar("SELECT 1").fetch_one(pool).await;
+        sqlx::query_scalar("SELECT 1").fetch_one(&pool).await;
 
     let health = match health_result {
         Ok(1) => state.health(),

@@ -10,7 +10,7 @@ pub async fn postgres_list_stock_mutations(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<StockMutationDto>> {
     let pool = state.pool()?;
-    Ok(stock_mutation_repository::list_stock_mutations(pool).await?)
+    Ok(stock_mutation_repository::list_stock_mutations(&pool).await?)
 }
 
 #[tauri::command]
@@ -19,7 +19,7 @@ pub async fn postgres_get_stock_mutation(
     id: String,
 ) -> PostgresCommandResult<Option<StockMutationDto>> {
     let pool = state.pool()?;
-    Ok(stock_mutation_repository::get_stock_mutation(pool, id).await?)
+    Ok(stock_mutation_repository::get_stock_mutation(&pool, id).await?)
 }
 
 #[tauri::command]
@@ -28,5 +28,5 @@ pub async fn postgres_upsert_stock_mutation(
     input: StockMutationDto,
 ) -> PostgresCommandResult<StockMutationDto> {
     let pool = state.pool()?;
-    Ok(stock_mutation_repository::upsert_stock_mutation(pool, input).await?)
+    Ok(stock_mutation_repository::upsert_stock_mutation(&pool, input).await?)
 }

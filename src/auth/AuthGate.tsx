@@ -17,7 +17,10 @@ interface AuthGateProps {
 export const AuthGate = ({ children }: AuthGateProps) => {
   const { currentUser, isLoading } = useAuth();
   const hasOwner = useLiveQuery(() => hasActiveOwner(), [], null);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  // Default ke 'register': saat database kosong (belum ada owner), tampilkan
+  // halaman daftar Owner dulu, bukan login. Saat sudah ada owner, branch
+  // hasOwner di bawah selalu merender <Login /> sehingga nilai ini diabaikan.
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [showSetupDrawer, setShowSetupDrawer] = useState(false);
 
   // Tauri Enforcement
