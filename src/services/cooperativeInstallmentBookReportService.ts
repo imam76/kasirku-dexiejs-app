@@ -3,6 +3,7 @@ import dayjs from '@/lib/dayjs';
 import type {
   CooperativeCollectionWeekday,
   CooperativeLoan,
+  CooperativeLoanInstallment,
   CooperativeLoanPayment,
   Employee,
 } from '@/types';
@@ -10,6 +11,7 @@ import {
   getCollectionDatesInMonth,
   getIsoWeekday,
 } from '@/utils/koperasi/collectionSchedule';
+import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
@@ -162,6 +164,33 @@ export const getCooperativeInstallmentBookAgingCategory = (
   return 'CURRENT';
 };
 
+// Anggota dianggap lancar menurut riwayat bila TIDAK ada satu pun cicilan yang
+// sudah jatuh tempo (due_date <= akhir bulan laporan) tapi masih bersaldo.
+const isLoanPaidThroughReportMonth = (
+  installments: CooperativeLoanInstallment[],
+  endDateKey: string,
+) => !installments.some((installment) => {
+  const dueDateKey = dayjs(installment.due_date).tz().format('YYYY-MM-DD');
+  if (dueDateKey > endDateKey) return false;
+  return getInstallmentRemainingAmounts(installment).total_amount > 0.01;
+});
+
+// Guard satu arah: riwayat hanya bisa "menyelamatkan" loan yang sebenarnya
+// lancar menjadi CURRENT. Bila ada tunggakan, kategori tetap mengikuti umur
+// pinjaman (logika lama 1-4 lancar / 5 calon macet / 6+ macet).
+export const resolveCooperativeInstallmentBookAgingCategory = ({
+  ageMonth,
+  installments,
+  endDateKey,
+}: {
+  ageMonth: number;
+  installments: CooperativeLoanInstallment[];
+  endDateKey: string;
+}): CooperativeInstallmentBookAgingCategory => {
+  if (isLoanPaidThroughReportMonth(installments, endDateKey)) return 'CURRENT';
+  return getCooperativeInstallmentBookAgingCategory(ageMonth);
+};
+
 const buildLoanSequenceByLoanId = (loans: CooperativeLoan[]) => {
   const sequenceByLoanId = new Map<string, number>();
   const countByMemberId = new Map<string, number>();
@@ -249,6 +278,7 @@ const createReportRow = ({
   loan,
   employeeById,
   payments,
+  installments,
   reportMonth,
   startDateKey,
   endDateKey,
@@ -257,6 +287,7 @@ const createReportRow = ({
   loan: CooperativeLoan;
   employeeById: Map<string, Employee>;
   payments: CooperativeLoanPayment[];
+  installments: CooperativeLoanInstallment[];
   reportMonth: dayjs.Dayjs;
   startDateKey: string;
   endDateKey: string;
@@ -317,7 +348,11 @@ const createReportRow = ({
       loanDate,
     }),
     age_month: ageMonth,
-    aging_category: getCooperativeInstallmentBookAgingCategory(ageMonth),
+    aging_category: resolveCooperativeInstallmentBookAgingCategory({
+      ageMonth,
+      installments,
+      endDateKey,
+    }),
     principal_amount: roundCurrency(Number(loan.principal_amount || 0)),
     opening_balance: openingBalance,
     payment_by_collection_date: paymentByCollectionDate,
@@ -341,13 +376,15 @@ export const getCooperativeInstallmentBookReport = async (
   const monthEnd = reportMonth.endOf('month');
   const startDateKey = monthStart.format('YYYY-MM-DD');
   const endDateKey = monthEnd.format('YYYY-MM-DD');
-  const [loans, payments, employees] = await Promise.all([
+  const [loans, payments, installments, employees] = await Promise.all([
     db.cooperativeLoans.orderBy('loan_number').toArray(),
     db.cooperativeLoanPayments.orderBy('payment_date').toArray(),
+    db.cooperativeLoanInstallments.orderBy('due_date').toArray(),
     db.employees.orderBy('name').toArray(),
   ]);
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
   const paymentsByLoanId = new Map<string, CooperativeLoanPayment[]>();
+  const installmentsByLoanId = new Map<string, CooperativeLoanInstallment[]>();
   const sequenceByLoanId = buildLoanSequenceByLoanId(loans);
 
   payments.forEach((payment) => {
@@ -356,12 +393,19 @@ export const getCooperativeInstallmentBookReport = async (
     paymentsByLoanId.set(payment.loan_id, current);
   });
 
+  installments.forEach((installment) => {
+    const current = installmentsByLoanId.get(installment.loan_id) ?? [];
+    current.push(installment);
+    installmentsByLoanId.set(installment.loan_id, current);
+  });
+
   const allRows = loans
     .filter(isReportableLoan)
     .map((loan) => createReportRow({
       loan,
       employeeById,
       payments: paymentsByLoanId.get(loan.id) ?? [],
+      installments: installmentsByLoanId.get(loan.id) ?? [],
       reportMonth,
       startDateKey,
       endDateKey,
