@@ -32,6 +32,7 @@ import {
   ServerCog,
   Fingerprint,
 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import type { LucideIcon } from 'lucide-react';
 import { SETUP_MODULE_GROUPS, DEFAULT_SELECTED_MODULES } from '@/constants/setupModules';
 import {
@@ -162,12 +163,20 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
 
     setIsSaving(true);
     try {
+      const normalizedDatabaseUrl = databaseUrl.trim();
       saveSetupConfig({
         enabledModules: selectedModules,
-        databaseUrl: databaseUrl.trim(),
+        databaseUrl: normalizedDatabaseUrl,
         configuredAt: new Date().toISOString(),
         configuredBy: licenseFingerprint,
       });
+
+      if (isTauriRuntime()) {
+        await invoke<void>('set_postgres_database_url', {
+          database_url: normalizedDatabaseUrl,
+        });
+      }
+
       message.success('Konfigurasi setup berhasil disimpan!');
       onClose();
     } catch {

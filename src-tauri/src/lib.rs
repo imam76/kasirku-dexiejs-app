@@ -23,19 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_share::init())
         .plugin(bluetooth_printer::init())
         .setup(|app| {
-            let state = match tauri::async_runtime::block_on(db::create_pg_pool()) {
-                Ok(pool) => {
-                    let migration_result =
-                        tauri::async_runtime::block_on(sqlx::migrate!("./migrations").run(&pool));
-                    if migration_result.is_ok() {
-                        db::PgPoolState::available(pool)
-                    } else {
-                        db::PgPoolState::migration_failed()
-                    }
-                }
-                Err(db::PostgresInitError::DatabaseUrlMissing) => db::PgPoolState::unconfigured(),
-                Err(db::PostgresInitError::Unreachable(_)) => db::PgPoolState::unreachable(),
-            };
+            let state = tauri::async_runtime::block_on(db::create_postgres_state());
             app.manage(state);
             Ok(())
         })
@@ -135,6 +123,7 @@ pub fn run() {
             commands::auth_commands::postgres_authenticate_server_session,
             commands::auth_commands::postgres_revoke_server_session,
             commands::postgres_health::postgres_health_check,
+            commands::postgres_health::set_postgres_database_url,
             bluetooth_printer::list_bluetooth_printers,
             bluetooth_printer::test_print_bluetooth,
             bluetooth_printer::print_receipt_bluetooth,
