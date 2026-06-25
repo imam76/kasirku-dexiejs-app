@@ -101,6 +101,10 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
           Register Owner Pertama
         </Button>
       )}
+
+      <Text type="secondary" className="mt-6 block text-center text-xs">
+        {__APP_VERSION__}
+      </Text>
     </div>
   );
 };

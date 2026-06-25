@@ -1,6 +1,9 @@
 use serde::Serialize;
-use sqlx::{postgres::PgPoolOptions, PgPool};
-use std::{env, fs, io, path::PathBuf, sync::RwLock, time::Duration};
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    PgPool,
+};
+use std::{env, fs, io, path::PathBuf, str::FromStr, sync::RwLock, time::Duration};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize)]
@@ -139,10 +142,22 @@ pub async fn create_pg_pool() -> Result<PgPool, PostgresInitError> {
 
     let database_url = read_database_url()?;
 
+    // Supabase's transaction pooler (port 6543) and other PgBouncer-style poolers
+    // reuse backend server connections across client sessions and do NOT support
+    // cached/named prepared statements. With sqlx's default statement cache, the
+    // first run prepares `sqlx_s_*` on a backend; after the app is closed and
+    // reopened the pooler hands back a backend that still has those statements,
+    // so the next PREPARE fails with "prepared statement already exists" — the
+    // app connects once but cannot reconnect. Disabling the statement cache makes
+    // sqlx use the unnamed prepared statement per query, which is pooler-safe.
+    let connect_options = PgConnectOptions::from_str(&database_url)
+        .map_err(PostgresInitError::Unreachable)?
+        .statement_cache_capacity(0);
+
     PgPoolOptions::new()
         .max_connections(5)
         .acquire_timeout(Duration::from_secs(5))
-        .connect(&database_url)
+        .connect_with(connect_options)
         .await
         .map_err(PostgresInitError::Unreachable)
 }
@@ -150,7 +165,12 @@ pub async fn create_pg_pool() -> Result<PgPool, PostgresInitError> {
 pub async fn create_postgres_state() -> PostgresState {
     match create_pg_pool().await {
         Ok(pool) => {
-            let migration_result = sqlx::migrate!("./migrations").run(&pool).await;
+            // Advisory locks are session-scoped and unreliable through a
+            // transaction pooler (each query may land on a different backend),
+            // so disable them. A desktop client never has concurrent migrators.
+            let mut migrator = sqlx::migrate!("./migrations");
+            migrator.set_locking(false);
+            let migration_result = migrator.run(&pool).await;
             if migration_result.is_ok() {
                 PostgresState::available(pool)
             } else {

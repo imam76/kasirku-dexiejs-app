@@ -3,9 +3,26 @@ import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 
 const host = process.env.TAURI_DEV_HOST;
+
+const pkg = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
+) as { version: string };
+
+// App version shown in the UI, format: v{major}.yy.mm.dd.HHmm (date/time = build time)
+const buildAppVersion = (() => {
+  const major = pkg.version.split('.')[0];
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = pad(now.getMonth() + 1);
+  const dd = pad(now.getDate());
+  const time = `${pad(now.getHours())}${pad(now.getMinutes())}`;
+  return `v${major}.${yy}.${mm}.${dd}.${time}`;
+})();
 const FEEDBACK_API_PATH = '/api/feedback';
 const feedbackApiUrl = new URL('./api/feedback.js', import.meta.url).href;
 
@@ -59,6 +76,10 @@ const feedbackApiDevPlugin = (): Plugin => ({
 export default defineConfig(async () => {
   return {
     plugins: [feedbackApiDevPlugin(), tanstackRouter(), react()],
+
+    define: {
+      __APP_VERSION__: JSON.stringify(buildAppVersion),
+    },
 
     // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
