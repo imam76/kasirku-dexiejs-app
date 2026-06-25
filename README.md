@@ -142,6 +142,7 @@ Start database:
 
 ```bash
 docker compose -f postgres-dev/compose.yml up -d
+podman-compose -f compose.yml down -v
 ```
 
 Stop database:
