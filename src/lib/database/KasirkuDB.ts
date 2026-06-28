@@ -68,6 +68,10 @@ import type {
   CooperativeFieldCashSession,
   MembershipPointTransaction,
   MembershipSetting,
+  PayrollRun,
+  PayrollRunItem,
+  EmployeeCashAdvance,
+  EmployeeCashAdvanceRepayment,
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
@@ -139,6 +143,10 @@ export class KasirkuDB extends Dexie {
   employees!: Table<Employee>;
   employeeAreas!: Table<EmployeeArea>;
   employeeCollectionSchedules!: Table<EmployeeCollectionSchedule>;
+  payrollRuns!: Table<PayrollRun>;
+  payrollRunItems!: Table<PayrollRunItem>;
+  employeeCashAdvances!: Table<EmployeeCashAdvance>;
+  employeeCashAdvanceRepayments!: Table<EmployeeCashAdvanceRepayment>;
   membershipPointTransactions!: Table<MembershipPointTransaction>;
   membershipSettings!: Table<MembershipSetting>;
 

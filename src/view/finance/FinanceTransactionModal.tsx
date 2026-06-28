@@ -153,7 +153,7 @@ export default function FinanceTransactionModal({
                 <>
                   <Option value={FINANCE_CATEGORIES.STOCK_PURCHASE}>{t('finance.category.stockPurchaseOption')}</Option>
                   <Option value={FINANCE_CATEGORIES.OPERATIONAL}>{t('finance.category.operationalOption')}</Option>
-                  <Option value="GAJI">{t('finance.category.GAJI')}</Option>
+                  <Option value={FINANCE_CATEGORIES.PAYROLL}>{t('finance.category.GAJI')}</Option>
                   <Option value="PERLENGKAPAN">{t('finance.category.PERLENGKAPAN')}</Option>
                   <Option value="MAKAN">{t('finance.category.MAKAN')}</Option>
                   <Option value="TRANSPORT">{t('finance.category.TRANSPORT')}</Option>

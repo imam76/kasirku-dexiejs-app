@@ -28,6 +28,8 @@ import type {
   PurchaseDocument,
   PurchaseDocumentItem,
   PurchaseInvoicePayment,
+  PayrollRun,
+  PayrollRunItem,
   Role,
   RolePermission,
   SalesDocument,
@@ -1415,6 +1417,126 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
         created_at: now,
         updated_at: now,
       });
+    }
+  });
+
+  this.version(64).stores({
+    payrollRuns: 'id, payroll_number, period_start, period_end, status, paid_at, finance_transaction_id, created_at, updated_at',
+    payrollRunItems: 'id, payroll_run_id, employee_id',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
+
+    const salaryAccountSeed = DEFAULT_CHART_OF_ACCOUNTS.find((account) => account.id === 'salary-expense');
+    if (salaryAccountSeed) {
+      const existingSalaryAccount = await chartOfAccounts.get(salaryAccountSeed.id)
+        ?? await chartOfAccounts.where('code').equals(salaryAccountSeed.code).first();
+
+      if (!existingSalaryAccount) {
+        await chartOfAccounts.put({
+          ...salaryAccountSeed,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+
+    const salaryMappingSeed = DEFAULT_FINANCE_ACCOUNT_MAPPINGS.find((mapping) => (
+      mapping.key === FINANCE_CATEGORIES.PAYROLL
+    ));
+    if (salaryMappingSeed && !await financeAccountMappings.get(salaryMappingSeed.key)) {
+      const salaryAccount = await chartOfAccounts.get(salaryMappingSeed.account_id)
+        ?? await chartOfAccounts.where('code').equals(salaryMappingSeed.account_code).first();
+
+      if (salaryAccount) {
+        await financeAccountMappings.put({
+          ...salaryMappingSeed,
+          id: salaryMappingSeed.key,
+          account_id: salaryAccount.id,
+          account_code: salaryAccount.code,
+          account_name: salaryAccount.name,
+          account_type: salaryAccount.type,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+  });
+
+  this.version(65).stores({
+    employeeCashAdvances: 'id, advance_number, employee_id, status, disbursed_at, finance_transaction_id, created_at, updated_at',
+    employeeCashAdvanceRepayments: 'id, cash_advance_id, payroll_run_id, payroll_run_item_id, employee_id, status, [cash_advance_id+status], [payroll_run_id+status], created_at, updated_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const financeAccountMappings = tx.table<FinanceAccountMapping, string>('financeAccountMappings');
+    const payrollRuns = tx.table<PayrollRun, string>('payrollRuns');
+    const payrollRunItems = tx.table<PayrollRunItem, string>('payrollRunItems');
+
+    const cashAdvanceAccountSeed = DEFAULT_CHART_OF_ACCOUNTS.find((account) => (
+      account.id === 'employee-cash-advance-receivable'
+    ));
+    if (cashAdvanceAccountSeed) {
+      const existingCashAdvanceAccount = await chartOfAccounts.get(cashAdvanceAccountSeed.id)
+        ?? await chartOfAccounts.where('code').equals(cashAdvanceAccountSeed.code).first();
+
+      if (!existingCashAdvanceAccount) {
+        await chartOfAccounts.put({
+          ...cashAdvanceAccountSeed,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+
+    const cashAdvanceMappingSeed = DEFAULT_FINANCE_ACCOUNT_MAPPINGS.find((mapping) => (
+      mapping.key === FINANCE_CATEGORIES.EMPLOYEE_CASH_ADVANCE
+    ));
+    if (cashAdvanceMappingSeed && !await financeAccountMappings.get(cashAdvanceMappingSeed.key)) {
+      const cashAdvanceAccount = await chartOfAccounts.get(cashAdvanceMappingSeed.account_id)
+        ?? await chartOfAccounts.where('code').equals(cashAdvanceMappingSeed.account_code).first();
+
+      if (cashAdvanceAccount) {
+        await financeAccountMappings.put({
+          ...cashAdvanceMappingSeed,
+          id: cashAdvanceMappingSeed.key,
+          account_id: cashAdvanceAccount.id,
+          account_code: cashAdvanceAccount.code,
+          account_name: cashAdvanceAccount.name,
+          account_type: cashAdvanceAccount.type,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+
+    const runUpdates = (await payrollRuns.toArray())
+      .filter((run) => run.other_deduction_amount === undefined || run.cash_advance_deduction_amount === undefined)
+      .map((run): PayrollRun => ({
+        ...run,
+        other_deduction_amount: Number(run.other_deduction_amount ?? run.deduction_amount ?? 0),
+        cash_advance_deduction_amount: Number(run.cash_advance_deduction_amount ?? 0),
+        deduction_amount: Number(run.deduction_amount ?? 0),
+        updated_at: run.updated_at ?? now,
+      }));
+
+    if (runUpdates.length > 0) {
+      await payrollRuns.bulkPut(runUpdates);
+    }
+
+    const itemUpdates = (await payrollRunItems.toArray())
+      .filter((item) => item.other_deduction_amount === undefined || item.cash_advance_deduction_amount === undefined)
+      .map((item): PayrollRunItem => ({
+        ...item,
+        other_deduction_amount: Number(item.other_deduction_amount ?? item.deduction_amount ?? 0),
+        cash_advance_deduction_amount: Number(item.cash_advance_deduction_amount ?? 0),
+        deduction_amount: Number(item.deduction_amount ?? 0),
+        updated_at: item.updated_at ?? now,
+      }));
+
+    if (itemUpdates.length > 0) {
+      await payrollRunItems.bulkPut(itemUpdates);
     }
   });
 }

@@ -264,6 +264,7 @@ const RootLayout = () => {
         { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
         { to: '/finance/receivables', label: t('nav.finance.receivables'), icon: ReceiptText },
         { to: '/finance/payables', label: t('nav.finance.payables'), icon: CreditCard },
+        { to: '/finance/payroll', label: t('nav.finance.payroll'), icon: WalletCards },
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
         { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
       ],

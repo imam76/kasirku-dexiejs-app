@@ -179,6 +179,32 @@ export const ensureAccountingDefaults = async () => {
 
     if (await db.financeAccountMappings.count() === 0) {
       await db.financeAccountMappings.bulkPut(seed.mappings);
+    } else {
+      const mappings = await db.financeAccountMappings.toArray();
+      const mappingKeys = new Set(mappings.map((mapping) => mapping.key));
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountById = new Map(accounts.map((account) => [account.id, account]));
+      const missingMappings = seed.mappings
+        .filter((mapping) => !mappingKeys.has(mapping.key))
+        .map((mapping) => {
+          const account = accountById.get(mapping.account_id);
+          if (!account) return undefined;
+
+          return {
+            ...mapping,
+            account_id: account.id,
+            account_code: account.code,
+            account_name: account.name,
+            account_type: account.type,
+            created_at: now,
+            updated_at: now,
+          };
+        })
+        .filter((mapping): mapping is FinanceAccountMapping => Boolean(mapping));
+
+      if (missingMappings.length > 0) {
+        await db.financeAccountMappings.bulkPut(missingMappings);
+      }
     }
 
     if (!await db.accountingProfileSetting.get('default')) {

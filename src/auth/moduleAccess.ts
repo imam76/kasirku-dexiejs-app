@@ -32,6 +32,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/finance/cash-flow': ['CASH_FLOW'],
   '/finance/receivables': ['RECEIVABLES'],
   '/finance/payables': ['PAYABLES'],
+  '/finance/payroll': ['CASH_FLOW'],
   '/finance/chart-of-accounts': ['CHART_OF_ACCOUNTS'],
   '/finance/general-ledger': ['GENERAL_LEDGER'],
   // Reports

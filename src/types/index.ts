@@ -154,6 +154,9 @@ export type SalesReturnItemCondition =
   | 'SELLABLE'
   | 'DAMAGED'
   | 'DISCARDED';
+export type PayrollRunStatus = 'DRAFT' | 'APPROVED' | 'PAID' | 'VOIDED';
+export type EmployeeCashAdvanceStatus = 'ACTIVE' | 'PAID' | 'VOIDED';
+export type EmployeeCashAdvanceRepaymentStatus = 'DRAFT' | 'RESERVED' | 'POSTED' | 'VOIDED';
 
 export type Permission =
   | 'TRANSACTION_VOID'
@@ -471,6 +474,102 @@ export interface EmployeeCollectionSchedule {
   effective_from?: string;
   effective_until?: string;
   is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayrollRun {
+  id: string;
+  payroll_number: string;
+  period_start: string;
+  period_end: string;
+  status: PayrollRunStatus;
+  employee_count: number;
+  gross_amount: number;
+  allowance_amount: number;
+  bonus_amount: number;
+  other_deduction_amount: number;
+  cash_advance_deduction_amount: number;
+  deduction_amount: number;
+  net_amount: number;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  finance_transaction_id?: string;
+  notes?: string;
+  approved_at?: string;
+  paid_at?: string;
+  voided_at?: string;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayrollRunItem {
+  id: string;
+  payroll_run_id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_position?: string;
+  base_salary: number;
+  allowance_amount: number;
+  bonus_amount: number;
+  other_deduction_amount: number;
+  cash_advance_deduction_amount: number;
+  deduction_amount: number;
+  gross_amount: number;
+  net_amount: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeCashAdvance {
+  id: string;
+  advance_number: string;
+  employee_id: string;
+  employee_name: string;
+  employee_position?: string;
+  amount: number;
+  outstanding_amount: number;
+  status: EmployeeCashAdvanceStatus;
+  disbursed_at: string;
+  payment_method?: PaymentMethod;
+  payment_channel?: string;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  finance_transaction_id?: string;
+  notes?: string;
+  voided_at?: string;
+  void_reason?: string;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeCashAdvanceRepayment {
+  id: string;
+  cash_advance_id: string;
+  cash_advance_number: string;
+  payroll_run_id: string;
+  payroll_run_item_id: string;
+  payroll_number?: string;
+  employee_id: string;
+  employee_name: string;
+  amount: number;
+  status: EmployeeCashAdvanceRepaymentStatus;
+  allocated_at: string;
+  posted_at?: string;
+  voided_at?: string;
   created_at: string;
   updated_at: string;
 }

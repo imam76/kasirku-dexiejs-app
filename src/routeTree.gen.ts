@@ -139,6 +139,7 @@ const KoperasiAnggotaLazyRouteImport = createFileRoute('/koperasi/anggota')()
 const FinanceReceivablesLazyRouteImport = createFileRoute(
   '/finance/receivables',
 )()
+const FinancePayrollLazyRouteImport = createFileRoute('/finance/payroll')()
 const FinancePayablesLazyRouteImport = createFileRoute('/finance/payables')()
 const FinanceGeneralLedgerLazyRouteImport = createFileRoute(
   '/finance/general-ledger',
@@ -605,6 +606,13 @@ const FinanceReceivablesLazyRoute = FinanceReceivablesLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/finance/receivables.lazy').then((d) => d.Route),
 )
+const FinancePayrollLazyRoute = FinancePayrollLazyRouteImport.update({
+  id: '/finance/payroll',
+  path: '/finance/payroll',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/finance/payroll.lazy').then((d) => d.Route),
+)
 const FinancePayablesLazyRoute = FinancePayablesLazyRouteImport.update({
   id: '/finance/payables',
   path: '/finance/payables',
@@ -898,6 +906,7 @@ export interface FileRoutesByFullPath {
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
+  '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
@@ -991,6 +1000,7 @@ export interface FileRoutesByTo {
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
+  '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
@@ -1085,6 +1095,7 @@ export interface FileRoutesById {
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
+  '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
@@ -1180,6 +1191,7 @@ export interface FileRouteTypes {
     | '/finance/chart-of-accounts'
     | '/finance/general-ledger'
     | '/finance/payables'
+    | '/finance/payroll'
     | '/finance/receivables'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
@@ -1273,6 +1285,7 @@ export interface FileRouteTypes {
     | '/finance/chart-of-accounts'
     | '/finance/general-ledger'
     | '/finance/payables'
+    | '/finance/payroll'
     | '/finance/receivables'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
@@ -1366,6 +1379,7 @@ export interface FileRouteTypes {
     | '/finance/chart-of-accounts'
     | '/finance/general-ledger'
     | '/finance/payables'
+    | '/finance/payroll'
     | '/finance/receivables'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
@@ -1460,6 +1474,7 @@ export interface RootRouteChildren {
   FinanceChartOfAccountsLazyRoute: typeof FinanceChartOfAccountsLazyRoute
   FinanceGeneralLedgerLazyRoute: typeof FinanceGeneralLedgerLazyRouteWithChildren
   FinancePayablesLazyRoute: typeof FinancePayablesLazyRoute
+  FinancePayrollLazyRoute: typeof FinancePayrollLazyRoute
   FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRoute
   KoperasiAnggotaLazyRoute: typeof KoperasiAnggotaLazyRoute
   KoperasiAngsuranLazyRoute: typeof KoperasiAngsuranLazyRoute
@@ -1939,6 +1954,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceReceivablesLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/payroll': {
+      id: '/finance/payroll'
+      path: '/finance/payroll'
+      fullPath: '/finance/payroll'
+      preLoaderRoute: typeof FinancePayrollLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/finance/payables': {
       id: '/finance/payables'
       path: '/finance/payables'
@@ -2237,6 +2259,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceChartOfAccountsLazyRoute: FinanceChartOfAccountsLazyRoute,
   FinanceGeneralLedgerLazyRoute: FinanceGeneralLedgerLazyRouteWithChildren,
   FinancePayablesLazyRoute: FinancePayablesLazyRoute,
+  FinancePayrollLazyRoute: FinancePayrollLazyRoute,
   FinanceReceivablesLazyRoute: FinanceReceivablesLazyRoute,
   KoperasiAnggotaLazyRoute: KoperasiAnggotaLazyRoute,
   KoperasiAngsuranLazyRoute: KoperasiAngsuranLazyRoute,

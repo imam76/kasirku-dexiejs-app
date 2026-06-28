@@ -46,6 +46,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   }),
   createAccountSeed('accounts-receivable', '1100', 'Piutang Usaha', 'ASSET'),
   createAccountSeed('cooperative-loan-receivable', '1120', 'Piutang Pinjaman Anggota', 'ASSET'),
+  createAccountSeed('employee-cash-advance-receivable', '1130', 'Piutang Kasbon Karyawan', 'ASSET'),
   createAccountSeed('inventory', '1200', 'Persediaan Barang', 'ASSET'),
   createAccountSeed('accounts-payable', '2000', 'Hutang Usaha', 'LIABILITY'),
   createAccountSeed('output-tax', '2100', 'Pajak Keluaran', 'LIABILITY'),
@@ -62,6 +63,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('stock-purchase', '5100', 'Pembelian Stok', 'EXPENSE'),
   createAccountSeed('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE'),
   createAccountSeed('operational-expense', '6100', 'Beban Operasional', 'EXPENSE'),
+  createAccountSeed('salary-expense', '6110', 'Beban Gaji', 'EXPENSE', {
+    parent_id: 'operational-expense',
+    parent_code: '6100',
+    parent_name: 'Beban Operasional',
+  }),
   createAccountSeed('cooperative-saving-interest-expense', '6095', 'Beban Jasa Simpanan Anggota', 'EXPENSE'),
   createAccountSeed('other-expense', '6900', 'Beban Lainnya', 'EXPENSE'),
 ];
@@ -119,6 +125,24 @@ export const DEFAULT_FINANCE_ACCOUNT_MAPPINGS: DefaultMappingSeed[] = [
     account_code: '6100',
     account_name: 'Beban Operasional',
     account_type: 'EXPENSE',
+    is_system: true,
+  },
+  {
+    key: FINANCE_CATEGORIES.PAYROLL,
+    category: FINANCE_CATEGORIES.PAYROLL,
+    account_id: 'salary-expense',
+    account_code: '6110',
+    account_name: 'Beban Gaji',
+    account_type: 'EXPENSE',
+    is_system: true,
+  },
+  {
+    key: FINANCE_CATEGORIES.EMPLOYEE_CASH_ADVANCE,
+    category: FINANCE_CATEGORIES.EMPLOYEE_CASH_ADVANCE,
+    account_id: 'employee-cash-advance-receivable',
+    account_code: '1130',
+    account_name: 'Piutang Kasbon Karyawan',
+    account_type: 'ASSET',
     is_system: true,
   },
   {
@@ -442,7 +466,10 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     description: 'Beban penyisihan piutang pinjaman tak tertagih',
   }),
   createEtapTemplateLine('operational-expense', '6000', 'Beban Operasional', 'EXPENSE', { is_postable: false }),
-  createEtapTemplateLine('salary-expense', '6010', 'Beban Gaji', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createEtapTemplateLine('salary-expense', '6010', 'Beban Gaji', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    mapping_keys: [FINANCE_CATEGORIES.PAYROLL],
+  }),
   createEtapTemplateLine('rent-expense', '6020', 'Beban Sewa', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createEtapTemplateLine('rat-expense', '6030', 'Beban RAT', 'EXPENSE', {
     parent_template_account_id: 'operational-expense',
@@ -560,7 +587,10 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   }),
   createTemplateLine('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE', { parent_template_account_id: 'cogs-group' }),
   createTemplateLine('operational-expense', '6000', 'Beban Operasional', 'EXPENSE', { is_postable: false }),
-  createTemplateLine('salary-expense', '6010', 'Beban Gaji', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createTemplateLine('salary-expense', '6010', 'Beban Gaji', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    mapping_keys: [FINANCE_CATEGORIES.PAYROLL],
+  }),
   createTemplateLine('rent-expense', '6020', 'Beban Sewa', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('electricity-expense', '6030', 'Beban Listrik', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('transport-expense', '6040', 'Beban Transport', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),

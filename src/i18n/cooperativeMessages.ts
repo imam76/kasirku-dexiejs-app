@@ -252,7 +252,7 @@ export const cooperativeMessages = {
     'cooperative.reports.dailyStorting.exportHtmlFailed': 'Gagal export HTML laporan storting harian.',
     'cooperative.reports.dailyStorting.exportPdfSuccess': 'Export PDF laporan storting harian berhasil.',
     'cooperative.reports.dailyStorting.exportPdfFailed': 'Gagal export PDF laporan storting harian.',
-    'cooperative.reports.dailyFieldCash.title': 'Laporan Kas Harian Petugas',
+    'cooperative.reports.dailyFieldCash.title': 'L. Kas Harian',
     'cooperative.reports.dailyFieldCash.subtitle': 'Rekap harian kas per petugas lapangan',
     'cooperative.reports.dailyFieldCash.period': 'Periode',
     'cooperative.reports.dailyFieldCash.collector': 'Kolektor',
