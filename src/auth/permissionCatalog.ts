@@ -239,6 +239,13 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'REPORT_PAYROLL_VIEW',
+    label: 'Lihat Laporan Penggajian',
+    group: 'Laporan',
+    moduleCodes: ['REPORT_PAYROLL'],
+    isSensitive: true,
+  },
+  {
     code: 'REPORT_PROFIT_LOSS_VIEW',
     label: 'Lihat Laporan Laba Rugi',
     group: 'Laporan',

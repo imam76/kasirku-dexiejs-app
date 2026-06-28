@@ -81,6 +81,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'REPORT_TRANSACTION_DETAIL', label: 'Transaction Detail', description: 'Laporan detail transaksi' },
       { code: 'REPORT_PURCHASE', label: 'Purchase Report', description: 'Laporan pembelian' },
       { code: 'REPORT_EXPENSE', label: 'Expense Report', description: 'Laporan pengeluaran' },
+      { code: 'REPORT_PAYROLL', label: 'Payroll Report', description: 'Laporan penggajian karyawan' },
       { code: 'REPORT_AGING', label: 'Aging Report', description: 'Laporan umur piutang/hutang' },
       { code: 'REPORT_STOCK_CARD', label: 'Stock Card', description: 'Kartu stok per produk' },
       { code: 'REPORT_PROFIT', label: 'Profit Report', description: 'Laporan laba rugi' },
@@ -143,6 +144,7 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   // Reports
   'REPORT_POS_SALES',
   'REPORT_DEPOSIT',
+  'REPORT_PAYROLL',
   'REPORT_PROFIT',
 ];
 

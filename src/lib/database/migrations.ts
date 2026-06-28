@@ -1313,6 +1313,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       STOCK_PURCHASE_ACCESS: ['REPORT_PURCHASE_VIEW'],
       FINANCE_ACCESS: [
         'REPORT_EXPENSE_VIEW',
+        'REPORT_PAYROLL_VIEW',
         'REPORT_PROFIT_LOSS_VIEW',
         'REPORT_AGING_VIEW',
       ],
@@ -1537,6 +1538,39 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
 
     if (itemUpdates.length > 0) {
       await payrollRunItems.bulkPut(itemUpdates);
+    }
+  });
+
+  this.version(66).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingPermissions = await rolePermissionTable.toArray();
+    const existingIds = new Set(existingPermissions.map((permission) => permission.id));
+    const payrollPermissionCode: RolePermission['permission_code'] = 'REPORT_PAYROLL_VIEW';
+    const migratedPermissions = existingPermissions
+      .filter((permission) => permission.permission_code === 'FINANCE_ACCESS')
+      .flatMap((legacyPermission) => {
+        const id = `${legacyPermission.role_id}:${payrollPermissionCode}`;
+        if (existingIds.has(id)) return [];
+        existingIds.add(id);
+
+        return [{
+          id,
+          role_id: legacyPermission.role_id,
+          permission_code: payrollPermissionCode,
+          created_at: now,
+          updated_at: now,
+          sync_status: 'pending' as const,
+        }];
+      });
+    const systemPermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingIds.has(permission.id));
+
+    if (migratedPermissions.length > 0 || systemPermissions.length > 0) {
+      await rolePermissionTable.bulkPut([
+        ...migratedPermissions,
+        ...systemPermissions,
+      ]);
     }
   });
 }

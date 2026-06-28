@@ -9,12 +9,14 @@ export const exportPdf = async ({
   filename,
   build,
   target,
+  orientation = 'portrait',
 }: {
   filename: string;
   build: (doc: jsPDF) => void | jsPDF;
   target?: ExportTarget;
+  orientation?: 'portrait' | 'landscape';
 }) => {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ orientation });
   const builtDoc = build(doc) ?? doc;
 
   return await saveExportFile({

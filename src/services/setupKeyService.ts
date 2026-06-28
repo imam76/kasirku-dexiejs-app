@@ -4,7 +4,7 @@ import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
-const CURRENT_MODULE_CATALOG_VERSION = 5;
+const CURRENT_MODULE_CATALOG_VERSION = 6;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
@@ -83,6 +83,9 @@ export const getSetupConfig = (): SetupConfig | null => {
     }
     if (enabledModules.has('REPORT_POS_SALES')) {
       enabledModules.add('REPORT_DEPOSIT');
+    }
+    if (['CASH_FLOW', 'REPORT_EXPENSE', 'REPORT_PROFIT'].some((moduleCode) => enabledModules.has(moduleCode))) {
+      enabledModules.add('REPORT_PAYROLL');
     }
     if (enabledModules.has('KOPERASI_SHU')) {
       [
