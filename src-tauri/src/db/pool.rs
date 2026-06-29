@@ -1,4 +1,5 @@
 use serde::Serialize;
+use sha2::{Digest, Sha384};
 use sqlx::{
     migrate::{MigrateError, Migration, Migrator},
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -202,6 +203,7 @@ async fn create_migrated_postgres_state(pool: PgPool) -> PostgresState {
     // Advisory locks are session-scoped and unreliable through a transaction
     // pooler (each query may land on a different backend), so disable them.
     let mut migrator = sqlx::migrate!("./migrations");
+    normalize_migration_checksums(&mut migrator);
     migrator.set_locking(false);
     match run_postgres_migrations(&pool, &migrator).await {
         Ok(()) => PostgresState::available(pool),
@@ -209,6 +211,41 @@ async fn create_migrated_postgres_state(pool: PgPool) -> PostgresState {
             PostgresState::migration_failed(format!("PostgreSQL migration failed: {}", error))
         }
     }
+}
+
+fn normalize_migration_checksums(migrator: &mut Migrator) {
+    for migration in migrator.migrations.to_mut() {
+        migration.checksum = checksum_ignoring_carriage_returns(migration.sql.as_str()).into();
+    }
+}
+
+fn checksum_ignoring_carriage_returns(sql: &str) -> Vec<u8> {
+    let mut digest = Sha384::new();
+
+    for fragment in sql.split('\r') {
+        digest.update(fragment);
+    }
+
+    digest.finalize().to_vec()
+}
+
+fn line_ending_equivalent_checksums(sql: &str) -> [Vec<u8>; 3] {
+    [
+        checksum_sql(sql),
+        checksum_ignoring_carriage_returns(sql),
+        checksum_with_crlf_line_endings(sql),
+    ]
+}
+
+fn checksum_sql(sql: &str) -> Vec<u8> {
+    let mut digest = Sha384::new();
+    digest.update(sql);
+    digest.finalize().to_vec()
+}
+
+fn checksum_with_crlf_line_endings(sql: &str) -> Vec<u8> {
+    let without_carriage_returns = sql.replace('\r', "");
+    checksum_sql(&without_carriage_returns.replace('\n', "\r\n"))
 }
 
 async fn run_postgres_migrations(pool: &PgPool, migrator: &Migrator) -> Result<(), MigrateError> {
@@ -230,6 +267,10 @@ async fn repair_compatible_migration_mismatch(
     migrator: &Migrator,
     version: i64,
 ) -> Result<(), MigrateError> {
+    if repair_line_ending_only_migration_checksum(pool, migrator, version).await? {
+        return Ok(());
+    }
+
     if version == 1 && department_table_has_current_columns(pool).await? {
         return execute_current_migration_and_replace_row(pool, migrator, version).await;
     }
@@ -247,6 +288,28 @@ async fn repair_compatible_migration_mismatch(
     }
 
     update_applied_migration_checksum(pool, migrator, version).await
+}
+
+async fn repair_line_ending_only_migration_checksum(
+    pool: &PgPool,
+    migrator: &Migrator,
+    version: i64,
+) -> Result<bool, MigrateError> {
+    let migration = migration_for_version(migrator, version)?;
+    let Some(stored_checksum) = applied_migration_checksum(pool, version).await? else {
+        return Ok(false);
+    };
+
+    let equivalent_checksums = line_ending_equivalent_checksums(migration.sql.as_str());
+    if !equivalent_checksums
+        .iter()
+        .any(|checksum| checksum.as_slice() == stored_checksum.as_slice())
+    {
+        return Ok(false);
+    }
+
+    update_applied_migration_checksum(pool, migrator, version).await?;
+    Ok(true)
 }
 
 async fn repair_legacy_migration_numbering(
@@ -401,15 +464,21 @@ async fn applied_migration_checksum_matches(
     version: i64,
     checksum: &[u8],
 ) -> Result<bool, sqlx::Error> {
-    let stored_checksum: Option<Vec<u8>> =
-        sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = $1")
-            .bind(version)
-            .fetch_optional(pool)
-            .await?;
+    let stored_checksum = applied_migration_checksum(pool, version).await?;
 
     Ok(stored_checksum
         .as_deref()
         .is_some_and(|stored_checksum| stored_checksum == checksum))
+}
+
+async fn applied_migration_checksum(
+    pool: &PgPool,
+    version: i64,
+) -> Result<Option<Vec<u8>>, sqlx::Error> {
+    sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = $1")
+        .bind(version)
+        .fetch_optional(pool)
+        .await
 }
 
 fn migration_for_version(migrator: &Migrator, version: i64) -> Result<&Migration, MigrateError> {
