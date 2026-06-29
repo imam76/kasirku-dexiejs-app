@@ -7,7 +7,11 @@ import {
   withDeletedFinanceTransactionSync,
   withPendingFinanceTransactionSync,
 } from '@/services/financeTransactionSyncService';
-import { getCashOrBankAccountForPayment } from '@/services/generalLedgerService';
+import {
+  getCashOrBankAccountForPayment,
+  postEmployeeCashAdvanceDisbursementJournal,
+  reverseEmployeeCashAdvanceDisbursementJournal,
+} from '@/services/generalLedgerService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import type {
   EmployeeCashAdvance,
@@ -111,6 +115,10 @@ export const createEmployeeCashAdvance = async (
     db.financeBalance,
     db.chartOfAccounts,
     db.financeAccountMappings,
+    db.enabledModules,
+    db.generalLedgerSetting,
+    db.journalEntries,
+    db.journalEntryLines,
     db.activityLogs,
   ], async () => {
     const employee = await db.employees.get(parsed.employee_id);
@@ -167,6 +175,7 @@ export const createEmployeeCashAdvance = async (
     await updateFinanceBalanceForCashAdvance(-amount, now);
     await db.employeeCashAdvances.add(savedCashAdvance);
     await db.financeTransactions.add(financeTransaction);
+    await postEmployeeCashAdvanceDisbursementJournal(savedCashAdvance, currentUser);
     await writeActivityLog({
       user: currentUser,
       action: 'EMPLOYEE_CASH_ADVANCE_CREATED',
@@ -198,6 +207,11 @@ export const voidEmployeeCashAdvance = async (
     db.employeeCashAdvanceRepayments,
     db.financeTransactions,
     db.financeBalance,
+    db.chartOfAccounts,
+    db.enabledModules,
+    db.generalLedgerSetting,
+    db.journalEntries,
+    db.journalEntryLines,
     db.activityLogs,
   ], async () => {
     const cashAdvance = await db.employeeCashAdvances.get(parsed.id);
@@ -253,6 +267,12 @@ export const voidEmployeeCashAdvance = async (
     };
 
     await db.employeeCashAdvances.put(voidedCashAdvance);
+    await reverseEmployeeCashAdvanceDisbursementJournal(
+      voidedCashAdvance,
+      `Pembatalan kasbon: ${parsed.reason}`,
+      currentUser,
+      now,
+    );
     await writeActivityLog({
       user: currentUser,
       action: 'EMPLOYEE_CASH_ADVANCE_VOIDED',

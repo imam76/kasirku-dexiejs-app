@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem } from '@/types';
-import { isExpenseReportFinanceTransaction } from '@/constants/finance';
+import { isExpenseReportFinanceTransaction, isIncomeReportFinanceTransaction } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
@@ -68,6 +68,12 @@ type PurchaseReportRow = StockPurchase & {
 interface ExpenseReportData {
   transactions: FinanceTransaction[];
   totalExpense: number;
+  breakdown: Record<string, number>;
+}
+
+interface IncomeReportData {
+  transactions: FinanceTransaction[];
+  totalIncome: number;
   breakdown: Record<string, number>;
 }
 
@@ -753,6 +759,60 @@ export const useExpenseReport = (startDate?: string, endDate?: string, categorie
       return {
         transactions,
         totalExpense,
+        breakdown,
+      };
+    },
+  });
+};
+
+export const useIncomeReport = (startDate?: string, endDate?: string, categories?: string[]) => {
+  return useQuery({
+    queryKey: ['incomeReport', startDate, endDate, categories],
+    queryFn: async (): Promise<IncomeReportData> => {
+      await requireUserPermission(await getCurrentSessionUser(), 'REPORT_INCOME_VIEW');
+      let collection = db.financeTransactions.where('type').equals('INCOME').reverse();
+
+      if (startDate && endDate) {
+        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
+        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
+        collection = db.financeTransactions
+          .where('created_at')
+          .between(startISO, endISO, true, true)
+          .filter(isIncomeReportFinanceTransaction)
+          .reverse();
+      } else if (startDate) {
+        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
+        collection = db.financeTransactions
+          .where('created_at')
+          .aboveOrEqual(startISO)
+          .filter(isIncomeReportFinanceTransaction)
+          .reverse();
+      } else if (endDate) {
+        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
+        collection = db.financeTransactions
+          .where('created_at')
+          .belowOrEqual(endISO)
+          .filter(isIncomeReportFinanceTransaction)
+          .reverse();
+      }
+
+      let transactions = (await collection.toArray())
+        .filter(isIncomeReportFinanceTransaction);
+
+      if (categories && categories.length > 0) {
+        transactions = transactions.filter((transaction) => categories.includes(transaction.category));
+      }
+
+      const totalIncome = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+
+      const breakdown = transactions.reduce((acc, transaction) => {
+        acc[transaction.category] = (acc[transaction.category] || 0) + transaction.amount;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return {
+        transactions,
+        totalIncome,
         breakdown,
       };
     },

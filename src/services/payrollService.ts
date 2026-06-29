@@ -9,7 +9,7 @@ import {
   voidPayrollCashAdvanceRepayments,
 } from '@/services/employeeCashAdvanceService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
-import { getCashOrBankAccountForPayment } from '@/services/generalLedgerService';
+import { getCashOrBankAccountForPayment, postPayrollRunPaidJournal } from '@/services/generalLedgerService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import type {
   AuthUser,
@@ -408,6 +408,10 @@ export const payPayrollRun = async (
     db.profitLogs,
     db.chartOfAccounts,
     db.financeAccountMappings,
+    db.enabledModules,
+    db.generalLedgerSetting,
+    db.journalEntries,
+    db.journalEntryLines,
     db.activityLogs,
   ], async () => {
     const run = await db.payrollRuns.get(payrollRunId);
@@ -437,6 +441,7 @@ export const payPayrollRun = async (
     };
 
     await db.payrollRuns.put(paidRun);
+    await postPayrollRunPaidJournal(paidRun, currentUser);
     await writeActivityLog({
       user: currentUser,
       action: 'PAYROLL_RUN_PAID',

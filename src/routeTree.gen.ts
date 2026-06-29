@@ -53,6 +53,9 @@ const ReportPosSalesReportLazyRouteImport = createFileRoute(
 const ReportPayrollReportLazyRouteImport = createFileRoute(
   '/report/payroll-report',
 )()
+const ReportIncomeReportLazyRouteImport = createFileRoute(
+  '/report/income-report',
+)()
 const ReportExpenseReportLazyRouteImport = createFileRoute(
   '/report/expense-report',
 )()
@@ -338,6 +341,13 @@ const ReportPayrollReportLazyRoute = ReportPayrollReportLazyRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
   import('./routes/report/payroll-report.lazy').then((d) => d.Route),
+)
+const ReportIncomeReportLazyRoute = ReportIncomeReportLazyRouteImport.update({
+  id: '/report/income-report',
+  path: '/report/income-report',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/report/income-report.lazy').then((d) => d.Route),
 )
 const ReportExpenseReportLazyRoute = ReportExpenseReportLazyRouteImport.update({
   id: '/report/expense-report',
@@ -954,6 +964,7 @@ export interface FileRoutesByFullPath {
   '/report/aging-report': typeof ReportAgingReportLazyRoute
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
+  '/report/income-report': typeof ReportIncomeReportLazyRoute
   '/report/payroll-report': typeof ReportPayrollReportLazyRoute
   '/report/pos-sales-report': typeof ReportPosSalesReportLazyRoute
   '/report/profit-loss-report': typeof ReportProfitLossReportLazyRoute
@@ -1049,6 +1060,7 @@ export interface FileRoutesByTo {
   '/report/aging-report': typeof ReportAgingReportLazyRoute
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
+  '/report/income-report': typeof ReportIncomeReportLazyRoute
   '/report/payroll-report': typeof ReportPayrollReportLazyRoute
   '/report/pos-sales-report': typeof ReportPosSalesReportLazyRoute
   '/report/profit-loss-report': typeof ReportProfitLossReportLazyRoute
@@ -1145,6 +1157,7 @@ export interface FileRoutesById {
   '/report/aging-report': typeof ReportAgingReportLazyRoute
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
+  '/report/income-report': typeof ReportIncomeReportLazyRoute
   '/report/payroll-report': typeof ReportPayrollReportLazyRoute
   '/report/pos-sales-report': typeof ReportPosSalesReportLazyRoute
   '/report/profit-loss-report': typeof ReportProfitLossReportLazyRoute
@@ -1242,6 +1255,7 @@ export interface FileRouteTypes {
     | '/report/aging-report'
     | '/report/deposit-report'
     | '/report/expense-report'
+    | '/report/income-report'
     | '/report/payroll-report'
     | '/report/pos-sales-report'
     | '/report/profit-loss-report'
@@ -1337,6 +1351,7 @@ export interface FileRouteTypes {
     | '/report/aging-report'
     | '/report/deposit-report'
     | '/report/expense-report'
+    | '/report/income-report'
     | '/report/payroll-report'
     | '/report/pos-sales-report'
     | '/report/profit-loss-report'
@@ -1432,6 +1447,7 @@ export interface FileRouteTypes {
     | '/report/aging-report'
     | '/report/deposit-report'
     | '/report/expense-report'
+    | '/report/income-report'
     | '/report/payroll-report'
     | '/report/pos-sales-report'
     | '/report/profit-loss-report'
@@ -1528,6 +1544,7 @@ export interface RootRouteChildren {
   ReportAgingReportLazyRoute: typeof ReportAgingReportLazyRoute
   ReportDepositReportLazyRoute: typeof ReportDepositReportLazyRoute
   ReportExpenseReportLazyRoute: typeof ReportExpenseReportLazyRoute
+  ReportIncomeReportLazyRoute: typeof ReportIncomeReportLazyRoute
   ReportPayrollReportLazyRoute: typeof ReportPayrollReportLazyRoute
   ReportPosSalesReportLazyRoute: typeof ReportPosSalesReportLazyRoute
   ReportProfitLossReportLazyRoute: typeof ReportProfitLossReportLazyRoute
@@ -1717,6 +1734,13 @@ declare module '@tanstack/react-router' {
       path: '/report/payroll-report'
       fullPath: '/report/payroll-report'
       preLoaderRoute: typeof ReportPayrollReportLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report/income-report': {
+      id: '/report/income-report'
+      path: '/report/income-report'
+      fullPath: '/report/income-report'
+      preLoaderRoute: typeof ReportIncomeReportLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report/expense-report': {
@@ -2322,6 +2346,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportAgingReportLazyRoute: ReportAgingReportLazyRoute,
   ReportDepositReportLazyRoute: ReportDepositReportLazyRoute,
   ReportExpenseReportLazyRoute: ReportExpenseReportLazyRoute,
+  ReportIncomeReportLazyRoute: ReportIncomeReportLazyRoute,
   ReportPayrollReportLazyRoute: ReportPayrollReportLazyRoute,
   ReportPosSalesReportLazyRoute: ReportPosSalesReportLazyRoute,
   ReportProfitLossReportLazyRoute: ReportProfitLossReportLazyRoute,

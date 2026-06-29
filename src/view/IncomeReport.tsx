@@ -1,20 +1,21 @@
-import { Loading } from '@/components/Loading';
-import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
-import { useExpenseReport } from '@/hooks/useReports';
-import { useI18n } from '@/hooks/useI18n';
-import { getFinanceCategoryLabel } from '@/i18n/finance';
-import dayjs from '@/lib/dayjs';
-import { exportHtmlPdf, exportXlsx, saveExportFile, type ExportTarget } from '@/utils/export';
 import { FileExcelOutlined, FilePdfOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
 import { App, Button, DatePicker, Select, Typography } from 'antd';
 import { useRef, useState } from 'react';
 import ExportActions from '@/components/ExportActions';
+import { Loading } from '@/components/Loading';
+import { FINANCE_CATEGORIES } from '@/constants/finance';
+import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
+import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import ExpenseReportDocument from './expense-report/ExpenseReportDocument';
+import { useIncomeReport } from '@/hooks/useReports';
+import { getFinanceCategoryLabel } from '@/i18n/finance';
+import dayjs from '@/lib/dayjs';
+import { exportHtmlPdf, exportXlsx, saveExportFile, type ExportTarget } from '@/utils/export';
+import IncomeReportDocument from './income-report/IncomeReportDocument';
 
 const { Title } = Typography;
 
-export default function ExpenseReport() {
+export default function IncomeReport() {
   const { message } = App.useApp();
   const { t, locale } = useI18n();
   const isMobile = useIsMobile();
@@ -29,14 +30,16 @@ export default function ExpenseReport() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedHelper, setSelectedHelper] = useState<string | undefined>('today');
 
-  const { data, isLoading, refetch } = useExpenseReport(startDate, endDate, selectedCategories);
-  const expenseCategories = [
-    { value: 'PEMBELIAN_STOK', label: t('finance.category.stockPurchaseOption') },
-    { value: 'OPERASIONAL', label: t('finance.category.operationalOption') },
-    { value: 'GAJI', label: t('finance.category.GAJI') },
-    { value: 'PERLENGKAPAN', label: t('finance.category.PERLENGKAPAN') },
-    { value: 'MAKAN', label: t('finance.category.MAKAN') },
-    { value: 'TRANSPORT', label: t('finance.category.TRANSPORT') },
+  const { data, isLoading, refetch } = useIncomeReport(startDate, endDate, selectedCategories);
+  const incomeCategories = [
+    { value: FINANCE_CATEGORIES.SALES, label: t('finance.category.PENJUALAN') },
+    { value: FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT, label: t('finance.category.PEMBAYARAN_INVOICE_PENJUALAN') },
+    { value: FINANCE_CATEGORIES.KSP_SAVING_DEPOSIT, label: t('finance.category.KSP_SETORAN_SIMPANAN') },
+    { value: FINANCE_CATEGORIES.KSP_LOAN_PAYMENT, label: t('finance.category.KSP_PEMBAYARAN_ANGSURAN') },
+    { value: FINANCE_CATEGORIES.KSP_LOAN_ADMIN_FEE, label: t('finance.category.KSP_ADMIN_PINJAMAN') },
+    { value: FINANCE_CATEGORIES.SERVICE, label: t('finance.category.LAYANAN') },
+    { value: FINANCE_CATEGORIES.BONUS_GRANT, label: t('finance.category.BONUS') },
+    { value: FINANCE_CATEGORIES.OTHER, label: t('finance.category.LAINNYA') },
   ];
   const periodText = `${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`;
   const printDateText = dayjs().tz().format('YYYY-MM-DD HH:mm:ss');
@@ -44,7 +47,7 @@ export default function ExpenseReport() {
     ? selectedCategories.map((category) => getFinanceCategoryLabel(category, t)).join(', ')
     : t('report.allCategories');
   const companyName = profile?.company_name || 'Frayukti';
-  const exportFilenameBase = `laporan-pengeluaran-${dayjs().tz().format('YYYY-MM-DD')}`;
+  const exportFilenameBase = `laporan-pemasukan-${dayjs().tz().format('YYYY-MM-DD')}`;
 
   const escapeHtml = (value: string) =>
     value.replace(/[&<>"']/g, (char) => {
@@ -63,7 +66,7 @@ export default function ExpenseReport() {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(t('report.expense.title'))}</title>
+  <title>${escapeHtml(t('report.income.title'))}</title>
   <style>
     @page { size: A4 portrait; margin: 12mm; }
     * { box-sizing: border-box; }
@@ -149,10 +152,10 @@ export default function ExpenseReport() {
         orientation: 'portrait',
         target,
       });
-      if (exported) message.success(t('report.expense.exportPdfSuccess'));
+      if (exported) message.success(t('report.income.exportPdfSuccess'));
     } catch (error) {
-      console.error('Failed to export expense PDF:', error);
-      message.error(t('report.expense.exportPdfFailed'));
+      console.error('Failed to export income PDF:', error);
+      message.error(t('report.income.exportPdfFailed'));
     }
   };
 
@@ -166,10 +169,10 @@ export default function ExpenseReport() {
         content: buildHtmlDocument(),
         target,
       });
-      if (exported) message.success(t('report.expense.exportHtmlSuccess'));
+      if (exported) message.success(t('report.income.exportHtmlSuccess'));
     } catch (error) {
-      console.error('Failed to export expense HTML:', error);
-      message.error(t('report.expense.exportHtmlFailed'));
+      console.error('Failed to export income HTML:', error);
+      message.error(t('report.income.exportHtmlFailed'));
     }
   };
 
@@ -179,9 +182,9 @@ export default function ExpenseReport() {
     try {
       const header = [
         [companyName],
-        [t('report.expense.title')],
+        [t('report.income.title')],
         [`${t('report.periodWithColon')} ${periodText}`],
-        [`${t('report.expenseCategory')}: ${selectedCategoryText}`],
+        [`${t('report.incomeCategory')}: ${selectedCategoryText}`],
         [`${t('report.printDate')} ${printDateText}`],
         [],
         [t('report.dateTime'), t('report.descriptionLong'), t('report.category'), t('report.amount')],
@@ -196,7 +199,7 @@ export default function ExpenseReport() {
 
       const footer = [
         [],
-        ['', '', t('report.totalOverall'), data.totalExpense],
+        ['', '', t('report.totalOverall'), data.totalIncome],
       ];
 
       await exportXlsx({
@@ -204,30 +207,30 @@ export default function ExpenseReport() {
         target,
         sheets: [
           {
-            name: t('report.expense.title'),
+            name: t('report.income.title'),
             rows: [...header, ...body, ...footer],
           },
         ],
       });
-      message.success(t('report.expense.exportExcelSuccess'));
+      message.success(t('report.income.exportExcelSuccess'));
     } catch (error) {
-      console.error('Failed to export expense Excel:', error);
-      message.error(t('report.expense.exportExcelFailed'));
+      console.error('Failed to export income Excel:', error);
+      message.error(t('report.income.exportExcelFailed'));
     }
   };
 
   if (isLoading) return <Loading />;
 
   return (
-    <div className="p-4 sm:p-6 bg-[#FDFDFD] min-h-screen">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+    <div className="min-h-screen bg-[#FDFDFD] p-4 sm:p-6">
+      <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <Title level={4} className="!mb-1 !font-bold text-gray-900">{t('report.expense.title')}</Title>
-          <p className="text-gray-500 text-xs sm:text-sm">{t('report.expense.subtitle')}</p>
+          <Title level={4} className="!mb-1 !font-bold text-gray-900">{t('report.income.title')}</Title>
+          <p className="text-xs text-gray-500 sm:text-sm">{t('report.income.subtitle')}</p>
         </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Button
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5"
+            className="flex flex-1 items-center justify-center gap-1.5 sm:flex-none"
             icon={<ReloadOutlined className="text-[12px]" />}
             onClick={() => refetch()}
             loading={isLoading}
@@ -261,12 +264,11 @@ export default function ExpenseReport() {
         </div>
       </div>
 
-      {/* FILTER SECTION */}
-      <div className="mb-8 bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">{t('report.parameterTitle')}</div>
+      <div className="mb-8 rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('report.parameterTitle')}</div>
         <div className="space-y-5">
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.expenseCategory')}</span>
+            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.incomeCategory')}</span>
             <Select
               mode="multiple"
               placeholder={t('report.allCategories')}
@@ -274,59 +276,59 @@ export default function ExpenseReport() {
               value={selectedCategories}
               onChange={setSelectedCategories}
               allowClear
-              options={expenseCategories}
+              options={incomeCategories}
               size="large"
             />
           </div>
-          
+
           <div className="flex flex-col gap-2.5">
-            <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.dateRange')}</span>
+            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.dateRange')}</span>
             <div className="flex flex-wrap gap-2">
-              <Button 
+              <Button
                 size={isMobile ? 'small' : 'middle'}
-                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'today' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'today' ? 'border-[#2563EB] bg-[#2563EB] text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-[#2563EB]'}`}
                 onClick={() => handleHelperChange('today')}
               >
                 {t('report.today')}
               </Button>
-              <Button 
+              <Button
                 size={isMobile ? 'small' : 'middle'}
-                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'yesterday' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'yesterday' ? 'border-[#2563EB] bg-[#2563EB] text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-[#2563EB]'}`}
                 onClick={() => handleHelperChange('yesterday')}
               >
                 {t('report.yesterday')}
               </Button>
-              <Button 
+              <Button
                 size={isMobile ? 'small' : 'middle'}
-                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-week' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-week' ? 'border-[#2563EB] bg-[#2563EB] text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-[#2563EB]'}`}
                 onClick={() => handleHelperChange('this-week')}
               >
                 {t('report.thisWeek')}
               </Button>
-              <Button 
+              <Button
                 size={isMobile ? 'small' : 'middle'}
-                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-month' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'this-month' ? 'border-[#2563EB] bg-[#2563EB] text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-[#2563EB]'}`}
                 onClick={() => handleHelperChange('this-month')}
               >
                 {t('report.thisMonth')}
               </Button>
-              <Button 
+              <Button
                 size={isMobile ? 'small' : 'middle'}
-                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'last-month' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'last-month' ? 'border-[#2563EB] bg-[#2563EB] text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-[#2563EB]'}`}
                 onClick={() => handleHelperChange('last-month')}
               >
                 {t('report.lastMonth')}
               </Button>
-              <Button 
+              <Button
                 size={isMobile ? 'small' : 'middle'}
-                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'custom' ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`} 
+                className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === 'custom' ? 'border-[#2563EB] bg-[#2563EB] text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-[#2563EB]'}`}
                 onClick={() => setSelectedHelper('custom')}
               >
                 {t('report.custom')}
               </Button>
 
               {(selectedCategories.length > 0 || selectedHelper !== 'today') && (
-                <Button type="link" onClick={handleReset} className="text-gray-400 hover:text-red-500 flex items-center gap-1">
+                <Button type="link" onClick={handleReset} className="flex items-center gap-1 text-gray-400 hover:text-red-500">
                   <ReloadOutlined className="text-[10px]" /> {t('common.reset')}
                 </Button>
               )}
@@ -339,7 +341,7 @@ export default function ExpenseReport() {
                   onChange={handleDateRangeChange}
                   format="YYYY-MM-DD"
                   placeholder={[t('common.from'), t('common.to')]}
-                  className="w-full sm:w-[320px] rounded-lg"
+                  className="w-full rounded-lg sm:w-[320px]"
                   size="large"
                 />
               </div>
@@ -348,14 +350,13 @@ export default function ExpenseReport() {
         </div>
       </div>
 
-      {/* DATA SECTION */}
       <div>
-        <div className="text-[11px] font-bold text-gray-400 tracking-[0.1em] mb-4 uppercase">{t('report.expense.transactionDetails')}</div>
+        <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('report.income.transactionDetails')}</div>
         <div className="overflow-x-auto">
-          <ExpenseReportDocument
+          <IncomeReportDocument
             ref={reportRef}
             transactions={data?.transactions || []}
-            totalExpense={data?.totalExpense || 0}
+            totalIncome={data?.totalIncome || 0}
             breakdown={data?.breakdown || {}}
             companyName={companyName}
             logoDataUrl={profile?.logo_data_url}

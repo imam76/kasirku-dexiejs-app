@@ -17,11 +17,13 @@ import type {
   Department,
   EnabledModule,
   Employee,
+  EmployeeCashAdvance,
   FinanceAccountMapping,
   FinanceTransaction,
   GeneralLedgerSetting,
   InventoryLot,
   JournalEntry,
+  JournalEntryLine,
   MembershipSetting,
   Product,
   Project,
@@ -1571,6 +1573,240 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
         ...migratedPermissions,
         ...systemPermissions,
       ]);
+    }
+  });
+
+  this.version(67).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingPermissions = await rolePermissionTable.toArray();
+    const existingIds = new Set(existingPermissions.map((permission) => permission.id));
+    const incomePermissionCode: RolePermission['permission_code'] = 'REPORT_INCOME_VIEW';
+    const migratedPermissions = existingPermissions
+      .filter((permission) => (
+        permission.permission_code === 'FINANCE_ACCESS' ||
+        permission.permission_code === 'REPORT_EXPENSE_VIEW'
+      ))
+      .flatMap((legacyPermission) => {
+        const id = `${legacyPermission.role_id}:${incomePermissionCode}`;
+        if (existingIds.has(id)) return [];
+        existingIds.add(id);
+
+        return [{
+          id,
+          role_id: legacyPermission.role_id,
+          permission_code: incomePermissionCode,
+          created_at: now,
+          updated_at: now,
+          sync_status: 'pending' as const,
+        }];
+      });
+    const systemPermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingIds.has(permission.id));
+
+    if (migratedPermissions.length > 0 || systemPermissions.length > 0) {
+      await rolePermissionTable.bulkPut([
+        ...migratedPermissions,
+        ...systemPermissions,
+      ]);
+    }
+  });
+
+  this.version(68).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const enabledModules = tx.table<EnabledModule, string>('enabledModules');
+    const generalLedgerSetting = tx.table<GeneralLedgerSetting, string>('generalLedgerSetting');
+    const journalEntries = tx.table<JournalEntry, string>('journalEntries');
+    const journalEntryLines = tx.table<JournalEntryLine, string>('journalEntryLines');
+    const module = await enabledModules.get('GENERAL_LEDGER');
+    const setting = await generalLedgerSetting.get('default');
+
+    if (!module?.is_enabled || !setting?.is_ready || !setting.cutoff_date) return;
+
+    const roundCurrency = (value: number) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+    const amountOrZero = (value: number | undefined) => {
+      const amount = Number(value || 0);
+      return Number.isFinite(amount) ? roundCurrency(amount) : 0;
+    };
+    const isBeforeCutoff = (entryDate: string) => entryDate.slice(0, 10) < setting.cutoff_date!.slice(0, 10);
+
+    const accounts = await tx.table<ChartOfAccount, string>('chartOfAccounts').toArray();
+    const accountById = new Map(accounts.map((account) => [account.id, account]));
+    const accountByCode = new Map(accounts.map((account) => [account.code, account]));
+    const findPostableAccount = (ids: string[], codes: string[]) => {
+      const account = ids
+        .map((id) => accountById.get(id))
+        .find(Boolean)
+        ?? codes.map((code) => accountByCode.get(code)).find(Boolean);
+
+      return account?.is_active && account.is_postable ? account : undefined;
+    };
+    const findCashAccount = (accountId?: string, paymentMethod?: string) => {
+      const selectedAccount = accountId ? accountById.get(accountId) : undefined;
+      if (selectedAccount?.is_active && selectedAccount.is_postable && selectedAccount.type === 'ASSET') {
+        return selectedAccount;
+      }
+
+      return paymentMethod === 'NON_TUNAI'
+        ? findPostableAccount(['bank'], ['1020'])
+        : findPostableAccount(['cash'], ['1010']);
+    };
+    const salaryExpenseAccount = findPostableAccount(['salary-expense', 'template-salary-expense'], ['6110', '6010'])
+      ?? findPostableAccount(['other-expense', 'template-other-expense'], ['6900']);
+    const cashAdvanceAccount = findPostableAccount(['employee-cash-advance-receivable'], ['1130']);
+
+    if (!salaryExpenseAccount || !cashAdvanceAccount) return;
+
+    const existingSourceKeys = new Set(
+      (await journalEntries
+        .where('source_type')
+        .anyOf(['PAYROLL_RUN', 'EMPLOYEE_CASH_ADVANCE'])
+        .toArray())
+        .filter((entry) => entry.status === 'POSTED')
+        .map((entry) => `${entry.source_type}:${entry.source_id}:${entry.source_event}`),
+    );
+    const sequenceByDate = new Map<string, number>();
+    const createJournalEntryNumber = async (entryDate: string) => {
+      const dateKey = entryDate.slice(0, 10).replace(/-/g, '');
+      const prefix = `JRN-${dateKey}-`;
+      let sequence = sequenceByDate.get(dateKey);
+      if (sequence === undefined) {
+        sequence = await journalEntries.where('entry_number').startsWith(prefix).count();
+      }
+      sequence += 1;
+      sequenceByDate.set(dateKey, sequence);
+      return `${prefix}${String(sequence).padStart(4, '0')}`;
+    };
+    const entriesToAdd: JournalEntry[] = [];
+    const linesToAdd: JournalEntryLine[] = [];
+    const addJournalEntry = async ({
+      sourceType,
+      sourceId,
+      sourceNumber,
+      sourceEvent,
+      entryDate,
+      description,
+      lines,
+    }: {
+      sourceType: JournalEntry['source_type'];
+      sourceId: string;
+      sourceNumber?: string;
+      sourceEvent: string;
+      entryDate: string;
+      description: string;
+      lines: Array<{ account: ChartOfAccount; debit?: number; credit?: number; description?: string }>;
+    }) => {
+      const sourceKey = `${sourceType}:${sourceId}:${sourceEvent}`;
+      if (existingSourceKeys.has(sourceKey)) return;
+
+      const normalizedLines = lines
+        .map((line) => ({
+          ...line,
+          debit: amountOrZero(line.debit),
+          credit: amountOrZero(line.credit),
+        }))
+        .filter((line) => line.debit > 0 || line.credit > 0);
+      const totalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
+      const totalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
+      if (normalizedLines.length < 2 || Math.abs(totalDebit - totalCredit) > 0.01) return;
+
+      const entryId = crypto.randomUUID();
+      entriesToAdd.push({
+        id: entryId,
+        entry_number: await createJournalEntryNumber(entryDate),
+        entry_date: entryDate,
+        status: 'POSTED',
+        source_type: sourceType,
+        source_id: sourceId,
+        source_number: sourceNumber,
+        source_event: sourceEvent,
+        description,
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        posted_at: now,
+        version: 1,
+        created_at: now,
+        updated_at: now,
+        sync_status: 'pending',
+      });
+      normalizedLines.forEach((line) => {
+        linesToAdd.push({
+          id: crypto.randomUUID(),
+          journal_entry_id: entryId,
+          account_id: line.account.id,
+          account_code: line.account.code,
+          account_name: line.account.name,
+          account_type: line.account.type,
+          debit: line.debit,
+          credit: line.credit,
+          description: line.description,
+          created_at: now,
+        });
+      });
+      existingSourceKeys.add(sourceKey);
+    };
+
+    const cashAdvances = await tx.table<EmployeeCashAdvance, string>('employeeCashAdvances').toArray();
+    for (const advance of cashAdvances) {
+      if (advance.status === 'VOIDED' || isBeforeCutoff(advance.disbursed_at)) continue;
+
+      const amount = amountOrZero(advance.amount);
+      const cashAccount = findCashAccount(advance.cash_account_id, advance.payment_method);
+      if (amount <= 0 || !cashAccount) continue;
+
+      await addJournalEntry({
+        sourceType: 'EMPLOYEE_CASH_ADVANCE',
+        sourceId: advance.id,
+        sourceNumber: advance.advance_number,
+        sourceEvent: 'EMPLOYEE_CASH_ADVANCE_DISBURSED',
+        entryDate: advance.disbursed_at,
+        description: `Pencairan kasbon ${advance.advance_number} ${advance.employee_name}`,
+        lines: [
+          { account: cashAdvanceAccount, debit: amount, description: 'Piutang kasbon karyawan bertambah' },
+          { account: cashAccount, credit: amount, description: 'Kas/bank berkurang karena pencairan kasbon' },
+        ],
+      });
+    }
+
+    const payrollRuns = await tx.table<PayrollRun, string>('payrollRuns')
+      .where('status')
+      .equals('PAID')
+      .toArray();
+    for (const run of payrollRuns) {
+      if (!run.paid_at || isBeforeCutoff(run.paid_at)) continue;
+
+      const cashAmount = amountOrZero(run.net_amount);
+      const cashAdvanceDeductionAmount = amountOrZero(run.cash_advance_deduction_amount);
+      const expenseAmount = roundCurrency(cashAmount + cashAdvanceDeductionAmount);
+      const cashAccount = cashAmount > 0 ? findCashAccount(run.cash_account_id, run.payment_method) : undefined;
+      if (expenseAmount <= 0 || (cashAmount > 0 && !cashAccount)) continue;
+
+      await addJournalEntry({
+        sourceType: 'PAYROLL_RUN',
+        sourceId: run.id,
+        sourceNumber: run.payroll_number,
+        sourceEvent: 'PAYROLL_RUN_PAID',
+        entryDate: run.paid_at,
+        description: `Pembayaran gaji ${run.payroll_number} periode ${run.period_start} s/d ${run.period_end}`,
+        lines: [
+          { account: salaryExpenseAccount, debit: expenseAmount, description: 'Beban gaji karyawan' },
+          ...(cashAccount ? [{
+            account: cashAccount,
+            credit: cashAmount,
+            description: 'Kas/bank berkurang karena pembayaran gaji',
+          }] : []),
+          ...(cashAdvanceDeductionAmount > 0 ? [{
+            account: cashAdvanceAccount,
+            credit: cashAdvanceDeductionAmount,
+            description: 'Piutang kasbon karyawan dilunasi dari payroll',
+          }] : []),
+        ],
+      });
+    }
+
+    if (entriesToAdd.length > 0) {
+      await journalEntries.bulkAdd(entriesToAdd);
+      await journalEntryLines.bulkAdd(linesToAdd);
     }
   });
 }

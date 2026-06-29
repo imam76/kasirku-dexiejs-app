@@ -9,12 +9,14 @@ import type {
   CooperativeLoan,
   CooperativeLoanPayment,
   CooperativeSavingTransaction,
+  EmployeeCashAdvance,
   FinanceTransaction,
   InventoryAccountingPolicy,
   JournalEntry,
   JournalEntryLine,
   JournalSourceType,
   PaymentMethod,
+  PayrollRun,
   ProductionOrder,
   ProductionOrderCost,
   ProductionOrderItem,
@@ -46,6 +48,8 @@ const SOURCE_EVENTS = {
   SALES_RETURN_ISSUED: 'SALES_RETURN_ISSUED',
   PURCHASE_INVOICE_PAYMENT_POSTED: 'PURCHASE_INVOICE_PAYMENT_POSTED',
   CASH_BANK_TRANSFER_POSTED: 'CASH_BANK_TRANSFER_POSTED',
+  PAYROLL_RUN_PAID: 'PAYROLL_RUN_PAID',
+  EMPLOYEE_CASH_ADVANCE_DISBURSED: 'EMPLOYEE_CASH_ADVANCE_DISBURSED',
   COOPERATIVE_SAVING_DEPOSIT_POSTED: 'COOPERATIVE_SAVING_DEPOSIT_POSTED',
   COOPERATIVE_SAVING_WITHDRAWAL_POSTED: 'COOPERATIVE_SAVING_WITHDRAWAL_POSTED',
   COOPERATIVE_SAVING_INTEREST_PAID: 'COOPERATIVE_SAVING_INTEREST_PAID',
@@ -212,6 +216,8 @@ const ACCOUNT_CANDIDATES = {
     ids: ['cooperative-saving-interest-expense', 'template-cooperative-saving-interest-expense'],
     codes: ['6095'],
   },
+  employeeCashAdvanceReceivable: { ids: ['employee-cash-advance-receivable'], codes: ['1130'] },
+  salaryExpense: { ids: ['salary-expense', 'template-salary-expense'], codes: ['6110', '6010'] },
   otherExpense: { ids: ['other-expense', 'template-other-expense'], codes: ['6900'] },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
 } satisfies Record<string, AccountCandidate>;
@@ -1106,6 +1112,117 @@ export const postCashBankTransferJournal = async (input: {
     actor: input.actor,
   });
 };
+
+const buildPayrollRunPaidJournalDescription = (run: PayrollRun) => (
+  `Pembayaran gaji ${run.payroll_number} periode ${run.period_start} s/d ${run.period_end}`
+);
+
+export const postPayrollRunPaidJournal = async (
+  run: PayrollRun,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (run.status !== 'PAID') return undefined;
+  if (!run.paid_at) return undefined;
+  if (!await isGeneralLedgerPostingEnabled(run.paid_at)) return undefined;
+
+  const cashAmount = amountOrZero(run.net_amount);
+  const cashAdvanceDeductionAmount = amountOrZero(run.cash_advance_deduction_amount);
+  const expenseAmount = roundCurrency(cashAmount + cashAdvanceDeductionAmount);
+  if (expenseAmount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const salaryExpenseAccount = tryGetPostableAccount(accounts, ACCOUNT_CANDIDATES.salaryExpense)
+    ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.otherExpense, 'Beban Gaji');
+  const cashAccount = cashAmount > 0
+    ? run.cash_account_id
+      ? accounts.find((account) => account.id === run.cash_account_id)
+      : getPostableAccount(accounts, getCashAccountCandidate(run.payment_method), 'Kas/Bank')
+    : undefined;
+  if (cashAmount > 0 && !cashAccount) {
+    throw new Error('Akun kas/bank pembayaran payroll tidak ditemukan.');
+  }
+  if (cashAccount && (cashAccount.type !== 'ASSET' || !cashAccount.is_active || !cashAccount.is_postable)) {
+    throw new Error('Akun kas/bank pembayaran payroll harus bertipe aset, aktif, dan postable.');
+  }
+
+  const cashAdvanceAccount = cashAdvanceDeductionAmount > 0
+    ? getPostableAccount(accounts, ACCOUNT_CANDIDATES.employeeCashAdvanceReceivable, 'Piutang Kasbon Karyawan')
+    : undefined;
+
+  return postBalancedJournalEntry({
+    source_type: 'PAYROLL_RUN',
+    source_id: run.id,
+    source_number: run.payroll_number,
+    source_event: SOURCE_EVENTS.PAYROLL_RUN_PAID,
+    entry_date: run.paid_at,
+    description: buildPayrollRunPaidJournalDescription(run),
+    lines: [
+      createDebitLine(salaryExpenseAccount, expenseAmount, 'Beban gaji karyawan'),
+      cashAccount
+        ? createCreditLine(cashAccount, cashAmount, 'Kas/bank berkurang karena pembayaran gaji')
+        : undefined,
+      cashAdvanceAccount
+        ? createCreditLine(cashAdvanceAccount, cashAdvanceDeductionAmount, 'Piutang kasbon karyawan dilunasi dari payroll')
+        : undefined,
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const postEmployeeCashAdvanceDisbursementJournal = async (
+  advance: EmployeeCashAdvance,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (advance.status === 'VOIDED') return undefined;
+  if (!await isGeneralLedgerPostingEnabled(advance.disbursed_at)) return undefined;
+
+  const amount = amountOrZero(advance.amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cashAdvanceAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.employeeCashAdvanceReceivable,
+    'Piutang Kasbon Karyawan',
+  );
+  const cashAccount = advance.cash_account_id
+    ? accounts.find((account) => account.id === advance.cash_account_id)
+    : getPostableAccount(accounts, getCashAccountCandidate(advance.payment_method), 'Kas/Bank');
+  if (!cashAccount) {
+    throw new Error('Akun kas/bank pencairan kasbon tidak ditemukan.');
+  }
+  if (cashAccount.type !== 'ASSET' || !cashAccount.is_active || !cashAccount.is_postable) {
+    throw new Error('Akun kas/bank pencairan kasbon harus bertipe aset, aktif, dan postable.');
+  }
+
+  return postBalancedJournalEntry({
+    source_type: 'EMPLOYEE_CASH_ADVANCE',
+    source_id: advance.id,
+    source_number: advance.advance_number,
+    source_event: SOURCE_EVENTS.EMPLOYEE_CASH_ADVANCE_DISBURSED,
+    entry_date: advance.disbursed_at,
+    description: `Pencairan kasbon ${advance.advance_number} ${advance.employee_name}`,
+    lines: [
+      createDebitLine(cashAdvanceAccount, amount, 'Piutang kasbon karyawan bertambah'),
+      createCreditLine(cashAccount, amount, 'Kas/bank berkurang karena pencairan kasbon'),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const reverseEmployeeCashAdvanceDisbursementJournal = async (
+  advance: EmployeeCashAdvance,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  entryDate?: string,
+) => reverseJournalEntriesForSource({
+  source_type: 'EMPLOYEE_CASH_ADVANCE',
+  source_id: advance.id,
+  source_event: SOURCE_EVENTS.EMPLOYEE_CASH_ADVANCE_DISBURSED,
+  reason,
+  entry_date: entryDate,
+  actor,
+});
 
 const getCooperativeSavingSourceEvent = (transaction: CooperativeSavingTransaction) => {
   if (transaction.transaction_type === 'DEPOSIT') {

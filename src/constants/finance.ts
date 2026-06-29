@@ -66,6 +66,11 @@ export const NON_EXPENSE_REPORT_FINANCE_CATEGORIES = [
   FINANCE_CATEGORIES.WITHDRAWAL,
 ] as const;
 
+export const NON_INCOME_REPORT_FINANCE_CATEGORIES = [
+  FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
+  ...FINANCE_FUNDING_CATEGORIES,
+] as const;
+
 export const isFundingFinanceCategory = (category: string) => {
   return FINANCE_FUNDING_CATEGORIES.includes(category as typeof FINANCE_FUNDING_CATEGORIES[number]);
 };
@@ -83,6 +88,17 @@ export const isExpenseReportFinanceTransaction = (
     transaction.type === 'EXPENSE' &&
     !NON_EXPENSE_REPORT_FINANCE_CATEGORIES.includes(
       transaction.category as typeof NON_EXPENSE_REPORT_FINANCE_CATEGORIES[number],
+    )
+  );
+};
+
+export const isIncomeReportFinanceTransaction = (
+  transaction: { type: string; category: string },
+) => {
+  return (
+    transaction.type === 'INCOME' &&
+    !NON_INCOME_REPORT_FINANCE_CATEGORIES.includes(
+      transaction.category as typeof NON_INCOME_REPORT_FINANCE_CATEGORIES[number],
     )
   );
 };

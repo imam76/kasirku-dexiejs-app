@@ -232,6 +232,13 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['REPORT_PURCHASE'],
   },
   {
+    code: 'REPORT_INCOME_VIEW',
+    label: 'Lihat Laporan Pemasukan',
+    group: 'Laporan',
+    moduleCodes: ['REPORT_INCOME'],
+    isSensitive: true,
+  },
+  {
     code: 'REPORT_EXPENSE_VIEW',
     label: 'Lihat Laporan Pengeluaran',
     group: 'Laporan',
