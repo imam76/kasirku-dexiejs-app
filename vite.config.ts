@@ -3,20 +3,27 @@ import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 
 const host = process.env.TAURI_DEV_HOST;
+
+const readJsonIfExists = <T>(path: URL): T | null => {
+  const resolvedPath = fileURLToPath(path);
+  if (!existsSync(resolvedPath)) return null;
+
+  return JSON.parse(readFileSync(resolvedPath, 'utf-8')) as T;
+};
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
 ) as { version: string };
 
-const tauriConfig = JSON.parse(
-  readFileSync(fileURLToPath(new URL('./src-tauri/tauri.conf.json', import.meta.url)), 'utf-8'),
-) as { version?: string };
+const tauriConfig = readJsonIfExists<{ version?: string }>(
+  new URL('./src-tauri/tauri.conf.json', import.meta.url),
+);
 
-const appVersion = tauriConfig.version ?? pkg.version;
+const appVersion = tauriConfig?.version ?? pkg.version;
 const FEEDBACK_API_PATH = '/api/feedback';
 const feedbackApiUrl = new URL('./api/feedback.js', import.meta.url).href;
 

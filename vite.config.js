@@ -38,12 +38,18 @@ var _a;
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 var host = process.env.TAURI_DEV_HOST;
+var readJsonIfExists = function (path) {
+    var resolvedPath = fileURLToPath(path);
+    if (!existsSync(resolvedPath))
+        return null;
+    return JSON.parse(readFileSync(resolvedPath, 'utf-8'));
+};
 var pkg = JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'));
-var tauriConfig = JSON.parse(readFileSync(fileURLToPath(new URL('./src-tauri/tauri.conf.json', import.meta.url)), 'utf-8'));
-var appVersion = (_a = tauriConfig.version) !== null && _a !== void 0 ? _a : pkg.version;
+var tauriConfig = readJsonIfExists(new URL('./src-tauri/tauri.conf.json', import.meta.url));
+var appVersion = (_a = tauriConfig === null || tauriConfig === void 0 ? void 0 : tauriConfig.version) !== null && _a !== void 0 ? _a : pkg.version;
 var FEEDBACK_API_PATH = '/api/feedback';
 var feedbackApiUrl = new URL('./api/feedback.js', import.meta.url).href;
 var withJsonResponseHelpers = function (response) {
