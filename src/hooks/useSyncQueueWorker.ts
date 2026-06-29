@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { isTauriRuntime } from '@/services/postgresAdapter';
-import { runDatabaseSyncNow } from '@/services/syncOrchestratorService';
+import { runDatabaseRefreshNow, runDatabaseSyncNow } from '@/services/syncOrchestratorService';
 
 const REALTIME_SYNC_DEBOUNCE_MS = 750;
 
@@ -37,7 +37,7 @@ export const useSyncQueueWorker = () => {
 
       isRealtimeSyncRunning = true;
       try {
-        await runDatabaseSyncNow();
+        await runDatabaseRefreshNow();
       } catch (error) {
         console.error('Failed to refresh PostgreSQL realtime data', error);
       } finally {

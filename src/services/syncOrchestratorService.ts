@@ -103,6 +103,7 @@ export const refreshAllDataFromPostgres = async () => {
 type DatabaseSyncResult = Awaited<ReturnType<typeof refreshAllDataFromPostgres>>;
 
 let activeDatabaseSync: Promise<DatabaseSyncResult> | null = null;
+let activeDatabaseRefresh: Promise<DatabaseSyncResult> | null = null;
 
 const runDatabaseSyncNowInternal = async () => {
   const setSyncPhase = useSyncActivityStore.getState().setPhase;
@@ -123,16 +124,53 @@ const runDatabaseSyncNowInternal = async () => {
   }
 };
 
+const runDatabaseRefreshNowInternal = async () => {
+  const setSyncPhase = useSyncActivityStore.getState().setPhase;
+
+  try {
+    setSyncPhase('refreshing');
+    const result = await refreshAllDataFromPostgres();
+
+    setSyncPhase('idle');
+    return result;
+  } catch (error) {
+    setSyncPhase('error', getErrorMessage(error));
+    throw error;
+  }
+};
+
 export const runDatabaseSyncNow = async () => {
   if (activeDatabaseSync) {
     return activeDatabaseSync;
   }
 
-  activeDatabaseSync = runDatabaseSyncNowInternal().finally(() => {
+  activeDatabaseSync = (async () => {
+    if (activeDatabaseRefresh) {
+      await activeDatabaseRefresh;
+    }
+
+    return runDatabaseSyncNowInternal();
+  })().finally(() => {
     activeDatabaseSync = null;
   });
 
   return activeDatabaseSync;
+};
+
+export const runDatabaseRefreshNow = async () => {
+  if (activeDatabaseSync) {
+    return activeDatabaseSync;
+  }
+
+  if (activeDatabaseRefresh) {
+    return activeDatabaseRefresh;
+  }
+
+  activeDatabaseRefresh = runDatabaseRefreshNowInternal().finally(() => {
+    activeDatabaseRefresh = null;
+  });
+
+  return activeDatabaseRefresh;
 };
 
 export const retryFailedDatabaseSyncItems = async () => {

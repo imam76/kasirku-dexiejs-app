@@ -1,6 +1,6 @@
 import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
 import { Button, Divider, Form, Input, Modal, Radio, Typography } from 'antd'
-import React from 'react'
+import React, { useState } from 'react'
 
 const { Text, Title } = Typography
 const { TextArea } = Input
@@ -10,16 +10,24 @@ type FeedbackFormValues = Record<string, number | string | undefined>
 interface FeedbackModalProps {
   open: boolean
   wave: 1 | 2
-  onFinish: (values: FeedbackFormValues) => void
+  onFinish: (values: FeedbackFormValues) => void | Promise<void>
 }
 
 const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, wave, onFinish }) => {
   const [form] = Form.useForm()
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const q8Value = Form.useWatch('q8', form)
 
-  const handleSubmit = (values: FeedbackFormValues) => {
-    onFinish(values)
-    form.resetFields()
+  const handleSubmit = async (values: FeedbackFormValues) => {
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      await onFinish(values)
+      form.resetFields()
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const questions = FEEDBACK_QUESTIONS.filter((q) => q.wave === wave)
@@ -52,6 +60,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, wave, onFinish }) =
           layout="vertical"
           onFinish={handleSubmit}
           requiredMark={false}
+          disabled={isSubmitting}
           className="max-h-[70vh] overflow-y-auto px-1"
         >
           {questions.map((q) => {
@@ -100,8 +109,8 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ open, wave, onFinish }) =
           })}
 
           <div className="mt-6 md:mt-8 flex justify-center sticky bottom-0 bg-white py-2">
-            <Button type="primary" size="large" htmlType="submit" className="w-full md:max-w-xs h-12 text-base font-semibold">
-              Kirim Feedback
+            <Button type="primary" size="large" htmlType="submit" loading={isSubmitting} className="w-full md:max-w-xs h-12 text-base font-semibold">
+              {isSubmitting ? 'Mengirim...' : 'Kirim Feedback'}
             </Button>
           </div>
         </Form>

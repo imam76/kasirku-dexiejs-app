@@ -37,6 +37,7 @@ export default function ExportActions({
 }: ExportActionsProps) {
   const { t } = useI18n();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const buttonLabel = label ?? t('common.export');
   const defaultTargets = useMemo<ExportTargetAction[]>(() => [
@@ -45,6 +46,7 @@ export default function ExportActions({
   ], [t]);
 
   const isDisabled = disabled || formats.length === 0 || formats.every((format) => format.disabled);
+  const isExporting = exportingKey !== null;
 
   const menuItems = useMemo<MenuProps['items']>(
     () =>
@@ -52,21 +54,33 @@ export default function ExportActions({
         key: format.key,
         label: format.label,
         icon: format.icon,
-        disabled: format.disabled,
+        disabled: format.disabled || isExporting,
         children: (format.targets ?? defaultTargets).map((target) => ({
           key: `${format.key}:${target.key}`,
           label: target.label,
         })),
       })),
-    [formats, defaultTargets],
+    [formats, defaultTargets, isExporting],
   );
+
+  const handleExport = async (format: ExportFormatAction, target: ExportTarget) => {
+    if (isExporting) return;
+
+    const nextExportingKey = `${format.key}:${target}`;
+    setExportingKey(nextExportingKey);
+    try {
+      await format.onExport(target);
+    } finally {
+      setExportingKey(null);
+    }
+  };
 
   const handleMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
     const [formatKey, targetKey] = String(key).split(':');
     const format = formats.find((item) => item.key === formatKey);
     if (!format || format.disabled) return;
 
-    void format.onExport((targetKey || 'auto') as ExportTarget);
+    void handleExport(format, (targetKey || 'auto') as ExportTarget);
   };
 
   const button = (
@@ -74,7 +88,8 @@ export default function ExportActions({
       type={buttonType}
       className={buttonClassName}
       icon={<DownloadOutlined className="text-[12px]" />}
-      disabled={isDisabled}
+      disabled={isDisabled || isExporting}
+      loading={isExporting}
       onClick={isMobile ? () => setDrawerOpen(true) : undefined}
     >
       {buttonLabel}
@@ -126,10 +141,11 @@ export default function ExportActions({
                       {targets.map((target) => (
                         <Button
                           key={target.key}
-                          disabled={format.disabled}
+                          disabled={format.disabled || isExporting}
+                          loading={exportingKey === `${format.key}:${target.key}`}
                           onClick={() => {
                             setDrawerOpen(false);
-                            void format.onExport(target.key);
+                            void handleExport(format, target.key);
                           }}
                         >
                           {target.label}

@@ -151,7 +151,7 @@ export default function PendingPurchaseCosts() {
           <Link to="/purchases">
             <Button icon={<ArrowLeft size={16} />}>Kembali</Button>
           </Link>
-          <Button icon={<RefreshCw size={16} />} onClick={() => refetchPendingCosts()}>
+          <Button icon={<RefreshCw size={16} />} loading={isLoadingPendingCosts} onClick={() => void refetchPendingCosts()}>
             Refresh
           </Button>
         </div>

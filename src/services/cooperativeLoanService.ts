@@ -1255,7 +1255,10 @@ export const disburseCooperativeLoan = async (
     ) {
       throw new Error('Mode data historis hanya dapat digunakan untuk tanggal pencairan sebelum hari ini.');
     }
-    if (dayjs(disbursementDate).tz().isBefore(dayjs(loan.application_date).tz(), 'day')) {
+    if (
+      !parsedInput.historical_entry &&
+      dayjs(disbursementDate).tz().isBefore(dayjs(loan.application_date).tz(), 'day')
+    ) {
       throw new Error('Tanggal pencairan tidak boleh sebelum tanggal pengajuan.');
     }
 

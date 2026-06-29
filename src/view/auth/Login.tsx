@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { App, Button, Form, Input, Typography } from 'antd';
 import { LockKeyhole } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -21,6 +22,7 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
   const { message } = App.useApp();
   const { login } = useAuth();
   const [form] = Form.useForm<LoginFormValues>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const activeUsers = useLiveQuery(
     () => db.authUsers.toArray(),
     [],
@@ -28,11 +30,16 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
   ).filter((user) => user.is_active);
 
   const handleSubmit = async (values: LoginFormValues) => {
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
     try {
       await login(normalizeAuthEmail(values.email) ?? '', values.pin);
       form.resetFields(['pin']);
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Login gagal.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
   const canLogin = activeUsers.length > 0;
@@ -75,7 +82,7 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
               { type: 'email', message: 'Format email tidak valid.' },
             ]}
           >
-            <Input size="large" autoFocus placeholder="Masukkan Email" />
+            <Input size="large" autoFocus placeholder="Masukkan Email" disabled={isSubmitting} />
           </Form.Item>
 
           <Form.Item
@@ -87,11 +94,11 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
               { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
             ]}
           >
-            <Input.Password size="large" inputMode="numeric" placeholder="Masukkan PIN" />
+            <Input.Password size="large" inputMode="numeric" placeholder="Masukkan PIN" disabled={isSubmitting} />
           </Form.Item>
 
-          <Button type="primary" htmlType="submit" size="large" block>
-            Masuk
+          <Button type="primary" htmlType="submit" size="large" block loading={isSubmitting}>
+            {isSubmitting ? 'Memproses...' : 'Masuk'}
           </Button>
         </Form>
       )}

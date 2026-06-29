@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { App, Button, Form, Input, Typography } from 'antd';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { createOwnerUser, normalizeAuthEmail } from '@/auth/authService';
@@ -21,13 +22,17 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
   const { message } = App.useApp();
   const { login } = useAuth();
   const [form] = Form.useForm<SetupOwnerFormValues>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (values: SetupOwnerFormValues) => {
+    if (isSubmitting) return;
+
     if (values.pin !== values.confirmPin) {
       message.error('Konfirmasi PIN tidak sama.');
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const email = normalizeAuthEmail(values.email) ?? '';
       await createOwnerUser({
@@ -40,6 +45,8 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
       onComplete?.();
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Gagal membuat Owner.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -69,7 +76,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
             { min: 2, message: 'Nama minimal 2 karakter.' },
           ]}
         >
-          <Input size="large" autoFocus placeholder="Contoh: Imam" />
+          <Input size="large" autoFocus placeholder="Contoh: Imam" disabled={isSubmitting} />
         </Form.Item>
 
         <Form.Item
@@ -80,7 +87,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
             { type: 'email', message: 'Format email tidak valid.' },
           ]}
         >
-          <Input size="large" placeholder="Contoh: owner@toko.com" />
+          <Input size="large" placeholder="Contoh: owner@toko.com" disabled={isSubmitting} />
         </Form.Item>
 
         <Form.Item
@@ -92,7 +99,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
             { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
           ]}
         >
-          <Input.Password size="large" inputMode="numeric" placeholder="Masukkan PIN" />
+          <Input.Password size="large" inputMode="numeric" placeholder="Masukkan PIN" disabled={isSubmitting} />
         </Form.Item>
 
         <Form.Item
@@ -104,11 +111,11 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
             { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
           ]}
         >
-          <Input.Password size="large" inputMode="numeric" placeholder="Ulangi PIN" />
+          <Input.Password size="large" inputMode="numeric" placeholder="Ulangi PIN" disabled={isSubmitting} />
         </Form.Item>
 
-        <Button type="primary" htmlType="submit" size="large" block>
-          Simpan Owner
+        <Button type="primary" htmlType="submit" size="large" block loading={isSubmitting}>
+          {isSubmitting ? 'Menyimpan...' : 'Simpan Owner'}
         </Button>
 
         {onBackToLogin && (
@@ -116,6 +123,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
             type="link"
             icon={<ArrowLeft size={16} />}
             onClick={onBackToLogin}
+            disabled={isSubmitting}
             block
           >
             Kembali ke Login
