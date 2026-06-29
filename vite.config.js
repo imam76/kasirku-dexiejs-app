@@ -34,6 +34,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var _a;
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
@@ -41,17 +42,8 @@ import { readFileSync } from "node:fs";
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 var host = process.env.TAURI_DEV_HOST;
 var pkg = JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'));
-// App version shown in the UI, format: v{major}.yy.mm.dd.HHmm (date/time = build time)
-var buildAppVersion = (function () {
-    var major = pkg.version.split('.')[0];
-    var now = new Date();
-    var pad = function (value) { return String(value).padStart(2, '0'); };
-    var yy = String(now.getFullYear()).slice(-2);
-    var mm = pad(now.getMonth() + 1);
-    var dd = pad(now.getDate());
-    var time = "".concat(pad(now.getHours())).concat(pad(now.getMinutes()));
-    return "v".concat(major, ".").concat(yy, ".").concat(mm, ".").concat(dd, ".").concat(time);
-})();
+var tauriConfig = JSON.parse(readFileSync(fileURLToPath(new URL('./src-tauri/tauri.conf.json', import.meta.url)), 'utf-8'));
+var appVersion = (_a = tauriConfig.version) !== null && _a !== void 0 ? _a : pkg.version;
 var FEEDBACK_API_PATH = '/api/feedback';
 var feedbackApiUrl = new URL('./api/feedback.js', import.meta.url).href;
 var withJsonResponseHelpers = function (response) {
@@ -105,7 +97,7 @@ export default defineConfig(function () { return __awaiter(void 0, void 0, void 
         return [2 /*return*/, {
                 plugins: [feedbackApiDevPlugin(), tanstackRouter(), react()],
                 define: {
-                    __APP_VERSION__: JSON.stringify(buildAppVersion),
+                    __APP_VERSION__: JSON.stringify(appVersion),
                 },
                 // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
                 //

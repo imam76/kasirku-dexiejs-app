@@ -12,17 +12,11 @@ const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
 ) as { version: string };
 
-// App version shown in the UI, format: v{major}.yy.mm.dd.HHmm (date/time = build time)
-const buildAppVersion = (() => {
-  const major = pkg.version.split('.')[0];
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, '0');
-  const yy = String(now.getFullYear()).slice(-2);
-  const mm = pad(now.getMonth() + 1);
-  const dd = pad(now.getDate());
-  const time = `${pad(now.getHours())}${pad(now.getMinutes())}`;
-  return `v${major}.${yy}.${mm}.${dd}.${time}`;
-})();
+const tauriConfig = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./src-tauri/tauri.conf.json', import.meta.url)), 'utf-8'),
+) as { version?: string };
+
+const appVersion = tauriConfig.version ?? pkg.version;
 const FEEDBACK_API_PATH = '/api/feedback';
 const feedbackApiUrl = new URL('./api/feedback.js', import.meta.url).href;
 
@@ -78,7 +72,7 @@ export default defineConfig(async () => {
     plugins: [feedbackApiDevPlugin(), tanstackRouter(), react()],
 
     define: {
-      __APP_VERSION__: JSON.stringify(buildAppVersion),
+      __APP_VERSION__: JSON.stringify(appVersion),
     },
 
     // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

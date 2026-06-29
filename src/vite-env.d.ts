@@ -8,5 +8,5 @@ interface ImportMeta {
   readonly env: ImportMetaEnv
 }
 
-// Injected at build time via Vite `define` — format: v{major}.yy.mm.dd.HHmm
+// Injected at build time via Vite `define`.
 declare const __APP_VERSION__: string
