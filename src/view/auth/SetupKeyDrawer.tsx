@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import type { LucideIcon } from 'lucide-react';
+import { ensureDefaultOwner } from '@/auth/authService';
 import { SETUP_MODULE_GROUPS, DEFAULT_SELECTED_MODULES } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 import {
@@ -234,6 +235,8 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
         configuredAt: new Date().toISOString(),
         configuredBy: licenseFingerprint,
       });
+
+      await ensureDefaultOwner();
 
       message.success('Konfigurasi setup berhasil disimpan!');
       onClose();

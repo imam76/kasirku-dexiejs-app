@@ -202,10 +202,7 @@ const shouldApplyRemoteRolePermission = (
   return remotePermission.updated_at >= localRemoteUpdatedAt;
 };
 
-const canReadFromPostgres = () => (
-  isTauriRuntime() &&
-  (typeof navigator === 'undefined' || navigator.onLine)
-);
+const canReadFromPostgres = () => isTauriRuntime();
 
 export const mergeRemoteAuthUsersIntoDexie = async (
   remoteUsers: RemoteAuthUserDto[],

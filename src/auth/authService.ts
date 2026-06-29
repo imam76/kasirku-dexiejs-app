@@ -297,12 +297,25 @@ export const ensureDefaultOwner = async (): Promise<void> => {
   }
 };
 
-export const hasActiveOwner = async () => {
-  const owner = await db.authUsers
+const findLocalActiveOwner = async () => (
+  db.authUsers
     .where('role')
     .equals('OWNER')
     .and((user) => user.is_active)
-    .first();
+    .first()
+);
+
+export const hasActiveOwner = async () => {
+  let owner = await findLocalActiveOwner();
+
+  if (!owner) {
+    try {
+      await refreshAuthUsersFromPostgres();
+    } catch (error) {
+      console.error('Failed to refresh auth users before owner check', error);
+    }
+    owner = await findLocalActiveOwner();
+  }
 
   return Boolean(owner);
 };

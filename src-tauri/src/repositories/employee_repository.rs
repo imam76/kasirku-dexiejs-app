@@ -72,7 +72,6 @@ pub async fn upsert_employee(
     pool: &PgPool,
     input: EmployeeDto,
 ) -> Result<EmployeeDto, sqlx::Error> {
-    let employee_id = input.id.clone();
     sqlx::query_as::<_, EmployeeDto>(
         r#"
         INSERT INTO employees (
