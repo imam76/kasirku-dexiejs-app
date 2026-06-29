@@ -409,6 +409,7 @@ export type JournalEntrySyncStatus = EntitySyncStatus;
 export type CurrencySyncStatus = EntitySyncStatus;
 export type CurrencyRateSyncStatus = EntitySyncStatus;
 export type CooperativeMemberSyncStatus = EntitySyncStatus;
+export type CooperativeAreaSyncStatus = EntitySyncStatus;
 export type CooperativeSavingTransactionSyncStatus = EntitySyncStatus;
 export type CooperativeMemberSavingBalanceSyncStatus = EntitySyncStatus;
 export type CooperativeLoanSyncStatus = EntitySyncStatus;
@@ -424,6 +425,10 @@ export interface CooperativeArea {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: CooperativeAreaSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface Employee {

@@ -1,8 +1,8 @@
 use crate::{
     db::{PostgresCommandResult, PostgresState},
     models::cooperative::{
-        CooperativeLoanCollectionEventDto, CooperativeLoanDto, CooperativeLoanInstallmentDto,
-        CooperativeLoanPaymentDto, CooperativeMemberDto, CooperativeMemberSavingBalanceDto,
+        CooperativeAreaDto, CooperativeLoanCollectionEventDto, CooperativeLoanDto,
+        CooperativeLoanInstallmentDto, CooperativeLoanPaymentDto, CooperativeMemberDto, CooperativeMemberSavingBalanceDto,
         CooperativePaymentApprovalRequestDto, CooperativePaymentInstallmentReconciliationDto,
         CooperativePostingAccountDto, CooperativeSavingTransactionDto,
         DecideCooperativePaymentApprovalInput, PostCooperativeLoanPaymentInput,
@@ -134,6 +134,32 @@ pub async fn postgres_record_cooperative_loan_collection_event(
     cooperative_payment_repository::record_collection_event(&pool, input)
         .await
         .map_err(cooperative_mutation_error)
+}
+
+#[tauri::command]
+pub async fn postgres_list_cooperative_areas(
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<Vec<CooperativeAreaDto>> {
+    let pool = state.pool()?;
+    Ok(cooperative_repository::list_cooperative_areas(&pool).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_get_cooperative_area(
+    state: State<'_, PostgresState>,
+    id: String,
+) -> PostgresCommandResult<Option<CooperativeAreaDto>> {
+    let pool = state.pool()?;
+    Ok(cooperative_repository::get_cooperative_area(&pool, id).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_upsert_cooperative_area(
+    state: State<'_, PostgresState>,
+    input: CooperativeAreaDto,
+) -> PostgresCommandResult<CooperativeAreaDto> {
+    let pool = state.pool()?;
+    Ok(cooperative_repository::upsert_cooperative_area(&pool, input).await?)
 }
 
 #[tauri::command]

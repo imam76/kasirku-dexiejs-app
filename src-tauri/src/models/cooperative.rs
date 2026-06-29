@@ -4,6 +4,18 @@ use crate::models::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CooperativeAreaDto {
+    pub id: String,
+    pub name: String,
+    pub code: Option<String>,
+    pub description: Option<String>,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CooperativeMemberDto {
     pub id: String,
     pub member_number: String,

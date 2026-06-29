@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { cooperativeAreaSchema } from '@/lib/validations/cooperativeArea';
+import { pushLocalCooperativeAreasToPostgres } from '@/services/cooperativeAreaReadService';
 import type { CooperativeArea } from '@/types';
 
 export interface CooperativeAreaUpsertInput {
@@ -45,18 +46,24 @@ const requireAreaActor = async () => {
   return currentUser;
 };
 
+const withPendingSync = (area: CooperativeArea): CooperativeArea => ({
+  ...area,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 export const createCooperativeArea = async (input: CooperativeAreaUpsertInput): Promise<CooperativeArea> => {
   const currentUser = await requireAreaActor();
   const sanitizedInput = sanitizeCooperativeAreaInput(input);
   await assertAreaCodeAvailable(sanitizedInput.code);
 
   const now = new Date().toISOString();
-  const area: CooperativeArea = {
+  const area: CooperativeArea = withPendingSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.cooperativeAreas.add(area);
   await writeActivityLog({
@@ -66,6 +73,7 @@ export const createCooperativeArea = async (input: CooperativeAreaUpsertInput): 
     entity_id: area.id,
     description: `${currentUser?.name ?? 'User'} membuat area ${area.name}.`,
   });
+  await pushLocalCooperativeAreasToPostgres();
 
   return area;
 };
@@ -83,11 +91,11 @@ export const updateCooperativeArea = async (
   const sanitizedInput = sanitizeCooperativeAreaInput(input);
   await assertAreaCodeAvailable(sanitizedInput.code, id);
 
-  const updatedArea: CooperativeArea = {
+  const updatedArea: CooperativeArea = withPendingSync({
     ...existingArea,
     ...sanitizedInput,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.cooperativeAreas.put(updatedArea);
   await writeActivityLog({
@@ -97,6 +105,7 @@ export const updateCooperativeArea = async (
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memperbarui area ${updatedArea.name}.`,
   });
+  await pushLocalCooperativeAreasToPostgres();
 
   return updatedArea;
 };
@@ -108,11 +117,11 @@ export const archiveCooperativeArea = async (id: string): Promise<CooperativeAre
     throw new Error('Area tidak ditemukan.');
   }
 
-  const archivedArea: CooperativeArea = {
+  const archivedArea: CooperativeArea = withPendingSync({
     ...area,
     is_active: false,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.cooperativeAreas.put(archivedArea);
   await writeActivityLog({
@@ -122,6 +131,7 @@ export const archiveCooperativeArea = async (id: string): Promise<CooperativeAre
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan area ${area.name}.`,
   });
+  await pushLocalCooperativeAreasToPostgres();
 
   return archivedArea;
 };
@@ -135,11 +145,11 @@ export const restoreCooperativeArea = async (id: string): Promise<CooperativeAre
 
   await assertAreaCodeAvailable(area.code, id);
 
-  const restoredArea: CooperativeArea = {
+  const restoredArea: CooperativeArea = withPendingSync({
     ...area,
     is_active: true,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.cooperativeAreas.put(restoredArea);
   await writeActivityLog({
@@ -149,6 +159,7 @@ export const restoreCooperativeArea = async (id: string): Promise<CooperativeAre
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan area ${area.name}.`,
   });
+  await pushLocalCooperativeAreasToPostgres();
 
   return restoredArea;
 };
