@@ -38,13 +38,23 @@ pub async fn set_postgres_database_url(
         db::remove_persisted_database_url()
             .map_err(|err| format!("Failed to clear stored database URL: {}", err))?;
         env::remove_var("DATABASE_URL");
-    } else {
-        db::persist_database_url(trimmed)
-            .map_err(|err| format!("Failed to save database URL: {}", err))?;
-        env::set_var("DATABASE_URL", trimmed);
+        state.update_from(PostgresState::unconfigured());
+        let health = state.health();
+        realtime_state.restart(app_handle, health.available);
+
+        return Ok(health);
     }
 
-    let new_state = db::create_postgres_state().await;
+    let new_state = db::create_postgres_state_from_database_url(trimmed).await;
+    let health = new_state.health();
+    if !health.available {
+        return Ok(health);
+    }
+
+    db::persist_database_url(trimmed)
+        .map_err(|err| format!("Failed to save database URL: {}", err))?;
+    env::set_var("DATABASE_URL", trimmed);
+
     state.update_from(new_state);
     let health = state.health();
     realtime_state.restart(app_handle, health.available);

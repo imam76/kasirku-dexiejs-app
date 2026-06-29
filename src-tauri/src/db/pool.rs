@@ -7,6 +7,7 @@ use std::{env, fs, io, path::PathBuf, str::FromStr, sync::RwLock, time::Duration
 use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PostgresStatus {
     Available,
     Unconfigured,
@@ -68,15 +69,12 @@ impl PostgresState {
         )
     }
 
-    pub fn unreachable() -> Self {
-        Self::unavailable(PostgresStatus::Unreachable, "PostgreSQL is unavailable.")
+    pub fn unreachable(message: impl Into<String>) -> Self {
+        Self::unavailable(PostgresStatus::Unreachable, message)
     }
 
-    pub fn migration_failed() -> Self {
-        Self::unavailable(
-            PostgresStatus::MigrationFailed,
-            "PostgreSQL migration failed.",
-        )
+    pub fn migration_failed(message: impl Into<String>) -> Self {
+        Self::unavailable(PostgresStatus::MigrationFailed, message)
     }
 
     pub fn unavailable(status: PostgresStatus, message: impl Into<String>) -> Self {
@@ -141,7 +139,12 @@ pub async fn create_pg_pool() -> Result<PgPool, PostgresInitError> {
     load_env();
 
     let database_url = configured_database_url()?;
+    create_pg_pool_from_database_url(&database_url).await
+}
 
+async fn create_pg_pool_from_database_url(
+    database_url: &str,
+) -> Result<PgPool, PostgresInitError> {
     // Supabase's transaction pooler (port 6543) and other PgBouncer-style poolers
     // reuse backend server connections across client sessions and do NOT support
     // cached/named prepared statements. With sqlx's default statement cache, the
@@ -169,21 +172,39 @@ pub fn configured_database_url() -> Result<String, PostgresInitError> {
 
 pub async fn create_postgres_state() -> PostgresState {
     match create_pg_pool().await {
-        Ok(pool) => {
-            // Advisory locks are session-scoped and unreliable through a
-            // transaction pooler (each query may land on a different backend),
-            // so disable them. A desktop client never has concurrent migrators.
-            let mut migrator = sqlx::migrate!("./migrations");
-            migrator.set_locking(false);
-            let migration_result = migrator.run(&pool).await;
-            if migration_result.is_ok() {
-                PostgresState::available(pool)
-            } else {
-                PostgresState::migration_failed()
-            }
-        }
+        Ok(pool) => create_migrated_postgres_state(pool).await,
         Err(PostgresInitError::DatabaseUrlMissing) => PostgresState::unconfigured(),
-        Err(PostgresInitError::Unreachable(_)) => PostgresState::unreachable(),
+        Err(PostgresInitError::Unreachable(error)) => {
+            PostgresState::unreachable(format!("PostgreSQL is unavailable: {}", error))
+        }
+    }
+}
+
+pub async fn create_postgres_state_from_database_url(database_url: &str) -> PostgresState {
+    let trimmed = database_url.trim();
+    if trimmed.is_empty() {
+        return PostgresState::unconfigured();
+    }
+
+    match create_pg_pool_from_database_url(trimmed).await {
+        Ok(pool) => create_migrated_postgres_state(pool).await,
+        Err(PostgresInitError::DatabaseUrlMissing) => PostgresState::unconfigured(),
+        Err(PostgresInitError::Unreachable(error)) => {
+            PostgresState::unreachable(format!("PostgreSQL is unavailable: {}", error))
+        }
+    }
+}
+
+async fn create_migrated_postgres_state(pool: PgPool) -> PostgresState {
+    // Advisory locks are session-scoped and unreliable through a transaction
+    // pooler (each query may land on a different backend), so disable them.
+    let mut migrator = sqlx::migrate!("./migrations");
+    migrator.set_locking(false);
+    match migrator.run(&pool).await {
+        Ok(()) => PostgresState::available(pool),
+        Err(error) => {
+            PostgresState::migration_failed(format!("PostgreSQL migration failed: {}", error))
+        }
     }
 }
 
