@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import type { ActivityLog, AuthUser, Permission, Role, RolePermission, UserRole } from '@/types';
+import type { ActivityLog, AuthUser, Employee, Permission, Role, RolePermission, UserRole } from '@/types';
 import { hasPermission } from './permissions';
 import { refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from './authReadService';
 import {
@@ -22,6 +22,7 @@ import {
 import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './roleSeed';
 import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
+import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
 
 const SESSION_STORAGE_KEY = 'frayukti-auth-session-id';
 const PIN_HASH_ALGORITHM = 'SHA-256';
@@ -596,6 +597,32 @@ const mapRemoteAuthUserForLogin = (remoteUser: RemoteAuthUserDto): AuthUser => (
   remote_updated_at: remoteUser.updated_at,
 });
 
+const ensureEmployeeLoginDataAvailable = async (remoteUser: RemoteAuthUserDto) => {
+  if (remoteUser.actor_type !== 'EMPLOYEE') return;
+
+  try {
+    await refreshEmployeesFromPostgres();
+  } catch (error) {
+    console.error('Failed to refresh employees for server login', error);
+  }
+
+  const existingEmployee = await db.employees.get(remoteUser.id);
+  if (existingEmployee) return;
+
+  const fallbackEmployee: Employee = {
+    id: remoteUser.id,
+    name: remoteUser.name,
+    email: normalizeAuthEmail(remoteUser.email ?? undefined),
+    login_role_id: remoteUser.role_id ?? undefined,
+    pin_hash: remoteUser.pin_hash,
+    pin_salt: remoteUser.pin_salt,
+    is_active: remoteUser.is_active,
+    created_at: remoteUser.created_at,
+    updated_at: remoteUser.updated_at,
+  };
+  await db.employees.put(fallbackEmployee);
+};
+
 const tryLoginWithLocalData = async (normalizedEmail: string, pin: string): Promise<AuthUser | null> => {
   const users = (await db.authUsers.toArray()).filter((user) => user.is_active && authUserEmailMatches(user, normalizedEmail));
 
@@ -704,7 +731,11 @@ export const loginWithEmailAndPin = async (email: string, pin: string): Promise<
 
       await refreshRolesFromPostgres();
       const user = mapRemoteAuthUserForLogin(serverSession.user);
-      await db.authUsers.put(user);
+      if (serverSession.user.actor_type === 'EMPLOYEE') {
+        await ensureEmployeeLoginDataAvailable(serverSession.user);
+      } else {
+        await db.authUsers.put(user);
+      }
       return createLoginSession(user, serverSession);
     } catch (error) {
       const localLogin = await tryLoginWithLocalData(normalizedEmail, pin);

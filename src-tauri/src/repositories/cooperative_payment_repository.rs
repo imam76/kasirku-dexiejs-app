@@ -146,25 +146,36 @@ async fn require_actor(
     let actor = sqlx::query_as::<_, ActorAccess>(
         r#"
         SELECT
-          auth_user.id AS user_id,
-          auth_user.name AS user_name,
-          auth_user.employee_id,
-          auth_user.role_id,
-          auth_user.role AS legacy_role,
-          COALESCE(role.is_owner, FALSE) OR auth_user.role = 'OWNER' AS is_owner
+          COALESCE(auth_user.id, employee.id) AS user_id,
+          COALESCE(auth_user.name, employee.name) AS user_name,
+          CASE
+            WHEN employee.id IS NOT NULL THEN employee.id
+            ELSE auth_user.employee_id
+          END AS employee_id,
+          COALESCE(auth_user.role_id, employee.login_role_id) AS role_id,
+          COALESCE(auth_user.role, role.code, 'KASIR') AS legacy_role,
+          COALESCE(role.is_owner, FALSE) OR COALESCE(auth_user.role = 'OWNER', FALSE) AS is_owner
         FROM server_auth_sessions AS session
-        JOIN auth_users AS auth_user
+        LEFT JOIN auth_users AS auth_user
           ON auth_user.id = session.user_id
+         AND auth_user.deleted_at IS NULL
+         AND auth_user.is_active = TRUE
+        LEFT JOIN employees AS employee
+          ON employee.id = session.employee_id
+         AND employee.deleted_at IS NULL
+         AND employee.is_active = TRUE
         LEFT JOIN roles AS role
-          ON role.id = auth_user.role_id
+          ON role.id = COALESCE(auth_user.role_id, employee.login_role_id)
          AND role.deleted_at IS NULL
         WHERE session.token = $1
           AND session.revoked_at IS NULL
           AND session.expires_at > NOW()
-          AND auth_user.deleted_at IS NULL
-          AND auth_user.is_active = TRUE
           AND (
-            auth_user.role_id IS NULL OR
+            (session.user_id IS NOT NULL AND auth_user.id IS NOT NULL) OR
+            (session.employee_id IS NOT NULL AND employee.id IS NOT NULL)
+          )
+          AND (
+            COALESCE(auth_user.role_id, employee.login_role_id) IS NULL OR
             (role.id IS NOT NULL AND role.is_active = TRUE)
           )
         "#,

@@ -60,6 +60,7 @@ export interface RemoteAuthUserDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+  actor_type?: 'USER' | 'EMPLOYEE' | null;
 }
 
 export interface RemoteServerAuthSessionDto {
