@@ -21,7 +21,7 @@ type CooperativeInstallmentBookReportProps = {
   printDateText: string;
 };
 
-const REPORT_MIN_WIDTH = 1240;
+const REPORT_MIN_WIDTH = 1280;
 
 const emptySummary: CooperativeInstallmentBookReportSummary = {
   row_count: 0,
@@ -284,7 +284,7 @@ const renderSection = ({
       </div>
       <table style={tableStyle}>
         <colgroup>
-          <col style={{ width: 92 }} />
+          <col style={{ width: 120 }} />
           <col style={{ width: 86 }} />
           <col style={{ width: 44 }} />
           <col style={{ width: 170 }} />
