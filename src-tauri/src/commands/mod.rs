@@ -3,6 +3,7 @@ pub mod contact_commands;
 pub mod cooperative_commands;
 pub mod currency_commands;
 pub mod department_commands;
+pub mod employee_commands;
 pub mod finance_transaction_commands;
 pub mod journal_entry_commands;
 pub mod postgres_health;

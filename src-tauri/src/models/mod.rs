@@ -3,6 +3,7 @@ pub mod contact;
 pub mod cooperative;
 pub mod currency;
 pub mod department;
+pub mod employee;
 pub mod finance_transaction;
 pub mod journal_entry;
 pub mod product;
