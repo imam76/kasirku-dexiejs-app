@@ -1,3 +1,4 @@
+pub mod app_setup_config_commands;
 pub mod auth_commands;
 pub mod contact_commands;
 pub mod cooperative_commands;

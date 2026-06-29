@@ -13,7 +13,7 @@ export interface SetupModuleGroup {
 
 export interface SetupConfig {
   enabledModules: string[];
-  databaseUrl: string;
+  databaseUrl?: string;
   configuredAt: string;
   configuredBy: string; // license fingerprint (first 8 chars of hash)
   moduleCatalogVersion?: number;

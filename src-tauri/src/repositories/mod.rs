@@ -1,3 +1,4 @@
+pub mod app_setup_config_repository;
 pub mod auth_repository;
 pub mod contact_repository;
 pub mod cooperative_repository;

@@ -1085,6 +1085,13 @@ export interface RemoteRecordCooperativeLoanCollectionEventResult {
   installment: RemoteCooperativeLoanInstallmentDto;
 }
 
+export interface RemoteAppSetupConfigDto {
+  enabledModules: string[];
+  configuredAt: string;
+  configuredBy: string;
+  moduleCatalogVersion: number;
+}
+
 export type PostgresHealthStatus = 'available' | 'unconfigured' | 'unreachable' | 'migration_failed';
 
 export interface PostgresHealth {
@@ -1114,6 +1121,18 @@ export const isPostgresUnavailableError = (error: unknown): error is PostgresCom
 );
 
 export const postgresAdapter = {
+  async setDatabaseUrl(databaseUrl: string) {
+    if (!isTauriRuntime()) {
+      return {
+        available: false,
+        status: 'unconfigured',
+        message: 'Tauri runtime is not available.',
+      } satisfies PostgresHealth;
+    }
+
+    return invoke<PostgresHealth>('set_postgres_database_url', { databaseUrl });
+  },
+
   async healthCheck() {
     if (!isTauriRuntime()) {
       return {
@@ -1132,6 +1151,18 @@ export const postgresAdapter = {
         message: 'PostgreSQL health check failed.',
       } satisfies PostgresHealth;
     }
+  },
+};
+
+export const appSetupConfigPostgresAdapter = {
+  async get() {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAppSetupConfigDto | null>('postgres_get_app_setup_config');
+  },
+
+  async upsert(input: RemoteAppSetupConfigDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAppSetupConfigDto>('postgres_upsert_app_setup_config', { input });
   },
 };
 

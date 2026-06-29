@@ -136,6 +136,8 @@ pub fn run() {
             commands::auth_commands::postgres_upsert_activity_log,
             commands::auth_commands::postgres_authenticate_server_session,
             commands::auth_commands::postgres_revoke_server_session,
+            commands::app_setup_config_commands::postgres_get_app_setup_config,
+            commands::app_setup_config_commands::postgres_upsert_app_setup_config,
             commands::postgres_health::postgres_health_check,
             commands::postgres_health::set_postgres_database_url,
             bluetooth_printer::list_bluetooth_printers,

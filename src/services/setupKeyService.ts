@@ -2,9 +2,10 @@ import type { SetupConfig } from '@/types/setup';
 import type { AuthUser, Role } from '@/types';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
+import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
-const CURRENT_MODULE_CATALOG_VERSION = 7;
+export const CURRENT_MODULE_CATALOG_VERSION = 7;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
@@ -55,6 +56,56 @@ export const getLicenseFingerprint = async (licenseKey: string): Promise<string>
   return hash.slice(0, 8);
 };
 
+const migrateEnabledModules = (modules: string[]): string[] => {
+  const enabledModules = new Set(modules);
+  if (enabledModules.has('PRODUCT')) {
+    enabledModules.add('PRODUCTION');
+    enabledModules.add('STOCK_OPNAME');
+  }
+  if (LEGACY_SETTINGS_MODULES.some((moduleCode) => enabledModules.has(moduleCode))) {
+    enabledModules.add('AREA');
+    enabledModules.add('EMPLOYEE');
+  }
+  if (['PURCHASE_ORDER', 'PURCHASE_RECEIPT', 'PURCHASE_INVOICE', 'PURCHASE_RETURN']
+    .some((moduleCode) => enabledModules.has(moduleCode))) {
+    enabledModules.add('PURCHASE_REQUEST');
+    enabledModules.add('PURCHASE_RFQ');
+  }
+  if (enabledModules.has('REPORT_POS_SALES')) {
+    enabledModules.add('REPORT_DEPOSIT');
+  }
+  if (enabledModules.has('REPORT_EXPENSE')) {
+    enabledModules.add('REPORT_INCOME');
+  }
+  if (['CASH_FLOW', 'REPORT_EXPENSE', 'REPORT_PROFIT'].some((moduleCode) => enabledModules.has(moduleCode))) {
+    enabledModules.add('REPORT_PAYROLL');
+  }
+  if (enabledModules.has('KOPERASI_SHU')) {
+    [
+      'KOPERASI_REPORT_CASH',
+      'KOPERASI_REPORT_DAILY_TARGET',
+      'KOPERASI_REPORT_DAILY_STORTING',
+      'KOPERASI_REPORT_DAILY_DROP',
+      'KOPERASI_REPORT_WEEKLY_DROP',
+      'KOPERASI_REPORT_IPTW',
+      'KOPERASI_REPORT_MEMBER_REGISTER',
+      'KOPERASI_REPORT_INSTALLMENT_BOOK',
+      'KOPERASI_REPORT_CASH_FLOW',
+      'KOPERASI_REPORT_LEDGER',
+    ].forEach((moduleCode) => enabledModules.add(moduleCode));
+  }
+
+  return Array.from(enabledModules);
+};
+
+export const normalizeSetupConfig = (config: SetupConfig): SetupConfig => ({
+  ...config,
+  enabledModules: (config.moduleCatalogVersion ?? 1) >= CURRENT_MODULE_CATALOG_VERSION
+    ? config.enabledModules
+    : migrateEnabledModules(config.enabledModules),
+  moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
+});
+
 /**
  * Read setup config from localStorage.
  */
@@ -63,55 +114,11 @@ export const getSetupConfig = (): SetupConfig | null => {
     const raw = localStorage.getItem(SETUP_CONFIG_STORAGE_KEY);
     if (!raw) return null;
     const config = JSON.parse(raw) as SetupConfig;
-    if ((config.moduleCatalogVersion ?? 1) >= CURRENT_MODULE_CATALOG_VERSION) {
-      return config;
+    const normalizedConfig = normalizeSetupConfig(config);
+    if ((config.moduleCatalogVersion ?? 1) < CURRENT_MODULE_CATALOG_VERSION) {
+      localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify(normalizedConfig));
     }
-
-    const enabledModules = new Set(config.enabledModules);
-    if (enabledModules.has('PRODUCT')) {
-      enabledModules.add('PRODUCTION');
-      enabledModules.add('STOCK_OPNAME');
-    }
-    if (LEGACY_SETTINGS_MODULES.some((moduleCode) => enabledModules.has(moduleCode))) {
-      enabledModules.add('AREA');
-      enabledModules.add('EMPLOYEE');
-    }
-    if (['PURCHASE_ORDER', 'PURCHASE_RECEIPT', 'PURCHASE_INVOICE', 'PURCHASE_RETURN']
-      .some((moduleCode) => enabledModules.has(moduleCode))) {
-      enabledModules.add('PURCHASE_REQUEST');
-      enabledModules.add('PURCHASE_RFQ');
-    }
-    if (enabledModules.has('REPORT_POS_SALES')) {
-      enabledModules.add('REPORT_DEPOSIT');
-    }
-    if (enabledModules.has('REPORT_EXPENSE')) {
-      enabledModules.add('REPORT_INCOME');
-    }
-    if (['CASH_FLOW', 'REPORT_EXPENSE', 'REPORT_PROFIT'].some((moduleCode) => enabledModules.has(moduleCode))) {
-      enabledModules.add('REPORT_PAYROLL');
-    }
-    if (enabledModules.has('KOPERASI_SHU')) {
-      [
-        'KOPERASI_REPORT_CASH',
-        'KOPERASI_REPORT_DAILY_TARGET',
-        'KOPERASI_REPORT_DAILY_STORTING',
-        'KOPERASI_REPORT_DAILY_DROP',
-        'KOPERASI_REPORT_WEEKLY_DROP',
-        'KOPERASI_REPORT_IPTW',
-        'KOPERASI_REPORT_MEMBER_REGISTER',
-        'KOPERASI_REPORT_INSTALLMENT_BOOK',
-        'KOPERASI_REPORT_CASH_FLOW',
-        'KOPERASI_REPORT_LEDGER',
-      ].forEach((moduleCode) => enabledModules.add(moduleCode));
-    }
-
-    const migratedConfig: SetupConfig = {
-      ...config,
-      enabledModules: Array.from(enabledModules),
-      moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
-    };
-    localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify(migratedConfig));
-    return migratedConfig;
+    return normalizedConfig;
   } catch {
     return null;
   }
@@ -121,11 +128,50 @@ export const getSetupConfig = (): SetupConfig | null => {
  * Save setup config to localStorage.
  */
 export const saveSetupConfig = (config: SetupConfig): void => {
-  localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify({
-    ...config,
-    moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
-  }));
+  localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify(normalizeSetupConfig(config)));
   window.dispatchEvent(new Event(SETUP_CONFIG_CHANGED_EVENT));
+};
+
+export const getRemoteSetupConfig = async (): Promise<SetupConfig | null> => {
+  const remoteConfig = await appSetupConfigPostgresAdapter.get();
+  if (!remoteConfig) return null;
+
+  return normalizeSetupConfig({
+    enabledModules: remoteConfig.enabledModules,
+    configuredAt: remoteConfig.configuredAt,
+    configuredBy: remoteConfig.configuredBy,
+    moduleCatalogVersion: remoteConfig.moduleCatalogVersion,
+  });
+};
+
+export const syncSetupConfigFromRemote = async (): Promise<SetupConfig | null> => {
+  const remoteConfig = await getRemoteSetupConfig();
+  if (remoteConfig) {
+    saveSetupConfig(remoteConfig);
+  }
+  return remoteConfig;
+};
+
+export const saveSetupConfigToRemote = async (config: SetupConfig): Promise<SetupConfig> => {
+  const normalizedConfig = normalizeSetupConfig(config);
+  const remoteConfig = await appSetupConfigPostgresAdapter.upsert({
+    enabledModules: normalizedConfig.enabledModules,
+    configuredAt: normalizedConfig.configuredAt,
+    configuredBy: normalizedConfig.configuredBy,
+    moduleCatalogVersion: normalizedConfig.moduleCatalogVersion ?? CURRENT_MODULE_CATALOG_VERSION,
+  });
+
+  const savedConfig = remoteConfig
+    ? normalizeSetupConfig({
+      enabledModules: remoteConfig.enabledModules,
+      configuredAt: remoteConfig.configuredAt,
+      configuredBy: remoteConfig.configuredBy,
+      moduleCatalogVersion: remoteConfig.moduleCatalogVersion,
+    })
+    : normalizedConfig;
+
+  saveSetupConfig(savedConfig);
+  return savedConfig;
 };
 
 /**

@@ -1,3 +1,4 @@
+pub mod app_setup_config;
 pub mod auth;
 pub mod contact;
 pub mod cooperative;

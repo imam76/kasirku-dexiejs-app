@@ -32,9 +32,7 @@ import {
   ServerCog,
   Fingerprint,
 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
 import type { LucideIcon } from 'lucide-react';
-import { ensureDefaultOwner } from '@/auth/authService';
 import { SETUP_MODULE_GROUPS, DEFAULT_SELECTED_MODULES } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 import {
@@ -42,8 +40,8 @@ import {
   getLicenseFingerprint,
   saveSetupConfig,
   getSetupConfig,
+  saveSetupConfigToRemote,
 } from '@/services/setupKeyService';
-import type { PostgresHealth } from '@/services/postgresAdapter';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -56,55 +54,6 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
   Banknote,
   BarChart3,
   Landmark,
-};
-
-interface DatabaseParts {
-  host: string;
-  port: string;
-  name: string;
-  user: string;
-  password: string;
-}
-
-const EMPTY_DB_PARTS: DatabaseParts = {
-  host: '',
-  port: '',
-  name: '',
-  user: '',
-  password: '',
-};
-
-// The backend still expects a full connection URL, but typing it by hand is
-// error-prone. We let the user fill short labelled fields and (de)serialize
-// the `postgresql://user:pass@host:port/db` string here.
-const parseDatabaseUrl = (url: string | undefined): DatabaseParts => {
-  if (!url?.trim()) return { ...EMPTY_DB_PARTS };
-  try {
-    const parsed = new URL(url.trim());
-    return {
-      host: parsed.hostname,
-      port: parsed.port,
-      name: parsed.pathname.replace(/^\//, ''),
-      user: decodeURIComponent(parsed.username),
-      password: decodeURIComponent(parsed.password),
-    };
-  } catch {
-    return { ...EMPTY_DB_PARTS };
-  }
-};
-
-const buildDatabaseUrl = (parts: DatabaseParts): string => {
-  const host = parts.host.trim();
-  if (!host) return ''; // empty host = offline-only (Dexie) mode
-
-  const port = parts.port.trim() || '5432';
-  const name = parts.name.trim() || 'postgres';
-  const user = parts.user.trim();
-  const auth = user
-    ? `${encodeURIComponent(user)}${parts.password ? `:${encodeURIComponent(parts.password)}` : ''}@`
-    : '';
-
-  return `postgresql://${auth}${host}:${port}/${name}`;
 };
 
 interface SetupKeyDrawerProps {
@@ -127,14 +76,6 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
   const existingConfig = useMemo(() => getSetupConfig(), []);
   const [selectedModules, setSelectedModules] = useState<string[]>(
     existingConfig?.enabledModules ?? DEFAULT_SELECTED_MODULES,
-  );
-  const [dbParts, setDbParts] = useState<DatabaseParts>(
-    () => parseDatabaseUrl(existingConfig?.databaseUrl),
-  );
-  const updateDbPart = useCallback(
-    (key: keyof DatabaseParts, value: string) =>
-      setDbParts((prev) => ({ ...prev, [key]: value })),
-    [],
   );
   const [isSaving, setIsSaving] = useState(false);
 
@@ -220,27 +161,17 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
 
     setIsSaving(true);
     try {
-      const normalizedDatabaseUrl = buildDatabaseUrl(dbParts);
-
-      // Persist & re-init the Postgres pool from the URL the user pasted.
-      // Run this first: if it fails we don't want to claim the setup succeeded.
-      if (isTauriRuntime()) {
-        const postgresHealth = await invoke<PostgresHealth>('set_postgres_database_url', {
-          databaseUrl: normalizedDatabaseUrl,
-        });
-        if (normalizedDatabaseUrl && !postgresHealth.available) {
-          throw new Error(postgresHealth.message ?? 'Koneksi PostgreSQL tidak tersedia.');
-        }
-      }
-
-      saveSetupConfig({
+      const nextConfig = {
         enabledModules: selectedModules,
-        databaseUrl: normalizedDatabaseUrl,
         configuredAt: new Date().toISOString(),
         configuredBy: licenseFingerprint,
-      });
+      };
 
-      await ensureDefaultOwner();
+      if (isTauriRuntime()) {
+        await saveSetupConfigToRemote(nextConfig);
+      } else {
+        saveSetupConfig(nextConfig);
+      }
 
       message.success('Konfigurasi setup berhasil disimpan!');
       onClose();
@@ -249,7 +180,7 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
     } finally {
       setIsSaving(false);
     }
-  }, [selectedModules, dbParts, licenseFingerprint, message, onClose]);
+  }, [selectedModules, licenseFingerprint, message, onClose]);
 
   // Reset drawer state when closed
   const handleClose = useCallback(() => {
@@ -538,90 +469,6 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
               />
             </div>
 
-            <Divider />
-
-            {/* Database connection */}
-            <div className="mb-6">
-              <div className="mb-2 flex items-center gap-2">
-                <Database size={14} className="text-blue-500" />
-                <Text strong className="text-sm">
-                  Koneksi Database
-                </Text>
-              </div>
-
-              <div className="space-y-2.5">
-                {/* Host / IP */}
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">
-                    Host / IP
-                  </label>
-                  <Input
-                    size="large"
-                    value={dbParts.host}
-                    onChange={(e) => updateDbPart('host', e.target.value)}
-                    placeholder="192.168.1.8 atau db.contoh.com"
-                    prefix={<ServerCog size={14} className="text-gray-400" />}
-                  />
-                </div>
-
-                {/* Port + Database */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">
-                      Port
-                    </label>
-                    <Input
-                      size="large"
-                      value={dbParts.port}
-                      onChange={(e) => updateDbPart('port', e.target.value)}
-                      placeholder="5432"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">
-                      Nama Database
-                    </label>
-                    <Input
-                      size="large"
-                      value={dbParts.name}
-                      onChange={(e) => updateDbPart('name', e.target.value)}
-                      placeholder="postgres"
-                    />
-                  </div>
-                </div>
-
-                {/* User + Password */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">
-                      User
-                    </label>
-                    <Input
-                      size="large"
-                      value={dbParts.user}
-                      onChange={(e) => updateDbPart('user', e.target.value)}
-                      placeholder="postgres"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">
-                      Password
-                    </label>
-                    <Input.Password
-                      size="large"
-                      value={dbParts.password}
-                      onChange={(e) => updateDbPart('password', e.target.value)}
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Text type="secondary" className="mt-2 block text-xs">
-                Cukup isi Host/IP dan kredensialnya — Port default <Text code className="!text-xs">5432</Text>.
-                Kosongkan Host jika hanya memakai mode offline (Dexie).
-              </Text>
-            </div>
           </div>
 
           {/* Fixed bottom action */}

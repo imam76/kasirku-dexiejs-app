@@ -1,10 +1,13 @@
 use serde::Serialize;
 use sqlx::{
+    migrate::{MigrateError, Migration, Migrator},
     postgres::{PgConnectOptions, PgPoolOptions},
-    PgPool,
+    Executor, PgPool,
 };
 use std::{env, fs, io, path::PathBuf, str::FromStr, sync::RwLock, time::Duration};
 use thiserror::Error;
+
+const MAX_MIGRATION_REPAIR_ATTEMPTS: usize = 8;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -200,12 +203,360 @@ async fn create_migrated_postgres_state(pool: PgPool) -> PostgresState {
     // pooler (each query may land on a different backend), so disable them.
     let mut migrator = sqlx::migrate!("./migrations");
     migrator.set_locking(false);
-    match migrator.run(&pool).await {
+    match run_postgres_migrations(&pool, &migrator).await {
         Ok(()) => PostgresState::available(pool),
         Err(error) => {
             PostgresState::migration_failed(format!("PostgreSQL migration failed: {}", error))
         }
     }
+}
+
+async fn run_postgres_migrations(pool: &PgPool, migrator: &Migrator) -> Result<(), MigrateError> {
+    for _ in 0..MAX_MIGRATION_REPAIR_ATTEMPTS {
+        match migrator.run(pool).await {
+            Ok(()) => return Ok(()),
+            Err(MigrateError::VersionMismatch(version)) => {
+                repair_compatible_migration_mismatch(pool, migrator, version).await?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    migrator.run(pool).await
+}
+
+async fn repair_compatible_migration_mismatch(
+    pool: &PgPool,
+    migrator: &Migrator,
+    version: i64,
+) -> Result<(), MigrateError> {
+    if version == 1 && department_table_has_current_columns(pool).await? {
+        return execute_current_migration_and_replace_row(pool, migrator, version).await;
+    }
+
+    if repair_legacy_migration_numbering(pool, migrator, version).await? {
+        return Ok(());
+    }
+
+    if !is_current_migration_schema_compatible(pool, version).await? {
+        return Err(MigrateError::VersionMismatch(version));
+    }
+
+    if matches!(version, 30 | 31 | 32 | 33 | 34 | 35) {
+        return execute_current_migration_and_replace_row(pool, migrator, version).await;
+    }
+
+    update_applied_migration_checksum(pool, migrator, version).await
+}
+
+async fn repair_legacy_migration_numbering(
+    pool: &PgPool,
+    migrator: &Migrator,
+    version: i64,
+) -> Result<bool, MigrateError> {
+    match version {
+        30 if !is_current_migration_schema_compatible(pool, 30).await?
+            && is_current_migration_schema_compatible(pool, 31).await? =>
+        {
+            execute_current_migration_and_replace_row(pool, migrator, 30).await?;
+            insert_applied_migration_if_missing(pool, migrator, 31).await?;
+            Ok(true)
+        }
+        31 if !is_current_migration_schema_compatible(pool, 31).await?
+            && is_current_migration_schema_compatible(pool, 32).await? =>
+        {
+            move_legacy_area_migration_row(pool, migrator).await?;
+            Ok(true)
+        }
+        32 if !is_current_migration_schema_compatible(pool, 32).await?
+            && function_exists(pool, "kasirku_notify_data_change").await? =>
+        {
+            delete_applied_migration_row(pool, 32).await?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
+async fn execute_current_migration_and_replace_row(
+    pool: &PgPool,
+    migrator: &Migrator,
+    version: i64,
+) -> Result<(), MigrateError> {
+    let migration = migration_for_version(migrator, version)?;
+    let mut tx = pool.begin().await?;
+
+    tx.execute(migration.sql.clone())
+        .await
+        .map_err(|error| MigrateError::ExecuteMigration(error, version))?;
+
+    sqlx::query(
+        r#"
+        UPDATE _sqlx_migrations
+        SET description = $1, checksum = $2, success = TRUE
+        WHERE version = $3
+        "#,
+    )
+    .bind(migration.description.as_ref())
+    .bind(migration.checksum.as_ref())
+    .bind(version)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn move_legacy_area_migration_row(
+    pool: &PgPool,
+    migrator: &Migrator,
+) -> Result<(), MigrateError> {
+    let area_migration = migration_for_version(migrator, 32)?;
+    let has_current_area_row =
+        applied_migration_checksum_matches(pool, 32, area_migration.checksum.as_ref()).await?;
+    let mut tx = pool.begin().await?;
+
+    if has_current_area_row {
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 31")
+            .execute(&mut *tx)
+            .await?;
+    } else {
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 32")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            r#"
+            UPDATE _sqlx_migrations
+            SET version = 32, description = $1, checksum = $2, success = TRUE
+            WHERE version = 31
+            "#,
+        )
+        .bind(area_migration.description.as_ref())
+        .bind(area_migration.checksum.as_ref())
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn update_applied_migration_checksum(
+    pool: &PgPool,
+    migrator: &Migrator,
+    version: i64,
+) -> Result<(), MigrateError> {
+    let migration = migration_for_version(migrator, version)?;
+
+    sqlx::query(
+        r#"
+        UPDATE _sqlx_migrations
+        SET description = $1, checksum = $2, success = TRUE
+        WHERE version = $3
+        "#,
+    )
+    .bind(migration.description.as_ref())
+    .bind(migration.checksum.as_ref())
+    .bind(version)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+async fn insert_applied_migration_if_missing(
+    pool: &PgPool,
+    migrator: &Migrator,
+    version: i64,
+) -> Result<(), MigrateError> {
+    let migration = migration_for_version(migrator, version)?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
+        VALUES ($1, $2, TRUE, $3, -1)
+        ON CONFLICT (version) DO NOTHING
+        "#,
+    )
+    .bind(version)
+    .bind(migration.description.as_ref())
+    .bind(migration.checksum.as_ref())
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+async fn delete_applied_migration_row(pool: &PgPool, version: i64) -> Result<(), MigrateError> {
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = $1")
+        .bind(version)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+async fn applied_migration_checksum_matches(
+    pool: &PgPool,
+    version: i64,
+    checksum: &[u8],
+) -> Result<bool, sqlx::Error> {
+    let stored_checksum: Option<Vec<u8>> =
+        sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = $1")
+            .bind(version)
+            .fetch_optional(pool)
+            .await?;
+
+    Ok(stored_checksum
+        .as_deref()
+        .is_some_and(|stored_checksum| stored_checksum == checksum))
+}
+
+fn migration_for_version(migrator: &Migrator, version: i64) -> Result<&Migration, MigrateError> {
+    migrator
+        .iter()
+        .find(|migration| migration.version == version)
+        .ok_or(MigrateError::VersionNotPresent(version))
+}
+
+async fn is_current_migration_schema_compatible(
+    pool: &PgPool,
+    version: i64,
+) -> Result<bool, sqlx::Error> {
+    match version {
+        1 => Ok(department_table_has_current_columns(pool).await?
+            && indexes_exist(pool, &["idx_departments_name", "idx_departments_is_active"]).await?),
+        16 | 35 => column_exists(pool, "auth_users", "email").await,
+        30 => {
+            tables_exist(
+                pool,
+                &[
+                    "employees",
+                    "employee_areas",
+                    "employee_collection_schedules",
+                ],
+            )
+            .await
+        }
+        31 => {
+            tables_exist(
+                pool,
+                &[
+                    "payroll_runs",
+                    "payroll_run_items",
+                    "employee_cash_advances",
+                    "employee_cash_advance_repayments",
+                ],
+            )
+            .await
+        }
+        32 => table_exists(pool, "cooperative_areas").await,
+        33 => column_exists(pool, "server_auth_sessions", "employee_id").await,
+        34 => function_exists(pool, "kasirku_notify_data_change").await,
+        _ => Ok(false),
+    }
+}
+
+async fn department_table_has_current_columns(pool: &PgPool) -> Result<bool, sqlx::Error> {
+    table_has_columns(
+        pool,
+        "departments",
+        &[
+            "id",
+            "code",
+            "name",
+            "description",
+            "is_active",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+        ],
+    )
+    .await
+}
+
+async fn tables_exist(pool: &PgPool, tables: &[&str]) -> Result<bool, sqlx::Error> {
+    for table in tables {
+        if !table_exists(pool, table).await? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+async fn indexes_exist(pool: &PgPool, indexes: &[&str]) -> Result<bool, sqlx::Error> {
+    for index in indexes {
+        if !relation_exists(pool, index).await? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+async fn table_has_columns(
+    pool: &PgPool,
+    table: &str,
+    columns: &[&str],
+) -> Result<bool, sqlx::Error> {
+    if !table_exists(pool, table).await? {
+        return Ok(false);
+    }
+
+    for column in columns {
+        if !column_exists(pool, table, column).await? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+async fn table_exists(pool: &PgPool, table: &str) -> Result<bool, sqlx::Error> {
+    relation_exists(pool, table).await
+}
+
+async fn relation_exists(pool: &PgPool, relation: &str) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("SELECT to_regclass($1) IS NOT NULL")
+        .bind(format!("public.{}", relation))
+        .fetch_one(pool)
+        .await
+}
+
+async fn column_exists(pool: &PgPool, table: &str, column: &str) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = $1
+              AND column_name = $2
+        )
+        "#,
+    )
+    .bind(table)
+    .bind(column)
+    .fetch_one(pool)
+    .await
+}
+
+async fn function_exists(pool: &PgPool, function_name: &str) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM pg_proc
+            JOIN pg_namespace ON pg_namespace.oid = pg_proc.pronamespace
+            WHERE pg_namespace.nspname = 'public'
+              AND pg_proc.proname = $1
+        )
+        "#,
+    )
+    .bind(function_name)
+    .fetch_one(pool)
+    .await
 }
 
 fn load_env() {
