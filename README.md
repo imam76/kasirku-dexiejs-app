@@ -61,6 +61,48 @@ Untuk menjalankan aplikasi desktop Tauri:
 bun run tauri dev
 ```
 
+## Clean Data Lokal Dexie
+
+Gunakan langkah ini saat data lokal Dexie/IndexedDB masih nyangkut di mode dev.
+Tutup aplikasi Tauri/Vite dulu, lalu jalankan dari root project:
+
+```bash
+pkill -f 'target/debug/frayukti|tauri dev|vite --config vite.config.ts' || true
+
+stamp=$(date +%Y%m%d-%H%M%S)
+backup_dir="$HOME/.local/share/kasirku-dexie-clean-backups/$stamp"
+mkdir -p "$backup_dir"
+
+paths=(
+  "$HOME/.local/share/com.asepimamnawawi-imam76.frayukti-app"
+  "$HOME/.config/BraveSoftware/Brave-Browser/Default/IndexedDB/http_localhost_1420.indexeddb.leveldb"
+  "$HOME/.config/BraveSoftware/Brave-Browser/Default/IndexedDB/http_localhost_1420.indexeddb.blob"
+  "$HOME/.config/Code/Partitions/vscode-browser/IndexedDB/http_localhost_1420.indexeddb.leveldb"
+  "$HOME/.config/Code/Partitions/vscode-browser/IndexedDB/http_localhost_1420.indexeddb.blob"
+)
+
+for path in "${paths[@]}"; do
+  if [ -e "$path" ]; then
+    tar_name=$(printf '%s' "$path" | sed "s#^$HOME/##; s#[/ ]#_#g")
+    tar -C "$(dirname "$path")" -czf "$backup_dir/$tar_name.tar.gz" "$(basename "$path")"
+    rm -rf "$path"
+    echo "cleaned $path"
+  fi
+done
+
+echo "backup: $backup_dir"
+```
+
+Setelah itu jalankan ulang:
+
+```bash
+bun run tauri dev
+```
+
+Catatan: command ini membersihkan storage lokal Tauri/WebView dan origin dev
+`http://localhost:1420`. PostgreSQL lokal tidak ikut di-reset; untuk reset
+PostgreSQL gunakan `docker compose -f postgres-dev/compose.yml down -v`.
+
 ## Script Penting
 
 ```bash
