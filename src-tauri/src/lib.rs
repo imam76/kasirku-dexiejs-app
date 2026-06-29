@@ -3,6 +3,7 @@ mod bluetooth_printer;
 mod commands;
 mod db;
 mod models;
+mod postgres_realtime;
 mod repositories;
 mod usb_serial_printer;
 
@@ -24,7 +25,10 @@ pub fn run() {
         .plugin(bluetooth_printer::init())
         .setup(|app| {
             let state = tauri::async_runtime::block_on(db::create_postgres_state());
+            let realtime_state = postgres_realtime::PostgresRealtimeState::default();
+            realtime_state.restart(app.handle().clone(), state.health().available);
             app.manage(state);
+            app.manage(realtime_state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
