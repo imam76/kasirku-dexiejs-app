@@ -1,6 +1,9 @@
-use crate::db::{self, PostgresHealth, PostgresState};
+use crate::{
+    db::{self, PostgresHealth, PostgresState},
+    postgres_realtime::PostgresRealtimeState,
+};
 use std::env;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn postgres_health_check(
@@ -24,7 +27,9 @@ pub async fn postgres_health_check(
 
 #[tauri::command]
 pub async fn set_postgres_database_url(
+    app_handle: AppHandle,
     state: State<'_, PostgresState>,
+    realtime_state: State<'_, PostgresRealtimeState>,
     database_url: String,
 ) -> Result<PostgresHealth, String> {
     let trimmed = database_url.trim();
@@ -41,6 +46,8 @@ pub async fn set_postgres_database_url(
 
     let new_state = db::create_postgres_state().await;
     state.update_from(new_state);
+    let health = state.health();
+    realtime_state.restart(app_handle, health.available);
 
-    Ok(state.health())
+    Ok(health)
 }

@@ -4,6 +4,7 @@ pub mod cooperative_repository;
 pub mod cooperative_payment_repository;
 pub mod currency_repository;
 pub mod department_repository;
+pub mod employee_repository;
 pub mod finance_transaction_repository;
 pub mod journal_entry_repository;
 pub mod product_repository;

@@ -1,18 +1,28 @@
 import { db } from '@/lib/db';
-import type { ActivityLog, AuthUser, Permission, UserRole } from '@/types';
+import type { ActivityLog, AuthUser, Employee, Permission, Role, RolePermission, UserRole } from '@/types';
 import { hasPermission } from './permissions';
 import { refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from './authReadService';
-import { enqueueActivityLogSync, enqueueAuthUserSync } from '@/services/syncQueueService';
+import {
+  enqueueActivityLogSync,
+  enqueueAuthUserSync,
+  enqueuePendingRolePermissionsForSync,
+  enqueuePendingRolesForSync,
+} from '@/services/syncQueueService';
 import {
   authUserPostgresAdapter,
   postgresAdapter,
+  rolePermissionPostgresAdapter,
+  rolePostgresAdapter,
   serverAuthSessionPostgresAdapter,
   type RemoteAuthUserDto,
+  type RemoteRoleDto,
+  type RemoteRolePermissionDto,
   type RemoteServerAuthSessionDto,
 } from '@/services/postgresAdapter';
 import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './roleSeed';
 import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
+import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
 
 const SESSION_STORAGE_KEY = 'frayukti-auth-session-id';
 const PIN_HASH_ALGORITHM = 'SHA-256';
@@ -102,6 +112,88 @@ const withPendingAuthUserSync = (user: AuthUser): AuthUser => ({
   sync_status: 'pending',
   sync_error: undefined,
 });
+
+const mapAuthUserToRemoteDto = (user: AuthUser): RemoteAuthUserDto => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  role_id: user.role_id,
+  role_name: user.role_name,
+  employee_id: user.employee_id,
+  pin_hash: user.pin_hash,
+  pin_salt: user.pin_salt,
+  is_active: user.is_active,
+  created_at: user.created_at,
+  updated_at: user.updated_at,
+});
+
+const mapRoleToRemoteDto = (role: Role): RemoteRoleDto => ({
+  id: role.id,
+  name: role.name,
+  code: role.code,
+  description: role.description,
+  is_system: role.is_system,
+  is_owner: role.is_owner,
+  is_active: role.is_active,
+  created_at: role.created_at,
+  updated_at: role.updated_at,
+});
+
+const mapRolePermissionToRemoteDto = (permission: RolePermission): RemoteRolePermissionDto => ({
+  id: permission.id,
+  role_id: permission.role_id,
+  permission_code: permission.permission_code,
+  created_at: permission.created_at,
+  updated_at: permission.updated_at,
+});
+
+const syncOwnerBootstrapToPostgres = async (owner: AuthUser): Promise<void> => {
+  const postgresHealth = await postgresAdapter.healthCheck();
+  if (!postgresHealth.available) return;
+
+  const syncedAt = new Date().toISOString();
+  const roles = await db.roles.toArray();
+  const rolePermissions = await db.rolePermissions.toArray();
+
+  try {
+    for (const role of roles) {
+      const remoteRole = await rolePostgresAdapter.upsert(mapRoleToRemoteDto(role));
+      if (remoteRole && role.updated_at === remoteRole.updated_at) {
+        await db.roles.update(role.id, {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at: remoteRole.updated_at,
+        });
+      }
+    }
+
+    for (const permission of rolePermissions) {
+      const remotePermission = await rolePermissionPostgresAdapter.upsert(mapRolePermissionToRemoteDto(permission));
+      if (remotePermission && permission.updated_at === remotePermission.updated_at) {
+        await db.rolePermissions.update(permission.id, {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at: remotePermission.updated_at,
+        });
+      }
+    }
+
+    const remoteOwner = await authUserPostgresAdapter.upsert(mapAuthUserToRemoteDto(owner));
+    if (remoteOwner && owner.updated_at === remoteOwner.updated_at) {
+      await db.authUsers.update(owner.id, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteOwner.updated_at,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to sync owner bootstrap to PostgreSQL', error);
+  }
+};
 
 const assertValidName = (name: string) => {
   if (normalizeName(name).length < 2) {
@@ -206,17 +298,32 @@ export const ensureDefaultOwner = async (): Promise<void> => {
   }
 };
 
-export const hasActiveOwner = async () => {
-  const owner = await db.authUsers
+const findLocalActiveOwner = async () => (
+  db.authUsers
     .where('role')
     .equals('OWNER')
     .and((user) => user.is_active)
-    .first();
+    .first()
+);
+
+export const hasActiveOwner = async () => {
+  let owner = await findLocalActiveOwner();
+
+  if (!owner) {
+    try {
+      await refreshAuthUsersFromPostgres();
+    } catch (error) {
+      console.error('Failed to refresh auth users before owner check', error);
+    }
+    owner = await findLocalActiveOwner();
+  }
 
   return Boolean(owner);
 };
 
 export const createOwnerUser = async (input: { name: string; email: string; pin: string }): Promise<AuthUser> => {
+  await seedSystemRoles(db);
+
   const hasOwner = await hasActiveOwner();
   if (hasOwner) {
     throw new Error('Owner aktif sudah ada.');
@@ -239,7 +346,10 @@ export const createOwnerUser = async (input: { name: string; email: string; pin:
   });
 
   await db.authUsers.add(owner);
+  await enqueuePendingRolesForSync();
+  await enqueuePendingRolePermissionsForSync();
   await enqueueAuthUserSync(owner, 'create');
+  await syncOwnerBootstrapToPostgres(owner);
   await writeActivityLog({
     user: owner,
     action: 'AUTH_OWNER_CREATED',
@@ -487,6 +597,32 @@ const mapRemoteAuthUserForLogin = (remoteUser: RemoteAuthUserDto): AuthUser => (
   remote_updated_at: remoteUser.updated_at,
 });
 
+const ensureEmployeeLoginDataAvailable = async (remoteUser: RemoteAuthUserDto) => {
+  if (remoteUser.actor_type !== 'EMPLOYEE') return;
+
+  try {
+    await refreshEmployeesFromPostgres();
+  } catch (error) {
+    console.error('Failed to refresh employees for server login', error);
+  }
+
+  const existingEmployee = await db.employees.get(remoteUser.id);
+  if (existingEmployee) return;
+
+  const fallbackEmployee: Employee = {
+    id: remoteUser.id,
+    name: remoteUser.name,
+    email: normalizeAuthEmail(remoteUser.email ?? undefined),
+    login_role_id: remoteUser.role_id ?? undefined,
+    pin_hash: remoteUser.pin_hash,
+    pin_salt: remoteUser.pin_salt,
+    is_active: remoteUser.is_active,
+    created_at: remoteUser.created_at,
+    updated_at: remoteUser.updated_at,
+  };
+  await db.employees.put(fallbackEmployee);
+};
+
 const tryLoginWithLocalData = async (normalizedEmail: string, pin: string): Promise<AuthUser | null> => {
   const users = (await db.authUsers.toArray()).filter((user) => user.is_active && authUserEmailMatches(user, normalizedEmail));
 
@@ -587,15 +723,41 @@ export const loginWithEmailAndPin = async (email: string, pin: string): Promise<
 
   const postgresHealth = await postgresAdapter.healthCheck();
   if (postgresHealth.available) {
-    const serverSession = await serverAuthSessionPostgresAdapter.authenticate(normalizedEmail, pin);
-    if (!serverSession) {
-      throw new Error('Sesi server gagal dibuat.');
-    }
+    try {
+      const serverSession = await serverAuthSessionPostgresAdapter.authenticate(normalizedEmail, pin);
+      if (!serverSession) {
+        throw new Error('Sesi server gagal dibuat.');
+      }
 
-    await refreshRolesFromPostgres();
-    const user = mapRemoteAuthUserForLogin(serverSession.user);
-    await db.authUsers.put(user);
-    return createLoginSession(user, serverSession);
+      await refreshRolesFromPostgres();
+      const user = mapRemoteAuthUserForLogin(serverSession.user);
+      if (serverSession.user.actor_type === 'EMPLOYEE') {
+        await ensureEmployeeLoginDataAvailable(serverSession.user);
+      } else {
+        await db.authUsers.put(user);
+      }
+      return createLoginSession(user, serverSession);
+    } catch (error) {
+      const localLogin = await tryLoginWithLocalData(normalizedEmail, pin);
+      if (localLogin) {
+        console.warn('Server login failed; using local auth data.', error);
+        return localLogin;
+      }
+
+      if (error instanceof Error) {
+        throw error;
+      }
+
+      const message = (
+        error &&
+        typeof error === 'object' &&
+        'message' in error &&
+        typeof error.message === 'string'
+      )
+        ? error.message
+        : 'Email atau PIN tidak valid atau user tidak aktif.';
+      throw new Error(message);
+    }
   }
 
   const localLogin = await tryLoginWithLocalData(normalizedEmail, pin);

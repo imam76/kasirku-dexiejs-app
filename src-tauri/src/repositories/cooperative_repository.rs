@@ -1,8 +1,25 @@
 use crate::models::cooperative::{
-    CooperativeLoanDto, CooperativeLoanInstallmentDto, CooperativeLoanPaymentDto,
+    CooperativeAreaDto, CooperativeLoanDto, CooperativeLoanInstallmentDto, CooperativeLoanPaymentDto,
     CooperativeMemberDto, CooperativeMemberSavingBalanceDto, CooperativeSavingTransactionDto,
 };
 use sqlx::PgPool;
+
+macro_rules! cooperative_area_select {
+    () => {
+        r#"
+        SELECT
+            id,
+            name,
+            code,
+            description,
+            is_active,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at,
+            deleted_at::TEXT AS deleted_at
+        FROM cooperative_areas
+        "#
+    };
+}
 
 macro_rules! cooperative_member_select {
     () => {
@@ -247,6 +264,76 @@ pub async fn list_cooperative_members(
         " ORDER BY updated_at DESC, created_at DESC"
     ))
     .fetch_all(pool)
+    .await
+}
+
+pub async fn list_cooperative_areas(pool: &PgPool) -> Result<Vec<CooperativeAreaDto>, sqlx::Error> {
+    sqlx::query_as::<_, CooperativeAreaDto>(concat!(
+        cooperative_area_select!(),
+        " WHERE deleted_at IS NULL ORDER BY name ASC"
+    ))
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn get_cooperative_area(
+    pool: &PgPool,
+    id: String,
+) -> Result<Option<CooperativeAreaDto>, sqlx::Error> {
+    sqlx::query_as::<_, CooperativeAreaDto>(concat!(
+        cooperative_area_select!(),
+        " WHERE id = $1 AND deleted_at IS NULL"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn upsert_cooperative_area(
+    pool: &PgPool,
+    input: CooperativeAreaDto,
+) -> Result<CooperativeAreaDto, sqlx::Error> {
+    sqlx::query_as::<_, CooperativeAreaDto>(
+        r#"
+        INSERT INTO cooperative_areas (
+            id,
+            name,
+            code,
+            description,
+            is_active,
+            created_at,
+            updated_at,
+            deleted_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::TIMESTAMPTZ, $7::TIMESTAMPTZ, $8::TIMESTAMPTZ)
+        ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            code = EXCLUDED.code,
+            description = EXCLUDED.description,
+            is_active = EXCLUDED.is_active,
+            updated_at = EXCLUDED.updated_at,
+            deleted_at = EXCLUDED.deleted_at
+        WHERE EXCLUDED.updated_at >= cooperative_areas.updated_at
+        RETURNING
+            id,
+            name,
+            code,
+            description,
+            is_active,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at,
+            deleted_at::TEXT AS deleted_at
+        "#,
+    )
+    .bind(&input.id)
+    .bind(&input.name)
+    .bind(&input.code)
+    .bind(&input.description)
+    .bind(input.is_active)
+    .bind(&input.created_at)
+    .bind(&input.updated_at)
+    .bind(&input.deleted_at)
+    .fetch_one(pool)
     .await
 }
 

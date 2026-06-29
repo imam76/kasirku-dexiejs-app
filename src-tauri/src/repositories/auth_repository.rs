@@ -3,7 +3,7 @@ use crate::models::auth::{
 };
 use chrono::{Duration, Utc};
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
+use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
 fn hash_pin(pin: &str, salt: &str) -> String {
@@ -12,13 +12,68 @@ fn hash_pin(pin: &str, salt: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+#[derive(Debug, Clone, FromRow)]
+struct EmployeeLoginCandidate {
+    id: String,
+    name: String,
+    email: Option<String>,
+    login_role_id: Option<String>,
+    role_name: Option<String>,
+    role_code: Option<String>,
+    role_is_active: Option<bool>,
+    pin_hash: Option<String>,
+    pin_salt: Option<String>,
+    is_active: bool,
+    created_at: String,
+    updated_at: String,
+    deleted_at: Option<String>,
+}
+
+async fn create_server_session(
+    pool: &PgPool,
+    user: AuthUserDto,
+    user_id: Option<String>,
+    employee_id: Option<String>,
+) -> Result<ServerAuthSessionDto, sqlx::Error> {
+    let token = Uuid::new_v4().to_string();
+    let now = Utc::now();
+    let expires_at = now + Duration::hours(12);
+
+    sqlx::query(
+        r#"
+        INSERT INTO server_auth_sessions (
+          token,
+          user_id,
+          employee_id,
+          created_at,
+          last_active_at,
+          expires_at
+        )
+        VALUES ($1, $2, $3, $4, $4, $5)
+        "#,
+    )
+    .bind(&token)
+    .bind(user_id)
+    .bind(employee_id)
+    .bind(now)
+    .bind(expires_at)
+    .execute(pool)
+    .await?;
+
+    Ok(ServerAuthSessionDto {
+        token,
+        user,
+        expires_at: expires_at.to_rfc3339(),
+    })
+}
+
 pub async fn authenticate_server_session(
     pool: &PgPool,
     email: String,
     pin: String,
 ) -> Result<Option<ServerAuthSessionDto>, sqlx::Error> {
     let normalized_email = email.trim().to_lowercase();
-    let user = sqlx::query_as::<_, AuthUserDto>(
+    let mut user = sqlx::query_as::<_, AuthUserDto>(
         r#"
         SELECT
             id,
@@ -47,66 +102,115 @@ pub async fn authenticate_server_session(
         LIMIT 1
         "#,
     )
-    .bind(normalized_email)
+    .bind(&normalized_email)
     .fetch_optional(pool)
     .await?;
 
-    let Some(user) = user else {
-        return Ok(None);
-    };
+    if let Some(user) = user.as_mut() {
+        if hash_pin(&pin, &user.pin_salt) == user.pin_hash {
+            if let Some(role_id) = &user.role_id {
+                let role_is_active = sqlx::query_scalar::<_, bool>(
+                    r#"
+                    SELECT EXISTS (
+                      SELECT 1
+                      FROM roles
+                      WHERE id = $1
+                        AND is_active = TRUE
+                        AND deleted_at IS NULL
+                    )
+                    "#,
+                )
+                .bind(role_id)
+                .fetch_one(pool)
+                .await?;
 
-    if hash_pin(&pin, &user.pin_salt) != user.pin_hash {
-        return Ok(None);
-    }
+                if !role_is_active {
+                    return Ok(None);
+                }
+            }
 
-    if let Some(role_id) = &user.role_id {
-        let role_is_active = sqlx::query_scalar::<_, bool>(
-            r#"
-            SELECT EXISTS (
-              SELECT 1
-              FROM roles
-              WHERE id = $1
-                AND is_active = TRUE
-                AND deleted_at IS NULL
+            user.actor_type = Some("USER".to_string());
+            return create_server_session(
+                pool,
+                user.clone(),
+                Some(user.id.clone()),
+                None,
             )
-            "#,
-        )
-        .bind(role_id)
-        .fetch_one(pool)
-        .await?;
-
-        if !role_is_active {
-            return Ok(None);
+            .await
+            .map(Some);
         }
     }
 
-    let token = Uuid::new_v4().to_string();
-    let now = Utc::now();
-    let expires_at = now + Duration::hours(12);
-    sqlx::query(
+    let employee_candidates = sqlx::query_as::<_, EmployeeLoginCandidate>(
         r#"
-        INSERT INTO server_auth_sessions (
-          token,
-          user_id,
-          created_at,
-          last_active_at,
-          expires_at
-        )
-        VALUES ($1, $2, $3, $3, $4)
+        SELECT
+            employee.id,
+            employee.name,
+            employee.email,
+            employee.login_role_id,
+            role.name AS role_name,
+            role.code AS role_code,
+            role.is_active AS role_is_active,
+            employee.pin_hash,
+            employee.pin_salt,
+            employee.is_active,
+            employee.created_at::TEXT AS created_at,
+            employee.updated_at::TEXT AS updated_at,
+            employee.deleted_at::TEXT AS deleted_at
+        FROM employees AS employee
+        LEFT JOIN roles AS role
+          ON role.id = employee.login_role_id
+         AND role.deleted_at IS NULL
+        WHERE employee.deleted_at IS NULL
+          AND employee.is_active = TRUE
+          AND employee.pin_hash IS NOT NULL
+          AND employee.pin_salt IS NOT NULL
+          AND LOWER(COALESCE(employee.email, '')) = $1
+        ORDER BY employee.created_at DESC
         "#,
     )
-    .bind(&token)
-    .bind(&user.id)
-    .bind(now)
-    .bind(expires_at)
-    .execute(pool)
+    .bind(&normalized_email)
+    .fetch_all(pool)
     .await?;
 
-    Ok(Some(ServerAuthSessionDto {
-        token,
-        user,
-        expires_at: expires_at.to_rfc3339(),
-    }))
+    for employee in employee_candidates {
+        let (Some(pin_hash), Some(pin_salt)) = (
+            employee.pin_hash.clone(),
+            employee.pin_salt.clone(),
+        ) else {
+            continue;
+        };
+        if hash_pin(&pin, &pin_salt) != pin_hash.as_str() {
+            continue;
+        }
+        if employee.login_role_id.is_some() && employee.role_is_active != Some(true) {
+            return Ok(None);
+        }
+
+        let employee_id = employee.id.clone();
+        let user = AuthUserDto {
+            id: employee.id,
+            name: employee.name,
+            email: employee.email,
+            role: employee.role_code.unwrap_or_else(|| "KASIR".to_string()),
+            role_id: employee.login_role_id,
+            role_name: employee.role_name,
+            employee_id: Some(employee_id.clone()),
+            pin_hash,
+            pin_salt,
+            is_active: employee.is_active,
+            created_at: employee.created_at,
+            updated_at: employee.updated_at,
+            deleted_at: employee.deleted_at,
+            actor_type: Some("EMPLOYEE".to_string()),
+        };
+
+        return create_server_session(pool, user, None, Some(employee_id))
+            .await
+            .map(Some);
+    }
+
+    Ok(None)
 }
 
 pub async fn revoke_server_session(pool: &PgPool, token: String) -> Result<(), sqlx::Error> {

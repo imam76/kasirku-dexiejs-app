@@ -60,6 +60,7 @@ export interface RemoteAuthUserDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+  actor_type?: 'USER' | 'EMPLOYEE' | null;
 }
 
 export interface RemoteServerAuthSessionDto {
@@ -97,6 +98,56 @@ export interface RemoteRolePermissionDto {
   id: string;
   role_id: string;
   permission_code: Permission;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteEmployeeDto {
+  id: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  position?: string | null;
+  user_id?: string | null;
+  user_name?: string | null;
+  login_role_id?: string | null;
+  field_cash_account_id?: string | null;
+  field_cash_account_code?: string | null;
+  field_cash_account_name?: string | null;
+  pin_hash?: string | null;
+  pin_salt?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteEmployeeAreaDto {
+  id: string;
+  employee_id: string;
+  area_id: string;
+  area_name: string;
+  area_code?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteEmployeeCollectionScheduleDto {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_position?: string | null;
+  area_id: string;
+  area_name: string;
+  area_code?: string | null;
+  weekday: CooperativeCollectionWeekday;
+  effective_from?: string | null;
+  effective_until?: string | null;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
@@ -733,6 +784,17 @@ export interface RemoteCooperativeMemberDto {
   updated_by_name?: string | null;
 }
 
+export interface RemoteCooperativeAreaDto {
+  id: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
 export interface RemoteCooperativeSavingTransactionDto {
   id: string;
   member_id: string;
@@ -1150,6 +1212,47 @@ export const activityLogPostgresAdapter = {
   },
 };
 
+export const employeePostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteEmployeeDto[]>('postgres_list_employees');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEmployeeDto | null>('postgres_get_employee', { id });
+  },
+
+  async upsert(input: RemoteEmployeeDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEmployeeDto>('postgres_upsert_employee', { input });
+  },
+};
+
+export const employeeAreaPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteEmployeeAreaDto[]>('postgres_list_employee_areas');
+  },
+
+  async upsert(input: RemoteEmployeeAreaDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEmployeeAreaDto>('postgres_upsert_employee_area', { input });
+  },
+};
+
+export const employeeCollectionSchedulePostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteEmployeeCollectionScheduleDto[]>('postgres_list_employee_collection_schedules');
+  },
+
+  async upsert(input: RemoteEmployeeCollectionScheduleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEmployeeCollectionScheduleDto>('postgres_upsert_employee_collection_schedule', { input });
+  },
+};
+
 export const departmentPostgresAdapter = {
   async list() {
     if (!isTauriRuntime()) return [];
@@ -1480,6 +1583,23 @@ export const cooperativeMemberPostgresAdapter = {
   async upsert(input: RemoteCooperativeMemberDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteCooperativeMemberDto>('postgres_upsert_cooperative_member', { input });
+  },
+};
+
+export const cooperativeAreaPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeAreaDto[]>('postgres_list_cooperative_areas');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeAreaDto | null>('postgres_get_cooperative_area', { id });
+  },
+
+  async upsert(input: RemoteCooperativeAreaDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeAreaDto>('postgres_upsert_cooperative_area', { input });
   },
 };
 

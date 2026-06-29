@@ -3,6 +3,7 @@ mod bluetooth_printer;
 mod commands;
 mod db;
 mod models;
+mod postgres_realtime;
 mod repositories;
 mod usb_serial_printer;
 
@@ -24,7 +25,10 @@ pub fn run() {
         .plugin(bluetooth_printer::init())
         .setup(|app| {
             let state = tauri::async_runtime::block_on(db::create_postgres_state());
+            let realtime_state = postgres_realtime::PostgresRealtimeState::default();
+            realtime_state.restart(app.handle().clone(), state.health().available);
             app.manage(state);
+            app.manage(realtime_state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -33,6 +37,13 @@ pub fn run() {
             commands::department_commands::postgres_get_department,
             commands::department_commands::postgres_upsert_department,
             commands::department_commands::postgres_delete_department,
+            commands::employee_commands::postgres_list_employees,
+            commands::employee_commands::postgres_get_employee,
+            commands::employee_commands::postgres_upsert_employee,
+            commands::employee_commands::postgres_list_employee_areas,
+            commands::employee_commands::postgres_upsert_employee_area,
+            commands::employee_commands::postgres_list_employee_collection_schedules,
+            commands::employee_commands::postgres_upsert_employee_collection_schedule,
             commands::project_commands::postgres_list_projects,
             commands::project_commands::postgres_get_project,
             commands::project_commands::postgres_upsert_project,
@@ -83,6 +94,9 @@ pub fn run() {
             commands::journal_entry_commands::postgres_list_journal_entry_bundles,
             commands::journal_entry_commands::postgres_get_journal_entry_bundle,
             commands::journal_entry_commands::postgres_upsert_journal_entry_bundle,
+            commands::cooperative_commands::postgres_list_cooperative_areas,
+            commands::cooperative_commands::postgres_get_cooperative_area,
+            commands::cooperative_commands::postgres_upsert_cooperative_area,
             commands::cooperative_commands::postgres_list_cooperative_members,
             commands::cooperative_commands::postgres_get_cooperative_member,
             commands::cooperative_commands::postgres_upsert_cooperative_member,

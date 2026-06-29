@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import type { LucideIcon } from 'lucide-react';
+import { ensureDefaultOwner } from '@/auth/authService';
 import { SETUP_MODULE_GROUPS, DEFAULT_SELECTED_MODULES } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 import {
@@ -42,6 +43,7 @@ import {
   saveSetupConfig,
   getSetupConfig,
 } from '@/services/setupKeyService';
+import type { PostgresHealth } from '@/services/postgresAdapter';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -223,9 +225,12 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
       // Persist & re-init the Postgres pool from the URL the user pasted.
       // Run this first: if it fails we don't want to claim the setup succeeded.
       if (isTauriRuntime()) {
-        await invoke<void>('set_postgres_database_url', {
+        const postgresHealth = await invoke<PostgresHealth>('set_postgres_database_url', {
           databaseUrl: normalizedDatabaseUrl,
         });
+        if (normalizedDatabaseUrl && !postgresHealth.available) {
+          throw new Error(postgresHealth.message ?? 'Koneksi PostgreSQL tidak tersedia.');
+        }
       }
 
       saveSetupConfig({
@@ -235,10 +240,12 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
         configuredBy: licenseFingerprint,
       });
 
+      await ensureDefaultOwner();
+
       message.success('Konfigurasi setup berhasil disimpan!');
       onClose();
-    } catch {
-      message.error('Gagal menyimpan konfigurasi.');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Gagal menyimpan konfigurasi.');
     } finally {
       setIsSaving(false);
     }

@@ -8,6 +8,14 @@ import {
 import { db } from '@/lib/db';
 import { employeeSchema } from '@/lib/validations/employee';
 import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
+import {
+  employeePostgresAdapter,
+  employeeAreaPostgresAdapter,
+  employeeCollectionSchedulePostgresAdapter,
+  type RemoteEmployeeDto,
+  type RemoteEmployeeAreaDto,
+  type RemoteEmployeeCollectionScheduleDto,
+} from '@/services/postgresAdapter';
 import type {
   ChartOfAccount,
   CooperativeArea,
@@ -367,6 +375,52 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
     });
   });
 
+  // Sync to PostgreSQL
+  try {
+    const remoteEmployee: RemoteEmployeeDto = {
+      ...employee,
+      phone: employee.phone ?? null,
+      email: employee.email ?? null,
+      address: employee.address ?? null,
+      position: employee.position ?? null,
+      user_id: employee.user_id ?? null,
+      user_name: employee.user_name ?? null,
+      login_role_id: employee.login_role_id ?? null,
+      field_cash_account_id: employee.field_cash_account_id ?? null,
+      field_cash_account_code: employee.field_cash_account_code ?? null,
+      field_cash_account_name: employee.field_cash_account_name ?? null,
+      pin_hash: employee.pin_hash ?? null,
+      pin_salt: employee.pin_salt ?? null,
+      notes: employee.notes ?? null,
+    };
+
+    await employeePostgresAdapter.upsert(remoteEmployee);
+
+    // Sync employee areas
+    for (const assignment of assignments) {
+      const remoteArea: RemoteEmployeeAreaDto = {
+        ...assignment,
+        area_code: assignment.area_code ?? null,
+      };
+      await employeeAreaPostgresAdapter.upsert(remoteArea);
+    }
+
+    // Sync collection schedules
+    for (const schedule of collectionSchedules) {
+      const remoteSchedule: RemoteEmployeeCollectionScheduleDto = {
+        ...schedule,
+        employee_position: schedule.employee_position ?? null,
+        area_code: schedule.area_code ?? null,
+        effective_from: schedule.effective_from ?? null,
+        effective_until: schedule.effective_until ?? null,
+      };
+      await employeeCollectionSchedulePostgresAdapter.upsert(remoteSchedule);
+    }
+  } catch (error) {
+    console.error('Failed to sync employee to PostgreSQL:', error);
+    // Continue even if sync fails, as data is already saved locally
+  }
+
   return employee;
 };
 
@@ -463,6 +517,52 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     });
   });
 
+  // Sync to PostgreSQL
+  try {
+    const remoteEmployee: RemoteEmployeeDto = {
+      ...updatedEmployee,
+      phone: updatedEmployee.phone ?? null,
+      email: updatedEmployee.email ?? null,
+      address: updatedEmployee.address ?? null,
+      position: updatedEmployee.position ?? null,
+      user_id: updatedEmployee.user_id ?? null,
+      user_name: updatedEmployee.user_name ?? null,
+      login_role_id: updatedEmployee.login_role_id ?? null,
+      field_cash_account_id: updatedEmployee.field_cash_account_id ?? null,
+      field_cash_account_code: updatedEmployee.field_cash_account_code ?? null,
+      field_cash_account_name: updatedEmployee.field_cash_account_name ?? null,
+      pin_hash: updatedEmployee.pin_hash ?? null,
+      pin_salt: updatedEmployee.pin_salt ?? null,
+      notes: updatedEmployee.notes ?? null,
+    };
+
+    await employeePostgresAdapter.upsert(remoteEmployee);
+
+    // Sync employee areas
+    for (const assignment of assignments) {
+      const remoteArea: RemoteEmployeeAreaDto = {
+        ...assignment,
+        area_code: assignment.area_code ?? null,
+      };
+      await employeeAreaPostgresAdapter.upsert(remoteArea);
+    }
+
+    // Sync collection schedules
+    for (const schedule of collectionSchedules) {
+      const remoteSchedule: RemoteEmployeeCollectionScheduleDto = {
+        ...schedule,
+        employee_position: schedule.employee_position ?? null,
+        area_code: schedule.area_code ?? null,
+        effective_from: schedule.effective_from ?? null,
+        effective_until: schedule.effective_until ?? null,
+      };
+      await employeeCollectionSchedulePostgresAdapter.upsert(remoteSchedule);
+    }
+  } catch (error) {
+    console.error('Failed to sync employee to PostgreSQL:', error);
+    // Continue even if sync fails, as data is already saved locally
+  }
+
   return updatedEmployee;
 };
 
@@ -487,6 +587,31 @@ export const archiveEmployee = async (id: string): Promise<Employee> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan karyawan ${employee.name}.`,
   });
+
+  // Sync to PostgreSQL
+  try {
+    const remoteEmployee: RemoteEmployeeDto = {
+      ...archivedEmployee,
+      phone: archivedEmployee.phone ?? null,
+      email: archivedEmployee.email ?? null,
+      address: archivedEmployee.address ?? null,
+      position: archivedEmployee.position ?? null,
+      user_id: archivedEmployee.user_id ?? null,
+      user_name: archivedEmployee.user_name ?? null,
+      login_role_id: archivedEmployee.login_role_id ?? null,
+      field_cash_account_id: archivedEmployee.field_cash_account_id ?? null,
+      field_cash_account_code: archivedEmployee.field_cash_account_code ?? null,
+      field_cash_account_name: archivedEmployee.field_cash_account_name ?? null,
+      pin_hash: archivedEmployee.pin_hash ?? null,
+      pin_salt: archivedEmployee.pin_salt ?? null,
+      notes: archivedEmployee.notes ?? null,
+    };
+
+    await employeePostgresAdapter.upsert(remoteEmployee);
+  } catch (error) {
+    console.error('Failed to sync archived employee to PostgreSQL:', error);
+    // Continue even if sync fails, as data is already saved locally
+  }
 
   return archivedEmployee;
 };
@@ -515,6 +640,31 @@ export const restoreEmployee = async (id: string): Promise<Employee> => {
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan karyawan ${employee.name}.`,
   });
+
+  // Sync to PostgreSQL
+  try {
+    const remoteEmployee: RemoteEmployeeDto = {
+      ...restoredEmployee,
+      phone: restoredEmployee.phone ?? null,
+      email: restoredEmployee.email ?? null,
+      address: restoredEmployee.address ?? null,
+      position: restoredEmployee.position ?? null,
+      user_id: restoredEmployee.user_id ?? null,
+      user_name: restoredEmployee.user_name ?? null,
+      login_role_id: restoredEmployee.login_role_id ?? null,
+      field_cash_account_id: restoredEmployee.field_cash_account_id ?? null,
+      field_cash_account_code: restoredEmployee.field_cash_account_code ?? null,
+      field_cash_account_name: restoredEmployee.field_cash_account_name ?? null,
+      pin_hash: restoredEmployee.pin_hash ?? null,
+      pin_salt: restoredEmployee.pin_salt ?? null,
+      notes: restoredEmployee.notes ?? null,
+    };
+
+    await employeePostgresAdapter.upsert(remoteEmployee);
+  } catch (error) {
+    console.error('Failed to sync restored employee to PostgreSQL:', error);
+    // Continue even if sync fails, as data is already saved locally
+  }
 
   return restoredEmployee;
 };

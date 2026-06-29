@@ -140,7 +140,7 @@ impl From<sqlx::Error> for PostgresCommandError {
 pub async fn create_pg_pool() -> Result<PgPool, PostgresInitError> {
     load_env();
 
-    let database_url = read_database_url()?;
+    let database_url = configured_database_url()?;
 
     // Supabase's transaction pooler (port 6543) and other PgBouncer-style poolers
     // reuse backend server connections across client sessions and do NOT support
@@ -160,6 +160,11 @@ pub async fn create_pg_pool() -> Result<PgPool, PostgresInitError> {
         .connect_with(connect_options)
         .await
         .map_err(PostgresInitError::Unreachable)
+}
+
+pub fn configured_database_url() -> Result<String, PostgresInitError> {
+    load_env();
+    read_database_url()
 }
 
 pub async fn create_postgres_state() -> PostgresState {

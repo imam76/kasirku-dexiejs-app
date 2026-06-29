@@ -15,6 +15,9 @@ pub struct AuthUserDto {
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub actor_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

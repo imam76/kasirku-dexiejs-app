@@ -1,9 +1,11 @@
 import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
+import { pushLocalCooperativeAreasToPostgres, refreshCooperativeAreasFromPostgres } from '@/services/cooperativeAreaReadService';
 import { refreshCooperativeDataFromPostgres } from '@/services/cooperativeReadService';
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
+import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
 import { postgresAdapter } from '@/services/postgresAdapter';
@@ -50,6 +52,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingPurchaseDocumentsForSync();
   await enqueuePendingSalesDocumentsForSync();
   await enqueuePendingStockOpnamesForSync();
+  await pushLocalCooperativeAreasToPostgres();
 };
 
 export const refreshAllDataFromPostgres = async () => {
@@ -73,6 +76,8 @@ export const refreshAllDataFromPostgres = async () => {
     taxes: await refreshTaxesFromPostgres(),
     contacts: await refreshContactsFromPostgres(),
     warehouses: await refreshWarehousesFromPostgres(),
+    cooperativeAreas: await refreshCooperativeAreasFromPostgres(),
+    employees: await refreshEmployeesFromPostgres(),
     currencies: await refreshCurrenciesFromPostgres(),
     currencyRates: await refreshCurrencyRatesFromPostgres(),
     products: await refreshProductsFromPostgres(),
@@ -95,7 +100,11 @@ export const refreshAllDataFromPostgres = async () => {
   };
 };
 
-export const runDatabaseSyncNow = async () => {
+type DatabaseSyncResult = Awaited<ReturnType<typeof refreshAllDataFromPostgres>>;
+
+let activeDatabaseSync: Promise<DatabaseSyncResult> | null = null;
+
+const runDatabaseSyncNowInternal = async () => {
   const setSyncPhase = useSyncActivityStore.getState().setPhase;
 
   try {
@@ -112,6 +121,18 @@ export const runDatabaseSyncNow = async () => {
     setSyncPhase('error', getErrorMessage(error));
     throw error;
   }
+};
+
+export const runDatabaseSyncNow = async () => {
+  if (activeDatabaseSync) {
+    return activeDatabaseSync;
+  }
+
+  activeDatabaseSync = runDatabaseSyncNowInternal().finally(() => {
+    activeDatabaseSync = null;
+  });
+
+  return activeDatabaseSync;
 };
 
 export const retryFailedDatabaseSyncItems = async () => {
