@@ -6,6 +6,83 @@ import { runDatabaseRefreshNow, runDatabaseSyncNow } from '@/services/syncOrches
 
 const REALTIME_SYNC_DEBOUNCE_MS = 750;
 
+const CASHIER_QUERY_KEYS = [
+  'cashierSession',
+  'cashierSessions',
+  'transactions-history',
+  'posSalesReport',
+  'transactionDetailReport',
+  'depositReport',
+];
+
+const COOPERATIVE_REALTIME_TABLES = new Set([
+  'cooperative_areas',
+  'cooperative_loan_collection_events',
+  'cooperative_loan_installments',
+  'cooperative_loan_payments',
+  'cooperative_loans',
+  'cooperative_member_saving_balances',
+  'cooperative_members',
+  'cooperative_payment_approval_requests',
+  'cooperative_payment_policy',
+  'cooperative_posting_accounts',
+  'cooperative_saving_transactions',
+]);
+
+const COOPERATIVE_QUERY_KEYS = [
+  'cooperativeAreas',
+  'cooperativeMembers',
+  'cooperativeSavings',
+  'cooperativeLoans',
+  'cooperativeLoanInstallments',
+  'cooperativeLoanPayments',
+  'cooperativePaymentApprovalRequests',
+  'cooperativeFieldCashSessions',
+  'cooperativeFieldCashReport',
+  'cooperativeReports',
+  'cooperativeDailyDropReport',
+  'cooperativeWeeklyEmployeeDropReport',
+  'cooperativeDailyStortingReport',
+  'cooperativeDailyTargetReport',
+  'cooperativeDailyFieldCashReport',
+  'cooperativeCashReport',
+  'cooperativeLedgerReport',
+  'cooperativeIptwReport',
+  'cooperativeInstallmentBookReport',
+  'cooperativeMemberRegisterReport',
+  'financeBalance',
+  'financeTransactions',
+  'journalEntries',
+  'trialBalance',
+  'incomeStatement',
+  'balanceSheet',
+];
+
+const FINANCE_REALTIME_TABLES = new Set([
+  'accounting_profile_setting',
+  'chart_of_accounts',
+  'enabled_modules',
+  'finance_account_mappings',
+  'finance_transactions',
+  'general_ledger_setting',
+  'journal_entries',
+  'journal_entry_lines',
+]);
+
+const FINANCE_QUERY_KEYS = [
+  'financeBalance',
+  'financeTransactions',
+  'journalEntries',
+  'trialBalance',
+  'incomeStatement',
+  'balanceSheet',
+  'cooperativeFieldCashReport',
+  'cooperativeReports',
+  'cooperativeDailyFieldCashReport',
+  'cooperativeCashReport',
+  'cooperativeLedgerReport',
+];
+
 type PostgresRealtimeChangeEvent = {
   table?: string;
   operation?: string;
@@ -14,18 +91,27 @@ type PostgresRealtimeChangeEvent = {
   emitted_at?: string;
 };
 
+const invalidateQueryKeys = (queryKeys: string[]) => {
+  queryKeys.forEach((queryKey) => {
+    queryClient.invalidateQueries({ queryKey: [queryKey] });
+  });
+};
+
 const invalidateServerAuthoritativeQueries = (change: PostgresRealtimeChangeEvent) => {
   if (change.table === 'cashier_sessions') {
-    queryClient.invalidateQueries({ queryKey: ['cashierSession'] });
-    queryClient.invalidateQueries({ queryKey: ['cashierSessions'] });
-    queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
-    queryClient.invalidateQueries({ queryKey: ['posSalesReport'] });
-    queryClient.invalidateQueries({ queryKey: ['transactionDetailReport'] });
-    queryClient.invalidateQueries({ queryKey: ['depositReport'] });
+    invalidateQueryKeys(CASHIER_QUERY_KEYS);
   }
 
   if (change.table === 'cooperative_payment_approval_requests') {
     queryClient.invalidateQueries({ queryKey: ['cooperativePaymentApprovalRequests'] });
+  }
+
+  if (change.table && COOPERATIVE_REALTIME_TABLES.has(change.table)) {
+    invalidateQueryKeys(COOPERATIVE_QUERY_KEYS);
+  }
+
+  if (change.table && FINANCE_REALTIME_TABLES.has(change.table)) {
+    invalidateQueryKeys(FINANCE_QUERY_KEYS);
   }
 };
 
@@ -35,6 +121,7 @@ export const useSyncQueueWorker = () => {
     let realtimeSyncTimeoutId: number | undefined;
     let isRealtimeSyncRunning = false;
     let pendingRealtimeSync = false;
+    let pendingRealtimeChanges: PostgresRealtimeChangeEvent[] = [];
     let unlistenPostgresRealtime: (() => void) | undefined;
 
     const syncWhenOnline = async () => {
@@ -52,9 +139,14 @@ export const useSyncQueueWorker = () => {
       }
 
       isRealtimeSyncRunning = true;
+      const changes = pendingRealtimeChanges;
+      pendingRealtimeChanges = [];
+
       try {
         await runDatabaseRefreshNow();
+        changes.forEach(invalidateServerAuthoritativeQueries);
       } catch (error) {
+        pendingRealtimeChanges = [...changes, ...pendingRealtimeChanges];
         console.error('Failed to refresh PostgreSQL realtime data', error);
       } finally {
         isRealtimeSyncRunning = false;
@@ -83,7 +175,7 @@ export const useSyncQueueWorker = () => {
 
     if (isTauriRuntime()) {
       void listen<PostgresRealtimeChangeEvent>('postgres-data-change', (event) => {
-        invalidateServerAuthoritativeQueries(event.payload);
+        pendingRealtimeChanges.push(event.payload);
         scheduleRealtimeSync();
       })
         .then((unlisten) => {
