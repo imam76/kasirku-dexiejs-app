@@ -1092,6 +1092,17 @@ export interface RemoteAppSetupConfigDto {
   moduleCatalogVersion: number;
 }
 
+export interface RemoteCompanyProfileSettingDto {
+  id: 'default';
+  companyName?: string | null;
+  logoDataUrl?: string | null;
+  logoFileName?: string | null;
+  logoMimeType?: string | null;
+  logoSize?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type PostgresHealthStatus = 'available' | 'unconfigured' | 'unreachable' | 'migration_failed';
 
 export interface PostgresHealth {
@@ -1163,6 +1174,18 @@ export const appSetupConfigPostgresAdapter = {
   async upsert(input: RemoteAppSetupConfigDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteAppSetupConfigDto>('postgres_upsert_app_setup_config', { input });
+  },
+};
+
+export const companyProfileSettingPostgresAdapter = {
+  async get() {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCompanyProfileSettingDto | null>('postgres_get_company_profile_setting');
+  },
+
+  async upsert(input: RemoteCompanyProfileSettingDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCompanyProfileSettingDto>('postgres_upsert_company_profile_setting', { input });
   },
 };
 
