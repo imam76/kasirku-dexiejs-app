@@ -79,6 +79,46 @@ jobs:
           SETUP_HASH_KEY=${{ secrets.SETUP_HASH_KEY }}
           EOF
 
+      - name: Prepare updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}
+          TAURI_SIGNING_PRIVATE_KEY_RAW: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          key_file="$RUNNER_TEMP/tauri-updater.key"
+
+          if [ -n "${TAURI_SIGNING_PRIVATE_KEY_B64:-}" ]; then
+            printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_B64" | base64 --decode > "$key_file"
+          elif [ -n "${TAURI_SIGNING_PRIVATE_KEY_RAW:-}" ]; then
+            printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_RAW" | sed 's/\\n/\n/g' > "$key_file"
+          else
+            echo "::error::Missing updater signing secret. Set TAURI_SIGNING_PRIVATE_KEY_B64 from ~/.tauri/frayukti-updater.key."
+            exit 1
+          fi
+
+          decoded_key_file="$RUNNER_TEMP/tauri-updater-key.decoded"
+          if ! base64 --decode "$key_file" > "$decoded_key_file" 2>/dev/null; then
+            echo "::error::Invalid updater private key. TAURI_SIGNING_PRIVATE_KEY_B64 must be base64 of ~/.tauri/frayukti-updater.key, not the decoded minisign text."
+            exit 1
+          fi
+
+          if ! head -n 1 "$decoded_key_file" | grep -q '^untrusted comment: .*secret key'; then
+            echo "::error::Invalid updater private key. Use the private ~/.tauri/frayukti-updater.key file, not ~/.tauri/frayukti-updater.key.pub."
+            exit 1
+          fi
+
+          {
+            echo 'TAURI_SIGNING_PRIVATE_KEY<<EOF'
+            cat "$key_file"
+            echo 'EOF'
+            echo 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD<<EOF'
+            printf '%s\n' "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
+
       # --- Build + upload ke draft release ---
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -88,10 +128,6 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_SETUP_HASH_KEY: ${{ secrets.VITE_SETUP_HASH_KEY }}
-          # Required by bundle.createUpdaterArtifacts. Store the contents of
-          # ~/.tauri/frayukti-updater.key in this secret.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: app-v__VERSION__
           releaseName: "frayukti v__VERSION__"

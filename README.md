@@ -137,10 +137,26 @@ TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat "$HOME/.tauri/frayukti-updater.key.pas
 bun run tauri build
 ```
 
-Untuk GitHub Actions, isi secret `TAURI_SIGNING_PRIVATE_KEY` dengan isi file
-`~/.tauri/frayukti-updater.key`. Jika key diberi password, isi juga
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Workflow saat ini membuat draft release;
-publish draft tersebut agar updater aplikasi bisa membaca `latest.json`.
+Untuk GitHub Actions, isi secret `TAURI_SIGNING_PRIVATE_KEY_B64` dengan private
+key yang sudah di-base64 satu baris:
+
+```bash
+base64 -w0 "$HOME/.tauri/frayukti-updater.key"
+```
+
+Pakai file private `.key`, bukan `.key.pub`, dan jangan decode isi `.key` secara
+manual sebelum dimasukkan ke secret.
+
+Isi juga `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`:
+
+```bash
+cat "$HOME/.tauri/frayukti-updater.key.password"
+```
+
+Secret lama `TAURI_SIGNING_PRIVATE_KEY` masih didukung sebagai fallback, tapi
+format base64 lebih aman karena tidak rusak oleh newline saat ditempel ke GitHub
+Secrets. Workflow saat ini membuat draft release; publish draft tersebut agar
+updater aplikasi bisa membaca `latest.json`.
 
 ## Testing
 
