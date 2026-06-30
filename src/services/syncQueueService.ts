@@ -6,6 +6,12 @@ import {
 } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
 import {
+  mergeRemoteCooperativeAreasIntoDexie,
+} from '@/services/cooperativeAreaReadService';
+import {
+  mergeRemoteCooperativeCollectionEventsIntoDexie,
+} from '@/services/cooperativeCollectionEventService';
+import {
   mergeRemoteCooperativeLoanInstallmentsIntoDexie,
   mergeRemoteCooperativeLoanPaymentsIntoDexie,
   mergeRemoteCooperativeLoansIntoDexie,
@@ -29,6 +35,8 @@ import {
   activityLogPostgresAdapter,
   authUserPostgresAdapter,
   contactPostgresAdapter,
+  cooperativeAreaPostgresAdapter,
+  cooperativeCollectionEventPostgresAdapter,
   cooperativeLoanInstallmentPostgresAdapter,
   cooperativeLoanPostgresAdapter,
   cooperativeMemberPostgresAdapter,
@@ -55,6 +63,8 @@ import {
   type RemoteActivityLogDto,
   type RemoteAuthUserDto,
   type RemoteContactDto,
+  type RemoteCooperativeAreaDto,
+  type RemoteCooperativeLoanCollectionEventDto,
   type RemoteCooperativeLoanDto,
   type RemoteCooperativeLoanInstallmentDto,
   type RemoteCooperativeLoanPaymentDto,
@@ -79,6 +89,7 @@ import {
   type RemoteProjectDto,
   type RemoteRoleDto,
   type RemoteRolePermissionDto,
+  type RemoteRecordCooperativeLoanCollectionEventResult,
   type RemoteSalesDocumentBundleDto,
   type RemoteSalesDocumentDto,
   type RemoteSalesDocumentItemDto,
@@ -89,14 +100,18 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, CooperativeLoan, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { ActivityLog, AuthUser, Contact, CooperativeArea, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
 const SYNC_QUEUE_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
+const SESSION_STORAGE_KEY = 'frayukti-auth-session-id';
+const MISSING_SERVER_SESSION_TOKEN_SYNC_ERROR = 'Sesi server tidak tersedia untuk upload event penagihan koperasi. Login server lalu retry sync.';
 const ACTIVITY_LOG_ENTITY = 'activityLogs';
 const AUTH_USER_ENTITY = 'authUsers';
 const CONTACT_ENTITY = 'contacts';
+const COOPERATIVE_AREA_ENTITY = 'cooperativeAreas';
+const COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY = 'cooperativeLoanCollectionEvents';
 const COOPERATIVE_LOAN_ENTITY = 'cooperativeLoans';
 const COOPERATIVE_LOAN_INSTALLMENT_ENTITY = 'cooperativeLoanInstallments';
 const COOPERATIVE_LOAN_PAYMENT_ENTITY = 'cooperativeLoanPayments';
@@ -141,6 +156,24 @@ const normalizeRemoteNumber = (value: number | undefined) => (
 const isPostgresAvailableForSync = async () => {
   const health = await postgresAdapter.healthCheck();
   return health.available;
+};
+
+const getCurrentSyncServerSessionToken = async () => {
+  if (typeof localStorage === 'undefined') return undefined;
+
+  const sessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+  if (!sessionId) return undefined;
+
+  const session = await db.authSessions.get(sessionId);
+  if (!session?.server_session_token) return undefined;
+  if (
+    session.server_session_expires_at &&
+    Date.parse(session.server_session_expires_at) <= Date.now()
+  ) {
+    return undefined;
+  }
+
+  return session.server_session_token;
 };
 
 const mapActivityLogToRemoteDto = (log: ActivityLog): RemoteActivityLogDto => ({
@@ -217,6 +250,17 @@ const mapContactToRemoteDto = (contact: Contact): RemoteContactDto => ({
   membership_points_balance: normalizeRemoteNumber(contact.membership_points_balance),
   created_at: contact.created_at,
   updated_at: contact.updated_at,
+});
+
+const mapCooperativeAreaToRemoteDto = (area: CooperativeArea): RemoteCooperativeAreaDto => ({
+  id: area.id,
+  name: area.name,
+  code: area.code ?? null,
+  description: area.description ?? null,
+  is_active: area.is_active,
+  created_at: area.created_at,
+  updated_at: area.updated_at,
+  deleted_at: null,
 });
 
 const mapCooperativeMemberToRemoteDto = (member: CooperativeMember): RemoteCooperativeMemberDto => ({
@@ -377,6 +421,26 @@ const mapCooperativeLoanInstallmentToRemoteDto = (
   last_contacted_at: installment.last_contacted_at,
   created_at: installment.created_at,
   updated_at: installment.updated_at,
+});
+
+const mapCooperativeLoanCollectionEventToRemoteDto = (
+  event: CooperativeLoanCollectionEvent,
+): RemoteCooperativeLoanCollectionEventDto => ({
+  id: event.id,
+  installment_id: event.installment_id,
+  loan_id: event.loan_id,
+  loan_number: event.loan_number,
+  member_id: event.member_id,
+  member_number: event.member_number,
+  member_name: event.member_name,
+  collection_status: event.collection_status,
+  follow_up_date: event.follow_up_date ?? null,
+  collection_notes: event.collection_notes,
+  contacted_at: event.contacted_at,
+  actor_user_id: event.actor_user_id ?? null,
+  actor_user_name: event.actor_user_name ?? null,
+  actor_employee_id: event.actor_employee_id ?? null,
+  created_at: event.created_at,
 });
 
 const mapCooperativeLoanPaymentToRemoteDto = (
@@ -1041,6 +1105,19 @@ const isRemoteCooperativeMemberDto = (payload: unknown): payload is RemoteCooper
   );
 };
 
+const isRemoteCooperativeAreaDto = (payload: unknown): payload is RemoteCooperativeAreaDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCooperativeAreaDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteCooperativeSavingTransactionDto = (
   payload: unknown,
 ): payload is RemoteCooperativeSavingTransactionDto => {
@@ -1128,6 +1205,27 @@ const isRemoteCooperativeLoanInstallmentDto = (
     typeof candidate.status === 'string' &&
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteCooperativeLoanCollectionEventDto = (
+  payload: unknown,
+): payload is RemoteCooperativeLoanCollectionEventDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCooperativeLoanCollectionEventDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.installment_id === 'string' &&
+    typeof candidate.loan_id === 'string' &&
+    typeof candidate.loan_number === 'string' &&
+    typeof candidate.member_id === 'string' &&
+    typeof candidate.member_number === 'string' &&
+    typeof candidate.member_name === 'string' &&
+    typeof candidate.collection_status === 'string' &&
+    typeof candidate.collection_notes === 'string' &&
+    typeof candidate.contacted_at === 'string' &&
+    typeof candidate.created_at === 'string'
   );
 };
 
@@ -1681,6 +1779,17 @@ const updateCooperativeLoanInstallmentSyncMetadata = async (
   await db.cooperativeLoanInstallments.update(installmentId, syncMetadata);
 };
 
+const updateCooperativeLoanCollectionEventSyncMetadata = async (
+  eventId: string,
+  sourceCreatedAt: string,
+  syncMetadata: Partial<Pick<CooperativeLoanCollectionEvent, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentEvent = await db.cooperativeLoanCollectionEvents.get(eventId);
+  if (!currentEvent || currentEvent.created_at !== sourceCreatedAt) return;
+
+  await db.cooperativeLoanCollectionEvents.update(eventId, syncMetadata);
+};
+
 const updateCooperativeLoanPaymentSyncMetadata = async (
   paymentId: string,
   sourceUpdatedAt: string,
@@ -1868,6 +1977,17 @@ const updateCurrencyRateSyncMetadata = async (
   await db.currencyRates.update(rateId, syncMetadata);
 };
 
+const updateCooperativeAreaSyncMetadata = async (
+  areaId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CooperativeArea, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentArea = await db.cooperativeAreas.get(areaId);
+  if (!currentArea || currentArea.updated_at !== sourceUpdatedAt) return;
+
+  await db.cooperativeAreas.update(areaId, syncMetadata);
+};
+
 const markQueueItemPending = async (queueItemId: string) => {
   await db.syncQueue.update(queueItemId, {
     status: 'pending',
@@ -1921,6 +2041,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === COOPERATIVE_AREA_ENTITY && isRemoteCooperativeAreaDto(queueItem.payload)) {
+    await updateCooperativeAreaSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === COOPERATIVE_LOAN_ENTITY && isRemoteCooperativeLoanDto(queueItem.payload)) {
     await updateCooperativeLoanSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -1933,6 +2060,16 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     isRemoteCooperativeLoanInstallmentDto(queueItem.payload)
   ) {
     await updateCooperativeLoanInstallmentSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY &&
+    isRemoteCooperativeLoanCollectionEventDto(queueItem.payload)
+  ) {
+    await updateCooperativeLoanCollectionEventSyncMetadata(queueItem.entity_id, queueItem.payload.created_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -2124,6 +2261,14 @@ const processContactQueueItem = async (queueItem: SyncQueueItem) => {
   return contactPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processCooperativeAreaQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteCooperativeAreaDto(queueItem.payload)) {
+    throw new Error('Payload area koperasi sync queue tidak valid.');
+  }
+
+  return cooperativeAreaPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processCooperativeMemberQueueItem = async (queueItem: SyncQueueItem) => {
   if (!isRemoteCooperativeMemberDto(queueItem.payload)) {
     throw new Error('Payload anggota koperasi sync queue tidak valid.');
@@ -2162,6 +2307,37 @@ const processCooperativeLoanInstallmentQueueItem = async (queueItem: SyncQueueIt
   }
 
   return cooperativeLoanInstallmentPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processCooperativeLoanCollectionEventQueueItem = async (
+  queueItem: SyncQueueItem,
+): Promise<RemoteRecordCooperativeLoanCollectionEventResult> => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Event penagihan koperasi sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteCooperativeLoanCollectionEventDto(queueItem.payload)) {
+    throw new Error('Payload event penagihan koperasi sync queue tidak valid.');
+  }
+
+  const sessionToken = await getCurrentSyncServerSessionToken();
+  if (!sessionToken) {
+    throw new Error(MISSING_SERVER_SESSION_TOKEN_SYNC_ERROR);
+  }
+
+  const result = await cooperativeCollectionEventPostgresAdapter.record({
+    session_token: sessionToken,
+    event_id: queueItem.payload.id,
+    installment_id: queueItem.payload.installment_id,
+    collection_status: queueItem.payload.collection_status,
+    follow_up_date: queueItem.payload.follow_up_date,
+    collection_notes: queueItem.payload.collection_notes,
+  });
+  if (!result) {
+    throw new Error('Upload event penagihan koperasi tidak menghasilkan data remote.');
+  }
+
+  return result;
 };
 
 const processCooperativeLoanPaymentQueueItem = async (
@@ -2402,6 +2578,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteActivityLog: RemoteActivityLogDto | null = null;
     let remoteAuthUser: RemoteAuthUserDto | null = null;
     let remoteContact: RemoteContactDto | null = null;
+    let remoteCooperativeArea: RemoteCooperativeAreaDto | null = null;
+    let remoteCooperativeLoanCollectionEventResult: RemoteRecordCooperativeLoanCollectionEventResult | null = null;
     let remoteCooperativeLoan: RemoteCooperativeLoanDto | null = null;
     let remoteCooperativeLoanInstallment: RemoteCooperativeLoanInstallmentDto | null = null;
     let remoteCooperativeLoanPayment: RemoteCooperativeLoanPaymentDto | null = null;
@@ -2431,10 +2609,14 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteAuthUser = await processAuthUserQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CONTACT_ENTITY) {
       remoteContact = await processContactQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === COOPERATIVE_AREA_ENTITY) {
+      remoteCooperativeArea = await processCooperativeAreaQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === COOPERATIVE_LOAN_ENTITY) {
       remoteCooperativeLoan = await processCooperativeLoanQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === COOPERATIVE_LOAN_INSTALLMENT_ENTITY) {
       remoteCooperativeLoanInstallment = await processCooperativeLoanInstallmentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY) {
+      remoteCooperativeLoanCollectionEventResult = await processCooperativeLoanCollectionEventQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === COOPERATIVE_LOAN_PAYMENT_ENTITY) {
       remoteCooperativeLoanPayment = await processCooperativeLoanPaymentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === COOPERATIVE_MEMBER_ENTITY) {
@@ -2645,6 +2827,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       return;
     }
 
+    if (remoteCooperativeArea && isRemoteCooperativeAreaDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCooperativeAreaSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCooperativeArea.updated_at,
+      });
+      await mergeRemoteCooperativeAreasIntoDexie([remoteCooperativeArea], syncedAt);
+      return;
+    }
+
     if (remoteCooperativeLoanInstallment && isRemoteCooperativeLoanInstallmentDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateCooperativeLoanInstallmentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
@@ -2654,6 +2848,24 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteCooperativeLoanInstallment.updated_at,
       });
       await mergeRemoteCooperativeLoanInstallmentsIntoDexie([remoteCooperativeLoanInstallment], syncedAt);
+      return;
+    }
+
+    if (
+      remoteCooperativeLoanCollectionEventResult &&
+      isRemoteCooperativeLoanCollectionEventDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCooperativeLoanCollectionEventSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.created_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCooperativeLoanCollectionEventResult.event.created_at,
+      });
+      await Promise.all([
+        mergeRemoteCooperativeCollectionEventsIntoDexie([remoteCooperativeLoanCollectionEventResult.event], syncedAt),
+        mergeRemoteCooperativeLoanInstallmentsIntoDexie([remoteCooperativeLoanCollectionEventResult.installment], syncedAt),
+      ]);
       return;
     }
 
@@ -3178,6 +3390,29 @@ export const enqueueCooperativeMemberSync = async (
   return queueItem;
 };
 
+export const enqueueCooperativeAreaSync = async (
+  area: CooperativeArea,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: COOPERATIVE_AREA_ENTITY,
+    entity_id: area.id,
+    operation,
+    payload: mapCooperativeAreaToRemoteDto(area),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueueCooperativeSavingTransactionSync = async (
   transaction: CooperativeSavingTransaction,
   operation: Extract<SyncQueueOperation, 'create' | 'update'>,
@@ -3270,6 +3505,29 @@ export const enqueueCooperativeLoanInstallmentSync = async (
   return queueItem;
 };
 
+export const enqueueCooperativeLoanCollectionEventSync = async (
+  event: CooperativeLoanCollectionEvent,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY,
+    entity_id: event.id,
+    operation,
+    payload: mapCooperativeLoanCollectionEventToRemoteDto(event),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueueCooperativeLoanPaymentSync = async (
   payment: CooperativeLoanPayment,
   operation: Extract<SyncQueueOperation, 'create' | 'update'>,
@@ -3295,20 +3553,39 @@ export const enqueueCooperativeLoanPaymentSync = async (
 
 export const enqueuePendingCooperativeDataForSync = async () => {
   const [
+    areaQueueItems,
     memberQueueItems,
     savingTransactionQueueItems,
     savingBalanceQueueItems,
     loanQueueItems,
     loanInstallmentQueueItems,
+    loanCollectionEventQueueItems,
     loanPaymentQueueItems,
   ] = await Promise.all([
+    db.syncQueue.where('entity').equals(COOPERATIVE_AREA_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(COOPERATIVE_MEMBER_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(COOPERATIVE_SAVING_TRANSACTION_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(COOPERATIVE_MEMBER_SAVING_BALANCE_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(COOPERATIVE_LOAN_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(COOPERATIVE_LOAN_INSTALLMENT_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(COOPERATIVE_LOAN_PAYMENT_ENTITY).toArray(),
   ]);
+
+  const areas = (await db.cooperativeAreas.toArray())
+    .filter((area) => area.sync_status === 'pending' || area.sync_status === 'failed');
+  for (const area of areas) {
+    const existingQueueItem = areaQueueItems.find((queueItem) => (
+      queueItem.entity_id === area.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCooperativeAreaDto(queueItem.payload) &&
+      queueItem.payload.updated_at === area.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueCooperativeAreaSync(area, 'update');
+    }
+  }
 
   const members = (await db.cooperativeMembers.toArray())
     .filter((member) => member.sync_status === 'pending' || member.sync_status === 'failed');
@@ -3382,6 +3659,37 @@ export const enqueuePendingCooperativeDataForSync = async () => {
 
     if (!existingQueueItem) {
       await enqueueCooperativeLoanInstallmentSync(installment, 'update');
+    }
+  }
+
+  const loanCollectionEvents = (await db.cooperativeLoanCollectionEvents.toArray())
+    .filter((event) => event.sync_status === 'pending' || event.sync_status === 'failed');
+  for (const event of loanCollectionEvents) {
+    const existingQueueItem = loanCollectionEventQueueItems.find((queueItem) => (
+      queueItem.entity_id === event.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCooperativeLoanCollectionEventDto(queueItem.payload) &&
+      queueItem.payload.created_at === event.created_at
+    ));
+
+    if (
+      existingQueueItem?.status === 'failed' &&
+      existingQueueItem.error_message === MISSING_SERVER_SESSION_TOKEN_SYNC_ERROR &&
+      await getCurrentSyncServerSessionToken()
+    ) {
+      const now = new Date().toISOString();
+      await db.syncQueue.update(existingQueueItem.id, {
+        status: 'pending',
+        attempts: 0,
+        error_message: undefined,
+        updated_at: now,
+      });
+      await updateCooperativeLoanCollectionEventSyncMetadata(event.id, event.created_at, {
+        sync_status: 'pending',
+        sync_error: undefined,
+      });
+    } else if (!existingQueueItem) {
+      await enqueueCooperativeLoanCollectionEventSync(event, 'create');
     }
   }
 

@@ -58,6 +58,7 @@ import {
 } from '@/services/cooperativeFieldCashService';
 import {
   enqueueCooperativeMemberSavingBalancesSync,
+  enqueueCooperativeLoanCollectionEventsSync,
   enqueueCooperativeLoanInstallmentsSync,
   enqueueCooperativeLoanPaymentsSync,
   enqueueCooperativeLoansSync,
@@ -1935,6 +1936,7 @@ const recordCooperativeLoanInstallmentCollectionLocally = async (
   }
 
   await enqueueCooperativeLoanInstallmentsSync([savedInstallment], 'update');
+  await enqueueCooperativeLoanCollectionEventsSync([savedEvent], 'create');
 
   return {
     event: savedEvent,

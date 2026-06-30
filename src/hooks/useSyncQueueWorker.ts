@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { queryClient } from '@/providers/queryClient';
 import { isTauriRuntime } from '@/services/postgresAdapter';
 import { runDatabaseRefreshNow, runDatabaseSyncNow } from '@/services/syncOrchestratorService';
 
@@ -11,6 +12,12 @@ type PostgresRealtimeChangeEvent = {
   id?: string;
   updated_at?: string;
   emitted_at?: string;
+};
+
+const invalidateServerAuthoritativeQueries = (change: PostgresRealtimeChangeEvent) => {
+  if (change.table === 'cooperative_payment_approval_requests') {
+    queryClient.invalidateQueries({ queryKey: ['cooperativePaymentApprovalRequests'] });
+  }
 };
 
 export const useSyncQueueWorker = () => {
@@ -66,7 +73,10 @@ export const useSyncQueueWorker = () => {
     window.addEventListener('online', syncWhenOnline);
 
     if (isTauriRuntime()) {
-      void listen<PostgresRealtimeChangeEvent>('postgres-data-change', scheduleRealtimeSync)
+      void listen<PostgresRealtimeChangeEvent>('postgres-data-change', (event) => {
+        invalidateServerAuthoritativeQueries(event.payload);
+        scheduleRealtimeSync();
+      })
         .then((unlisten) => {
           if (isDisposed) {
             unlisten();

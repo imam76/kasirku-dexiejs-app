@@ -42,6 +42,8 @@ const entityLabelByName: Record<string, string> = {
   activityLogs: 'Log Aktivitas',
   authUsers: 'User',
   contacts: 'Kontak',
+  cooperativeAreas: 'Area Koperasi',
+  cooperativeLoanCollectionEvents: 'Histori Penagihan Koperasi',
   cooperativeLoanInstallments: 'Angsuran Koperasi',
   cooperativeLoanPayments: 'Pembayaran Koperasi',
   cooperativeLoans: 'Pinjaman Koperasi',

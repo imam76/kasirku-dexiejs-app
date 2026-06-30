@@ -1,6 +1,6 @@
 import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
-import { pushLocalCooperativeAreasToPostgres, refreshCooperativeAreasFromPostgres } from '@/services/cooperativeAreaReadService';
+import { refreshCooperativeAreasFromPostgres } from '@/services/cooperativeAreaReadService';
 import { refreshCooperativeDataFromPostgres } from '@/services/cooperativeReadService';
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
@@ -52,7 +52,6 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingPurchaseDocumentsForSync();
   await enqueuePendingSalesDocumentsForSync();
   await enqueuePendingStockOpnamesForSync();
-  await pushLocalCooperativeAreasToPostgres();
 };
 
 export const refreshAllDataFromPostgres = async () => {

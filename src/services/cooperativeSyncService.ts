@@ -1,4 +1,6 @@
 import {
+  enqueueCooperativeAreaSync,
+  enqueueCooperativeLoanCollectionEventSync,
   enqueueCooperativeLoanInstallmentSync,
   enqueueCooperativeLoanPaymentSync,
   enqueueCooperativeLoanSync,
@@ -7,7 +9,9 @@ import {
   enqueueCooperativeSavingTransactionSync,
 } from '@/services/syncQueueService';
 import type {
+  CooperativeArea,
   CooperativeLoan,
+  CooperativeLoanCollectionEvent,
   CooperativeLoanInstallment,
   CooperativeLoanPayment,
   CooperativeMember,
@@ -30,6 +34,15 @@ export const enqueueCooperativeMembersSync = async (
 ) => {
   for (const member of members) {
     await enqueueCooperativeMemberSync(member, operation);
+  }
+};
+
+export const enqueueCooperativeAreasSync = async (
+  areas: CooperativeArea[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  for (const area of areas) {
+    await enqueueCooperativeAreaSync(area, operation);
   }
 };
 
@@ -66,6 +79,15 @@ export const enqueueCooperativeLoanInstallmentsSync = async (
 ) => {
   for (const installment of installments) {
     await enqueueCooperativeLoanInstallmentSync(installment, operation);
+  }
+};
+
+export const enqueueCooperativeLoanCollectionEventsSync = async (
+  events: CooperativeLoanCollectionEvent[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  for (const event of events) {
+    await enqueueCooperativeLoanCollectionEventSync(event, operation);
   }
 };
 

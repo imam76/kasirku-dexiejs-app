@@ -1,7 +1,7 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { cooperativeAreaSchema } from '@/lib/validations/cooperativeArea';
-import { pushLocalCooperativeAreasToPostgres } from '@/services/cooperativeAreaReadService';
+import { enqueueCooperativeAreasSync } from '@/services/cooperativeSyncService';
 import type { CooperativeArea } from '@/types';
 
 export interface CooperativeAreaUpsertInput {
@@ -73,7 +73,7 @@ export const createCooperativeArea = async (input: CooperativeAreaUpsertInput): 
     entity_id: area.id,
     description: `${currentUser?.name ?? 'User'} membuat area ${area.name}.`,
   });
-  await pushLocalCooperativeAreasToPostgres();
+  await enqueueCooperativeAreasSync([area], 'create');
 
   return area;
 };
@@ -105,7 +105,7 @@ export const updateCooperativeArea = async (
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memperbarui area ${updatedArea.name}.`,
   });
-  await pushLocalCooperativeAreasToPostgres();
+  await enqueueCooperativeAreasSync([updatedArea], 'update');
 
   return updatedArea;
 };
@@ -131,7 +131,7 @@ export const archiveCooperativeArea = async (id: string): Promise<CooperativeAre
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan area ${area.name}.`,
   });
-  await pushLocalCooperativeAreasToPostgres();
+  await enqueueCooperativeAreasSync([archivedArea], 'update');
 
   return archivedArea;
 };
@@ -159,7 +159,7 @@ export const restoreCooperativeArea = async (id: string): Promise<CooperativeAre
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan area ${area.name}.`,
   });
-  await pushLocalCooperativeAreasToPostgres();
+  await enqueueCooperativeAreasSync([restoredArea], 'update');
 
   return restoredArea;
 };
