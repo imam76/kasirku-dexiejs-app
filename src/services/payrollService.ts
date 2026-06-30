@@ -10,10 +10,12 @@ import {
 } from '@/services/employeeCashAdvanceService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { getCashOrBankAccountForPayment, postPayrollRunPaidJournal } from '@/services/generalLedgerService';
+import { enqueueEmployeeCashAdvanceBundleSync, enqueuePayrollRunBundleSync } from '@/services/syncQueueService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import type {
   AuthUser,
   Employee,
+  EmployeeCashAdvance,
   FinanceTransaction,
   PayrollRun,
   PayrollRunItem,
@@ -50,6 +52,42 @@ const requirePayrollActor = async () => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'FINANCE_ACCESS');
   return currentUser;
+};
+
+const withPendingPayrollRunSync = (run: PayrollRun): PayrollRun => ({
+  ...run,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
+const enqueuePayrollRunWithCurrentDetails = async (
+  run: PayrollRun,
+  operation: 'create' | 'update',
+) => {
+  const [items, repayments] = await Promise.all([
+    db.payrollRunItems.where('payroll_run_id').equals(run.id).toArray(),
+    db.employeeCashAdvanceRepayments.where('payroll_run_id').equals(run.id).toArray(),
+  ]);
+
+  await enqueuePayrollRunBundleSync(run, items, repayments, operation);
+};
+
+const enqueueCashAdvanceBundlesWithCurrentRepayments = async (
+  cashAdvances: EmployeeCashAdvance[],
+) => {
+  const uniqueCashAdvances = Array.from(new Map(cashAdvances.map((cashAdvance) => [
+    cashAdvance.id,
+    cashAdvance,
+  ])).values());
+
+  for (const cashAdvance of uniqueCashAdvances) {
+    const repayments = await db.employeeCashAdvanceRepayments
+      .where('cash_advance_id')
+      .equals(cashAdvance.id)
+      .toArray();
+
+    await enqueueEmployeeCashAdvanceBundleSync(cashAdvance, repayments, 'update');
+  }
 };
 
 const normalizeDateOnly = (value: string) => value.slice(0, 10);
@@ -253,7 +291,7 @@ export const createPayrollRun = async (input: PayrollRunUpsertInput): Promise<Pa
     now,
   });
   const totals = summarizePayrollItems(items);
-  const payrollRun: PayrollRun = {
+  const payrollRun: PayrollRun = withPendingPayrollRunSync({
     id: payrollRunId,
     payroll_number: payrollNumber,
     period_start: sanitized.period_start,
@@ -267,7 +305,7 @@ export const createPayrollRun = async (input: PayrollRunUpsertInput): Promise<Pa
     updated_by_name: currentUser?.name,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.transaction('rw', [db.payrollRuns, db.payrollRunItems, db.employeeCashAdvanceRepayments, db.activityLogs], async () => {
     await db.payrollRuns.add(payrollRun);
@@ -284,6 +322,7 @@ export const createPayrollRun = async (input: PayrollRunUpsertInput): Promise<Pa
     });
   });
 
+  await enqueuePayrollRunBundleSync(payrollRun, items, repayments, 'create');
   return payrollRun;
 };
 
@@ -310,7 +349,7 @@ export const updatePayrollRun = async (
     now,
   });
   const totals = summarizePayrollItems(items);
-  const updatedRun: PayrollRun = {
+  const updatedRun: PayrollRun = withPendingPayrollRunSync({
     ...existingRun,
     period_start: sanitized.period_start,
     period_end: sanitized.period_end,
@@ -319,7 +358,7 @@ export const updatePayrollRun = async (
     updated_by: currentUser?.id,
     updated_by_name: currentUser?.name,
     updated_at: now,
-  };
+  });
 
   await db.transaction('rw', [db.payrollRuns, db.payrollRunItems, db.employeeCashAdvanceRepayments, db.activityLogs], async () => {
     await db.payrollRuns.put(updatedRun);
@@ -342,6 +381,7 @@ export const updatePayrollRun = async (
     });
   });
 
+  await enqueuePayrollRunBundleSync(updatedRun, items, repayments, 'update');
   return updatedRun;
 };
 
@@ -359,14 +399,14 @@ export const approvePayrollRun = async (payrollRunId: string): Promise<PayrollRu
   }
 
   const now = new Date().toISOString();
-  const approvedRun: PayrollRun = {
+  const approvedRun: PayrollRun = withPendingPayrollRunSync({
     ...run,
     status: 'APPROVED',
     approved_at: now,
     updated_by: currentUser?.id,
     updated_by_name: currentUser?.name,
     updated_at: now,
-  };
+  });
 
   await db.transaction('rw', [
     db.payrollRuns,
@@ -385,6 +425,7 @@ export const approvePayrollRun = async (payrollRunId: string): Promise<PayrollRu
     });
   });
 
+  await enqueuePayrollRunWithCurrentDetails(approvedRun, 'update');
   return approvedRun;
 };
 
@@ -397,6 +438,7 @@ export const payPayrollRun = async (
   const now = new Date().toISOString();
   let paidRun: PayrollRun | undefined;
   let financeTransaction: FinanceTransaction | undefined;
+  let postedCashAdvances: EmployeeCashAdvance[] = [];
 
   await db.transaction('rw', [
     db.payrollRuns,
@@ -424,8 +466,9 @@ export const payPayrollRun = async (
     if (run.net_amount > 0) {
       financeTransaction = await addPayrollFinanceEffect(run, payment, currentUser, now);
     }
-    await postPayrollCashAdvanceRepayments(run.id, paidAt, now);
-    paidRun = {
+    const cashAdvancePosting = await postPayrollCashAdvanceRepayments(run.id, paidAt, now);
+    postedCashAdvances = cashAdvancePosting.cashAdvances;
+    paidRun = withPendingPayrollRunSync({
       ...run,
       status: 'PAID',
       paid_at: paidAt,
@@ -438,7 +481,7 @@ export const payPayrollRun = async (
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
       updated_at: now,
-    };
+    });
 
     await db.payrollRuns.put(paidRun);
     await postPayrollRunPaidJournal(paidRun, currentUser);
@@ -458,6 +501,8 @@ export const payPayrollRun = async (
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
   }
+  await enqueuePayrollRunWithCurrentDetails(paidRun, 'update');
+  await enqueueCashAdvanceBundlesWithCurrentRepayments(postedCashAdvances);
   return paidRun;
 };
 
@@ -475,14 +520,14 @@ export const voidPayrollRun = async (payrollRunId: string): Promise<PayrollRun> 
   }
 
   const now = new Date().toISOString();
-  const voidedRun: PayrollRun = {
+  const voidedRun: PayrollRun = withPendingPayrollRunSync({
     ...run,
     status: 'VOIDED',
     voided_at: now,
     updated_by: currentUser?.id,
     updated_by_name: currentUser?.name,
     updated_at: now,
-  };
+  });
 
   await db.transaction('rw', [db.payrollRuns, db.employeeCashAdvanceRepayments, db.activityLogs], async () => {
     await voidPayrollCashAdvanceRepayments(voidedRun.id, now);
@@ -496,5 +541,6 @@ export const voidPayrollRun = async (payrollRunId: string): Promise<PayrollRun> 
     });
   });
 
+  await enqueuePayrollRunWithCurrentDetails(voidedRun, 'update');
   return voidedRun;
 };

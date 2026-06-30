@@ -38,6 +38,7 @@ BEGIN
     FOREACH realtime_table_name IN ARRAY ARRAY[
         'activity_logs',
         'auth_users',
+        'cashier_sessions',
         'contacts',
         'cooperative_areas',
         'cooperative_loan_collection_events',

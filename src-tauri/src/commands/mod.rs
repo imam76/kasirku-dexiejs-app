@@ -1,6 +1,7 @@
 pub mod accounting_setting_commands;
 pub mod app_setup_config_commands;
 pub mod auth_commands;
+pub mod cashier_session_commands;
 pub mod chart_of_account_commands;
 pub mod company_profile_setting_commands;
 pub mod contact_commands;
@@ -10,6 +11,7 @@ pub mod department_commands;
 pub mod employee_commands;
 pub mod finance_transaction_commands;
 pub mod journal_entry_commands;
+pub mod payroll_commands;
 pub mod postgres_health;
 pub mod product_commands;
 pub mod production_order_commands;

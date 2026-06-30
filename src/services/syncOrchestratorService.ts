@@ -8,6 +8,7 @@ import {
   refreshFinanceAccountMappingsFromPostgres,
   refreshGeneralLedgerSettingFromPostgres,
 } from '@/services/accountingSettingReadService';
+import { refreshCashierSessionsFromPostgres } from '@/services/cashierSessionReadService';
 import { refreshChartOfAccountsFromPostgres } from '@/services/chartOfAccountReadService';
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
@@ -15,6 +16,7 @@ import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService
 import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
+import { refreshEmployeeCashAdvancesFromPostgres, refreshPayrollRunsFromPostgres } from '@/services/payrollReadService';
 import { postgresAdapter } from '@/services/postgresAdapter';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
@@ -25,12 +27,14 @@ import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadServi
 import {
   enqueuePendingAccountingSettingsForSync,
   enqueuePendingAuthUsersForSync,
+  enqueuePendingCashierSessionsForSync,
   enqueuePendingChartOfAccountsForSync,
   enqueuePendingContactsForSync,
   enqueuePendingCooperativeDataForSync,
   enqueuePendingEmployeesForSync,
   enqueuePendingFinanceTransactionsForSync,
   enqueuePendingJournalEntriesForSync,
+  enqueuePendingPayrollDataForSync,
   enqueuePendingProductionOrdersForSync,
   enqueuePendingPurchaseDocumentsForSync,
   enqueuePendingRolePermissionsForSync,
@@ -59,6 +63,8 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingContactsForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingEmployeesForSync();
+  await enqueuePendingPayrollDataForSync();
+  await enqueuePendingCashierSessionsForSync();
   await enqueuePendingFinanceTransactionsForSync();
   await enqueuePendingJournalEntriesForSync();
   await enqueuePendingProductionOrdersForSync();
@@ -98,6 +104,9 @@ export const refreshAllDataFromPostgres = async () => {
     currencies: await refreshCurrenciesFromPostgres(),
     currencyRates: await refreshCurrencyRatesFromPostgres(),
     products: await refreshProductsFromPostgres(),
+    payrollRuns: await refreshPayrollRunsFromPostgres(),
+    employeeCashAdvances: await refreshEmployeeCashAdvancesFromPostgres(),
+    cashierSessions: await refreshCashierSessionsFromPostgres(),
     financeTransactions: await refreshFinanceTransactionsFromPostgres(),
     journalEntries: await refreshJournalEntriesFromPostgres(),
     productionOrders: await refreshProductionOrdersFromPostgres(),

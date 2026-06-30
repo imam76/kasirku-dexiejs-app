@@ -1,5 +1,6 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
+import { enqueueCashierSessionSync } from '@/services/syncQueueService';
 import type { CashierSession, CashierSessionBalanceStatus, Transaction } from '@/types';
 import { isTransactionActive, isTransactionVoided } from '@/utils/transactions';
 
@@ -86,6 +87,8 @@ export const openCashierSession = async (input: OpenCashierSessionInput): Promis
     opening_note: input.opening_note?.trim() || undefined,
     created_at: now,
     updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
   };
 
   await db.cashierSessions.add(session);
@@ -96,6 +99,7 @@ export const openCashierSession = async (input: OpenCashierSessionInput): Promis
     entity_id: session.id,
     description: `${currentUser.name} membuka sesi kasir ${session.session_number}.`,
   });
+  await enqueueCashierSessionSync(session, 'create');
 
   return session;
 };
@@ -201,6 +205,8 @@ export const closeCashierSession = async (input: CloseCashierSessionInput): Prom
     cash_difference_amount: reconciliation.cash_difference_amount,
     balance_status: reconciliation.balance_status,
     updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
   });
 
   const closedSession = await db.cashierSessions.get(session.id);
@@ -217,6 +223,7 @@ export const closeCashierSession = async (input: CloseCashierSessionInput): Prom
     entity_id: closedSession.id,
     description: `${currentUser.name} menutup sesi kasir ${closedSession.session_number} dengan selisih ${reconciliation.cash_difference_amount}.`,
   });
+  await enqueueCashierSessionSync(closedSession, 'update');
 
   return closedSession;
 };

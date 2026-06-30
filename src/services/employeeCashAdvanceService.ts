@@ -12,6 +12,7 @@ import {
   postEmployeeCashAdvanceDisbursementJournal,
   reverseEmployeeCashAdvanceDisbursementJournal,
 } from '@/services/generalLedgerService';
+import { enqueueEmployeeCashAdvanceBundleSync } from '@/services/syncQueueService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import type {
   EmployeeCashAdvance,
@@ -96,6 +97,24 @@ const updateFinanceBalanceForCashAdvance = async (amountDelta: number, now: stri
   });
 };
 
+const withPendingCashAdvanceSync = (cashAdvance: EmployeeCashAdvance): EmployeeCashAdvance => ({
+  ...cashAdvance,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
+const enqueueCashAdvanceBundleWithCurrentRepayments = async (
+  cashAdvance: EmployeeCashAdvance,
+  operation: 'create' | 'update',
+) => {
+  const repayments = await db.employeeCashAdvanceRepayments
+    .where('cash_advance_id')
+    .equals(cashAdvance.id)
+    .toArray();
+
+  await enqueueEmployeeCashAdvanceBundleSync(cashAdvance, repayments, operation);
+};
+
 export const createEmployeeCashAdvance = async (
   input: CreateEmployeeCashAdvanceInput,
 ): Promise<EmployeeCashAdvance> => {
@@ -131,7 +150,7 @@ export const createEmployeeCashAdvance = async (
     const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.EMPLOYEE_CASH_ADVANCE);
     const advanceNumber = await createNextCashAdvanceNumber(disbursedAt);
 
-    savedCashAdvance = {
+    savedCashAdvance = withPendingCashAdvanceSync({
       id: cashAdvanceId,
       advance_number: advanceNumber,
       employee_id: employee.id,
@@ -154,7 +173,7 @@ export const createEmployeeCashAdvance = async (
       updated_by_name: currentUser?.name,
       created_at: now,
       updated_at: now,
-    };
+    });
 
     financeTransaction = withPendingFinanceTransactionSync({
       id: financeTransactionId,
@@ -190,6 +209,7 @@ export const createEmployeeCashAdvance = async (
   }
 
   await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  await enqueueCashAdvanceBundleWithCurrentRepayments(savedCashAdvance, 'create');
   return savedCashAdvance;
 };
 
@@ -255,7 +275,7 @@ export const voidEmployeeCashAdvance = async (
     }
 
     await updateFinanceBalanceForCashAdvance(cashAdvance.amount, now);
-    voidedCashAdvance = {
+    voidedCashAdvance = withPendingCashAdvanceSync({
       ...cashAdvance,
       status: 'VOIDED',
       outstanding_amount: 0,
@@ -264,7 +284,7 @@ export const voidEmployeeCashAdvance = async (
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
       updated_at: now,
-    };
+    });
 
     await db.employeeCashAdvances.put(voidedCashAdvance);
     await reverseEmployeeCashAdvanceDisbursementJournal(
@@ -289,6 +309,7 @@ export const voidEmployeeCashAdvance = async (
   if (deletedFinanceTransaction) {
     await enqueueFinanceTransactionsSync([deletedFinanceTransaction], 'delete');
   }
+  await enqueueCashAdvanceBundleWithCurrentRepayments(voidedCashAdvance, 'update');
 
   return voidedCashAdvance;
 };
@@ -430,7 +451,12 @@ export const postPayrollCashAdvanceRepayments = async (
     .filter((repayment) => repayment.status === 'RESERVED')
     .toArray();
 
-  if (repayments.length === 0) return [];
+  if (repayments.length === 0) {
+    return {
+      repayments: [] as EmployeeCashAdvanceRepayment[],
+      cashAdvances: [] as EmployeeCashAdvance[],
+    };
+  }
 
   const amountByAdvance = repayments.reduce<Map<string, number>>((acc, repayment) => {
     acc.set(repayment.cash_advance_id, roundCurrency((acc.get(repayment.cash_advance_id) ?? 0) + repayment.amount));
@@ -438,6 +464,7 @@ export const postPayrollCashAdvanceRepayments = async (
   }, new Map<string, number>());
   const advances = await db.employeeCashAdvances.bulkGet(Array.from(amountByAdvance.keys()));
   const advanceById = new Map((advances.filter(Boolean) as EmployeeCashAdvance[]).map((advance) => [advance.id, advance]));
+  const updatedCashAdvances: EmployeeCashAdvance[] = [];
 
   for (const [cashAdvanceId, repaymentAmount] of amountByAdvance.entries()) {
     const advance = advanceById.get(cashAdvanceId);
@@ -449,12 +476,14 @@ export const postPayrollCashAdvanceRepayments = async (
     }
 
     const nextOutstandingAmount = Math.max(0, roundCurrency(advance.outstanding_amount - repaymentAmount));
-    await db.employeeCashAdvances.put({
+    const updatedCashAdvance = withPendingCashAdvanceSync({
       ...advance,
       outstanding_amount: nextOutstandingAmount,
       status: nextOutstandingAmount <= 0.01 ? 'PAID' : 'ACTIVE',
       updated_at: now,
     });
+    await db.employeeCashAdvances.put(updatedCashAdvance);
+    updatedCashAdvances.push(updatedCashAdvance);
   }
 
   const postedRepayments = repayments.map((repayment): EmployeeCashAdvanceRepayment => ({
@@ -465,7 +494,10 @@ export const postPayrollCashAdvanceRepayments = async (
   }));
 
   await db.employeeCashAdvanceRepayments.bulkPut(postedRepayments);
-  return postedRepayments;
+  return {
+    repayments: postedRepayments,
+    cashAdvances: updatedCashAdvances,
+  };
 };
 
 export const voidPayrollCashAdvanceRepayments = async (

@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
+  CashierSessionBalanceStatus,
+  CashierSessionStatus,
   CooperativeCollectionWeekday,
   CooperativeLoanBillingFrequency,
   CooperativeLoanDeductionMethod,
@@ -18,10 +20,13 @@ import type {
   CooperativeSavingTransactionType,
   CooperativeSavingType,
   CooperativeSavingWithdrawalSource,
+  EmployeeCashAdvanceRepaymentStatus,
+  EmployeeCashAdvanceStatus,
   FinanceTransactionType,
   JournalEntryStatus,
   JournalSourceType,
   PaymentMethod,
+  PayrollRunStatus,
   Permission,
   ProductUnit,
   ProductUnitMapping,
@@ -153,6 +158,113 @@ export interface RemoteEmployeeCollectionScheduleDto {
   deleted_at?: string | null;
 }
 
+export interface RemotePayrollRunDto {
+  id: string;
+  payroll_number: string;
+  period_start: string;
+  period_end: string;
+  status: PayrollRunStatus;
+  employee_count: number;
+  gross_amount: number;
+  allowance_amount: number;
+  bonus_amount: number;
+  other_deduction_amount: number;
+  cash_advance_deduction_amount: number;
+  deduction_amount: number;
+  net_amount: number;
+  payment_method?: PaymentMethod | null;
+  payment_channel?: string | null;
+  cash_account_id?: string | null;
+  cash_account_code?: string | null;
+  cash_account_name?: string | null;
+  finance_transaction_id?: string | null;
+  notes?: string | null;
+  approved_at?: string | null;
+  paid_at?: string | null;
+  voided_at?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemotePayrollRunItemDto {
+  id: string;
+  payroll_run_id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_position?: string | null;
+  base_salary: number;
+  allowance_amount: number;
+  bonus_amount: number;
+  other_deduction_amount: number;
+  cash_advance_deduction_amount: number;
+  deduction_amount: number;
+  gross_amount: number;
+  net_amount: number;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteEmployeeCashAdvanceDto {
+  id: string;
+  advance_number: string;
+  employee_id: string;
+  employee_name: string;
+  employee_position?: string | null;
+  amount: number;
+  outstanding_amount: number;
+  status: EmployeeCashAdvanceStatus;
+  disbursed_at: string;
+  payment_method?: PaymentMethod | null;
+  payment_channel?: string | null;
+  cash_account_id?: string | null;
+  cash_account_code?: string | null;
+  cash_account_name?: string | null;
+  finance_transaction_id?: string | null;
+  notes?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteEmployeeCashAdvanceRepaymentDto {
+  id: string;
+  cash_advance_id: string;
+  cash_advance_number: string;
+  payroll_run_id: string;
+  payroll_run_item_id: string;
+  payroll_number?: string | null;
+  employee_id: string;
+  employee_name: string;
+  amount: number;
+  status: EmployeeCashAdvanceRepaymentStatus;
+  allocated_at: string;
+  posted_at?: string | null;
+  voided_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemotePayrollRunBundleDto {
+  run: RemotePayrollRunDto;
+  items: RemotePayrollRunItemDto[];
+  cash_advance_repayments: RemoteEmployeeCashAdvanceRepaymentDto[];
+}
+
+export interface RemoteEmployeeCashAdvanceBundleDto {
+  cash_advance: RemoteEmployeeCashAdvanceDto;
+  repayments: RemoteEmployeeCashAdvanceRepaymentDto[];
+}
+
 export interface RemoteDepartmentDto {
   id: string;
   code?: string | null;
@@ -162,6 +274,33 @@ export interface RemoteDepartmentDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+}
+
+export interface RemoteCashierSessionDto {
+  id: string;
+  session_number: string;
+  status: CashierSessionStatus;
+  cashier_user_id?: string | null;
+  cashier_user_name?: string | null;
+  opened_at: string;
+  opening_cash_amount: number;
+  opening_note?: string | null;
+  closed_at?: string | null;
+  closed_by_user_id?: string | null;
+  closed_by_user_name?: string | null;
+  closing_cash_amount?: number | null;
+  closing_note?: string | null;
+  expected_cash_amount?: number | null;
+  cash_sales_amount?: number | null;
+  non_cash_sales_amount?: number | null;
+  total_sales_amount?: number | null;
+  voided_sales_amount?: number | null;
+  transaction_count?: number | null;
+  voided_transaction_count?: number | null;
+  cash_difference_amount?: number | null;
+  balance_status?: CashierSessionBalanceStatus | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RemoteChartOfAccountDto {
@@ -1370,6 +1509,46 @@ export const employeeCollectionSchedulePostgresAdapter = {
   },
 };
 
+export const payrollRunPostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemotePayrollRunBundleDto[]>('postgres_list_payroll_run_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePayrollRunBundleDto | null>('postgres_get_payroll_run_bundle', { id });
+  },
+
+  async upsert(input: RemotePayrollRunBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePayrollRunBundleDto>('postgres_upsert_payroll_run_bundle', { input });
+  },
+};
+
+export const employeeCashAdvancePostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteEmployeeCashAdvanceBundleDto[]>('postgres_list_employee_cash_advance_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEmployeeCashAdvanceBundleDto | null>('postgres_get_employee_cash_advance_bundle', { id });
+  },
+
+  async upsert(input: RemoteEmployeeCashAdvanceBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEmployeeCashAdvanceBundleDto>('postgres_upsert_employee_cash_advance_bundle', { input });
+  },
+};
+
 export const departmentPostgresAdapter = {
   async list() {
     if (!isTauriRuntime()) return [];
@@ -1389,6 +1568,23 @@ export const departmentPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteDepartmentDto | null>('postgres_delete_department', { id });
+  },
+};
+
+export const cashierSessionPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCashierSessionDto[]>('postgres_list_cashier_sessions');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCashierSessionDto | null>('postgres_get_cashier_session', { id });
+  },
+
+  async upsert(input: RemoteCashierSessionDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCashierSessionDto>('postgres_upsert_cashier_session', { input });
   },
 };
 

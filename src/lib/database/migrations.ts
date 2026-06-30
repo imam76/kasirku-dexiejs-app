@@ -1,6 +1,7 @@
 import type {
   AccountingProfileSetting,
   AuthUser,
+  CashierSession,
   ChartOfAccount,
   CompanyProfileSetting,
   Contact,
@@ -1889,5 +1890,47 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     await markPendingSetting('accountingProfileSetting');
     await markPendingSetting('enabledModules');
     await markPendingSetting('generalLedgerSetting');
+  });
+
+  this.version(72).stores({
+    payrollRuns: 'id, payroll_number, period_start, period_end, status, paid_at, finance_transaction_id, sync_status, created_at, updated_at',
+    employeeCashAdvances: 'id, advance_number, employee_id, status, disbursed_at, finance_transaction_id, sync_status, created_at, updated_at',
+  }).upgrade(async (tx) => {
+    const markPendingPayrollRecord = async (tableName: 'payrollRuns' | 'employeeCashAdvances') => {
+      const table = tx.table<{ id: string; sync_status?: string; sync_error?: string }, string>(tableName);
+      const records = await table.toArray();
+      const recordsToMark = records
+        .filter((record) => !record.sync_status)
+        .map((record) => ({
+          ...record,
+          sync_status: 'pending' as const,
+          sync_error: undefined,
+        }));
+
+      if (recordsToMark.length > 0) {
+        await table.bulkPut(recordsToMark);
+      }
+    };
+
+    await markPendingPayrollRecord('payrollRuns');
+    await markPendingPayrollRecord('employeeCashAdvances');
+  });
+
+  this.version(73).stores({
+    cashierSessions: 'id, session_number, status, cashier_user_id, opened_at, closed_at, balance_status, sync_status, created_at, updated_at',
+  }).upgrade(async (tx) => {
+    const table = tx.table<CashierSession, string>('cashierSessions');
+    const sessions = await table.toArray();
+    const sessionsToMark = sessions
+      .filter((session) => !session.sync_status)
+      .map((session) => ({
+        ...session,
+        sync_status: 'pending' as const,
+        sync_error: undefined,
+      }));
+
+    if (sessionsToMark.length > 0) {
+      await table.bulkPut(sessionsToMark);
+    }
   });
 }

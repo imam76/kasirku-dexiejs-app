@@ -26,6 +26,7 @@ import {
   mergeRemoteFinanceAccountMappingsIntoDexie,
   mergeRemoteGeneralLedgerSettingIntoDexie,
 } from '@/services/accountingSettingReadService';
+import { mergeRemoteCashierSessionsIntoDexie } from '@/services/cashierSessionReadService';
 import { mergeRemoteChartOfAccountsIntoDexie } from '@/services/chartOfAccountReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
 import {
@@ -35,6 +36,10 @@ import {
 } from '@/services/employeeReadService';
 import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
 import { mergeRemoteJournalEntryBundlesIntoDexie } from '@/services/journalEntryReadService';
+import {
+  mergeRemoteEmployeeCashAdvanceBundlesIntoDexie,
+  mergeRemotePayrollRunBundlesIntoDexie,
+} from '@/services/payrollReadService';
 import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
 import { mergeRemoteProductionOrderBundlesIntoDexie } from '@/services/productionReadService';
 import { mergeRemotePurchaseDocumentBundlesIntoDexie } from '@/services/purchaseDocumentReadService';
@@ -47,6 +52,7 @@ import {
   activityLogPostgresAdapter,
   accountingProfileSettingPostgresAdapter,
   authUserPostgresAdapter,
+  cashierSessionPostgresAdapter,
   chartOfAccountPostgresAdapter,
   contactPostgresAdapter,
   enabledModulePostgresAdapter,
@@ -62,12 +68,14 @@ import {
   currencyPostgresAdapter,
   currencyRatePostgresAdapter,
   departmentPostgresAdapter,
+  employeeCashAdvancePostgresAdapter,
   employeeAreaPostgresAdapter,
   employeeCollectionSchedulePostgresAdapter,
   employeePostgresAdapter,
   financeTransactionPostgresAdapter,
   isTauriRuntime,
   journalEntryPostgresAdapter,
+  payrollRunPostgresAdapter,
   postgresAdapter,
   productPostgresAdapter,
   productionOrderPostgresAdapter,
@@ -82,6 +90,7 @@ import {
   warehousePostgresAdapter,
   type RemoteActivityLogDto,
   type RemoteAuthUserDto,
+  type RemoteCashierSessionDto,
   type RemoteContactDto,
   type RemoteCooperativeAreaDto,
   type RemoteCooperativeLoanCollectionEventDto,
@@ -100,12 +109,18 @@ import {
   type RemoteFinanceAccountMappingDto,
   type RemoteGeneralLedgerSettingDto,
   type RemoteEmployeeAreaDto,
+  type RemoteEmployeeCashAdvanceBundleDto,
+  type RemoteEmployeeCashAdvanceDto,
+  type RemoteEmployeeCashAdvanceRepaymentDto,
   type RemoteEmployeeCollectionScheduleDto,
   type RemoteEmployeeDto,
   type RemoteFinanceTransactionDto,
   type RemoteJournalEntryBundleDto,
   type RemoteJournalEntryDto,
   type RemoteJournalEntryLineDto,
+  type RemotePayrollRunBundleDto,
+  type RemotePayrollRunDto,
+  type RemotePayrollRunItemDto,
   type RemoteProductDto,
   type RemoteProductionOrderBundleDto,
   type RemoteProductionOrderCostDto,
@@ -128,7 +143,7 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { AccountingProfileSetting, ActivityLog, AuthUser, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { AccountingProfileSetting, ActivityLog, AuthUser, CashierSession, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -137,6 +152,7 @@ const SESSION_STORAGE_KEY = 'frayukti-auth-session-id';
 const MISSING_SERVER_SESSION_TOKEN_SYNC_ERROR = 'Sesi server tidak tersedia untuk upload event penagihan koperasi. Login server lalu retry sync.';
 const ACTIVITY_LOG_ENTITY = 'activityLogs';
 const AUTH_USER_ENTITY = 'authUsers';
+const CASHIER_SESSION_ENTITY = 'cashierSessions';
 const CONTACT_ENTITY = 'contacts';
 const COOPERATIVE_AREA_ENTITY = 'cooperativeAreas';
 const COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY = 'cooperativeLoanCollectionEvents';
@@ -156,9 +172,11 @@ const GENERAL_LEDGER_SETTING_ENTITY = 'generalLedgerSetting';
 const DEPARTMENT_ENTITY = 'departments';
 const EMPLOYEE_ENTITY = 'employees';
 const EMPLOYEE_AREA_ENTITY = 'employeeAreas';
+const EMPLOYEE_CASH_ADVANCE_ENTITY = 'employeeCashAdvances';
 const EMPLOYEE_COLLECTION_SCHEDULE_ENTITY = 'employeeCollectionSchedules';
 const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
 const JOURNAL_ENTRY_ENTITY = 'journalEntries';
+const PAYROLL_RUN_ENTITY = 'payrollRuns';
 const PRODUCT_ENTITY = 'products';
 const PRODUCTION_ORDER_ENTITY = 'productionOrders';
 const PROJECT_ENTITY = 'projects';
@@ -237,6 +255,33 @@ const mapAuthUserToRemoteDto = (user: AuthUser): RemoteAuthUserDto => ({
   is_active: user.is_active,
   created_at: user.created_at,
   updated_at: user.updated_at,
+});
+
+const mapCashierSessionToRemoteDto = (session: CashierSession): RemoteCashierSessionDto => ({
+  id: session.id,
+  session_number: session.session_number,
+  status: session.status,
+  cashier_user_id: session.cashier_user_id ?? null,
+  cashier_user_name: session.cashier_user_name ?? null,
+  opened_at: session.opened_at,
+  opening_cash_amount: session.opening_cash_amount,
+  opening_note: session.opening_note ?? null,
+  closed_at: session.closed_at ?? null,
+  closed_by_user_id: session.closed_by_user_id ?? null,
+  closed_by_user_name: session.closed_by_user_name ?? null,
+  closing_cash_amount: session.closing_cash_amount ?? null,
+  closing_note: session.closing_note ?? null,
+  expected_cash_amount: session.expected_cash_amount ?? null,
+  cash_sales_amount: session.cash_sales_amount ?? null,
+  non_cash_sales_amount: session.non_cash_sales_amount ?? null,
+  total_sales_amount: session.total_sales_amount ?? null,
+  voided_sales_amount: session.voided_sales_amount ?? null,
+  transaction_count: session.transaction_count ?? null,
+  voided_transaction_count: session.voided_transaction_count ?? null,
+  cash_difference_amount: session.cash_difference_amount ?? null,
+  balance_status: session.balance_status ?? null,
+  created_at: session.created_at,
+  updated_at: session.updated_at,
 });
 
 const mapRoleToRemoteDto = (role: Role): RemoteRoleDto => ({
@@ -674,6 +719,124 @@ const mapDeletedEmployeeCollectionScheduleToRemoteDto = (
   is_active: false,
   updated_at: deletedAt,
   deleted_at: deletedAt,
+});
+
+const mapPayrollRunToRemoteDto = (run: PayrollRun): RemotePayrollRunDto => ({
+  id: run.id,
+  payroll_number: run.payroll_number,
+  period_start: run.period_start,
+  period_end: run.period_end,
+  status: run.status,
+  employee_count: Math.trunc(normalizeRemoteNumber(run.employee_count)),
+  gross_amount: normalizeRemoteNumber(run.gross_amount),
+  allowance_amount: normalizeRemoteNumber(run.allowance_amount),
+  bonus_amount: normalizeRemoteNumber(run.bonus_amount),
+  other_deduction_amount: normalizeRemoteNumber(run.other_deduction_amount),
+  cash_advance_deduction_amount: normalizeRemoteNumber(run.cash_advance_deduction_amount),
+  deduction_amount: normalizeRemoteNumber(run.deduction_amount),
+  net_amount: normalizeRemoteNumber(run.net_amount),
+  payment_method: run.payment_method ?? null,
+  payment_channel: run.payment_channel ?? null,
+  cash_account_id: run.cash_account_id ?? null,
+  cash_account_code: run.cash_account_code ?? null,
+  cash_account_name: run.cash_account_name ?? null,
+  finance_transaction_id: run.finance_transaction_id ?? null,
+  notes: run.notes ?? null,
+  approved_at: run.approved_at ?? null,
+  paid_at: run.paid_at ?? null,
+  voided_at: run.voided_at ?? null,
+  created_by: run.created_by ?? null,
+  created_by_name: run.created_by_name ?? null,
+  updated_by: run.updated_by ?? null,
+  updated_by_name: run.updated_by_name ?? null,
+  created_at: run.created_at,
+  updated_at: run.updated_at,
+});
+
+const mapPayrollRunItemToRemoteDto = (item: PayrollRunItem): RemotePayrollRunItemDto => ({
+  id: item.id,
+  payroll_run_id: item.payroll_run_id,
+  employee_id: item.employee_id,
+  employee_name: item.employee_name,
+  employee_position: item.employee_position ?? null,
+  base_salary: normalizeRemoteNumber(item.base_salary),
+  allowance_amount: normalizeRemoteNumber(item.allowance_amount),
+  bonus_amount: normalizeRemoteNumber(item.bonus_amount),
+  other_deduction_amount: normalizeRemoteNumber(item.other_deduction_amount),
+  cash_advance_deduction_amount: normalizeRemoteNumber(item.cash_advance_deduction_amount),
+  deduction_amount: normalizeRemoteNumber(item.deduction_amount),
+  gross_amount: normalizeRemoteNumber(item.gross_amount),
+  net_amount: normalizeRemoteNumber(item.net_amount),
+  notes: item.notes ?? null,
+  created_at: item.created_at,
+  updated_at: item.updated_at,
+});
+
+const mapEmployeeCashAdvanceToRemoteDto = (
+  cashAdvance: EmployeeCashAdvance,
+): RemoteEmployeeCashAdvanceDto => ({
+  id: cashAdvance.id,
+  advance_number: cashAdvance.advance_number,
+  employee_id: cashAdvance.employee_id,
+  employee_name: cashAdvance.employee_name,
+  employee_position: cashAdvance.employee_position ?? null,
+  amount: normalizeRemoteNumber(cashAdvance.amount),
+  outstanding_amount: normalizeRemoteNumber(cashAdvance.outstanding_amount),
+  status: cashAdvance.status,
+  disbursed_at: cashAdvance.disbursed_at,
+  payment_method: cashAdvance.payment_method ?? null,
+  payment_channel: cashAdvance.payment_channel ?? null,
+  cash_account_id: cashAdvance.cash_account_id ?? null,
+  cash_account_code: cashAdvance.cash_account_code ?? null,
+  cash_account_name: cashAdvance.cash_account_name ?? null,
+  finance_transaction_id: cashAdvance.finance_transaction_id ?? null,
+  notes: cashAdvance.notes ?? null,
+  voided_at: cashAdvance.voided_at ?? null,
+  void_reason: cashAdvance.void_reason ?? null,
+  created_by: cashAdvance.created_by ?? null,
+  created_by_name: cashAdvance.created_by_name ?? null,
+  updated_by: cashAdvance.updated_by ?? null,
+  updated_by_name: cashAdvance.updated_by_name ?? null,
+  created_at: cashAdvance.created_at,
+  updated_at: cashAdvance.updated_at,
+});
+
+const mapEmployeeCashAdvanceRepaymentToRemoteDto = (
+  repayment: EmployeeCashAdvanceRepayment,
+): RemoteEmployeeCashAdvanceRepaymentDto => ({
+  id: repayment.id,
+  cash_advance_id: repayment.cash_advance_id,
+  cash_advance_number: repayment.cash_advance_number,
+  payroll_run_id: repayment.payroll_run_id,
+  payroll_run_item_id: repayment.payroll_run_item_id,
+  payroll_number: repayment.payroll_number ?? null,
+  employee_id: repayment.employee_id,
+  employee_name: repayment.employee_name,
+  amount: normalizeRemoteNumber(repayment.amount),
+  status: repayment.status,
+  allocated_at: repayment.allocated_at,
+  posted_at: repayment.posted_at ?? null,
+  voided_at: repayment.voided_at ?? null,
+  created_at: repayment.created_at,
+  updated_at: repayment.updated_at,
+});
+
+const mapPayrollRunBundleToRemoteDto = (
+  run: PayrollRun,
+  items: PayrollRunItem[],
+  cashAdvanceRepayments: EmployeeCashAdvanceRepayment[],
+): RemotePayrollRunBundleDto => ({
+  run: mapPayrollRunToRemoteDto(run),
+  items: items.map(mapPayrollRunItemToRemoteDto),
+  cash_advance_repayments: cashAdvanceRepayments.map(mapEmployeeCashAdvanceRepaymentToRemoteDto),
+});
+
+const mapEmployeeCashAdvanceBundleToRemoteDto = (
+  cashAdvance: EmployeeCashAdvance,
+  repayments: EmployeeCashAdvanceRepayment[],
+): RemoteEmployeeCashAdvanceBundleDto => ({
+  cash_advance: mapEmployeeCashAdvanceToRemoteDto(cashAdvance),
+  repayments: repayments.map(mapEmployeeCashAdvanceRepaymentToRemoteDto),
 });
 
 const mapProjectToRemoteDto = (project: Project): RemoteProjectDto => ({
@@ -1459,6 +1622,21 @@ const isRemoteAuthUserDto = (payload: unknown): payload is RemoteAuthUserDto => 
   );
 };
 
+const isRemoteCashierSessionDto = (payload: unknown): payload is RemoteCashierSessionDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteCashierSessionDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.session_number === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.opened_at === 'string' &&
+    typeof candidate.opening_cash_amount === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteRoleDto = (payload: unknown): payload is RemoteRoleDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -1622,6 +1800,109 @@ const isRemoteEmployeeCollectionScheduleDto = (
     typeof candidate.is_active === 'boolean' &&
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemotePayrollRunDto = (payload: unknown): payload is RemotePayrollRunDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePayrollRunDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.payroll_number === 'string' &&
+    typeof candidate.period_start === 'string' &&
+    typeof candidate.period_end === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.employee_count === 'number' &&
+    typeof candidate.gross_amount === 'number' &&
+    typeof candidate.deduction_amount === 'number' &&
+    typeof candidate.net_amount === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemotePayrollRunItemDto = (payload: unknown): payload is RemotePayrollRunItemDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePayrollRunItemDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.payroll_run_id === 'string' &&
+    typeof candidate.employee_id === 'string' &&
+    typeof candidate.employee_name === 'string' &&
+    typeof candidate.base_salary === 'number' &&
+    typeof candidate.deduction_amount === 'number' &&
+    typeof candidate.gross_amount === 'number' &&
+    typeof candidate.net_amount === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteEmployeeCashAdvanceDto = (payload: unknown): payload is RemoteEmployeeCashAdvanceDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteEmployeeCashAdvanceDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.advance_number === 'string' &&
+    typeof candidate.employee_id === 'string' &&
+    typeof candidate.employee_name === 'string' &&
+    typeof candidate.amount === 'number' &&
+    typeof candidate.outstanding_amount === 'number' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.disbursed_at === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteEmployeeCashAdvanceRepaymentDto = (
+  payload: unknown,
+): payload is RemoteEmployeeCashAdvanceRepaymentDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteEmployeeCashAdvanceRepaymentDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.cash_advance_id === 'string' &&
+    typeof candidate.cash_advance_number === 'string' &&
+    typeof candidate.payroll_run_id === 'string' &&
+    typeof candidate.payroll_run_item_id === 'string' &&
+    typeof candidate.employee_id === 'string' &&
+    typeof candidate.employee_name === 'string' &&
+    typeof candidate.amount === 'number' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.allocated_at === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemotePayrollRunBundleDto = (payload: unknown): payload is RemotePayrollRunBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePayrollRunBundleDto>;
+  return (
+    isRemotePayrollRunDto(candidate.run) &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every(isRemotePayrollRunItemDto) &&
+    Array.isArray(candidate.cash_advance_repayments) &&
+    candidate.cash_advance_repayments.every(isRemoteEmployeeCashAdvanceRepaymentDto)
+  );
+};
+
+const isRemoteEmployeeCashAdvanceBundleDto = (
+  payload: unknown,
+): payload is RemoteEmployeeCashAdvanceBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteEmployeeCashAdvanceBundleDto>;
+  return (
+    isRemoteEmployeeCashAdvanceDto(candidate.cash_advance) &&
+    Array.isArray(candidate.repayments) &&
+    candidate.repayments.every(isRemoteEmployeeCashAdvanceRepaymentDto)
   );
 };
 
@@ -2113,6 +2394,17 @@ const updateAuthUserSyncMetadata = async (
   await db.authUsers.update(userId, syncMetadata);
 };
 
+const updateCashierSessionSyncMetadata = async (
+  sessionId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<CashierSession, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentSession = await db.cashierSessions.get(sessionId);
+  if (!currentSession || currentSession.updated_at !== sourceUpdatedAt) return;
+
+  await db.cashierSessions.update(sessionId, syncMetadata);
+};
+
 const updateRoleSyncMetadata = async (
   roleId: string,
   sourceUpdatedAt: string,
@@ -2232,6 +2524,28 @@ const updateEmployeeCollectionScheduleSyncMetadata = async (
   if (!currentSchedule || currentSchedule.updated_at !== sourceUpdatedAt) return;
 
   await db.employeeCollectionSchedules.update(scheduleId, syncMetadata);
+};
+
+const updatePayrollRunSyncMetadata = async (
+  payrollRunId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<PayrollRun, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentRun = await db.payrollRuns.get(payrollRunId);
+  if (!currentRun || currentRun.updated_at !== sourceUpdatedAt) return;
+
+  await db.payrollRuns.update(payrollRunId, syncMetadata);
+};
+
+const updateEmployeeCashAdvanceSyncMetadata = async (
+  cashAdvanceId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<EmployeeCashAdvance, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentCashAdvance = await db.employeeCashAdvances.get(cashAdvanceId);
+  if (!currentCashAdvance || currentCashAdvance.updated_at !== sourceUpdatedAt) return;
+
+  await db.employeeCashAdvances.update(cashAdvanceId, syncMetadata);
 };
 
 const updateFinanceTransactionSyncMetadata = async (
@@ -2409,6 +2723,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === CASHIER_SESSION_ENTITY && isRemoteCashierSessionDto(queueItem.payload)) {
+    await updateCashierSessionSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === ROLE_ENTITY && isRemoteRoleDto(queueItem.payload)) {
     await updateRoleSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -2573,6 +2894,23 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     isRemoteEmployeeCollectionScheduleDto(queueItem.payload)
   ) {
     await updateEmployeeCollectionScheduleSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === PAYROLL_RUN_ENTITY && isRemotePayrollRunBundleDto(queueItem.payload)) {
+    await updatePayrollRunSyncMetadata(queueItem.entity_id, queueItem.payload.run.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === EMPLOYEE_CASH_ADVANCE_ENTITY &&
+    isRemoteEmployeeCashAdvanceBundleDto(queueItem.payload)
+  ) {
+    await updateEmployeeCashAdvanceSyncMetadata(queueItem.entity_id, queueItem.payload.cash_advance.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -2880,6 +3218,18 @@ const processDepartmentQueueItem = async (queueItem: SyncQueueItem) => {
   return departmentPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processCashierSessionQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Sesi kasir sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteCashierSessionDto(queueItem.payload)) {
+    throw new Error('Payload sesi kasir sync queue tidak valid.');
+  }
+
+  return cashierSessionPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processEmployeeQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Employee sync queue tidak mendukung operasi delete.');
@@ -2906,6 +3256,30 @@ const processEmployeeCollectionScheduleQueueItem = async (queueItem: SyncQueueIt
   }
 
   return employeeCollectionSchedulePostgresAdapter.upsert(queueItem.payload);
+};
+
+const processPayrollRunQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Payroll sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemotePayrollRunBundleDto(queueItem.payload)) {
+    throw new Error('Payload payroll sync queue tidak valid.');
+  }
+
+  return payrollRunPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processEmployeeCashAdvanceQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Kasbon karyawan sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteEmployeeCashAdvanceBundleDto(queueItem.payload)) {
+    throw new Error('Payload kasbon karyawan sync queue tidak valid.');
+  }
+
+  return employeeCashAdvancePostgresAdapter.upsert(queueItem.payload);
 };
 
 const processFinanceTransactionQueueItem = async (queueItem: SyncQueueItem) => {
@@ -3113,12 +3487,15 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteAccountingProfileSetting: RemoteAccountingProfileSettingDto | null = null;
     let remoteEnabledModule: RemoteEnabledModuleDto | null = null;
     let remoteGeneralLedgerSetting: RemoteGeneralLedgerSettingDto | null = null;
+    let remoteCashierSession: RemoteCashierSessionDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
     let remoteEmployee: RemoteEmployeeDto | null = null;
     let remoteEmployeeArea: RemoteEmployeeAreaDto | null = null;
+    let remoteEmployeeCashAdvanceBundle: RemoteEmployeeCashAdvanceBundleDto | null = null;
     let remoteEmployeeCollectionSchedule: RemoteEmployeeCollectionScheduleDto | null = null;
     let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
     let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
+    let remotePayrollRunBundle: RemotePayrollRunBundleDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProductionOrderBundle: RemoteProductionOrderBundleDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
@@ -3167,18 +3544,24 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteEnabledModule = await processEnabledModuleQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === GENERAL_LEDGER_SETTING_ENTITY) {
       remoteGeneralLedgerSetting = await processGeneralLedgerSettingQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === CASHIER_SESSION_ENTITY) {
+      remoteCashierSession = await processCashierSessionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === DEPARTMENT_ENTITY) {
       remoteDepartment = await processDepartmentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === EMPLOYEE_ENTITY) {
       remoteEmployee = await processEmployeeQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === EMPLOYEE_AREA_ENTITY) {
       remoteEmployeeArea = await processEmployeeAreaQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === EMPLOYEE_CASH_ADVANCE_ENTITY) {
+      remoteEmployeeCashAdvanceBundle = await processEmployeeCashAdvanceQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === EMPLOYEE_COLLECTION_SCHEDULE_ENTITY) {
       remoteEmployeeCollectionSchedule = await processEmployeeCollectionScheduleQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FINANCE_TRANSACTION_ENTITY) {
       remoteFinanceTransaction = await processFinanceTransactionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === JOURNAL_ENTRY_ENTITY) {
       remoteJournalEntryBundle = await processJournalEntryQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === PAYROLL_RUN_ENTITY) {
+      remotePayrollRunBundle = await processPayrollRunQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PRODUCT_ENTITY) {
       remoteProduct = await processProductQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PRODUCTION_ORDER_ENTITY) {
@@ -3587,6 +3970,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       return;
     }
 
+    if (remoteCashierSession && isRemoteCashierSessionDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateCashierSessionSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteCashierSession.updated_at,
+      });
+      await mergeRemoteCashierSessionsIntoDexie([remoteCashierSession], syncedAt);
+      return;
+    }
+
     if (remoteDepartment && isRemoteDepartmentDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateDepartmentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
@@ -3639,6 +4034,37 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         },
       );
       await mergeRemoteEmployeeCollectionSchedulesIntoDexie([remoteEmployeeCollectionSchedule], syncedAt);
+      return;
+    }
+
+    if (remotePayrollRunBundle && isRemotePayrollRunBundleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updatePayrollRunSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.run.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remotePayrollRunBundle.run.updated_at,
+      });
+      await mergeRemotePayrollRunBundlesIntoDexie([remotePayrollRunBundle], syncedAt);
+      return;
+    }
+
+    if (
+      remoteEmployeeCashAdvanceBundle &&
+      isRemoteEmployeeCashAdvanceBundleDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateEmployeeCashAdvanceSyncMetadata(
+        currentQueueItem.entity_id,
+        currentQueueItem.payload.cash_advance.updated_at,
+        {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at: remoteEmployeeCashAdvanceBundle.cash_advance.updated_at,
+        },
+      );
+      await mergeRemoteEmployeeCashAdvanceBundlesIntoDexie([remoteEmployeeCashAdvanceBundle], syncedAt);
       return;
     }
 
@@ -4637,6 +5063,51 @@ export const enqueuePendingAccountingSettingsForSync = async () => {
   }
 };
 
+export const enqueueCashierSessionSync = async (
+  session: CashierSession,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: CASHIER_SESSION_ENTITY,
+    entity_id: session.id,
+    operation,
+    payload: mapCashierSessionToRemoteDto(session),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingCashierSessionsForSync = async () => {
+  const sessions = (await db.cashierSessions.toArray())
+    .filter((session) => session.sync_status === 'pending' || session.sync_status === 'failed');
+  const queueItems = await db.syncQueue
+    .where('entity')
+    .equals(CASHIER_SESSION_ENTITY)
+    .toArray();
+
+  for (const session of sessions) {
+    const existingQueueItem = queueItems.find((queueItem) => (
+      queueItem.entity_id === session.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteCashierSessionDto(queueItem.payload) &&
+      queueItem.payload.updated_at === session.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueCashierSessionSync(session, 'update');
+    }
+  }
+};
+
 export const enqueueDepartmentSync = async (
   department: Department,
   operation: SyncQueueOperation,
@@ -4826,6 +5297,103 @@ export const enqueuePendingEmployeesForSync = async () => {
 
     if (!existingQueueItem) {
       await enqueueEmployeeCollectionScheduleSync(schedule, 'update');
+    }
+  }
+};
+
+export const enqueuePayrollRunBundleSync = async (
+  run: PayrollRun,
+  items: PayrollRunItem[],
+  cashAdvanceRepayments: EmployeeCashAdvanceRepayment[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: PAYROLL_RUN_ENTITY,
+    entity_id: run.id,
+    operation,
+    payload: mapPayrollRunBundleToRemoteDto(run, items, cashAdvanceRepayments),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueEmployeeCashAdvanceBundleSync = async (
+  cashAdvance: EmployeeCashAdvance,
+  repayments: EmployeeCashAdvanceRepayment[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: EMPLOYEE_CASH_ADVANCE_ENTITY,
+    entity_id: cashAdvance.id,
+    operation,
+    payload: mapEmployeeCashAdvanceBundleToRemoteDto(cashAdvance, repayments),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingPayrollDataForSync = async () => {
+  const [
+    payrollRunQueueItems,
+    cashAdvanceQueueItems,
+  ] = await Promise.all([
+    db.syncQueue.where('entity').equals(PAYROLL_RUN_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(EMPLOYEE_CASH_ADVANCE_ENTITY).toArray(),
+  ]);
+
+  const payrollRuns = (await db.payrollRuns.toArray())
+    .filter((run) => run.sync_status === 'pending' || run.sync_status === 'failed');
+  for (const run of payrollRuns) {
+    const existingQueueItem = payrollRunQueueItems.find((queueItem) => (
+      queueItem.entity_id === run.id &&
+      queueItem.status !== 'synced' &&
+      isRemotePayrollRunBundleDto(queueItem.payload) &&
+      queueItem.payload.run.updated_at === run.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      const [items, repayments] = await Promise.all([
+        db.payrollRunItems.where('payroll_run_id').equals(run.id).toArray(),
+        db.employeeCashAdvanceRepayments.where('payroll_run_id').equals(run.id).toArray(),
+      ]);
+      await enqueuePayrollRunBundleSync(run, items, repayments, 'update');
+    }
+  }
+
+  const cashAdvances = (await db.employeeCashAdvances.toArray())
+    .filter((cashAdvance) => cashAdvance.sync_status === 'pending' || cashAdvance.sync_status === 'failed');
+  for (const cashAdvance of cashAdvances) {
+    const existingQueueItem = cashAdvanceQueueItems.find((queueItem) => (
+      queueItem.entity_id === cashAdvance.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteEmployeeCashAdvanceBundleDto(queueItem.payload) &&
+      queueItem.payload.cash_advance.updated_at === cashAdvance.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      const repayments = await db.employeeCashAdvanceRepayments
+        .where('cash_advance_id')
+        .equals(cashAdvance.id)
+        .toArray();
+      await enqueueEmployeeCashAdvanceBundleSync(cashAdvance, repayments, 'update');
     }
   }
 };

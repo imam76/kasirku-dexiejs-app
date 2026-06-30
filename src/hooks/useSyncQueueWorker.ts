@@ -15,6 +15,15 @@ type PostgresRealtimeChangeEvent = {
 };
 
 const invalidateServerAuthoritativeQueries = (change: PostgresRealtimeChangeEvent) => {
+  if (change.table === 'cashier_sessions') {
+    queryClient.invalidateQueries({ queryKey: ['cashierSession'] });
+    queryClient.invalidateQueries({ queryKey: ['cashierSessions'] });
+    queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
+    queryClient.invalidateQueries({ queryKey: ['posSalesReport'] });
+    queryClient.invalidateQueries({ queryKey: ['transactionDetailReport'] });
+    queryClient.invalidateQueries({ queryKey: ['depositReport'] });
+  }
+
   if (change.table === 'cooperative_payment_approval_requests') {
     queryClient.invalidateQueries({ queryKey: ['cooperativePaymentApprovalRequests'] });
   }

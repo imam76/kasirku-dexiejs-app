@@ -406,6 +406,7 @@ export type AccountingProfileSettingSyncStatus = EntitySyncStatus;
 export type EnabledModuleSyncStatus = EntitySyncStatus;
 export type GeneralLedgerSettingSyncStatus = EntitySyncStatus;
 export type AuthUserSyncStatus = EntitySyncStatus;
+export type CashierSessionSyncStatus = EntitySyncStatus;
 export type ContactSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;
@@ -429,6 +430,8 @@ export type CooperativeLoanCollectionEventSyncStatus = EntitySyncStatus;
 export type EmployeeSyncStatus = EntitySyncStatus;
 export type EmployeeAreaSyncStatus = EntitySyncStatus;
 export type EmployeeCollectionScheduleSyncStatus = EntitySyncStatus;
+export type PayrollRunSyncStatus = EntitySyncStatus;
+export type EmployeeCashAdvanceSyncStatus = EntitySyncStatus;
 
 export interface CooperativeArea {
   id: string;
@@ -535,6 +538,10 @@ export interface PayrollRun {
   updated_by_name?: string;
   created_at: string;
   updated_at: string;
+  sync_status?: PayrollRunSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface PayrollRunItem {
@@ -581,6 +588,10 @@ export interface EmployeeCashAdvance {
   updated_by_name?: string;
   created_at: string;
   updated_at: string;
+  sync_status?: EmployeeCashAdvanceSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface EmployeeCashAdvanceRepayment {
@@ -1345,6 +1356,10 @@ export interface CashierSession {
   balance_status?: CashierSessionBalanceStatus;
   created_at: string;
   updated_at: string;
+  sync_status?: CashierSessionSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface CooperativeFieldCashSession {

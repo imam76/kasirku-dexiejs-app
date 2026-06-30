@@ -1,6 +1,7 @@
 pub mod accounting_setting;
 pub mod app_setup_config;
 pub mod auth;
+pub mod cashier_session;
 pub mod chart_of_account;
 pub mod company_profile_setting;
 pub mod contact;
@@ -10,6 +11,7 @@ pub mod department;
 pub mod employee;
 pub mod finance_transaction;
 pub mod journal_entry;
+pub mod payroll;
 pub mod product;
 pub mod production_order;
 pub mod project;
