@@ -115,7 +115,7 @@ jobs:
           fi
 
           {
-            printf 'TAURI_SIGNING_PRIVATE_KEY_PATH=%s\n' "$key_file"
+            printf 'TAURI_SIGNING_PRIVATE_KEY=%s\n' "$key_file"
             echo 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD<<EOF'
             printf '%s\n' "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
             echo 'EOF'
