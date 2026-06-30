@@ -400,6 +400,11 @@ export interface Warehouse {
 }
 
 export type EntitySyncStatus = 'pending' | 'synced' | 'failed';
+export type ChartOfAccountSyncStatus = EntitySyncStatus;
+export type FinanceAccountMappingSyncStatus = EntitySyncStatus;
+export type AccountingProfileSettingSyncStatus = EntitySyncStatus;
+export type EnabledModuleSyncStatus = EntitySyncStatus;
+export type GeneralLedgerSettingSyncStatus = EntitySyncStatus;
 export type AuthUserSyncStatus = EntitySyncStatus;
 export type ContactSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
@@ -421,6 +426,9 @@ export type CooperativeLoanSyncStatus = EntitySyncStatus;
 export type CooperativeLoanInstallmentSyncStatus = EntitySyncStatus;
 export type CooperativeLoanPaymentSyncStatus = EntitySyncStatus;
 export type CooperativeLoanCollectionEventSyncStatus = EntitySyncStatus;
+export type EmployeeSyncStatus = EntitySyncStatus;
+export type EmployeeAreaSyncStatus = EntitySyncStatus;
+export type EmployeeCollectionScheduleSyncStatus = EntitySyncStatus;
 
 export interface CooperativeArea {
   id: string;
@@ -455,6 +463,10 @@ export interface Employee {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: EmployeeSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface EmployeeArea {
@@ -465,6 +477,10 @@ export interface EmployeeArea {
   area_code?: string;
   created_at: string;
   updated_at: string;
+  sync_status?: EmployeeAreaSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export type CooperativeCollectionWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -483,6 +499,10 @@ export interface EmployeeCollectionSchedule {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: EmployeeCollectionScheduleSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface PayrollRun {
@@ -2105,6 +2125,10 @@ export interface ChartOfAccount {
   description?: string;
   created_at: string;
   updated_at: string;
+  sync_status?: ChartOfAccountSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface FinanceAccountMapping {
@@ -2118,6 +2142,10 @@ export interface FinanceAccountMapping {
   is_system: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: FinanceAccountMappingSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface AccountingProfileSetting {
@@ -2128,6 +2156,10 @@ export interface AccountingProfileSetting {
   locked_after_transaction?: boolean;
   created_at: string;
   updated_at: string;
+  sync_status?: AccountingProfileSettingSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface EnabledModule {
@@ -2139,6 +2171,10 @@ export interface EnabledModule {
   requires_extension?: IndustryExtensionCode;
   created_at: string;
   updated_at: string;
+  sync_status?: EnabledModuleSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface GeneralLedgerSetting {
@@ -2150,6 +2186,10 @@ export interface GeneralLedgerSetting {
   activated_at?: string;
   created_at: string;
   updated_at: string;
+  sync_status?: GeneralLedgerSettingSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface JournalEntry {

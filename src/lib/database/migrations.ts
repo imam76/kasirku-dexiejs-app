@@ -17,7 +17,9 @@ import type {
   Department,
   EnabledModule,
   Employee,
+  EmployeeArea,
   EmployeeCashAdvance,
+  EmployeeCollectionSchedule,
   FinanceAccountMapping,
   FinanceTransaction,
   GeneralLedgerSetting,
@@ -1808,5 +1810,84 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       await journalEntries.bulkAdd(entriesToAdd);
       await journalEntryLines.bulkAdd(linesToAdd);
     }
+  });
+
+  this.version(69).stores({
+    employees: 'id, name, email, phone, user_id, login_role_id, field_cash_account_id, is_active, sync_status, updated_at, created_at',
+    employeeAreas: 'id, employee_id, area_id, sync_status, updated_at, created_at',
+    employeeCollectionSchedules: 'id, employee_id, area_id, weekday, [employee_id+area_id], [employee_id+area_id+weekday], is_active, sync_status, effective_from, effective_until, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const markPendingEmployeeRecords = async <T extends { sync_status?: string; sync_error?: string }>(
+      tableName: string,
+    ) => {
+      const table = tx.table<T, string>(tableName);
+      const records = await table.toArray();
+      const recordsWithoutSyncStatus = records
+        .filter((record) => !record.sync_status)
+        .map((record) => ({
+          ...record,
+          sync_status: 'pending' as const,
+          sync_error: undefined,
+        }));
+
+      if (recordsWithoutSyncStatus.length > 0) {
+        await table.bulkPut(recordsWithoutSyncStatus);
+      }
+    };
+
+    await markPendingEmployeeRecords<Employee>('employees');
+    await markPendingEmployeeRecords<EmployeeArea>('employeeAreas');
+    await markPendingEmployeeRecords<EmployeeCollectionSchedule>('employeeCollectionSchedules');
+  });
+
+  this.version(70).stores({
+    chartOfAccounts: 'id, code, name, type, parent_id, is_postable, is_system, is_active, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    // Chart of accounts (including kas petugas/field cash accounts) had no cross-device
+    // sync before. Mark every existing account pending so the next Sync DB run uploads
+    // any account that until now only lived in this device's Dexie.
+    const table = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const accounts = await table.toArray();
+    const accountsToMark = accounts
+      .filter((account) => !account.sync_status)
+      .map((account) => ({
+        ...account,
+        sync_status: 'pending' as const,
+        sync_error: undefined,
+      }));
+
+    if (accountsToMark.length > 0) {
+      await table.bulkPut(accountsToMark);
+    }
+  });
+
+  this.version(71).stores({
+    financeAccountMappings: 'id, key, category, account_id, is_system, sync_status, updated_at, created_at',
+    accountingProfileSetting: 'id, accounting_profile, industry_extension, sync_status, updated_at',
+    enabledModules: 'id, code, is_enabled, source, sync_status, updated_at',
+    generalLedgerSetting: 'id, is_ready, cutoff_date, inventory_policy, opening_balance_journal_id, activated_at, sync_status, updated_at',
+  }).upgrade(async (tx) => {
+    // The foundational accounting seed (mappings, profile, modules, GL setting) was
+    // local-only. Mark every existing row pending so the next Sync DB run uploads it.
+    const markPendingSetting = async (tableName: string) => {
+      const table = tx.table<{ id: string; sync_status?: string; sync_error?: string }, string>(tableName);
+      const records = await table.toArray();
+      const recordsToMark = records
+        .filter((record) => !record.sync_status)
+        .map((record) => ({
+          ...record,
+          sync_status: 'pending' as const,
+          sync_error: undefined,
+        }));
+
+      if (recordsToMark.length > 0) {
+        await table.bulkPut(recordsToMark);
+      }
+    };
+
+    await markPendingSetting('financeAccountMappings');
+    await markPendingSetting('accountingProfileSetting');
+    await markPendingSetting('enabledModules');
+    await markPendingSetting('generalLedgerSetting');
   });
 }

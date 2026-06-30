@@ -225,6 +225,19 @@ Alasannya:
 - Employee tidak lagi gagal diam-diam karena masuk queue.
 - Jalan menuju sync penuh `chartOfAccounts` tetap terbuka dan lebih rapi.
 
+## Status Fix 2026-06-30
+
+Sudah diterapkan fix bertahap sesuai Opsi C:
+
+- `employees`, `employeeAreas`, dan `employeeCollectionSchedules` sekarang punya metadata sync lokal dan masuk `syncQueue`.
+- Flow create/update/archive/restore karyawan tidak lagi direct upload non-retryable; semua masuk queue dan bisa diretry lewat Sync DB.
+- Edit karyawan yang melepas area/jadwal mengirim soft-delete remote memakai `deleted_at`.
+- Refresh employee dari PostgreSQL menandai data sebagai `synced`.
+- Refresh employee juga membuat fallback row `chartOfAccounts` lokal dari snapshot `field_cash_account_*` jika akun kas petugas belum ada di PC tersebut.
+- Endpoint list remote area/jadwal karyawan sekarang mengirim tombstone `deleted_at` agar PC lain bisa menghapus row lokal yang sudah dilepas.
+
+Catatan: sync penuh `chartOfAccounts` lintas perangkat belum dibuat. Untuk kasus kas petugas, sementara ini PC lain membangun akun lokal dari snapshot employee.
+
 ## Acceptance Criteria
 
 - Membuat akun kas petugas di PC A tidak hanya tersimpan di Dexie lokal.

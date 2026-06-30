@@ -20,7 +20,19 @@ import {
   mergeRemoteCooperativeSavingTransactionsIntoDexie,
 } from '@/services/cooperativeReadService';
 import { mergeRemoteCurrenciesIntoDexie, mergeRemoteCurrencyRatesIntoDexie } from '@/services/currencyReadService';
+import {
+  mergeRemoteAccountingProfileSettingIntoDexie,
+  mergeRemoteEnabledModulesIntoDexie,
+  mergeRemoteFinanceAccountMappingsIntoDexie,
+  mergeRemoteGeneralLedgerSettingIntoDexie,
+} from '@/services/accountingSettingReadService';
+import { mergeRemoteChartOfAccountsIntoDexie } from '@/services/chartOfAccountReadService';
 import { mergeRemoteDepartmentsIntoDexie } from '@/services/departmentReadService';
+import {
+  mergeRemoteEmployeeAreasIntoDexie,
+  mergeRemoteEmployeeCollectionSchedulesIntoDexie,
+  mergeRemoteEmployeesIntoDexie,
+} from '@/services/employeeReadService';
 import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
 import { mergeRemoteJournalEntryBundlesIntoDexie } from '@/services/journalEntryReadService';
 import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
@@ -33,8 +45,13 @@ import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
 import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
 import {
   activityLogPostgresAdapter,
+  accountingProfileSettingPostgresAdapter,
   authUserPostgresAdapter,
+  chartOfAccountPostgresAdapter,
   contactPostgresAdapter,
+  enabledModulePostgresAdapter,
+  financeAccountMappingPostgresAdapter,
+  generalLedgerSettingPostgresAdapter,
   cooperativeAreaPostgresAdapter,
   cooperativeCollectionEventPostgresAdapter,
   cooperativeLoanInstallmentPostgresAdapter,
@@ -45,6 +62,9 @@ import {
   currencyPostgresAdapter,
   currencyRatePostgresAdapter,
   departmentPostgresAdapter,
+  employeeAreaPostgresAdapter,
+  employeeCollectionSchedulePostgresAdapter,
+  employeePostgresAdapter,
   financeTransactionPostgresAdapter,
   isTauriRuntime,
   journalEntryPostgresAdapter,
@@ -73,7 +93,15 @@ import {
   type RemoteCooperativeSavingTransactionDto,
   type RemoteCurrencyDto,
   type RemoteCurrencyRateDto,
+  type RemoteAccountingProfileSettingDto,
+  type RemoteChartOfAccountDto,
   type RemoteDepartmentDto,
+  type RemoteEnabledModuleDto,
+  type RemoteFinanceAccountMappingDto,
+  type RemoteGeneralLedgerSettingDto,
+  type RemoteEmployeeAreaDto,
+  type RemoteEmployeeCollectionScheduleDto,
+  type RemoteEmployeeDto,
   type RemoteFinanceTransactionDto,
   type RemoteJournalEntryBundleDto,
   type RemoteJournalEntryDto,
@@ -100,7 +128,7 @@ import {
   type RemoteTaxDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
-import type { ActivityLog, AuthUser, Contact, CooperativeArea, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, FinanceTransaction, JournalEntry, JournalEntryLine, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { AccountingProfileSetting, ActivityLog, AuthUser, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -120,7 +148,15 @@ const COOPERATIVE_MEMBER_SAVING_BALANCE_ENTITY = 'cooperativeMemberSavingBalance
 const COOPERATIVE_SAVING_TRANSACTION_ENTITY = 'cooperativeSavingTransactions';
 const CURRENCY_ENTITY = 'currencies';
 const CURRENCY_RATE_ENTITY = 'currencyRates';
+const CHART_OF_ACCOUNT_ENTITY = 'chartOfAccounts';
+const FINANCE_ACCOUNT_MAPPING_ENTITY = 'financeAccountMappings';
+const ACCOUNTING_PROFILE_SETTING_ENTITY = 'accountingProfileSetting';
+const ENABLED_MODULE_ENTITY = 'enabledModules';
+const GENERAL_LEDGER_SETTING_ENTITY = 'generalLedgerSetting';
 const DEPARTMENT_ENTITY = 'departments';
+const EMPLOYEE_ENTITY = 'employees';
+const EMPLOYEE_AREA_ENTITY = 'employeeAreas';
+const EMPLOYEE_COLLECTION_SCHEDULE_ENTITY = 'employeeCollectionSchedules';
 const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
 const JOURNAL_ENTRY_ENTITY = 'journalEntries';
 const PRODUCT_ENTITY = 'products';
@@ -490,6 +526,75 @@ const mapCooperativeLoanPaymentToRemoteDto = (
   idempotency_key: payment.idempotency_key,
 });
 
+const mapChartOfAccountToRemoteDto = (account: ChartOfAccount): RemoteChartOfAccountDto => ({
+  id: account.id,
+  code: account.code,
+  name: account.name,
+  type: account.type,
+  normal_balance: account.normal_balance,
+  parent_id: account.parent_id ?? null,
+  parent_code: account.parent_code ?? null,
+  parent_name: account.parent_name ?? null,
+  is_postable: account.is_postable,
+  is_system: account.is_system,
+  is_active: account.is_active,
+  description: account.description ?? null,
+  created_at: account.created_at,
+  updated_at: account.updated_at,
+  deleted_at: null,
+});
+
+const mapFinanceAccountMappingToRemoteDto = (
+  mapping: FinanceAccountMapping,
+): RemoteFinanceAccountMappingDto => ({
+  id: mapping.id,
+  key: mapping.key,
+  category: mapping.category ?? null,
+  account_id: mapping.account_id,
+  account_code: mapping.account_code,
+  account_name: mapping.account_name,
+  account_type: mapping.account_type,
+  is_system: mapping.is_system,
+  created_at: mapping.created_at,
+  updated_at: mapping.updated_at,
+});
+
+const mapAccountingProfileSettingToRemoteDto = (
+  setting: AccountingProfileSetting,
+): RemoteAccountingProfileSettingDto => ({
+  id: setting.id,
+  accounting_profile: setting.accounting_profile,
+  industry_extension: setting.industry_extension,
+  template_id: setting.template_id ?? null,
+  locked_after_transaction: setting.locked_after_transaction ?? null,
+  created_at: setting.created_at,
+  updated_at: setting.updated_at,
+});
+
+const mapEnabledModuleToRemoteDto = (module: EnabledModule): RemoteEnabledModuleDto => ({
+  id: module.id,
+  code: module.code,
+  is_enabled: module.is_enabled,
+  source: module.source,
+  requires_profile: module.requires_profile ?? null,
+  requires_extension: module.requires_extension ?? null,
+  created_at: module.created_at,
+  updated_at: module.updated_at,
+});
+
+const mapGeneralLedgerSettingToRemoteDto = (
+  setting: GeneralLedgerSetting,
+): RemoteGeneralLedgerSettingDto => ({
+  id: setting.id,
+  is_ready: setting.is_ready,
+  cutoff_date: setting.cutoff_date ?? null,
+  inventory_policy: setting.inventory_policy,
+  opening_balance_journal_id: setting.opening_balance_journal_id ?? null,
+  activated_at: setting.activated_at ?? null,
+  created_at: setting.created_at,
+  updated_at: setting.updated_at,
+});
+
 const mapDepartmentToRemoteDto = (department: Department): RemoteDepartmentDto => ({
   id: department.id,
   code: department.code,
@@ -498,6 +603,77 @@ const mapDepartmentToRemoteDto = (department: Department): RemoteDepartmentDto =
   is_active: department.is_active,
   created_at: department.created_at,
   updated_at: department.updated_at,
+});
+
+const mapEmployeeToRemoteDto = (employee: Employee): RemoteEmployeeDto => ({
+  id: employee.id,
+  name: employee.name,
+  phone: employee.phone ?? null,
+  email: employee.email ?? null,
+  address: employee.address ?? null,
+  position: employee.position ?? null,
+  user_id: employee.user_id ?? null,
+  user_name: employee.user_name ?? null,
+  login_role_id: employee.login_role_id ?? null,
+  field_cash_account_id: employee.field_cash_account_id ?? null,
+  field_cash_account_code: employee.field_cash_account_code ?? null,
+  field_cash_account_name: employee.field_cash_account_name ?? null,
+  pin_hash: employee.pin_hash ?? null,
+  pin_salt: employee.pin_salt ?? null,
+  notes: employee.notes ?? null,
+  is_active: employee.is_active,
+  created_at: employee.created_at,
+  updated_at: employee.updated_at,
+  deleted_at: null,
+});
+
+const mapEmployeeAreaToRemoteDto = (assignment: EmployeeArea): RemoteEmployeeAreaDto => ({
+  id: assignment.id,
+  employee_id: assignment.employee_id,
+  area_id: assignment.area_id,
+  area_name: assignment.area_name,
+  area_code: assignment.area_code ?? null,
+  created_at: assignment.created_at,
+  updated_at: assignment.updated_at,
+  deleted_at: null,
+});
+
+const mapDeletedEmployeeAreaToRemoteDto = (
+  assignment: EmployeeArea,
+  deletedAt: string,
+): RemoteEmployeeAreaDto => ({
+  ...mapEmployeeAreaToRemoteDto(assignment),
+  updated_at: deletedAt,
+  deleted_at: deletedAt,
+});
+
+const mapEmployeeCollectionScheduleToRemoteDto = (
+  schedule: EmployeeCollectionSchedule,
+): RemoteEmployeeCollectionScheduleDto => ({
+  id: schedule.id,
+  employee_id: schedule.employee_id,
+  employee_name: schedule.employee_name,
+  employee_position: schedule.employee_position ?? null,
+  area_id: schedule.area_id,
+  area_name: schedule.area_name,
+  area_code: schedule.area_code ?? null,
+  weekday: schedule.weekday,
+  effective_from: schedule.effective_from ?? null,
+  effective_until: schedule.effective_until ?? null,
+  is_active: schedule.is_active,
+  created_at: schedule.created_at,
+  updated_at: schedule.updated_at,
+  deleted_at: null,
+});
+
+const mapDeletedEmployeeCollectionScheduleToRemoteDto = (
+  schedule: EmployeeCollectionSchedule,
+  deletedAt: string,
+): RemoteEmployeeCollectionScheduleDto => ({
+  ...mapEmployeeCollectionScheduleToRemoteDto(schedule),
+  is_active: false,
+  updated_at: deletedAt,
+  deleted_at: deletedAt,
 });
 
 const mapProjectToRemoteDto = (project: Project): RemoteProjectDto => ({
@@ -1311,6 +1487,85 @@ const isRemoteRolePermissionDto = (payload: unknown): payload is RemoteRolePermi
   );
 };
 
+const isRemoteChartOfAccountDto = (payload: unknown): payload is RemoteChartOfAccountDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteChartOfAccountDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.code === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.type === 'string' &&
+    typeof candidate.normal_balance === 'string' &&
+    typeof candidate.is_postable === 'boolean' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteFinanceAccountMappingDto = (
+  payload: unknown,
+): payload is RemoteFinanceAccountMappingDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteFinanceAccountMappingDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.key === 'string' &&
+    typeof candidate.account_id === 'string' &&
+    typeof candidate.account_code === 'string' &&
+    typeof candidate.account_name === 'string' &&
+    typeof candidate.account_type === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteAccountingProfileSettingDto = (
+  payload: unknown,
+): payload is RemoteAccountingProfileSettingDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteAccountingProfileSettingDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.accounting_profile === 'string' &&
+    typeof candidate.industry_extension === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteEnabledModuleDto = (payload: unknown): payload is RemoteEnabledModuleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteEnabledModuleDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.code === 'string' &&
+    typeof candidate.is_enabled === 'boolean' &&
+    typeof candidate.source === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteGeneralLedgerSettingDto = (
+  payload: unknown,
+): payload is RemoteGeneralLedgerSettingDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteGeneralLedgerSettingDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.is_ready === 'boolean' &&
+    typeof candidate.inventory_policy === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteDepartmentDto = (payload: unknown): payload is RemoteDepartmentDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -1318,6 +1573,52 @@ const isRemoteDepartmentDto = (payload: unknown): payload is RemoteDepartmentDto
   return (
     typeof candidate.id === 'string' &&
     typeof candidate.name === 'string' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteEmployeeDto = (payload: unknown): payload is RemoteEmployeeDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteEmployeeDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteEmployeeAreaDto = (payload: unknown): payload is RemoteEmployeeAreaDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteEmployeeAreaDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.employee_id === 'string' &&
+    typeof candidate.area_id === 'string' &&
+    typeof candidate.area_name === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteEmployeeCollectionScheduleDto = (
+  payload: unknown,
+): payload is RemoteEmployeeCollectionScheduleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteEmployeeCollectionScheduleDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.employee_id === 'string' &&
+    typeof candidate.employee_name === 'string' &&
+    typeof candidate.area_id === 'string' &&
+    typeof candidate.area_name === 'string' &&
+    typeof candidate.weekday === 'number' &&
     typeof candidate.is_active === 'boolean' &&
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'
@@ -1834,6 +2135,61 @@ const updateRolePermissionSyncMetadata = async (
   await db.rolePermissions.update(permissionId, syncMetadata);
 };
 
+const updateChartOfAccountSyncMetadata = async (
+  accountId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<ChartOfAccount, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentAccount = await db.chartOfAccounts.get(accountId);
+  if (!currentAccount || currentAccount.updated_at !== sourceUpdatedAt) return;
+
+  await db.chartOfAccounts.update(accountId, syncMetadata);
+};
+
+const updateFinanceAccountMappingSyncMetadata = async (
+  mappingId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<FinanceAccountMapping, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const current = await db.financeAccountMappings.get(mappingId);
+  if (!current || current.updated_at !== sourceUpdatedAt) return;
+
+  await db.financeAccountMappings.update(mappingId, syncMetadata);
+};
+
+const updateAccountingProfileSettingSyncMetadata = async (
+  settingId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<AccountingProfileSetting, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const current = await db.accountingProfileSetting.get(settingId as 'default');
+  if (!current || current.updated_at !== sourceUpdatedAt) return;
+
+  await db.accountingProfileSetting.update(settingId as 'default', syncMetadata);
+};
+
+const updateEnabledModuleSyncMetadata = async (
+  moduleId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<EnabledModule, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const current = await db.enabledModules.get(moduleId);
+  if (!current || current.updated_at !== sourceUpdatedAt) return;
+
+  await db.enabledModules.update(moduleId, syncMetadata);
+};
+
+const updateGeneralLedgerSettingSyncMetadata = async (
+  settingId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<GeneralLedgerSetting, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const current = await db.generalLedgerSetting.get(settingId as 'default');
+  if (!current || current.updated_at !== sourceUpdatedAt) return;
+
+  await db.generalLedgerSetting.update(settingId as 'default', syncMetadata);
+};
+
 const updateDepartmentSyncMetadata = async (
   departmentId: string,
   sourceUpdatedAt: string,
@@ -1843,6 +2199,39 @@ const updateDepartmentSyncMetadata = async (
   if (!currentDepartment || currentDepartment.updated_at !== sourceUpdatedAt) return;
 
   await db.departments.update(departmentId, syncMetadata);
+};
+
+const updateEmployeeSyncMetadata = async (
+  employeeId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Employee, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentEmployee = await db.employees.get(employeeId);
+  if (!currentEmployee || currentEmployee.updated_at !== sourceUpdatedAt) return;
+
+  await db.employees.update(employeeId, syncMetadata);
+};
+
+const updateEmployeeAreaSyncMetadata = async (
+  assignmentId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<EmployeeArea, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentAssignment = await db.employeeAreas.get(assignmentId);
+  if (!currentAssignment || currentAssignment.updated_at !== sourceUpdatedAt) return;
+
+  await db.employeeAreas.update(assignmentId, syncMetadata);
+};
+
+const updateEmployeeCollectionScheduleSyncMetadata = async (
+  scheduleId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<EmployeeCollectionSchedule, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentSchedule = await db.employeeCollectionSchedules.get(scheduleId);
+  if (!currentSchedule || currentSchedule.updated_at !== sourceUpdatedAt) return;
+
+  await db.employeeCollectionSchedules.update(scheduleId, syncMetadata);
 };
 
 const updateFinanceTransactionSyncMetadata = async (
@@ -2123,8 +2512,67 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === CHART_OF_ACCOUNT_ENTITY && isRemoteChartOfAccountDto(queueItem.payload)) {
+    await updateChartOfAccountSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === FINANCE_ACCOUNT_MAPPING_ENTITY && isRemoteFinanceAccountMappingDto(queueItem.payload)) {
+    await updateFinanceAccountMappingSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === ACCOUNTING_PROFILE_SETTING_ENTITY && isRemoteAccountingProfileSettingDto(queueItem.payload)) {
+    await updateAccountingProfileSettingSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === ENABLED_MODULE_ENTITY && isRemoteEnabledModuleDto(queueItem.payload)) {
+    await updateEnabledModuleSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === GENERAL_LEDGER_SETTING_ENTITY && isRemoteGeneralLedgerSettingDto(queueItem.payload)) {
+    await updateGeneralLedgerSettingSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === DEPARTMENT_ENTITY && isRemoteDepartmentDto(queueItem.payload)) {
     await updateDepartmentSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === EMPLOYEE_ENTITY && isRemoteEmployeeDto(queueItem.payload)) {
+    await updateEmployeeSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === EMPLOYEE_AREA_ENTITY && isRemoteEmployeeAreaDto(queueItem.payload)) {
+    await updateEmployeeAreaSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === EMPLOYEE_COLLECTION_SCHEDULE_ENTITY &&
+    isRemoteEmployeeCollectionScheduleDto(queueItem.payload)
+  ) {
+    await updateEmployeeCollectionScheduleSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -2376,6 +2824,50 @@ const processCurrencyRateQueueItem = async (queueItem: SyncQueueItem) => {
   return currencyRatePostgresAdapter.upsert(queueItem.payload);
 };
 
+const processChartOfAccountQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return chartOfAccountPostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemoteChartOfAccountDto(queueItem.payload)) {
+    throw new Error('Payload chart of account sync queue tidak valid.');
+  }
+
+  return chartOfAccountPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processFinanceAccountMappingQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteFinanceAccountMappingDto(queueItem.payload)) {
+    throw new Error('Payload finance account mapping sync queue tidak valid.');
+  }
+
+  return financeAccountMappingPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processAccountingProfileSettingQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteAccountingProfileSettingDto(queueItem.payload)) {
+    throw new Error('Payload accounting profile setting sync queue tidak valid.');
+  }
+
+  return accountingProfileSettingPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processEnabledModuleQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteEnabledModuleDto(queueItem.payload)) {
+    throw new Error('Payload enabled module sync queue tidak valid.');
+  }
+
+  return enabledModulePostgresAdapter.upsert(queueItem.payload);
+};
+
+const processGeneralLedgerSettingQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteGeneralLedgerSettingDto(queueItem.payload)) {
+    throw new Error('Payload general ledger setting sync queue tidak valid.');
+  }
+
+  return generalLedgerSettingPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processDepartmentQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     return departmentPostgresAdapter.delete(queueItem.entity_id);
@@ -2386,6 +2878,34 @@ const processDepartmentQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return departmentPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processEmployeeQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Employee sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteEmployeeDto(queueItem.payload)) {
+    throw new Error('Payload employee sync queue tidak valid.');
+  }
+
+  return employeePostgresAdapter.upsert(queueItem.payload);
+};
+
+const processEmployeeAreaQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteEmployeeAreaDto(queueItem.payload)) {
+    throw new Error('Payload area karyawan sync queue tidak valid.');
+  }
+
+  return employeeAreaPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processEmployeeCollectionScheduleQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteEmployeeCollectionScheduleDto(queueItem.payload)) {
+    throw new Error('Payload jadwal penagihan karyawan sync queue tidak valid.');
+  }
+
+  return employeeCollectionSchedulePostgresAdapter.upsert(queueItem.payload);
 };
 
 const processFinanceTransactionQueueItem = async (queueItem: SyncQueueItem) => {
@@ -2588,7 +3108,15 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteCooperativeSavingTransaction: RemoteCooperativeSavingTransactionDto | null = null;
     let remoteCurrency: RemoteCurrencyDto | null = null;
     let remoteCurrencyRate: RemoteCurrencyRateDto | null = null;
+    let remoteChartOfAccount: RemoteChartOfAccountDto | null = null;
+    let remoteFinanceAccountMapping: RemoteFinanceAccountMappingDto | null = null;
+    let remoteAccountingProfileSetting: RemoteAccountingProfileSettingDto | null = null;
+    let remoteEnabledModule: RemoteEnabledModuleDto | null = null;
+    let remoteGeneralLedgerSetting: RemoteGeneralLedgerSettingDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
+    let remoteEmployee: RemoteEmployeeDto | null = null;
+    let remoteEmployeeArea: RemoteEmployeeAreaDto | null = null;
+    let remoteEmployeeCollectionSchedule: RemoteEmployeeCollectionScheduleDto | null = null;
     let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
     let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
@@ -2629,8 +3157,24 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteCurrency = await processCurrencyQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CURRENCY_RATE_ENTITY) {
       remoteCurrencyRate = await processCurrencyRateQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === CHART_OF_ACCOUNT_ENTITY) {
+      remoteChartOfAccount = await processChartOfAccountQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === FINANCE_ACCOUNT_MAPPING_ENTITY) {
+      remoteFinanceAccountMapping = await processFinanceAccountMappingQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === ACCOUNTING_PROFILE_SETTING_ENTITY) {
+      remoteAccountingProfileSetting = await processAccountingProfileSettingQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === ENABLED_MODULE_ENTITY) {
+      remoteEnabledModule = await processEnabledModuleQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === GENERAL_LEDGER_SETTING_ENTITY) {
+      remoteGeneralLedgerSetting = await processGeneralLedgerSettingQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === DEPARTMENT_ENTITY) {
       remoteDepartment = await processDepartmentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === EMPLOYEE_ENTITY) {
+      remoteEmployee = await processEmployeeQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === EMPLOYEE_AREA_ENTITY) {
+      remoteEmployeeArea = await processEmployeeAreaQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === EMPLOYEE_COLLECTION_SCHEDULE_ENTITY) {
+      remoteEmployeeCollectionSchedule = await processEmployeeCollectionScheduleQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FINANCE_TRANSACTION_ENTITY) {
       remoteFinanceTransaction = await processFinanceTransactionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === JOURNAL_ENTRY_ENTITY) {
@@ -2678,6 +3222,22 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     }
 
     if (
+      currentQueueItem.entity === CHART_OF_ACCOUNT_ENTITY &&
+      !remoteChartOfAccount &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteChartOfAccountDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateChartOfAccountSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+      });
+      return;
+    }
+
+    if (
       currentQueueItem.entity === DEPARTMENT_ENTITY &&
       !remoteDepartment &&
       currentQueueItem.operation === 'delete' &&
@@ -2690,6 +3250,26 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         sync_error: undefined,
         last_synced_at: syncedAt,
       });
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === EMPLOYEE_AREA_ENTITY &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteEmployeeAreaDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === EMPLOYEE_COLLECTION_SCHEDULE_ENTITY &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteEmployeeCollectionScheduleDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
       return;
     }
 
@@ -2947,6 +3527,66 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       return;
     }
 
+    if (remoteChartOfAccount && isRemoteChartOfAccountDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateChartOfAccountSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteChartOfAccount.updated_at,
+      });
+      await mergeRemoteChartOfAccountsIntoDexie([remoteChartOfAccount], syncedAt);
+      return;
+    }
+
+    if (remoteFinanceAccountMapping && isRemoteFinanceAccountMappingDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateFinanceAccountMappingSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteFinanceAccountMapping.updated_at,
+      });
+      await mergeRemoteFinanceAccountMappingsIntoDexie([remoteFinanceAccountMapping], syncedAt);
+      return;
+    }
+
+    if (remoteAccountingProfileSetting && isRemoteAccountingProfileSettingDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateAccountingProfileSettingSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteAccountingProfileSetting.updated_at,
+      });
+      await mergeRemoteAccountingProfileSettingIntoDexie(remoteAccountingProfileSetting, syncedAt);
+      return;
+    }
+
+    if (remoteEnabledModule && isRemoteEnabledModuleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateEnabledModuleSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteEnabledModule.updated_at,
+      });
+      await mergeRemoteEnabledModulesIntoDexie([remoteEnabledModule], syncedAt);
+      return;
+    }
+
+    if (remoteGeneralLedgerSetting && isRemoteGeneralLedgerSettingDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateGeneralLedgerSettingSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteGeneralLedgerSetting.updated_at,
+      });
+      await mergeRemoteGeneralLedgerSettingIntoDexie(remoteGeneralLedgerSetting, syncedAt);
+      return;
+    }
+
     if (remoteDepartment && isRemoteDepartmentDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateDepartmentSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
@@ -2956,6 +3596,49 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteDepartment.updated_at,
       });
       await mergeRemoteDepartmentsIntoDexie([remoteDepartment], syncedAt);
+      return;
+    }
+
+    if (remoteEmployee && isRemoteEmployeeDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateEmployeeSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteEmployee.updated_at,
+      });
+      await mergeRemoteEmployeesIntoDexie([remoteEmployee], syncedAt);
+      return;
+    }
+
+    if (remoteEmployeeArea && isRemoteEmployeeAreaDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateEmployeeAreaSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteEmployeeArea.updated_at,
+      });
+      await mergeRemoteEmployeeAreasIntoDexie([remoteEmployeeArea], syncedAt);
+      return;
+    }
+
+    if (
+      remoteEmployeeCollectionSchedule &&
+      isRemoteEmployeeCollectionScheduleDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateEmployeeCollectionScheduleSyncMetadata(
+        currentQueueItem.entity_id,
+        currentQueueItem.payload.updated_at,
+        {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at: remoteEmployeeCollectionSchedule.updated_at,
+        },
+      );
+      await mergeRemoteEmployeeCollectionSchedulesIntoDexie([remoteEmployeeCollectionSchedule], syncedAt);
       return;
     }
 
@@ -3755,6 +4438,205 @@ export const enqueueCurrencyRateSync = async (
   return queueItem;
 };
 
+export const enqueueChartOfAccountSync = async (
+  account: ChartOfAccount,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: CHART_OF_ACCOUNT_ENTITY,
+    entity_id: account.id,
+    operation,
+    payload: mapChartOfAccountToRemoteDto(account),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingChartOfAccountsForSync = async () => {
+  const accountQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(CHART_OF_ACCOUNT_ENTITY)
+    .toArray();
+
+  const accounts = (await db.chartOfAccounts.toArray())
+    .filter((account) => account.sync_status === 'pending' || account.sync_status === 'failed');
+  for (const account of accounts) {
+    const existingQueueItem = accountQueueItems.find((queueItem) => (
+      queueItem.entity_id === account.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteChartOfAccountDto(queueItem.payload) &&
+      queueItem.payload.updated_at === account.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueChartOfAccountSync(account, 'update');
+    }
+  }
+};
+
+export const enqueueFinanceAccountMappingSync = async (
+  mapping: FinanceAccountMapping,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: FINANCE_ACCOUNT_MAPPING_ENTITY,
+    entity_id: mapping.id,
+    operation,
+    payload: mapFinanceAccountMappingToRemoteDto(mapping),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueAccountingProfileSettingSync = async (
+  setting: AccountingProfileSetting,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ACCOUNTING_PROFILE_SETTING_ENTITY,
+    entity_id: setting.id,
+    operation,
+    payload: mapAccountingProfileSettingToRemoteDto(setting),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueEnabledModuleSync = async (
+  module: EnabledModule,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ENABLED_MODULE_ENTITY,
+    entity_id: module.id,
+    operation,
+    payload: mapEnabledModuleToRemoteDto(module),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueGeneralLedgerSettingSync = async (
+  setting: GeneralLedgerSetting,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: GENERAL_LEDGER_SETTING_ENTITY,
+    entity_id: setting.id,
+    operation,
+    payload: mapGeneralLedgerSettingToRemoteDto(setting),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingAccountingSettingsForSync = async () => {
+  const [
+    mappingQueueItems,
+    profileQueueItems,
+    moduleQueueItems,
+    glQueueItems,
+  ] = await Promise.all([
+    db.syncQueue.where('entity').equals(FINANCE_ACCOUNT_MAPPING_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(ACCOUNTING_PROFILE_SETTING_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(ENABLED_MODULE_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(GENERAL_LEDGER_SETTING_ENTITY).toArray(),
+  ]);
+
+  const mappings = (await db.financeAccountMappings.toArray())
+    .filter((mapping) => mapping.sync_status === 'pending' || mapping.sync_status === 'failed');
+  for (const mapping of mappings) {
+    const existing = mappingQueueItems.find((queueItem) => (
+      queueItem.entity_id === mapping.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteFinanceAccountMappingDto(queueItem.payload) &&
+      queueItem.payload.updated_at === mapping.updated_at
+    ));
+    if (!existing) await enqueueFinanceAccountMappingSync(mapping, 'update');
+  }
+
+  const profiles = (await db.accountingProfileSetting.toArray())
+    .filter((profile) => profile.sync_status === 'pending' || profile.sync_status === 'failed');
+  for (const profile of profiles) {
+    const existing = profileQueueItems.find((queueItem) => (
+      queueItem.entity_id === profile.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteAccountingProfileSettingDto(queueItem.payload) &&
+      queueItem.payload.updated_at === profile.updated_at
+    ));
+    if (!existing) await enqueueAccountingProfileSettingSync(profile, 'update');
+  }
+
+  const modules = (await db.enabledModules.toArray())
+    .filter((module) => module.sync_status === 'pending' || module.sync_status === 'failed');
+  for (const module of modules) {
+    const existing = moduleQueueItems.find((queueItem) => (
+      queueItem.entity_id === module.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteEnabledModuleDto(queueItem.payload) &&
+      queueItem.payload.updated_at === module.updated_at
+    ));
+    if (!existing) await enqueueEnabledModuleSync(module, 'update');
+  }
+
+  const glSettings = (await db.generalLedgerSetting.toArray())
+    .filter((setting) => setting.sync_status === 'pending' || setting.sync_status === 'failed');
+  for (const setting of glSettings) {
+    const existing = glQueueItems.find((queueItem) => (
+      queueItem.entity_id === setting.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteGeneralLedgerSettingDto(queueItem.payload) &&
+      queueItem.payload.updated_at === setting.updated_at
+    ));
+    if (!existing) await enqueueGeneralLedgerSettingSync(setting, 'update');
+  }
+};
+
 export const enqueueDepartmentSync = async (
   department: Department,
   operation: SyncQueueOperation,
@@ -3776,6 +4658,176 @@ export const enqueueDepartmentSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueueEmployeeSync = async (
+  employee: Employee,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: EMPLOYEE_ENTITY,
+    entity_id: employee.id,
+    operation,
+    payload: mapEmployeeToRemoteDto(employee),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueEmployeeAreaSync = async (
+  assignment: EmployeeArea,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: EMPLOYEE_AREA_ENTITY,
+    entity_id: assignment.id,
+    operation,
+    payload: mapEmployeeAreaToRemoteDto(assignment),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueEmployeeAreaDeleteSync = async (
+  assignment: EmployeeArea,
+  deletedAt: string,
+) => {
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: EMPLOYEE_AREA_ENTITY,
+    entity_id: assignment.id,
+    operation: 'delete',
+    payload: mapDeletedEmployeeAreaToRemoteDto(assignment, deletedAt),
+    status: 'pending',
+    attempts: 0,
+    created_at: deletedAt,
+    updated_at: deletedAt,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueEmployeeCollectionScheduleSync = async (
+  schedule: EmployeeCollectionSchedule,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: EMPLOYEE_COLLECTION_SCHEDULE_ENTITY,
+    entity_id: schedule.id,
+    operation,
+    payload: mapEmployeeCollectionScheduleToRemoteDto(schedule),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueEmployeeCollectionScheduleDeleteSync = async (
+  schedule: EmployeeCollectionSchedule,
+  deletedAt: string,
+) => {
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: EMPLOYEE_COLLECTION_SCHEDULE_ENTITY,
+    entity_id: schedule.id,
+    operation: 'delete',
+    payload: mapDeletedEmployeeCollectionScheduleToRemoteDto(schedule, deletedAt),
+    status: 'pending',
+    attempts: 0,
+    created_at: deletedAt,
+    updated_at: deletedAt,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingEmployeesForSync = async () => {
+  const [
+    employeeQueueItems,
+    employeeAreaQueueItems,
+    employeeCollectionScheduleQueueItems,
+  ] = await Promise.all([
+    db.syncQueue.where('entity').equals(EMPLOYEE_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(EMPLOYEE_AREA_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(EMPLOYEE_COLLECTION_SCHEDULE_ENTITY).toArray(),
+  ]);
+
+  const employees = (await db.employees.toArray())
+    .filter((employee) => employee.sync_status === 'pending' || employee.sync_status === 'failed');
+  for (const employee of employees) {
+    const existingQueueItem = employeeQueueItems.find((queueItem) => (
+      queueItem.entity_id === employee.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteEmployeeDto(queueItem.payload) &&
+      queueItem.payload.updated_at === employee.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueEmployeeSync(employee, 'update');
+    }
+  }
+
+  const assignments = (await db.employeeAreas.toArray())
+    .filter((assignment) => assignment.sync_status === 'pending' || assignment.sync_status === 'failed');
+  for (const assignment of assignments) {
+    const existingQueueItem = employeeAreaQueueItems.find((queueItem) => (
+      queueItem.entity_id === assignment.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteEmployeeAreaDto(queueItem.payload) &&
+      queueItem.payload.updated_at === assignment.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueEmployeeAreaSync(assignment, 'update');
+    }
+  }
+
+  const schedules = (await db.employeeCollectionSchedules.toArray())
+    .filter((schedule) => schedule.sync_status === 'pending' || schedule.sync_status === 'failed');
+  for (const schedule of schedules) {
+    const existingQueueItem = employeeCollectionScheduleQueueItems.find((queueItem) => (
+      queueItem.entity_id === schedule.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteEmployeeCollectionScheduleDto(queueItem.payload) &&
+      queueItem.payload.updated_at === schedule.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueEmployeeCollectionScheduleSync(schedule, 'update');
+    }
+  }
 };
 
 export const enqueueFinanceTransactionSync = async (

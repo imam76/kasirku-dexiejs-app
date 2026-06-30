@@ -1,5 +1,7 @@
+pub mod accounting_setting_commands;
 pub mod app_setup_config_commands;
 pub mod auth_commands;
+pub mod chart_of_account_commands;
 pub mod company_profile_setting_commands;
 pub mod contact_commands;
 pub mod cooperative_commands;

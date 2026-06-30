@@ -170,7 +170,6 @@ pub async fn list_employee_areas(pool: &PgPool) -> Result<Vec<EmployeeAreaDto>, 
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM employee_areas
-        WHERE deleted_at IS NULL
         ORDER BY employee_id, area_name ASC
         "#,
     )
@@ -247,7 +246,6 @@ pub async fn list_employee_collection_schedules(
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM employee_collection_schedules
-        WHERE deleted_at IS NULL
         ORDER BY employee_id, area_id, weekday ASC
         "#,
     )

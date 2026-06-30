@@ -7,15 +7,15 @@ import {
 } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { employeeSchema } from '@/lib/validations/employee';
-import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
 import {
-  employeePostgresAdapter,
-  employeeAreaPostgresAdapter,
-  employeeCollectionSchedulePostgresAdapter,
-  type RemoteEmployeeDto,
-  type RemoteEmployeeAreaDto,
-  type RemoteEmployeeCollectionScheduleDto,
-} from '@/services/postgresAdapter';
+  enqueueChartOfAccountSync,
+  enqueueEmployeeAreaDeleteSync,
+  enqueueEmployeeAreaSync,
+  enqueueEmployeeCollectionScheduleDeleteSync,
+  enqueueEmployeeCollectionScheduleSync,
+  enqueueEmployeeSync,
+} from '@/services/syncQueueService';
+import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
 import type {
   ChartOfAccount,
   CooperativeArea,
@@ -72,6 +72,12 @@ const requireEmployeeActor = async () => {
   await requireUserPermission(currentUser, 'EMPLOYEE_MANAGE');
   return currentUser;
 };
+
+const withPendingSync = <T extends object>(record: T): T & { sync_status: 'pending'; sync_error: undefined } => ({
+  ...record,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
 
 const assertFieldCashAccount = (account: ChartOfAccount | undefined) => {
   if (!account) {
@@ -171,7 +177,7 @@ export const createFieldCashAccountForEmployee = async (input: {
 
   const parent = await getFieldCashParentAccount();
   const now = new Date().toISOString();
-  const account: ChartOfAccount = {
+  const account: ChartOfAccount = withPendingSync({
     id: crypto.randomUUID(),
     code,
     name: `Kas Petugas - ${employeeName}`,
@@ -186,7 +192,7 @@ export const createFieldCashAccountForEmployee = async (input: {
     description: `Akun kas petugas lapangan ${employeeName}.`,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.transaction('rw', [db.chartOfAccounts, db.activityLogs], async () => {
     await db.chartOfAccounts.add(account);
@@ -198,6 +204,8 @@ export const createFieldCashAccountForEmployee = async (input: {
       description: `${currentUser?.name ?? 'User'} membuat akun kas petugas ${account.code} ${account.name}.`,
     });
   });
+
+  await enqueueChartOfAccountSync(account, 'create');
 
   return account;
 };
@@ -329,7 +337,7 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
     pinSalt = salt;
   }
 
-  const employee: Employee = {
+  const employee: Employee = withPendingSync({
     id: employeeId,
     name: sanitizedInput.name,
     phone: sanitizedInput.phone,
@@ -344,14 +352,14 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
     is_active: sanitizedInput.is_active,
     created_at: now,
     updated_at: now,
-  };
-  const assignments = buildEmployeeAreaAssignments(employee, areas, now);
+  });
+  const assignments = buildEmployeeAreaAssignments(employee, areas, now).map(withPendingSync);
   const collectionSchedules = buildEmployeeCollectionSchedules(
     employee,
     areas,
     sanitizedInput.collection_schedules,
     now,
-  );
+  ).map(withPendingSync);
 
   await db.transaction('rw', [
     db.employees,
@@ -375,50 +383,12 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
     });
   });
 
-  // Sync to PostgreSQL
-  try {
-    const remoteEmployee: RemoteEmployeeDto = {
-      ...employee,
-      phone: employee.phone ?? null,
-      email: employee.email ?? null,
-      address: employee.address ?? null,
-      position: employee.position ?? null,
-      user_id: employee.user_id ?? null,
-      user_name: employee.user_name ?? null,
-      login_role_id: employee.login_role_id ?? null,
-      field_cash_account_id: employee.field_cash_account_id ?? null,
-      field_cash_account_code: employee.field_cash_account_code ?? null,
-      field_cash_account_name: employee.field_cash_account_name ?? null,
-      pin_hash: employee.pin_hash ?? null,
-      pin_salt: employee.pin_salt ?? null,
-      notes: employee.notes ?? null,
-    };
-
-    await employeePostgresAdapter.upsert(remoteEmployee);
-
-    // Sync employee areas
-    for (const assignment of assignments) {
-      const remoteArea: RemoteEmployeeAreaDto = {
-        ...assignment,
-        area_code: assignment.area_code ?? null,
-      };
-      await employeeAreaPostgresAdapter.upsert(remoteArea);
-    }
-
-    // Sync collection schedules
-    for (const schedule of collectionSchedules) {
-      const remoteSchedule: RemoteEmployeeCollectionScheduleDto = {
-        ...schedule,
-        employee_position: schedule.employee_position ?? null,
-        area_code: schedule.area_code ?? null,
-        effective_from: schedule.effective_from ?? null,
-        effective_until: schedule.effective_until ?? null,
-      };
-      await employeeCollectionSchedulePostgresAdapter.upsert(remoteSchedule);
-    }
-  } catch (error) {
-    console.error('Failed to sync employee to PostgreSQL:', error);
-    // Continue even if sync fails, as data is already saved locally
+  await enqueueEmployeeSync(employee, 'create');
+  for (const assignment of assignments) {
+    await enqueueEmployeeAreaSync(assignment, 'create');
+  }
+  for (const schedule of collectionSchedules) {
+    await enqueueEmployeeCollectionScheduleSync(schedule, 'create');
   }
 
   return employee;
@@ -460,7 +430,7 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
   }
 
   const updatedAt = new Date().toISOString();
-  const updatedEmployee: Employee = {
+  const updatedEmployee: Employee = withPendingSync({
     ...existingEmployee,
     name: sanitizedInput.name,
     phone: sanitizedInput.phone,
@@ -476,8 +446,12 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     notes: sanitizedInput.notes,
     is_active: sanitizedInput.is_active,
     updated_at: updatedAt,
-  };
-  const assignments = buildEmployeeAreaAssignments(updatedEmployee, areas, updatedAt);
+  });
+  const existingAssignments = await db.employeeAreas
+    .where('employee_id')
+    .equals(id)
+    .toArray();
+  const assignments = buildEmployeeAreaAssignments(updatedEmployee, areas, updatedAt).map(withPendingSync);
   const existingSchedules = await db.employeeCollectionSchedules
     .where('employee_id')
     .equals(id)
@@ -489,9 +463,13 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     sanitizedInput.collection_schedules,
     updatedAt,
   ).map((schedule) => ({
-    ...schedule,
+    ...withPendingSync(schedule),
     created_at: existingScheduleById.get(schedule.id)?.created_at ?? schedule.created_at,
   }));
+  const assignmentIds = new Set(assignments.map((assignment) => assignment.id));
+  const scheduleIds = new Set(collectionSchedules.map((schedule) => schedule.id));
+  const removedAssignments = existingAssignments.filter((assignment) => !assignmentIds.has(assignment.id));
+  const removedSchedules = existingSchedules.filter((schedule) => !scheduleIds.has(schedule.id));
 
   await db.transaction('rw', [
     db.employees,
@@ -517,50 +495,18 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     });
   });
 
-  // Sync to PostgreSQL
-  try {
-    const remoteEmployee: RemoteEmployeeDto = {
-      ...updatedEmployee,
-      phone: updatedEmployee.phone ?? null,
-      email: updatedEmployee.email ?? null,
-      address: updatedEmployee.address ?? null,
-      position: updatedEmployee.position ?? null,
-      user_id: updatedEmployee.user_id ?? null,
-      user_name: updatedEmployee.user_name ?? null,
-      login_role_id: updatedEmployee.login_role_id ?? null,
-      field_cash_account_id: updatedEmployee.field_cash_account_id ?? null,
-      field_cash_account_code: updatedEmployee.field_cash_account_code ?? null,
-      field_cash_account_name: updatedEmployee.field_cash_account_name ?? null,
-      pin_hash: updatedEmployee.pin_hash ?? null,
-      pin_salt: updatedEmployee.pin_salt ?? null,
-      notes: updatedEmployee.notes ?? null,
-    };
-
-    await employeePostgresAdapter.upsert(remoteEmployee);
-
-    // Sync employee areas
-    for (const assignment of assignments) {
-      const remoteArea: RemoteEmployeeAreaDto = {
-        ...assignment,
-        area_code: assignment.area_code ?? null,
-      };
-      await employeeAreaPostgresAdapter.upsert(remoteArea);
-    }
-
-    // Sync collection schedules
-    for (const schedule of collectionSchedules) {
-      const remoteSchedule: RemoteEmployeeCollectionScheduleDto = {
-        ...schedule,
-        employee_position: schedule.employee_position ?? null,
-        area_code: schedule.area_code ?? null,
-        effective_from: schedule.effective_from ?? null,
-        effective_until: schedule.effective_until ?? null,
-      };
-      await employeeCollectionSchedulePostgresAdapter.upsert(remoteSchedule);
-    }
-  } catch (error) {
-    console.error('Failed to sync employee to PostgreSQL:', error);
-    // Continue even if sync fails, as data is already saved locally
+  await enqueueEmployeeSync(updatedEmployee, 'update');
+  for (const assignment of assignments) {
+    await enqueueEmployeeAreaSync(assignment, 'update');
+  }
+  for (const schedule of collectionSchedules) {
+    await enqueueEmployeeCollectionScheduleSync(schedule, 'update');
+  }
+  for (const assignment of removedAssignments) {
+    await enqueueEmployeeAreaDeleteSync(assignment, updatedAt);
+  }
+  for (const schedule of removedSchedules) {
+    await enqueueEmployeeCollectionScheduleDeleteSync(schedule, updatedAt);
   }
 
   return updatedEmployee;
@@ -573,11 +519,11 @@ export const archiveEmployee = async (id: string): Promise<Employee> => {
     throw new Error('Karyawan tidak ditemukan.');
   }
 
-  const archivedEmployee: Employee = {
+  const archivedEmployee: Employee = withPendingSync({
     ...employee,
     is_active: false,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.employees.put(archivedEmployee);
   await writeActivityLog({
@@ -588,30 +534,7 @@ export const archiveEmployee = async (id: string): Promise<Employee> => {
     description: `${currentUser?.name ?? 'User'} mengarsipkan karyawan ${employee.name}.`,
   });
 
-  // Sync to PostgreSQL
-  try {
-    const remoteEmployee: RemoteEmployeeDto = {
-      ...archivedEmployee,
-      phone: archivedEmployee.phone ?? null,
-      email: archivedEmployee.email ?? null,
-      address: archivedEmployee.address ?? null,
-      position: archivedEmployee.position ?? null,
-      user_id: archivedEmployee.user_id ?? null,
-      user_name: archivedEmployee.user_name ?? null,
-      login_role_id: archivedEmployee.login_role_id ?? null,
-      field_cash_account_id: archivedEmployee.field_cash_account_id ?? null,
-      field_cash_account_code: archivedEmployee.field_cash_account_code ?? null,
-      field_cash_account_name: archivedEmployee.field_cash_account_name ?? null,
-      pin_hash: archivedEmployee.pin_hash ?? null,
-      pin_salt: archivedEmployee.pin_salt ?? null,
-      notes: archivedEmployee.notes ?? null,
-    };
-
-    await employeePostgresAdapter.upsert(remoteEmployee);
-  } catch (error) {
-    console.error('Failed to sync archived employee to PostgreSQL:', error);
-    // Continue even if sync fails, as data is already saved locally
-  }
+  await enqueueEmployeeSync(archivedEmployee, 'update');
 
   return archivedEmployee;
 };
@@ -626,11 +549,11 @@ export const restoreEmployee = async (id: string): Promise<Employee> => {
 
   await assertFieldCashAccountAvailable(employee.field_cash_account_id, id, true);
 
-  const restoredEmployee: Employee = {
+  const restoredEmployee: Employee = withPendingSync({
     ...employee,
     is_active: true,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.employees.put(restoredEmployee);
   await writeActivityLog({
@@ -641,30 +564,7 @@ export const restoreEmployee = async (id: string): Promise<Employee> => {
     description: `${currentUser?.name ?? 'User'} memulihkan karyawan ${employee.name}.`,
   });
 
-  // Sync to PostgreSQL
-  try {
-    const remoteEmployee: RemoteEmployeeDto = {
-      ...restoredEmployee,
-      phone: restoredEmployee.phone ?? null,
-      email: restoredEmployee.email ?? null,
-      address: restoredEmployee.address ?? null,
-      position: restoredEmployee.position ?? null,
-      user_id: restoredEmployee.user_id ?? null,
-      user_name: restoredEmployee.user_name ?? null,
-      login_role_id: restoredEmployee.login_role_id ?? null,
-      field_cash_account_id: restoredEmployee.field_cash_account_id ?? null,
-      field_cash_account_code: restoredEmployee.field_cash_account_code ?? null,
-      field_cash_account_name: restoredEmployee.field_cash_account_name ?? null,
-      pin_hash: restoredEmployee.pin_hash ?? null,
-      pin_salt: restoredEmployee.pin_salt ?? null,
-      notes: restoredEmployee.notes ?? null,
-    };
-
-    await employeePostgresAdapter.upsert(remoteEmployee);
-  } catch (error) {
-    console.error('Failed to sync restored employee to PostgreSQL:', error);
-    // Continue even if sync fails, as data is already saved locally
-  }
+  await enqueueEmployeeSync(restoredEmployee, 'update');
 
   return restoredEmployee;
 };

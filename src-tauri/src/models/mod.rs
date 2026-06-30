@@ -1,5 +1,7 @@
+pub mod accounting_setting;
 pub mod app_setup_config;
 pub mod auth;
+pub mod chart_of_account;
 pub mod company_profile_setting;
 pub mod contact;
 pub mod cooperative;

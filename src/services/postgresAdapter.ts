@@ -164,6 +164,69 @@ export interface RemoteDepartmentDto {
   deleted_at?: string | null;
 }
 
+export interface RemoteChartOfAccountDto {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  normal_balance: string;
+  parent_id?: string | null;
+  parent_code?: string | null;
+  parent_name?: string | null;
+  is_postable: boolean;
+  is_system: boolean;
+  is_active: boolean;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteFinanceAccountMappingDto {
+  id: string;
+  key: string;
+  category?: string | null;
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: string;
+  is_system: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteAccountingProfileSettingDto {
+  id: string;
+  accounting_profile: string;
+  industry_extension: string;
+  template_id?: string | null;
+  locked_after_transaction?: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteEnabledModuleDto {
+  id: string;
+  code: string;
+  is_enabled: boolean;
+  source: string;
+  requires_profile?: string | null;
+  requires_extension?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteGeneralLedgerSettingDto {
+  id: string;
+  is_ready: boolean;
+  cutoff_date?: string | null;
+  inventory_policy: string;
+  opening_balance_journal_id?: string | null;
+  activated_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RemoteProjectDto {
   id: string;
   code?: string | null;
@@ -1326,6 +1389,76 @@ export const departmentPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteDepartmentDto | null>('postgres_delete_department', { id });
+  },
+};
+
+export const chartOfAccountPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteChartOfAccountDto[]>('postgres_list_chart_of_accounts');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteChartOfAccountDto | null>('postgres_get_chart_of_account', { id });
+  },
+
+  async upsert(input: RemoteChartOfAccountDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteChartOfAccountDto>('postgres_upsert_chart_of_account', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteChartOfAccountDto | null>('postgres_delete_chart_of_account', { id });
+  },
+};
+
+export const financeAccountMappingPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteFinanceAccountMappingDto[]>('postgres_list_finance_account_mappings');
+  },
+
+  async upsert(input: RemoteFinanceAccountMappingDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteFinanceAccountMappingDto>('postgres_upsert_finance_account_mapping', { input });
+  },
+};
+
+export const accountingProfileSettingPostgresAdapter = {
+  async get() {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAccountingProfileSettingDto | null>('postgres_get_accounting_profile_setting');
+  },
+
+  async upsert(input: RemoteAccountingProfileSettingDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAccountingProfileSettingDto>('postgres_upsert_accounting_profile_setting', { input });
+  },
+};
+
+export const enabledModulePostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteEnabledModuleDto[]>('postgres_list_enabled_modules');
+  },
+
+  async upsert(input: RemoteEnabledModuleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEnabledModuleDto>('postgres_upsert_enabled_module', { input });
+  },
+};
+
+export const generalLedgerSettingPostgresAdapter = {
+  async get() {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteGeneralLedgerSettingDto | null>('postgres_get_general_ledger_setting');
+  },
+
+  async upsert(input: RemoteGeneralLedgerSettingDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteGeneralLedgerSettingDto>('postgres_upsert_general_ledger_setting', { input });
   },
 };
 

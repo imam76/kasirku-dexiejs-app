@@ -22,6 +22,13 @@ import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import { chartOfAccountSchema } from '@/lib/validations/chartOfAccount';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import {
+  enqueueAccountingProfileSettingSync,
+  enqueueChartOfAccountSync,
+  enqueueEnabledModuleSync,
+  enqueueFinanceAccountMappingSync,
+  enqueueGeneralLedgerSettingSync,
+} from '@/services/syncQueueService';
 import { getGeneralLedgerReadiness } from '@/utils/accounting/getGeneralLedgerReadiness';
 import type {
   AccountingModuleCode,
@@ -151,9 +158,20 @@ export const buildDefaultAccountingSeed = (now: string) => {
   };
 };
 
+const withPendingSync = <T extends object>(record: T): T & { sync_status: 'pending'; sync_error: undefined } => ({
+  ...record,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 export const ensureAccountingDefaults = async () => {
   const now = new Date().toISOString();
   const seed = buildDefaultAccountingSeed(now);
+  let seededAccounts: ChartOfAccount[] = [];
+  let seededMappings: FinanceAccountMapping[] = [];
+  let seededProfile: AccountingProfileSetting | undefined;
+  let seededModules: EnabledModule[] = [];
+  let seededGeneralLedger: GeneralLedgerSetting | undefined;
 
   await db.transaction('rw', [
     db.chartOfAccounts,
@@ -163,22 +181,25 @@ export const ensureAccountingDefaults = async () => {
     db.generalLedgerSetting,
   ], async () => {
     if (await db.chartOfAccounts.count() === 0) {
-      await db.chartOfAccounts.bulkPut(seed.accounts);
+      seededAccounts = seed.accounts.map(withPendingSync);
+      await db.chartOfAccounts.bulkPut(seededAccounts);
     } else {
       const accounts = await db.chartOfAccounts.toArray();
       const accountCodes = new Set(accounts.map((account) => account.code));
       const accountIds = new Set(accounts.map((account) => account.id));
-      const missingAccounts = seed.accounts.filter((account) => {
-        return !accountCodes.has(account.code) && !accountIds.has(account.id);
-      });
+      const missingAccounts = seed.accounts
+        .filter((account) => !accountCodes.has(account.code) && !accountIds.has(account.id))
+        .map(withPendingSync);
 
       if (missingAccounts.length > 0) {
+        seededAccounts = missingAccounts;
         await db.chartOfAccounts.bulkPut(missingAccounts);
       }
     }
 
     if (await db.financeAccountMappings.count() === 0) {
-      await db.financeAccountMappings.bulkPut(seed.mappings);
+      seededMappings = seed.mappings.map(withPendingSync);
+      await db.financeAccountMappings.bulkPut(seededMappings);
     } else {
       const mappings = await db.financeAccountMappings.toArray();
       const mappingKeys = new Set(mappings.map((mapping) => mapping.key));
@@ -200,25 +221,50 @@ export const ensureAccountingDefaults = async () => {
             updated_at: now,
           };
         })
-        .filter((mapping): mapping is FinanceAccountMapping => Boolean(mapping));
+        .filter((mapping): mapping is FinanceAccountMapping => Boolean(mapping))
+        .map(withPendingSync);
 
       if (missingMappings.length > 0) {
+        seededMappings = missingMappings;
         await db.financeAccountMappings.bulkPut(missingMappings);
       }
     }
 
     if (!await db.accountingProfileSetting.get('default')) {
-      await db.accountingProfileSetting.put(seed.profileSetting);
+      seededProfile = withPendingSync(seed.profileSetting);
+      await db.accountingProfileSetting.put(seededProfile);
     }
 
     if (await db.enabledModules.count() === 0) {
-      await db.enabledModules.bulkPut(seed.enabledModules);
+      seededModules = seed.enabledModules.map(withPendingSync);
+      await db.enabledModules.bulkPut(seededModules);
     }
 
     if (!await db.generalLedgerSetting.get('default')) {
-      await db.generalLedgerSetting.put(seed.generalLedgerSetting);
+      seededGeneralLedger = withPendingSync(seed.generalLedgerSetting);
+      await db.generalLedgerSetting.put(seededGeneralLedger);
     }
   });
+
+  // The default accounting seed is foundational (every other module references these
+  // accounts, mappings, modules, and settings), so it must reach PostgreSQL too —
+  // not stay local-only. Only freshly seeded rows are enqueued; ids are deterministic
+  // so repeated uploads across devices are idempotent upserts.
+  for (const account of seededAccounts) {
+    await enqueueChartOfAccountSync(account, 'create');
+  }
+  for (const mapping of seededMappings) {
+    await enqueueFinanceAccountMappingSync(mapping, 'create');
+  }
+  if (seededProfile) {
+    await enqueueAccountingProfileSettingSync(seededProfile, 'create');
+  }
+  for (const module of seededModules) {
+    await enqueueEnabledModuleSync(module, 'create');
+  }
+  if (seededGeneralLedger) {
+    await enqueueGeneralLedgerSettingSync(seededGeneralLedger, 'create');
+  }
 };
 
 const sanitizeChartOfAccountInput = async (
@@ -316,13 +362,13 @@ export const createChartOfAccount = async (input: ChartOfAccountUpsertInput): Pr
   await assertAccountCodeAvailable(sanitizedInput.code);
 
   const now = new Date().toISOString();
-  const account: ChartOfAccount = {
+  const account: ChartOfAccount = withPendingSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
     is_system: false,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   await db.chartOfAccounts.add(account);
   await writeActivityLog({
@@ -332,6 +378,8 @@ export const createChartOfAccount = async (input: ChartOfAccountUpsertInput): Pr
     entity_id: account.id,
     description: `${currentUser?.name ?? 'User'} membuat akun ${account.code} ${account.name}.`,
   });
+
+  await enqueueChartOfAccountSync(account, 'create');
 
   return account;
 };
@@ -349,11 +397,11 @@ export const updateChartOfAccount = async (
   const sanitizedInput = await sanitizeChartOfAccountInput(input, id);
   await assertAccountCodeAvailable(sanitizedInput.code, id);
 
-  const updatedAccount: ChartOfAccount = {
+  const updatedAccount: ChartOfAccount = withPendingSync({
     ...existingAccount,
     ...sanitizedInput,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.chartOfAccounts.put(updatedAccount);
   await writeActivityLog({
@@ -363,6 +411,8 @@ export const updateChartOfAccount = async (
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memperbarui akun ${updatedAccount.code} ${updatedAccount.name}.`,
   });
+
+  await enqueueChartOfAccountSync(updatedAccount, 'update');
 
   return updatedAccount;
 };
@@ -383,11 +433,11 @@ export const archiveChartOfAccount = async (id: string): Promise<ChartOfAccount>
     throw new Error('Akun masih dipakai mapping finance. Pindahkan mapping dulu sebelum arsip.');
   }
 
-  const archivedAccount: ChartOfAccount = {
+  const archivedAccount: ChartOfAccount = withPendingSync({
     ...account,
     is_active: false,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.chartOfAccounts.put(archivedAccount);
   await writeActivityLog({
@@ -397,6 +447,8 @@ export const archiveChartOfAccount = async (id: string): Promise<ChartOfAccount>
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} mengarsipkan akun ${account.code} ${account.name}.`,
   });
+
+  await enqueueChartOfAccountSync(archivedAccount, 'update');
 
   return archivedAccount;
 };
@@ -410,11 +462,11 @@ export const restoreChartOfAccount = async (id: string): Promise<ChartOfAccount>
 
   await assertAccountCodeAvailable(account.code, id);
 
-  const restoredAccount: ChartOfAccount = {
+  const restoredAccount: ChartOfAccount = withPendingSync({
     ...account,
     is_active: true,
     updated_at: new Date().toISOString(),
-  };
+  });
 
   await db.chartOfAccounts.put(restoredAccount);
   await writeActivityLog({
@@ -424,6 +476,8 @@ export const restoreChartOfAccount = async (id: string): Promise<ChartOfAccount>
     entity_id: id,
     description: `${currentUser?.name ?? 'User'} memulihkan akun ${account.code} ${account.name}.`,
   });
+
+  await enqueueChartOfAccountSync(restoredAccount, 'update');
 
   return restoredAccount;
 };
@@ -440,7 +494,7 @@ export const updateFinanceAccountMapping = async (
 
   const now = new Date().toISOString();
   const existingMapping = await db.financeAccountMappings.get(key);
-  const mapping: FinanceAccountMapping = {
+  const mapping: FinanceAccountMapping = withPendingSync({
     id: key,
     key,
     category: key,
@@ -451,7 +505,7 @@ export const updateFinanceAccountMapping = async (
     is_system: existingMapping?.is_system ?? false,
     created_at: existingMapping?.created_at ?? now,
     updated_at: now,
-  };
+  });
 
   await db.financeAccountMappings.put(mapping);
   await writeActivityLog({
@@ -461,6 +515,8 @@ export const updateFinanceAccountMapping = async (
     entity_id: key,
     description: `${currentUser?.name ?? 'User'} memperbarui mapping ${key} ke akun ${account.code} ${account.name}.`,
   });
+
+  await enqueueFinanceAccountMappingSync(mapping, 'update');
 
   return mapping;
 };
@@ -510,7 +566,7 @@ export const updateEnabledModule = async (
 
   const existingModule = await db.enabledModules.get(code);
   const now = new Date().toISOString();
-  const module: EnabledModule = {
+  const module: EnabledModule = withPendingSync({
     id: code,
     code,
     is_enabled: isEnabled,
@@ -519,15 +575,16 @@ export const updateEnabledModule = async (
     requires_extension: existingModule?.requires_extension,
     created_at: existingModule?.created_at ?? now,
     updated_at: now,
-  };
+  });
+  let updatedGeneralLedger: GeneralLedgerSetting | undefined;
 
   await db.transaction('rw', [db.enabledModules, db.generalLedgerSetting], async () => {
     await db.enabledModules.put(module);
 
     if (code === 'GENERAL_LEDGER') {
       const setting = await db.generalLedgerSetting.get('default');
-      await db.generalLedgerSetting.put({
-        id: 'default',
+      updatedGeneralLedger = withPendingSync({
+        id: 'default' as const,
         is_ready: isEnabled ? true : setting?.is_ready ?? false,
         cutoff_date: setting?.cutoff_date,
         inventory_policy: setting?.inventory_policy ?? 'PERPETUAL_INVENTORY',
@@ -536,6 +593,7 @@ export const updateEnabledModule = async (
         created_at: setting?.created_at ?? now,
         updated_at: now,
       });
+      await db.generalLedgerSetting.put(updatedGeneralLedger);
     }
   });
   await writeActivityLog({
@@ -545,6 +603,11 @@ export const updateEnabledModule = async (
     entity_id: code,
     description: `${currentUser?.name ?? 'User'} ${isEnabled ? 'mengaktifkan' : 'menonaktifkan'} module ${code}.`,
   });
+
+  await enqueueEnabledModuleSync(module, 'update');
+  if (updatedGeneralLedger) {
+    await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
+  }
 
   return module;
 };
@@ -558,15 +621,15 @@ export const updateAccountingProfileSetting = async (
   assertAccountingProfileCombination(accountingProfile, industryExtension);
   const existingProfile = await db.accountingProfileSetting.get('default');
   const now = new Date().toISOString();
-  const profile: AccountingProfileSetting = {
-    id: 'default',
+  const profile: AccountingProfileSetting = withPendingSync({
+    id: 'default' as const,
     accounting_profile: accountingProfile,
     industry_extension: industryExtension,
     template_id: templateId,
     locked_after_transaction: existingProfile?.locked_after_transaction ?? false,
     created_at: existingProfile?.created_at ?? now,
     updated_at: now,
-  };
+  });
 
   await db.accountingProfileSetting.put(profile);
   await writeActivityLog({
@@ -576,6 +639,8 @@ export const updateAccountingProfileSetting = async (
     entity_id: 'default',
     description: `${currentUser?.name ?? 'User'} memperbarui accounting profile menjadi ${accountingProfile} + ${industryExtension}.`,
   });
+
+  await enqueueAccountingProfileSettingSync(profile, 'update');
 
   return profile;
 };
@@ -815,7 +880,7 @@ const mergeMissingTemplateAccounts = async (lines: ChartOfAccountTemplateLine[],
       nextId = `${account.id}-${suffix}`;
     }
 
-    const nextAccount = { ...account, id: nextId };
+    const nextAccount = withPendingSync({ ...account, id: nextId });
     newAccounts.push(nextAccount);
     accountByCode.set(nextAccount.code, nextAccount);
     accountByTemplateId.set(line.template_account_id, nextAccount);
@@ -840,10 +905,10 @@ const updateMappingsFromTemplate = async (lines: ChartOfAccountTemplateLine[], n
     
     for (const key of line.mapping_keys) {
       const existingMapping = await db.financeAccountMappings.get(key);
-      mappings.push({
+      mappings.push(withPendingSync({
         ...buildMappingFromAccount(key, account, now, true),
         created_at: existingMapping?.created_at ?? now,
-      });
+      }));
     }
   }
 
@@ -866,7 +931,7 @@ const updateModulesFromRules = async (
 
   for (const rule of rules) {
     const existingModule = await db.enabledModules.get(rule.module_code);
-    modules.push({
+    modules.push(withPendingSync({
       id: rule.module_code,
       code: rule.module_code,
       is_enabled: rule.default_enabled,
@@ -875,7 +940,7 @@ const updateModulesFromRules = async (
       requires_extension: rule.industry_extension,
       created_at: existingModule?.created_at ?? now,
       updated_at: now,
-    });
+    }));
   }
 
   if (modules.length > 0) {
@@ -900,6 +965,7 @@ export const applyChartOfAccountTemplate = async (input: ApplyChartOfAccountTemp
   let addedAccounts: ChartOfAccount[] = [];
   let updatedMappings: FinanceAccountMapping[] = [];
   let updatedModules: EnabledModule[] = [];
+  let updatedProfile: AccountingProfileSetting | undefined;
 
   await db.transaction('rw', [
     db.chartOfAccounts,
@@ -919,8 +985,8 @@ export const applyChartOfAccountTemplate = async (input: ApplyChartOfAccountTemp
 
     if (input.mode !== 'ACTIVATE_MODULES_ONLY') {
       const existingProfile = await db.accountingProfileSetting.get('default');
-      await db.accountingProfileSetting.put({
-        id: 'default',
+      updatedProfile = withPendingSync({
+        id: 'default' as const,
         accounting_profile: input.accounting_profile,
         industry_extension: input.industry_extension,
         template_id: template.id,
@@ -928,6 +994,7 @@ export const applyChartOfAccountTemplate = async (input: ApplyChartOfAccountTemp
         created_at: existingProfile?.created_at ?? now,
         updated_at: now,
       });
+      await db.accountingProfileSetting.put(updatedProfile);
     }
 
     if (input.mode === 'ACTIVATE_MODULES_ONLY' || input.update_modules) {
@@ -942,6 +1009,19 @@ export const applyChartOfAccountTemplate = async (input: ApplyChartOfAccountTemp
     entity_id: template.id,
     description: `${currentUser?.name ?? 'User'} menerapkan template ${template.name}. Akun baru: ${addedAccounts.length}, mapping: ${updatedMappings.length}, module: ${updatedModules.length}.`,
   });
+
+  for (const account of addedAccounts) {
+    await enqueueChartOfAccountSync(account, 'create');
+  }
+  for (const mapping of updatedMappings) {
+    await enqueueFinanceAccountMappingSync(mapping, 'update');
+  }
+  for (const module of updatedModules) {
+    await enqueueEnabledModuleSync(module, 'update');
+  }
+  if (updatedProfile) {
+    await enqueueAccountingProfileSettingSync(updatedProfile, 'update');
+  }
 
   return {
     addedAccounts,

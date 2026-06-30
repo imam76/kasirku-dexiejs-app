@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { enqueueGeneralLedgerSettingSync } from '@/services/syncQueueService';
 import type {
   AccountNormalBalance,
   AccountType,
@@ -11,6 +12,7 @@ import type {
   CooperativeSavingTransaction,
   EmployeeCashAdvance,
   FinanceTransaction,
+  GeneralLedgerSetting,
   InventoryAccountingPolicy,
   JournalEntry,
   JournalEntryLine,
@@ -624,6 +626,7 @@ export const postOpeningBalanceJournal = async ({
     : `${cutoff_date}T00:00:00.000`;
   const now = new Date().toISOString();
   let createdEntry: JournalEntry | undefined;
+  let updatedGeneralLedger: GeneralLedgerSetting | undefined;
 
   await db.transaction('rw', [
     db.chartOfAccounts,
@@ -671,7 +674,7 @@ export const postOpeningBalanceJournal = async ({
       actor: currentUser,
     });
 
-    await db.generalLedgerSetting.put({
+    updatedGeneralLedger = {
       id: 'default',
       is_ready: true,
       cutoff_date: normalizedCutoffDate,
@@ -680,7 +683,10 @@ export const postOpeningBalanceJournal = async ({
       activated_at: setting?.activated_at,
       created_at: setting?.created_at ?? now,
       updated_at: now,
-    });
+      sync_status: 'pending',
+      sync_error: undefined,
+    };
+    await db.generalLedgerSetting.put(updatedGeneralLedger);
 
     await writeActivityLog({
       user: currentUser,
@@ -690,6 +696,10 @@ export const postOpeningBalanceJournal = async ({
       description: `${currentUser?.name ?? 'User'} posting opening balance General Ledger per ${normalizedCutoffDate.slice(0, 10)}.`,
     });
   });
+
+  if (updatedGeneralLedger) {
+    await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
+  }
 
   return createdEntry;
 };
