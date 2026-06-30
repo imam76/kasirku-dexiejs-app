@@ -12,6 +12,8 @@
     "fs:default",
     "fs:allow-appcache-write",
     "os:default",
-    "share:default"
+    "share:default",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

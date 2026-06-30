@@ -1,6 +1,7 @@
 ; NSIS installer hooks for frayukti.
-; Wipes local application data when the user uninstalls the app so that a
-; fresh reinstall starts from a clean state.
+; Wipes local application data when the user explicitly uninstalls the app so
+; that a fresh reinstall starts from a clean state. Updates must preserve this
+; state so users do not need to run developer/database setup again.
 ;
 ; NOTE: PostgreSQL data is intentionally NOT touched here. It lives on a
 ; separate database server and must be reset deliberately by an admin, not as

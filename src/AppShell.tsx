@@ -1,4 +1,5 @@
 import { RouterProvider, createRouter } from '@tanstack/react-router';
+import { AutoUpdater } from '@/components/AutoUpdater';
 import { useSyncQueueWorker } from '@/hooks/useSyncQueueWorker';
 import { routeTree } from '@/routeTree.gen';
 
@@ -13,5 +14,10 @@ declare module '@tanstack/react-router' {
 export default function AppShell() {
   useSyncQueueWorker();
 
-  return <RouterProvider router={router} scrollRestoration={true} />;
+  return (
+    <>
+      <AutoUpdater />
+      <RouterProvider router={router} scrollRestoration={true} />
+    </>
+  );
 }

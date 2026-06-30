@@ -114,6 +114,34 @@ bun run tauri dev
 bun run tauri build
 ```
 
+## Auto Update Desktop
+
+Updater Tauri memakai GitHub Releases terbaru:
+
+```text
+https://github.com/imam76/kasirku-dexiejs-app/releases/latest/download/latest.json
+```
+
+Private signing key lokal dibuat di luar repo:
+
+```bash
+~/.tauri/frayukti-updater.key
+~/.tauri/frayukti-updater.key.password
+```
+
+Build installer yang menghasilkan artifact updater harus memakai isi key tersebut:
+
+```bash
+TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/frayukti-updater.key")" \
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat "$HOME/.tauri/frayukti-updater.key.password")" \
+bun run tauri build
+```
+
+Untuk GitHub Actions, isi secret `TAURI_SIGNING_PRIVATE_KEY` dengan isi file
+`~/.tauri/frayukti-updater.key`. Jika key diberi password, isi juga
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Workflow saat ini membuat draft release;
+publish draft tersebut agar updater aplikasi bisa membaca `latest.json`.
+
 ## Testing
 
 Install browser Playwright sekali saja di mesin baru:
