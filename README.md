@@ -132,7 +132,7 @@ Private signing key lokal dibuat di luar repo:
 Build installer yang menghasilkan artifact updater harus memakai isi key tersebut:
 
 ```bash
-TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/frayukti-updater.key")" \
+TAURI_SIGNING_PRIVATE_KEY_PATH="$HOME/.tauri/frayukti-updater.key" \
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat "$HOME/.tauri/frayukti-updater.key.password")" \
 bun run tauri build
 ```
@@ -154,9 +154,9 @@ cat "$HOME/.tauri/frayukti-updater.key.password"
 ```
 
 Secret lama `TAURI_SIGNING_PRIVATE_KEY` masih didukung sebagai fallback, tapi
-format base64 lebih aman karena tidak rusak oleh newline saat ditempel ke GitHub
-Secrets. Workflow saat ini membuat draft release; publish draft tersebut agar
-updater aplikasi bisa membaca `latest.json`.
+format base64 lebih aman karena workflow akan decode ke file sementara dan
+mengirim path file tersebut ke Tauri. Workflow saat ini membuat draft release;
+publish draft tersebut agar updater aplikasi bisa membaca `latest.json`.
 
 ## Testing
 

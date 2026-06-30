@@ -99,6 +99,10 @@ jobs:
             exit 1
           fi
 
+          normalized_key_file="$RUNNER_TEMP/tauri-updater.key.normalized"
+          tr -d '\r\n' < "$key_file" > "$normalized_key_file"
+          mv "$normalized_key_file" "$key_file"
+
           decoded_key_file="$RUNNER_TEMP/tauri-updater-key.decoded"
           if ! base64 --decode "$key_file" > "$decoded_key_file" 2>/dev/null; then
             echo "::error::Invalid updater private key. TAURI_SIGNING_PRIVATE_KEY_B64 must be base64 of ~/.tauri/frayukti-updater.key, not the decoded minisign text."
@@ -111,9 +115,7 @@ jobs:
           fi
 
           {
-            echo 'TAURI_SIGNING_PRIVATE_KEY<<EOF'
-            cat "$key_file"
-            echo 'EOF'
+            printf 'TAURI_SIGNING_PRIVATE_KEY_PATH=%s\n' "$key_file"
             echo 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD<<EOF'
             printf '%s\n' "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
             echo 'EOF'
