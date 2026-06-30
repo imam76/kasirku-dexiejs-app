@@ -146,9 +146,7 @@ pub async fn create_pg_pool() -> Result<PgPool, PostgresInitError> {
     create_pg_pool_from_database_url(&database_url).await
 }
 
-async fn create_pg_pool_from_database_url(
-    database_url: &str,
-) -> Result<PgPool, PostgresInitError> {
+async fn create_pg_pool_from_database_url(database_url: &str) -> Result<PgPool, PostgresInitError> {
     // Supabase's transaction pooler (port 6543) and other PgBouncer-style poolers
     // reuse backend server connections across client sessions and do NOT support
     // cached/named prepared statements. With sqlx's default statement cache, the
@@ -706,7 +704,11 @@ fn app_config_dir() -> Option<PathBuf> {
     {
         env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
-            .or_else(|| env::var_os("HOME").map(PathBuf::from).map(|home| home.join(".config")))
+            .or_else(|| {
+                env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .map(|home| home.join(".config"))
+            })
             .map(|config_dir| config_dir.join("frayukti"))
     }
 }

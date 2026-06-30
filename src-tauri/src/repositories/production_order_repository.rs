@@ -92,7 +92,10 @@ pub async fn list_production_order_bundles(
     .fetch_all(pool)
     .await?;
 
-    let order_ids = orders.iter().map(|order| order.id.clone()).collect::<Vec<_>>();
+    let order_ids = orders
+        .iter()
+        .map(|order| order.id.clone())
+        .collect::<Vec<_>>();
     let items = list_production_order_items_for_orders(pool, order_ids.clone()).await?;
     let costs = list_production_order_costs_for_orders(pool, order_ids).await?;
 
@@ -116,7 +119,11 @@ pub async fn list_production_order_bundles(
     for order in orders {
         let items = items_by_order_id.remove(&order.id).unwrap_or_default();
         let costs = costs_by_order_id.remove(&order.id).unwrap_or_default();
-        bundles.push(ProductionOrderBundleDto { order, items, costs });
+        bundles.push(ProductionOrderBundleDto {
+            order,
+            items,
+            costs,
+        });
     }
 
     Ok(bundles)
@@ -126,16 +133,22 @@ pub async fn get_production_order_bundle(
     pool: &PgPool,
     id: String,
 ) -> Result<Option<ProductionOrderBundleDto>, sqlx::Error> {
-    let order =
-        sqlx::query_as::<_, ProductionOrderDto>(concat!(production_order_select!(), " WHERE id = $1"))
-            .bind(id)
-            .fetch_optional(pool)
-            .await?;
+    let order = sqlx::query_as::<_, ProductionOrderDto>(concat!(
+        production_order_select!(),
+        " WHERE id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
 
     if let Some(order) = order {
         let items = list_production_order_items(pool, &order.id).await?;
         let costs = list_production_order_costs(pool, &order.id).await?;
-        return Ok(Some(ProductionOrderBundleDto { order, items, costs }));
+        return Ok(Some(ProductionOrderBundleDto {
+            order,
+            items,
+            costs,
+        }));
     }
 
     Ok(None)
@@ -155,7 +168,11 @@ pub async fn upsert_production_order_bundle(
         let items = list_production_order_items_in_tx(&mut tx, &order.id).await?;
         let costs = list_production_order_costs_in_tx(&mut tx, &order.id).await?;
         tx.commit().await?;
-        return Ok(ProductionOrderBundleDto { order, items, costs });
+        return Ok(ProductionOrderBundleDto {
+            order,
+            items,
+            costs,
+        });
     }
 
     let order = get_production_order_in_tx(&mut tx, &order_id)
@@ -165,7 +182,11 @@ pub async fn upsert_production_order_bundle(
     let costs = list_production_order_costs_in_tx(&mut tx, &order.id).await?;
     tx.commit().await?;
 
-    Ok(ProductionOrderBundleDto { order, items, costs })
+    Ok(ProductionOrderBundleDto {
+        order,
+        items,
+        costs,
+    })
 }
 
 async fn list_production_order_items(
@@ -355,7 +376,7 @@ async fn upsert_production_order(
             created_by_name,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at
-        "#
+        "#,
     )
     .bind(input.id)
     .bind(input.production_number)
@@ -424,7 +445,7 @@ async fn replace_production_order_items(
                 $12::TIMESTAMPTZ,
                 $13::TIMESTAMPTZ
             )
-            "#
+            "#,
         )
         .bind(item.id)
         .bind(order_id)
@@ -481,7 +502,7 @@ async fn replace_production_order_costs(
                 $8::TIMESTAMPTZ,
                 $9::TIMESTAMPTZ
             )
-            "#
+            "#,
         )
         .bind(cost.id)
         .bind(order_id)

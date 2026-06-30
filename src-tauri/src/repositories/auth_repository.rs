@@ -130,14 +130,9 @@ pub async fn authenticate_server_session(
             }
 
             user.actor_type = Some("USER".to_string());
-            return create_server_session(
-                pool,
-                user.clone(),
-                Some(user.id.clone()),
-                None,
-            )
-            .await
-            .map(Some);
+            return create_server_session(pool, user.clone(), Some(user.id.clone()), None)
+                .await
+                .map(Some);
         }
     }
 
@@ -174,10 +169,9 @@ pub async fn authenticate_server_session(
     .await?;
 
     for employee in employee_candidates {
-        let (Some(pin_hash), Some(pin_salt)) = (
-            employee.pin_hash.clone(),
-            employee.pin_salt.clone(),
-        ) else {
+        let (Some(pin_hash), Some(pin_salt)) =
+            (employee.pin_hash.clone(), employee.pin_salt.clone())
+        else {
             continue;
         };
         if hash_pin(&pin, &pin_salt) != pin_hash.as_str() {

@@ -1,6 +1,7 @@
 use crate::models::cooperative::{
-    CooperativeAreaDto, CooperativeLoanDto, CooperativeLoanInstallmentDto, CooperativeLoanPaymentDto,
-    CooperativeMemberDto, CooperativeMemberSavingBalanceDto, CooperativeSavingTransactionDto,
+    CooperativeAreaDto, CooperativeLoanDto, CooperativeLoanInstallmentDto,
+    CooperativeLoanPaymentDto, CooperativeMemberDto, CooperativeMemberSavingBalanceDto,
+    CooperativeSavingTransactionDto,
 };
 use sqlx::PgPool;
 
@@ -785,13 +786,10 @@ pub async fn get_cooperative_loan(
     pool: &PgPool,
     id: String,
 ) -> Result<Option<CooperativeLoanDto>, sqlx::Error> {
-    sqlx::query_as::<_, CooperativeLoanDto>(concat!(
-        cooperative_loan_select!(),
-        " WHERE id = $1"
-    ))
-    .bind(id)
-    .fetch_optional(pool)
-    .await
+    sqlx::query_as::<_, CooperativeLoanDto>(concat!(cooperative_loan_select!(), " WHERE id = $1"))
+        .bind(id)
+        .fetch_optional(pool)
+        .await
 }
 
 pub async fn upsert_cooperative_loan(

@@ -1,4 +1,4 @@
-use crate::models::employee::{EmployeeDto, EmployeeAreaDto, EmployeeCollectionScheduleDto};
+use crate::models::employee::{EmployeeAreaDto, EmployeeCollectionScheduleDto, EmployeeDto};
 use sqlx::PgPool;
 
 pub async fn list_employees(pool: &PgPool) -> Result<Vec<EmployeeDto>, sqlx::Error> {
@@ -33,10 +33,7 @@ pub async fn list_employees(pool: &PgPool) -> Result<Vec<EmployeeDto>, sqlx::Err
     .await
 }
 
-pub async fn get_employee(
-    pool: &PgPool,
-    id: String,
-) -> Result<Option<EmployeeDto>, sqlx::Error> {
+pub async fn get_employee(pool: &PgPool, id: String) -> Result<Option<EmployeeDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeDto>(
         r#"
         SELECT

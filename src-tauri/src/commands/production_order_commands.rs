@@ -12,7 +12,10 @@ pub async fn postgres_list_production_order_bundles(
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<ProductionOrderBundleDto>> {
     let pool = state.pool()?;
-    Ok(production_order_repository::list_production_order_bundles(&pool, updated_after, limit).await?)
+    Ok(
+        production_order_repository::list_production_order_bundles(&pool, updated_after, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]

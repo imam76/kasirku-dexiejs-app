@@ -1,5 +1,6 @@
 pub mod app_setup_config_commands;
 pub mod auth_commands;
+pub mod company_profile_setting_commands;
 pub mod contact_commands;
 pub mod cooperative_commands;
 pub mod currency_commands;
@@ -13,7 +14,7 @@ pub mod production_order_commands;
 pub mod project_commands;
 pub mod purchase_document_commands;
 pub mod sales_document_commands;
-pub mod stock_opname_commands;
 pub mod stock_mutation_commands;
+pub mod stock_opname_commands;
 pub mod tax_commands;
 pub mod warehouse_commands;

@@ -125,7 +125,10 @@ pub async fn fetch_bi_kurs_transaksi(
 }
 
 fn is_valid_currency_code(currency_code: &str) -> bool {
-    currency_code.len() == 3 && currency_code.chars().all(|character| character.is_ascii_alphabetic())
+    currency_code.len() == 3
+        && currency_code
+            .chars()
+            .all(|character| character.is_ascii_alphabetic())
 }
 
 fn parse_input_date(value: &str) -> Result<NaiveDate, String> {
@@ -227,18 +230,18 @@ fn map_bi_row(
     .filter(|value| is_valid_currency_code(value))
     .unwrap_or_else(|| requested_currency_code.to_string());
 
-    let rate_date = parse_bi_date(find_row_value(row, &["tanggal", "tgl", "date", "ratedate"])?)?;
-    let unit_amount = find_row_value(
+    let rate_date = parse_bi_date(find_row_value(
         row,
-        &["nilai", "nominal", "unit", "unitamount", "satuan"],
-    )
-    .and_then(parse_bi_number)
-    .filter(|value| *value > 0.0)
-    .unwrap_or(1.0);
-    let bi_buy_rate = find_row_value(row, &["kursbeli", "beli", "buy", "bid"])
-        .and_then(parse_bi_number)?;
-    let bi_sell_rate = find_row_value(row, &["kursjual", "jual", "sell", "ask"])
-        .and_then(parse_bi_number)?;
+        &["tanggal", "tgl", "date", "ratedate"],
+    )?)?;
+    let unit_amount = find_row_value(row, &["nilai", "nominal", "unit", "unitamount", "satuan"])
+        .and_then(parse_bi_number)
+        .filter(|value| *value > 0.0)
+        .unwrap_or(1.0);
+    let bi_buy_rate =
+        find_row_value(row, &["kursbeli", "beli", "buy", "bid"]).and_then(parse_bi_number)?;
+    let bi_sell_rate =
+        find_row_value(row, &["kursjual", "jual", "sell", "ask"]).and_then(parse_bi_number)?;
     let middle_rate = ((bi_buy_rate + bi_sell_rate) / 2.0) / unit_amount;
 
     Some(BiKursTransaksiRateDto {

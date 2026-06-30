@@ -49,13 +49,8 @@ impl PostgresRealtimeState {
         let active_generation = Arc::clone(&self.generation);
 
         tauri::async_runtime::spawn(async move {
-            run_postgres_realtime_listener(
-                app_handle,
-                active_generation,
-                generation,
-                database_url,
-            )
-            .await;
+            run_postgres_realtime_listener(app_handle, active_generation, generation, database_url)
+                .await;
         });
     }
 }
@@ -84,8 +79,12 @@ async fn run_postgres_realtime_listener(
                     match tokio::time::timeout(LISTENER_RECV_TIMEOUT, listener.recv()).await {
                         Ok(Ok(notification)) => {
                             if let Some(payload) = parse_realtime_payload(notification.payload()) {
-                                if let Err(error) = app_handle.emit(POSTGRES_REALTIME_EVENT, payload) {
-                                    eprintln!("[PostgreSQL realtime] failed to emit event: {error}");
+                                if let Err(error) =
+                                    app_handle.emit(POSTGRES_REALTIME_EVENT, payload)
+                                {
+                                    eprintln!(
+                                        "[PostgreSQL realtime] failed to emit event: {error}"
+                                    );
                                 }
                             }
                         }
@@ -121,11 +120,7 @@ fn is_current_generation(active_generation: &AtomicU64, generation: u64) -> bool
     active_generation.load(Ordering::SeqCst) == generation
 }
 
-async fn sleep_if_current(
-    active_generation: &AtomicU64,
-    generation: u64,
-    duration: Duration,
-) {
+async fn sleep_if_current(active_generation: &AtomicU64, generation: u64, duration: Duration) {
     if is_current_generation(active_generation, generation) {
         tokio::time::sleep(duration).await;
     }

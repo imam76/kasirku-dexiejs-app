@@ -1,5 +1,6 @@
 pub mod app_setup_config;
 pub mod auth;
+pub mod company_profile_setting;
 pub mod contact;
 pub mod cooperative;
 pub mod currency;
@@ -12,7 +13,7 @@ pub mod production_order;
 pub mod project;
 pub mod purchase_document;
 pub mod sales_document;
-pub mod stock_opname;
 pub mod stock_mutation;
+pub mod stock_opname;
 pub mod tax;
 pub mod warehouse;

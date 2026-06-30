@@ -1,6 +1,6 @@
 use crate::{
     db::{PostgresCommandResult, PostgresState},
-    models::employee::{EmployeeDto, EmployeeAreaDto, EmployeeCollectionScheduleDto},
+    models::employee::{EmployeeAreaDto, EmployeeCollectionScheduleDto, EmployeeDto},
     repositories::employee_repository,
 };
 use tauri::State;

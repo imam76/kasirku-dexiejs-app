@@ -3,9 +3,7 @@ use sqlx::PgPool;
 
 const APP_SETUP_CONFIG_ID: &str = "default";
 
-pub async fn get_app_setup_config(
-    pool: &PgPool,
-) -> Result<Option<AppSetupConfigDto>, sqlx::Error> {
+pub async fn get_app_setup_config(pool: &PgPool) -> Result<Option<AppSetupConfigDto>, sqlx::Error> {
     sqlx::query_as::<_, AppSetupConfigDto>(
         r#"
         SELECT

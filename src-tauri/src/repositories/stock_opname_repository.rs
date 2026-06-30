@@ -80,7 +80,10 @@ pub async fn list_stock_opname_bundles(
     .fetch_all(pool)
     .await?;
 
-    let opname_ids = opnames.iter().map(|opname| opname.id.clone()).collect::<Vec<_>>();
+    let opname_ids = opnames
+        .iter()
+        .map(|opname| opname.id.clone())
+        .collect::<Vec<_>>();
     let items = list_stock_opname_items_for_opnames(pool, opname_ids).await?;
     let mut items_by_opname_id = HashMap::<String, Vec<StockOpnameItemDto>>::new();
     for item in items {
@@ -309,7 +312,7 @@ async fn upsert_stock_opname(
             total_variance_value,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at
-        "#
+        "#,
     )
     .bind(input.id)
     .bind(input.opname_number)
@@ -388,7 +391,7 @@ async fn replace_stock_opname_items(
                 $14::TIMESTAMPTZ,
                 $15::TIMESTAMPTZ
             )
-            "#
+            "#,
         )
         .bind(item.id)
         .bind(opname_id)
