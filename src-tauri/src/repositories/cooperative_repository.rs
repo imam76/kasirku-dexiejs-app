@@ -235,7 +235,7 @@ macro_rules! cooperative_loan_payment_select {
             collector_position,
             received_by,
             received_by_name,
-            posted_at,
+            posted_at::TEXT AS posted_at,
             finance_transaction_id,
             journal_entry_id,
             reversal_of_payment_id,

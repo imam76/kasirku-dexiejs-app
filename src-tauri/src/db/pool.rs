@@ -130,11 +130,25 @@ impl PostgresHealth {
 }
 
 impl From<sqlx::Error> for PostgresCommandError {
-    fn from(_error: sqlx::Error) -> Self {
+    fn from(error: sqlx::Error) -> Self {
+        // Surface the underlying cause instead of collapsing every SQL failure into
+        // an opaque string. For database-side errors (missing column, constraint
+        // violation, type mismatch, …) include the SQLSTATE code and Postgres
+        // message, which is what actually identifies the failing query.
+        let detail = match error.as_database_error() {
+            Some(db_error) => match db_error.code() {
+                Some(code) => format!("{} ({})", db_error.message(), code),
+                None => db_error.message().to_string(),
+            },
+            None => error.to_string(),
+        };
+
+        eprintln!("[PostgreSQL command] failed: {detail}");
+
         Self {
             code: "postgres_error",
             status: None,
-            message: "PostgreSQL command failed.".to_string(),
+            message: format!("PostgreSQL command failed: {detail}"),
         }
     }
 }
