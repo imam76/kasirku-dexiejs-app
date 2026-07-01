@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select } from 'antd';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Users } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import {
@@ -8,6 +9,10 @@ import {
   type CooperativeMemberStatusFilter,
 } from '@/hooks/useCooperativeMembers';
 import { useI18n } from '@/hooks/useI18n';
+import CooperativeAreaQuickCreateModal, {
+  type CooperativeAreaQuickCreateFormValues,
+} from '@/components/CooperativeAreaQuickCreateModal';
+import { createCooperativeAreaWithGeneratedCode } from '@/services/cooperativeAreaService';
 import type { CooperativeMember } from '@/types';
 import CooperativeMemberDetailDrawer from './CooperativeMemberDetailDrawer';
 import CooperativeMemberFormModal, { type CooperativeMemberFormValues } from './CooperativeMemberFormModal';
@@ -17,8 +22,11 @@ import { cooperativeMemberStatusOptions } from './memberOptions';
 export default function CooperativeMemberManagement() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const [form] = Form.useForm<CooperativeMemberFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAreaModalOpen, setIsAreaModalOpen] = useState(false);
+  const [isCreatingArea, setIsCreatingArea] = useState(false);
   const {
     filteredMembers,
     areas,
@@ -44,6 +52,7 @@ export default function CooperativeMemberManagement() {
 
   const closeModal = () => {
     setIsModalOpen(false);
+    setIsAreaModalOpen(false);
     resetForm();
     form.resetFields();
   };
@@ -94,6 +103,27 @@ export default function CooperativeMemberManagement() {
       closeModal();
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('cooperative.members.saveFailed'));
+    }
+  };
+
+  const handleCreateArea = async (values: CooperativeAreaQuickCreateFormValues) => {
+    try {
+      setIsCreatingArea(true);
+      const area = await createCooperativeAreaWithGeneratedCode({
+        ...values,
+        source: 'member',
+      });
+      form.setFieldsValue({
+        area_id: area.id,
+        officer_id: undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ['cooperativeAreas'] });
+      message.success(t('areas.quickCreateSuccess', { code: area.code ?? area.name }));
+      setIsAreaModalOpen(false);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('areas.quickCreateFailed'));
+    } finally {
+      setIsCreatingArea(false);
     }
   };
 
@@ -192,6 +222,13 @@ export default function CooperativeMemberManagement() {
         isSubmitting={isSubmitting}
         onCancel={closeModal}
         onSubmit={handleSubmit}
+        onCreateAreaClick={() => setIsAreaModalOpen(true)}
+      />
+      <CooperativeAreaQuickCreateModal
+        open={isAreaModalOpen}
+        isSubmitting={isCreatingArea}
+        onCancel={() => setIsAreaModalOpen(false)}
+        onSubmit={handleCreateArea}
       />
       <CooperativeMemberDetailDrawer
         member={selectedMember}

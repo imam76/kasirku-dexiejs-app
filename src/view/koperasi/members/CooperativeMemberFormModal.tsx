@@ -1,6 +1,7 @@
-import { DatePicker, Form, Input, Modal, Select } from 'antd';
+import { Button, DatePicker, Form, Input, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
+import { Plus } from 'lucide-react';
 import { useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeArea, CooperativeMemberStatus, Employee, EmployeeArea } from '@/types';
@@ -31,6 +32,7 @@ interface CooperativeMemberFormModalProps {
   isSubmitting: boolean;
   onCancel: () => void;
   onSubmit: (values: CooperativeMemberFormValues) => void;
+  onCreateAreaClick: () => void;
 }
 
 export default function CooperativeMemberFormModal({
@@ -43,6 +45,7 @@ export default function CooperativeMemberFormModal({
   isSubmitting,
   onCancel,
   onSubmit,
+  onCreateAreaClick,
 }: CooperativeMemberFormModalProps) {
   const { t } = useI18n();
   const selectedOfficerId = Form.useWatch('officer_id', form);
@@ -179,27 +182,33 @@ export default function CooperativeMemberFormModal({
           />
         </Form.Item>
 
-        <Form.Item
-          name="area_id"
-          label={t('cooperative.members.form.area')}
-          rules={[{ required: true, message: t('cooperative.members.validation.areaRequired') }]}
-        >
-          <Select
-            showSearch
-            optionFilterProp="label"
-            placeholder={t('cooperative.members.form.areaPlaceholder')}
-            data-testid="koperasi-member-area-select"
-            onChange={handleAreaChange}
-            options={areas.map((area) => ({
-              value: area.id,
-              label: area.code ? `${area.code} - ${area.name}` : area.name,
-              disabled: !area.is_active || Boolean(
-                selectedOfficerId &&
-                !assignedAreaIdsByEmployee.get(selectedOfficerId)?.has(area.id),
-              ),
-            }))}
-          />
-        </Form.Item>
+        <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <Form.Item
+            name="area_id"
+            label={t('cooperative.members.form.area')}
+            rules={[{ required: true, message: t('cooperative.members.validation.areaRequired') }]}
+            className="mb-0"
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('cooperative.members.form.areaPlaceholder')}
+              data-testid="koperasi-member-area-select"
+              onChange={handleAreaChange}
+              options={areas.map((area) => ({
+                value: area.id,
+                label: area.code ? `${area.code} - ${area.name}` : area.name,
+                disabled: !area.is_active || Boolean(
+                  selectedOfficerId &&
+                  !assignedAreaIdsByEmployee.get(selectedOfficerId)?.has(area.id),
+                ),
+              }))}
+            />
+          </Form.Item>
+          <Button type="dashed" icon={<Plus size={16} />} onClick={onCreateAreaClick}>
+            {t('areas.quickCreate')}
+          </Button>
+        </div>
 
         <Form.Item name="address" label={t('cooperative.members.form.address')}>
           <TextArea

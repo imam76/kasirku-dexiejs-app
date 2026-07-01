@@ -29,6 +29,12 @@ const COOPERATIVE_REALTIME_TABLES = new Set([
   'cooperative_saving_transactions',
 ]);
 
+const EMPLOYEE_REALTIME_TABLES = new Set([
+  'employee_areas',
+  'employee_collection_schedules',
+  'employees',
+]);
+
 const COOPERATIVE_QUERY_KEYS = [
   'cooperativeAreas',
   'cooperativeMembers',
@@ -107,6 +113,10 @@ const invalidateServerAuthoritativeQueries = (change: PostgresRealtimeChangeEven
   }
 
   if (change.table && COOPERATIVE_REALTIME_TABLES.has(change.table)) {
+    invalidateQueryKeys(COOPERATIVE_QUERY_KEYS);
+  }
+
+  if (change.table && EMPLOYEE_REALTIME_TABLES.has(change.table)) {
     invalidateQueryKeys(COOPERATIVE_QUERY_KEYS);
   }
 

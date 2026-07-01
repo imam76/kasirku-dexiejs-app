@@ -1259,6 +1259,11 @@ export const messages = {
 
     'areas.title': 'Master Data Area',
     'areas.add': 'Tambah Area',
+    'areas.quickCreate': 'Tambah Area',
+    'areas.quickCreateTitle': 'Tambah Area Baru',
+    'areas.quickCreateOk': 'Simpan Area',
+    'areas.quickCreateSuccess': 'Area {code} berhasil dibuat.',
+    'areas.quickCreateFailed': 'Gagal membuat area.',
     'areas.addTitle': 'Tambah Area',
     'areas.editTitle': 'Edit Area',
     'areas.edit': 'Edit',
@@ -2804,6 +2809,11 @@ export const messages = {
 
     'areas.title': 'Area Master Data',
     'areas.add': 'Add Area',
+    'areas.quickCreate': 'Add Area',
+    'areas.quickCreateTitle': 'Add New Area',
+    'areas.quickCreateOk': 'Save Area',
+    'areas.quickCreateSuccess': 'Area {code} was created.',
+    'areas.quickCreateFailed': 'Failed to create area.',
     'areas.addTitle': 'Add Area',
     'areas.editTitle': 'Edit Area',
     'areas.edit': 'Edit',

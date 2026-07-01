@@ -53,6 +53,7 @@ interface EmployeeFormModalProps {
   onCancel: () => void;
   onSubmit: (values: EmployeeFormValues) => void;
   onCreateFieldCashAccount: (employeeName: string) => Promise<ChartOfAccount | undefined>;
+  onCreateAreaClick: () => void;
 }
 
 export default function EmployeeFormModal({
@@ -68,6 +69,7 @@ export default function EmployeeFormModal({
   onCancel,
   onSubmit,
   onCreateFieldCashAccount,
+  onCreateAreaClick,
 }: EmployeeFormModalProps) {
   const { t } = useI18n();
   const loginPinValue = Form.useWatch('login_pin', form);
@@ -252,20 +254,25 @@ export default function EmployeeFormModal({
               label: t('employees.form.collectionTab'),
               children: (
                 <div className="pt-1">
-                  <Form.Item name="area_ids" label={t('employees.form.areas')}>
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      placeholder={t('employees.form.areasPlaceholder')}
-                      options={areas.map((area) => ({
-                        value: area.id,
-                        label: area.code ? `${area.code} - ${area.name}` : area.name,
-                        disabled: !area.is_active,
-                      }))}
-                    />
-                  </Form.Item>
+                  <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                    <Form.Item name="area_ids" label={t('employees.form.areas')} className="mb-0">
+                      <Select
+                        mode="multiple"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder={t('employees.form.areasPlaceholder')}
+                        options={areas.map((area) => ({
+                          value: area.id,
+                          label: area.code ? `${area.code} - ${area.name}` : area.name,
+                          disabled: !area.is_active,
+                        }))}
+                      />
+                    </Form.Item>
+                    <Button type="dashed" icon={<Plus size={16} />} onClick={onCreateAreaClick}>
+                      {t('areas.quickCreate')}
+                    </Button>
+                  </div>
 
                   <Form.List name="collection_schedules">
                     {(fields, { add, remove }) => (
