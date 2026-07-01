@@ -50,10 +50,11 @@ interface EmployeeFormModalProps {
   canManageLogin: boolean;
   isSubmitting: boolean;
   isCreatingFieldCashAccount: boolean;
+  isCreatingArea: boolean;
   onCancel: () => void;
   onSubmit: (values: EmployeeFormValues) => void;
   onCreateFieldCashAccount: (employeeName: string) => Promise<ChartOfAccount | undefined>;
-  onCreateAreaClick: () => void;
+  onCreateArea: (areaName: string) => Promise<boolean>;
 }
 
 export default function EmployeeFormModal({
@@ -66,10 +67,11 @@ export default function EmployeeFormModal({
   canManageLogin,
   isSubmitting,
   isCreatingFieldCashAccount,
+  isCreatingArea,
   onCancel,
   onSubmit,
   onCreateFieldCashAccount,
-  onCreateAreaClick,
+  onCreateArea,
 }: EmployeeFormModalProps) {
   const { t } = useI18n();
   const loginPinValue = Form.useWatch('login_pin', form);
@@ -77,6 +79,48 @@ export default function EmployeeFormModal({
   const selectedAreaIds = Form.useWatch('area_ids', form) ?? [];
   const isPinRequired = !isEditing || Boolean(loginPinValue);
   const [activeTab, setActiveTab] = useState('employee');
+  const [areaSearchText, setAreaSearchText] = useState('');
+  const areaCreateName = areaSearchText.trim();
+  const hasAreaSearchMatch = areaCreateName
+    ? areas.some((area) => {
+      const label = area.code ? `${area.code} - ${area.name}` : area.name;
+      return label.toLowerCase().includes(areaCreateName.toLowerCase());
+    })
+    : true;
+
+  const handleCreateAreaFromSearch = async () => {
+    if (!areaCreateName || isCreatingArea) return;
+
+    const isCreated = await onCreateArea(areaCreateName);
+    if (isCreated) setAreaSearchText('');
+  };
+
+  const areaNotFoundContent = areaCreateName ? (
+    <div className="px-1 py-1">
+      <Button
+        type="text"
+        icon={<Plus size={16} />}
+        loading={isCreatingArea}
+        disabled={isCreatingArea}
+        className="h-auto w-full whitespace-normal text-left"
+        style={{ justifyContent: 'flex-start' }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          void handleCreateAreaFromSearch();
+        }}
+      >
+        {t('areas.quickCreateFromSearch', { name: areaCreateName })}
+      </Button>
+    </div>
+  ) : (
+    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+      {t('areas.empty')}
+    </div>
+  );
 
   return (
     <Modal
@@ -84,7 +128,10 @@ export default function EmployeeFormModal({
       open={open}
       onCancel={onCancel}
       afterOpenChange={(isOpen) => {
-        if (!isOpen) setActiveTab('employee');
+        if (!isOpen) {
+          setActiveTab('employee');
+          setAreaSearchText('');
+        }
       }}
       onOk={() => form.submit()}
       confirmLoading={isSubmitting}
@@ -254,25 +301,29 @@ export default function EmployeeFormModal({
               label: t('employees.form.collectionTab'),
               children: (
                 <div className="pt-1">
-                  <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                    <Form.Item name="area_ids" label={t('employees.form.areas')} className="mb-0">
-                      <Select
-                        mode="multiple"
-                        allowClear
-                        showSearch
-                        optionFilterProp="label"
-                        placeholder={t('employees.form.areasPlaceholder')}
-                        options={areas.map((area) => ({
-                          value: area.id,
-                          label: area.code ? `${area.code} - ${area.name}` : area.name,
-                          disabled: !area.is_active,
-                        }))}
-                      />
-                    </Form.Item>
-                    <Button type="dashed" icon={<Plus size={16} />} onClick={onCreateAreaClick}>
-                      {t('areas.quickCreate')}
-                    </Button>
-                  </div>
+                  <Form.Item name="area_ids" label={t('employees.form.areas')} className="mb-6">
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder={t('employees.form.areasPlaceholder')}
+                      onSearch={setAreaSearchText}
+                      onInputKeyDown={(event) => {
+                        if (event.key === 'Enter' && areaCreateName && !hasAreaSearchMatch) {
+                          event.preventDefault();
+                          void handleCreateAreaFromSearch();
+                        }
+                      }}
+                      onChange={() => setAreaSearchText('')}
+                      notFoundContent={areaNotFoundContent}
+                      options={areas.map((area) => ({
+                        value: area.id,
+                        label: area.code ? `${area.code} - ${area.name}` : area.name,
+                        disabled: !area.is_active,
+                      }))}
+                    />
+                  </Form.Item>
 
                   <Form.List name="collection_schedules">
                     {(fields, { add, remove }) => (

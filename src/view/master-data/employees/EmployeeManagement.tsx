@@ -5,9 +5,6 @@ import { Plus, UserRoundCog } from 'lucide-react';
 import { useEmployees, type EmployeeStatusFilter, type EmployeeWithAreas } from '@/hooks/useEmployees';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
-import CooperativeAreaQuickCreateModal, {
-  type CooperativeAreaQuickCreateFormValues,
-} from '@/components/CooperativeAreaQuickCreateModal';
 import { createCooperativeAreaWithGeneratedCode } from '@/services/cooperativeAreaService';
 import { createFieldCashAccountForEmployee } from '@/services/employeeService';
 import dayjs from '@/lib/dayjs';
@@ -21,7 +18,6 @@ export default function EmployeeManagement() {
   const queryClient = useQueryClient();
   const [form] = Form.useForm<EmployeeFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isAreaModalOpen, setIsAreaModalOpen] = useState(false);
   const [isCreatingArea, setIsCreatingArea] = useState(false);
   const [isCreatingFieldCashAccount, setIsCreatingFieldCashAccount] = useState(false);
   const {
@@ -44,7 +40,6 @@ export default function EmployeeManagement() {
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setIsAreaModalOpen(false);
     resetForm();
     form.resetFields();
   };
@@ -96,11 +91,11 @@ export default function EmployeeManagement() {
     }
   };
 
-  const handleCreateArea = async (values: CooperativeAreaQuickCreateFormValues) => {
+  const handleCreateArea = async (areaName: string) => {
     try {
       setIsCreatingArea(true);
       const area = await createCooperativeAreaWithGeneratedCode({
-        ...values,
+        name: areaName,
         source: 'employee',
       });
       const currentAreaIds = form.getFieldValue('area_ids') ?? [];
@@ -109,9 +104,10 @@ export default function EmployeeManagement() {
       });
       queryClient.invalidateQueries({ queryKey: ['cooperativeAreas'] });
       message.success(t('areas.quickCreateSuccess', { code: area.code ?? area.name }));
-      setIsAreaModalOpen(false);
+      return true;
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('areas.quickCreateFailed'));
+      return false;
     } finally {
       setIsCreatingArea(false);
     }
@@ -221,16 +217,11 @@ export default function EmployeeManagement() {
         canManageLogin={can('USER_MANAGE')}
         isSubmitting={isSubmitting}
         isCreatingFieldCashAccount={isCreatingFieldCashAccount}
+        isCreatingArea={isCreatingArea}
         onCancel={closeModal}
         onSubmit={handleSubmit}
         onCreateFieldCashAccount={handleCreateFieldCashAccount}
-        onCreateAreaClick={() => setIsAreaModalOpen(true)}
-      />
-      <CooperativeAreaQuickCreateModal
-        open={isAreaModalOpen}
-        isSubmitting={isCreatingArea}
-        onCancel={() => setIsAreaModalOpen(false)}
-        onSubmit={handleCreateArea}
+        onCreateArea={handleCreateArea}
       />
     </Card>
   );

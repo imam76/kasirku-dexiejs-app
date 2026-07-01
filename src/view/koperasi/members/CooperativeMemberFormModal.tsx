@@ -2,7 +2,7 @@ import { Button, DatePicker, Form, Input, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { Plus } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeArea, CooperativeMemberStatus, Employee, EmployeeArea } from '@/types';
 import { cooperativeMemberStatusOptions } from './memberOptions';
@@ -30,9 +30,10 @@ interface CooperativeMemberFormModalProps {
   employeeAreaAssignments: EmployeeArea[];
   isEditing: boolean;
   isSubmitting: boolean;
+  isCreatingArea: boolean;
   onCancel: () => void;
   onSubmit: (values: CooperativeMemberFormValues) => void;
-  onCreateAreaClick: () => void;
+  onCreateArea: (areaName: string) => Promise<boolean>;
 }
 
 export default function CooperativeMemberFormModal({
@@ -43,11 +44,13 @@ export default function CooperativeMemberFormModal({
   employeeAreaAssignments,
   isEditing,
   isSubmitting,
+  isCreatingArea,
   onCancel,
   onSubmit,
-  onCreateAreaClick,
+  onCreateArea,
 }: CooperativeMemberFormModalProps) {
   const { t } = useI18n();
+  const [areaSearchText, setAreaSearchText] = useState('');
   const selectedOfficerId = Form.useWatch('officer_id', form);
   const selectedAreaId = Form.useWatch('area_id', form);
   const assignedAreaIdsByEmployee = useMemo(() => {
@@ -84,17 +87,63 @@ export default function CooperativeMemberFormModal({
   };
 
   const handleAreaChange = (areaId: string) => {
+    setAreaSearchText('');
     const officerId = form.getFieldValue('officer_id');
     if (officerId && !assignedAreaIdsByEmployee.get(officerId)?.has(areaId)) {
       form.setFieldsValue({ officer_id: undefined });
     }
   };
 
+  const areaCreateName = areaSearchText.trim();
+  const hasAreaSearchMatch = areaCreateName
+    ? areas.some((area) => {
+      const label = area.code ? `${area.code} - ${area.name}` : area.name;
+      return label.toLowerCase().includes(areaCreateName.toLowerCase());
+    })
+    : true;
+
+  const handleCreateAreaFromSearch = async () => {
+    if (!areaCreateName || isCreatingArea) return;
+
+    const isCreated = await onCreateArea(areaCreateName);
+    if (isCreated) setAreaSearchText('');
+  };
+
+  const areaNotFoundContent = areaCreateName ? (
+    <div className="px-1 py-1">
+      <Button
+        type="text"
+        icon={<Plus size={16} />}
+        loading={isCreatingArea}
+        disabled={isCreatingArea}
+        className="h-auto w-full whitespace-normal text-left"
+        style={{ justifyContent: 'flex-start' }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          void handleCreateAreaFromSearch();
+        }}
+      >
+        {t('areas.quickCreateFromSearch', { name: areaCreateName })}
+      </Button>
+    </div>
+  ) : (
+    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+      {t('areas.empty')}
+    </div>
+  );
+
   return (
     <Modal
       title={isEditing ? t('cooperative.members.editTitle') : t('cooperative.members.addTitle')}
       open={open}
       onCancel={onCancel}
+      afterOpenChange={(isOpen) => {
+        if (!isOpen) setAreaSearchText('');
+      }}
       onOk={() => form.submit()}
       okButtonProps={{ 'data-testid': 'koperasi-member-submit-button' }}
       confirmLoading={isSubmitting}
@@ -182,33 +231,36 @@ export default function CooperativeMemberFormModal({
           />
         </Form.Item>
 
-        <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          <Form.Item
-            name="area_id"
-            label={t('cooperative.members.form.area')}
-            rules={[{ required: true, message: t('cooperative.members.validation.areaRequired') }]}
-            className="mb-0"
-          >
-            <Select
-              showSearch
-              optionFilterProp="label"
-              placeholder={t('cooperative.members.form.areaPlaceholder')}
-              data-testid="koperasi-member-area-select"
-              onChange={handleAreaChange}
-              options={areas.map((area) => ({
-                value: area.id,
-                label: area.code ? `${area.code} - ${area.name}` : area.name,
-                disabled: !area.is_active || Boolean(
-                  selectedOfficerId &&
-                  !assignedAreaIdsByEmployee.get(selectedOfficerId)?.has(area.id),
-                ),
-              }))}
-            />
-          </Form.Item>
-          <Button type="dashed" icon={<Plus size={16} />} onClick={onCreateAreaClick}>
-            {t('areas.quickCreate')}
-          </Button>
-        </div>
+        <Form.Item
+          name="area_id"
+          label={t('cooperative.members.form.area')}
+          rules={[{ required: true, message: t('cooperative.members.validation.areaRequired') }]}
+          className="mb-6"
+        >
+          <Select
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('cooperative.members.form.areaPlaceholder')}
+            data-testid="koperasi-member-area-select"
+            onSearch={setAreaSearchText}
+            onInputKeyDown={(event) => {
+              if (event.key === 'Enter' && areaCreateName && !hasAreaSearchMatch) {
+                event.preventDefault();
+                void handleCreateAreaFromSearch();
+              }
+            }}
+            onChange={handleAreaChange}
+            notFoundContent={areaNotFoundContent}
+            options={areas.map((area) => ({
+              value: area.id,
+              label: area.code ? `${area.code} - ${area.name}` : area.name,
+              disabled: !area.is_active || Boolean(
+                selectedOfficerId &&
+                !assignedAreaIdsByEmployee.get(selectedOfficerId)?.has(area.id),
+              ),
+            }))}
+          />
+        </Form.Item>
 
         <Form.Item name="address" label={t('cooperative.members.form.address')}>
           <TextArea

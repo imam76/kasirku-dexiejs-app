@@ -9,9 +9,6 @@ import {
   type CooperativeMemberStatusFilter,
 } from '@/hooks/useCooperativeMembers';
 import { useI18n } from '@/hooks/useI18n';
-import CooperativeAreaQuickCreateModal, {
-  type CooperativeAreaQuickCreateFormValues,
-} from '@/components/CooperativeAreaQuickCreateModal';
 import { createCooperativeAreaWithGeneratedCode } from '@/services/cooperativeAreaService';
 import type { CooperativeMember } from '@/types';
 import CooperativeMemberDetailDrawer from './CooperativeMemberDetailDrawer';
@@ -25,7 +22,6 @@ export default function CooperativeMemberManagement() {
   const queryClient = useQueryClient();
   const [form] = Form.useForm<CooperativeMemberFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isAreaModalOpen, setIsAreaModalOpen] = useState(false);
   const [isCreatingArea, setIsCreatingArea] = useState(false);
   const {
     filteredMembers,
@@ -52,7 +48,6 @@ export default function CooperativeMemberManagement() {
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setIsAreaModalOpen(false);
     resetForm();
     form.resetFields();
   };
@@ -106,11 +101,11 @@ export default function CooperativeMemberManagement() {
     }
   };
 
-  const handleCreateArea = async (values: CooperativeAreaQuickCreateFormValues) => {
+  const handleCreateArea = async (areaName: string) => {
     try {
       setIsCreatingArea(true);
       const area = await createCooperativeAreaWithGeneratedCode({
-        ...values,
+        name: areaName,
         source: 'member',
       });
       form.setFieldsValue({
@@ -119,9 +114,10 @@ export default function CooperativeMemberManagement() {
       });
       queryClient.invalidateQueries({ queryKey: ['cooperativeAreas'] });
       message.success(t('areas.quickCreateSuccess', { code: area.code ?? area.name }));
-      setIsAreaModalOpen(false);
+      return true;
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('areas.quickCreateFailed'));
+      return false;
     } finally {
       setIsCreatingArea(false);
     }
@@ -220,15 +216,10 @@ export default function CooperativeMemberManagement() {
         employeeAreaAssignments={employeeAreaAssignments}
         isEditing={Boolean(editingMember)}
         isSubmitting={isSubmitting}
+        isCreatingArea={isCreatingArea}
         onCancel={closeModal}
         onSubmit={handleSubmit}
-        onCreateAreaClick={() => setIsAreaModalOpen(true)}
-      />
-      <CooperativeAreaQuickCreateModal
-        open={isAreaModalOpen}
-        isSubmitting={isCreatingArea}
-        onCancel={() => setIsAreaModalOpen(false)}
-        onSubmit={handleCreateArea}
+        onCreateArea={handleCreateArea}
       />
       <CooperativeMemberDetailDrawer
         member={selectedMember}
