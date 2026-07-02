@@ -55,7 +55,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -69,7 +69,7 @@ const tableStyle: CSSProperties = {
 
 const cellStyle: CSSProperties = {
   border: '1px solid #9ca3af',
-  fontSize: 13,
+  fontSize: 14,
   padding: '10px 12px',
 };
 
@@ -116,12 +116,12 @@ const EmployeeCashReport = ({
       style={{ breakInside: 'avoid', marginBottom: 24 }}
       data-testid={`koperasi-cash-report-employee-${employee.employee_id}`}
     >
-      <div style={{ fontSize: 13, marginBottom: 8 }}>
+      <div style={{ fontSize: 14, marginBottom: 8 }}>
         <strong>{labels.employee}:</strong>{' '}
         {employee.employee_name} ({employee.employee_code || '-'})
       </div>
       {employee.employee_position ? (
-        <div style={{ color: '#4b5563', fontSize: 12, marginBottom: 10 }}>
+        <div style={{ color: '#4b5563', fontSize: 13, marginBottom: 10 }}>
           {employee.employee_position}
         </div>
       ) : null}
@@ -158,7 +158,7 @@ const EmployeeCashReport = ({
           border: '1px solid #111827',
           borderTop: 0,
           display: 'flex',
-          fontSize: 14,
+          fontSize: 15,
           fontWeight: 700,
           justifyContent: 'space-between',
           padding: '12px',

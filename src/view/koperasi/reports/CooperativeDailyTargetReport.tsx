@@ -123,7 +123,7 @@ const thStyle: CSSProperties = {
   background: '#f3f4f6',
   border: '1px solid #9ca3af',
   color: '#111827',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   lineHeight: 1.25,
   padding: '5px 3px',
@@ -133,7 +133,7 @@ const thStyle: CSSProperties = {
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 11,
+  fontSize: 12,
   lineHeight: 1.3,
   padding: '5px 3px',
   verticalAlign: 'middle',
@@ -327,7 +327,7 @@ const CooperativeDailyTargetReport = forwardRef<HTMLDivElement, CooperativeDaily
               <div style={{ color: '#4b5563', fontSize: 13 }}>{t('cooperative.reports.title')}</div>
             </div>
           </div>
-          <div style={{ fontSize: 11, lineHeight: 1.55, textAlign: 'right' }}>
+          <div style={{ fontSize: 12, lineHeight: 1.55, textAlign: 'right' }}>
             <div>{t('cooperative.reports.dailyTarget.month')}: {monthText}</div>
             <div>{t('cooperative.reports.dailyTarget.employee')}: {employeeText}</div>
             <div>{t('report.printDate')} {printDateText}</div>
@@ -338,7 +338,7 @@ const CooperativeDailyTargetReport = forwardRef<HTMLDivElement, CooperativeDaily
           <div style={{ fontSize: 18, fontWeight: 700 }}>
             {t('cooperative.reports.dailyTarget.title')}
           </div>
-          <div style={{ color: '#4b5563', fontSize: 11, marginTop: 4 }}>
+          <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>
             {t('cooperative.reports.dailyTarget.subtitle')}
           </div>
         </div>
@@ -357,23 +357,23 @@ const CooperativeDailyTargetReport = forwardRef<HTMLDivElement, CooperativeDaily
             >
               <div style={groupHeaderStyle}>
                 <div>
-                  <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700 }}>
+                  <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
                     {t('cooperative.reports.dailyTarget.employee')}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
                     {getEmployeeLabel(group, t('cooperative.memberRegister.unassignedEmployee'))}
                   </div>
-                  <div style={{ color: '#4b5563', fontSize: 10, marginTop: 5 }}>
+                  <div style={{ color: '#4b5563', fontSize: 12, marginTop: 5 }}>
                     {t('cooperative.reports.dailyTarget.areas')}: {group.area_names.join(', ') || '-'}
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700 }}>
+                  <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
                     {t('cooperative.reports.dailyTarget.schedule')}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 14px', marginTop: 3 }}>
                     {group.collection_schedules.map((schedule) => (
-                      <span key={schedule.weekday} style={{ fontSize: 10 }}>
+                      <span key={schedule.weekday} style={{ fontSize: 12 }}>
                         <strong>{getCollectionWeekdayLabel(schedule.weekday)}:</strong>{' '}
                         {schedule.area_names.join(', ') || '-'}
                       </span>

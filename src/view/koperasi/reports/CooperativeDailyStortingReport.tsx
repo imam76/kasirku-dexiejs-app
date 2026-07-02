@@ -68,7 +68,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -94,14 +94,14 @@ const summaryCellStyle: CSSProperties = {
 
 const summaryLabelStyle: CSSProperties = {
   color: '#4b5563',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   letterSpacing: 0,
   textTransform: 'uppercase',
 };
 
 const summaryValueStyle: CSSProperties = {
-  fontSize: 15,
+  fontSize: 16,
   fontWeight: 700,
   marginTop: 8,
   textAlign: 'right',
@@ -123,7 +123,7 @@ const groupHeaderStyle: CSSProperties = {
 };
 
 const groupAmountStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   textAlign: 'right',
 };
 
@@ -137,7 +137,7 @@ const thStyle: CSSProperties = {
   background: '#f9fafb',
   border: '1px solid #d1d5db',
   color: '#111827',
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 700,
   padding: '8px 8px',
   textAlign: 'left',
@@ -145,7 +145,7 @@ const thStyle: CSSProperties = {
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 12,
+  fontSize: 13,
   overflowWrap: 'break-word',
   padding: '7px 8px',
   verticalAlign: 'top',
@@ -291,7 +291,7 @@ const CooperativeDailyStortingReport = forwardRef<HTMLDivElement, CooperativeDai
           <div style={{ fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>
             {labels.title}
           </div>
-          <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>
+          <div style={{ color: '#4b5563', fontSize: 13, marginTop: 4 }}>
             {labels.subtitle}
           </div>
         </div>
@@ -326,22 +326,22 @@ const CooperativeDailyStortingReport = forwardRef<HTMLDivElement, CooperativeDai
             <section key={group.key} style={groupStyle}>
               <div style={groupHeaderStyle}>
                 <div>
-                  <div style={{ color: '#4b5563', fontSize: 11, fontWeight: 700 }}>
+                  <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
                     {labels.collector}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
                     {getCollectorLabel(group, t('cooperative.memberRegister.unassignedEmployee'))}
                   </div>
-                  <div style={{ color: '#4b5563', fontSize: 11, marginTop: 4 }}>
+                  <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>
                     {labels.areas}: {group.area_names.length > 0 ? group.area_names.join(', ') : '-'}
                   </div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.storting}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.storting}</div>
                   <div style={{ fontWeight: 700 }}>{money(group.summary.storting_amount)}</div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.cash}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.cash}</div>
                   <div style={{ fontWeight: 700 }}>{money(group.summary.cash_amount)}</div>
                 </div>
               </div>

@@ -54,7 +54,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -74,7 +74,7 @@ const summaryStyle: CSSProperties = {
 
 const summaryCellStyle: CSSProperties = {
   borderRight: '1px solid #d1d5db',
-  fontSize: 12,
+  fontSize: 13,
   padding: '10px 12px',
 };
 
@@ -102,14 +102,14 @@ const tableStyle: CSSProperties = {
 const thStyle: CSSProperties = {
   background: '#f9fafb',
   border: '1px solid #d1d5db',
-  fontSize: 12,
+  fontSize: 13,
   padding: '8px 10px',
   textAlign: 'left',
 };
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 12,
+  fontSize: 13,
   overflowWrap: 'break-word',
   padding: '8px 10px',
   verticalAlign: 'top',
@@ -175,7 +175,7 @@ const CooperativeMemberRegisterReport = forwardRef<HTMLDivElement, CooperativeMe
           <div style={{ fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>
             {t('cooperative.memberRegister.title')}
           </div>
-          <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>
+          <div style={{ color: '#4b5563', fontSize: 13, marginTop: 4 }}>
             {t('cooperative.memberRegister.subtitle')}
           </div>
         </div>
@@ -204,14 +204,14 @@ const CooperativeMemberRegisterReport = forwardRef<HTMLDivElement, CooperativeMe
             <section key={group.key} style={groupStyle}>
               <div style={groupHeaderStyle}>
                 <div>
-                  <div style={{ color: '#4b5563', fontSize: 11, fontWeight: 700 }}>
+                  <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
                     {t('cooperative.memberRegister.employeeName')}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
                     {getOfficerLabel(group, t('cooperative.memberRegister.unassignedEmployee'))}
                   </div>
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 700, textAlign: 'right' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, textAlign: 'right' }}>
                   {t('cooperative.memberRegister.memberCount', { count: group.member_count })}
                 </div>
               </div>

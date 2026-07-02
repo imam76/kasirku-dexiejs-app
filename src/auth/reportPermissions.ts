@@ -57,6 +57,10 @@ export const COOPERATIVE_REPORT_ACCESS: Record<string, ReportAccessDefinition> =
     permission: 'COOPERATIVE_OVERVIEW_REPORT_VIEW',
     moduleCode: 'KOPERASI_SHU',
   },
+  '/koperasi/laporan-simpanan-sukarela': {
+    permission: 'COOPERATIVE_SAVING_VIEW',
+    moduleCode: 'KOPERASI_SIMPANAN_SUKARELA',
+  },
   '/koperasi/laporan-tunai': {
     permission: 'COOPERATIVE_CASH_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_CASH',

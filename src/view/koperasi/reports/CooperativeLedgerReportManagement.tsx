@@ -79,7 +79,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -115,14 +115,14 @@ const tableStyle: CSSProperties = {
 const thStyle: CSSProperties = {
   background: '#f9fafb',
   border: '1px solid #d1d5db',
-  fontSize: 12,
+  fontSize: 13,
   padding: '8px 10px',
   textAlign: 'left',
 };
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 12,
+  fontSize: 13,
   overflowWrap: 'break-word',
   padding: '8px 10px',
   verticalAlign: 'top',
@@ -414,7 +414,7 @@ export default function CooperativeLedgerReportManagement() {
               <section key={group.account_id} style={accountSectionStyle}>
                 <div style={accountHeaderStyle}>
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>
                       {t('generalLedger.account')}
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 700 }}>
@@ -422,19 +422,19 @@ export default function CooperativeLedgerReportManagement() {
                     </div>
                   </div>
                   <div style={accountSummaryCellStyle}>
-                    <div style={{ fontSize: 11 }}>{t('cooperative.ledger.openingBalance')}</div>
+                    <div style={{ fontSize: 12 }}>{t('cooperative.ledger.openingBalance')}</div>
                     <div style={getSignedStyle(group.opening_balance)}>{money(group.opening_balance)}</div>
                   </div>
                   <div style={accountSummaryCellStyle}>
-                    <div style={{ fontSize: 11 }}>{t('generalLedger.debit')}</div>
+                    <div style={{ fontSize: 12 }}>{t('generalLedger.debit')}</div>
                     <div style={{ fontWeight: 600 }}>{money(group.total_debit)}</div>
                   </div>
                   <div style={accountSummaryCellStyle}>
-                    <div style={{ fontSize: 11 }}>{t('generalLedger.credit')}</div>
+                    <div style={{ fontSize: 12 }}>{t('generalLedger.credit')}</div>
                     <div style={{ fontWeight: 600 }}>{money(group.total_credit)}</div>
                   </div>
                   <div style={accountSummaryCellStyle}>
-                    <div style={{ fontSize: 11 }}>{t('cooperative.ledger.endingBalance')}</div>
+                    <div style={{ fontSize: 12 }}>{t('cooperative.ledger.endingBalance')}</div>
                     <div style={getSignedStyle(group.ending_balance)}>{money(group.ending_balance)}</div>
                   </div>
                 </div>

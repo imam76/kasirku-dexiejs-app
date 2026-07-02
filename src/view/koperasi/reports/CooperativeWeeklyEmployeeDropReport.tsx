@@ -64,7 +64,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -91,14 +91,14 @@ const summaryCellStyle: CSSProperties = {
 
 const summaryLabelStyle: CSSProperties = {
   color: '#4b5563',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   letterSpacing: 0,
   textTransform: 'uppercase',
 };
 
 const summaryValueStyle: CSSProperties = {
-  fontSize: 15,
+  fontSize: 16,
   fontWeight: 700,
   marginTop: 8,
   textAlign: 'right',
@@ -130,7 +130,7 @@ const employeeHeaderStyle: CSSProperties = {
 };
 
 const groupAmountStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   textAlign: 'right',
 };
 
@@ -143,14 +143,14 @@ const tableStyle: CSSProperties = {
 const thStyle: CSSProperties = {
   background: '#f9fafb',
   border: '1px solid #d1d5db',
-  fontSize: 11,
+  fontSize: 12,
   padding: '8px 8px',
   textAlign: 'left',
 };
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 11,
+  fontSize: 12,
   overflowWrap: 'break-word',
   padding: '8px 8px',
   verticalAlign: 'top',
@@ -401,7 +401,7 @@ const CooperativeWeeklyEmployeeDropReport = forwardRef<HTMLDivElement, Cooperati
             <section key={week.key} style={weekStyle}>
               <div style={weekHeaderStyle}>
                 <div>
-                  <div style={{ color: '#4b5563', fontSize: 11, fontWeight: 700 }}>
+                  <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
                     {t('cooperative.reports.weeklyEmployeeDrop.week')} {week.week_index}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
@@ -409,19 +409,19 @@ const CooperativeWeeklyEmployeeDropReport = forwardRef<HTMLDivElement, Cooperati
                   </div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.oldMember}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.oldMember}</div>
                   <div style={{ fontWeight: 700 }}>{week.summary.old_member_count}</div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.newMember}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.newMember}</div>
                   <div style={{ fontWeight: 700 }}>{week.summary.new_member_count}</div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.exitMember}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.exitMember}</div>
                   <div style={{ fontWeight: 700 }}>{week.summary.exit_member_count}</div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.total}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.total}</div>
                   <div style={{ fontWeight: 700 }}>{money(week.summary.total_payable_amount)}</div>
                 </div>
               </div>
@@ -430,7 +430,7 @@ const CooperativeWeeklyEmployeeDropReport = forwardRef<HTMLDivElement, Cooperati
                 <section key={group.key}>
                   <div style={employeeHeaderStyle}>
                     <div>
-                      <div style={{ color: '#4b5563', fontSize: 11, fontWeight: 700 }}>
+                      <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
                         {t('cooperative.reports.weeklyEmployeeDrop.employee')}
                       </div>
                       <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
@@ -438,15 +438,15 @@ const CooperativeWeeklyEmployeeDropReport = forwardRef<HTMLDivElement, Cooperati
                       </div>
                     </div>
                     <div style={groupAmountStyle}>
-                      <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.rowCount}</div>
+                      <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.rowCount}</div>
                       <div style={{ fontWeight: 700 }}>{group.summary.row_count}</div>
                     </div>
                     <div style={groupAmountStyle}>
-                      <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.net}</div>
+                      <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.net}</div>
                       <div style={{ fontWeight: 700 }}>{money(group.summary.net_disbursement_amount)}</div>
                     </div>
                     <div style={groupAmountStyle}>
-                      <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.total}</div>
+                      <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.total}</div>
                       <div style={{ fontWeight: 700 }}>{money(group.summary.total_payable_amount)}</div>
                     </div>
                   </div>

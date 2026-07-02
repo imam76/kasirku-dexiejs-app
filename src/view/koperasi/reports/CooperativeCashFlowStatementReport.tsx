@@ -96,7 +96,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -123,14 +123,14 @@ const summaryCellStyle: CSSProperties = {
 
 const summaryLabelStyle: CSSProperties = {
   color: '#4b5563',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   letterSpacing: 0,
   textTransform: 'uppercase',
 };
 
 const summaryValueStyle: CSSProperties = {
-  fontSize: 15,
+  fontSize: 16,
   fontWeight: 700,
   marginTop: 8,
   textAlign: 'right',
@@ -152,7 +152,7 @@ const sectionHeaderStyle: CSSProperties = {
 };
 
 const sectionAmountStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   textAlign: 'right',
 };
 
@@ -165,14 +165,14 @@ const tableStyle: CSSProperties = {
 const thStyle: CSSProperties = {
   background: '#f9fafb',
   border: '1px solid #d1d5db',
-  fontSize: 12,
+  fontSize: 13,
   padding: '8px 10px',
   textAlign: 'left',
 };
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 12,
+  fontSize: 13,
   overflowWrap: 'break-word',
   padding: '8px 10px',
   verticalAlign: 'top',
@@ -198,7 +198,7 @@ const footerGridStyle: CSSProperties = {
 
 const footerCellStyle: CSSProperties = {
   borderBottom: '1px solid #d1d5db',
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 700,
   padding: '10px 12px',
 };
@@ -291,7 +291,7 @@ const CooperativeCashFlowStatementReport = forwardRef<HTMLDivElement, Cooperativ
           <div style={{ fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>
             {t('cooperative.reports.cashFlow.reportTitle')}
           </div>
-          <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>
+          <div style={{ color: '#4b5563', fontSize: 13, marginTop: 4 }}>
             {periodText}
           </div>
         </div>
@@ -325,15 +325,15 @@ const CooperativeCashFlowStatementReport = forwardRef<HTMLDivElement, Cooperativ
                 </div>
               </div>
               <div style={sectionAmountStyle}>
-                <div style={{ color: '#4b5563', fontSize: 11 }}>{t('cooperative.reports.cashFlow.cashIn')}</div>
+                <div style={{ color: '#4b5563', fontSize: 12 }}>{t('cooperative.reports.cashFlow.cashIn')}</div>
                 <div style={{ fontWeight: 700 }}>{money(section.cash_in_amount)}</div>
               </div>
               <div style={sectionAmountStyle}>
-                <div style={{ color: '#4b5563', fontSize: 11 }}>{t('cooperative.reports.cashFlow.cashOut')}</div>
+                <div style={{ color: '#4b5563', fontSize: 12 }}>{t('cooperative.reports.cashFlow.cashOut')}</div>
                 <div style={{ fontWeight: 700 }}>{money(section.cash_out_amount)}</div>
               </div>
               <div style={sectionAmountStyle}>
-                <div style={{ color: '#4b5563', fontSize: 11 }}>{t('cooperative.reports.cashFlow.net')}</div>
+                <div style={{ color: '#4b5563', fontSize: 12 }}>{t('cooperative.reports.cashFlow.net')}</div>
                 <div style={getAmountStyle(section.net_amount)}>{money(section.net_amount)}</div>
               </div>
             </div>
@@ -372,7 +372,7 @@ const CooperativeCashFlowStatementReport = forwardRef<HTMLDivElement, Cooperativ
                       <td style={tdStyle}>{row.entry_number}</td>
                       <td style={tdStyle}>
                         <div>{row.source_number || '-'}</div>
-                        <div style={{ color: '#6b7280', fontSize: 11 }}>{row.source_type}</div>
+                        <div style={{ color: '#6b7280', fontSize: 12 }}>{row.source_type}</div>
                       </td>
                       <td style={tdStyle}>{row.description || '-'}</td>
                       <td style={numberCellStyle}>{cashInText(row.amount)}</td>

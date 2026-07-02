@@ -885,7 +885,7 @@ export default function CooperativeReportManagement() {
             sourceEvent={record.source_event}
             sourceNumber={record.source_number || record.source_id}
           />
-          <Text type="secondary" className="text-xs">{record.source_type}</Text>
+          <Text type="secondary" className="text-sm">{record.source_type}</Text>
         </Space>
       ),
       width: 220,
@@ -1217,7 +1217,7 @@ export default function CooperativeReportManagement() {
                       columns={journalLineColumns}
                       rowKey="id"
                       pagination={false}
-                      size="small"
+                      size="middle"
                     />
                   ),
                 }}

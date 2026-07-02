@@ -71,6 +71,13 @@ function Cooperative() {
       desc: t('cooperative.index.reportsDesc'),
     },
     {
+      to: '/koperasi/laporan-simpanan-sukarela',
+      label: t('nav.cooperative.voluntarySavingsReport'),
+      icon: WalletOutlined,
+      color: 'text-emerald-700',
+      desc: t('cooperative.index.voluntarySavingsReportDesc'),
+    },
+    {
       to: '/koperasi/laporan-tunai',
       label: t('nav.cooperative.cashReport'),
       icon: BankOutlined,

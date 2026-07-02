@@ -57,7 +57,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -90,7 +90,7 @@ const tableStyle: CSSProperties = {
 const thStyle: CSSProperties = {
   background: '#f3f4f6',
   border: '1px solid #9ca3af',
-  fontSize: 11,
+  fontSize: 12,
   padding: '8px 7px',
   textAlign: 'left',
   verticalAlign: 'middle',
@@ -98,7 +98,7 @@ const thStyle: CSSProperties = {
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 11,
+  fontSize: 12,
   overflowWrap: 'break-word',
   padding: '7px 7px',
   verticalAlign: 'top',
@@ -197,18 +197,18 @@ const CooperativeIptwReport = forwardRef<HTMLDivElement, CooperativeIptwReportPr
 
         <div style={summaryStyle}>
           <div style={{ ...summaryCellStyle, borderRight: '1px solid #d1d5db' }}>
-            <div style={{ color: '#4b5563', fontSize: 11, fontWeight: 700 }}>
+            <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
               {t('cooperative.iptwReport.rowCount')}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 5, textAlign: 'right' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 5, textAlign: 'right' }}>
               {rows.length}
             </div>
           </div>
           <div style={summaryCellStyle}>
-            <div style={{ color: '#4b5563', fontSize: 11, fontWeight: 700 }}>
+            <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
               {t('cooperative.iptwReport.grandTotal')}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 5, textAlign: 'right' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 5, textAlign: 'right' }}>
               {money(totalAmount)}
             </div>
           </div>

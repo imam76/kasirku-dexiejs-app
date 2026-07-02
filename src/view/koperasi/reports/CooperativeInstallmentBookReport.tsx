@@ -90,7 +90,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -111,13 +111,13 @@ const summaryCellStyle: CSSProperties = {
 
 const summaryLabelStyle: CSSProperties = {
   color: '#4b5563',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   textTransform: 'uppercase',
 };
 
 const summaryValueStyle: CSSProperties = {
-  fontSize: 15,
+  fontSize: 16,
   fontWeight: 700,
   marginTop: 8,
   textAlign: 'right',
@@ -146,7 +146,7 @@ const tableStyle: CSSProperties = {
 const thStyle: CSSProperties = {
   background: '#f9fafb',
   border: '1px solid #9ca3af',
-  fontSize: 11,
+  fontSize: 12,
   padding: '7px 6px',
   textAlign: 'left',
   verticalAlign: 'middle',
@@ -154,7 +154,7 @@ const thStyle: CSSProperties = {
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 11,
+  fontSize: 12,
   overflowWrap: 'break-word',
   padding: '7px 6px',
   verticalAlign: 'top',
@@ -238,7 +238,7 @@ const renderRow = (
     <td style={centerCellStyle}>{row.member_category}</td>
     <td style={tdStyle}>
       <div style={{ fontWeight: 700 }}>{row.member_name}</div>
-      <div style={{ color: '#6b7280', fontSize: 10, marginTop: 2 }}>
+      <div style={{ color: '#6b7280', fontSize: 12, marginTop: 2 }}>
         Bulan ke-{row.age_month}
       </div>
     </td>
@@ -274,7 +274,7 @@ const renderSection = ({
           background: colors.header,
           borderBottom: '1px solid #9ca3af',
           color: colors.text,
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: 700,
           padding: '8px 12px',
           textTransform: 'uppercase',
@@ -424,22 +424,22 @@ const CooperativeInstallmentBookReport = forwardRef<
           <section key={group.key} style={areaStyle}>
             <div style={areaHeaderStyle}>
               <div>
-                <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700 }}>
+                <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
                   {t('cooperative.installmentBook.resort')}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
                   {getOfficerLabel(group, t('cooperative.installmentBook.unassignedResort'))}
                 </div>
-                <div style={{ color: '#4b5563', fontSize: 10, marginTop: 4 }}>
+                <div style={{ color: '#4b5563', fontSize: 12, marginTop: 4 }}>
                   {t('cooperative.installmentBook.areas')}: {group.area_names.join(', ') || '-'}
                 </div>
-                <div style={{ color: '#4b5563', fontSize: 10, marginTop: 2 }}>
+                <div style={{ color: '#4b5563', fontSize: 12, marginTop: 2 }}>
                   {t('cooperative.installmentBook.collectionDays')}: {group.collection_weekdays
                     .map(getCollectionWeekdayLabel)
                     .join(', ') || '-'}
                 </div>
               </div>
-              <div style={{ fontSize: 12, textAlign: 'right' }}>
+              <div style={{ fontSize: 13, textAlign: 'right' }}>
                 <div>{group.summary.row_count} anggota</div>
                 <div style={{ fontWeight: 700, marginTop: 2 }}>
                   {labels.endingBalance}: {money(group.summary.ending_balance)}

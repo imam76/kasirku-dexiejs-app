@@ -70,7 +70,7 @@ const reportLogoStyle: CSSProperties = {
 };
 
 const reportMetaStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   lineHeight: 1.6,
   textAlign: 'right',
   whiteSpace: 'nowrap',
@@ -97,14 +97,14 @@ const summaryCellStyle: CSSProperties = {
 
 const summaryLabelStyle: CSSProperties = {
   color: '#4b5563',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   letterSpacing: 0,
   textTransform: 'uppercase',
 };
 
 const summaryValueStyle: CSSProperties = {
-  fontSize: 15,
+  fontSize: 16,
   fontWeight: 700,
   marginTop: 8,
   textAlign: 'right',
@@ -126,7 +126,7 @@ const groupHeaderStyle: CSSProperties = {
 };
 
 const groupAmountStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   textAlign: 'right',
 };
 
@@ -139,14 +139,14 @@ const tableStyle: CSSProperties = {
 const thStyle: CSSProperties = {
   background: '#f9fafb',
   border: '1px solid #d1d5db',
-  fontSize: 11,
+  fontSize: 12,
   padding: '8px 8px',
   textAlign: 'left',
 };
 
 const tdStyle: CSSProperties = {
   border: '1px solid #d1d5db',
-  fontSize: 11,
+  fontSize: 12,
   overflowWrap: 'break-word',
   padding: '8px 8px',
   verticalAlign: 'top',
@@ -328,7 +328,7 @@ const CooperativeDailyDropReport = forwardRef<HTMLDivElement, CooperativeDailyDr
             <section key={group.key} style={groupStyle}>
               <div style={groupHeaderStyle}>
                 <div>
-                  <div style={{ color: '#4b5563', fontSize: 11, fontWeight: 700 }}>
+                  <div style={{ color: '#4b5563', fontSize: 12, fontWeight: 700 }}>
                     {formatDateDot(group.date_key)} - {formatDayName(group.date_key)}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
@@ -336,15 +336,15 @@ const CooperativeDailyDropReport = forwardRef<HTMLDivElement, CooperativeDailyDr
                   </div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.oldMember}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.oldMember}</div>
                   <div style={{ fontWeight: 700 }}>{group.summary.old_member_count}</div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.newMember}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.newMember}</div>
                   <div style={{ fontWeight: 700 }}>{group.summary.new_member_count}</div>
                 </div>
                 <div style={groupAmountStyle}>
-                  <div style={{ color: '#4b5563', fontSize: 11 }}>{labels.exitMember}</div>
+                  <div style={{ color: '#4b5563', fontSize: 12 }}>{labels.exitMember}</div>
                   <div style={{ fontWeight: 700 }}>{group.summary.exit_member_count}</div>
                 </div>
               </div>
