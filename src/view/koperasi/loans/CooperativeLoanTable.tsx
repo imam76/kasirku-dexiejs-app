@@ -19,6 +19,7 @@ interface CooperativeLoanTableProps {
   onApprove: (loan: CooperativeLoan) => void;
   onReject: (loan: CooperativeLoan) => void;
   onDisburse: (loan: CooperativeLoan) => void;
+  canDisburse: boolean;
   loading?: boolean;
 }
 
@@ -28,6 +29,7 @@ export default function CooperativeLoanTable({
   onApprove,
   onReject,
   onDisburse,
+  canDisburse,
   loading,
 }: CooperativeLoanTableProps) {
   const { t } = useI18n();
@@ -169,7 +171,7 @@ export default function CooperativeLoanTable({
           <Button
             type="text"
             icon={<Send size={16} />}
-            disabled={loan.status !== 'APPROVED'}
+            disabled={loan.status !== 'APPROVED' || !canDisburse}
             data-testid={`koperasi-loan-disburse-${loan.loan_number}`}
             onClick={() => onDisburse(loan)}
           >

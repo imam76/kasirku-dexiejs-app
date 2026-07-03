@@ -27,6 +27,10 @@ import {
   reverseCooperativeLoanPaymentJournal,
   reverseCooperativeSavingTransactionJournal,
 } from '@/services/generalLedgerService';
+import {
+  recordCashBankTransferInCurrentTransaction,
+  type RecordCashBankTransferResult,
+} from '@/services/cashBankTransferService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import {
   mergeRemoteFinanceTransactionsIntoDexie,
@@ -53,6 +57,7 @@ import {
 import {
   assertSufficientCashAccountBalance,
   buildFieldCashFinanceTransactionFields,
+  getCashAccountBalance,
   getFieldCashContextForCashAccount,
   type CooperativeFieldCashContext,
 } from '@/services/cooperativeFieldCashService';
@@ -145,9 +150,19 @@ export interface DisburseCooperativeLoanInput {
   notes?: string;
 }
 
+export interface DisburseCooperativeLoanViaFieldCashInput extends DisburseCooperativeLoanInput {
+  finance_cash_account_id?: string;
+  field_cash_account_id?: string;
+  dropping_amount?: number;
+}
+
 export interface DisburseCooperativeLoanResult {
   loan: CooperativeLoan;
   installments: CooperativeLoanInstallment[];
+}
+
+export interface DisburseCooperativeLoanViaFieldCashResult extends DisburseCooperativeLoanResult {
+  droppingTransfer?: RecordCashBankTransferResult;
 }
 
 export interface RecordCooperativeLoanPaymentInput {
@@ -1177,22 +1192,309 @@ export const rejectCooperativeLoan = async (
   return rejectedLoan;
 };
 
-export const disburseCooperativeLoan = async (
-  input: DisburseCooperativeLoanInput,
-): Promise<DisburseCooperativeLoanResult> => {
-  const currentUser = await getCurrentSessionUser();
-  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
+type ParsedCooperativeLoanDisbursementInput = ReturnType<typeof cooperativeLoanDisbursementSchema.parse>;
 
-  const parsedInput = cooperativeLoanDisbursementSchema.parse(input);
-  const now = new Date().toISOString();
+interface CooperativeLoanDisbursementWriteResult {
+  loan: CooperativeLoan;
+  installments: CooperativeLoanInstallment[];
+  financeTransaction?: FinanceTransaction;
+  mandatorySavingTransaction?: CooperativeSavingTransaction;
+  mandatorySavingBalance?: CooperativeMemberSavingBalance;
+}
+
+const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
+  loanId,
+  parsedInput,
+  now,
+  currentUser,
+}: {
+  loanId: string;
+  parsedInput: ParsedCooperativeLoanDisbursementInput;
+  now: string;
+  currentUser: Awaited<ReturnType<typeof getCurrentSessionUser>>;
+}): Promise<CooperativeLoanDisbursementWriteResult> => {
   const disbursementDate = parsedInput.disbursement_date ?? now;
   const paymentMethod = parsedInput.payment_method ?? 'TUNAI';
   const financeTransactionId = crypto.randomUUID();
   let disbursedLoan: CooperativeLoan | undefined;
   let installments: CooperativeLoanInstallment[] = [];
-  let financeTransaction: FinanceTransaction | undefined;
   let mandatorySavingTransaction: CooperativeSavingTransaction | undefined;
   let mandatorySavingBalance: CooperativeMemberSavingBalance | undefined;
+
+  const loan = await db.cooperativeLoans.get(loanId);
+  if (!loan) {
+    throw new Error('Pinjaman koperasi tidak ditemukan.');
+  }
+  if (loan.status !== 'APPROVED') {
+    throw new Error('Pinjaman hanya bisa dicairkan setelah approved.');
+  }
+
+  const existingInstallment = await db.cooperativeLoanInstallments
+    .where('loan_id')
+    .equals(loan.id)
+    .first();
+  if (existingInstallment) {
+    throw new Error('Jadwal angsuran pinjaman ini sudah pernah dibuat.');
+  }
+
+  const member = await db.cooperativeMembers.get(loan.member_id);
+  if (!member) {
+    throw new Error('Anggota pinjaman tidak ditemukan.');
+  }
+  if (!member.officer_id) {
+    throw new Error('Petugas/Resort anggota wajib ditentukan sebelum pencairan.');
+  }
+  if (!member.area_id) {
+    throw new Error('Area anggota wajib ditentukan sebelum pencairan.');
+  }
+  const officer = await db.employees.get(member.officer_id);
+  if (!officer || !officer.is_active) {
+    throw new Error('Petugas/Resort anggota tidak ditemukan atau sudah nonaktif.');
+  }
+  const areaAssignment = await db.employeeAreas
+    .where('employee_id')
+    .equals(officer.id)
+    .and((assignment) => assignment.area_id === member.area_id)
+    .first();
+  if (!areaAssignment) {
+    throw new Error('Area anggota belum termasuk wilayah tugas petugas/Resort.');
+  }
+  const collectionSchedules = await db.employeeCollectionSchedules
+    .where('[employee_id+area_id]')
+    .equals([officer.id, member.area_id])
+    .toArray() as EmployeeCollectionSchedule[];
+  const resolvedSchedule = resolveCollectionScheduleForDisbursement({
+    schedules: collectionSchedules,
+    value: disbursementDate,
+    allowHistoricalFallback: parsedInput.historical_entry,
+  });
+  if (!resolvedSchedule) {
+    const weekday = getCollectionWeekdayLabel(
+      ((dayjs(disbursementDate).tz().day() || 7)) as 1 | 2 | 3 | 4 | 5 | 6 | 7,
+    );
+    throw new Error(
+      `Pencairan tidak dapat dilakukan pada hari ${weekday}. Pilih tanggal sesuai jadwal penagihan ${officer.name} untuk area ${member.area_name ?? member.area_code ?? member.area_id}.`,
+    );
+  }
+  if (
+    parsedInput.historical_entry &&
+    !dayjs(disbursementDate).tz().isBefore(dayjs().tz(), 'day')
+  ) {
+    throw new Error('Mode data historis hanya dapat digunakan untuk tanggal pencairan sebelum hari ini.');
+  }
+  if (
+    !parsedInput.historical_entry &&
+    dayjs(disbursementDate).tz().isBefore(dayjs(loan.application_date).tz(), 'day')
+  ) {
+    throw new Error('Tanggal pencairan tidak boleh sebelum tanggal pengajuan.');
+  }
+
+  const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
+  const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT);
+  const disbursementAmount = resolveNetDisbursementAmount(loan);
+  if (disbursementAmount < -0.01) {
+    throw new Error('Nominal pencairan net tidak boleh negatif.');
+  }
+  const fieldCashContext = paymentMethod === 'TUNAI'
+    ? await getFieldCashContextForCashAccount(cashAccount.id)
+    : undefined;
+  if (fieldCashContext && disbursementAmount > 0) {
+    await assertSufficientCashAccountBalance(cashAccount.id, disbursementAmount);
+  }
+  const firstDueDate = parsedInput.historical_entry && parsedInput.first_due_date
+    ? parsedInput.first_due_date
+    : getFirstScheduledDueDate({
+        disbursementDate: dayjs(disbursementDate).tz(),
+        frequency: resolveLoanBillingFrequency(loan),
+        weekday: resolvedSchedule.weekday,
+      }).toISOString();
+  if (!dayjs(firstDueDate).tz().isAfter(dayjs(disbursementDate).tz(), 'day')) {
+    throw new Error('Jatuh tempo pertama harus setelah tanggal pencairan.');
+  }
+  const collectionWeekday = parsedInput.historical_entry && parsedInput.first_due_date
+    ? getIsoWeekday(firstDueDate)
+    : resolvedSchedule.weekday;
+  const collectionSchedule = parsedInput.historical_entry
+    ? findCollectionScheduleByWeekday(collectionSchedules, firstDueDate)
+    : resolvedSchedule.schedule;
+  if (!collectionSchedule) {
+    throw new Error(
+      `Jatuh tempo pertama harus mengikuti salah satu hari jadwal penagihan ${officer.name}.`,
+    );
+  }
+  await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
+
+  const nextDisbursedLoan: CooperativeLoan = withPendingCooperativeSync({
+    ...loan,
+    status: 'DISBURSED' as const,
+    disbursed_at: disbursementDate,
+    officer_id: officer.id,
+    officer_name: officer.name,
+    officer_position: officer.position,
+    area_id: member.area_id,
+    area_name: member.area_name,
+    area_code: member.area_code,
+    collection_schedule_id: collectionSchedule?.id,
+    collection_weekday: collectionWeekday,
+    cash_account_id: cashAccount.id,
+    cash_account_code: cashAccount.code,
+    cash_account_name: cashAccount.name,
+    payment_method: paymentMethod,
+    payment_channel: parsedInput.payment_channel,
+    finance_transaction_id: financeTransactionId,
+    disbursement_notes: parsedInput.notes,
+    net_disbursement_amount: Math.max(0, disbursementAmount),
+    outstanding_principal_amount: loan.principal_amount,
+    outstanding_interest_amount: loan.total_interest_amount,
+    outstanding_penalty_amount: 0,
+    updated_at: now,
+    updated_by: currentUser?.id,
+    updated_by_name: currentUser?.name,
+  });
+  disbursedLoan = nextDisbursedLoan;
+
+  installments = buildInstallments(nextDisbursedLoan, firstDueDate, now);
+  const financeTransaction = withPendingFinanceTransactionSync({
+    id: financeTransactionId,
+    type: 'EXPENSE',
+    category: FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT,
+    amount: Math.max(0, disbursementAmount),
+    description: `Pencairan pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
+    created_at: disbursementDate,
+    reference_id: loan.id,
+    payment_method: paymentMethod,
+    payment_channel: parsedInput.payment_channel,
+    cash_account_id: cashAccount.id,
+    cash_account_code: cashAccount.code,
+    cash_account_name: cashAccount.name,
+    ...accountSnapshot,
+    ...(fieldCashContext
+      ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'LOAN_DISBURSEMENT')
+      : {}),
+  }, currentUser, now);
+
+  await db.financeTransactions.add(financeTransaction);
+  if (resolveLoanDeductionMethod(nextDisbursedLoan) === 'DEDUCT_ON_DISBURSEMENT') {
+    const mandatorySavingResult = await recordMandatorySavingDeduction({
+      loan: nextDisbursedLoan,
+      amount: Number(nextDisbursedLoan.mandatory_saving_amount || 0),
+      transactionDate: disbursementDate,
+      now,
+      cashAccount,
+      paymentMethod,
+      paymentChannel: parsedInput.payment_channel,
+      currentUser,
+    });
+    mandatorySavingTransaction = mandatorySavingResult.transaction;
+    mandatorySavingBalance = mandatorySavingResult.balance;
+  }
+  await db.cooperativeLoanInstallments.bulkAdd(installments);
+  await db.cooperativeLoans.put(nextDisbursedLoan);
+
+  const journalEntry = await postCooperativeLoanDisbursementJournal(nextDisbursedLoan, currentUser);
+  if (journalEntry) {
+    disbursedLoan = {
+      ...nextDisbursedLoan,
+      journal_entry_id: journalEntry.id,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    };
+    await db.cooperativeLoans.update(loan.id, {
+      journal_entry_id: journalEntry.id,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    });
+  }
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'COOPERATIVE_LOAN_DISBURSED',
+    entity: 'cooperativeLoans',
+    entity_id: loan.id,
+    description: `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)}.`,
+  });
+
+  if (!disbursedLoan) {
+    throw new Error('Pencairan pinjaman gagal disimpan.');
+  }
+
+  return {
+    loan: disbursedLoan,
+    installments,
+    financeTransaction,
+    mandatorySavingTransaction,
+    mandatorySavingBalance,
+  };
+};
+
+const enqueueCooperativeLoanDisbursementResultSync = async (
+  result: CooperativeLoanDisbursementWriteResult,
+) => {
+  if (result.financeTransaction) {
+    await enqueueFinanceTransactionsSync([result.financeTransaction], 'create');
+  }
+  if (result.mandatorySavingTransaction) {
+    await enqueueCooperativeSavingTransactionsSync([result.mandatorySavingTransaction], 'create');
+  }
+  if (result.mandatorySavingBalance) {
+    await enqueueCooperativeMemberSavingBalancesSync([result.mandatorySavingBalance], 'update');
+  }
+  await enqueueCooperativeLoansSync([result.loan], 'update');
+  await enqueueCooperativeLoanInstallmentsSync(result.installments, 'create');
+};
+
+export const disburseCooperativeLoan = async (
+  input: DisburseCooperativeLoanInput,
+): Promise<DisburseCooperativeLoanResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_DISBURSE');
+
+  const parsedInput = cooperativeLoanDisbursementSchema.parse(input);
+  const now = new Date().toISOString();
+  let result: CooperativeLoanDisbursementWriteResult | undefined;
+
+  await db.transaction('rw', cooperativeLoanTables, async () => {
+    result = await writeCooperativeLoanDisbursementInCurrentTransaction({
+      loanId: input.loan_id,
+      parsedInput,
+      now,
+      currentUser,
+    });
+  });
+
+  if (!result) {
+    throw new Error('Pencairan pinjaman gagal disimpan.');
+  }
+
+  await enqueueCooperativeLoanDisbursementResultSync(result);
+
+  return {
+    loan: result.loan,
+    installments: result.installments,
+  };
+};
+
+export const disburseCooperativeLoanViaFieldCash = async (
+  input: DisburseCooperativeLoanViaFieldCashInput,
+): Promise<DisburseCooperativeLoanViaFieldCashResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_DISBURSE');
+
+  const droppingAmount = roundCurrency(Number(input.dropping_amount || 0));
+  if (!Number.isFinite(droppingAmount) || droppingAmount < 0) {
+    throw new Error('Nominal dropping tidak boleh negatif.');
+  }
+
+  const parsedInput = cooperativeLoanDisbursementSchema.parse({
+    ...input,
+    payment_method: 'TUNAI',
+    cash_account_id: input.field_cash_account_id,
+  });
+  const now = new Date().toISOString();
+  let disbursementResult: CooperativeLoanDisbursementWriteResult | undefined;
+  let droppingTransfer: RecordCashBankTransferResult | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const loan = await db.cooperativeLoans.get(input.loan_id);
@@ -1203,213 +1505,75 @@ export const disburseCooperativeLoan = async (
       throw new Error('Pinjaman hanya bisa dicairkan setelah approved.');
     }
 
-    const existingInstallment = await db.cooperativeLoanInstallments
-      .where('loan_id')
-      .equals(loan.id)
-      .first();
-    if (existingInstallment) {
-      throw new Error('Jadwal angsuran pinjaman ini sudah pernah dibuat.');
-    }
-
     const member = await db.cooperativeMembers.get(loan.member_id);
-    if (!member) {
-      throw new Error('Anggota pinjaman tidak ditemukan.');
-    }
-    if (!member.officer_id) {
+    if (!member?.officer_id) {
       throw new Error('Petugas/Resort anggota wajib ditentukan sebelum pencairan.');
-    }
-    if (!member.area_id) {
-      throw new Error('Area anggota wajib ditentukan sebelum pencairan.');
     }
     const officer = await db.employees.get(member.officer_id);
     if (!officer || !officer.is_active) {
       throw new Error('Petugas/Resort anggota tidak ditemukan atau sudah nonaktif.');
     }
-    const areaAssignment = await db.employeeAreas
-      .where('employee_id')
-      .equals(officer.id)
-      .and((assignment) => assignment.area_id === member.area_id)
-      .first();
-    if (!areaAssignment) {
-      throw new Error('Area anggota belum termasuk wilayah tugas petugas/Resort.');
-    }
-    const collectionSchedules = await db.employeeCollectionSchedules
-      .where('[employee_id+area_id]')
-      .equals([officer.id, member.area_id])
-      .toArray() as EmployeeCollectionSchedule[];
-    const resolvedSchedule = resolveCollectionScheduleForDisbursement({
-      schedules: collectionSchedules,
-      value: disbursementDate,
-      allowHistoricalFallback: parsedInput.historical_entry,
-    });
-    if (!resolvedSchedule) {
-      const weekday = getCollectionWeekdayLabel(
-        ((dayjs(disbursementDate).tz().day() || 7)) as 1 | 2 | 3 | 4 | 5 | 6 | 7,
-      );
-      throw new Error(
-        `Pencairan tidak dapat dilakukan pada hari ${weekday}. Pilih tanggal sesuai jadwal penagihan ${officer.name} untuk area ${member.area_name ?? member.area_code ?? member.area_id}.`,
-      );
-    }
-    if (
-      parsedInput.historical_entry &&
-      !dayjs(disbursementDate).tz().isBefore(dayjs().tz(), 'day')
-    ) {
-      throw new Error('Mode data historis hanya dapat digunakan untuk tanggal pencairan sebelum hari ini.');
-    }
-    if (
-      !parsedInput.historical_entry &&
-      dayjs(disbursementDate).tz().isBefore(dayjs(loan.application_date).tz(), 'day')
-    ) {
-      throw new Error('Tanggal pencairan tidak boleh sebelum tanggal pengajuan.');
+    if (!officer.field_cash_account_id) {
+      throw new Error(`Petugas/Resort ${officer.name} belum memiliki akun kas PDL.`);
     }
 
-    const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
-    const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT);
-    const disbursementAmount = resolveNetDisbursementAmount(loan);
-    if (disbursementAmount < -0.01) {
-      throw new Error('Nominal pencairan net tidak boleh negatif.');
-    }
-    const fieldCashContext = paymentMethod === 'TUNAI'
-      ? await getFieldCashContextForCashAccount(cashAccount.id)
-      : undefined;
-    if (fieldCashContext && disbursementAmount > 0) {
-      await assertSufficientCashAccountBalance(cashAccount.id, disbursementAmount);
-    }
-    const firstDueDate = parsedInput.historical_entry && parsedInput.first_due_date
-      ? parsedInput.first_due_date
-      : getFirstScheduledDueDate({
-          disbursementDate: dayjs(disbursementDate).tz(),
-          frequency: resolveLoanBillingFrequency(loan),
-          weekday: resolvedSchedule.weekday,
-        }).toISOString();
-    if (!dayjs(firstDueDate).tz().isAfter(dayjs(disbursementDate).tz(), 'day')) {
-      throw new Error('Jatuh tempo pertama harus setelah tanggal pencairan.');
-    }
-    const collectionWeekday = parsedInput.historical_entry && parsedInput.first_due_date
-      ? getIsoWeekday(firstDueDate)
-      : resolvedSchedule.weekday;
-    const collectionSchedule = parsedInput.historical_entry
-      ? findCollectionScheduleByWeekday(collectionSchedules, firstDueDate)
-      : resolvedSchedule.schedule;
-    if (!collectionSchedule) {
-      throw new Error(
-        `Jatuh tempo pertama harus mengikuti salah satu hari jadwal penagihan ${officer.name}.`,
-      );
-    }
-    await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
-
-    const nextDisbursedLoan: CooperativeLoan = withPendingCooperativeSync({
-      ...loan,
-      status: 'DISBURSED' as const,
-      disbursed_at: disbursementDate,
-      officer_id: officer.id,
-      officer_name: officer.name,
-      officer_position: officer.position,
-      area_id: member.area_id,
-      area_name: member.area_name,
-      area_code: member.area_code,
-      collection_schedule_id: collectionSchedule?.id,
-      collection_weekday: collectionWeekday,
-      cash_account_id: cashAccount.id,
-      cash_account_code: cashAccount.code,
-      cash_account_name: cashAccount.name,
-      payment_method: paymentMethod,
-      payment_channel: parsedInput.payment_channel,
-      finance_transaction_id: financeTransactionId,
-      disbursement_notes: parsedInput.notes,
-      net_disbursement_amount: Math.max(0, disbursementAmount),
-      outstanding_principal_amount: loan.principal_amount,
-      outstanding_interest_amount: loan.total_interest_amount,
-      outstanding_penalty_amount: 0,
-      updated_at: now,
-      updated_by: currentUser?.id,
-      updated_by_name: currentUser?.name,
-    });
-    disbursedLoan = nextDisbursedLoan;
-
-    installments = buildInstallments(nextDisbursedLoan, firstDueDate, now);
-    financeTransaction = withPendingFinanceTransactionSync({
-      id: financeTransactionId,
-      type: 'EXPENSE',
-      category: FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT,
-      amount: Math.max(0, disbursementAmount),
-      description: `Pencairan pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
-      created_at: disbursementDate,
-      reference_id: loan.id,
-      payment_method: paymentMethod,
-      payment_channel: parsedInput.payment_channel,
-      cash_account_id: cashAccount.id,
-      cash_account_code: cashAccount.code,
-      cash_account_name: cashAccount.name,
-      ...accountSnapshot,
-      ...(fieldCashContext
-        ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'LOAN_DISBURSEMENT')
-        : {}),
-    }, currentUser, now);
-
-    await db.financeTransactions.add(financeTransaction);
-    if (resolveLoanDeductionMethod(nextDisbursedLoan) === 'DEDUCT_ON_DISBURSEMENT') {
-      const mandatorySavingResult = await recordMandatorySavingDeduction({
-        loan: nextDisbursedLoan,
-        amount: Number(nextDisbursedLoan.mandatory_saving_amount || 0),
-        transactionDate: disbursementDate,
-        now,
-        cashAccount,
-        paymentMethod,
-        paymentChannel: parsedInput.payment_channel,
-        currentUser,
-      });
-      mandatorySavingTransaction = mandatorySavingResult.transaction;
-      mandatorySavingBalance = mandatorySavingResult.balance;
-    }
-    await db.cooperativeLoanInstallments.bulkAdd(installments);
-    await db.cooperativeLoans.put(nextDisbursedLoan);
-
-    const journalEntry = await postCooperativeLoanDisbursementJournal(nextDisbursedLoan, currentUser);
-    if (journalEntry) {
-      disbursedLoan = {
-        ...nextDisbursedLoan,
-        journal_entry_id: journalEntry.id,
-        updated_at: now,
-        sync_status: 'pending',
-        sync_error: undefined,
-      };
-      await db.cooperativeLoans.update(loan.id, {
-        journal_entry_id: journalEntry.id,
-        updated_at: now,
-        sync_status: 'pending',
-        sync_error: undefined,
-      });
+    const fieldCashAccountId = parsedInput.cash_account_id ?? officer.field_cash_account_id;
+    if (fieldCashAccountId !== officer.field_cash_account_id) {
+      throw new Error(`Akun kas PDL tidak sesuai dengan petugas/Resort ${officer.name}.`);
     }
 
-    await writeActivityLog({
-      user: currentUser,
-      action: 'COOPERATIVE_LOAN_DISBURSED',
-      entity: 'cooperativeLoans',
-      entity_id: loan.id,
-      description: `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)}.`,
+    const disbursementAmount = Math.max(0, resolveNetDisbursementAmount(loan));
+    const currentFieldCashBalance = await getCashAccountBalance(fieldCashAccountId);
+    if (roundCurrency(currentFieldCashBalance + droppingAmount) + 0.01 < disbursementAmount) {
+      const shortage = roundCurrency(disbursementAmount - currentFieldCashBalance - droppingAmount);
+      throw new Error(`Saldo kas PDL setelah dropping belum cukup untuk pencairan. Kekurangan Rp ${shortage.toLocaleString('id-ID')}.`);
+    }
+
+    const disbursementDate = parsedInput.disbursement_date ?? now;
+    if (droppingAmount > 0) {
+      if (!input.finance_cash_account_id) {
+        throw new Error('Akun kas/bank finance wajib dipilih jika ada dropping.');
+      }
+
+      droppingTransfer = await recordCashBankTransferInCurrentTransaction({
+        from_cash_account_id: input.finance_cash_account_id,
+        to_cash_account_id: fieldCashAccountId,
+        amount: droppingAmount,
+        transfer_date: disbursementDate,
+        payment_channel: parsedInput.payment_channel,
+        reference_id: loan.id,
+        notes: `Dropping kas pencairan pinjaman ${loan.loan_number} ke ${officer.name}.`,
+      }, currentUser);
+    }
+
+    disbursementResult = await writeCooperativeLoanDisbursementInCurrentTransaction({
+      loanId: input.loan_id,
+      parsedInput: {
+        ...parsedInput,
+        payment_method: 'TUNAI',
+        cash_account_id: fieldCashAccountId,
+      },
+      now,
+      currentUser,
     });
   });
 
-  if (!disbursedLoan) {
+  if (!disbursementResult) {
     throw new Error('Pencairan pinjaman gagal disimpan.');
   }
 
-  if (financeTransaction) {
-    await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  if (droppingTransfer) {
+    await enqueueFinanceTransactionsSync([
+      droppingTransfer.outTransaction,
+      droppingTransfer.inTransaction,
+    ], 'create');
   }
-  if (mandatorySavingTransaction) {
-    await enqueueCooperativeSavingTransactionsSync([mandatorySavingTransaction], 'create');
-  }
-  if (mandatorySavingBalance) {
-    await enqueueCooperativeMemberSavingBalancesSync([mandatorySavingBalance], 'update');
-  }
-  await enqueueCooperativeLoansSync([disbursedLoan], 'update');
-  await enqueueCooperativeLoanInstallmentsSync(installments, 'create');
+  await enqueueCooperativeLoanDisbursementResultSync(disbursementResult);
 
   return {
-    loan: disbursedLoan,
-    installments,
+    loan: disbursementResult.loan,
+    installments: disbursementResult.installments,
+    droppingTransfer,
   };
 };
 

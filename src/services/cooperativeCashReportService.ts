@@ -6,7 +6,7 @@ import {
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
-export type CooperativeCashReportRowKey = 'STORTING' | 'DROPING' | 'TABUNGAN' | 'IPTW';
+export type CooperativeCashReportRowKey = 'STORTING' | 'DROP' | 'TABUNGAN' | 'IPTW';
 
 export interface CooperativeCashReportFilters {
   date?: string;
@@ -51,11 +51,9 @@ export interface CooperativeCashReport {
   summary: CooperativeCashReportSummary;
 }
 
-const createEmployeeReport = (
+export const createCooperativeCashReportEmployee = (
   source: CooperativeFieldCashReportRow,
 ): CooperativeCashReportEmployee => {
-  // Setoran ke finance sengaja tidak masuk laporan ini. Laporan Tunai adalah
-  // snapshot aktivitas kas operasional karyawan sebelum proses settlement.
   const rows: CooperativeCashReportRow[] = [
     {
       key: 'STORTING',
@@ -63,9 +61,12 @@ const createEmployeeReport = (
       outgoing_amount: source.storting_loan_payment_reversal_amount,
     },
     {
-      key: 'DROPING',
+      key: 'DROP',
       incoming_amount: source.dropping_from_finance_amount,
-      outgoing_amount: source.loan_disbursement_amount,
+      outgoing_amount: roundCurrency(
+        source.deposit_to_finance_amount +
+        source.loan_disbursement_amount,
+      ),
     },
     {
       key: 'TABUNGAN',
@@ -121,7 +122,7 @@ export const getCooperativeCashReport = async (
   }));
   const employees = sourceRows
     .filter((row) => !filters.employeeId || row.employee_id === filters.employeeId)
-    .map(createEmployeeReport);
+    .map(createCooperativeCashReportEmployee);
   const summary = employees.reduce<CooperativeCashReportSummary>((result, employee) => ({
     total_incoming_amount: roundCurrency(
       result.total_incoming_amount + employee.total_incoming_amount,

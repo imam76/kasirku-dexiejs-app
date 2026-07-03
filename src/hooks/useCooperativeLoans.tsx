@@ -6,10 +6,12 @@ import {
   approveCooperativeLoan,
   createCooperativeLoanApplication,
   disburseCooperativeLoan,
+  disburseCooperativeLoanViaFieldCash,
   rejectCooperativeLoan,
   type ApproveCooperativeLoanInput,
   type CreateCooperativeLoanApplicationInput,
   type DisburseCooperativeLoanInput,
+  type DisburseCooperativeLoanViaFieldCashInput,
   type RejectCooperativeLoanInput,
 } from '@/services/cooperativeLoanService';
 import { getCashAccountBalance } from '@/services/cooperativeFieldCashService';
@@ -29,6 +31,18 @@ const COOPERATIVE_LOAN_RELATED_QUERY_KEYS = [
   'cooperativeLoanInstallments',
   'cooperativeSavings',
   'cooperativeFieldCashReport',
+  'cooperativeFieldCashCashDetail',
+  'cooperativeReports',
+  'cooperativeDailyDropReport',
+  'cooperativeWeeklyEmployeeDropReport',
+  'cooperativeDailyStortingReport',
+  'cooperativeDailyTargetReport',
+  'cooperativeDailyFieldCashReport',
+  'cooperativeCashReport',
+  'cooperativeLedgerReport',
+  'cooperativeIptwReport',
+  'cooperativeInstallmentBookReport',
+  'cooperativeMemberRegisterReport',
   'financeBalance',
   'financeTransactions',
   'journalEntries',
@@ -97,6 +111,10 @@ export const useCooperativeLoans = () => {
     () => new Set(fieldCashEmployees.map((employee) => employee.field_cash_account_id).filter(Boolean) as string[]),
     [fieldCashEmployees],
   );
+  const financeAccounts = useMemo(
+    () => paymentAccounts.filter((account) => !fieldCashAccountIds.has(account.id)),
+    [fieldCashAccountIds, paymentAccounts],
+  );
 
   const activeMembers = useMemo(
     () => members.filter((member) => member.status === 'ACTIVE'),
@@ -151,6 +169,10 @@ export const useCooperativeLoans = () => {
     mutationFn: disburseCooperativeLoan,
     onSuccess: invalidate,
   });
+  const disburseViaFieldCashMutation = useMutation({
+    mutationFn: disburseCooperativeLoanViaFieldCash,
+    onSuccess: invalidate,
+  });
 
   return {
     members,
@@ -164,6 +186,7 @@ export const useCooperativeLoans = () => {
     disbursingLoan,
     setDisbursingLoan,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
+    financeAccounts: financeAccounts as ChartOfAccount[],
     fieldCashEmployees: fieldCashEmployees as Employee[],
     employeeCollectionSchedules: employeeCollectionSchedules as EmployeeCollectionSchedule[],
     fieldCashAccountIds,
@@ -176,6 +199,11 @@ export const useCooperativeLoans = () => {
     approveLoan: (input: ApproveCooperativeLoanInput) => approveMutation.mutateAsync(input),
     rejectLoan: (input: RejectCooperativeLoanInput) => rejectMutation.mutateAsync(input),
     disburseLoan: (input: DisburseCooperativeLoanInput) => disburseMutation.mutateAsync(input),
-    isMutating: createMutation.isPending || approveMutation.isPending || rejectMutation.isPending || disburseMutation.isPending,
+    disburseLoanViaFieldCash: (input: DisburseCooperativeLoanViaFieldCashInput) => disburseViaFieldCashMutation.mutateAsync(input),
+    isMutating: createMutation.isPending ||
+      approveMutation.isPending ||
+      rejectMutation.isPending ||
+      disburseMutation.isPending ||
+      disburseViaFieldCashMutation.isPending,
   };
 };

@@ -1,9 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
+import type { Dayjs } from 'dayjs';
 import { useAuth } from '@/auth/useAuth';
 import { db } from '@/lib/db';
+import dayjs from '@/lib/dayjs';
+import { createCooperativeCashReportEmployee } from '@/services/cooperativeCashReportService';
 import {
+  closeFieldCashBookToFinance,
+  type CloseFieldCashBookInput,
   getCashAccountBalance,
   recordDepositFromPetugasToFinance,
   recordDroppingFromFinanceToPetugas,
@@ -18,16 +23,31 @@ import type { ChartOfAccount, Employee } from '@/types';
 const RELATED_QUERY_KEYS = [
   'cooperativeFieldCashSessions',
   'cooperativeFieldCashReport',
+  'cooperativeFieldCashCashDetail',
+  'cooperativeCashReport',
+  'cooperativeDailyFieldCashReport',
   'financeTransactions',
   'financeBalance',
   'journalEntries',
   'trialBalance',
 ];
 
+export const buildDailyFieldCashReportFilters = (
+  date: Dayjs = dayjs.tz().startOf('day'),
+  employeeId?: string,
+): CooperativeFieldCashReportFilters => ({
+  fromDate: date.startOf('day').toISOString(),
+  toDate: date.endOf('day').toISOString(),
+  ...(employeeId ? { employeeId } : {}),
+});
+
 export const useCooperativeFieldCash = () => {
   const queryClient = useQueryClient();
   const { can, currentRole, currentUser } = useAuth();
-  const [reportFilters, setReportFilters] = useState<CooperativeFieldCashReportFilters>({});
+  const [reportFilters, setReportFilters] = useState<CooperativeFieldCashReportFilters>(() => (
+    buildDailyFieldCashReportFilters()
+  ));
+  const [cashDetailDate, setCashDetailDate] = useState(() => dayjs.tz().startOf('day'));
   const canViewAllFieldCash = Boolean(
     currentRole?.is_owner ||
     currentUser?.role === 'OWNER' ||
@@ -87,12 +107,23 @@ export const useCooperativeFieldCash = () => {
     queryKey: ['cooperativeFieldCashReport', reportFilters, currentUser?.id, currentUser?.employee_id, canViewAllFieldCash],
     queryFn: () => getCooperativeFieldCashReport(canViewAllFieldCash ? reportFilters : {}),
   });
+  const cashDetailDateKey = cashDetailDate.format('YYYY-MM-DD');
+  const cashDetailQuery = useQuery({
+    queryKey: ['cooperativeFieldCashCashDetail', cashDetailDateKey, currentUser?.id, currentUser?.employee_id, canViewAllFieldCash],
+    queryFn: async () => {
+      const selectedDate = dayjs.tz(cashDetailDateKey);
+      const rows = await getCooperativeFieldCashReport({
+        fromDate: selectedDate.startOf('day').toISOString(),
+        toDate: selectedDate.endOf('day').toISOString(),
+      });
 
-  const invalidate = () => {
-    RELATED_QUERY_KEYS.forEach((queryKey) => {
-      queryClient.invalidateQueries({ queryKey: [queryKey] });
-    });
-  };
+      return rows.map(createCooperativeCashReportEmployee);
+    },
+  });
+
+  const invalidate = () => Promise.all(
+    RELATED_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey: [queryKey] })),
+  );
 
   const droppingMutation = useMutation({
     mutationFn: recordDroppingFromFinanceToPetugas,
@@ -100,6 +131,10 @@ export const useCooperativeFieldCash = () => {
   });
   const depositMutation = useMutation({
     mutationFn: recordDepositFromPetugasToFinance,
+    onSuccess: invalidate,
+  });
+  const closeBookMutation = useMutation({
+    mutationFn: closeFieldCashBookToFinance,
     onSuccess: invalidate,
   });
 
@@ -114,8 +149,14 @@ export const useCooperativeFieldCash = () => {
     reportFilters,
     setReportFilters,
     isReportLoading: reportQuery.isLoading,
+    cashDetailDate,
+    setCashDetailDate,
+    cashDetailEmployees: cashDetailQuery.data ?? [],
+    isCashDetailLoading: cashDetailQuery.isLoading || cashDetailQuery.isFetching,
+    cashDetailError: cashDetailQuery.error,
     recordDropping: (input: RecordFieldCashTransferInput) => droppingMutation.mutateAsync(input),
     recordDeposit: (input: RecordFieldCashTransferInput) => depositMutation.mutateAsync(input),
-    isMutating: droppingMutation.isPending || depositMutation.isPending,
+    closeBook: (input: CloseFieldCashBookInput) => closeBookMutation.mutateAsync(input),
+    isMutating: droppingMutation.isPending || depositMutation.isPending || closeBookMutation.isPending,
   };
 };

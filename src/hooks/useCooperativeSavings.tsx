@@ -40,6 +40,7 @@ export interface CooperativeSavingPendingReturn {
 const COOPERATIVE_SAVING_RELATED_QUERY_KEYS = [
   'cooperativeSavings',
   'cooperativeFieldCashReport',
+  'cooperativeFieldCashCashDetail',
   'cooperativeReports',
   'cooperativeDailyDropReport',
   'cooperativeWeeklyEmployeeDropReport',

@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
-import { App, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Tag } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { App, Button, Card, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Tag } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { Banknote, Download, Upload } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
-import { useCooperativeFieldCash } from '@/hooks/useCooperativeFieldCash';
+import { buildDailyFieldCashReportFilters, useCooperativeFieldCash } from '@/hooks/useCooperativeFieldCash';
 import dayjs from '@/lib/dayjs';
 import type { Employee } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
+import CooperativeFieldCashCashDetailTable from './CooperativeFieldCashCashDetailTable';
 import CooperativeFieldCashReportTable from './CooperativeFieldCashReportTable';
 
 const { TextArea } = Input;
@@ -21,7 +22,25 @@ interface TransferFormValues {
 
 type TransferMode = 'DROPPING' | 'DEPOSIT';
 
+const REMEMBERED_FINANCE_ACCOUNT_ID_KEY = 'kasirku.koperasi.fieldCash.rememberedFinanceAccountId';
+
 const money = (amount: number) => `Rp ${formatCurrency(amount)}`;
+
+const getRememberedFinanceAccountId = () => (
+  typeof window === 'undefined'
+    ? undefined
+    : window.localStorage.getItem(REMEMBERED_FINANCE_ACCOUNT_ID_KEY) || undefined
+);
+
+const saveRememberedFinanceAccountId = (accountId?: string) => {
+  if (typeof window === 'undefined') return;
+
+  if (accountId) {
+    window.localStorage.setItem(REMEMBERED_FINANCE_ACCOUNT_ID_KEY, accountId);
+  } else {
+    window.localStorage.removeItem(REMEMBERED_FINANCE_ACCOUNT_ID_KEY);
+  }
+};
 
 export default function CooperativeFieldCashManagement() {
   const { message } = App.useApp();
@@ -29,6 +48,7 @@ export default function CooperativeFieldCashManagement() {
   const canManage = can('COOPERATIVE_FIELD_CASH_MANAGE');
   const [transferForm] = Form.useForm<TransferFormValues>();
   const [transferMode, setTransferMode] = useState<TransferMode | null>(null);
+  const [rememberFinanceAccount, setRememberFinanceAccount] = useState(() => Boolean(getRememberedFinanceAccountId()));
   const {
     fieldCashEmployees,
     canViewAllFieldCash,
@@ -38,8 +58,13 @@ export default function CooperativeFieldCashManagement() {
     reportFilters,
     setReportFilters,
     isReportLoading,
+    cashDetailDate,
+    setCashDetailDate,
+    cashDetailEmployees,
+    isCashDetailLoading,
+    cashDetailError,
     recordDropping,
-    recordDeposit,
+    closeBook,
     isMutating,
   } = useCooperativeFieldCash();
   const selectedTransferEmployeeId = Form.useWatch('employee_id', transferForm);
@@ -57,6 +82,16 @@ export default function CooperativeFieldCashManagement() {
   const selectedTransferBalance = selectedTransferEmployee?.field_cash_account_id
     ? balances.get(selectedTransferEmployee.field_cash_account_id)
     : undefined;
+  const cashDetailEmployeesById = useMemo(() => (
+    new Map(cashDetailEmployees.map((employee) => [employee.employee_id, employee]))
+  ), [cashDetailEmployees]);
+  const selectedTransferCashDetail = selectedTransferEmployeeId
+    ? cashDetailEmployeesById.get(selectedTransferEmployeeId)
+    : undefined;
+  const reportDate = useMemo(() => (
+    reportFilters.fromDate ? dayjs(reportFilters.fromDate).tz().startOf('day') : dayjs.tz().startOf('day')
+  ), [reportFilters.fromDate]);
+  const cashDetailDateText = cashDetailDate.format('DD MMMM YYYY');
   const totalCollectorBalance = useMemo(() => (
     fieldCashEmployees.reduce((sum, employee) => (
       sum + Number(employee.field_cash_account_id ? balances.get(employee.field_cash_account_id) || 0 : 0)
@@ -68,17 +103,45 @@ export default function CooperativeFieldCashManagement() {
     )).length
   ), [balances, fieldCashEmployees]);
 
+  const setDailyReportDate = (date: Dayjs, employeeId = reportFilters.employeeId) => {
+    setReportFilters(buildDailyFieldCashReportFilters(date, employeeId));
+  };
+
+  useEffect(() => {
+    if (transferMode !== 'DEPOSIT') return;
+
+    const balance = Number(selectedTransferBalance || 0);
+    transferForm.setFieldsValue({ amount: balance > 0 ? balance : 0 });
+  }, [selectedTransferBalance, transferForm, transferMode]);
+
   const openTransferModal = (mode: TransferMode, employee?: Employee) => {
     const balance = employee?.field_cash_account_id
       ? Number(balances.get(employee.field_cash_account_id) || 0)
       : undefined;
+    const rememberedFinanceAccountId = getRememberedFinanceAccountId();
+    const rememberedAccountIsAvailable = Boolean(
+      rememberedFinanceAccountId &&
+      (
+        financeAccounts.length === 0 ||
+        financeAccounts.some((account) => account.id === rememberedFinanceAccountId)
+      )
+    );
+
+    if (rememberedFinanceAccountId && financeAccounts.length > 0 && !rememberedAccountIsAvailable) {
+      saveRememberedFinanceAccountId();
+    }
 
     transferForm.resetFields();
     transferForm.setFieldsValue({
       employee_id: employee?.id,
+      finance_cash_account_id: rememberedAccountIsAvailable ? rememberedFinanceAccountId : undefined,
       amount: mode === 'DEPOSIT' && balance && balance > 0 ? balance : undefined,
       transfer_date: dayjs(),
     });
+    if (mode === 'DEPOSIT') {
+      setCashDetailDate(reportDate);
+    }
+    setRememberFinanceAccount(rememberedAccountIsAvailable);
     setTransferMode(mode);
   };
 
@@ -106,12 +169,23 @@ export default function CooperativeFieldCashManagement() {
     };
 
     try {
+      if (rememberFinanceAccount) {
+        saveRememberedFinanceAccountId(values.finance_cash_account_id);
+      }
+
       if (transferMode === 'DROPPING') {
         await recordDropping(input);
         message.success('Dropping kas ke kolektor berhasil dicatat.');
       } else {
-        await recordDeposit(input);
-        message.success('Setoran kolektor ke kas/bank berhasil dicatat.');
+        await closeBook({
+          employee_id: input.employee_id,
+          cash_account_id: input.cash_account_id,
+          finance_cash_account_id: input.finance_cash_account_id,
+          transfer_date: input.transfer_date,
+          notes: input.notes,
+        });
+        setDailyReportDate((values.transfer_date ?? dayjs()).tz().add(1, 'day').startOf('day'));
+        message.success('Tutup buku setoran kolektor selesai. Saldo siap 0 untuk besok pagi.');
       }
       closeTransferModal();
     } catch (error) {
@@ -158,19 +232,32 @@ export default function CooperativeFieldCashManagement() {
         </div>
       </div>
 
-      {canViewAllFieldCash && (
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,320px)]">
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder="Semua kolektor"
-            value={reportFilters.employeeId}
-            onChange={(employeeId) => setReportFilters({ ...reportFilters, employeeId })}
-            options={employeeOptions}
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(180px,260px)_minmax(220px,320px)]">
+        <div>
+          <p className="mb-2 text-sm font-medium text-gray-700">Tanggal Rekap</p>
+          <DatePicker
+            className="w-full"
+            value={reportDate}
+            format="DD MMMM YYYY"
+            onChange={(value) => setDailyReportDate(value?.startOf('day') ?? dayjs.tz().startOf('day'))}
           />
         </div>
-      )}
+        {canViewAllFieldCash && (
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700">Kolektor</p>
+            <Select
+              className="w-full"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Semua kolektor"
+              value={reportFilters.employeeId}
+              onChange={(employeeId) => setDailyReportDate(reportDate, employeeId)}
+              options={employeeOptions}
+            />
+          </div>
+        )}
+      </div>
 
       <CooperativeFieldCashReportTable
         rows={reportRows}
@@ -185,6 +272,7 @@ export default function CooperativeFieldCashManagement() {
         open={Boolean(transferMode)}
         onCancel={closeTransferModal}
         onOk={() => transferForm.submit()}
+        okText={transferMode === 'DEPOSIT' ? 'Tutup Buku' : 'OK'}
         confirmLoading={isMutating}
         destroyOnHidden
         forceRender
@@ -229,6 +317,11 @@ export default function CooperativeFieldCashManagement() {
                 optionFilterProp="label"
                 placeholder="Pilih akun kas/bank"
                 options={financeAccountOptions}
+                onChange={(accountId) => {
+                  if (rememberFinanceAccount) {
+                    saveRememberedFinanceAccountId(accountId);
+                  }
+                }}
               />
             </Form.Item>
             <Form.Item
@@ -239,13 +332,33 @@ export default function CooperativeFieldCashManagement() {
               <DatePicker showTime className="w-full" />
             </Form.Item>
           </div>
+          <Checkbox
+            checked={rememberFinanceAccount}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              const selectedAccountId = transferForm.getFieldValue('finance_cash_account_id');
+
+              setRememberFinanceAccount(checked);
+              saveRememberedFinanceAccountId(checked ? selectedAccountId : undefined);
+            }}
+          >
+            Ingat akun kas/bank
+          </Checkbox>
           <Form.Item
             name="amount"
-            label="Nominal"
-            rules={[{ required: true, type: 'number', min: 1, message: 'Nominal wajib lebih dari 0.' }]}
+            label={transferMode === 'DEPOSIT' ? 'Nominal Tutup Buku' : 'Nominal'}
+            rules={[{
+              required: true,
+              type: 'number',
+              min: 1,
+              message: transferMode === 'DEPOSIT'
+                ? 'Saldo tutup buku wajib lebih dari 0.'
+                : 'Nominal wajib lebih dari 0.',
+            }]}
           >
             <InputNumber<number>
-              min={1}
+              min={transferMode === 'DEPOSIT' ? 0 : 1}
+              disabled={transferMode === 'DEPOSIT'}
               className="w-full"
               formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
@@ -254,6 +367,28 @@ export default function CooperativeFieldCashManagement() {
           <Form.Item name="notes" label="Catatan">
             <TextArea rows={3} />
           </Form.Item>
+          {transferMode === 'DEPOSIT' ? (
+            <div className="space-y-3">
+              <div className="max-w-[260px]">
+                <p className="mb-2 text-sm font-medium text-gray-700">Tanggal Laporan Tunai</p>
+                <DatePicker
+                  className="w-full"
+                  value={cashDetailDate}
+                  format="DD MMMM YYYY"
+                  onChange={(value) => setCashDetailDate(value?.startOf('day') ?? dayjs.tz().startOf('day'))}
+                />
+              </div>
+              <CooperativeFieldCashCashDetailTable
+                compact
+                employees={selectedTransferCashDetail ? [selectedTransferCashDetail] : []}
+                loading={isCashDetailLoading}
+                title="Rincian Laporan Tunai"
+                subtitle={cashDetailDateText}
+                emptyText="Belum ada rincian tunai untuk kolektor dan tanggal ini."
+                error={cashDetailError}
+              />
+            </div>
+          ) : null}
         </Form>
       </Modal>
     </Card>

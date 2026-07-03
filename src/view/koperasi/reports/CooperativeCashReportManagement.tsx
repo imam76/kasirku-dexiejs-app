@@ -8,7 +8,10 @@ import { useCooperativeCashReport } from '@/hooks/useCooperativeCashReport';
 import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 import { useI18n } from '@/hooks/useI18n';
 import dayjs from '@/lib/dayjs';
-import type { CooperativeCashReportEmployee } from '@/services/cooperativeCashReportService';
+import type {
+  CooperativeCashReportEmployee,
+  CooperativeCashReportRowKey,
+} from '@/services/cooperativeCashReportService';
 import { exportCsv, exportHtmlPdf, saveExportFile, type ExportRows, type ExportTarget } from '@/utils/export';
 import CooperativeCashReport from './CooperativeCashReport';
 
@@ -30,6 +33,13 @@ const escapeHtml = (value: string) =>
 const employeeLabel = (
   employee: Pick<CooperativeCashReportEmployee, 'employee_name' | 'employee_code'>,
 ) => `${employee.employee_name} (${employee.employee_code || '-'})`;
+
+const cashReportRowLabelKeys = {
+  STORTING: 'cooperative.cashReport.storting',
+  DROP: 'cooperative.cashReport.drop',
+  TABUNGAN: 'cooperative.cashReport.saving',
+  IPTW: 'cooperative.cashReport.iptw',
+} as const satisfies Record<CooperativeCashReportRowKey, string>;
 
 export default function CooperativeCashReportManagement() {
   const { message } = App.useApp();
@@ -82,7 +92,7 @@ export default function CooperativeCashReportManagement() {
       ]);
       employee.rows.forEach((row) => {
         rows.push([
-          t(`cooperative.cashReport.${row.key === 'STORTING' ? 'storting' : row.key === 'DROPING' ? 'dropping' : 'saving'}`),
+          t(cashReportRowLabelKeys[row.key]),
           row.incoming_amount,
           row.outgoing_amount,
         ]);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select } from 'antd';
 import { Banknote, Plus } from 'lucide-react';
+import { useAuth } from '@/auth/useAuth';
 import dayjs from '@/lib/dayjs';
 import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
 import { useCooperativeLoanRatePreference } from '@/hooks/useCooperativeLoanRatePreference';
@@ -24,6 +25,8 @@ import { cooperativeLoanStatusOptions } from './loanOptions';
 export default function CooperativeLoanManagement() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
+  const { can } = useAuth();
+  const canDisburseLoan = can('COOPERATIVE_LOAN_DISBURSE');
   const [form] = Form.useForm<CooperativeLoanFormValues>();
   const [disbursementForm] = Form.useForm<CooperativeLoanDisbursementFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,6 +42,7 @@ export default function CooperativeLoanManagement() {
     disbursingLoan,
     setDisbursingLoan,
     paymentAccounts,
+    financeAccounts,
     fieldCashEmployees,
     employeeCollectionSchedules,
     fieldCashAccountIds,
@@ -51,6 +55,7 @@ export default function CooperativeLoanManagement() {
     approveLoan,
     rejectLoan,
     disburseLoan,
+    disburseLoanViaFieldCash,
     isMutating,
   } = useCooperativeLoans();
 
@@ -90,8 +95,18 @@ export default function CooperativeLoanManagement() {
       schedule.area_id === member?.area_id
     ));
     const disbursementDate = getNextCollectionDate(schedules, dayjs().tz(), true);
+    const responsibleAccountFields = getResponsibleFieldCashAccountFields(member, fieldCashEmployees, paymentAccounts);
+    const responsibleCashAccountId = responsibleAccountFields.cash_account_id;
+    const netDisbursementAmount = loan.net_disbursement_amount ?? loan.principal_amount;
+    const currentFieldCashBalance = responsibleCashAccountId
+      ? Number(fieldCashBalances.get(responsibleCashAccountId) || 0)
+      : 0;
     if (!member?.officer_id || !member.area_id) {
       message.error(t('cooperative.loans.collectionScheduleMissing'));
+      return;
+    }
+    if (!responsibleCashAccountId) {
+      message.error(t('cooperative.loans.fieldCashAccountMissing'));
       return;
     }
     const firstDueDate = disbursementDate
@@ -108,8 +123,10 @@ export default function CooperativeLoanManagement() {
       first_due_date: firstDueDate,
       payment_method: 'TUNAI',
       remember_cash_account: true,
+      finance_cash_account_id: financeAccounts[0]?.id,
+      dropping_amount: Math.max(0, netDisbursementAmount - currentFieldCashBalance),
       ...getRememberedCashAccountFields(paymentAccounts),
-      ...getResponsibleFieldCashAccountFields(member, fieldCashEmployees, paymentAccounts),
+      ...responsibleAccountFields,
     });
     setDisbursingLoan(loan);
   };
@@ -219,16 +236,31 @@ export default function CooperativeLoanManagement() {
     if (!disbursingLoan) return;
 
     try {
-      const result = await disburseLoan({
-        loan_id: disbursingLoan.id,
-        disbursement_date: values.disbursement_date?.toISOString(),
-        first_due_date: values.first_due_date?.toISOString(),
-        historical_entry: values.disbursement_date?.isBefore(dayjs().tz(), 'day'),
-        payment_method: values.payment_method,
-        cash_account_id: values.cash_account_id,
-        payment_channel: values.payment_channel,
-        notes: values.notes,
-      });
+      const isFieldCashDisbursement = Boolean(
+        values.cash_account_id && fieldCashAccountIds.has(values.cash_account_id),
+      );
+      const result = isFieldCashDisbursement
+        ? await disburseLoanViaFieldCash({
+            loan_id: disbursingLoan.id,
+            disbursement_date: values.disbursement_date?.toISOString(),
+            first_due_date: values.first_due_date?.toISOString(),
+            historical_entry: values.disbursement_date?.isBefore(dayjs().tz(), 'day'),
+            field_cash_account_id: values.cash_account_id,
+            finance_cash_account_id: values.finance_cash_account_id,
+            dropping_amount: Number(values.dropping_amount || 0),
+            payment_channel: values.payment_channel,
+            notes: values.notes,
+          })
+        : await disburseLoan({
+            loan_id: disbursingLoan.id,
+            disbursement_date: values.disbursement_date?.toISOString(),
+            first_due_date: values.first_due_date?.toISOString(),
+            historical_entry: values.disbursement_date?.isBefore(dayjs().tz(), 'day'),
+            payment_method: values.payment_method,
+            cash_account_id: values.cash_account_id,
+            payment_channel: values.payment_channel,
+            notes: values.notes,
+          });
       if (values.remember_cash_account) {
         rememberCashAccount({
           cash_account_id: result.loan.cash_account_id ?? values.cash_account_id,
@@ -284,6 +316,7 @@ export default function CooperativeLoanManagement() {
         onApprove={handleApprove}
         onReject={handleReject}
         onDisburse={openDisbursementModal}
+        canDisburse={canDisburseLoan}
         loading={isMutating}
       />
 
@@ -301,6 +334,7 @@ export default function CooperativeLoanManagement() {
         open={Boolean(disbursingLoan)}
         isSubmitting={isMutating}
         paymentAccounts={paymentAccounts}
+        financeAccounts={financeAccounts}
         fieldCashAccountIds={fieldCashAccountIds}
         fieldCashBalances={fieldCashBalances}
         collectionSchedules={employeeCollectionSchedules.filter((schedule) => (

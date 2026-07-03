@@ -90,7 +90,7 @@ const money = (value: number) => `Rp ${formatCurrency(value || 0)}`;
 
 const rowLabelKeys = {
   STORTING: 'cooperative.cashReport.storting',
-  DROPING: 'cooperative.cashReport.dropping',
+  DROP: 'cooperative.cashReport.drop',
   TABUNGAN: 'cooperative.cashReport.saving',
   IPTW: 'cooperative.cashReport.iptw',
 } as const satisfies Record<CooperativeCashReportRowKey, string>;

@@ -1933,4 +1933,39 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       await table.bulkPut(sessionsToMark);
     }
   });
+
+  this.version(74).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingPermissions = await rolePermissionTable.toArray();
+    const existingIds = new Set(existingPermissions.map((permission) => permission.id));
+    const disbursePermissionCode: RolePermission['permission_code'] = 'COOPERATIVE_LOAN_DISBURSE';
+
+    const migratedPermissions = existingPermissions
+      .filter((permission) => permission.permission_code === 'FINANCE_ACCESS')
+      .flatMap((financePermission) => {
+        const id = `${financePermission.role_id}:${disbursePermissionCode}`;
+        if (existingIds.has(id)) return [];
+        existingIds.add(id);
+
+        return [{
+          id,
+          role_id: financePermission.role_id,
+          permission_code: disbursePermissionCode,
+          created_at: now,
+          updated_at: now,
+          sync_status: 'pending' as const,
+        }];
+      });
+
+    const systemPermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingIds.has(permission.id));
+
+    if (migratedPermissions.length > 0 || systemPermissions.length > 0) {
+      await rolePermissionTable.bulkPut([
+        ...migratedPermissions,
+        ...systemPermissions,
+      ]);
+    }
+  });
 }

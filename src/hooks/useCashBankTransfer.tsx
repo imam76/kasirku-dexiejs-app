@@ -11,6 +11,9 @@ import { useI18n } from '@/hooks/useI18n';
 
 const invalidateCashBankTransferQueries = (queryClient: QueryClient) => {
   queryClient.invalidateQueries({ queryKey: ['cooperativeFieldCashReport'] });
+  queryClient.invalidateQueries({ queryKey: ['cooperativeFieldCashCashDetail'] });
+  queryClient.invalidateQueries({ queryKey: ['cooperativeCashReport'] });
+  queryClient.invalidateQueries({ queryKey: ['cooperativeDailyFieldCashReport'] });
   queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
   queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
   queryClient.invalidateQueries({ queryKey: ['journalEntries'] });

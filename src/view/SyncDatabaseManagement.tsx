@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { App, Alert, Button, Empty, Input, Segmented, Table, Tag, Tooltip } from 'antd';
 import type { TableProps } from 'antd';
 import {
@@ -81,7 +82,21 @@ const getHealthTagColor = (health?: PostgresHealth) => {
 const panelClassName = 'rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#141829]';
 const statCardClassName = 'rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-colors dark:border-slate-800 dark:bg-[#141829]';
 
+const SYNC_REFRESH_QUERY_KEYS = [
+  'cooperativeFieldCashReport',
+  'cooperativeFieldCashCashDetail',
+  'cooperativeCashReport',
+  'cooperativeDailyFieldCashReport',
+  'financeTransactions',
+  'financeBalance',
+  'journalEntries',
+  'trialBalance',
+  'incomeStatement',
+  'balanceSheet',
+];
+
 export default function SyncDatabaseManagement() {
+  const queryClient = useQueryClient();
   const { t } = useI18n();
   const { message } = App.useApp();
   const syncStatus = useSyncStatus();
@@ -113,6 +128,9 @@ export default function SyncDatabaseManagement() {
     setIsSyncingNow(true);
     try {
       const result = await runDatabaseSyncNow();
+      SYNC_REFRESH_QUERY_KEYS.forEach((queryKey) => {
+        queryClient.invalidateQueries({ queryKey: [queryKey] });
+      });
       setHealth(result.postgresHealth);
       message.success(result.skipped ? t('syncDb.uploadOnlyStarted') : t('syncDb.syncStarted'));
     } catch (error) {
