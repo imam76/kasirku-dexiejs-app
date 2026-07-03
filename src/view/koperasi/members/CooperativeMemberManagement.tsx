@@ -85,7 +85,7 @@ export default function CooperativeMemberManagement() {
     address: values.address,
     area_id: values.area_id,
     officer_id: values.officer_id,
-    join_date: values.join_date?.toISOString() ?? '',
+    join_date: values.join_date?.format('YYYY-MM-DD') ?? '',
     status: values.status,
     notes: values.notes,
   });

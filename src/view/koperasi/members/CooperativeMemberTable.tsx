@@ -4,6 +4,7 @@ import { Archive, Edit2, Eye, RotateCcw } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeMember, CooperativeMemberStatus } from '@/types';
+import { formatDateOnly } from '@/utils/formatters';
 import { cooperativeMemberStatusOptions } from './memberOptions';
 
 const { Text } = Typography;
@@ -80,7 +81,7 @@ export default function CooperativeMemberTable({
       title: t('cooperative.members.table.joinDate'),
       dataIndex: 'join_date',
       key: 'join_date',
-      render: (joinDate: string) => joinDate.slice(0, 10),
+      render: (joinDate: string) => formatDateOnly(joinDate),
     },
     {
       title: t('cooperative.members.table.status'),

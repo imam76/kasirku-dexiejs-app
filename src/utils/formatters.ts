@@ -5,6 +5,10 @@ export const formatDate = (dateString: string): string => {
   return dayjs(dateString).tz().format('D MMMM YYYY HH:mm');
 };
 
+export const formatDateOnly = (dateString: string): string => {
+  return dayjs(dateString).tz().format('D MMMM YYYY');
+};
+
 export const formatCurrency = (value: number): string => {
   return value.toLocaleString('id-ID');
 };

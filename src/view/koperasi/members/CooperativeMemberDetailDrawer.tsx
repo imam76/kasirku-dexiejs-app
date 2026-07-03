@@ -1,6 +1,7 @@
 import { Descriptions, Drawer, Tag, Typography } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeMember, CooperativeMemberStatus } from '@/types';
+import { formatDateOnly } from '@/utils/formatters';
 import { cooperativeMemberStatusOptions } from './memberOptions';
 
 const { Paragraph } = Typography;
@@ -63,7 +64,7 @@ export default function CooperativeMemberDetailDrawer({
               {member.phone || '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.members.form.joinDate')}>
-              {member.join_date.slice(0, 10)}
+              {formatDateOnly(member.join_date)}
             </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.members.detail.createdBy')}>
               {member.created_by_name || '-'}
