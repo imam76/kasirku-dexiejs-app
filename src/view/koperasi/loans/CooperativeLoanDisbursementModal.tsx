@@ -1,4 +1,4 @@
-import { Alert, Checkbox, DatePicker, Descriptions, Form, Input, Modal, Select, Tag, Typography } from 'antd';
+import { Alert, Checkbox, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select, Tag, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useEffect, useMemo } from 'react';
@@ -27,6 +27,8 @@ export interface CooperativeLoanDisbursementFormValues {
   first_due_date: Dayjs;
   payment_method: PaymentMethod;
   cash_account_id?: string;
+  finance_cash_account_id?: string;
+  dropping_amount: number;
   remember_cash_account: boolean;
   payment_channel?: string;
   notes?: string;
@@ -38,6 +40,7 @@ interface CooperativeLoanDisbursementModalProps {
   open: boolean;
   isSubmitting: boolean;
   paymentAccounts: ChartOfAccount[];
+  financeAccounts: ChartOfAccount[];
   fieldCashAccountIds: Set<string>;
   fieldCashBalances: Map<string, number>;
   collectionSchedules: EmployeeCollectionSchedule[];
@@ -51,6 +54,7 @@ export default function CooperativeLoanDisbursementModal({
   open,
   isSubmitting,
   paymentAccounts,
+  financeAccounts,
   fieldCashAccountIds,
   fieldCashBalances,
   collectionSchedules,
@@ -59,6 +63,7 @@ export default function CooperativeLoanDisbursementModal({
 }: CooperativeLoanDisbursementModalProps) {
   const { t } = useI18n();
   const selectedCashAccountId = Form.useWatch('cash_account_id', form);
+  const selectedDroppingAmount = Number(Form.useWatch('dropping_amount', form) || 0);
   const selectedDisbursementDate = Form.useWatch('disbursement_date', form);
   const historicalEntry = Boolean(
     selectedDisbursementDate?.isBefore(dayjs().tz(), 'day'),
@@ -67,6 +72,10 @@ export default function CooperativeLoanDisbursementModal({
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [paymentAccounts]);
+  const financeAccountOptions = useMemo(() => financeAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.code} - ${account.name}`,
+  })), [financeAccounts]);
   const selectedAccount = useMemo(() => (
     paymentAccounts.find((account) => account.id === selectedCashAccountId)
   ), [paymentAccounts, selectedCashAccountId]);
@@ -74,6 +83,10 @@ export default function CooperativeLoanDisbursementModal({
   const netDisbursementAmount = loan
     ? loan.net_disbursement_amount ?? loan.principal_amount
     : 0;
+  const selectedFieldCashBalance = selectedCashAccountId
+    ? Number(fieldCashBalances.get(selectedCashAccountId) || 0)
+    : 0;
+  const estimatedFieldCashBalance = selectedFieldCashBalance + selectedDroppingAmount - netDisbursementAmount;
   const scheduleText = useMemo(() => Array.from(new Set(
     collectionSchedules
       .filter((schedule) => schedule.is_active)
@@ -169,9 +182,9 @@ export default function CooperativeLoanDisbursementModal({
             rules={[{ required: true, message: t('salesDocuments.validation.required', { field: t('checkout.method') }) }]}
           >
             <Select
+              disabled
               options={[
                 { value: 'TUNAI', label: t('payment.cash') },
-                { value: 'NON_TUNAI', label: t('payment.nonCash') },
               ]}
               data-testid="koperasi-loan-disbursement-payment-method-select"
             />
@@ -180,6 +193,7 @@ export default function CooperativeLoanDisbursementModal({
             <Form.Item name="cash_account_id" label={t('finance.cashAccount')} className="mb-2">
               <Select
                 allowClear
+                disabled
                 showSearch
                 optionFilterProp="label"
                 placeholder={t('finance.cashAccountPlaceholder')}
@@ -195,14 +209,69 @@ export default function CooperativeLoanDisbursementModal({
           </Form.Item>
         </div>
 
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Form.Item
+            noStyle
+            shouldUpdate={(previous, current) => previous.dropping_amount !== current.dropping_amount}
+          >
+            {({ getFieldValue }) => {
+              const droppingAmount = Number(getFieldValue('dropping_amount') || 0);
+
+              return (
+                <Form.Item
+                  name="finance_cash_account_id"
+                  label={t('cooperative.loans.form.financeCashAccount')}
+                  rules={[
+                    {
+                      validator: async (_rule, value) => {
+                        if (droppingAmount > 0 && !value) {
+                          throw new Error(t('cooperative.loans.validation.financeCashAccountRequired'));
+                        }
+                      },
+                    },
+                  ]}
+                >
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder={t('cooperative.loans.form.financeCashAccountPlaceholder')}
+                    options={financeAccountOptions}
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+          <Form.Item
+            name="dropping_amount"
+            label={t('cooperative.loans.form.droppingAmount')}
+            rules={[{ required: true, type: 'number', min: 0, message: t('cooperative.loans.validation.droppingAmountMin') }]}
+          >
+            <InputNumber<number>
+              min={0}
+              className="w-full"
+              formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={(value) => Number(value?.replace(/Rp\s?|(\.*)/g, '') || 0)}
+            />
+          </Form.Item>
+        </div>
+
         <Form.Item name="notes" label={t('cooperative.loans.form.disbursementNotes')}>
           <TextArea rows={3} placeholder={t('cooperative.loans.form.disbursementNotesPlaceholder')} />
         </Form.Item>
 
         {selectedAccount && fieldCashAccountIds.has(selectedAccount.id) && (
-          <Tag color="green" className="mb-4">
-            Kas Petugas {selectedAccount.code} - saldo Rp {formatCurrency(Number(fieldCashBalances.get(selectedAccount.id) || 0))}
-          </Tag>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Tag color="green">
+              {t('cooperative.loans.selectedFieldCash', { account: selectedAccount.code })}
+            </Tag>
+            <Tag>
+              {t('cooperative.loans.fieldCashBalance', { amount: formatCurrency(selectedFieldCashBalance) })}
+            </Tag>
+            <Tag color={estimatedFieldCashBalance >= -0.01 ? 'blue' : 'red'}>
+              {t('cooperative.loans.estimatedFieldCashBalance', { amount: formatCurrency(estimatedFieldCashBalance) })}
+            </Tag>
+          </div>
         )}
 
         {loan && (
@@ -224,6 +293,9 @@ export default function CooperativeLoanDisbursementModal({
               )}
               <Descriptions.Item label={t('cooperative.loans.netDisbursement')}>
                 Rp {formatCurrency(netDisbursementAmount)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('cooperative.loans.preview.droppingAmount')}>
+                Rp {formatCurrency(selectedDroppingAmount)}
               </Descriptions.Item>
             </Descriptions>
           </div>

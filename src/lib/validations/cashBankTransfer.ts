@@ -13,6 +13,7 @@ export const cashBankTransferSchema = z.object({
   amount: z.number({ message: 'Jumlah transfer wajib diisi.' }).min(1, 'Jumlah transfer harus lebih dari 0.'),
   transfer_date: optionalTrimmedString,
   payment_channel: optionalTrimmedString,
+  reference_id: optionalTrimmedString,
   notes: optionalTrimmedString,
 }).refine((value) => value.from_cash_account_id !== value.to_cash_account_id, {
   path: ['to_cash_account_id'],

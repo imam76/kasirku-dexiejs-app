@@ -5,6 +5,7 @@ import { cashBankTransferSchema } from '@/lib/validations/cashBankTransfer';
 import { postCashBankTransferJournal } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import type {
+  AuthUser,
   ChartOfAccount,
   CooperativeFieldCashMovementKind,
   CooperativeFieldCashSession,
@@ -18,6 +19,7 @@ export interface RecordCashBankTransferInput {
   amount: number;
   transfer_date?: string;
   payment_channel?: string;
+  reference_id?: string;
   notes?: string;
 }
 
@@ -33,6 +35,8 @@ export interface VoidCashBankTransferResult {
   outReversal: FinanceTransaction;
   inReversal: FinanceTransaction;
 }
+
+type CashBankTransferActor = AuthUser | null | undefined;
 
 const assertCashBankAccount = (account: ChartOfAccount | undefined, label: string) => {
   if (!account) {
@@ -130,21 +134,115 @@ const buildFieldCashFinanceFields = (
     : {}),
 });
 
-export const recordCashBankTransfer = async (
+export const recordCashBankTransferInCurrentTransaction = async (
   input: RecordCashBankTransferInput,
+  currentUser: CashBankTransferActor,
 ): Promise<RecordCashBankTransferResult> => {
-  const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
-
   const parsedInput = cashBankTransferSchema.parse(input);
   const now = new Date().toISOString();
   const transferDate = parsedInput.transfer_date ?? now;
   const transferGroupId = crypto.randomUUID();
   const outTransactionId = crypto.randomUUID();
   const inTransactionId = crypto.randomUUID();
-  let outTransaction: FinanceTransaction | undefined;
-  let inTransaction: FinanceTransaction | undefined;
 
+  const [fromAccountRecord, toAccountRecord] = await Promise.all([
+    db.chartOfAccounts.get(parsedInput.from_cash_account_id),
+    db.chartOfAccounts.get(parsedInput.to_cash_account_id),
+  ]);
+  const fromAccount = assertCashBankAccount(fromAccountRecord, 'Akun sumber');
+  const toAccount = assertCashBankAccount(toAccountRecord, 'Akun tujuan');
+
+  if (fromAccount.id === toAccount.id) {
+    throw new Error('Akun tujuan harus berbeda dari akun sumber.');
+  }
+
+  const [fromFieldEmployee, toFieldEmployee] = await Promise.all([
+    getActiveFieldCashEmployeeByCashAccount(fromAccount.id),
+    getActiveFieldCashEmployeeByCashAccount(toAccount.id),
+  ]);
+  const [fromFieldSession, toFieldSession] = await Promise.all([
+    fromFieldEmployee ? getOpenFieldCashSessionForEmployee(fromFieldEmployee, fromAccount.id) : undefined,
+    toFieldEmployee ? getOpenFieldCashSessionForEmployee(toFieldEmployee, toAccount.id) : undefined,
+  ]);
+
+  if (fromFieldEmployee) {
+    await assertFieldCashBalanceForTransferOut(fromFieldEmployee, fromAccount.id, parsedInput.amount);
+  }
+
+  const description = createTransferDescription(fromAccount, toAccount, parsedInput.notes);
+  const outTransaction = withPendingFinanceTransactionSync({
+    id: outTransactionId,
+    type: 'EXPENSE',
+    category: FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
+    amount: parsedInput.amount,
+    description,
+    created_at: transferDate,
+    reference_id: parsedInput.reference_id,
+    payment_channel: parsedInput.payment_channel,
+    cash_account_id: fromAccount.id,
+    cash_account_code: fromAccount.code,
+    cash_account_name: fromAccount.name,
+    account_id: fromAccount.id,
+    account_code: fromAccount.code,
+    account_name: fromAccount.name,
+    account_type: fromAccount.type,
+    transfer_group_id: transferGroupId,
+    transfer_direction: 'OUT',
+    ...(fromFieldEmployee
+      ? buildFieldCashFinanceFields(fromFieldEmployee, fromFieldSession, 'DEPOSIT_TO_FINANCE')
+      : {}),
+  }, currentUser, transferDate);
+  const inTransaction = withPendingFinanceTransactionSync({
+    id: inTransactionId,
+    type: 'INCOME',
+    category: FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
+    amount: parsedInput.amount,
+    description,
+    created_at: transferDate,
+    reference_id: parsedInput.reference_id,
+    payment_channel: parsedInput.payment_channel,
+    cash_account_id: toAccount.id,
+    cash_account_code: toAccount.code,
+    cash_account_name: toAccount.name,
+    account_id: toAccount.id,
+    account_code: toAccount.code,
+    account_name: toAccount.name,
+    account_type: toAccount.type,
+    transfer_group_id: transferGroupId,
+    transfer_direction: 'IN',
+    ...(toFieldEmployee
+      ? buildFieldCashFinanceFields(toFieldEmployee, toFieldSession, 'DROPPING_FROM_FINANCE')
+      : {}),
+  }, currentUser, transferDate);
+
+  await db.financeTransactions.bulkAdd([outTransaction, inTransaction]);
+  await postCashBankTransferJournal({
+    transferGroupId,
+    transferDate,
+    amount: parsedInput.amount,
+    fromAccount,
+    toAccount,
+    description,
+    actor: currentUser,
+  });
+  await writeActivityLog({
+    user: currentUser,
+    action: 'CASH_BANK_TRANSFER_RECORDED',
+    entity: 'financeTransactions',
+    entity_id: transferGroupId,
+    description: `${currentUser?.name ?? 'User'} mencatat transfer kas/bank sebesar ${parsedInput.amount} dari ${fromAccount.code} ke ${toAccount.code}.`,
+  });
+
+  return { transferGroupId, outTransaction, inTransaction };
+};
+
+export const recordCashBankTransfer = async (
+  input: RecordCashBankTransferInput,
+): Promise<RecordCashBankTransferResult> => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+
+  let result: RecordCashBankTransferResult | undefined;
   await db.transaction('rw', [
     db.financeTransactions,
     db.chartOfAccounts,
@@ -156,100 +254,16 @@ export const recordCashBankTransfer = async (
     db.journalEntryLines,
     db.activityLogs,
   ], async () => {
-    const [fromAccountRecord, toAccountRecord] = await Promise.all([
-      db.chartOfAccounts.get(parsedInput.from_cash_account_id),
-      db.chartOfAccounts.get(parsedInput.to_cash_account_id),
-    ]);
-    const fromAccount = assertCashBankAccount(fromAccountRecord, 'Akun sumber');
-    const toAccount = assertCashBankAccount(toAccountRecord, 'Akun tujuan');
-
-    if (fromAccount.id === toAccount.id) {
-      throw new Error('Akun tujuan harus berbeda dari akun sumber.');
-    }
-
-    const [fromFieldEmployee, toFieldEmployee] = await Promise.all([
-      getActiveFieldCashEmployeeByCashAccount(fromAccount.id),
-      getActiveFieldCashEmployeeByCashAccount(toAccount.id),
-    ]);
-    const [fromFieldSession, toFieldSession] = await Promise.all([
-      fromFieldEmployee ? getOpenFieldCashSessionForEmployee(fromFieldEmployee, fromAccount.id) : undefined,
-      toFieldEmployee ? getOpenFieldCashSessionForEmployee(toFieldEmployee, toAccount.id) : undefined,
-    ]);
-
-    if (fromFieldEmployee) {
-      await assertFieldCashBalanceForTransferOut(fromFieldEmployee, fromAccount.id, parsedInput.amount);
-    }
-
-    const description = createTransferDescription(fromAccount, toAccount, parsedInput.notes);
-    outTransaction = withPendingFinanceTransactionSync({
-      id: outTransactionId,
-      type: 'EXPENSE',
-      category: FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
-      amount: parsedInput.amount,
-      description,
-      created_at: transferDate,
-      payment_channel: parsedInput.payment_channel,
-      cash_account_id: fromAccount.id,
-      cash_account_code: fromAccount.code,
-      cash_account_name: fromAccount.name,
-      account_id: fromAccount.id,
-      account_code: fromAccount.code,
-      account_name: fromAccount.name,
-      account_type: fromAccount.type,
-      transfer_group_id: transferGroupId,
-      transfer_direction: 'OUT',
-      ...(fromFieldEmployee
-        ? buildFieldCashFinanceFields(fromFieldEmployee, fromFieldSession, 'DEPOSIT_TO_FINANCE')
-        : {}),
-    }, currentUser, transferDate);
-    inTransaction = withPendingFinanceTransactionSync({
-      id: inTransactionId,
-      type: 'INCOME',
-      category: FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
-      amount: parsedInput.amount,
-      description,
-      created_at: transferDate,
-      payment_channel: parsedInput.payment_channel,
-      cash_account_id: toAccount.id,
-      cash_account_code: toAccount.code,
-      cash_account_name: toAccount.name,
-      account_id: toAccount.id,
-      account_code: toAccount.code,
-      account_name: toAccount.name,
-      account_type: toAccount.type,
-      transfer_group_id: transferGroupId,
-      transfer_direction: 'IN',
-      ...(toFieldEmployee
-        ? buildFieldCashFinanceFields(toFieldEmployee, toFieldSession, 'DROPPING_FROM_FINANCE')
-        : {}),
-    }, currentUser, transferDate);
-
-    await db.financeTransactions.bulkAdd([outTransaction, inTransaction]);
-    await postCashBankTransferJournal({
-      transferGroupId,
-      transferDate,
-      amount: parsedInput.amount,
-      fromAccount,
-      toAccount,
-      description,
-      actor: currentUser,
-    });
-    await writeActivityLog({
-      user: currentUser,
-      action: 'CASH_BANK_TRANSFER_RECORDED',
-      entity: 'financeTransactions',
-      entity_id: transferGroupId,
-      description: `${currentUser?.name ?? 'User'} mencatat transfer kas/bank sebesar ${parsedInput.amount} dari ${fromAccount.code} ke ${toAccount.code}.`,
-    });
+    result = await recordCashBankTransferInCurrentTransaction(input, currentUser);
   });
 
-  if (!outTransaction || !inTransaction) {
+  if (!result) {
     throw new Error('Transfer kas/bank gagal dicatat.');
   }
 
-  await enqueueFinanceTransactionsSync([outTransaction, inTransaction], 'create');
+  await enqueueFinanceTransactionsSync([result.outTransaction, result.inTransaction], 'create');
 
-  return { transferGroupId, outTransaction, inTransaction };
+  return result;
 };
 
 export const voidCashBankTransfer = async (

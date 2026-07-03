@@ -5,7 +5,13 @@ import {
   isTauriRuntime,
   type RemoteFinanceTransactionDto,
 } from '@/services/postgresAdapter';
-import type { AccountType, FinanceTransaction, FinanceTransactionType, PaymentMethod } from '@/types';
+import type {
+  AccountType,
+  CooperativeFieldCashMovementKind,
+  FinanceTransaction,
+  FinanceTransactionType,
+  PaymentMethod,
+} from '@/types';
 
 export interface FinanceTransactionReadSyncResult {
   fetched: number;
@@ -27,6 +33,15 @@ const VALID_FINANCE_TRANSACTION_TYPES: FinanceTransactionType[] = ['INCOME', 'EX
 const VALID_PAYMENT_METHODS: PaymentMethod[] = ['TUNAI', 'NON_TUNAI'];
 const VALID_ACCOUNT_TYPES: AccountType[] = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'CONTRA_REVENUE', 'EXPENSE'];
 const VALID_TRANSFER_DIRECTIONS: Array<NonNullable<FinanceTransaction['transfer_direction']>> = ['OUT', 'IN'];
+const VALID_FIELD_CASH_MOVEMENT_KINDS: CooperativeFieldCashMovementKind[] = [
+  'DROPPING_FROM_FINANCE',
+  'STORTING_LOAN_PAYMENT',
+  'STORTING_SAVING_DEPOSIT',
+  'LOAN_DISBURSEMENT',
+  'SAVING_WITHDRAWAL',
+  'IPTW_PAYOUT',
+  'DEPOSIT_TO_FINANCE',
+];
 
 let isRefreshingFinanceTransactionsFromPostgres = false;
 
@@ -52,6 +67,13 @@ const isTransferDirection = (
 ): direction is NonNullable<FinanceTransaction['transfer_direction']> => (
   Boolean(direction) &&
   VALID_TRANSFER_DIRECTIONS.includes(direction as NonNullable<FinanceTransaction['transfer_direction']>)
+);
+
+const isFieldCashMovementKind = (
+  kind: string | null | undefined,
+): kind is CooperativeFieldCashMovementKind => (
+  Boolean(kind) &&
+  VALID_FIELD_CASH_MOVEMENT_KINDS.includes(kind as CooperativeFieldCashMovementKind)
 );
 
 const toPositiveVersion = (version: number | null | undefined) => (
@@ -83,6 +105,13 @@ const mapRemoteFinanceTransactionToLocal = (
     ? remoteTransaction.transfer_direction
     : undefined,
   reversal_of_transfer_group_id: optionalString(remoteTransaction.reversal_of_transfer_group_id),
+  field_cash_session_id: optionalString(remoteTransaction.field_cash_session_id),
+  field_cash_session_number: optionalString(remoteTransaction.field_cash_session_number),
+  field_employee_id: optionalString(remoteTransaction.field_employee_id),
+  field_employee_name: optionalString(remoteTransaction.field_employee_name),
+  field_cash_movement_kind: isFieldCashMovementKind(remoteTransaction.field_cash_movement_kind)
+    ? remoteTransaction.field_cash_movement_kind
+    : undefined,
   version: toPositiveVersion(remoteTransaction.version),
   created_by: optionalString(remoteTransaction.created_by),
   created_by_name: optionalString(remoteTransaction.created_by_name),

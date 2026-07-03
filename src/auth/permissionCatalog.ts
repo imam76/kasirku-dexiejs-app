@@ -330,6 +330,14 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'COOPERATIVE_LOAN_DISBURSE',
+    label: 'Cairkan Pinjaman Koperasi',
+    description: 'Mencairkan pinjaman approved dan mencatat dropping kas ke PDL bila diperlukan.',
+    group: 'Koperasi',
+    moduleCodes: ['KOPERASI_PINJAMAN', 'CASH_FLOW'],
+    isSensitive: true,
+  },
+  {
     code: 'COOPERATIVE_INSTALLMENT_VIEW',
     label: 'Lihat Angsuran Koperasi',
     group: 'Koperasi',

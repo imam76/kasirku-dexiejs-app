@@ -25,6 +25,11 @@ pub async fn list_finance_transactions(
             transfer_group_id,
             transfer_direction,
             reversal_of_transfer_group_id,
+            field_cash_session_id,
+            field_cash_session_number,
+            field_employee_id,
+            field_employee_name,
+            field_cash_movement_kind,
             version,
             created_by,
             created_by_name,
@@ -66,6 +71,11 @@ pub async fn get_finance_transaction(
             transfer_group_id,
             transfer_direction,
             reversal_of_transfer_group_id,
+            field_cash_session_id,
+            field_cash_session_number,
+            field_employee_id,
+            field_employee_name,
+            field_cash_movement_kind,
             version,
             created_by,
             created_by_name,
@@ -109,6 +119,11 @@ pub async fn upsert_finance_transaction(
             transfer_group_id,
             transfer_direction,
             reversal_of_transfer_group_id,
+            field_cash_session_id,
+            field_cash_session_number,
+            field_employee_id,
+            field_employee_name,
+            field_cash_movement_kind,
             version,
             created_by,
             created_by_name,
@@ -142,9 +157,14 @@ pub async fn upsert_finance_transaction(
             $21,
             $22,
             $23,
-            $24::TIMESTAMPTZ,
-            $25::TIMESTAMPTZ,
-            $26::TIMESTAMPTZ
+            $24,
+            $25,
+            $26,
+            $27,
+            $28,
+            $29::TIMESTAMPTZ,
+            $30::TIMESTAMPTZ,
+            $31::TIMESTAMPTZ
         )
         ON CONFLICT (id) DO UPDATE SET
             type = EXCLUDED.type,
@@ -164,6 +184,11 @@ pub async fn upsert_finance_transaction(
             transfer_group_id = EXCLUDED.transfer_group_id,
             transfer_direction = EXCLUDED.transfer_direction,
             reversal_of_transfer_group_id = EXCLUDED.reversal_of_transfer_group_id,
+            field_cash_session_id = EXCLUDED.field_cash_session_id,
+            field_cash_session_number = EXCLUDED.field_cash_session_number,
+            field_employee_id = EXCLUDED.field_employee_id,
+            field_employee_name = EXCLUDED.field_employee_name,
+            field_cash_movement_kind = EXCLUDED.field_cash_movement_kind,
             version = EXCLUDED.version,
             created_by = COALESCE(finance_transactions.created_by, EXCLUDED.created_by),
             created_by_name = COALESCE(finance_transactions.created_by_name, EXCLUDED.created_by_name),
@@ -196,6 +221,11 @@ pub async fn upsert_finance_transaction(
             transfer_group_id,
             transfer_direction,
             reversal_of_transfer_group_id,
+            field_cash_session_id,
+            field_cash_session_number,
+            field_employee_id,
+            field_employee_name,
+            field_cash_movement_kind,
             version,
             created_by,
             created_by_name,
@@ -224,6 +254,11 @@ pub async fn upsert_finance_transaction(
     .bind(input.transfer_group_id)
     .bind(input.transfer_direction)
     .bind(input.reversal_of_transfer_group_id)
+    .bind(input.field_cash_session_id)
+    .bind(input.field_cash_session_number)
+    .bind(input.field_employee_id)
+    .bind(input.field_employee_name)
+    .bind(input.field_cash_movement_kind)
     .bind(input.version)
     .bind(input.created_by)
     .bind(input.created_by_name)

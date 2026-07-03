@@ -907,6 +907,11 @@ export interface RemoteFinanceTransactionDto {
   transfer_group_id?: string | null;
   transfer_direction?: 'OUT' | 'IN' | null;
   reversal_of_transfer_group_id?: string | null;
+  field_cash_session_id?: string | null;
+  field_cash_session_number?: string | null;
+  field_employee_id?: string | null;
+  field_employee_name?: string | null;
+  field_cash_movement_kind?: string | null;
   version: number;
   created_by?: string | null;
   created_by_name?: string | null;

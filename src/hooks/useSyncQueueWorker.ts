@@ -45,6 +45,7 @@ const COOPERATIVE_QUERY_KEYS = [
   'cooperativePaymentApprovalRequests',
   'cooperativeFieldCashSessions',
   'cooperativeFieldCashReport',
+  'cooperativeFieldCashCashDetail',
   'cooperativeReports',
   'cooperativeDailyDropReport',
   'cooperativeWeeklyEmployeeDropReport',
@@ -83,6 +84,7 @@ const FINANCE_QUERY_KEYS = [
   'incomeStatement',
   'balanceSheet',
   'cooperativeFieldCashReport',
+  'cooperativeFieldCashCashDetail',
   'cooperativeReports',
   'cooperativeDailyFieldCashReport',
   'cooperativeCashReport',
@@ -109,6 +111,13 @@ const PAYROLL_QUERY_KEYS = [
   'incomeStatement',
   'balanceSheet',
 ];
+
+const DATABASE_SYNC_QUERY_KEYS = Array.from(new Set([
+  ...CASHIER_QUERY_KEYS,
+  ...COOPERATIVE_QUERY_KEYS,
+  ...FINANCE_QUERY_KEYS,
+  ...PAYROLL_QUERY_KEYS,
+]));
 
 type PostgresRealtimeChangeEvent = {
   table?: string;
@@ -162,6 +171,7 @@ export const useSyncQueueWorker = () => {
     const syncWhenOnline = async () => {
       try {
         await runDatabaseSyncNow();
+        invalidateQueryKeys(DATABASE_SYNC_QUERY_KEYS);
       } catch (error) {
         console.error('Failed to refresh PostgreSQL read data', error);
       }
