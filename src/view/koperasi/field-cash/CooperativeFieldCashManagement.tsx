@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { App, Button, Card, Checkbox, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Tag } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { Banknote, Download, Upload } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
-import { useCooperativeFieldCash } from '@/hooks/useCooperativeFieldCash';
+import { buildDailyFieldCashReportFilters, useCooperativeFieldCash } from '@/hooks/useCooperativeFieldCash';
 import dayjs from '@/lib/dayjs';
 import type { Employee } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
@@ -64,7 +64,7 @@ export default function CooperativeFieldCashManagement() {
     isCashDetailLoading,
     cashDetailError,
     recordDropping,
-    recordDeposit,
+    closeBook,
     isMutating,
   } = useCooperativeFieldCash();
   const selectedTransferEmployeeId = Form.useWatch('employee_id', transferForm);
@@ -88,6 +88,9 @@ export default function CooperativeFieldCashManagement() {
   const selectedTransferCashDetail = selectedTransferEmployeeId
     ? cashDetailEmployeesById.get(selectedTransferEmployeeId)
     : undefined;
+  const reportDate = useMemo(() => (
+    reportFilters.fromDate ? dayjs(reportFilters.fromDate).tz().startOf('day') : dayjs.tz().startOf('day')
+  ), [reportFilters.fromDate]);
   const cashDetailDateText = cashDetailDate.format('DD MMMM YYYY');
   const totalCollectorBalance = useMemo(() => (
     fieldCashEmployees.reduce((sum, employee) => (
@@ -99,6 +102,17 @@ export default function CooperativeFieldCashManagement() {
       Math.abs(Number(employee.field_cash_account_id ? balances.get(employee.field_cash_account_id) || 0 : 0)) > 0.01
     )).length
   ), [balances, fieldCashEmployees]);
+
+  const setDailyReportDate = (date: Dayjs, employeeId = reportFilters.employeeId) => {
+    setReportFilters(buildDailyFieldCashReportFilters(date, employeeId));
+  };
+
+  useEffect(() => {
+    if (transferMode !== 'DEPOSIT') return;
+
+    const balance = Number(selectedTransferBalance || 0);
+    transferForm.setFieldsValue({ amount: balance > 0 ? balance : 0 });
+  }, [selectedTransferBalance, transferForm, transferMode]);
 
   const openTransferModal = (mode: TransferMode, employee?: Employee) => {
     const balance = employee?.field_cash_account_id
@@ -124,6 +138,9 @@ export default function CooperativeFieldCashManagement() {
       amount: mode === 'DEPOSIT' && balance && balance > 0 ? balance : undefined,
       transfer_date: dayjs(),
     });
+    if (mode === 'DEPOSIT') {
+      setCashDetailDate(reportDate);
+    }
     setRememberFinanceAccount(rememberedAccountIsAvailable);
     setTransferMode(mode);
   };
@@ -160,8 +177,15 @@ export default function CooperativeFieldCashManagement() {
         await recordDropping(input);
         message.success('Dropping kas ke kolektor berhasil dicatat.');
       } else {
-        await recordDeposit(input);
-        message.success('Setoran kolektor ke kas/bank berhasil dicatat.');
+        await closeBook({
+          employee_id: input.employee_id,
+          cash_account_id: input.cash_account_id,
+          finance_cash_account_id: input.finance_cash_account_id,
+          transfer_date: input.transfer_date,
+          notes: input.notes,
+        });
+        setDailyReportDate((values.transfer_date ?? dayjs()).tz().add(1, 'day').startOf('day'));
+        message.success('Tutup buku setoran kolektor selesai. Saldo siap 0 untuk besok pagi.');
       }
       closeTransferModal();
     } catch (error) {
@@ -208,8 +232,17 @@ export default function CooperativeFieldCashManagement() {
         </div>
       </div>
 
-      {canViewAllFieldCash && (
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,320px)]">
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(180px,260px)_minmax(220px,320px)]">
+        <div>
+          <p className="mb-2 text-sm font-medium text-gray-700">Tanggal Rekap</p>
+          <DatePicker
+            className="w-full"
+            value={reportDate}
+            format="DD MMMM YYYY"
+            onChange={(value) => setDailyReportDate(value?.startOf('day') ?? dayjs.tz().startOf('day'))}
+          />
+        </div>
+        {canViewAllFieldCash && (
           <div>
             <p className="mb-2 text-sm font-medium text-gray-700">Kolektor</p>
             <Select
@@ -219,12 +252,12 @@ export default function CooperativeFieldCashManagement() {
               optionFilterProp="label"
               placeholder="Semua kolektor"
               value={reportFilters.employeeId}
-              onChange={(employeeId) => setReportFilters({ ...reportFilters, employeeId })}
+              onChange={(employeeId) => setDailyReportDate(reportDate, employeeId)}
               options={employeeOptions}
             />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <CooperativeFieldCashReportTable
         rows={reportRows}
@@ -239,6 +272,7 @@ export default function CooperativeFieldCashManagement() {
         open={Boolean(transferMode)}
         onCancel={closeTransferModal}
         onOk={() => transferForm.submit()}
+        okText={transferMode === 'DEPOSIT' ? 'Tutup Buku' : 'OK'}
         confirmLoading={isMutating}
         destroyOnHidden
         forceRender
@@ -312,11 +346,19 @@ export default function CooperativeFieldCashManagement() {
           </Checkbox>
           <Form.Item
             name="amount"
-            label="Nominal"
-            rules={[{ required: true, type: 'number', min: 1, message: 'Nominal wajib lebih dari 0.' }]}
+            label={transferMode === 'DEPOSIT' ? 'Nominal Tutup Buku' : 'Nominal'}
+            rules={[{
+              required: true,
+              type: 'number',
+              min: 1,
+              message: transferMode === 'DEPOSIT'
+                ? 'Saldo tutup buku wajib lebih dari 0.'
+                : 'Nominal wajib lebih dari 0.',
+            }]}
           >
             <InputNumber<number>
-              min={1}
+              min={transferMode === 'DEPOSIT' ? 0 : 1}
+              disabled={transferMode === 'DEPOSIT'}
               className="w-full"
               formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}

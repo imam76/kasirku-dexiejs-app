@@ -34,6 +34,8 @@ export interface RecordFieldCashTransferInput {
   notes?: string;
 }
 
+export type CloseFieldCashBookInput = Omit<RecordFieldCashTransferInput, 'amount'>;
+
 export interface CooperativeFieldCashContext {
   employee: Employee;
   session?: CooperativeFieldCashSession;
@@ -546,5 +548,38 @@ export const recordDepositFromPetugasToFinance = async (
     amount: input.amount,
     transfer_date: input.transfer_date,
     notes: input.notes ?? `Setor kas petugas ${employee.name} ke finance.`,
+  });
+};
+
+export const closeFieldCashBookToFinance = async (
+  input: CloseFieldCashBookInput,
+): Promise<RecordCashBankTransferResult> => {
+  await requireFieldCashManage();
+
+  const employee = await db.employees.get(input.employee_id);
+  if (!employee) {
+    throw new Error('Karyawan tidak ditemukan.');
+  }
+
+  await assertEmployeeFieldCashAccount(employee, input.cash_account_id);
+  const financeAccount = assertFieldCashAccount(
+    await db.chartOfAccounts.get(input.finance_cash_account_id),
+    'Akun kas/bank finance',
+  );
+  if (input.cash_account_id === financeAccount.id) {
+    throw new Error('Akun kas petugas dan akun finance harus berbeda.');
+  }
+
+  const closingAmount = roundCurrency(await getCashAccountBalance(input.cash_account_id));
+  if (!isPositiveAmount(closingAmount)) {
+    throw new Error('Saldo kolektor sudah 0, tidak perlu tutup buku.');
+  }
+
+  return recordCashBankTransfer({
+    from_cash_account_id: input.cash_account_id,
+    to_cash_account_id: input.finance_cash_account_id,
+    amount: closingAmount,
+    transfer_date: input.transfer_date,
+    notes: input.notes ?? `Tutup buku setoran kolektor ${employee.name} ke finance.`,
   });
 };
