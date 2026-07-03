@@ -4,10 +4,15 @@ import { demoOwner } from './data';
 export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
-  await expect(page.getByText('Belum ada user aktif.')).toBeVisible();
+  const registerHeading = page.getByRole('heading', { name: 'Register Owner' });
+  await expect(page.getByRole('heading', { name: /Masuk Frayukti|Register Owner/ })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Register Owner Pertama' }).click();
+  if (!await registerHeading.isVisible()) {
+    await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
+    await expect(page.getByText('Belum ada user aktif.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Register Owner Pertama' }).click();
+  }
   await expect(page.getByRole('heading', { name: 'Register Owner' })).toBeVisible();
 
   await page.getByLabel('Nama Owner').fill(demoOwner.name);

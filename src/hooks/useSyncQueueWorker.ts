@@ -89,6 +89,27 @@ const FINANCE_QUERY_KEYS = [
   'cooperativeLedgerReport',
 ];
 
+const PAYROLL_REALTIME_TABLES = new Set([
+  'employee_cash_advance_repayments',
+  'employee_cash_advances',
+  'payroll_run_items',
+  'payroll_runs',
+]);
+
+const PAYROLL_QUERY_KEYS = [
+  'employeeCashAdvances',
+  'financeBalance',
+  'financeTransactions',
+  'payrollReport',
+  'payrollRuns',
+  'profitBalance',
+  'profitLogs',
+  'journalEntries',
+  'trialBalance',
+  'incomeStatement',
+  'balanceSheet',
+];
+
 type PostgresRealtimeChangeEvent = {
   table?: string;
   operation?: string;
@@ -122,6 +143,10 @@ const invalidateServerAuthoritativeQueries = (change: PostgresRealtimeChangeEven
 
   if (change.table && FINANCE_REALTIME_TABLES.has(change.table)) {
     invalidateQueryKeys(FINANCE_QUERY_KEYS);
+  }
+
+  if (change.table && PAYROLL_REALTIME_TABLES.has(change.table)) {
+    invalidateQueryKeys(PAYROLL_QUERY_KEYS);
   }
 };
 

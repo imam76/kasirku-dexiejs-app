@@ -29,10 +29,14 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import ExportActions from '@/components/ExportActions';
 import dayjs from '@/lib/dayjs';
+import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 import { useEmployeeCashAdvances, type EmployeeCashAdvanceStatusFilter, type EmployeeCashAdvanceWithRepayments } from '@/hooks/useEmployeeCashAdvances';
 import { usePayroll, type PayrollRunWithItems, type PayrollStatusFilter } from '@/hooks/usePayroll';
+import type { ExportTarget } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
+import { exportPayrollEmployeeSlipPdf, exportPayrollRunSlipsPdf } from '@/utils/payrollSlipPdf';
 import type {
   ChartOfAccount,
   Employee,
@@ -690,12 +694,14 @@ function EmployeeCashAdvanceFormModal({
 }
 
 export default function PayrollManagement() {
-  const { modal } = App.useApp();
+  const { message, modal } = App.useApp();
   const [activeTab, setActiveTab] = useState('payroll');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCashAdvanceFormOpen, setIsCashAdvanceFormOpen] = useState(false);
   const [editingRun, setEditingRun] = useState<PayrollRunWithItems | null>(null);
   const [payingRun, setPayingRun] = useState<PayrollRunWithItems | null>(null);
+  const [exportingSlipKey, setExportingSlipKey] = useState<string | null>(null);
+  const { profile } = useCompanyProfileSetting();
   const {
     employees,
     cashBankAccounts,
@@ -830,6 +836,58 @@ export default function PayrollManagement() {
     setPayingRun(null);
   };
 
+  const handleExportPayrollRunSlips = async (run: PayrollRunWithItems, target: ExportTarget = 'auto') => {
+    if (exportingSlipKey) return;
+
+    const exportKey = `run:${run.id}`;
+    setExportingSlipKey(exportKey);
+    try {
+      const exported = await exportPayrollRunSlipsPdf({
+        run,
+        items: run.items,
+        profile,
+        target,
+      });
+
+      if (exported) {
+        message.success(`Slip gabungan ${run.payroll_number} berhasil dibuat.`);
+      }
+    } catch (error) {
+      console.error('Failed to export payroll slips PDF:', error);
+      message.error(error instanceof Error ? error.message : 'Gagal membuat slip gaji.');
+    } finally {
+      setExportingSlipKey(null);
+    }
+  };
+
+  const handleExportPayrollEmployeeSlip = async (
+    run: PayrollRunWithItems,
+    item: PayrollRunItem,
+    target: ExportTarget = 'auto',
+  ) => {
+    if (exportingSlipKey) return;
+
+    const exportKey = `item:${item.id}`;
+    setExportingSlipKey(exportKey);
+    try {
+      const exported = await exportPayrollEmployeeSlipPdf({
+        run,
+        item,
+        profile,
+        target,
+      });
+
+      if (exported) {
+        message.success(`Slip gaji ${item.employee_name} berhasil dibuat.`);
+      }
+    } catch (error) {
+      console.error('Failed to export payroll employee slip PDF:', error);
+      message.error(error instanceof Error ? error.message : 'Gagal membuat slip gaji karyawan.');
+    } finally {
+      setExportingSlipKey(null);
+    }
+  };
+
   const handleSubmitCashAdvance = async (values: EmployeeCashAdvanceFormValues) => {
     await createCashAdvance({
       employee_id: values.employee_id,
@@ -945,7 +1003,7 @@ export default function PayrollManagement() {
     {
       title: 'Aksi',
       key: 'actions',
-      width: 260,
+      width: 340,
       render: (_: unknown, run: PayrollRunWithItems) => (
         <Space wrap>
           {run.status === 'DRAFT' && (
@@ -963,6 +1021,24 @@ export default function PayrollManagement() {
               Bayar
             </Button>
           )}
+          {run.status === 'PAID' && (
+            <ExportActions
+              label="Slip Gabungan"
+              buttonType="default"
+              buttonSize="small"
+              flattenSingleFormatTargets
+              testId={`payroll-slip-all-${run.id}`}
+              disabled={Boolean(exportingSlipKey && exportingSlipKey !== `run:${run.id}`)}
+              formats={[
+                {
+                  key: 'pdf',
+                  label: 'PDF',
+                  icon: <ReceiptText size={14} />,
+                  onExport: (target) => handleExportPayrollRunSlips(run, target),
+                },
+              ]}
+            />
+          )}
           {(run.status === 'DRAFT' || run.status === 'APPROVED') && (
             <Button size="small" danger icon={<XCircle size={14} />} onClick={() => handleVoid(run)} loading={isVoiding}>
               Void
@@ -973,7 +1049,7 @@ export default function PayrollManagement() {
     },
   ];
 
-  const itemColumns = [
+  const buildItemColumns = (run: PayrollRunWithItems) => [
     {
       title: 'Karyawan',
       key: 'employee',
@@ -1032,6 +1108,29 @@ export default function PayrollManagement() {
       key: 'notes',
       render: (value?: string) => value || '-',
     },
+    ...(run.status === 'PAID' ? [{
+      title: 'Slip',
+      key: 'slip',
+      width: 140,
+      render: (_: unknown, item: PayrollRunItem) => (
+        <ExportActions
+          label="Slip"
+          buttonType="default"
+          buttonSize="small"
+          flattenSingleFormatTargets
+          testId={`payroll-slip-item-${run.id}-${item.employee_id}`}
+          disabled={Boolean(exportingSlipKey && exportingSlipKey !== `item:${item.id}`)}
+          formats={[
+            {
+              key: 'pdf',
+              label: 'PDF',
+              icon: <ReceiptText size={14} />,
+              onExport: (target) => handleExportPayrollEmployeeSlip(run, item, target),
+            },
+          ]}
+        />
+      ),
+    }] : []),
   ];
 
   const cashAdvanceColumns = [
@@ -1253,8 +1352,8 @@ export default function PayrollManagement() {
                           size="small"
                           pagination={false}
                           dataSource={run.items}
-                          columns={itemColumns}
-                          scroll={{ x: 1080 }}
+                          columns={buildItemColumns(run)}
+                          scroll={{ x: run.status === 'PAID' ? 1200 : 1080 }}
                         />
                       ),
                     }}

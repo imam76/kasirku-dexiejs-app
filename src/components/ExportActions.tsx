@@ -24,16 +24,22 @@ type ExportActionsProps = {
   formats: ExportFormatAction[];
   disabled?: boolean;
   buttonClassName?: string;
+  buttonSize?: ButtonProps['size'];
   buttonType?: ButtonProps['type'];
+  flattenSingleFormatTargets?: boolean;
   label?: string;
+  testId?: string;
 };
 
 export default function ExportActions({
   formats,
   disabled = false,
   buttonClassName,
+  buttonSize,
   buttonType = 'primary',
+  flattenSingleFormatTargets = false,
   label,
+  testId,
 }: ExportActionsProps) {
   const { t } = useI18n();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -49,8 +55,19 @@ export default function ExportActions({
   const isExporting = exportingKey !== null;
 
   const menuItems = useMemo<MenuProps['items']>(
-    () =>
-      formats.map((format) => ({
+    () => {
+      if (flattenSingleFormatTargets && formats.length === 1) {
+        const format = formats[0];
+
+        return (format.targets ?? defaultTargets).map((target) => ({
+          key: `${format.key}:${target.key}`,
+          label: target.label,
+          icon: format.icon,
+          disabled: format.disabled || isExporting,
+        }));
+      }
+
+      return formats.map((format) => ({
         key: format.key,
         label: format.label,
         icon: format.icon,
@@ -59,8 +76,9 @@ export default function ExportActions({
           key: `${format.key}:${target.key}`,
           label: target.label,
         })),
-      })),
-    [formats, defaultTargets, isExporting],
+      }));
+    },
+    [formats, defaultTargets, flattenSingleFormatTargets, isExporting],
   );
 
   const handleExport = async (format: ExportFormatAction, target: ExportTarget) => {
@@ -86,8 +104,10 @@ export default function ExportActions({
   const button = (
     <Button
       type={buttonType}
+      size={buttonSize}
       className={buttonClassName}
       icon={<DownloadOutlined className="text-[12px]" />}
+      data-testid={testId}
       disabled={isDisabled || isExporting}
       loading={isExporting}
       onClick={isMobile ? () => setDrawerOpen(true) : undefined}
