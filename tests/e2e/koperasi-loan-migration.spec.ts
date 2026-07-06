@@ -75,7 +75,31 @@ test.describe.serial('migrasi pinjaman koperasi', () => {
     await expect(receivableRow).toContainText('Rp 800.000');
   });
 
-  test('LOAN-MIG-03 - migrasi ditolak untuk angsuran lunas melebihi tenor tanpa data parsial', async ({ page }) => {
+  test('LOAN-MIG-03 - laporan perkembangan resort menaruh migrasi di saldo lalu, bukan drop', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await seedMigrationFixture(page);
+
+    await migrateLoan(page, migrationFixtureMember, {
+      principal: '1200000',
+      ratePercent: '1',
+      tenor: '12',
+      settledThrough: '4',
+      disbursementWeekday: migrationFixtureMember.officerWeekday,
+      expectedOutstanding: 'Rp 800.000',
+    });
+
+    await page.goto('/koperasi/laporan-perkembangan-resort');
+    await expect(page.getByRole('heading', { name: 'LAPORAN PERKEMBANGAN RESORT/KARYAWAN' })).toBeVisible();
+
+    const grandTotalCells = page.getByTestId('koperasi-resort-development-grand-total').locator('td');
+    await expect(grandTotalCells.nth(1)).toHaveText('Rp 896.000');
+    await expect(grandTotalCells.nth(2)).toHaveText('-');
+    await expect(grandTotalCells.nth(4)).toHaveText('-');
+    await expect(grandTotalCells.nth(5)).toHaveText('Rp 896.000');
+    await expect(grandTotalCells.nth(7)).toHaveText('Rp 896.000');
+  });
+
+  test('LOAN-MIG-04 - migrasi ditolak untuk angsuran lunas melebihi tenor tanpa data parsial', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
     await seedMigrationFixture(page);
 

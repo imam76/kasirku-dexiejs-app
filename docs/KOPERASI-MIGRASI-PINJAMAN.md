@@ -84,12 +84,31 @@ setup GL: isi baris Piutang Pinjaman (1120) di form Opening Balance sebesar tota
 sisa pokok pinjaman migrasi. Form opening balance menyediakan tombol bantu untuk
 mengisi angka ini otomatis (`gl-opening-balance-fill-migration`).
 
+## Laporan Perkembangan Resort/Karyawan
+
+Laporan perkembangan resort memperlakukan pinjaman migrasi sebagai **saldo awal
+berjalan**, bukan sebagai drop/pencairan baru. Artinya:
+
+- kolom `DROP`, `20%`, dan `PINJAMAN BARU` tidak diisi dari loan
+  `is_migration`;
+- `SALDO LALU` memakai sisa tagihan migrasi yang masih berjalan, yaitu
+  `outstanding_principal_amount + outstanding_interest_amount +
+  outstanding_penalty_amount`, lalu tetap dikoreksi oleh pembayaran
+  pasca-migrasi yang sudah tercatat;
+- pembayaran pasca-migrasi tetap masuk ke kolom `ANGSURAN`.
+
+Dengan contoh pokok Rp1.200.000, bunga flat 1% x 12 bulan, dan lunas historis
+sampai angsuran ke-4, laporan bulan berjalan menampilkan `SALDO LALU`
+Rp896.000 dan `DROP` kosong, bukan drop Rp1.200.000.
+
 ## Referensi kode
 
 - `src/services/cooperativeLoanService.ts` — `migrateCooperativeLoan`,
   `assertMigrationPositionWithinLoan`, `applyMigrationPaidState`.
 - `src/services/cooperativeReportService.ts` — `buildPaymentInstallmentReconciliation`,
   `buildFinanceTransactionReconciliation`, `buildLoanReceivableLedgerReconciliation`.
+- `src/services/cooperativeResortDevelopmentReportService.ts` — perlakuan
+  saldo awal pinjaman migrasi di laporan perkembangan resort/karyawan.
 - `src/lib/validations/cooperativeLoan.ts` — `cooperativeLoanDisbursementSchema`.
 - `src/view/koperasi/loans/CooperativeLoanMigrationModal.tsx` — batas input UI.
-- `tests/e2e/koperasi-loan-migration.spec.ts` — regresi LOAN-MIG-01..03.
+- `tests/e2e/koperasi-loan-migration.spec.ts` — regresi LOAN-MIG-01..04.

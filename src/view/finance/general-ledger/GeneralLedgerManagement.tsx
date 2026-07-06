@@ -84,7 +84,7 @@ export default function GeneralLedgerManagement() {
   const reportKey = [filters.startDate, filters.endDate, filters.accountId];
   const journalQuery = useQuery({
     queryKey: ['journalEntries', ...reportKey],
-    queryFn: () => getJournalEntriesWithLines(filters),
+    queryFn: () => getJournalEntriesWithLines({ ...filters, includeClosingEntries: true }),
     enabled: canShowReports,
   });
   const trialBalanceQuery = useQuery({
@@ -166,7 +166,10 @@ export default function GeneralLedgerManagement() {
       render: (_value, record) => (
         <Space orientation="vertical" size={0}>
           <Text>{record.source_number || record.source_id || '-'}</Text>
-          <Text type="secondary" className="text-xs">{record.source_type}</Text>
+          <Space size={4}>
+            <Text type="secondary" className="text-xs">{record.source_type}</Text>
+            {record.source_type === 'CLOSING_JOURNAL' && <Tag color="red">Closing</Tag>}
+          </Space>
         </Space>
       ),
       width: 220,

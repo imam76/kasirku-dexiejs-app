@@ -2033,4 +2033,9 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       );
     }
   });
+
+  this.version(78).stores({
+    accountingPeriods: 'id, name, period_type, start_date, end_date, status, closing_journal_entry_id, sync_status, updated_at, created_at',
+    closingRuns: 'id, period_id, status, closing_journal_entry_id, posted_at, sync_status, updated_at, created_at',
+  });
 }

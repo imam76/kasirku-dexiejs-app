@@ -108,6 +108,8 @@ type LoanContext = {
   employee: EmployeeSnapshot;
   group_key: string;
   disbursed_date_key: string;
+  reportable_amount: number;
+  drop_amount: number;
 };
 
 type AmountEvent = {
@@ -176,6 +178,27 @@ const getLoanServiceAmount = (principalAmount: number) => roundCurrency(
 const getLoanReportableAmount = (principalAmount: number) => roundCurrency(
   Number(principalAmount || 0) + getLoanServiceAmount(principalAmount),
 );
+
+const getLoanOutstandingAmount = (loan: CooperativeLoan) => roundCurrency(
+  Number(loan.outstanding_principal_amount || 0) +
+  Number(loan.outstanding_interest_amount || 0) +
+  Number(loan.outstanding_penalty_amount || 0),
+);
+
+const getLoanPaymentAmount = (payment: CooperativeLoanPayment) => roundCurrency(
+  Number(payment.amount || 0),
+);
+
+const getLoanReportableOpeningAmount = (
+  loan: CooperativeLoan,
+  reportablePaymentAmount: number,
+) => {
+  if (loan.is_migration) {
+    return roundCurrency(getLoanOutstandingAmount(loan) + reportablePaymentAmount);
+  }
+
+  return getLoanReportableAmount(loan.principal_amount);
+};
 
 const compareEmployeeLabel = (
   left?: Pick<CooperativeResortDevelopmentEmployeeOption, 'name' | 'position'>,
@@ -351,13 +374,18 @@ const summarizeGroups = (
 const getOpeningBalanceForGroup = (
   groupKey: string,
   startDateKey: string,
+  endDateKey: string,
   loanContexts: LoanContext[],
   paymentEvents: AmountEvent[],
 ) => {
   const previousLoanAmount = loanContexts
     .filter((context) => context.group_key === groupKey)
-    .filter((context) => context.disbursed_date_key < startDateKey)
-    .reduce((sum, context) => sum + getLoanReportableAmount(context.loan.principal_amount), 0);
+    .filter((context) => (
+      context.loan.is_migration
+        ? context.disbursed_date_key <= endDateKey
+        : context.disbursed_date_key < startDateKey
+    ))
+    .reduce((sum, context) => sum + context.reportable_amount, 0);
   const previousPaymentAmount = paymentEvents
     .filter((event) => event.group_key === groupKey && event.date_key < startDateKey)
     .reduce((sum, event) => sum + event.amount, 0);
@@ -382,14 +410,20 @@ const getPeriodSummary = ({
   const workdayDateKeys = new Set(getWorkdayDateKeys(startDate, endDate));
   const openingBalanceAmount = roundCurrency(
     Array.from(groupKeys).reduce((sum, groupKey) => (
-      sum + getOpeningBalanceForGroup(groupKey, startDateKey, loanContexts, paymentEvents)
+      sum + getOpeningBalanceForGroup(
+        groupKey,
+        startDateKey,
+        endDate.format(DATE_KEY_FORMAT),
+        loanContexts,
+        paymentEvents,
+      )
     ), 0),
   );
   const dropAmount = roundCurrency(
     loanContexts
       .filter((context) => groupKeys.has(context.group_key))
       .filter((context) => workdayDateKeys.has(context.disbursed_date_key))
-      .reduce((sum, context) => sum + Number(context.loan.principal_amount || 0), 0),
+      .reduce((sum, context) => sum + context.drop_amount, 0),
   );
   const serviceAmount = roundCurrency(dropAmount * LOAN_SERVICE_RATE);
   const newLoanAmount = roundCurrency(dropAmount + serviceAmount);
@@ -524,6 +558,16 @@ export const getCooperativeResortDevelopmentReport = async (
   ]);
   const memberById = new Map(members.map((member) => [member.id, member]));
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
+  const reportablePaymentAmountByLoanId = new Map<string, number>();
+  payments
+    .filter(isReportableCooperativeLoanPayment)
+    .forEach((payment) => {
+      addAmount(
+        reportablePaymentAmountByLoanId,
+        payment.loan_id,
+        getLoanPaymentAmount(payment),
+      );
+    });
   const employeeByKey = new Map<string, EmployeeSnapshot>();
   const addEmployeeSnapshot = (employee: EmployeeSnapshot) => {
     employeeByKey.set(getGroupKey(employee.employee_id), employee);
@@ -546,6 +590,11 @@ export const getCooperativeResortDevelopmentReport = async (
         employee,
         group_key: getGroupKey(employee.employee_id),
         disbursed_date_key: getDateKey(loan.disbursed_at as string),
+        reportable_amount: getLoanReportableOpeningAmount(
+          loan,
+          reportablePaymentAmountByLoanId.get(loan.id) ?? 0,
+        ),
+        drop_amount: loan.is_migration ? 0 : Number(loan.principal_amount || 0),
       };
       addEmployeeSnapshot(employee);
       return context;
@@ -576,6 +625,7 @@ export const getCooperativeResortDevelopmentReport = async (
 
   loanContexts.forEach((context) => {
     addGroupKey(context.group_key);
+    if (context.loan.is_migration) return;
     addAmountEvent(
       [],
       dropByBucketKey,
@@ -634,6 +684,7 @@ export const getCooperativeResortDevelopmentReport = async (
       const openingBalance = getOpeningBalanceForGroup(
         groupKey,
         startDateKey,
+        endDateKey,
         loanContexts,
         paymentEvents,
       );

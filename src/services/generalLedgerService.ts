@@ -61,6 +61,8 @@ const SOURCE_EVENTS = {
   PRODUCTION_ORDER_POSTED: 'PRODUCTION_ORDER_POSTED',
   OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
   MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
+  YEAR_END_CLOSING_POSTED: 'YEAR_END_CLOSING_POSTED',
+  YEAR_END_CLOSING_REVERSED: 'YEAR_END_CLOSING_REVERSED',
 } as const;
 
 type JournalSourceEvent = typeof SOURCE_EVENTS[keyof typeof SOURCE_EVENTS];
@@ -131,6 +133,13 @@ export interface GeneralLedgerReportFilters {
   accountId?: string;
   sourceTypes?: JournalSourceType[];
   sourceEvents?: string[];
+  /**
+   * Sertakan jurnal penutup (`CLOSING_JOURNAL`) dalam hasil report.
+   * Default `false`: laporan operasional (laba rugi/SHU) mengecualikan jurnal
+   * penutup agar tidak menjadi nol. Set `true` untuk neraca/trial balance mode
+   * "setelah closing" dan untuk journal list.
+   */
+  includeClosingEntries?: boolean;
 }
 
 export interface TrialBalanceRow {
@@ -222,6 +231,10 @@ const ACCOUNT_CANDIDATES = {
   salaryExpense: { ids: ['salary-expense', 'template-salary-expense'], codes: ['6110', '6010'] },
   otherExpense: { ids: ['other-expense', 'template-other-expense'], codes: ['6900'] },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
+  retainedEarnings: {
+    ids: ['retained-earning', 'shu-belum-dibagikan', 'template-retained-earning'],
+    codes: ['3100'],
+  },
 } satisfies Record<string, AccountCandidate>;
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -240,12 +253,59 @@ const isDateBeforeCutoff = (entryDate: string, cutoffDate?: string) => {
   return entryDate.slice(0, 10) < cutoffDate.slice(0, 10);
 };
 
+const toDateOnly = (value: string) => value.slice(0, 10);
+
+const isDateWithinPeriod = (
+  entryDate: string,
+  period: { start_date: string; end_date: string },
+) => {
+  const date = toDateOnly(entryDate);
+  return date >= toDateOnly(period.start_date) && date <= toDateOnly(period.end_date);
+};
+
+/**
+ * Cari periode akuntansi (belum dihapus) yang mencakup tanggal jurnal.
+ * Periode bersifat overlay opsional: jika belum ada periode yang cocok, posting
+ * mengikuti aturan cutoff seperti biasa.
+ */
+export const getAccountingPeriodForDate = async (entryDate: string) => {
+  const periods = await db.accountingPeriods.toArray();
+  return periods
+    .filter((period) => !period.deleted_at && isDateWithinPeriod(entryDate, period))
+    .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))[0];
+};
+
+/**
+ * Periode dianggap "postable" bila tidak ada periode yang cocok atau periodenya
+ * masih berstatus OPEN. Periode LOCKED/CLOSED menolak posting operasional.
+ */
+export const isAccountingPeriodPostable = async (entryDate: string) => {
+  const period = await getAccountingPeriodForDate(entryDate);
+  if (!period) return true;
+  return period.status === 'OPEN';
+};
+
+/**
+ * Guard eksplisit untuk posting yang butuh error message jelas (mis. jurnal
+ * manual). Melempar bila tanggal berada di periode LOCKED atau CLOSED.
+ */
+export const assertAccountingPeriodOpen = async (entryDate: string) => {
+  const period = await getAccountingPeriodForDate(entryDate);
+  if (!period || period.status === 'OPEN') return;
+
+  const statusLabel = period.status === 'CLOSED' ? 'sudah ditutup (CLOSED)' : 'terkunci (LOCKED)';
+  throw new Error(
+    `Periode "${period.name}" ${statusLabel}. Transaksi bertanggal ${toDateOnly(entryDate)} tidak dapat diposting. Gunakan jurnal penyesuaian di periode terbuka atau buka ulang periode.`,
+  );
+};
+
 export const isGeneralLedgerPostingEnabled = async (entryDate?: string) => {
   const module = await db.enabledModules.get('GENERAL_LEDGER');
   const setting = await getGeneralLedgerSetting();
   if (!module?.is_enabled || !setting?.is_ready || !setting.cutoff_date) return false;
   if (setting.inventory_policy !== 'PERPETUAL_INVENTORY') return false;
   if (entryDate && isDateBeforeCutoff(entryDate, setting.cutoff_date)) return false;
+  if (entryDate && !(await isAccountingPeriodPostable(entryDate))) return false;
   return true;
 };
 
@@ -715,6 +775,8 @@ export const postManualJournal = async ({
 }) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'JOURNAL_MANAGE');
+
+  await assertAccountingPeriodOpen(entry_date);
 
   const accounts = await db.chartOfAccounts.toArray();
   const accountById = new Map(accounts.map((account) => [account.id, account]));
@@ -1649,8 +1711,9 @@ const entryMatchesFilters = (entry: JournalEntry, filters: GeneralLedgerReportFi
   const matchesSourceEvent = !filters.sourceEvents?.length || (
     Boolean(entry.source_event) && filters.sourceEvents.includes(entry.source_event as string)
   );
+  const matchesClosing = filters.includeClosingEntries === true || entry.source_type !== 'CLOSING_JOURNAL';
 
-  return matchesDate && matchesSourceType && matchesSourceEvent;
+  return matchesDate && matchesSourceType && matchesSourceEvent && matchesClosing;
 };
 
 export const getJournalEntriesWithLines = async (
@@ -1874,4 +1937,223 @@ export const getBalanceSheetReport = async (
     difference,
     is_balanced: Math.abs(difference) <= JOURNAL_TOLERANCE,
   };
+};
+
+// ============================================================================
+// Tutup Buku Akhir Tahun (Year-end closing)
+// ============================================================================
+
+export interface ClosingJournalPreviewLine {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: AccountType;
+  debit: number;
+  credit: number;
+}
+
+export interface ClosingJournalPreview {
+  lines: ClosingJournalPreviewLine[];
+  retained_earning_account_id: string;
+  retained_earning_account_code: string;
+  retained_earning_account_name: string;
+  net_income_amount: number;
+  total_revenue_amount: number;
+  total_contra_revenue_amount: number;
+  total_expense_amount: number;
+  total_debit: number;
+  total_credit: number;
+  is_balanced: boolean;
+}
+
+/**
+ * Resolusi akun ekuitas tujuan closing (Saldo Laba / SHU Belum Dibagi, kode 3100).
+ * Harus aktif dan postable.
+ */
+export const getRetainedEarningsAccount = async (): Promise<ChartOfAccount> => {
+  const accounts = await db.chartOfAccounts.toArray();
+  return getPostableAccount(accounts, ACCOUNT_CANDIDATES.retainedEarnings, 'Saldo Laba');
+};
+
+/**
+ * Hitung preview jurnal penutup untuk periode berjalan. Setiap akun nominal
+ * (REVENUE, CONTRA_REVENUE, EXPENSE) ditutup line-per-line, selisihnya masuk ke
+ * akun Saldo Laba/SHU. Report ini mengecualikan jurnal penutup sebelumnya agar
+ * angka net income = laba rugi periode.
+ */
+export const buildClosingJournalPreview = async (
+  periodFilters: { startDate: string; endDate: string },
+): Promise<ClosingJournalPreview> => {
+  const retainedEarningsAccount = await getRetainedEarningsAccount();
+  const reportLines = await getPostedReportLines({
+    startDate: periodFilters.startDate,
+    endDate: periodFilters.endDate,
+    includeClosingEntries: false,
+  });
+
+  const movementByAccount = new Map<string, {
+    account_code: string;
+    account_name: string;
+    account_type: AccountType;
+    debit: number;
+    credit: number;
+  }>();
+
+  let totalRevenue = 0;
+  let totalContraRevenue = 0;
+  let totalExpense = 0;
+
+  reportLines.forEach(({ line }) => {
+    if (
+      line.account_type !== 'REVENUE' &&
+      line.account_type !== 'CONTRA_REVENUE' &&
+      line.account_type !== 'EXPENSE'
+    ) {
+      return;
+    }
+
+    const current = movementByAccount.get(line.account_id) ?? {
+      account_code: line.account_code,
+      account_name: line.account_name,
+      account_type: line.account_type,
+      debit: 0,
+      credit: 0,
+    };
+    current.debit += line.debit;
+    current.credit += line.credit;
+    movementByAccount.set(line.account_id, current);
+  });
+
+  const lines: ClosingJournalPreviewLine[] = [];
+
+  movementByAccount.forEach((movement, accountId) => {
+    const net = roundCurrency(movement.debit - movement.credit);
+    if (Math.abs(net) < JOURNAL_TOLERANCE) return;
+
+    // Tutup akun dengan posting berlawanan agar saldonya nol.
+    const closingDebit = net < 0 ? Math.abs(net) : 0;
+    const closingCredit = net > 0 ? net : 0;
+
+    lines.push({
+      account_id: accountId,
+      account_code: movement.account_code,
+      account_name: movement.account_name,
+      account_type: movement.account_type,
+      debit: closingDebit,
+      credit: closingCredit,
+    });
+
+    if (movement.account_type === 'REVENUE') {
+      totalRevenue = roundCurrency(totalRevenue + (movement.credit - movement.debit));
+    } else if (movement.account_type === 'CONTRA_REVENUE') {
+      totalContraRevenue = roundCurrency(totalContraRevenue + (movement.debit - movement.credit));
+    } else {
+      totalExpense = roundCurrency(totalExpense + (movement.debit - movement.credit));
+    }
+  });
+
+  const netIncome = roundCurrency(totalRevenue - totalContraRevenue - totalExpense);
+
+  // Line penyeimbang ke Saldo Laba / SHU.
+  if (Math.abs(netIncome) >= JOURNAL_TOLERANCE) {
+    lines.push({
+      account_id: retainedEarningsAccount.id,
+      account_code: retainedEarningsAccount.code,
+      account_name: retainedEarningsAccount.name,
+      account_type: retainedEarningsAccount.type,
+      debit: netIncome < 0 ? Math.abs(netIncome) : 0,
+      credit: netIncome > 0 ? netIncome : 0,
+    });
+  }
+
+  const totalDebit = roundCurrency(lines.reduce((sum, line) => sum + line.debit, 0));
+  const totalCredit = roundCurrency(lines.reduce((sum, line) => sum + line.credit, 0));
+
+  return {
+    lines,
+    retained_earning_account_id: retainedEarningsAccount.id,
+    retained_earning_account_code: retainedEarningsAccount.code,
+    retained_earning_account_name: retainedEarningsAccount.name,
+    net_income_amount: netIncome,
+    total_revenue_amount: totalRevenue,
+    total_contra_revenue_amount: totalContraRevenue,
+    total_expense_amount: totalExpense,
+    total_debit: totalDebit,
+    total_credit: totalCredit,
+    is_balanced: Math.abs(totalDebit - totalCredit) <= JOURNAL_TOLERANCE,
+  };
+};
+
+/**
+ * Buat & post jurnal penutup (`CLOSING_JOURNAL`) untuk periode. Idempotent per
+ * period (source_id = period id). Melewati guard periode locked karena closing
+ * memang dijalankan saat periode LOCKED — analog dengan opening balance yang
+ * melewati guard cutoff. Harus dipanggil di dalam Dexie transaction yang juga
+ * mencakup journalEntries & journalEntryLines.
+ */
+export const createClosingJournalEntry = async ({
+  periodId,
+  periodName,
+  entryDate,
+  lines,
+  actor,
+}: {
+  periodId: string;
+  periodName: string;
+  entryDate: string;
+  lines: ClosingJournalPreviewLine[];
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
+}): Promise<JournalEntry> => {
+  const existingEntry = await getPostedJournalEntryForSource(
+    'CLOSING_JOURNAL',
+    periodId,
+    SOURCE_EVENTS.YEAR_END_CLOSING_POSTED,
+  );
+  if (existingEntry) {
+    return existingEntry;
+  }
+
+  const normalizedLines: NormalizedJournalLine[] = lines.map((line) => ({
+    account_id: line.account_id,
+    account_code: line.account_code,
+    account_name: line.account_name,
+    account_type: line.account_type,
+    debit: roundCurrency(line.debit),
+    credit: roundCurrency(line.credit),
+    description: `Jurnal penutup ${periodName}`,
+  }));
+
+  return createPostedJournalEntry({
+    source_type: 'CLOSING_JOURNAL',
+    source_id: periodId,
+    source_number: periodName,
+    source_event: SOURCE_EVENTS.YEAR_END_CLOSING_POSTED,
+    entry_date: entryDate,
+    description: `Jurnal penutup akhir periode ${periodName}`,
+    lines: normalizedLines,
+    actor,
+  });
+};
+
+/**
+ * Reversal jurnal penutup untuk keperluan reopen periode. Harus dipanggil di
+ * dalam Dexie transaction yang mencakup journalEntries & journalEntryLines.
+ */
+export const reverseClosingJournalEntry = async ({
+  entryId,
+  reason,
+  entryDate,
+  actor,
+}: {
+  entryId: string;
+  reason: string;
+  entryDate: string;
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
+}): Promise<JournalEntry | undefined> => {
+  const entry = await db.journalEntries.get(entryId);
+  if (!entry || entry.status !== 'POSTED') {
+    return undefined;
+  }
+
+  return reverseJournalEntry(entry, reason, entryDate, actor);
 };

@@ -159,6 +159,7 @@ const FinancePayablesLazyRouteImport = createFileRoute('/finance/payables')()
 const FinanceGeneralLedgerLazyRouteImport = createFileRoute(
   '/finance/general-ledger',
 )()
+const FinanceClosingLazyRouteImport = createFileRoute('/finance/closing')()
 const FinanceChartOfAccountsLazyRouteImport = createFileRoute(
   '/finance/chart-of-accounts',
 )()
@@ -688,6 +689,13 @@ const FinanceGeneralLedgerLazyRoute =
   } as any).lazy(() =>
     import('./routes/finance/general-ledger.lazy').then((d) => d.Route),
   )
+const FinanceClosingLazyRoute = FinanceClosingLazyRouteImport.update({
+  id: '/finance/closing',
+  path: '/finance/closing',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/finance/closing.lazy').then((d) => d.Route),
+)
 const FinanceChartOfAccountsLazyRoute =
   FinanceChartOfAccountsLazyRouteImport.update({
     id: '/finance/chart-of-accounts',
@@ -975,6 +983,7 @@ export interface FileRoutesByFullPath {
   '/finance/cash-bank-reconciliation': typeof FinanceCashBankReconciliationLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
+  '/finance/closing': typeof FinanceClosingLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
@@ -1075,6 +1084,7 @@ export interface FileRoutesByTo {
   '/finance/cash-bank-reconciliation': typeof FinanceCashBankReconciliationLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
+  '/finance/closing': typeof FinanceClosingLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
@@ -1176,6 +1186,7 @@ export interface FileRoutesById {
   '/finance/cash-bank-reconciliation': typeof FinanceCashBankReconciliationLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
+  '/finance/closing': typeof FinanceClosingLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
@@ -1278,6 +1289,7 @@ export interface FileRouteTypes {
     | '/finance/cash-bank-reconciliation'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
+    | '/finance/closing'
     | '/finance/general-ledger'
     | '/finance/payables'
     | '/finance/payroll'
@@ -1378,6 +1390,7 @@ export interface FileRouteTypes {
     | '/finance/cash-bank-reconciliation'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
+    | '/finance/closing'
     | '/finance/general-ledger'
     | '/finance/payables'
     | '/finance/payroll'
@@ -1478,6 +1491,7 @@ export interface FileRouteTypes {
     | '/finance/cash-bank-reconciliation'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
+    | '/finance/closing'
     | '/finance/general-ledger'
     | '/finance/payables'
     | '/finance/payroll'
@@ -1579,6 +1593,7 @@ export interface RootRouteChildren {
   FinanceCashBankReconciliationLazyRoute: typeof FinanceCashBankReconciliationLazyRoute
   FinanceCashFlowLazyRoute: typeof FinanceCashFlowLazyRoute
   FinanceChartOfAccountsLazyRoute: typeof FinanceChartOfAccountsLazyRoute
+  FinanceClosingLazyRoute: typeof FinanceClosingLazyRoute
   FinanceGeneralLedgerLazyRoute: typeof FinanceGeneralLedgerLazyRouteWithChildren
   FinancePayablesLazyRoute: typeof FinancePayablesLazyRoute
   FinancePayrollLazyRoute: typeof FinancePayrollLazyRoute
@@ -2122,6 +2137,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceGeneralLedgerLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/closing': {
+      id: '/finance/closing'
+      path: '/finance/closing'
+      fullPath: '/finance/closing'
+      preLoaderRoute: typeof FinanceClosingLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/finance/chart-of-accounts': {
       id: '/finance/chart-of-accounts'
       path: '/finance/chart-of-accounts'
@@ -2413,6 +2435,7 @@ const rootRouteChildren: RootRouteChildren = {
     FinanceCashBankReconciliationLazyRoute,
   FinanceCashFlowLazyRoute: FinanceCashFlowLazyRoute,
   FinanceChartOfAccountsLazyRoute: FinanceChartOfAccountsLazyRoute,
+  FinanceClosingLazyRoute: FinanceClosingLazyRoute,
   FinanceGeneralLedgerLazyRoute: FinanceGeneralLedgerLazyRouteWithChildren,
   FinancePayablesLazyRoute: FinancePayablesLazyRoute,
   FinancePayrollLazyRoute: FinancePayrollLazyRoute,

@@ -287,6 +287,27 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'ACCOUNTING_PERIOD_MANAGE',
+    label: 'Kelola Periode Akuntansi',
+    group: 'Keuangan',
+    moduleCodes: ['GENERAL_LEDGER'],
+    isSensitive: true,
+  },
+  {
+    code: 'PERIOD_CLOSE',
+    label: 'Tutup Buku Periode',
+    group: 'Keuangan',
+    moduleCodes: ['GENERAL_LEDGER'],
+    isSensitive: true,
+  },
+  {
+    code: 'PERIOD_REOPEN',
+    label: 'Buka Ulang Periode',
+    group: 'Keuangan',
+    moduleCodes: ['GENERAL_LEDGER'],
+    isSensitive: true,
+  },
+  {
     code: 'SALES_RETURN_MANAGE',
     label: 'Kelola Retur Penjualan',
     group: 'Sales',

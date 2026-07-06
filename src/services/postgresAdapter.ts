@@ -1,6 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
+  AccountingPeriodStatus,
+  AccountingPeriodType,
+  ClosingRunStatus,
   CashBankReconciliationStatus,
   CashierSessionBalanceStatus,
   CashierSessionStatus,
@@ -946,6 +949,67 @@ export interface RemoteCashBankReconciliationDto {
   notes?: string | null;
   voided_at?: string | null;
   void_reason?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteAccountingPeriodDto {
+  id: string;
+  name: string;
+  period_type: AccountingPeriodType;
+  start_date: string;
+  end_date: string;
+  status: AccountingPeriodStatus;
+  locked_at?: string | null;
+  locked_by?: string | null;
+  locked_by_name?: string | null;
+  closed_at?: string | null;
+  closed_by?: string | null;
+  closed_by_name?: string | null;
+  closing_journal_entry_id?: string | null;
+  reopened_at?: string | null;
+  reopened_by?: string | null;
+  reopened_by_name?: string | null;
+  reopen_reason?: string | null;
+  notes?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteClosingRunDto {
+  id: string;
+  period_id: string;
+  period_name: string;
+  start_date: string;
+  end_date: string;
+  status: ClosingRunStatus;
+  retained_earning_account_id: string;
+  retained_earning_account_code: string;
+  retained_earning_account_name: string;
+  net_income_amount: number;
+  total_revenue_amount: number;
+  total_contra_revenue_amount: number;
+  total_expense_amount: number;
+  closing_journal_entry_id?: string | null;
+  posted_at?: string | null;
+  reversed_at?: string | null;
+  reversed_by?: string | null;
+  reversed_by_name?: string | null;
+  reversal_journal_entry_id?: string | null;
+  reversal_reason?: string | null;
+  notes?: string | null;
   version: number;
   created_by?: string | null;
   created_by_name?: string | null;
@@ -2010,6 +2074,40 @@ export const cashBankReconciliationPostgresAdapter = {
   async upsert(input: RemoteCashBankReconciliationDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteCashBankReconciliationDto>('postgres_upsert_cash_bank_reconciliation', { input });
+  },
+};
+
+export const accountingPeriodPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteAccountingPeriodDto[]>('postgres_list_accounting_periods');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAccountingPeriodDto | null>('postgres_get_accounting_period', { id });
+  },
+
+  async upsert(input: RemoteAccountingPeriodDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAccountingPeriodDto>('postgres_upsert_accounting_period', { input });
+  },
+};
+
+export const closingRunPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteClosingRunDto[]>('postgres_list_closing_runs');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteClosingRunDto | null>('postgres_get_closing_run', { id });
+  },
+
+  async upsert(input: RemoteClosingRunDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteClosingRunDto>('postgres_upsert_closing_run', { input });
   },
 };
 

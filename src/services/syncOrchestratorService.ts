@@ -10,6 +10,8 @@ import {
 } from '@/services/accountingSettingReadService';
 import { refreshCashierSessionsFromPostgres } from '@/services/cashierSessionReadService';
 import { refreshCashBankReconciliationsFromPostgres } from '@/services/cashBankReconciliationReadService';
+import { refreshAccountingPeriodsFromPostgres } from '@/services/accountingPeriodReadService';
+import { refreshClosingRunsFromPostgres } from '@/services/closingRunReadService';
 import { refreshChartOfAccountsFromPostgres } from '@/services/chartOfAccountReadService';
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
@@ -30,6 +32,8 @@ import {
   enqueuePendingAuthUsersForSync,
   enqueuePendingCashierSessionsForSync,
   enqueuePendingCashBankReconciliationsForSync,
+  enqueuePendingAccountingPeriodsForSync,
+  enqueuePendingClosingRunsForSync,
   enqueuePendingChartOfAccountsForSync,
   enqueuePendingContactsForSync,
   enqueuePendingCooperativeDataForSync,
@@ -69,7 +73,9 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingCashierSessionsForSync();
   await enqueuePendingFinanceTransactionsForSync();
   await enqueuePendingCashBankReconciliationsForSync();
+  await enqueuePendingAccountingPeriodsForSync();
   await enqueuePendingJournalEntriesForSync();
+  await enqueuePendingClosingRunsForSync();
   await enqueuePendingProductionOrdersForSync();
   await enqueuePendingPurchaseDocumentsForSync();
   await enqueuePendingSalesDocumentsForSync();
@@ -112,7 +118,9 @@ export const refreshAllDataFromPostgres = async () => {
     cashierSessions: await refreshCashierSessionsFromPostgres(),
     financeTransactions: await refreshFinanceTransactionsFromPostgres(),
     cashBankReconciliations: await refreshCashBankReconciliationsFromPostgres(),
+    accountingPeriods: await refreshAccountingPeriodsFromPostgres(),
     journalEntries: await refreshJournalEntriesFromPostgres(),
+    closingRuns: await refreshClosingRunsFromPostgres(),
     productionOrders: await refreshProductionOrdersFromPostgres(),
     cooperative: await refreshCooperativeDataFromPostgres(),
     cooperativeCollectionEvents: await refreshCooperativeCollectionEventsFromPostgres(),

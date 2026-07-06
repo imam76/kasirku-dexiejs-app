@@ -201,6 +201,9 @@ export type Permission =
   | 'REPORT_STOCK_CARD_VIEW'
   | 'FINANCE_ACCESS'
   | 'JOURNAL_MANAGE'
+  | 'ACCOUNTING_PERIOD_MANAGE'
+  | 'PERIOD_CLOSE'
+  | 'PERIOD_REOPEN'
   | 'SALES_RETURN_MANAGE'
   | 'COOPERATIVE_MEMBER_VIEW'
   | 'COOPERATIVE_MEMBER_MANAGE'
@@ -420,6 +423,8 @@ export type WarehouseSyncStatus = EntitySyncStatus;
 export type FinanceTransactionSyncStatus = EntitySyncStatus;
 export type CashBankReconciliationSyncStatus = EntitySyncStatus;
 export type JournalEntrySyncStatus = EntitySyncStatus;
+export type AccountingPeriodSyncStatus = EntitySyncStatus;
+export type ClosingRunSyncStatus = EntitySyncStatus;
 export type CurrencySyncStatus = EntitySyncStatus;
 export type CurrencyRateSyncStatus = EntitySyncStatus;
 export type CooperativeMemberSyncStatus = EntitySyncStatus;
@@ -2100,7 +2105,8 @@ export type JournalSourceType =
   | 'COOPERATIVE_LOAN'
   | 'MANUAL_JOURNAL'
   | 'PRODUCTION_ORDER'
-  | 'OPENING_BALANCE';
+  | 'OPENING_BALANCE'
+  | 'CLOSING_JOURNAL';
 
 export type AccountingProfileCode =
   | 'SAK_EMKM'
@@ -2244,6 +2250,80 @@ export interface CashBankReconciliation {
   created_at: string;
   updated_at: string;
   sync_status?: CashBankReconciliationSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type AccountingPeriodStatus = 'OPEN' | 'LOCKED' | 'CLOSED';
+export type AccountingPeriodType = 'MONTHLY' | 'YEARLY';
+
+export interface AccountingPeriod {
+  id: string;
+  name: string;
+  period_type: AccountingPeriodType;
+  start_date: string;
+  end_date: string;
+  status: AccountingPeriodStatus;
+  locked_at?: string;
+  locked_by?: string;
+  locked_by_name?: string;
+  closed_at?: string;
+  closed_by?: string;
+  closed_by_name?: string;
+  closing_journal_entry_id?: string;
+  reopened_at?: string;
+  reopened_by?: string;
+  reopened_by_name?: string;
+  reopen_reason?: string;
+  notes?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  sync_status?: AccountingPeriodSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type ClosingRunStatus = 'DRAFT' | 'POSTED' | 'REVERSED';
+
+export interface ClosingRun {
+  id: string;
+  period_id: string;
+  period_name: string;
+  start_date: string;
+  end_date: string;
+  status: ClosingRunStatus;
+  retained_earning_account_id: string;
+  retained_earning_account_code: string;
+  retained_earning_account_name: string;
+  net_income_amount: number;
+  total_revenue_amount: number;
+  total_contra_revenue_amount: number;
+  total_expense_amount: number;
+  closing_journal_entry_id?: string;
+  posted_at?: string;
+  reversed_at?: string;
+  reversed_by?: string;
+  reversed_by_name?: string;
+  reversal_journal_entry_id?: string;
+  reversal_reason?: string;
+  notes?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  sync_status?: ClosingRunSyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;

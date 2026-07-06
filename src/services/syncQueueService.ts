@@ -50,9 +50,11 @@ import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
 import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
 import {
   activityLogPostgresAdapter,
+  accountingPeriodPostgresAdapter,
   accountingProfileSettingPostgresAdapter,
   authUserPostgresAdapter,
   cashBankReconciliationPostgresAdapter,
+  closingRunPostgresAdapter,
   cashierSessionPostgresAdapter,
   chartOfAccountPostgresAdapter,
   contactPostgresAdapter,
@@ -90,9 +92,11 @@ import {
   stockMutationPostgresAdapter,
   taxPostgresAdapter,
   warehousePostgresAdapter,
+  type RemoteAccountingPeriodDto,
   type RemoteActivityLogDto,
   type RemoteAuthUserDto,
   type RemoteCashBankReconciliationDto,
+  type RemoteClosingRunDto,
   type RemoteCashierSessionDto,
   type RemoteContactDto,
   type RemoteCooperativeAreaDto,
@@ -147,7 +151,9 @@ import {
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
 import { mergeRemoteCashBankReconciliationsIntoDexie } from '@/services/cashBankReconciliationReadService';
-import type { AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import { mergeRemoteAccountingPeriodsIntoDexie } from '@/services/accountingPeriodReadService';
+import { mergeRemoteClosingRunsIntoDexie } from '@/services/closingRunReadService';
+import type { AccountingPeriod, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -158,6 +164,8 @@ const ACTIVITY_LOG_ENTITY = 'activityLogs';
 const AUTH_USER_ENTITY = 'authUsers';
 const CASHIER_SESSION_ENTITY = 'cashierSessions';
 const CASH_BANK_RECONCILIATION_ENTITY = 'cashBankReconciliations';
+const ACCOUNTING_PERIOD_ENTITY = 'accountingPeriods';
+const CLOSING_RUN_ENTITY = 'closingRuns';
 const CONTACT_ENTITY = 'contacts';
 const COOPERATIVE_AREA_ENTITY = 'cooperativeAreas';
 const COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY = 'cooperativeLoanCollectionEvents';
@@ -1092,6 +1100,71 @@ const mapCashBankReconciliationToRemoteDto = (
   created_at: reconciliation.created_at,
   updated_at: reconciliation.updated_at,
   deleted_at: undefined,
+});
+
+const mapAccountingPeriodToRemoteDto = (
+  period: AccountingPeriod,
+): RemoteAccountingPeriodDto => ({
+  id: period.id,
+  name: period.name,
+  period_type: period.period_type,
+  start_date: period.start_date,
+  end_date: period.end_date,
+  status: period.status,
+  locked_at: period.locked_at,
+  locked_by: period.locked_by,
+  locked_by_name: period.locked_by_name,
+  closed_at: period.closed_at,
+  closed_by: period.closed_by,
+  closed_by_name: period.closed_by_name,
+  closing_journal_entry_id: period.closing_journal_entry_id,
+  reopened_at: period.reopened_at,
+  reopened_by: period.reopened_by,
+  reopened_by_name: period.reopened_by_name,
+  reopen_reason: period.reopen_reason,
+  notes: period.notes,
+  version: period.version ?? 1,
+  created_by: period.created_by,
+  created_by_name: period.created_by_name,
+  updated_by: period.updated_by,
+  updated_by_name: period.updated_by_name,
+  created_at: period.created_at,
+  updated_at: period.updated_at,
+  deleted_at: period.deleted_at,
+});
+
+const mapClosingRunToRemoteDto = (
+  run: ClosingRun,
+): RemoteClosingRunDto => ({
+  id: run.id,
+  period_id: run.period_id,
+  period_name: run.period_name,
+  start_date: run.start_date,
+  end_date: run.end_date,
+  status: run.status,
+  retained_earning_account_id: run.retained_earning_account_id,
+  retained_earning_account_code: run.retained_earning_account_code,
+  retained_earning_account_name: run.retained_earning_account_name,
+  net_income_amount: normalizeRemoteNumber(run.net_income_amount),
+  total_revenue_amount: normalizeRemoteNumber(run.total_revenue_amount),
+  total_contra_revenue_amount: normalizeRemoteNumber(run.total_contra_revenue_amount),
+  total_expense_amount: normalizeRemoteNumber(run.total_expense_amount),
+  closing_journal_entry_id: run.closing_journal_entry_id,
+  posted_at: run.posted_at,
+  reversed_at: run.reversed_at,
+  reversed_by: run.reversed_by,
+  reversed_by_name: run.reversed_by_name,
+  reversal_journal_entry_id: run.reversal_journal_entry_id,
+  reversal_reason: run.reversal_reason,
+  notes: run.notes,
+  version: run.version ?? 1,
+  created_by: run.created_by,
+  created_by_name: run.created_by_name,
+  updated_by: run.updated_by,
+  updated_by_name: run.updated_by_name,
+  created_at: run.created_at,
+  updated_at: run.updated_at,
+  deleted_at: run.deleted_at,
 });
 
 const mapJournalEntryToRemoteDto = (entry: JournalEntry): RemoteJournalEntryDto => ({
@@ -2165,6 +2238,42 @@ const isRemoteCashBankReconciliationDto = (payload: unknown): payload is RemoteC
   );
 };
 
+const isRemoteAccountingPeriodDto = (payload: unknown): payload is RemoteAccountingPeriodDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteAccountingPeriodDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.period_type === 'string' &&
+    typeof candidate.start_date === 'string' &&
+    typeof candidate.end_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteClosingRunDto = (payload: unknown): payload is RemoteClosingRunDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteClosingRunDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.period_id === 'string' &&
+    typeof candidate.period_name === 'string' &&
+    typeof candidate.start_date === 'string' &&
+    typeof candidate.end_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.retained_earning_account_id === 'string' &&
+    typeof candidate.net_income_amount === 'number' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteJournalEntryDto = (payload: unknown): payload is RemoteJournalEntryDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -2642,6 +2751,28 @@ const updateCashBankReconciliationSyncMetadata = async (
   await db.cashBankReconciliations.update(reconciliationId, syncMetadata);
 };
 
+const updateAccountingPeriodSyncMetadata = async (
+  periodId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<AccountingPeriod, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentPeriod = await db.accountingPeriods.get(periodId);
+  if (!currentPeriod || currentPeriod.updated_at !== sourceUpdatedAt) return;
+
+  await db.accountingPeriods.update(periodId, syncMetadata);
+};
+
+const updateClosingRunSyncMetadata = async (
+  runId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<ClosingRun, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentRun = await db.closingRuns.get(runId);
+  if (!currentRun || currentRun.updated_at !== sourceUpdatedAt) return;
+
+  await db.closingRuns.update(runId, syncMetadata);
+};
+
 const updateJournalEntrySyncMetadata = async (
   entryId: string,
   sourceUpdatedAt: string,
@@ -3011,6 +3142,26 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     isRemoteCashBankReconciliationDto(queueItem.payload)
   ) {
     await updateCashBankReconciliationSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === ACCOUNTING_PERIOD_ENTITY &&
+    isRemoteAccountingPeriodDto(queueItem.payload)
+  ) {
+    await updateAccountingPeriodSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === CLOSING_RUN_ENTITY &&
+    isRemoteClosingRunDto(queueItem.payload)
+  ) {
+    await updateClosingRunSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -3398,6 +3549,30 @@ const processCashBankReconciliationQueueItem = async (queueItem: SyncQueueItem) 
   return cashBankReconciliationPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processAccountingPeriodQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Periode akuntansi sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteAccountingPeriodDto(queueItem.payload)) {
+    throw new Error('Payload periode akuntansi sync queue tidak valid.');
+  }
+
+  return accountingPeriodPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processClosingRunQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Closing run sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteClosingRunDto(queueItem.payload)) {
+    throw new Error('Payload closing run sync queue tidak valid.');
+  }
+
+  return closingRunPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processJournalEntryQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Journal entry sync queue tidak mendukung operasi delete.');
@@ -3603,6 +3778,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteEmployeeCollectionSchedule: RemoteEmployeeCollectionScheduleDto | null = null;
     let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
     let remoteCashBankReconciliation: RemoteCashBankReconciliationDto | null = null;
+    let remoteAccountingPeriod: RemoteAccountingPeriodDto | null = null;
+    let remoteClosingRun: RemoteClosingRunDto | null = null;
     let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
     let remotePayrollRunBundle: RemotePayrollRunBundleDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
@@ -3669,6 +3846,10 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteFinanceTransaction = await processFinanceTransactionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CASH_BANK_RECONCILIATION_ENTITY) {
       remoteCashBankReconciliation = await processCashBankReconciliationQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === ACCOUNTING_PERIOD_ENTITY) {
+      remoteAccountingPeriod = await processAccountingPeriodQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === CLOSING_RUN_ENTITY) {
+      remoteClosingRun = await processClosingRunQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === JOURNAL_ENTRY_ENTITY) {
       remoteJournalEntryBundle = await processJournalEntryQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PAYROLL_RUN_ENTITY) {
@@ -4200,6 +4381,30 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteCashBankReconciliation.updated_at,
       });
       await mergeRemoteCashBankReconciliationsIntoDexie([remoteCashBankReconciliation], syncedAt);
+      return;
+    }
+
+    if (remoteAccountingPeriod && isRemoteAccountingPeriodDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateAccountingPeriodSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteAccountingPeriod.updated_at,
+      });
+      await mergeRemoteAccountingPeriodsIntoDexie([remoteAccountingPeriod], syncedAt);
+      return;
+    }
+
+    if (remoteClosingRun && isRemoteClosingRunDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateClosingRunSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteClosingRun.updated_at,
+      });
+      await mergeRemoteClosingRunsIntoDexie([remoteClosingRun], syncedAt);
       return;
     }
 
@@ -5567,6 +5772,52 @@ export const enqueueCashBankReconciliationSync = async (
   return queueItem;
 };
 
+export const enqueueAccountingPeriodSync = async (
+  period: AccountingPeriod,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ACCOUNTING_PERIOD_ENTITY,
+    entity_id: period.id,
+    operation,
+    payload: mapAccountingPeriodToRemoteDto(period),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueClosingRunSync = async (
+  run: ClosingRun,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: CLOSING_RUN_ENTITY,
+    entity_id: run.id,
+    operation,
+    payload: mapClosingRunToRemoteDto(run),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueuePendingFinanceTransactionsForSync = async () => {
   const financeTransactions = (await db.financeTransactions.toArray())
     .filter((transaction) => transaction.sync_status === 'pending' || transaction.sync_status === 'failed');
@@ -5615,6 +5866,60 @@ export const enqueuePendingCashBankReconciliationsForSync = async () => {
 
     if (!existingQueueItem) {
       await enqueueCashBankReconciliationSync(reconciliation, 'update');
+    }
+  }
+};
+
+export const enqueuePendingAccountingPeriodsForSync = async () => {
+  const periods = (await db.accountingPeriods.toArray())
+    .filter((period) => (
+      period.sync_status === 'pending' ||
+      period.sync_status === 'failed'
+    ));
+
+  const queueItems = await db.syncQueue
+    .where('entity')
+    .equals(ACCOUNTING_PERIOD_ENTITY)
+    .toArray();
+
+  for (const period of periods) {
+    const existingQueueItem = queueItems.find((queueItem) => (
+      queueItem.entity_id === period.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteAccountingPeriodDto(queueItem.payload) &&
+      queueItem.payload.updated_at === period.updated_at &&
+      queueItem.payload.version === (period.version ?? 1)
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueAccountingPeriodSync(period, 'update');
+    }
+  }
+};
+
+export const enqueuePendingClosingRunsForSync = async () => {
+  const runs = (await db.closingRuns.toArray())
+    .filter((run) => (
+      run.sync_status === 'pending' ||
+      run.sync_status === 'failed'
+    ));
+
+  const queueItems = await db.syncQueue
+    .where('entity')
+    .equals(CLOSING_RUN_ENTITY)
+    .toArray();
+
+  for (const run of runs) {
+    const existingQueueItem = queueItems.find((queueItem) => (
+      queueItem.entity_id === run.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteClosingRunDto(queueItem.payload) &&
+      queueItem.payload.updated_at === run.updated_at &&
+      queueItem.payload.version === (run.version ?? 1)
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueClosingRunSync(run, 'update');
     }
   }
 };
