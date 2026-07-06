@@ -5,7 +5,7 @@ import { isTauriRuntime } from '@/utils/export/platform';
 import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
-export const CURRENT_MODULE_CATALOG_VERSION = 7;
+export const CURRENT_MODULE_CATALOG_VERSION = 8;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
@@ -87,6 +87,7 @@ const migrateEnabledModules = (modules: string[]): string[] => {
       'KOPERASI_REPORT_DAILY_STORTING',
       'KOPERASI_REPORT_DAILY_DROP',
       'KOPERASI_REPORT_WEEKLY_DROP',
+      'KOPERASI_REPORT_RESORT_DEVELOPMENT',
       'KOPERASI_REPORT_IPTW',
       'KOPERASI_REPORT_MEMBER_REGISTER',
       'KOPERASI_REPORT_INSTALLMENT_BOOK',

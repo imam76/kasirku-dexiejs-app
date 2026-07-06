@@ -414,6 +414,12 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['KOPERASI_REPORT_WEEKLY_DROP'],
   },
   {
+    code: 'COOPERATIVE_RESORT_DEVELOPMENT_REPORT_VIEW',
+    label: 'Lihat Laporan Perkembangan Resort/Karyawan',
+    group: 'Laporan Koperasi',
+    moduleCodes: ['KOPERASI_REPORT_RESORT_DEVELOPMENT'],
+  },
+  {
     code: 'COOPERATIVE_IPTW_REPORT_VIEW',
     label: 'Lihat Laporan IPTW',
     group: 'Laporan Koperasi',

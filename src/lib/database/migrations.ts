@@ -1972,4 +1972,42 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
   this.version(75).stores({
     cooperativeLoanPayments: 'id, payment_number, payment_type, payment_group_id, payment_group_number, loan_id, loan_number, installment_id, member_id, member_number, collector_id, received_by, payment_date, posted_at, status, reversal_of_payment_id, finance_transaction_id, journal_entry_id, idempotency_key, sync_status, updated_at, created_at',
   });
+
+  this.version(76).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingPermissions = await rolePermissionTable.toArray();
+    const existingIds = new Set(existingPermissions.map((permission) => permission.id));
+    const resortDevelopmentPermission: RolePermission['permission_code'] = 'COOPERATIVE_RESORT_DEVELOPMENT_REPORT_VIEW';
+
+    const migratedPermissions = existingPermissions
+      .filter((permission) => (
+        permission.permission_code === 'COOPERATIVE_REPORT_VIEW' ||
+        permission.permission_code === 'COOPERATIVE_DAILY_TARGET_REPORT_VIEW'
+      ))
+      .flatMap((legacyPermission) => {
+        const id = `${legacyPermission.role_id}:${resortDevelopmentPermission}`;
+        if (existingIds.has(id)) return [];
+        existingIds.add(id);
+
+        return [{
+          id,
+          role_id: legacyPermission.role_id,
+          permission_code: resortDevelopmentPermission,
+          created_at: now,
+          updated_at: now,
+          sync_status: 'pending' as const,
+        }];
+      });
+
+    const systemPermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingIds.has(permission.id));
+
+    if (migratedPermissions.length > 0 || systemPermissions.length > 0) {
+      await rolePermissionTable.bulkPut([
+        ...migratedPermissions,
+        ...systemPermissions,
+      ]);
+    }
+  });
 }
