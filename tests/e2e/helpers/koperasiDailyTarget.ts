@@ -9,6 +9,7 @@ import type {
   Employee,
   EmployeeArea,
   EmployeeCollectionSchedule,
+  FinanceTransaction,
 } from '../../../src/types';
 
 export const dailyTargetFixtureIds = {
@@ -399,6 +400,41 @@ const savingTransactions: CooperativeSavingTransaction[] = [{
   sync_status: 'synced',
 }];
 
+const closeBookTransactions: FinanceTransaction[] = [
+  {
+    id: 'e2e-daily-target-close-book-monday',
+    type: 'EXPENSE',
+    category: 'TRANSFER_KAS_BANK',
+    amount: 250_000,
+    description: 'Tutup buku setoran kolektor Petugas Target ke finance.',
+    created_at: iso('2026-06-01', '18'),
+    cash_account_id: 'e2e-daily-target-field-cash',
+    cash_account_code: 'KAS-TH-001',
+    cash_account_name: 'Kas Petugas Target',
+    transfer_group_id: 'e2e-daily-target-close-book-monday-group',
+    transfer_direction: 'OUT',
+    field_employee_id: employee.id,
+    field_employee_name: employee.name,
+    field_cash_movement_kind: 'DEPOSIT_TO_FINANCE',
+  },
+  {
+    id: 'e2e-daily-target-close-book-thursday',
+    type: 'EXPENSE',
+    category: 'TRANSFER_KAS_BANK',
+    amount: 150_000,
+    description: 'Tutup buku setoran kolektor Petugas Target ke finance.',
+    created_at: iso('2026-06-04', '18'),
+    cash_account_id: 'e2e-daily-target-field-cash',
+    cash_account_code: 'KAS-TH-001',
+    cash_account_name: 'Kas Petugas Target',
+    transfer_group_id: 'e2e-daily-target-close-book-thursday-group',
+    transfer_direction: 'OUT',
+    field_employee_id: employee.id,
+    field_employee_name: employee.name,
+    field_cash_movement_kind: 'DEPOSIT_TO_FINANCE',
+  },
+];
+
 const fixture = {
   cooperativeAreas: areas,
   employees: [employee, secondEmployee],
@@ -434,6 +470,32 @@ export async function seedDailyTargetFixture(page: Page) {
       };
     });
   }, fixture);
+
+  await page.reload();
+}
+
+export async function seedDailyTargetCloseBookResetFixture(page: Page) {
+  await seedDailyTargetFixture(page);
+
+  await page.evaluate(async (records) => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('KasirkuDB');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(['financeTransactions'], 'readwrite');
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+
+        const store = transaction.objectStore('financeTransactions');
+        records.forEach((record) => store.put(record));
+      };
+    });
+  }, closeBookTransactions);
 
   await page.reload();
 }

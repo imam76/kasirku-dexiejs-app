@@ -15,7 +15,7 @@ test.describe.serial('migrasi pinjaman koperasi', () => {
       ratePercent: '1',
       tenor: '12',
       settledThrough: '4',
-      akadWeekday: migrationFixtureMember.officerWeekday,
+      disbursementWeekday: migrationFixtureMember.officerWeekday,
       expectedOutstanding: 'Rp 800.000',
     });
 

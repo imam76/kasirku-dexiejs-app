@@ -98,7 +98,12 @@ export default function CooperativeLoanMigrationManagement() {
     }
 
     const calculationType = values.interest_calculation_type;
+    const applicationDate = values.application_date;
     const disbursementDate = values.disbursement_date;
+    if (disbursementDate.isBefore(applicationDate, 'day')) {
+      message.error(t('cooperative.loans.validation.disbursementBeforeApplication'));
+      return;
+    }
     const frequency = calculationType === 'TOTAL_PERCENT'
       ? (values.billing_frequency ?? 'MONTHLY')
       : 'MONTHLY';
@@ -113,7 +118,7 @@ export default function CooperativeLoanMigrationManagement() {
         member_id: values.member_id,
         principal_amount: Number(values.principal_amount || 0),
         interest_calculation_type: calculationType,
-        application_date: disbursementDate.toISOString(),
+        application_date: applicationDate.toISOString(),
         notes: values.notes,
       };
       const created = await createLoan(calculationType === 'TOTAL_PERCENT'

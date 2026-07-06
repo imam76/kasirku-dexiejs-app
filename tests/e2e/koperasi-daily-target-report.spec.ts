@@ -1,14 +1,28 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { loginAsBootstrappedOwner } from './helpers/auth';
 import {
   dailyTargetFixtureIds,
+  seedDailyTargetCloseBookResetFixture,
   seedDailyTargetFixture,
 } from './helpers/koperasiDailyTarget';
+
+async function selectJune2026(page: Page) {
+  const monthInput = page.getByRole('textbox', { name: 'Select month' });
+  await monthInput.click();
+  await page
+    .locator('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)')
+    .last()
+    .locator('.ant-picker-cell-inner')
+    .filter({ hasText: /^Jun$/ })
+    .click();
+  await expect(monthInput).toHaveValue('June 2026');
+}
 
 test('TH-01, TH-03, TH-04, TH-06, TH-07, TH-10, TH-11, TH-12 - laporan target harian per PDL', async ({ page }) => {
   await loginAsBootstrappedOwner(page);
   await seedDailyTargetFixture(page);
   await page.goto('/koperasi/laporan-target-harian');
+  await selectJune2026(page);
 
   const report = page.getByTestId('koperasi-daily-target-report');
   await expect(report).toBeVisible();
@@ -83,4 +97,28 @@ test('TH-01, TH-03, TH-04, TH-06, TH-07, TH-10, TH-11, TH-12 - laporan target ha
 
   await expect(group).toBeVisible();
   await expect(secondGroup).toHaveCount(0);
+});
+
+test('laporan target harian mereset running drop setelah tutup buku petugas', async ({ page }) => {
+  await loginAsBootstrappedOwner(page);
+  await seedDailyTargetCloseBookResetFixture(page);
+  await page.goto('/koperasi/laporan-target-harian');
+  await selectJune2026(page);
+
+  const thursday = page.getByTestId(
+    `koperasi-daily-target-row-${dailyTargetFixtureIds.employee}-2026-06-04-4`,
+  );
+  const thursdayCells = thursday.locator('td');
+  await expect(thursdayCells.nth(12)).toHaveText('-');
+  await expect(thursdayCells.nth(13)).toContainText('Rp 200.000');
+  await expect(thursdayCells.nth(14)).toContainText('Rp 200.000');
+  await expect(thursdayCells.nth(15)).toContainText('Rp 150.000');
+
+  const nextMonday = page.getByTestId(
+    `koperasi-daily-target-row-${dailyTargetFixtureIds.employee}-2026-06-08-1`,
+  );
+  const nextMondayCells = nextMonday.locator('td');
+  await expect(nextMondayCells.nth(12)).toHaveText('-');
+  await expect(nextMondayCells.nth(14)).toHaveText('-');
+  await expect(nextMondayCells.nth(15)).toHaveText('-');
 });

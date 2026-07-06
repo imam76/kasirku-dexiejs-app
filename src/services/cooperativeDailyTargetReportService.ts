@@ -1,8 +1,10 @@
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import type { Dayjs } from 'dayjs';
+import { FINANCE_CATEGORIES } from '@/constants/finance';
 import type {
   CooperativeCollectionWeekday,
+  CooperativeFieldCashMovementKind,
   CooperativeLoan,
   CooperativeLoanInstallment,
   CooperativeMember,
@@ -10,6 +12,7 @@ import type {
   Employee,
   EmployeeArea,
   EmployeeCollectionSchedule,
+  FinanceTransaction,
 } from '@/types';
 import {
   getCollectionDatesInMonth,
@@ -205,6 +208,8 @@ const getBucketKey = (
   weekday: CooperativeCollectionWeekday,
 ) => `${dateKey}:${getEmployeeKey(employeeId)}:${weekday}`;
 
+const FIELD_CASH_CLOSE_BOOK_KIND: CooperativeFieldCashMovementKind = 'DEPOSIT_TO_FINANCE';
+
 const isReportableLoan = (loan: CooperativeLoan) => (
   (loan.status === 'DISBURSED' || loan.status === 'PAID_OFF') &&
   Boolean(loan.disbursed_at)
@@ -215,6 +220,23 @@ const isPostedSavingWithdrawal = (transaction: CooperativeSavingTransaction) => 
   transaction.transaction_type === 'WITHDRAWAL' &&
   !transaction.reversal_of_transaction_id &&
   !transaction.reversal_transaction_id
+);
+
+const isFieldCashCloseBookTransaction = (
+  transaction: FinanceTransaction,
+  voidedTransferGroupIds: Set<string>,
+) => (
+  !transaction.deleted_at &&
+  !transaction.reversal_of_transfer_group_id &&
+  (!transaction.transfer_group_id || !voidedTransferGroupIds.has(transaction.transfer_group_id)) &&
+  transaction.type === 'EXPENSE' &&
+  (
+    transaction.field_cash_movement_kind === FIELD_CASH_CLOSE_BOOK_KIND ||
+    (
+      transaction.category === FINANCE_CATEGORIES.CASH_BANK_TRANSFER &&
+      transaction.transfer_direction === 'OUT'
+    )
+  )
 );
 
 const matchesEmployeeFilter = (
@@ -559,6 +581,44 @@ const buildCollectionSchedulesByEmployeeId = (
   return result;
 };
 
+const buildCloseBookDateKeysByEmployeeKey = (
+  transactions: FinanceTransaction[],
+  employeeByFieldCashAccountId: Map<string, Employee>,
+  filters: CooperativeDailyTargetReportFilters,
+  startDateKey: string,
+  endDateKey: string,
+) => {
+  const voidedTransferGroupIds = new Set(
+    transactions
+      .map((transaction) => transaction.reversal_of_transfer_group_id)
+      .filter((groupId): groupId is string => Boolean(groupId)),
+  );
+  const closeDateKeysByEmployeeKey = new Map<string, Set<string>>();
+
+  transactions
+    .filter((transaction) => isFieldCashCloseBookTransaction(transaction, voidedTransferGroupIds))
+    .forEach((transaction) => {
+      const dateKey = getDateKey(transaction.created_at);
+      if (dateKey < startDateKey || dateKey > endDateKey) return;
+
+      const employeeId = transaction.field_employee_id
+        ?? employeeByFieldCashAccountId.get(transaction.cash_account_id ?? '')?.id;
+      if (!matchesEmployeeFilter(employeeId, filters.employeeId)) return;
+
+      const employeeKey = getEmployeeKey(employeeId);
+      const dateKeys = closeDateKeysByEmployeeKey.get(employeeKey) ?? new Set<string>();
+      dateKeys.add(dateKey);
+      closeDateKeysByEmployeeKey.set(employeeKey, dateKeys);
+    });
+
+  return new Map(
+    Array.from(closeDateKeysByEmployeeKey.entries()).map(([employeeKey, dateKeys]) => [
+      employeeKey,
+      Array.from(dateKeys).sort(),
+    ]),
+  );
+};
+
 export const getCooperativeDailyTargetReport = async (
   filters: CooperativeDailyTargetReportFilters = {},
 ): Promise<CooperativeDailyTargetReport> => {
@@ -576,6 +636,7 @@ export const getCooperativeDailyTargetReport = async (
     employees,
     employeeAreas,
     collectionSchedules,
+    financeTransactions,
   ] = await Promise.all([
     db.cooperativeLoans.orderBy('loan_number').toArray(),
     db.cooperativeLoanInstallments.orderBy('loan_id').toArray(),
@@ -585,6 +646,11 @@ export const getCooperativeDailyTargetReport = async (
     db.employees.orderBy('name').toArray(),
     db.employeeAreas.orderBy('employee_id').toArray(),
     db.employeeCollectionSchedules.orderBy('employee_id').toArray(),
+    db.financeTransactions
+      .where('category')
+      .equals(FINANCE_CATEGORIES.CASH_BANK_TRANSFER)
+      .filter((transaction) => !transaction.deleted_at)
+      .toArray(),
   ]);
   const memberById = new Map(members.map((member) => [member.id, member]));
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
@@ -598,6 +664,13 @@ export const getCooperativeDailyTargetReport = async (
     employees
       .filter((employee) => employee.field_cash_account_id)
       .map((employee) => [employee.field_cash_account_id as string, employee]),
+  );
+  const closeBookDateKeysByEmployeeKey = buildCloseBookDateKeysByEmployeeKey(
+    financeTransactions,
+    employeeByFieldCashAccountId,
+    filters,
+    startDateKey,
+    endDateKey,
   );
   const paidOffDateByLoanId = getCooperativeLoanPaidOffDateByLoanId(
     loans,
@@ -890,9 +963,22 @@ export const getCooperativeDailyTargetReport = async (
   });
 
   rowsByEmployeeKey.forEach((employeeRows) => {
+    const employeeKey = getEmployeeKey(employeeRows[0]?.employee_id);
+    const closeBookDateKeys = closeBookDateKeysByEmployeeKey.get(employeeKey) ?? [];
+    let closeBookDateIndex = 0;
     let runningDrop = 0;
     let runningStorting = 0;
+
     employeeRows.forEach((row) => {
+      while (
+        closeBookDateIndex < closeBookDateKeys.length &&
+        closeBookDateKeys[closeBookDateIndex] < row.date_key
+      ) {
+        runningDrop = 0;
+        runningStorting = 0;
+        closeBookDateIndex += 1;
+      }
+
       row.previous_drop_amount = runningDrop;
       runningDrop = roundCurrency(runningDrop + row.current_drop_amount);
       runningStorting = roundCurrency(runningStorting + row.storting_amount);

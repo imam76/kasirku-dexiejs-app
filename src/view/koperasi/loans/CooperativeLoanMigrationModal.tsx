@@ -23,6 +23,7 @@ export type CooperativeLoanMigrationSettledMode = 'INSTALLMENT' | 'PRINCIPAL';
 
 export interface CooperativeLoanMigrationFormValues {
   member_id: string;
+  application_date: Dayjs;
   disbursement_date: Dayjs;
   interest_calculation_type: CooperativeLoanInterestCalculationType;
   principal_amount: number;
@@ -125,10 +126,38 @@ export default function CooperativeLoanMigrationModal({
             />
           </Form.Item>
           <Form.Item
+            name="application_date"
+            label={t('cooperative.loans.form.applicationDate')}
+            rules={[{ required: true, message: t('cooperative.loans.validation.applicationDateRequired') }]}
+          >
+            <DatePicker
+              showTime
+              className="w-full"
+              disabledDate={(current) => !current.isBefore(dayjs().tz(), 'day')}
+              data-testid="koperasi-loan-migration-application-date-input"
+            />
+          </Form.Item>
+          <Form.Item
             name="disbursement_date"
-            label={t('cooperative.loans.migration.akadDate')}
-            rules={[{ required: true, message: t('cooperative.loans.validation.disbursementDateRequired') }]}
-            extra={selectedMemberId ? undefined : t('cooperative.loans.migration.akadDateMemberFirst')}
+            label={t('cooperative.loans.form.disbursementDate')}
+            dependencies={['application_date']}
+            rules={[
+              { required: true, message: t('cooperative.loans.validation.disbursementDateRequired') },
+              ({ getFieldValue }) => ({
+                validator(_, value?: Dayjs) {
+                  const selectedApplicationDate = getFieldValue('application_date') as Dayjs | undefined;
+                  if (
+                    value &&
+                    selectedApplicationDate &&
+                    value.isBefore(selectedApplicationDate, 'day')
+                  ) {
+                    return Promise.reject(new Error(t('cooperative.loans.validation.disbursementBeforeApplication')));
+                  }
+                  return Promise.resolve();
+                },
+              }),
+            ]}
+            extra={selectedMemberId ? undefined : t('cooperative.loans.migration.disbursementDateMemberFirst')}
           >
             <DatePicker
               showTime

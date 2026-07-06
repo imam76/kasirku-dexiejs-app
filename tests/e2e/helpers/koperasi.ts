@@ -221,14 +221,14 @@ interface MigrateLoanInput {
   ratePercent?: string;
   tenor?: string;
   settledThrough?: string;
-  /** ISO weekday (1=Mon..7=Sun) the officer collects on; akad date must land on it. */
-  akadWeekday?: number;
+  /** ISO weekday (1=Mon..7=Sun) the officer collects on; disbursement date must land on it. */
+  disbursementWeekday?: number;
   expectedOutstanding: string;
 }
 
 /**
  * Records a migration loan (running loan carried over at cut-off) via the dedicated
- * "Migrasi Pinjaman" menu. Picks a past akad date on the officer's collection weekday
+ * "Migrasi Pinjaman" menu. Picks a past disbursement date on the officer's collection weekday
  * (historical fallback requires it) and before today, so the migration posts no journal.
  * Returns the loan number.
  */
@@ -236,10 +236,10 @@ export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'mem
   const pad = (value: number) => String(value).padStart(2, '0');
   const isoWeekday = (date: Date) => (date.getDay() === 0 ? 7 : date.getDay());
   const past = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  while (isoWeekday(past) !== (input.akadWeekday ?? 1)) {
+  while (isoWeekday(past) !== (input.disbursementWeekday ?? 1)) {
     past.setDate(past.getDate() - 1);
   }
-  const akadDate = `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())} 09:00:00`;
+  const migrationDate = `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())} 09:00:00`;
 
   await page.goto('/koperasi/migrasi-pinjaman');
   await expect(page.getByTestId('koperasi-loan-migration-add-button')).toBeVisible();
@@ -247,9 +247,13 @@ export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'mem
   await page.getByTestId('koperasi-loan-migration-add-button').click();
   await selectAntdOptionByTestId(page, 'koperasi-loan-migration-member-select', `${member.memberNumber} - ${member.name}`);
   // AntD DatePicker does not forward data-testid onto the <input>; target it by its label.
-  const akadInput = page.getByRole('textbox', { name: 'Tanggal Akad (historis)' });
-  await akadInput.click();
-  await akadInput.fill(akadDate);
+  const applicationInput = page.getByRole('textbox', { name: 'Tanggal Pengajuan' });
+  await applicationInput.click();
+  await applicationInput.fill(migrationDate);
+  await page.keyboard.press('Enter');
+  const disbursementInput = page.getByRole('textbox', { name: 'Tanggal Pencairan' });
+  await disbursementInput.click();
+  await disbursementInput.fill(migrationDate);
   await page.keyboard.press('Enter');
   await fillControlByTestId(page, 'koperasi-loan-migration-principal-input', input.principal ?? '1200000');
   await fillControlByTestId(page, 'koperasi-loan-migration-interest-input', input.ratePercent ?? '1');
