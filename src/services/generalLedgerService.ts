@@ -240,7 +240,7 @@ const isDateBeforeCutoff = (entryDate: string, cutoffDate?: string) => {
   return entryDate.slice(0, 10) < cutoffDate.slice(0, 10);
 };
 
-const isGeneralLedgerPostingEnabled = async (entryDate?: string) => {
+export const isGeneralLedgerPostingEnabled = async (entryDate?: string) => {
   const module = await db.enabledModules.get('GENERAL_LEDGER');
   const setting = await getGeneralLedgerSetting();
   if (!module?.is_enabled || !setting?.is_ready || !setting.cutoff_date) return false;

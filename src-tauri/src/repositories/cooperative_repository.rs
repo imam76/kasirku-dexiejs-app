@@ -164,6 +164,7 @@ macro_rules! cooperative_loan_select {
             journal_entry_id,
             disbursement_notes,
             notes,
+            is_migration,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             created_by,
@@ -861,7 +862,8 @@ pub async fn upsert_cooperative_loan(
             created_by,
             created_by_name,
             updated_by,
-            updated_by_name
+            updated_by_name,
+            is_migration
         )
         VALUES (
             $1,
@@ -921,7 +923,8 @@ pub async fn upsert_cooperative_loan(
             $55,
             $56,
             $57,
-            $58
+            $58,
+            $59
         )
         ON CONFLICT (id) DO UPDATE SET
             loan_number = EXCLUDED.loan_number,
@@ -975,6 +978,7 @@ pub async fn upsert_cooperative_loan(
             journal_entry_id = EXCLUDED.journal_entry_id,
             disbursement_notes = EXCLUDED.disbursement_notes,
             notes = EXCLUDED.notes,
+            is_migration = EXCLUDED.is_migration,
             created_by = COALESCE(cooperative_loans.created_by, EXCLUDED.created_by),
             created_by_name = COALESCE(cooperative_loans.created_by_name, EXCLUDED.created_by_name),
             updated_by = EXCLUDED.updated_by,
@@ -1035,6 +1039,7 @@ pub async fn upsert_cooperative_loan(
             journal_entry_id,
             disbursement_notes,
             notes,
+            is_migration,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             created_by,
@@ -1101,6 +1106,7 @@ pub async fn upsert_cooperative_loan(
     .bind(input.created_by_name)
     .bind(input.updated_by)
     .bind(input.updated_by_name)
+    .bind(input.is_migration)
     .fetch_optional(pool)
     .await?;
 

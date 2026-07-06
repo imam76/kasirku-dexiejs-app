@@ -2,11 +2,17 @@ import { useMemo, useState, type HTMLAttributes } from 'react';
 import { App, Alert, Button, DatePicker, InputNumber, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
+import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
+import { db } from '@/lib/db';
 import { postOpeningBalanceJournal } from '@/services/generalLedgerService';
 import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency } from '@/utils/formatters';
 import type { ChartOfAccount, GeneralLedgerSetting, InventoryAccountingPolicy } from '@/types';
+
+const LOAN_RECEIVABLE_ACCOUNT_ID = 'cooperative-loan-receivable';
+const LOAN_RECEIVABLE_ACCOUNT_CODE = '1120';
+const roundCurrencyValue = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 const { Text } = Typography;
 
@@ -63,6 +69,34 @@ export default function OpeningBalanceForm({
         ? { debit: amount, credit: amount > 0 ? 0 : current[accountId]?.credit ?? 0 }
         : { debit: amount > 0 ? 0 : current[accountId]?.debit ?? 0, credit: amount },
     }));
+  };
+
+  // Jembatan migrasi pinjaman: pinjaman migrasi tidak menjurnal, jadi piutangnya harus masuk
+  // lewat baris Piutang Pinjaman (1120) di saldo awal ini.
+  const migrationReceivableTotal = useLiveQuery(
+    async () => {
+      const migrationLoans = await db.cooperativeLoans
+        .filter((loan) => Boolean(loan.is_migration))
+        .toArray();
+      return roundCurrencyValue(migrationLoans.reduce(
+        (sum, loan) => sum + Number(loan.outstanding_principal_amount || 0),
+        0,
+      ));
+    },
+    [],
+    0,
+  );
+  const loanReceivableAccount = useMemo(
+    () => accounts.find(
+      (account) => account.id === LOAN_RECEIVABLE_ACCOUNT_ID || account.code === LOAN_RECEIVABLE_ACCOUNT_CODE,
+    ),
+    [accounts],
+  );
+  const showMigrationHint = !isLocked && migrationReceivableTotal > 0 && Boolean(loanReceivableAccount);
+
+  const fillMigrationReceivable = () => {
+    if (!loanReceivableAccount) return;
+    updateAmount(loanReceivableAccount.id, 'debit', migrationReceivableTotal);
   };
 
   const handlePost = async () => {
@@ -152,6 +186,26 @@ export default function OpeningBalanceForm({
           type="success"
           showIcon
           title={t('generalLedger.setup.alreadyPosted')}
+        />
+      )}
+
+      {showMigrationHint && (
+        <Alert
+          className="mb-3"
+          type="warning"
+          showIcon
+          message={t('generalLedger.setup.migrationReceivableHint', {
+            amount: `Rp ${formatCurrency(migrationReceivableTotal)}`,
+          })}
+          action={(
+            <Button
+              size="small"
+              data-testid="gl-opening-balance-fill-migration"
+              onClick={fillMigrationReceivable}
+            >
+              {t('generalLedger.setup.fillMigrationReceivable')}
+            </Button>
+          )}
         />
       )}
 

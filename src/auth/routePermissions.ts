@@ -63,6 +63,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/koperasi/anggota': 'COOPERATIVE_MEMBER_VIEW',
   '/koperasi/simpanan': 'COOPERATIVE_SAVING_VIEW',
   '/koperasi/pinjaman': 'COOPERATIVE_LOAN_VIEW',
+  '/koperasi/migrasi-pinjaman': 'COOPERATIVE_LOAN_DISBURSE',
   '/koperasi/angsuran': 'COOPERATIVE_INSTALLMENT_VIEW',
   '/koperasi/penagihan': 'COOPERATIVE_BILLING_ACCESS',
   '/koperasi/kas-petugas': 'COOPERATIVE_FIELD_CASH_VIEW',

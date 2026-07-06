@@ -229,6 +229,7 @@ const mapRemoteCooperativeLoanToLocal = (
   journal_entry_id: optionalString(remoteLoan.journal_entry_id),
   disbursement_notes: optionalString(remoteLoan.disbursement_notes),
   notes: optionalString(remoteLoan.notes),
+  is_migration: remoteLoan.is_migration ? true : undefined,
   created_at: remoteLoan.created_at,
   updated_at: remoteLoan.updated_at,
   created_by: optionalString(remoteLoan.created_by),

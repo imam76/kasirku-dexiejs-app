@@ -311,7 +311,8 @@ export type CooperativeReconciliationKey =
   | 'LOAN_OUTSTANDING'
   | 'PAYMENT_INSTALLMENT'
   | 'FINANCE_TRANSACTION'
-  | 'JOURNAL_ENTRY';
+  | 'JOURNAL_ENTRY'
+  | 'LOAN_MIGRATION_OPENING';
 
 export interface CooperativeReconciliationRow {
   key: CooperativeReconciliationKey;
@@ -1380,6 +1381,42 @@ const buildJournalEntryReconciliation = (
   );
 };
 
+/**
+ * Rekonsiliasi Piutang Pinjaman (1120) GL vs outstanding pokok operasional.
+ *
+ * Pinjaman migrasi tidak menjurnal saat dibuat; piutangnya masuk lewat baris 1120 di jurnal
+ * saldo awal. Setelahnya, saldo GL 1120 bergerak bersama pembayaran (kredit 1120) dan pencairan
+ * baru (debit 1120), sehingga selalu = Σ sisa pokok seluruh pinjaman. Bila baris 1120 di saldo
+ * awal terlewat, saldo GL akan kurang sebesar piutang migrasi → mismatch. Perbandingan ini
+ * tahan-waktu (tidak melenceng setelah ada angsuran pasca-cutoff).
+ *
+ * Catatan: akun 1120 melacak POKOK (pencairan Dr pokok, pembayaran Cr pokok), jadi sisi
+ * operasional memakai outstanding_principal_amount, bukan termasuk bunga.
+ */
+const buildLoanReceivableLedgerReconciliation = (
+  loans: CooperativeLoan[],
+  accounts: ChartOfAccount[],
+  receivableJournalEntries: JournalEntryWithLines[],
+): CooperativeReconciliationRow => {
+  const expectedAmount = loans.reduce(
+    (sum, loan) => sum + Number(loan.outstanding_principal_amount || 0),
+    0,
+  );
+  const receivableAccount = accounts.find(
+    (account) => account.id === 'cooperative-loan-receivable' || account.code === '1120',
+  );
+  const actualAmount = receivableAccount
+    ? receivableJournalEntries.reduce((sum, entry) => sum + entry.lines.reduce(
+        (lineSum, line) => (line.account_id === receivableAccount.id
+          ? lineSum + (Number(line.debit || 0) - Number(line.credit || 0))
+          : lineSum),
+        0,
+      ), 0)
+    : 0;
+  const mismatchCount = isBalanceMismatch(actualAmount - expectedAmount) ? 1 : 0;
+  return createReconciliationRow('LOAN_MIGRATION_OPENING', mismatchCount, expectedAmount, actualAmount);
+};
+
 const buildReconciliationSummary = (
   savingBalances: CooperativeMemberSavingBalance[],
   savingTransactions: CooperativeSavingTransaction[],
@@ -1388,6 +1425,8 @@ const buildReconciliationSummary = (
   payments: CooperativeLoanPayment[],
   financeTransactions: FinanceTransaction[],
   journalEntries: JournalEntryWithLines[],
+  accounts: ChartOfAccount[],
+  receivableJournalEntries: JournalEntryWithLines[],
 ): CooperativeReconciliationSummary => {
   const rows = [
     buildSavingBalanceReconciliation(savingBalances, savingTransactions),
@@ -1396,6 +1435,11 @@ const buildReconciliationSummary = (
     buildFinanceTransactionReconciliation(savingTransactions, loans, payments, financeTransactions),
     buildJournalEntryReconciliation(savingTransactions, loans, payments, journalEntries),
   ];
+  // Hanya relevan bila ada pinjaman migrasi (piutangnya lewat saldo awal, bukan jurnal);
+  // kalau tidak, hindari noise untuk koperasi tanpa migrasi.
+  if (loans.some((loan) => loan.is_migration)) {
+    rows.push(buildLoanReceivableLedgerReconciliation(loans, accounts, receivableJournalEntries));
+  }
   const mismatchCount = rows.reduce((sum, row) => sum + row.mismatch_count, 0);
 
   return {
@@ -1531,6 +1575,8 @@ export const getCooperativeReportData = async (
       payments,
       financeTransactions,
       reconciliationJournalEntries,
+      accounts,
+      formalStatementEntries,
     ),
     journalEntries,
     incomeStatement,

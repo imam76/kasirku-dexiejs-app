@@ -1099,6 +1099,7 @@ export interface RemoteCooperativeLoanDto {
   journal_entry_id?: string | null;
   disbursement_notes?: string | null;
   notes?: string | null;
+  is_migration?: boolean | null;
   created_at: string;
   updated_at: string;
   created_by?: string | null;

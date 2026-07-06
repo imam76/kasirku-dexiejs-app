@@ -1913,6 +1913,8 @@ export interface CooperativeLoan {
   payment_channel?: string;
   finance_transaction_id?: string;
   journal_entry_id?: string;
+  /** true = pinjaman migrasi/saldo awal: tidak menjurnal & tidak menggerakkan kas. Piutang masuk lewat saldo awal. */
+  is_migration?: boolean;
   disbursement_notes?: string;
   notes?: string;
   created_at: string;

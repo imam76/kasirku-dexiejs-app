@@ -160,10 +160,29 @@ export const cooperativeLoanDisbursementSchema = z.object({
   disbursement_date: z.string().optional(),
   first_due_date: z.string().optional(),
   historical_entry: z.boolean().optional().default(false),
+  // Mode migrasi: mencatat posisi pinjaman berjalan per cut-off tanpa jurnal & tanpa kas.
+  migration_entry: z.boolean().optional().default(false),
+  // Cara 1 (bunga flat): angsuran 1..N ditandai lunas historis.
+  settled_through_installment_number: z.number().int().nonnegative().optional(),
+  // Cara 2 (anuitas/menurun/bayar lompat): sisa pokok/bunga dinyatakan eksplisit.
+  migration_outstanding_principal_amount: z.number().nonnegative().optional(),
+  migration_outstanding_interest_amount: z.number().nonnegative().optional(),
   payment_method: z.enum(cooperativeLoanPaymentMethodValues).optional(),
   cash_account_id: z.string().optional(),
   payment_channel: z.string().optional(),
   notes: z.string().optional(),
+}).superRefine((value, context) => {
+  if (!value.migration_entry) return;
+  if (
+    value.settled_through_installment_number === undefined &&
+    value.migration_outstanding_principal_amount === undefined
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['settled_through_installment_number'],
+      message: 'Migrasi wajib mengisi salah satu: jumlah angsuran yang sudah lunas atau sisa pokok.',
+    });
+  }
 });
 
 export const cooperativeLoanPaymentSchema = z.object({

@@ -20,6 +20,13 @@ export async function selectAntdOptionByTestId(page: Page, testId: string, optio
   await option.click();
 }
 
+export async function setAntdDateByTestId(page: Page, testId: string, value: string) {
+  const input = page.getByTestId(testId).locator('input').first();
+  await input.click();
+  await input.fill(value);
+  await page.keyboard.press('Enter');
+}
+
 export async function closeTopDialog(page: Page) {
   const dialog = page.getByRole('dialog').last();
   await expect(dialog).toBeVisible();

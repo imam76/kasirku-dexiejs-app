@@ -19,6 +19,7 @@ import {
 } from '@/lib/validations/cooperativeLoan';
 import {
   getCashOrBankAccountForPayment,
+  isGeneralLedgerPostingEnabled,
   postCooperativeLoanDisbursementJournal,
   postCooperativeIptwJournal,
   postCooperativeLoanPaymentJournal,
@@ -144,6 +145,10 @@ export interface DisburseCooperativeLoanInput {
   disbursement_date?: string;
   first_due_date?: string;
   historical_entry?: boolean;
+  migration_entry?: boolean;
+  settled_through_installment_number?: number;
+  migration_outstanding_principal_amount?: number;
+  migration_outstanding_interest_amount?: number;
   payment_method?: PaymentMethod;
   cash_account_id?: string;
   payment_channel?: string;
@@ -843,10 +848,95 @@ const reverseAutoIptwPayout = async ({
   return financeTransaction;
 };
 
+export interface CooperativeLoanMigrationState {
+  /** Bunga flat: angsuran 1..N ditandai lunas historis penuh. */
+  settledThroughInstallmentNumber?: number;
+  /** Anuitas/menurun/bayar lompat: sisa pokok dinyatakan eksplisit. */
+  outstandingPrincipalAmount?: number;
+  /** Opsional: sisa bunga eksplisit. Bila kosong, bunga mengikuti pokok yang lunas penuh. */
+  outstandingInterestAmount?: number;
+}
+
+const MIGRATION_EPSILON = 0.01;
+
+/**
+ * Menandai angsuran mana yang sudah lunas historis (tanpa jurnal & tanpa CooperativeLoanPayment)
+ * berdasarkan posisi migrasi. Mengembalikan kartu angsuran dengan paid_* & status terisi.
+ */
+const applyMigrationPaidState = (
+  installments: CooperativeLoanInstallment[],
+  migration: CooperativeLoanMigrationState,
+  now: string,
+): CooperativeLoanInstallment[] => {
+  const ordered = [...installments].sort((a, b) => a.installment_number - b.installment_number);
+
+  if (migration.outstandingPrincipalAmount !== undefined) {
+    const totalPrincipal = roundCurrency(
+      ordered.reduce((sum, row) => sum + Number(row.principal_amount || 0), 0),
+    );
+    const totalInterest = roundCurrency(
+      ordered.reduce((sum, row) => sum + Number(row.interest_amount || 0), 0),
+    );
+    let principalToSettle = roundCurrency(Math.max(0, totalPrincipal - migration.outstandingPrincipalAmount));
+    const interestGiven = migration.outstandingInterestAmount !== undefined;
+    let interestToSettle = interestGiven
+      ? roundCurrency(Math.max(0, totalInterest - (migration.outstandingInterestAmount ?? 0)))
+      : 0;
+
+    for (const row of ordered) {
+      const principal = Number(row.principal_amount || 0);
+      if (principalToSettle >= principal - MIGRATION_EPSILON) {
+        row.paid_principal_amount = principal;
+        principalToSettle = roundCurrency(principalToSettle - principal);
+      } else if (principalToSettle > MIGRATION_EPSILON) {
+        row.paid_principal_amount = roundCurrency(principalToSettle);
+        principalToSettle = 0;
+      } else {
+        row.paid_principal_amount = 0;
+      }
+
+      const interest = Number(row.interest_amount || 0);
+      if (interestGiven) {
+        if (interestToSettle >= interest - MIGRATION_EPSILON) {
+          row.paid_interest_amount = interest;
+          interestToSettle = roundCurrency(interestToSettle - interest);
+        } else if (interestToSettle > MIGRATION_EPSILON) {
+          row.paid_interest_amount = roundCurrency(interestToSettle);
+          interestToSettle = 0;
+        } else {
+          row.paid_interest_amount = 0;
+        }
+      } else {
+        // Default: bunga dianggap lunas hanya pada angsuran yang pokoknya lunas penuh.
+        row.paid_interest_amount = row.paid_principal_amount >= principal - MIGRATION_EPSILON ? interest : 0;
+      }
+    }
+  } else if (migration.settledThroughInstallmentNumber !== undefined) {
+    const settledThrough = migration.settledThroughInstallmentNumber;
+    for (const row of ordered) {
+      if (row.installment_number <= settledThrough) {
+        row.paid_principal_amount = row.principal_amount;
+        row.paid_interest_amount = row.interest_amount;
+        row.paid_penalty_amount = row.penalty_amount;
+      }
+    }
+  }
+
+  for (const row of ordered) {
+    row.status = getInstallmentNextStatus(row);
+    if (row.status === 'PAID') {
+      row.paid_at = now;
+    }
+  }
+
+  return ordered;
+};
+
 const buildInstallments = (
   loan: CooperativeLoan,
   firstDueDate: string,
   now: string,
+  migration?: CooperativeLoanMigrationState,
 ): CooperativeLoanInstallment[] => {
   const baseDueDate = dayjs(firstDueDate);
   const billingFrequency = resolveLoanBillingFrequency(loan);
@@ -862,7 +952,7 @@ const buildInstallments = (
         installmentCount: resolveLoanInstallmentCount(loan),
       });
 
-  return amounts.map((amount) => withPendingCooperativeSync({
+  const rows: CooperativeLoanInstallment[] = amounts.map((amount) => withPendingCooperativeSync({
     id: crypto.randomUUID(),
     loan_id: loan.id,
     loan_number: loan.loan_number,
@@ -889,6 +979,9 @@ const buildInstallments = (
     created_at: now,
     updated_at: now,
   }));
+
+  if (!migration) return rows;
+  return applyMigrationPaidState(rows, migration, now);
 };
 
 const recordMandatorySavingDeduction = async ({
@@ -1224,6 +1317,9 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
 }): Promise<CooperativeLoanDisbursementWriteResult> => {
   const disbursementDate = parsedInput.disbursement_date ?? now;
   const paymentMethod = parsedInput.payment_method ?? 'TUNAI';
+  const isMigration = parsedInput.migration_entry === true;
+  // Mode migrasi memakai relaksasi jadwal historis, tetapi tanpa jurnal & tanpa kas.
+  const historicalMode = Boolean(parsedInput.historical_entry) || isMigration;
   const financeTransactionId = crypto.randomUUID();
   let disbursedLoan: CooperativeLoan | undefined;
   let installments: CooperativeLoanInstallment[] = [];
@@ -1236,6 +1332,13 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
   }
   if (loan.status !== 'APPROVED') {
     throw new Error('Pinjaman hanya bisa dicairkan setelah approved.');
+  }
+  // Piutang migrasi harus masuk periode saldo awal (sebelum cutoff) supaya tidak menghasilkan
+  // pinjaman berpiutang tanpa jejak GL. Bila posting sudah aktif untuk tanggal ini, tolak.
+  if (isMigration && await isGeneralLedgerPostingEnabled(disbursementDate)) {
+    throw new Error(
+      'Pinjaman migrasi harus bertanggal sebelum cutoff buku besar. Piutangnya dicatat lewat saldo awal, bukan jurnal pencairan.',
+    );
   }
 
   const existingInstallment = await db.cooperativeLoanInstallments
@@ -1275,7 +1378,7 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
   const resolvedSchedule = resolveCollectionScheduleForDisbursement({
     schedules: collectionSchedules,
     value: disbursementDate,
-    allowHistoricalFallback: parsedInput.historical_entry,
+    allowHistoricalFallback: historicalMode,
   });
   if (!resolvedSchedule) {
     const weekday = getCollectionWeekdayLabel(
@@ -1292,25 +1395,29 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
     throw new Error('Mode data historis hanya dapat digunakan untuk tanggal pencairan sebelum hari ini.');
   }
   if (
-    !parsedInput.historical_entry &&
+    !historicalMode &&
     dayjs(disbursementDate).tz().isBefore(dayjs(loan.application_date).tz(), 'day')
   ) {
     throw new Error('Tanggal pencairan tidak boleh sebelum tanggal pengajuan.');
   }
 
-  const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
-  const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT);
-  const disbursementAmount = resolveNetDisbursementAmount(loan);
+  const cashAccount = isMigration
+    ? undefined
+    : await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
+  const accountSnapshot = isMigration
+    ? undefined
+    : await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT);
+  const disbursementAmount = isMigration ? 0 : resolveNetDisbursementAmount(loan);
   if (disbursementAmount < -0.01) {
     throw new Error('Nominal pencairan net tidak boleh negatif.');
   }
-  const fieldCashContext = paymentMethod === 'TUNAI'
+  const fieldCashContext = !isMigration && paymentMethod === 'TUNAI' && cashAccount
     ? await getFieldCashContextForCashAccount(cashAccount.id)
     : undefined;
-  if (fieldCashContext && disbursementAmount > 0) {
+  if (fieldCashContext && cashAccount && disbursementAmount > 0) {
     await assertSufficientCashAccountBalance(cashAccount.id, disbursementAmount);
   }
-  const firstDueDate = parsedInput.historical_entry && parsedInput.first_due_date
+  const firstDueDate = historicalMode && parsedInput.first_due_date
     ? parsedInput.first_due_date
     : getFirstScheduledDueDate({
         disbursementDate: dayjs(disbursementDate).tz(),
@@ -1320,10 +1427,10 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
   if (!dayjs(firstDueDate).tz().isAfter(dayjs(disbursementDate).tz(), 'day')) {
     throw new Error('Jatuh tempo pertama harus setelah tanggal pencairan.');
   }
-  const collectionWeekday = parsedInput.historical_entry && parsedInput.first_due_date
+  const collectionWeekday = historicalMode && parsedInput.first_due_date
     ? getIsoWeekday(firstDueDate)
     : resolvedSchedule.weekday;
-  const collectionSchedule = parsedInput.historical_entry
+  const collectionSchedule = historicalMode
     ? findCollectionScheduleByWeekday(collectionSchedules, firstDueDate)
     : resolvedSchedule.schedule;
   if (!collectionSchedule) {
@@ -1331,7 +1438,9 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
       `Jatuh tempo pertama harus mengikuti salah satu hari jadwal penagihan ${officer.name}.`,
     );
   }
-  await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
+  if (!isMigration) {
+    await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
+  }
 
   const nextDisbursedLoan: CooperativeLoan = withPendingCooperativeSync({
     ...loan,
@@ -1345,12 +1454,13 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
     area_code: member.area_code,
     collection_schedule_id: collectionSchedule?.id,
     collection_weekday: collectionWeekday,
-    cash_account_id: cashAccount.id,
-    cash_account_code: cashAccount.code,
-    cash_account_name: cashAccount.name,
+    cash_account_id: cashAccount?.id,
+    cash_account_code: cashAccount?.code,
+    cash_account_name: cashAccount?.name,
     payment_method: paymentMethod,
     payment_channel: parsedInput.payment_channel,
-    finance_transaction_id: financeTransactionId,
+    finance_transaction_id: isMigration ? undefined : financeTransactionId,
+    is_migration: isMigration ? true : undefined,
     disbursement_notes: parsedInput.notes,
     net_disbursement_amount: Math.max(0, disbursementAmount),
     outstanding_principal_amount: loan.principal_amount,
@@ -1362,67 +1472,101 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
   });
   disbursedLoan = nextDisbursedLoan;
 
-  installments = buildInstallments(nextDisbursedLoan, firstDueDate, now);
-  const financeTransaction = withPendingFinanceTransactionSync({
-    id: financeTransactionId,
-    type: 'EXPENSE',
-    category: FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT,
-    amount: Math.max(0, disbursementAmount),
-    description: `Pencairan pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
-    created_at: disbursementDate,
-    reference_id: loan.id,
-    payment_method: paymentMethod,
-    payment_channel: parsedInput.payment_channel,
-    cash_account_id: cashAccount.id,
-    cash_account_code: cashAccount.code,
-    cash_account_name: cashAccount.name,
-    ...accountSnapshot,
-    ...(fieldCashContext
-      ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'LOAN_DISBURSEMENT')
-      : {}),
-  }, currentUser, now);
+  const migrationState: CooperativeLoanMigrationState | undefined = isMigration
+    ? {
+        settledThroughInstallmentNumber: parsedInput.settled_through_installment_number,
+        outstandingPrincipalAmount: parsedInput.migration_outstanding_principal_amount,
+        outstandingInterestAmount: parsedInput.migration_outstanding_interest_amount,
+      }
+    : undefined;
+  installments = buildInstallments(nextDisbursedLoan, firstDueDate, now, migrationState);
 
-  await db.financeTransactions.add(financeTransaction);
-  if (resolveLoanDeductionMethod(nextDisbursedLoan) === 'DEDUCT_ON_DISBURSEMENT') {
-    const mandatorySavingResult = await recordMandatorySavingDeduction({
-      loan: nextDisbursedLoan,
-      amount: Number(nextDisbursedLoan.mandatory_saving_amount || 0),
-      transactionDate: disbursementDate,
-      now,
-      cashAccount,
-      paymentMethod,
-      paymentChannel: parsedInput.payment_channel,
-      currentUser,
-    });
-    mandatorySavingTransaction = mandatorySavingResult.transaction;
-    mandatorySavingBalance = mandatorySavingResult.balance;
+  if (isMigration) {
+    // Outstanding pinjaman migrasi diturunkan dari sisa kartu angsuran, bukan pokok penuh.
+    const remaining = installments.reduce(
+      (acc, installment) => {
+        const rem = getInstallmentRemainingAmounts(installment);
+        acc.principal += rem.principal_amount;
+        acc.interest += rem.interest_amount;
+        acc.penalty += rem.penalty_amount;
+        return acc;
+      },
+      { principal: 0, interest: 0, penalty: 0 },
+    );
+    nextDisbursedLoan.outstanding_principal_amount = roundCurrency(remaining.principal);
+    nextDisbursedLoan.outstanding_interest_amount = roundCurrency(remaining.interest);
+    nextDisbursedLoan.outstanding_penalty_amount = roundCurrency(remaining.penalty);
+    nextDisbursedLoan.net_disbursement_amount = 0;
+    nextDisbursedLoan.status = getLoanNextStatus(nextDisbursedLoan, installments);
+  }
+
+  let financeTransaction: FinanceTransaction | undefined;
+  if (!isMigration && cashAccount) {
+    financeTransaction = withPendingFinanceTransactionSync({
+      id: financeTransactionId,
+      type: 'EXPENSE',
+      category: FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT,
+      amount: Math.max(0, disbursementAmount),
+      description: `Pencairan pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
+      created_at: disbursementDate,
+      reference_id: loan.id,
+      payment_method: paymentMethod,
+      payment_channel: parsedInput.payment_channel,
+      cash_account_id: cashAccount.id,
+      cash_account_code: cashAccount.code,
+      cash_account_name: cashAccount.name,
+      ...accountSnapshot,
+      ...(fieldCashContext
+        ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'LOAN_DISBURSEMENT')
+        : {}),
+    }, currentUser, now);
+
+    await db.financeTransactions.add(financeTransaction);
+    if (resolveLoanDeductionMethod(nextDisbursedLoan) === 'DEDUCT_ON_DISBURSEMENT') {
+      const mandatorySavingResult = await recordMandatorySavingDeduction({
+        loan: nextDisbursedLoan,
+        amount: Number(nextDisbursedLoan.mandatory_saving_amount || 0),
+        transactionDate: disbursementDate,
+        now,
+        cashAccount,
+        paymentMethod,
+        paymentChannel: parsedInput.payment_channel,
+        currentUser,
+      });
+      mandatorySavingTransaction = mandatorySavingResult.transaction;
+      mandatorySavingBalance = mandatorySavingResult.balance;
+    }
   }
   await db.cooperativeLoanInstallments.bulkAdd(installments);
   await db.cooperativeLoans.put(nextDisbursedLoan);
 
-  const journalEntry = await postCooperativeLoanDisbursementJournal(nextDisbursedLoan, currentUser);
-  if (journalEntry) {
-    disbursedLoan = {
-      ...nextDisbursedLoan,
-      journal_entry_id: journalEntry.id,
-      updated_at: now,
-      sync_status: 'pending',
-      sync_error: undefined,
-    };
-    await db.cooperativeLoans.update(loan.id, {
-      journal_entry_id: journalEntry.id,
-      updated_at: now,
-      sync_status: 'pending',
-      sync_error: undefined,
-    });
+  if (!isMigration) {
+    const journalEntry = await postCooperativeLoanDisbursementJournal(nextDisbursedLoan, currentUser);
+    if (journalEntry) {
+      disbursedLoan = {
+        ...nextDisbursedLoan,
+        journal_entry_id: journalEntry.id,
+        updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
+      };
+      await db.cooperativeLoans.update(loan.id, {
+        journal_entry_id: journalEntry.id,
+        updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
+      });
+    }
   }
 
   await writeActivityLog({
     user: currentUser,
-    action: 'COOPERATIVE_LOAN_DISBURSED',
+    action: isMigration ? 'COOPERATIVE_LOAN_MIGRATED' : 'COOPERATIVE_LOAN_DISBURSED',
     entity: 'cooperativeLoans',
     entity_id: loan.id,
-    description: `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)}.`,
+    description: isMigration
+      ? `${currentUser?.name ?? 'User'} mencatat migrasi pinjaman ${loan.loan_number} (sisa pokok ${nextDisbursedLoan.outstanding_principal_amount}).`
+      : `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)}.`,
   });
 
   if (!disbursedLoan) {
@@ -1490,6 +1634,10 @@ export const disburseCooperativeLoanViaFieldCash = async (
 ): Promise<DisburseCooperativeLoanViaFieldCashResult> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_DISBURSE');
+
+  if (input.migration_entry) {
+    throw new Error('Pinjaman migrasi tidak boleh melalui jalur kas petugas karena tidak menggerakkan kas. Gunakan pencatatan migrasi biasa.');
+  }
 
   const droppingAmount = roundCurrency(Number(input.dropping_amount || 0));
   if (!Number.isFinite(droppingAmount) || droppingAmount < 0) {

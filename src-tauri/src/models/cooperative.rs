@@ -140,6 +140,7 @@ pub struct CooperativeLoanDto {
     pub journal_entry_id: Option<String>,
     pub disbursement_notes: Option<String>,
     pub notes: Option<String>,
+    pub is_migration: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
     pub created_by: Option<String>,

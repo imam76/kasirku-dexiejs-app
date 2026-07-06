@@ -168,6 +168,7 @@ const reconciliationLabelKey: Record<CooperativeReconciliationKey, TranslationKe
   PAYMENT_INSTALLMENT: 'cooperative.reports.reconciliation.paymentInstallment',
   FINANCE_TRANSACTION: 'cooperative.reports.reconciliation.financeTransaction',
   JOURNAL_ENTRY: 'cooperative.reports.reconciliation.journalEntry',
+  LOAN_MIGRATION_OPENING: 'cooperative.reports.reconciliation.loanMigrationOpening',
 };
 
 const getSignedAmountClass = (value: number) => (

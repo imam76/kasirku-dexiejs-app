@@ -212,6 +212,65 @@ export function loanRow(page: Page, memberNumber: string): Locator {
   return page.getByTestId(`koperasi-loan-row-${memberNumber}`).first();
 }
 
+export function migrationLoanRow(page: Page, memberNumber: string): Locator {
+  return page.getByTestId(`koperasi-loan-migration-row-${memberNumber}`).first();
+}
+
+interface MigrateLoanInput {
+  principal?: string;
+  ratePercent?: string;
+  tenor?: string;
+  settledThrough?: string;
+  /** ISO weekday (1=Mon..7=Sun) the officer collects on; akad date must land on it. */
+  akadWeekday?: number;
+  expectedOutstanding: string;
+}
+
+/**
+ * Records a migration loan (running loan carried over at cut-off) via the dedicated
+ * "Migrasi Pinjaman" menu. Picks a past akad date on the officer's collection weekday
+ * (historical fallback requires it) and before today, so the migration posts no journal.
+ * Returns the loan number.
+ */
+export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'memberNumber' | 'name'>, input: MigrateLoanInput) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const isoWeekday = (date: Date) => (date.getDay() === 0 ? 7 : date.getDay());
+  const past = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  while (isoWeekday(past) !== (input.akadWeekday ?? 1)) {
+    past.setDate(past.getDate() - 1);
+  }
+  const akadDate = `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())} 09:00:00`;
+
+  await page.goto('/koperasi/migrasi-pinjaman');
+  await expect(page.getByTestId('koperasi-loan-migration-add-button')).toBeVisible();
+
+  await page.getByTestId('koperasi-loan-migration-add-button').click();
+  await selectAntdOptionByTestId(page, 'koperasi-loan-migration-member-select', `${member.memberNumber} - ${member.name}`);
+  // AntD DatePicker does not forward data-testid onto the <input>; target it by its label.
+  const akadInput = page.getByRole('textbox', { name: 'Tanggal Akad (historis)' });
+  await akadInput.click();
+  await akadInput.fill(akadDate);
+  await page.keyboard.press('Enter');
+  await fillControlByTestId(page, 'koperasi-loan-migration-principal-input', input.principal ?? '1200000');
+  await fillControlByTestId(page, 'koperasi-loan-migration-interest-input', input.ratePercent ?? '1');
+  await fillControlByTestId(page, 'koperasi-loan-migration-tenor-input', input.tenor ?? '12');
+  await fillControlByTestId(page, 'koperasi-loan-migration-settled-installment-input', input.settledThrough ?? '4');
+  await page.getByTestId('koperasi-loan-migration-submit-button').click();
+
+  const row = migrationLoanRow(page, member.memberNumber);
+  await expect(row).toContainText(member.name);
+  await expect(row).toContainText('Disbursed');
+  await expect(row).toContainText(input.expectedOutstanding);
+
+  const rowText = await row.innerText();
+  const loanNumber = rowText.match(/KSP-PJ-\d{8}-\d{4}/)?.[0];
+  if (!loanNumber) {
+    throw new Error(`Nomor pinjaman migrasi tidak ditemukan di row ${member.memberNumber}.`);
+  }
+
+  return loanNumber;
+}
+
 export async function expectInstallmentSchedule(page: Page, member: DemoMemberInput) {
   await page.goto('/koperasi/angsuran');
   await expect(page.getByText('Pembayaran Angsuran', { exact: true })).toBeVisible();

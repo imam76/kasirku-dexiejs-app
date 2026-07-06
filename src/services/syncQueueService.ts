@@ -470,6 +470,7 @@ const mapCooperativeLoanToRemoteDto = (loan: CooperativeLoan): RemoteCooperative
   journal_entry_id: loan.journal_entry_id,
   disbursement_notes: loan.disbursement_notes,
   notes: loan.notes,
+  is_migration: loan.is_migration ?? false,
   created_at: loan.created_at,
   updated_at: loan.updated_at,
   created_by: loan.created_by,
