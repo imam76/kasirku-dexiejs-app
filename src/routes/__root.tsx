@@ -42,6 +42,7 @@ import {
   Home,
   Languages,
   ListTree,
+  Lock,
   MapPinned,
   Moon,
   Package,
@@ -268,6 +269,7 @@ const RootLayout = () => {
         { to: '/finance/payroll', label: t('nav.finance.payroll'), icon: WalletCards },
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
         { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
+        { to: '/finance/closing', label: t('closing.title'), icon: Lock },
       ],
     },
     {

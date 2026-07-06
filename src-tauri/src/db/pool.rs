@@ -263,7 +263,7 @@ fn checksum_with_crlf_line_endings(sql: &str) -> Vec<u8> {
 async fn run_postgres_migrations(pool: &PgPool, migrator: &Migrator) -> Result<(), MigrateError> {
     for _ in 0..MAX_MIGRATION_REPAIR_ATTEMPTS {
         match migrator.run(pool).await {
-            Ok(()) => return Ok(()),
+            Ok(()) => return repair_missing_current_schema(pool, migrator).await,
             Err(MigrateError::VersionMismatch(version)) => {
                 repair_compatible_migration_mismatch(pool, migrator, version).await?;
             }
@@ -271,7 +271,27 @@ async fn run_postgres_migrations(pool: &PgPool, migrator: &Migrator) -> Result<(
         }
     }
 
-    migrator.run(pool).await
+    migrator.run(pool).await?;
+    repair_missing_current_schema(pool, migrator).await
+}
+
+async fn repair_missing_current_schema(
+    pool: &PgPool,
+    migrator: &Migrator,
+) -> Result<(), MigrateError> {
+    for version in [47, 48] {
+        if is_current_migration_schema_compatible(pool, version).await? {
+            continue;
+        }
+
+        execute_current_migration_and_upsert_row(pool, migrator, version).await?;
+
+        if !is_current_migration_schema_compatible(pool, version).await? {
+            return Err(MigrateError::VersionMismatch(version));
+        }
+    }
+
+    Ok(())
 }
 
 async fn repair_compatible_migration_mismatch(
@@ -375,6 +395,38 @@ async fn execute_current_migration_and_replace_row(
     .bind(migration.description.as_ref())
     .bind(migration.checksum.as_ref())
     .bind(version)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn execute_current_migration_and_upsert_row(
+    pool: &PgPool,
+    migrator: &Migrator,
+    version: i64,
+) -> Result<(), MigrateError> {
+    let migration = migration_for_version(migrator, version)?;
+    let mut tx = pool.begin().await?;
+
+    tx.execute(migration.sql.clone())
+        .await
+        .map_err(|error| MigrateError::ExecuteMigration(error, version))?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
+        VALUES ($1, $2, TRUE, $3, -1)
+        ON CONFLICT (version) DO UPDATE SET
+            description = EXCLUDED.description,
+            checksum = EXCLUDED.checksum,
+            success = TRUE
+        "#,
+    )
+    .bind(version)
+    .bind(migration.description.as_ref())
+    .bind(migration.checksum.as_ref())
     .execute(&mut *tx)
     .await?;
 
@@ -537,6 +589,79 @@ async fn is_current_migration_schema_compatible(
         42 => column_exists(pool, "finance_transactions", "field_cash_movement_kind").await,
         46 => Ok(table_exists(pool, "cash_bank_reconciliations").await?
             && column_exists(pool, "finance_transactions", "cash_bank_reconciliation_id").await?),
+        47 => {
+            table_has_columns(
+                pool,
+                "accounting_periods",
+                &[
+                    "id",
+                    "name",
+                    "period_type",
+                    "start_date",
+                    "end_date",
+                    "status",
+                    "locked_at",
+                    "locked_by",
+                    "locked_by_name",
+                    "closed_at",
+                    "closed_by",
+                    "closed_by_name",
+                    "closing_journal_entry_id",
+                    "reopened_at",
+                    "reopened_by",
+                    "reopened_by_name",
+                    "reopen_reason",
+                    "notes",
+                    "version",
+                    "created_by",
+                    "created_by_name",
+                    "updated_by",
+                    "updated_by_name",
+                    "created_at",
+                    "updated_at",
+                    "deleted_at",
+                ],
+            )
+            .await
+        }
+        48 => {
+            table_has_columns(
+                pool,
+                "closing_runs",
+                &[
+                    "id",
+                    "period_id",
+                    "period_name",
+                    "start_date",
+                    "end_date",
+                    "status",
+                    "retained_earning_account_id",
+                    "retained_earning_account_code",
+                    "retained_earning_account_name",
+                    "net_income_amount",
+                    "total_revenue_amount",
+                    "total_contra_revenue_amount",
+                    "total_expense_amount",
+                    "closing_journal_entry_id",
+                    "posted_at",
+                    "reversed_at",
+                    "reversed_by",
+                    "reversed_by_name",
+                    "reversal_journal_entry_id",
+                    "reversal_reason",
+                    "notes",
+                    "version",
+                    "created_by",
+                    "created_by_name",
+                    "updated_by",
+                    "updated_by_name",
+                    "created_at",
+                    "updated_at",
+                    "deleted_at",
+                ],
+            )
+            .await
+        }
         _ => Ok(false),
     }
 }
