@@ -418,6 +418,7 @@ export type SalesDocumentSyncStatus = EntitySyncStatus;
 export type TaxSyncStatus = EntitySyncStatus;
 export type WarehouseSyncStatus = EntitySyncStatus;
 export type FinanceTransactionSyncStatus = EntitySyncStatus;
+export type CashBankReconciliationSyncStatus = EntitySyncStatus;
 export type JournalEntrySyncStatus = EntitySyncStatus;
 export type CurrencySyncStatus = EntitySyncStatus;
 export type CurrencyRateSyncStatus = EntitySyncStatus;
@@ -2079,6 +2080,7 @@ export interface CompanyProfileSetting {
 }
 
 export type FinanceTransactionType = 'INCOME' | 'EXPENSE' | 'OPENING_BALANCE';
+export type CashBankReconciliationStatus = 'BALANCED' | 'DIFFERENCE' | 'VOIDED';
 
 export type JournalEntryStatus = 'DRAFT' | 'POSTED' | 'VOIDED' | 'REVERSED';
 export type InventoryAccountingPolicy = 'CASH_FLOW_ONLY' | 'PERPETUAL_INVENTORY';
@@ -2215,6 +2217,38 @@ export interface GeneralLedgerSetting {
   remote_updated_at?: string;
 }
 
+export interface CashBankReconciliation {
+  id: string;
+  reconciliation_number: string;
+  cash_account_id: string;
+  cash_account_code?: string;
+  cash_account_name: string;
+  statement_date: string;
+  statement_reference?: string;
+  statement_ending_balance: number;
+  book_balance_amount: number;
+  cleared_balance_amount: number;
+  selected_transaction_total_amount: number;
+  selected_transaction_count: number;
+  selected_transaction_ids: string[];
+  difference_amount: number;
+  status: CashBankReconciliationStatus;
+  notes?: string;
+  voided_at?: string;
+  void_reason?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: CashBankReconciliationSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
 export interface JournalEntry {
   id: string;
   entry_number: string;
@@ -2337,6 +2371,10 @@ export interface FinanceTransaction {
   field_employee_id?: string;
   field_employee_name?: string;
   field_cash_movement_kind?: CooperativeFieldCashMovementKind;
+  cash_bank_reconciliation_id?: string;
+  cash_bank_reconciled_at?: string;
+  cash_bank_reconciled_by?: string;
+  cash_bank_reconciled_by_name?: string;
   version?: number;
   created_by?: string;
   created_by_name?: string;

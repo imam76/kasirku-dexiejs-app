@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
+  CashBankReconciliationStatus,
   CashierSessionBalanceStatus,
   CashierSessionStatus,
   CooperativeCollectionWeekday,
@@ -912,6 +913,39 @@ export interface RemoteFinanceTransactionDto {
   field_employee_id?: string | null;
   field_employee_name?: string | null;
   field_cash_movement_kind?: string | null;
+  cash_bank_reconciliation_id?: string | null;
+  cash_bank_reconciled_at?: string | null;
+  cash_bank_reconciled_by?: string | null;
+  cash_bank_reconciled_by_name?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteCashBankReconciliationDto {
+  id: string;
+  reconciliation_number: string;
+  cash_account_id: string;
+  cash_account_code?: string | null;
+  cash_account_name: string;
+  statement_date: string;
+  statement_reference?: string | null;
+  statement_ending_balance: number;
+  book_balance_amount: number;
+  cleared_balance_amount: number;
+  selected_transaction_total_amount: number;
+  selected_transaction_count: number;
+  selected_transaction_ids: string[];
+  difference_amount: number;
+  status: CashBankReconciliationStatus;
+  notes?: string | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
   version: number;
   created_by?: string | null;
   created_by_name?: string | null;
@@ -1959,6 +1993,23 @@ export const financeTransactionPostgresAdapter = {
   async upsert(input: RemoteFinanceTransactionDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteFinanceTransactionDto>('postgres_upsert_finance_transaction', { input });
+  },
+};
+
+export const cashBankReconciliationPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCashBankReconciliationDto[]>('postgres_list_cash_bank_reconciliations');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCashBankReconciliationDto | null>('postgres_get_cash_bank_reconciliation', { id });
+  },
+
+  async upsert(input: RemoteCashBankReconciliationDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCashBankReconciliationDto>('postgres_upsert_cash_bank_reconciliation', { input });
   },
 };
 

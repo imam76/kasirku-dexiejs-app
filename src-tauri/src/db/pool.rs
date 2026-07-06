@@ -535,6 +535,8 @@ async fn is_current_migration_schema_compatible(
         33 => column_exists(pool, "server_auth_sessions", "employee_id").await,
         34 => function_exists(pool, "kasirku_notify_data_change").await,
         42 => column_exists(pool, "finance_transactions", "field_cash_movement_kind").await,
+        46 => Ok(table_exists(pool, "cash_bank_reconciliations").await?
+            && column_exists(pool, "finance_transactions", "cash_bank_reconciliation_id").await?),
         _ => Ok(false),
     }
 }

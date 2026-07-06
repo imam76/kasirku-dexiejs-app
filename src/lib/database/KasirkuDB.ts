@@ -65,6 +65,7 @@ import type {
   EmployeeArea,
   EmployeeCollectionSchedule,
   CashierSession,
+  CashBankReconciliation,
   CooperativeFieldCashSession,
   MembershipPointTransaction,
   MembershipSetting,
@@ -89,6 +90,7 @@ export class KasirkuDB extends Dexie {
   profitBalance!: Table<ProfitBalance>;
   shoppingNotes!: Table<ShoppingNote>;
   financeTransactions!: Table<FinanceTransaction>;
+  cashBankReconciliations!: Table<CashBankReconciliation>;
   financeBalance!: Table<FinanceBalance>;
   unitConversions!: Table<UnitConversion>;
   units!: Table<UnitDefinition>;

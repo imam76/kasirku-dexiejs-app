@@ -24,6 +24,7 @@ export const backupDatabase = async () => {
       stockOpnames: await db.stockOpnames.toArray(),
       stockOpnameItems: await db.stockOpnameItems.toArray(),
       financeTransactions: await db.financeTransactions.toArray(),
+      cashBankReconciliations: await db.cashBankReconciliations.toArray(),
       financeBalance: await db.financeBalance.toArray(),
       payrollRuns: await db.payrollRuns.toArray(),
       payrollRunItems: await db.payrollRunItems.toArray(),
@@ -96,7 +97,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -128,6 +129,7 @@ export const restoreDatabase = async (file: File) => {
           db.stockOpnames,
           db.stockOpnameItems,
           db.financeTransactions,
+          db.cashBankReconciliations,
           db.financeBalance,
           db.payrollRuns,
           db.payrollRunItems,
@@ -189,6 +191,7 @@ export const restoreDatabase = async (file: File) => {
           await db.stockOpnames.clear();
           await db.stockOpnameItems.clear();
           await db.financeTransactions.clear();
+          await db.cashBankReconciliations.clear();
           await db.financeBalance.clear();
           await db.payrollRuns.clear();
           await db.payrollRunItems.clear();
@@ -254,6 +257,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.stockOpnames?.length) await db.stockOpnames.bulkAdd(data.stockOpnames);
           if (data.stockOpnameItems?.length) await db.stockOpnameItems.bulkAdd(data.stockOpnameItems);
           if (data.financeTransactions?.length) await db.financeTransactions.bulkAdd(data.financeTransactions);
+          if (data.cashBankReconciliations?.length) await db.cashBankReconciliations.bulkAdd(data.cashBankReconciliations);
           if (data.financeBalance?.length) await db.financeBalance.bulkAdd(data.financeBalance);
           if (data.payrollRuns?.length) await db.payrollRuns.bulkAdd(data.payrollRuns);
           if (data.payrollRunItems?.length) await db.payrollRunItems.bulkAdd(data.payrollRunItems);

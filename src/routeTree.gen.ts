@@ -163,6 +163,9 @@ const FinanceChartOfAccountsLazyRouteImport = createFileRoute(
   '/finance/chart-of-accounts',
 )()
 const FinanceCashFlowLazyRouteImport = createFileRoute('/finance/cash-flow')()
+const FinanceCashBankReconciliationLazyRouteImport = createFileRoute(
+  '/finance/cash-bank-reconciliation',
+)()
 const SalesReturnsNewLazyRouteImport = createFileRoute('/sales/returns/new')()
 const SalesReturnsReturnIdLazyRouteImport = createFileRoute(
   '/sales/returns/$returnId',
@@ -700,6 +703,16 @@ const FinanceCashFlowLazyRoute = FinanceCashFlowLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/finance/cash-flow.lazy').then((d) => d.Route),
 )
+const FinanceCashBankReconciliationLazyRoute =
+  FinanceCashBankReconciliationLazyRouteImport.update({
+    id: '/finance/cash-bank-reconciliation',
+    path: '/finance/cash-bank-reconciliation',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/cash-bank-reconciliation.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const SalesReturnsIndexRoute = SalesReturnsIndexRouteImport.update({
   id: '/sales/returns/',
   path: '/sales/returns/',
@@ -959,6 +972,7 @@ export interface FileRoutesByFullPath {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/finance/cash-bank-reconciliation': typeof FinanceCashBankReconciliationLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
@@ -1058,6 +1072,7 @@ export interface FileRoutesByTo {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/finance/cash-bank-reconciliation': typeof FinanceCashBankReconciliationLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
@@ -1158,6 +1173,7 @@ export interface FileRoutesById {
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
   '/transaction': typeof TransactionLazyRoute
+  '/finance/cash-bank-reconciliation': typeof FinanceCashBankReconciliationLazyRoute
   '/finance/cash-flow': typeof FinanceCashFlowLazyRoute
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
@@ -1259,6 +1275,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/sync-db'
     | '/transaction'
+    | '/finance/cash-bank-reconciliation'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
     | '/finance/general-ledger'
@@ -1358,6 +1375,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/sync-db'
     | '/transaction'
+    | '/finance/cash-bank-reconciliation'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
     | '/finance/general-ledger'
@@ -1457,6 +1475,7 @@ export interface FileRouteTypes {
     | '/shopping-note'
     | '/sync-db'
     | '/transaction'
+    | '/finance/cash-bank-reconciliation'
     | '/finance/cash-flow'
     | '/finance/chart-of-accounts'
     | '/finance/general-ledger'
@@ -1557,6 +1576,7 @@ export interface RootRouteChildren {
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
   SyncDbLazyRoute: typeof SyncDbLazyRoute
   TransactionLazyRoute: typeof TransactionLazyRoute
+  FinanceCashBankReconciliationLazyRoute: typeof FinanceCashBankReconciliationLazyRoute
   FinanceCashFlowLazyRoute: typeof FinanceCashFlowLazyRoute
   FinanceChartOfAccountsLazyRoute: typeof FinanceChartOfAccountsLazyRoute
   FinanceGeneralLedgerLazyRoute: typeof FinanceGeneralLedgerLazyRouteWithChildren
@@ -2116,6 +2136,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceCashFlowLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/cash-bank-reconciliation': {
+      id: '/finance/cash-bank-reconciliation'
+      path: '/finance/cash-bank-reconciliation'
+      fullPath: '/finance/cash-bank-reconciliation'
+      preLoaderRoute: typeof FinanceCashBankReconciliationLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sales/returns/': {
       id: '/sales/returns/'
       path: '/sales/returns'
@@ -2382,6 +2409,8 @@ const rootRouteChildren: RootRouteChildren = {
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
   SyncDbLazyRoute: SyncDbLazyRoute,
   TransactionLazyRoute: TransactionLazyRoute,
+  FinanceCashBankReconciliationLazyRoute:
+    FinanceCashBankReconciliationLazyRoute,
   FinanceCashFlowLazyRoute: FinanceCashFlowLazyRoute,
   FinanceChartOfAccountsLazyRoute: FinanceChartOfAccountsLazyRoute,
   FinanceGeneralLedgerLazyRoute: FinanceGeneralLedgerLazyRouteWithChildren,

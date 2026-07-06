@@ -1,6 +1,7 @@
 -- ============================================================================
 -- BACKFILL: cooperative_loans.is_migration untuk data yang dibuat SEBELUM
 -- kolom is_migration ada (nilainya NULL di remote).
+-- File ini disimpan di manual-migrations agar tidak dijalankan sqlx::migrate!.
 --
 -- Jalankan MANUAL di Postgres remote (bukan lewat sqlx migrate) SETELAH
 -- migrasi 0044 ter-apply. Aman diulang (idempotent).

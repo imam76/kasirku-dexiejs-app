@@ -2,6 +2,7 @@ pub mod accounting_setting_repository;
 pub mod app_setup_config_repository;
 pub mod auth_repository;
 pub mod cashier_session_repository;
+pub mod cash_bank_reconciliation_repository;
 pub mod chart_of_account_repository;
 pub mod company_profile_setting_repository;
 pub mod contact_repository;

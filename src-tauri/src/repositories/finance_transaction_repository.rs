@@ -30,6 +30,10 @@ pub async fn list_finance_transactions(
             field_employee_id,
             field_employee_name,
             field_cash_movement_kind,
+            cash_bank_reconciliation_id,
+            cash_bank_reconciled_at::TEXT AS cash_bank_reconciled_at,
+            cash_bank_reconciled_by,
+            cash_bank_reconciled_by_name,
             version,
             created_by,
             created_by_name,
@@ -76,6 +80,10 @@ pub async fn get_finance_transaction(
             field_employee_id,
             field_employee_name,
             field_cash_movement_kind,
+            cash_bank_reconciliation_id,
+            cash_bank_reconciled_at::TEXT AS cash_bank_reconciled_at,
+            cash_bank_reconciled_by,
+            cash_bank_reconciled_by_name,
             version,
             created_by,
             created_by_name,
@@ -124,6 +132,10 @@ pub async fn upsert_finance_transaction(
             field_employee_id,
             field_employee_name,
             field_cash_movement_kind,
+            cash_bank_reconciliation_id,
+            cash_bank_reconciled_at,
+            cash_bank_reconciled_by,
+            cash_bank_reconciled_by_name,
             version,
             created_by,
             created_by_name,
@@ -158,13 +170,17 @@ pub async fn upsert_finance_transaction(
             $22,
             $23,
             $24,
-            $25,
+            $25::TIMESTAMPTZ,
             $26,
             $27,
             $28,
-            $29::TIMESTAMPTZ,
-            $30::TIMESTAMPTZ,
-            $31::TIMESTAMPTZ
+            $29,
+            $30,
+            $31,
+            $32,
+            $33::TIMESTAMPTZ,
+            $34::TIMESTAMPTZ,
+            $35::TIMESTAMPTZ
         )
         ON CONFLICT (id) DO UPDATE SET
             type = EXCLUDED.type,
@@ -189,6 +205,10 @@ pub async fn upsert_finance_transaction(
             field_employee_id = EXCLUDED.field_employee_id,
             field_employee_name = EXCLUDED.field_employee_name,
             field_cash_movement_kind = EXCLUDED.field_cash_movement_kind,
+            cash_bank_reconciliation_id = EXCLUDED.cash_bank_reconciliation_id,
+            cash_bank_reconciled_at = EXCLUDED.cash_bank_reconciled_at,
+            cash_bank_reconciled_by = EXCLUDED.cash_bank_reconciled_by,
+            cash_bank_reconciled_by_name = EXCLUDED.cash_bank_reconciled_by_name,
             version = EXCLUDED.version,
             created_by = COALESCE(finance_transactions.created_by, EXCLUDED.created_by),
             created_by_name = COALESCE(finance_transactions.created_by_name, EXCLUDED.created_by_name),
@@ -226,6 +246,10 @@ pub async fn upsert_finance_transaction(
             field_employee_id,
             field_employee_name,
             field_cash_movement_kind,
+            cash_bank_reconciliation_id,
+            cash_bank_reconciled_at::TEXT AS cash_bank_reconciled_at,
+            cash_bank_reconciled_by,
+            cash_bank_reconciled_by_name,
             version,
             created_by,
             created_by_name,
@@ -259,6 +283,10 @@ pub async fn upsert_finance_transaction(
     .bind(input.field_employee_id)
     .bind(input.field_employee_name)
     .bind(input.field_cash_movement_kind)
+    .bind(input.cash_bank_reconciliation_id)
+    .bind(input.cash_bank_reconciled_at)
+    .bind(input.cash_bank_reconciled_by)
+    .bind(input.cash_bank_reconciled_by_name)
     .bind(input.version)
     .bind(input.created_by)
     .bind(input.created_by_name)

@@ -23,7 +23,8 @@ import {
   TrendingUp,
   TrendingDown,
   LayoutDashboard,
-  CreditCard
+  CreditCard,
+  Scale
 } from 'lucide-react';
 import { FinanceTransaction, FinanceTransactionType } from '@/types';
 import {
@@ -307,6 +308,12 @@ export default function FinanceManagement() {
               {t('finance.transfer')}
             </Button>
             <Button
+              icon={<Scale size={16} />}
+              href="/finance/cash-bank-reconciliation"
+            >
+              Rekonsiliasi
+            </Button>
+            <Button
               type="primary"
               icon={<Plus size={16} />}
               onClick={() => openModal('INCOME')}
@@ -440,6 +447,16 @@ export default function FinanceManagement() {
             >
               <ArrowLeftRight size={18} />
               <span className="text-[10px] mt-1">{t('finance.transfer')}</span>
+            </Button>
+          </Col>
+
+          <Col xs={8} sm={8} md={8}>
+            <Button
+              href="/finance/cash-bank-reconciliation"
+              className="h-16 flex flex-col items-center justify-center w-full"
+            >
+              <Scale size={18} />
+              <span className="text-[10px] mt-1">Rekonsiliasi</span>
             </Button>
           </Col>
 

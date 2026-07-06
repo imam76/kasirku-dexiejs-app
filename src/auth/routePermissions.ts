@@ -47,6 +47,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/shopping-note': 'PURCHASE_RECEIPT_MANAGE',
   '/finance': 'FINANCE_ACCESS',
   '/finance/cash-flow': 'FINANCE_ACCESS',
+  '/finance/cash-bank-reconciliation': 'FINANCE_ACCESS',
   '/finance/receivables': 'FINANCE_ACCESS',
   '/finance/payables': 'FINANCE_ACCESS',
   '/finance/payroll': 'FINANCE_ACCESS',

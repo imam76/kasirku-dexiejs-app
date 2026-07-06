@@ -112,6 +112,10 @@ const mapRemoteFinanceTransactionToLocal = (
   field_cash_movement_kind: isFieldCashMovementKind(remoteTransaction.field_cash_movement_kind)
     ? remoteTransaction.field_cash_movement_kind
     : undefined,
+  cash_bank_reconciliation_id: optionalString(remoteTransaction.cash_bank_reconciliation_id),
+  cash_bank_reconciled_at: optionalString(remoteTransaction.cash_bank_reconciled_at),
+  cash_bank_reconciled_by: optionalString(remoteTransaction.cash_bank_reconciled_by),
+  cash_bank_reconciled_by_name: optionalString(remoteTransaction.cash_bank_reconciled_by_name),
   version: toPositiveVersion(remoteTransaction.version),
   created_by: optionalString(remoteTransaction.created_by),
   created_by_name: optionalString(remoteTransaction.created_by_name),

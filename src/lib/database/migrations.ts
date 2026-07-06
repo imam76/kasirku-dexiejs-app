@@ -2,6 +2,7 @@ import type {
   AccountingProfileSetting,
   AuthUser,
   CashierSession,
+  CashBankReconciliation,
   ChartOfAccount,
   CompanyProfileSetting,
   Contact,
@@ -2008,6 +2009,28 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
         ...migratedPermissions,
         ...systemPermissions,
       ]);
+    }
+  });
+
+  this.version(77).stores({
+    cashBankReconciliations: 'id, reconciliation_number, cash_account_id, statement_date, status, sync_status, updated_at, created_at',
+    financeTransactions: 'id, type, category, account_id, cash_account_id, cash_bank_reconciliation_id, field_cash_session_id, field_employee_id, transfer_group_id, sync_status, updated_at, created_at, reference_id',
+  }).upgrade(async (tx) => {
+    const reconciliations = await tx.table<CashBankReconciliation, string>('cashBankReconciliations').toArray();
+    const reconciliationsWithoutSyncStatus = reconciliations
+      .filter((reconciliation) => !reconciliation.sync_status || !reconciliation.version || !reconciliation.updated_at)
+      .map((reconciliation) => ({
+        ...reconciliation,
+        version: reconciliation.version ?? 1,
+        updated_at: reconciliation.updated_at ?? reconciliation.created_at,
+        sync_status: reconciliation.sync_status ?? 'pending' as const,
+        sync_error: undefined,
+      }));
+
+    if (reconciliationsWithoutSyncStatus.length > 0) {
+      await tx.table<CashBankReconciliation, string>('cashBankReconciliations').bulkPut(
+        reconciliationsWithoutSyncStatus,
+      );
     }
   });
 }

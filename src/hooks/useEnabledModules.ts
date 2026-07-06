@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isRouteEnabledForModules } from '@/auth/moduleAccess';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { SETUP_CONFIG_CHANGED_EVENT, canBypassSetupModuleLockForUser, getSetupConfig } from '@/services/setupKeyService';
@@ -49,14 +49,14 @@ export const useEnabledModules = (options: {
     [bypassSetupModuleLock, config],
   );
 
-  const isModuleEnabled = useMemo(() => {
-    if (!enabledSet) return (_code: string) => true; // no config = all enabled
-    return (code: string) => enabledSet.has(code);
+  const isModuleEnabled = useCallback((code: string) => {
+    if (!enabledSet) return true; // no config = all enabled
+    return enabledSet.has(code);
   }, [enabledSet]);
 
-  const isRouteEnabled = useMemo(() => {
-    if (!enabledSet) return (_path: string) => true;
-    return (path: string) => isRouteEnabledForModules(path, enabledSet);
+  const isRouteEnabled = useCallback((path: string) => {
+    if (!enabledSet) return true;
+    return isRouteEnabledForModules(path, enabledSet);
   }, [enabledSet]);
 
   return {

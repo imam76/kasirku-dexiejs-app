@@ -1,0 +1,31 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CashBankReconciliationDto {
+    pub id: String,
+    pub reconciliation_number: String,
+    pub cash_account_id: String,
+    pub cash_account_code: Option<String>,
+    pub cash_account_name: String,
+    pub statement_date: String,
+    pub statement_reference: Option<String>,
+    pub statement_ending_balance: f64,
+    pub book_balance_amount: f64,
+    pub cleared_balance_amount: f64,
+    pub selected_transaction_total_amount: f64,
+    pub selected_transaction_count: i32,
+    pub selected_transaction_ids: Vec<String>,
+    pub difference_amount: f64,
+    pub status: String,
+    pub notes: Option<String>,
+    pub voided_at: Option<String>,
+    pub void_reason: Option<String>,
+    pub version: i32,
+    pub created_by: Option<String>,
+    pub created_by_name: Option<String>,
+    pub updated_by: Option<String>,
+    pub updated_by_name: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}

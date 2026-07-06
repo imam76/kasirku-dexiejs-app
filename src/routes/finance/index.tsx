@@ -29,6 +29,13 @@ function Finance() {
       desc: t('finance.index.cashFlowDesc'),
     },
     {
+      to: '/finance/cash-bank-reconciliation',
+      label: 'Rekonsiliasi Cash & Bank',
+      icon: BankOutlined,
+      color: 'text-cyan-700',
+      desc: 'Cocokkan saldo kas/bank dengan statement.',
+    },
+    {
       to: '/finance/receivables',
       label: t('nav.finance.receivables'),
       icon: FileTextOutlined,

@@ -21,6 +21,12 @@ import { useExportCsv, useExportPdf } from '@/hooks/useExport';
 
 const { Title, Text } = Typography;
 
+type JsPdfWithAutoTable = {
+  lastAutoTable?: {
+    finalY: number;
+  };
+};
+
 export default function DepositReport() {
   const { t } = useI18n();
   const isMobile = useIsMobile();
@@ -122,7 +128,7 @@ export default function DepositReport() {
             margin: { left: 8, right: 8 }
           });
 
-          currentY = (doc as any).lastAutoTable.finalY + 10;
+          currentY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? currentY) + 10;
         });
 
         // Grand Total section

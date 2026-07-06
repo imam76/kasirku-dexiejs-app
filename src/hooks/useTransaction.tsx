@@ -23,6 +23,7 @@ const TRANSACTION_PRODUCT_PAGE_SIZE = 9;
 const EMPTY_TRANSACTION_PRODUCT_PAGE = {
   products: [] as Product[],
   total: 0,
+  currentPage: 1,
 };
 const FALLBACK_MEMBERSHIP_SETTING: MembershipSetting = {
   ...DEFAULT_MEMBERSHIP_SETTING,
@@ -45,7 +46,7 @@ export const useTransaction = () => {
     redeemPoints,
     showPayment,
     setProducts,
-    setSearchTerm,
+    setSearchTerm: setStoreSearchTerm,
     setPaymentAmount,
     setPaymentMethod,
     setVoucherCode,
@@ -60,9 +61,10 @@ export const useTransaction = () => {
   const [productPage, setProductPage] = useState(1);
   const productSearchTerm = searchTerm.trim().toLowerCase();
 
-  useEffect(() => {
+  const setSearchTerm = useCallback((value: string) => {
     setProductPage(1);
-  }, [productSearchTerm]);
+    setStoreSearchTerm(value);
+  }, [setStoreSearchTerm]);
 
   const productPageResult = useLiveQuery(
     async () => {
@@ -78,22 +80,24 @@ export const useTransaction = () => {
         return {
           products: matchedProducts,
           total: matchedProducts.length,
+          currentPage: 1,
         };
       }
 
-      const offset = (productPage - 1) * TRANSACTION_PRODUCT_PAGE_SIZE;
-      const [total, pageProducts] = await Promise.all([
-        db.products.count(),
-        db.products
-          .orderBy('name')
-          .offset(offset)
-          .limit(TRANSACTION_PRODUCT_PAGE_SIZE)
-          .toArray(),
-      ]);
+      const total = await db.products.count();
+      const lastPage = Math.max(1, Math.ceil(total / TRANSACTION_PRODUCT_PAGE_SIZE));
+      const currentPage = Math.min(productPage, lastPage);
+      const offset = (currentPage - 1) * TRANSACTION_PRODUCT_PAGE_SIZE;
+      const pageProducts = await db.products
+        .orderBy('name')
+        .offset(offset)
+        .limit(TRANSACTION_PRODUCT_PAGE_SIZE)
+        .toArray();
 
       return {
         products: pageProducts,
         total,
+        currentPage,
       };
     },
     [productPage, productSearchTerm],
@@ -104,15 +108,6 @@ export const useTransaction = () => {
   useEffect(() => {
     setProducts(productPageResult.products);
   }, [productPageResult.products, setProducts]);
-
-  useEffect(() => {
-    if (productSearchTerm) return;
-
-    const lastPage = Math.max(1, Math.ceil(productTotal / TRANSACTION_PRODUCT_PAGE_SIZE));
-    if (productPage > lastPage) {
-      setProductPage(lastPage);
-    }
-  }, [productPage, productSearchTerm, productTotal]);
 
   const { data: activePromos = [] } = useQuery({
     queryKey: ['activePromos'],
@@ -146,7 +141,7 @@ export const useTransaction = () => {
   const productPagination = productSearchTerm
     ? undefined
     : {
-        currentPage: productPage,
+        currentPage: productPageResult.currentPage,
         pageSize: TRANSACTION_PRODUCT_PAGE_SIZE,
         total: productTotal,
         onChange: setProductPage,

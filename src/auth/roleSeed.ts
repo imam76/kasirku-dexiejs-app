@@ -1,4 +1,5 @@
 import type { AuthUser, Role, RolePermission, UserRole } from '@/types';
+import type { KasirkuDB } from '@/lib/database/KasirkuDB';
 import { ROLE_LABEL, ROLE_PERMISSIONS } from './permissions';
 
 export const SYSTEM_ROLE_IDS: Record<UserRole, string> = {
@@ -42,21 +43,7 @@ export const resolveLegacyRoleName = (role: UserRole | undefined) => (
   role ? ROLE_LABEL[role] : undefined
 );
 
-interface RoleSeedDatabase {
-  roles: {
-    toArray: () => Promise<Role[]>;
-    bulkPut: (items: Role[]) => Promise<unknown>;
-  };
-  rolePermissions: {
-    toArray: () => Promise<RolePermission[]>;
-    bulkPut: (items: RolePermission[]) => Promise<unknown>;
-  };
-  authUsers: {
-    toArray: () => Promise<AuthUser[]>;
-    bulkPut: (items: AuthUser[]) => Promise<unknown>;
-  };
-  transaction: (...args: any[]) => Promise<unknown>;
-}
+type RoleSeedDatabase = Pick<KasirkuDB, 'roles' | 'rolePermissions' | 'authUsers' | 'transaction'>;
 
 export const seedSystemRoles = async (database: RoleSeedDatabase): Promise<void> => {
   const now = new Date().toISOString();

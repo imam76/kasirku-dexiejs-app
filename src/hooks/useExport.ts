@@ -1,6 +1,6 @@
 import { App } from 'antd';
 import jsPDF from 'jspdf';
-import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
+import { exportCsv, exportPdf, type ExportRows, type ExportTarget } from '@/utils/export';
 
 interface ExportPdfOptions {
   filename: string;
@@ -14,7 +14,7 @@ interface ExportPdfOptions {
 interface ExportCsvOptions {
   filename: string;
   target?: ExportTarget;
-  rows: any[][];
+  rows: ExportRows;
   successMessage: string;
   errorMessage: string;
   errorConsoleMsg?: string;

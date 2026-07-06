@@ -53,6 +53,8 @@ export default function MembershipCheckoutPanel({
     return savedValue ? savedValue === 'true' : Boolean(memberContactId || voucherCode.trim());
   });
   const voucherValue = voucherCode.trim();
+  const shouldForceExpanded = Boolean(memberContactId || voucherValue);
+  const isPanelExpanded = isExpanded || shouldForceExpanded;
   const pointBalance = Math.max(0, Math.floor(Number(selectedMember?.membership_points_balance || 0)));
   const selectedMemberSummary = selectedMember
     ? `${selectedMember.membership_number ?? '-'} - ${selectedMember.name}`
@@ -66,14 +68,8 @@ export default function MembershipCheckoutPanel({
   ].filter(Boolean).join(' / ');
 
   useEffect(() => {
-    if (memberContactId || voucherCode.trim()) {
-      setIsExpanded(true);
-    }
-  }, [memberContactId, voucherCode]);
-
-  useEffect(() => {
-    localStorage.setItem(MEMBERSHIP_PANEL_STORAGE_KEY, String(isExpanded));
-  }, [isExpanded]);
+    localStorage.setItem(MEMBERSHIP_PANEL_STORAGE_KEY, String(isPanelExpanded));
+  }, [isPanelExpanded]);
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -92,7 +88,7 @@ export default function MembershipCheckoutPanel({
           type="button"
           className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left transition-colors hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-100"
           onClick={() => setIsExpanded((current) => !current)}
-          aria-expanded={isExpanded}
+          aria-expanded={isPanelExpanded}
         >
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-700">
             <TicketPercent size={16} />
@@ -103,20 +99,20 @@ export default function MembershipCheckoutPanel({
           </span>
         </button>
         <div className="flex shrink-0 items-center">
-          <Tooltip title={isExpanded ? 'Sembunyikan' : 'Tampilkan'}>
+          <Tooltip title={isPanelExpanded ? 'Sembunyikan' : 'Tampilkan'}>
             <Button
               type="text"
               size="small"
-              icon={isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              icon={isPanelExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               onClick={() => setIsExpanded((current) => !current)}
-              aria-label={isExpanded ? 'Sembunyikan member dan voucher' : 'Tampilkan member dan voucher'}
+              aria-label={isPanelExpanded ? 'Sembunyikan member dan voucher' : 'Tampilkan member dan voucher'}
               className="text-gray-600"
             />
           </Tooltip>
         </div>
       </div>
 
-      {isExpanded && (
+      {isPanelExpanded && (
         <div className="space-y-3 border-t border-gray-100 p-3 pt-2">
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-gray-500">

@@ -2,8 +2,8 @@
 export const daftarakunRestaurantCafeAndCoffeeShop = {
     "id": 17,
     "language": "id",
-    "name": "Restaurant\/Cafe\/Coffee Shops",
-    "description": "Restaurant\/Cafe\/Coffee Shops",
+    "name": "Restaurant/Cafe/Coffee Shops",
+    "description": "Restaurant/Cafe/Coffee Shops",
     "chart_of_accounts": [
         {
             "code": 110099010,

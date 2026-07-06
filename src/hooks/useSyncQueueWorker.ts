@@ -71,6 +71,7 @@ const FINANCE_REALTIME_TABLES = new Set([
   'enabled_modules',
   'finance_account_mappings',
   'finance_transactions',
+  'cash_bank_reconciliations',
   'general_ledger_setting',
   'journal_entries',
   'journal_entry_lines',
@@ -79,6 +80,9 @@ const FINANCE_REALTIME_TABLES = new Set([
 const FINANCE_QUERY_KEYS = [
   'financeBalance',
   'financeTransactions',
+  'cashBankReconciliationAccounts',
+  'cashBankReconciliationCandidates',
+  'cashBankReconciliations',
   'journalEntries',
   'trialBalance',
   'incomeStatement',

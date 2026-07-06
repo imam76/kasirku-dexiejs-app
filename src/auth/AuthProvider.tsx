@@ -98,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (currentRole?.is_owner || currentUser.role === 'OWNER') return true;
     if (currentUser.role_id) return permissionSet.has(permission);
     return hasPermission(currentUser.role, permission, { bypassSetupModuleLock });
-  }, [currentRole?.is_owner, currentUser, permissionSet]);
+  }, [currentRole, currentUser, permissionSet]);
 
   const requirePermission = useCallback((permission: Permission) => {
     if (!can(permission)) {

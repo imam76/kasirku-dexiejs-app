@@ -7,7 +7,7 @@ import {
 import {
   sumByKind,
 } from '@/services/cooperativeFieldCashReportService';
-import type { Employee, FinanceTransaction, CooperativeMember } from '@/types';
+import type { Employee, EmployeeArea, FinanceTransaction, CooperativeMember } from '@/types';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export const COOPERATIVE_DAILY_FIELD_CASH_UNASSIGNED_EMPLOYEE = '__UNASSIGNED__';
@@ -155,7 +155,7 @@ const summarizeRows = (
 }), createEmptyCooperativeDailyFieldCashReportSummary());
 
 const buildAreaNamesByEmployeeId = (
-  employeeAreas: any[],
+  employeeAreas: EmployeeArea[],
   members: CooperativeMember[],
 ) => {
   const areaNamesByEmployeeId = new Map<string, Set<string>>();

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { App, Button, Card, Input, Space, Typography, Upload } from 'antd';
 import { Building2, ImagePlus, Save, Trash2 } from 'lucide-react';
 import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 import { useI18n } from '@/hooks/useI18n';
 import type { CompanyProfileSettingInput } from '@/services/companyProfileSettingService';
+import type { CompanyProfileSetting } from '@/types';
 
 const { Paragraph, Text } = Typography;
 
@@ -17,23 +18,30 @@ const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) 
   reader.readAsDataURL(file);
 });
 
-export default function CompanyProfileSettingsCard() {
+const buildProfileDraft = (profile?: CompanyProfileSetting): CompanyProfileSettingInput => ({
+  company_name: profile?.company_name,
+  logo_data_url: profile?.logo_data_url,
+  logo_file_name: profile?.logo_file_name,
+  logo_mime_type: profile?.logo_mime_type,
+  logo_size: profile?.logo_size,
+});
+
+interface CompanyProfileSettingsCardContentProps {
+  profile?: CompanyProfileSetting;
+  isLoading: boolean;
+  isSaving: boolean;
+  saveProfile: (input: CompanyProfileSettingInput) => Promise<CompanyProfileSetting>;
+}
+
+function CompanyProfileSettingsCardContent({
+  profile,
+  isLoading,
+  isSaving,
+  saveProfile,
+}: CompanyProfileSettingsCardContentProps) {
   const { message } = App.useApp();
   const { t } = useI18n();
-  const { profile, isLoading, isSaving, saveProfile } = useCompanyProfileSetting();
-  const [draft, setDraft] = useState<CompanyProfileSettingInput>({});
-
-  useEffect(() => {
-    if (!profile) return;
-
-    setDraft({
-      company_name: profile.company_name,
-      logo_data_url: profile.logo_data_url,
-      logo_file_name: profile.logo_file_name,
-      logo_mime_type: profile.logo_mime_type,
-      logo_size: profile.logo_size,
-    });
-  }, [profile]);
+  const [draft, setDraft] = useState<CompanyProfileSettingInput>(() => buildProfileDraft(profile));
 
   const handleLogoFile = async (file: File) => {
     if (!ACCEPTED_LOGO_MIME_TYPES.includes(file.type)) {
@@ -154,5 +162,19 @@ export default function CompanyProfileSettingsCard() {
         </div>
       </div>
     </Card>
+  );
+}
+
+export default function CompanyProfileSettingsCard() {
+  const { profile, isLoading, isSaving, saveProfile } = useCompanyProfileSetting();
+
+  return (
+    <CompanyProfileSettingsCardContent
+      key={profile?.updated_at ?? 'empty'}
+      profile={profile}
+      isLoading={isLoading}
+      isSaving={isSaving}
+      saveProfile={saveProfile}
+    />
   );
 }

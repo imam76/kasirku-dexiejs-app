@@ -23,6 +23,20 @@ export const withPendingFinanceTransactionSync = (
   sync_error: undefined,
 });
 
+export const withUpdatedFinanceTransactionSync = (
+  transaction: FinanceTransaction,
+  actor?: FinanceTransactionActor,
+  updatedAt = new Date().toISOString(),
+): FinanceTransaction => ({
+  ...transaction,
+  version: toPositiveVersion(transaction.version) + 1,
+  updated_by: actor?.id ?? transaction.updated_by,
+  updated_by_name: actor?.name ?? transaction.updated_by_name,
+  updated_at: updatedAt,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
 export const withDeletedFinanceTransactionSync = (
   transaction: FinanceTransaction,
   actor?: FinanceTransactionActor,

@@ -9,6 +9,7 @@ import {
   refreshGeneralLedgerSettingFromPostgres,
 } from '@/services/accountingSettingReadService';
 import { refreshCashierSessionsFromPostgres } from '@/services/cashierSessionReadService';
+import { refreshCashBankReconciliationsFromPostgres } from '@/services/cashBankReconciliationReadService';
 import { refreshChartOfAccountsFromPostgres } from '@/services/chartOfAccountReadService';
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
@@ -28,6 +29,7 @@ import {
   enqueuePendingAccountingSettingsForSync,
   enqueuePendingAuthUsersForSync,
   enqueuePendingCashierSessionsForSync,
+  enqueuePendingCashBankReconciliationsForSync,
   enqueuePendingChartOfAccountsForSync,
   enqueuePendingContactsForSync,
   enqueuePendingCooperativeDataForSync,
@@ -66,6 +68,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingPayrollDataForSync();
   await enqueuePendingCashierSessionsForSync();
   await enqueuePendingFinanceTransactionsForSync();
+  await enqueuePendingCashBankReconciliationsForSync();
   await enqueuePendingJournalEntriesForSync();
   await enqueuePendingProductionOrdersForSync();
   await enqueuePendingPurchaseDocumentsForSync();
@@ -108,6 +111,7 @@ export const refreshAllDataFromPostgres = async () => {
     employeeCashAdvances: await refreshEmployeeCashAdvancesFromPostgres(),
     cashierSessions: await refreshCashierSessionsFromPostgres(),
     financeTransactions: await refreshFinanceTransactionsFromPostgres(),
+    cashBankReconciliations: await refreshCashBankReconciliationsFromPostgres(),
     journalEntries: await refreshJournalEntriesFromPostgres(),
     productionOrders: await refreshProductionOrdersFromPostgres(),
     cooperative: await refreshCooperativeDataFromPostgres(),

@@ -1,5 +1,5 @@
 import { Input, Modal, Select, Typography } from 'antd';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryOptions } from '@/i18n/stock';
 import type { ProductCategory } from '@/types';
@@ -32,18 +32,19 @@ export const BasicProductFormModal = ({
 
   const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
 
-  useEffect(() => {
-    if (open) {
+  const handleOpenChange = (visible: boolean) => {
+    if (visible) {
       setName(initialName);
       setSku(initialSku);
       setCategory('non_consumable');
     }
-  }, [open, initialName, initialSku]);
+  };
 
   return (
     <Modal
       title="Buat Produk Baru (Entri Dasar)"
       open={open}
+      afterOpenChange={handleOpenChange}
       onCancel={onCancel}
       onOk={() => onOk(name, sku, category)}
       okText="Buat"
