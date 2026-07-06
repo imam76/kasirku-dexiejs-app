@@ -243,6 +243,36 @@ export async function payFirstInstallment(page: Page, member: DemoMemberInput) {
   await expect(paymentRow).toContainText('Posted');
 }
 
+export async function payFlexibleInstallmentAmount(page: Page, member: DemoMemberInput, amount: number) {
+  await page.goto('/koperasi/angsuran');
+  const firstInstallmentRow = page.getByTestId(`koperasi-installment-row-${member.memberNumber}-1`);
+  await firstInstallmentRow.getByRole('button', { name: 'Bayar' }).click();
+
+  await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeVisible();
+  await fillControlByTestId(page, 'koperasi-installment-payment-amount-input', String(amount));
+  await expect(page.getByText('Preview Alokasi Pembayaran')).toBeVisible();
+  await expect(page.getByText('#1 -')).toBeVisible();
+  await expect(page.getByText('#2 -')).toBeVisible();
+  await page.getByTestId('koperasi-installment-payment-submit-button').click();
+  await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeHidden();
+}
+
+export async function expectFlexibleInstallmentAllocation(page: Page, member: DemoMemberInput) {
+  await page.goto('/koperasi/angsuran');
+
+  await expect(page.getByTestId(`koperasi-installment-row-${member.memberNumber}-1`)).toBeHidden();
+  const secondInstallmentRow = page.getByTestId(`koperasi-installment-row-${member.memberNumber}-2`);
+  await expect(secondInstallmentRow).toContainText('Partial');
+  await expect(secondInstallmentRow).toContainText('Rp 265.000');
+
+  await page.getByRole('tab', { name: 'Riwayat Pembayaran', exact: true }).click();
+  await expect(page.getByRole('columnheader', { name: 'No. Pembayaran' })).toBeVisible();
+  await expect(page.locator('tr:visible').filter({ hasText: member.name }).filter({ hasText: 'Rp 530.000' }).first())
+    .toContainText('KSP-ANG-GRP');
+  await expect(page.locator('tr:visible').filter({ hasText: member.name }).filter({ hasText: 'Rp 265.000' }).first())
+    .toContainText('KSP-ANG-GRP');
+}
+
 export async function payRemainingInstallments(page: Page, member: DemoMemberInput) {
   await page.goto('/koperasi/angsuran');
 

@@ -89,7 +89,7 @@ import type {
 } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import {
-  allocateLoanPaymentToInstallment,
+  allocateLoanPaymentAcrossInstallments,
   getInstallmentRemainingAmounts,
 } from '@/utils/koperasi/loanPaymentAllocation';
 import {
@@ -193,8 +193,12 @@ export interface ReverseCooperativeLoanPaymentInput {
 export interface RecordCooperativeLoanPaymentResult {
   status: 'POSTED';
   payment: CooperativeLoanPayment;
+  payments: CooperativeLoanPayment[];
   installment: CooperativeLoanInstallment;
+  installments: CooperativeLoanInstallment[];
   loan: CooperativeLoan;
+  payment_group_id?: string;
+  payment_group_number?: string;
 }
 
 export interface PendingCooperativeLoanPaymentApprovalResult {
@@ -289,7 +293,7 @@ const createCooperativeLoanNumber = async (date: string | Date = new Date()) => 
   return `${numberPrefix}${String(nextSequence).padStart(4, '0')}`;
 };
 
-const createCooperativeLoanPaymentNumber = async (date = new Date()) => {
+const createCooperativeLoanPaymentNumber = async (date = new Date(), sequenceOffset = 0) => {
   const prefix = 'KSP-ANG';
   const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
   const dayStart = new Date(date);
@@ -303,7 +307,12 @@ const createCooperativeLoanPaymentNumber = async (date = new Date()) => {
     .and((payment) => payment.payment_number.startsWith(`${prefix}-${datePart}`))
     .count();
 
-  return `${prefix}-${datePart}-${String(count + 1).padStart(4, '0')}`;
+  return `${prefix}-${datePart}-${String(count + 1 + sequenceOffset).padStart(4, '0')}`;
+};
+
+const createCooperativeLoanPaymentGroupNumber = (date: Date, paymentGroupId: string) => {
+  const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
+  return `KSP-ANG-GRP-${datePart}-${paymentGroupId.slice(0, 8).toUpperCase()}`;
 };
 
 const getMandatorySavingBalanceId = (memberId: string) => `${memberId}:WAJIB`;
@@ -1688,7 +1697,7 @@ const recordCooperativeLoanPaymentOnServer = async (
   );
   await ensureServerPostingAccounts(sessionToken, currentUser, cashAccount);
 
-  const remoteResult = await cooperativePostingPostgresAdapter.postPayment({
+  const remoteResult = await cooperativePostingPostgresAdapter.postPaymentBatch({
     session_token: sessionToken,
     idempotency_key: parsedInput.idempotency_key ?? crypto.randomUUID(),
     installment_id: parsedInput.installment_id,
@@ -1712,11 +1721,11 @@ const recordCooperativeLoanPaymentOnServer = async (
   const postedResult = remoteResult.result;
 
   await Promise.all([
-    mergeRemoteCooperativeLoanPaymentsIntoDexie([postedResult.payment]),
-    mergeRemoteCooperativeLoanInstallmentsIntoDexie([postedResult.installment]),
+    mergeRemoteCooperativeLoanPaymentsIntoDexie(postedResult.payments),
+    mergeRemoteCooperativeLoanInstallmentsIntoDexie(postedResult.installments),
     mergeRemoteCooperativeLoansIntoDexie([postedResult.loan]),
-    mergeRemoteFinanceTransactionsIntoDexie([postedResult.finance_transaction]),
-    mergeRemoteJournalEntryBundlesIntoDexie([postedResult.journal_entry]),
+    mergeRemoteFinanceTransactionsIntoDexie(postedResult.finance_transactions),
+    mergeRemoteJournalEntryBundlesIntoDexie(postedResult.journal_entries),
   ]);
   if (postedResult.loan.status === 'PAID_OFF') {
     await Promise.all([
@@ -1725,16 +1734,31 @@ const recordCooperativeLoanPaymentOnServer = async (
     ]);
   }
 
-  const [payment, installment, loan] = await Promise.all([
-    db.cooperativeLoanPayments.get(postedResult.payment.id),
-    db.cooperativeLoanInstallments.get(postedResult.installment.id),
+  const [payments, installments, loan] = await Promise.all([
+    db.cooperativeLoanPayments.bulkGet(postedResult.payments.map((payment) => payment.id)),
+    db.cooperativeLoanInstallments.bulkGet(postedResult.installments.map((installment) => installment.id)),
     db.cooperativeLoans.get(postedResult.loan.id),
   ]);
-  if (!payment || !installment || !loan) {
+  const savedPayments = payments.filter((payment): payment is CooperativeLoanPayment => Boolean(payment));
+  const savedInstallments = installments.filter((installment): installment is CooperativeLoanInstallment => Boolean(installment));
+  if (
+    savedPayments.length !== postedResult.payments.length ||
+    savedInstallments.length !== postedResult.installments.length ||
+    !loan
+  ) {
     throw new Error('Hasil posting pembayaran gagal diterapkan ke database lokal.');
   }
 
-  return { status: 'POSTED', payment, installment, loan };
+  return {
+    status: 'POSTED',
+    payment: savedPayments[0],
+    payments: savedPayments,
+    installment: savedInstallments[0],
+    installments: savedInstallments,
+    loan,
+    payment_group_id: postedResult.payment_group_id ?? undefined,
+    payment_group_number: postedResult.payment_group_number ?? undefined,
+  };
 };
 
 const recordCooperativeLoanPaymentLocally = async (
@@ -1753,16 +1777,16 @@ const recordCooperativeLoanPaymentLocally = async (
     );
   }
   const paymentMethod = parsedInput.payment_method ?? 'TUNAI';
-  const paymentId = crypto.randomUUID();
-  const financeTransactionId = crypto.randomUUID();
-  let savedPayment: CooperativeLoanPayment | undefined;
-  let savedInstallment: CooperativeLoanInstallment | undefined;
+  let savedPayments: CooperativeLoanPayment[] = [];
+  let savedInstallments: CooperativeLoanInstallment[] = [];
   let savedLoan: CooperativeLoan | undefined;
-  let financeTransaction: FinanceTransaction | undefined;
+  let financeTransactions: FinanceTransaction[] = [];
   let mandatorySavingReturnTransaction: CooperativeSavingTransaction | undefined;
   let mandatorySavingReturnBalance: CooperativeMemberSavingBalance | undefined;
   let mandatorySavingReturnFinanceTransaction: FinanceTransaction | undefined;
   let iptwFinanceTransaction: FinanceTransaction | undefined;
+  let paymentGroupId: string | undefined;
+  let paymentGroupNumber: string | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
     const installment = await db.cooperativeLoanInstallments.get(parsedInput.installment_id);
@@ -1797,108 +1821,150 @@ const recordCooperativeLoanPaymentLocally = async (
       collectorId === member?.officer_id ? member?.officer_position : undefined
     );
 
-    const allocation = allocateLoanPaymentToInstallment(installment, amount);
-    const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
-    const fieldCashContext = paymentMethod === 'TUNAI'
-      ? await getFieldCashContextForCashAccount(cashAccount.id)
-      : undefined;
-    await updateFinanceBalanceForPayment(allocation.total_amount, now);
-
-    const nextInstallment: CooperativeLoanInstallment = withPendingCooperativeSync({
-      ...installment,
-      paid_principal_amount: roundCurrency(installment.paid_principal_amount + allocation.principal_amount),
-      paid_interest_amount: roundCurrency(installment.paid_interest_amount + allocation.interest_amount),
-      paid_penalty_amount: roundCurrency(installment.paid_penalty_amount + allocation.penalty_amount),
-      updated_at: now,
-    });
-    const nextInstallmentStatus = getInstallmentNextStatus(nextInstallment);
-    nextInstallment.status = nextInstallmentStatus;
-    nextInstallment.paid_at = nextInstallmentStatus === 'PAID' ? paymentDate : undefined;
-    if (nextInstallmentStatus === 'PAID') {
-      nextInstallment.collection_status = 'NONE';
-      nextInstallment.follow_up_date = undefined;
-      nextInstallment.collection_notes = undefined;
-      nextInstallment.last_contacted_at = undefined;
-    }
-
-    const payment: CooperativeLoanPayment = withPendingCooperativeSync({
-      id: paymentId,
-      payment_number: await createCooperativeLoanPaymentNumber(new Date(now)),
-      payment_type: 'PAYMENT',
-      loan_id: loan.id,
-      loan_number: loan.loan_number,
-      installment_id: installment.id,
-      member_id: loan.member_id,
-      member_number: loan.member_number,
-      member_name: loan.member_name,
-      amount: allocation.total_amount,
-      principal_amount: allocation.principal_amount,
-      interest_amount: allocation.interest_amount,
-      penalty_amount: allocation.penalty_amount,
-      payment_date: paymentDate,
-      status: 'POSTED',
-      cash_account_id: cashAccount.id,
-      cash_account_code: cashAccount.code,
-      cash_account_name: cashAccount.name,
-      payment_method: paymentMethod,
-      payment_channel: parsedInput.payment_channel,
-      collector_id: collectorId,
-      collector_name: collectorName,
-      collector_position: collectorPosition,
-      received_by: currentUser?.id,
-      received_by_name: currentUser?.name,
-      posted_at: now,
-      finance_transaction_id: financeTransactionId,
-      idempotency_key: parsedInput.idempotency_key ?? paymentId,
-      notes: parsedInput.notes,
-      created_at: now,
-      updated_at: now,
-      created_by: currentUser?.id,
-      created_by_name: currentUser?.name,
-      updated_by: currentUser?.id,
-      updated_by_name: currentUser?.name,
-    });
-
-    financeTransaction = withPendingFinanceTransactionSync({
-      id: financeTransactionId,
-      type: 'INCOME',
-      category: FINANCE_CATEGORIES.KSP_LOAN_PAYMENT,
-      amount: allocation.total_amount,
-      description: `Pembayaran angsuran ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
-      created_at: paymentDate,
-      reference_id: payment.id,
-      payment_method: paymentMethod,
-      payment_channel: parsedInput.payment_channel,
-      cash_account_id: cashAccount.id,
-      cash_account_code: cashAccount.code,
-      cash_account_name: cashAccount.name,
-      account_id: cashAccount.id,
-      account_code: cashAccount.code,
-      account_name: cashAccount.name,
-      account_type: cashAccount.type,
-      ...(fieldCashContext
-        ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'STORTING_LOAN_PAYMENT')
-        : {}),
-    }, currentUser, now);
-
-    const nextLoanDraft: CooperativeLoan = {
-      ...loan,
-      outstanding_principal_amount: roundCurrency(loan.outstanding_principal_amount - allocation.principal_amount),
-      outstanding_interest_amount: roundCurrency(loan.outstanding_interest_amount - allocation.interest_amount),
-      outstanding_penalty_amount: roundCurrency(loan.outstanding_penalty_amount - allocation.penalty_amount),
-      updated_at: now,
-      updated_by: currentUser?.id,
-      updated_by_name: currentUser?.name,
-    };
-    assertOutstandingNotNegative(nextLoanDraft);
-
     const loanInstallments = await db.cooperativeLoanInstallments
       .where('loan_id')
       .equals(loan.id)
       .toArray();
-    const nextInstallments = loanInstallments.map((item) => (
-      item.id === nextInstallment.id ? nextInstallment : item
+    const allocationRows = allocateLoanPaymentAcrossInstallments(
+      loanInstallments.filter((item) => item.status !== 'PAID'),
+      amount,
+    );
+    if (allocationRows.length === 0) {
+      throw new Error('Tidak ada sisa angsuran yang dapat dialokasikan.');
+    }
+
+    const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, parsedInput.cash_account_id);
+    const fieldCashContext = paymentMethod === 'TUNAI'
+      ? await getFieldCashContextForCashAccount(cashAccount.id)
+      : undefined;
+    const totalAllocatedAmount = roundCurrency(allocationRows.reduce(
+      (sum, row) => sum + row.allocation.total_amount,
+      0,
     ));
+    await updateFinanceBalanceForPayment(totalAllocatedAmount, now);
+
+    if (allocationRows.length > 1) {
+      paymentGroupId = crypto.randomUUID();
+      paymentGroupNumber = createCooperativeLoanPaymentGroupNumber(new Date(now), paymentGroupId);
+    }
+
+    const updatedInstallmentById = new Map<string, CooperativeLoanInstallment>();
+    const payments: CooperativeLoanPayment[] = [];
+    const nextFinanceTransactions: FinanceTransaction[] = [];
+
+    const nextLoanDraft: CooperativeLoan = {
+      ...loan,
+      updated_at: now,
+      updated_by: currentUser?.id,
+      updated_by_name: currentUser?.name,
+    };
+
+    const baseIdempotencyKey = parsedInput.idempotency_key ?? paymentGroupId ?? crypto.randomUUID();
+    for (const [index, row] of allocationRows.entries()) {
+      const paymentId = crypto.randomUUID();
+      const financeTransactionId = crypto.randomUUID();
+      const { allocation } = row;
+      const nextInstallment: CooperativeLoanInstallment = withPendingCooperativeSync({
+        ...row.installment,
+        paid_principal_amount: roundCurrency(row.installment.paid_principal_amount + allocation.principal_amount),
+        paid_interest_amount: roundCurrency(row.installment.paid_interest_amount + allocation.interest_amount),
+        paid_penalty_amount: roundCurrency(row.installment.paid_penalty_amount + allocation.penalty_amount),
+        updated_at: now,
+      });
+      const nextInstallmentStatus = getInstallmentNextStatus(nextInstallment);
+      nextInstallment.status = nextInstallmentStatus;
+      nextInstallment.paid_at = nextInstallmentStatus === 'PAID' ? paymentDate : undefined;
+      if (nextInstallmentStatus === 'PAID') {
+        nextInstallment.collection_status = 'NONE';
+        nextInstallment.follow_up_date = undefined;
+        nextInstallment.collection_notes = undefined;
+        nextInstallment.last_contacted_at = undefined;
+      }
+      updatedInstallmentById.set(nextInstallment.id, nextInstallment);
+
+      const payment: CooperativeLoanPayment = withPendingCooperativeSync({
+        id: paymentId,
+        payment_number: await createCooperativeLoanPaymentNumber(new Date(now), index),
+        payment_type: 'PAYMENT',
+        payment_group_id: paymentGroupId,
+        payment_group_number: paymentGroupNumber,
+        payment_group_sequence: paymentGroupId ? index + 1 : undefined,
+        payment_group_total: paymentGroupId ? allocationRows.length : undefined,
+        loan_id: loan.id,
+        loan_number: loan.loan_number,
+        installment_id: row.installment.id,
+        member_id: loan.member_id,
+        member_number: loan.member_number,
+        member_name: loan.member_name,
+        amount: allocation.total_amount,
+        principal_amount: allocation.principal_amount,
+        interest_amount: allocation.interest_amount,
+        penalty_amount: allocation.penalty_amount,
+        payment_date: paymentDate,
+        status: 'POSTED',
+        cash_account_id: cashAccount.id,
+        cash_account_code: cashAccount.code,
+        cash_account_name: cashAccount.name,
+        payment_method: paymentMethod,
+        payment_channel: parsedInput.payment_channel,
+        collector_id: collectorId,
+        collector_name: collectorName,
+        collector_position: collectorPosition,
+        received_by: currentUser?.id,
+        received_by_name: currentUser?.name,
+        posted_at: now,
+        finance_transaction_id: financeTransactionId,
+        idempotency_key: allocationRows.length === 1
+          ? baseIdempotencyKey
+          : `${baseIdempotencyKey}:${index + 1}`,
+        notes: parsedInput.notes,
+        created_at: now,
+        updated_at: now,
+        created_by: currentUser?.id,
+        created_by_name: currentUser?.name,
+        updated_by: currentUser?.id,
+        updated_by_name: currentUser?.name,
+      });
+      payments.push(payment);
+
+      nextFinanceTransactions.push(withPendingFinanceTransactionSync({
+        id: financeTransactionId,
+        type: 'INCOME',
+        category: FINANCE_CATEGORIES.KSP_LOAN_PAYMENT,
+        amount: allocation.total_amount,
+        description: `Pembayaran angsuran ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
+        created_at: paymentDate,
+        reference_id: payment.id,
+        payment_method: paymentMethod,
+        payment_channel: parsedInput.payment_channel,
+        cash_account_id: cashAccount.id,
+        cash_account_code: cashAccount.code,
+        cash_account_name: cashAccount.name,
+        account_id: cashAccount.id,
+        account_code: cashAccount.code,
+        account_name: cashAccount.name,
+        account_type: cashAccount.type,
+        ...(fieldCashContext
+          ? buildFieldCashFinanceTransactionFields(fieldCashContext, 'STORTING_LOAN_PAYMENT')
+          : {}),
+      }, currentUser, now));
+
+      nextLoanDraft.outstanding_principal_amount = roundCurrency(
+        nextLoanDraft.outstanding_principal_amount - allocation.principal_amount,
+      );
+      nextLoanDraft.outstanding_interest_amount = roundCurrency(
+        nextLoanDraft.outstanding_interest_amount - allocation.interest_amount,
+      );
+      nextLoanDraft.outstanding_penalty_amount = roundCurrency(
+        nextLoanDraft.outstanding_penalty_amount - allocation.penalty_amount,
+      );
+    }
+    assertOutstandingNotNegative(nextLoanDraft);
+
+    const nextInstallments = loanInstallments.map((item) => (
+      updatedInstallmentById.get(item.id) ?? item
+    ));
+    const updatedInstallments = Array.from(updatedInstallmentById.values());
     const nextLoan: CooperativeLoan = withPendingCooperativeSync({
       ...nextLoanDraft,
       outstanding_principal_amount: Math.max(0, nextLoanDraft.outstanding_principal_amount),
@@ -1907,12 +1973,13 @@ const recordCooperativeLoanPaymentLocally = async (
       status: getLoanNextStatus(nextLoanDraft, nextInstallments),
     });
 
-    await db.financeTransactions.add(financeTransaction);
-    await db.cooperativeLoanPayments.add(payment);
-    await db.cooperativeLoanInstallments.put(nextInstallment);
+    await db.financeTransactions.bulkAdd(nextFinanceTransactions);
+    await db.cooperativeLoanPayments.bulkAdd(payments);
+    await db.cooperativeLoanInstallments.bulkPut(updatedInstallments);
     await db.cooperativeLoans.put(nextLoan);
 
     if (nextLoan.status === 'PAID_OFF') {
+      const paidOffPayment = payments[payments.length - 1];
       const iptwAmount = isCooperativeLoanEligibleForIptw(nextInstallments)
         ? calculateCooperativeIptwAmount(nextLoan.principal_amount)
         : 0;
@@ -1927,7 +1994,7 @@ const recordCooperativeLoanPaymentLocally = async (
 
       const mandatorySavingReturn = await recordMandatorySavingReturnOnPaidOff({
         loan: nextLoan,
-        payment,
+        payment: paidOffPayment,
         amount: mandatorySavingAmount,
         now,
         fieldCashContext,
@@ -1938,7 +2005,7 @@ const recordCooperativeLoanPaymentLocally = async (
       mandatorySavingReturnFinanceTransaction = mandatorySavingReturn.financeTransaction;
       iptwFinanceTransaction = await recordIptwPayoutOnPaidOff({
         loan: nextLoan,
-        payment,
+        payment: paidOffPayment,
         amount: iptwAmount,
         now,
         fieldCashContext,
@@ -1946,18 +2013,22 @@ const recordCooperativeLoanPaymentLocally = async (
       });
     }
 
-    const journalEntry = await postCooperativeLoanPaymentJournal(payment, currentUser);
-    savedPayment = journalEntry
-      ? {
-          ...payment,
-          journal_entry_id: journalEntry.id,
-          updated_at: now,
-          sync_status: 'pending',
-          sync_error: undefined,
-        }
-      : payment;
+    const paymentsWithJournal: CooperativeLoanPayment[] = [];
+    for (const payment of payments) {
+      const journalEntry = await postCooperativeLoanPaymentJournal(payment, currentUser);
+      if (!journalEntry) {
+        paymentsWithJournal.push(payment);
+        continue;
+      }
 
-    if (journalEntry) {
+      const paymentWithJournal: CooperativeLoanPayment = {
+        ...payment,
+        journal_entry_id: journalEntry.id,
+        updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
+      };
+      paymentsWithJournal.push(paymentWithJournal);
       await db.cooperativeLoanPayments.update(payment.id, {
         journal_entry_id: journalEntry.id,
         updated_at: now,
@@ -1966,24 +2037,26 @@ const recordCooperativeLoanPaymentLocally = async (
       });
     }
 
-    savedInstallment = nextInstallment;
+    savedPayments = paymentsWithJournal;
+    savedInstallments = updatedInstallments;
     savedLoan = nextLoan;
+    financeTransactions = nextFinanceTransactions;
 
     await writeActivityLog({
       user: currentUser,
       action: 'COOPERATIVE_LOAN_PAYMENT_RECORDED',
       entity: 'cooperativeLoanPayments',
-      entity_id: payment.id,
-      description: `${currentUser?.name ?? 'User'} mencatat pembayaran angsuran ${payment.payment_number} untuk ${loan.loan_number} sebesar ${payment.amount}.`,
+      entity_id: paymentGroupId ?? payments[0].id,
+      description: `${currentUser?.name ?? 'User'} mencatat pembayaran angsuran ${paymentGroupNumber ?? payments[0].payment_number} untuk ${loan.loan_number} sebesar ${totalAllocatedAmount}.`,
     });
   });
 
-  if (!savedPayment || !savedInstallment || !savedLoan) {
+  if (savedPayments.length === 0 || savedInstallments.length === 0 || !savedLoan) {
     throw new Error('Pembayaran angsuran gagal disimpan.');
   }
 
-  if (financeTransaction) {
-    await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  if (financeTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(financeTransactions, 'create');
   }
   if (mandatorySavingReturnFinanceTransaction) {
     await enqueueFinanceTransactionsSync([mandatorySavingReturnFinanceTransaction], 'create');
@@ -1997,15 +2070,19 @@ const recordCooperativeLoanPaymentLocally = async (
   if (mandatorySavingReturnBalance) {
     await enqueueCooperativeMemberSavingBalancesSync([mandatorySavingReturnBalance], 'update');
   }
-  await enqueueCooperativeLoanPaymentsSync([savedPayment], 'create');
-  await enqueueCooperativeLoanInstallmentsSync([savedInstallment], 'update');
+  await enqueueCooperativeLoanPaymentsSync(savedPayments, 'create');
+  await enqueueCooperativeLoanInstallmentsSync(savedInstallments, 'update');
   await enqueueCooperativeLoansSync([savedLoan], 'update');
 
   return {
     status: 'POSTED',
-    payment: savedPayment,
-    installment: savedInstallment,
+    payment: savedPayments[0],
+    payments: savedPayments,
+    installment: savedInstallments[0],
+    installments: savedInstallments,
     loan: savedLoan,
+    payment_group_id: paymentGroupId,
+    payment_group_number: paymentGroupNumber,
   };
 };
 

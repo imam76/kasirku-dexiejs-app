@@ -1136,6 +1136,10 @@ export interface RemoteCooperativeLoanPaymentDto {
   id: string;
   payment_number: string;
   payment_type?: CooperativeLoanPaymentType | null;
+  payment_group_id?: string | null;
+  payment_group_number?: string | null;
+  payment_group_sequence?: number | null;
+  payment_group_total?: number | null;
   loan_id: string;
   loan_number: string;
   installment_id?: string | null;
@@ -1210,6 +1214,16 @@ export interface RemotePostCooperativeLoanPaymentResult {
   journal_entry: RemoteJournalEntryBundleDto;
 }
 
+export interface RemotePostCooperativeLoanPaymentBatchResult {
+  payments: RemoteCooperativeLoanPaymentDto[];
+  installments: RemoteCooperativeLoanInstallmentDto[];
+  loan: RemoteCooperativeLoanDto;
+  finance_transactions: RemoteFinanceTransactionDto[];
+  journal_entries: RemoteJournalEntryBundleDto[];
+  payment_group_id?: string | null;
+  payment_group_number?: string | null;
+}
+
 export interface RemoteCooperativePaymentApprovalRequestDto {
   id: string;
   action_type: CooperativePaymentApprovalAction;
@@ -1240,6 +1254,16 @@ export type RemotePostCooperativeLoanPaymentOutcome =
   | {
       status: 'POSTED';
       result: RemotePostCooperativeLoanPaymentResult;
+    }
+  | {
+      status: 'PENDING_APPROVAL';
+      approval_request: RemoteCooperativePaymentApprovalRequestDto;
+    };
+
+export type RemotePostCooperativeLoanPaymentBatchOutcome =
+  | {
+      status: 'POSTED';
+      result: RemotePostCooperativeLoanPaymentBatchResult;
     }
   | {
       status: 'PENDING_APPROVAL';
@@ -2069,6 +2093,11 @@ export const cooperativeLoanPaymentPostgresAdapter = {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteCooperativeLoanPaymentDto | null>('postgres_get_cooperative_loan_payment', { id });
   },
+
+  async upsert(input: RemoteCooperativeLoanPaymentDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeLoanPaymentDto>('postgres_upsert_cooperative_loan_payment', { input });
+  },
 };
 
 export const cooperativePostingPostgresAdapter = {
@@ -2092,6 +2121,14 @@ export const cooperativePostingPostgresAdapter = {
     if (!isTauriRuntime()) return null;
     return invoke<RemotePostCooperativeLoanPaymentOutcome>(
       'postgres_post_cooperative_loan_payment',
+      { input },
+    );
+  },
+
+  async postPaymentBatch(input: RemotePostCooperativeLoanPaymentInput) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePostCooperativeLoanPaymentBatchOutcome>(
+      'postgres_post_cooperative_loan_payment_batch',
       { input },
     );
   },

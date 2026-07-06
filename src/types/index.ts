@@ -1959,6 +1959,10 @@ export interface CooperativeLoanPayment {
   id: string;
   payment_number: string;
   payment_type?: CooperativeLoanPaymentType;
+  payment_group_id?: string;
+  payment_group_number?: string;
+  payment_group_sequence?: number;
+  payment_group_total?: number;
   loan_id: string;
   loan_number: string;
   installment_id?: string;

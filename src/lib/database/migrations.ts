@@ -1968,4 +1968,8 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       ]);
     }
   });
+
+  this.version(75).stores({
+    cooperativeLoanPayments: 'id, payment_number, payment_type, payment_group_id, payment_group_number, loan_id, loan_number, installment_id, member_id, member_number, collector_id, received_by, payment_date, posted_at, status, reversal_of_payment_id, finance_transaction_id, journal_entry_id, idempotency_key, sync_status, updated_at, created_at',
+  });
 }

@@ -20,6 +20,11 @@ export interface LoanPaymentAllocation {
   remaining_total_amount: number;
 }
 
+export interface LoanInstallmentPaymentAllocation<TInstallment extends LoanInstallmentAllocationSource = LoanInstallmentAllocationSource> {
+  installment: TInstallment;
+  allocation: LoanPaymentAllocation;
+}
+
 const clampRemaining = (amount: number) => Math.max(0, roundCurrency(amount));
 
 export const getInstallmentRemainingAmounts = (
@@ -82,4 +87,66 @@ export const allocateLoanPaymentToInstallment = (
       penaltyAmount,
     ),
   };
+};
+
+export const sortInstallmentsForPaymentAllocation = <
+  TInstallment extends LoanInstallmentAllocationSource & {
+    due_date?: string;
+    installment_number?: number;
+    created_at?: string;
+    id?: string;
+  },
+>(
+  installments: TInstallment[],
+) => [...installments].sort((first, second) => (
+  (first.due_date ?? '').localeCompare(second.due_date ?? '') ||
+  Number(first.installment_number ?? 0) - Number(second.installment_number ?? 0) ||
+  (first.created_at ?? '').localeCompare(second.created_at ?? '') ||
+  (first.id ?? '').localeCompare(second.id ?? '')
+));
+
+export const allocateLoanPaymentAcrossInstallments = <
+  TInstallment extends LoanInstallmentAllocationSource & {
+    due_date?: string;
+    installment_number?: number;
+    created_at?: string;
+    id?: string;
+  },
+>(
+  installments: TInstallment[],
+  paymentAmount: number,
+): LoanInstallmentPaymentAllocation<TInstallment>[] => {
+  let unallocatedAmount = roundCurrency(paymentAmount);
+
+  if (unallocatedAmount <= 0) {
+    throw new Error('Nominal pembayaran wajib lebih dari 0.');
+  }
+
+  const payableInstallments = sortInstallmentsForPaymentAllocation(installments)
+    .filter((installment) => getInstallmentRemainingAmounts(installment).total_amount > 0.01);
+  const totalRemaining = roundCurrency(payableInstallments.reduce(
+    (sum, installment) => sum + getInstallmentRemainingAmounts(installment).total_amount,
+    0,
+  ));
+
+  if (unallocatedAmount - totalRemaining > 0.01) {
+    throw new Error('Nominal pembayaran melebihi total sisa pinjaman.');
+  }
+
+  const allocations: LoanInstallmentPaymentAllocation<TInstallment>[] = [];
+  for (const installment of payableInstallments) {
+    if (unallocatedAmount <= 0.01) break;
+
+    const remaining = getInstallmentRemainingAmounts(installment);
+    const allocationAmount = Math.min(unallocatedAmount, remaining.total_amount);
+    const allocation = allocateLoanPaymentToInstallment(installment, allocationAmount);
+    allocations.push({ installment, allocation });
+    unallocatedAmount = roundCurrency(unallocatedAmount - allocation.total_amount);
+  }
+
+  if (unallocatedAmount > 0.01) {
+    throw new Error('Alokasi pembayaran angsuran tidak valid.');
+  }
+
+  return allocations;
 };

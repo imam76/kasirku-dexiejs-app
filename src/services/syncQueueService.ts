@@ -61,6 +61,7 @@ import {
   cooperativeAreaPostgresAdapter,
   cooperativeCollectionEventPostgresAdapter,
   cooperativeLoanInstallmentPostgresAdapter,
+  cooperativeLoanPaymentPostgresAdapter,
   cooperativeLoanPostgresAdapter,
   cooperativeMemberPostgresAdapter,
   cooperativeMemberSavingBalancePostgresAdapter,
@@ -530,6 +531,10 @@ const mapCooperativeLoanPaymentToRemoteDto = (
   id: payment.id,
   payment_number: payment.payment_number,
   payment_type: payment.payment_type,
+  payment_group_id: payment.payment_group_id,
+  payment_group_number: payment.payment_group_number,
+  payment_group_sequence: payment.payment_group_sequence,
+  payment_group_total: payment.payment_group_total,
   loan_id: payment.loan_id,
   loan_number: payment.loan_number,
   installment_id: payment.installment_id,
@@ -3138,9 +3143,12 @@ const processCooperativeLoanPaymentQueueItem = async (
     throw new Error('Payload pembayaran angsuran koperasi sync queue tidak valid.');
   }
 
-  throw new Error(
-    'Sinkronisasi upsert pembayaran koperasi dinonaktifkan. Gunakan command posting pembayaran atomik.',
-  );
+  const remotePayment = await cooperativeLoanPaymentPostgresAdapter.upsert(queueItem.payload);
+  if (!remotePayment) {
+    throw new Error('Upload pembayaran angsuran koperasi tidak menghasilkan data remote.');
+  }
+
+  return remotePayment;
 };
 
 const processCurrencyQueueItem = async (queueItem: SyncQueueItem) => {

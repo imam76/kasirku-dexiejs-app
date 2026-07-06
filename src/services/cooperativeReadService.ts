@@ -47,6 +47,7 @@ const EMPTY_READ_SYNC_RESULT: CooperativeReadSyncResult = {
 };
 
 const optionalString = (value: string | null | undefined) => value ?? undefined;
+const optionalNumber = (value: number | null | undefined) => value ?? undefined;
 const optionalPaymentType = (value: RemoteCooperativeLoanPaymentDto['payment_type']) => value ?? undefined;
 
 let isRefreshingCooperativeDataFromPostgres = false;
@@ -279,6 +280,10 @@ const mapRemoteCooperativeLoanPaymentToLocal = (
   id: remotePayment.id,
   payment_number: remotePayment.payment_number,
   payment_type: optionalPaymentType(remotePayment.payment_type),
+  payment_group_id: optionalString(remotePayment.payment_group_id),
+  payment_group_number: optionalString(remotePayment.payment_group_number),
+  payment_group_sequence: optionalNumber(remotePayment.payment_group_sequence),
+  payment_group_total: optionalNumber(remotePayment.payment_group_total),
   loan_id: remotePayment.loan_id,
   loan_number: remotePayment.loan_number,
   installment_id: optionalString(remotePayment.installment_id),

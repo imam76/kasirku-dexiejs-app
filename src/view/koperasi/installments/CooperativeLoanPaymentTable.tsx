@@ -43,6 +43,14 @@ export default function CooperativeLoanPaymentTable({
       render: (paymentNumber: string, payment) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{paymentNumber}</Text>
+          {payment.payment_group_number && (
+            <Text type="secondary">
+              {payment.payment_group_number}
+              {payment.payment_group_sequence && payment.payment_group_total
+                ? ` (${payment.payment_group_sequence}/${payment.payment_group_total})`
+                : ''}
+            </Text>
+          )}
           {payment.payment_type === 'REVERSAL' && (
             <Text type="secondary">{t('cooperative.installments.paymentType.reversal')}</Text>
           )}

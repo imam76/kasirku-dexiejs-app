@@ -6,9 +6,10 @@ use crate::{
         CooperativeMemberSavingBalanceDto, CooperativePaymentApprovalRequestDto,
         CooperativePaymentInstallmentReconciliationDto, CooperativePostingAccountDto,
         CooperativeSavingTransactionDto, DecideCooperativePaymentApprovalInput,
-        PostCooperativeLoanPaymentInput, PostCooperativeLoanPaymentOutcome,
-        RecordCooperativeLoanCollectionEventInput, RecordCooperativeLoanCollectionEventResult,
-        RegisterCooperativePostingAccountsInput, RequestCooperativeLoanPaymentReversalInput,
+        PostCooperativeLoanPaymentBatchOutcome, PostCooperativeLoanPaymentInput,
+        PostCooperativeLoanPaymentOutcome, RecordCooperativeLoanCollectionEventInput,
+        RecordCooperativeLoanCollectionEventResult, RegisterCooperativePostingAccountsInput,
+        RequestCooperativeLoanPaymentReversalInput,
     },
     repositories::{cooperative_payment_repository, cooperative_repository},
 };
@@ -56,6 +57,17 @@ pub async fn postgres_post_cooperative_loan_payment(
 ) -> PostgresCommandResult<PostCooperativeLoanPaymentOutcome> {
     let pool = state.pool()?;
     cooperative_payment_repository::post_loan_payment(&pool, input)
+        .await
+        .map_err(cooperative_mutation_error)
+}
+
+#[tauri::command]
+pub async fn postgres_post_cooperative_loan_payment_batch(
+    state: State<'_, PostgresState>,
+    input: PostCooperativeLoanPaymentInput,
+) -> PostgresCommandResult<PostCooperativeLoanPaymentBatchOutcome> {
+    let pool = state.pool()?;
+    cooperative_payment_repository::post_loan_payment_batch(&pool, input)
         .await
         .map_err(cooperative_mutation_error)
 }
@@ -307,4 +319,13 @@ pub async fn postgres_get_cooperative_loan_payment(
 ) -> PostgresCommandResult<Option<CooperativeLoanPaymentDto>> {
     let pool = state.pool()?;
     Ok(cooperative_repository::get_cooperative_loan_payment(&pool, id).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_upsert_cooperative_loan_payment(
+    state: State<'_, PostgresState>,
+    input: CooperativeLoanPaymentDto,
+) -> PostgresCommandResult<CooperativeLoanPaymentDto> {
+    let pool = state.pool()?;
+    Ok(cooperative_repository::upsert_cooperative_loan_payment(&pool, input).await?)
 }

@@ -293,7 +293,15 @@ export default function CooperativeBillingManagement() {
         form={form}
         open={isPaymentModalOpen}
         isSubmitting={isMutating}
-        payableInstallments={payingInstallment ? [payingInstallment] : []}
+        payableInstallments={payingInstallment
+          ? [
+              payingInstallment,
+              ...allUnpaidInstallments.filter((installment) => (
+                installment.loan_id === payingInstallment.loan_id &&
+                installment.id !== payingInstallment.id
+              )),
+            ]
+          : []}
         paymentAccounts={paymentAccounts}
         activeCollectors={activeCollectors}
         fieldCashBadge={fieldCashPaymentBadge}

@@ -25,4 +25,11 @@ export const demoMembers = {
     phone: '081234567002',
     address: 'Alamat demo Budi Hartono',
   },
+  rani: {
+    memberNumber: 'KSU-003',
+    name: 'Rani Permata',
+    identityNumber: '3271010101010003',
+    phone: '081234567003',
+    address: 'Alamat demo Rani Permata',
+  },
 } as const;

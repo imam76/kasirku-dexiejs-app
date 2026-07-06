@@ -8,10 +8,12 @@ import {
   expectCooperativeFinancialReportsGated,
   createLoanApplication,
   disburseLoan,
+  expectFlexibleInstallmentAllocation,
   expectCooperativeReportSummary,
   expectInstallmentSchedule,
   payRemainingInstallments,
   payFirstInstallment,
+  payFlexibleInstallmentAmount,
 } from './helpers/koperasi';
 
 test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
@@ -44,5 +46,16 @@ test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
     await page.goto('/finance/general-ledger');
     await expect(page.getByText(/IPTW 5% pelunasan tepat waktu/)).toBeVisible();
     await expect(page.getByText(/Rp 150.000/).first()).toBeVisible();
+  });
+
+  test('PAY-08 - pembayaran nominal bebas dialokasikan ke cicilan tertua', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await createActiveMember(page, demoMembers.rani);
+
+    await createLoanApplication(page, demoMembers.rani);
+    await approveLoan(page, demoMembers.rani);
+    await disburseLoan(page, demoMembers.rani);
+    await payFlexibleInstallmentAmount(page, demoMembers.rani, 795000);
+    await expectFlexibleInstallmentAllocation(page, demoMembers.rani);
   });
 });

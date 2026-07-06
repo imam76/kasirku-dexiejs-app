@@ -179,6 +179,10 @@ pub struct CooperativeLoanPaymentDto {
     pub id: String,
     pub payment_number: String,
     pub payment_type: Option<String>,
+    pub payment_group_id: Option<String>,
+    pub payment_group_number: Option<String>,
+    pub payment_group_sequence: Option<i32>,
+    pub payment_group_total: Option<i32>,
     pub loan_id: String,
     pub loan_number: String,
     pub installment_id: Option<String>,
@@ -262,6 +266,17 @@ pub struct PostCooperativeLoanPaymentResult {
     pub journal_entry: JournalEntryBundleDto,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostCooperativeLoanPaymentBatchResult {
+    pub payments: Vec<CooperativeLoanPaymentDto>,
+    pub installments: Vec<CooperativeLoanInstallmentDto>,
+    pub loan: CooperativeLoanDto,
+    pub finance_transactions: Vec<FinanceTransactionDto>,
+    pub journal_entries: Vec<JournalEntryBundleDto>,
+    pub payment_group_id: Option<String>,
+    pub payment_group_number: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CooperativePaymentApprovalRequestDto {
     pub id: String,
@@ -294,6 +309,17 @@ pub struct CooperativePaymentApprovalRequestDto {
 pub enum PostCooperativeLoanPaymentOutcome {
     Posted {
         result: PostCooperativeLoanPaymentResult,
+    },
+    PendingApproval {
+        approval_request: CooperativePaymentApprovalRequestDto,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PostCooperativeLoanPaymentBatchOutcome {
+    Posted {
+        result: PostCooperativeLoanPaymentBatchResult,
     },
     PendingApproval {
         approval_request: CooperativePaymentApprovalRequestDto,

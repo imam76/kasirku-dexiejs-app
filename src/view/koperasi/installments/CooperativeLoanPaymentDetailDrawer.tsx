@@ -44,6 +44,14 @@ export default function CooperativeLoanPaymentDetailDrawer({
             <Descriptions.Item label={t('cooperative.installments.payments.paymentNumber')}>
               {payment.payment_number}
             </Descriptions.Item>
+            {payment.payment_group_number && (
+              <Descriptions.Item label={t('cooperative.installments.paymentGroup')}>
+                {payment.payment_group_number}
+                {payment.payment_group_sequence && payment.payment_group_total
+                  ? ` (${payment.payment_group_sequence}/${payment.payment_group_total})`
+                  : ''}
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label={t('cooperative.installments.payments.paymentDate')}>
               {formatDate(payment.payment_date)}
             </Descriptions.Item>
