@@ -7,11 +7,13 @@ import {
   createCooperativeLoanApplication,
   disburseCooperativeLoan,
   disburseCooperativeLoanViaFieldCash,
+  migrateCooperativeLoan,
   rejectCooperativeLoan,
   type ApproveCooperativeLoanInput,
   type CreateCooperativeLoanApplicationInput,
   type DisburseCooperativeLoanInput,
   type DisburseCooperativeLoanViaFieldCashInput,
+  type MigrateCooperativeLoanInput,
   type RejectCooperativeLoanInput,
 } from '@/services/cooperativeLoanService';
 import { getCashAccountBalance } from '@/services/cooperativeFieldCashService';
@@ -173,6 +175,10 @@ export const useCooperativeLoans = () => {
     mutationFn: disburseCooperativeLoanViaFieldCash,
     onSuccess: invalidate,
   });
+  const migrateMutation = useMutation({
+    mutationFn: migrateCooperativeLoan,
+    onSuccess: invalidate,
+  });
 
   return {
     members,
@@ -200,10 +206,12 @@ export const useCooperativeLoans = () => {
     rejectLoan: (input: RejectCooperativeLoanInput) => rejectMutation.mutateAsync(input),
     disburseLoan: (input: DisburseCooperativeLoanInput) => disburseMutation.mutateAsync(input),
     disburseLoanViaFieldCash: (input: DisburseCooperativeLoanViaFieldCashInput) => disburseViaFieldCashMutation.mutateAsync(input),
+    migrateLoan: (input: MigrateCooperativeLoanInput) => migrateMutation.mutateAsync(input),
     isMutating: createMutation.isPending ||
       approveMutation.isPending ||
       rejectMutation.isPending ||
       disburseMutation.isPending ||
-      disburseViaFieldCashMutation.isPending,
+      disburseViaFieldCashMutation.isPending ||
+      migrateMutation.isPending,
   };
 };

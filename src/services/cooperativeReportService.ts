@@ -1232,11 +1232,23 @@ const buildLoanOutstandingReconciliation = (
 const buildPaymentInstallmentReconciliation = (
   installments: CooperativeLoanInstallment[],
   payments: CooperativeLoanPayment[],
+  loans: CooperativeLoan[],
 ) => {
+  // Pinjaman migrasi mengisi paid_* angsuran dengan saldo historis (tanpa CooperativeLoanPayment),
+  // jadi dikecualikan dari cek payment-vs-installment agar tidak jadi false warning. Trade-off:
+  // pembayaran pasca-cutoff pada loan migrasi tidak terdeteksi cek agregat ini (belum ada field
+  // baseline paid historis terpisah).
+  const migrationLoanIds = new Set(
+    loans.filter((loan) => loan.is_migration).map((loan) => loan.id),
+  );
+  const operationalInstallments = installments.filter(
+    (installment) => !migrationLoanIds.has(installment.loan_id),
+  );
   const activePayments = payments.filter((payment) => (
     payment.status === 'POSTED' &&
     (payment.payment_type ?? 'PAYMENT') === 'PAYMENT' &&
-    !payment.reversal_of_payment_id
+    !payment.reversal_of_payment_id &&
+    !migrationLoanIds.has(payment.loan_id)
   ));
   const expectedByInstallmentId = new Map<string, {
     principal: number;
@@ -1262,13 +1274,13 @@ const buildPaymentInstallmentReconciliation = (
     });
   });
 
-  const installmentIds = new Set(installments.map((installment) => installment.id));
+  const installmentIds = new Set(operationalInstallments.map((installment) => installment.id));
   expectedByInstallmentId.forEach((_amounts, installmentId) => {
     if (!installmentIds.has(installmentId)) orphanPaymentCount += 1;
   });
 
   let mismatchCount = orphanPaymentCount;
-  installments.forEach((installment) => {
+  operationalInstallments.forEach((installment) => {
     const expected = expectedByInstallmentId.get(installment.id) ?? {
       principal: 0,
       interest: 0,
@@ -1284,7 +1296,7 @@ const buildPaymentInstallmentReconciliation = (
   });
 
   const expectedAmount = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-  const actualAmount = installments.reduce((sum, installment) => (
+  const actualAmount = operationalInstallments.reduce((sum, installment) => (
     sum +
     Number(installment.paid_principal_amount || 0) +
     Number(installment.paid_interest_amount || 0) +
@@ -1311,6 +1323,9 @@ const buildFinanceTransactionReconciliation = (
       amount: transaction.amount,
     })),
     ...loans
+      // Pencairan pinjaman migrasi sengaja tidak menggerakkan kas / financeTransactions,
+      // jadi jangan diharapkan punya finance_transaction_id (menghindari false warning).
+      .filter((loan) => !loan.is_migration)
       .filter((loan) => loan.status === 'DISBURSED' || loan.status === 'PAID_OFF' || Boolean(loan.finance_transaction_id))
       .map((loan) => ({
         financeTransactionId: loan.finance_transaction_id,
@@ -1398,10 +1413,12 @@ const buildLoanReceivableLedgerReconciliation = (
   accounts: ChartOfAccount[],
   receivableJournalEntries: JournalEntryWithLines[],
 ): CooperativeReconciliationRow => {
-  const expectedAmount = loans.reduce(
-    (sum, loan) => sum + Number(loan.outstanding_principal_amount || 0),
-    0,
-  );
+  // Akun 1120 hanya menampung piutang yang sudah menjadi piutang secara akuntansi,
+  // yaitu pinjaman DISBURSED/PAID_OFF. Loan SUBMITTED/APPROVED/REJECTED/REVERSED atau data
+  // parsial migrasi gagal tidak ikut expected 1120.
+  const expectedAmount = loans
+    .filter(isOutstandingLoan)
+    .reduce((sum, loan) => sum + Number(loan.outstanding_principal_amount || 0), 0);
   const receivableAccount = accounts.find(
     (account) => account.id === 'cooperative-loan-receivable' || account.code === '1120',
   );
@@ -1431,7 +1448,7 @@ const buildReconciliationSummary = (
   const rows = [
     buildSavingBalanceReconciliation(savingBalances, savingTransactions),
     buildLoanOutstandingReconciliation(loans, installments),
-    buildPaymentInstallmentReconciliation(installments, payments),
+    buildPaymentInstallmentReconciliation(installments, payments, loans),
     buildFinanceTransactionReconciliation(savingTransactions, loans, payments, financeTransactions),
     buildJournalEntryReconciliation(savingTransactions, loans, payments, journalEntries),
   ];

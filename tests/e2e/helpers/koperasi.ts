@@ -227,12 +227,15 @@ interface MigrateLoanInput {
 }
 
 /**
- * Records a migration loan (running loan carried over at cut-off) via the dedicated
- * "Migrasi Pinjaman" menu. Picks a past disbursement date on the officer's collection weekday
- * (historical fallback requires it) and before today, so the migration posts no journal.
- * Returns the loan number.
+ * Opens the "Migrasi Pinjaman" modal and fills the form (member, historical dates on the officer's
+ * collection weekday, scheme fields, and "paid through installment N") WITHOUT submitting.
+ * Shared by the happy-path {@link migrateLoan} and the invalid-input rejection test.
  */
-export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'memberNumber' | 'name'>, input: MigrateLoanInput) {
+async function openAndFillMigrationForm(
+  page: Page,
+  member: Pick<DemoMemberInput, 'memberNumber' | 'name'>,
+  input: Pick<MigrateLoanInput, 'principal' | 'ratePercent' | 'tenor' | 'settledThrough' | 'disbursementWeekday'>,
+) {
   const pad = (value: number) => String(value).padStart(2, '0');
   const isoWeekday = (date: Date) => (date.getDay() === 0 ? 7 : date.getDay());
   const past = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -259,6 +262,16 @@ export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'mem
   await fillControlByTestId(page, 'koperasi-loan-migration-interest-input', input.ratePercent ?? '1');
   await fillControlByTestId(page, 'koperasi-loan-migration-tenor-input', input.tenor ?? '12');
   await fillControlByTestId(page, 'koperasi-loan-migration-settled-installment-input', input.settledThrough ?? '4');
+}
+
+/**
+ * Records a migration loan (running loan carried over at cut-off) via the dedicated
+ * "Migrasi Pinjaman" menu. Picks a past disbursement date on the officer's collection weekday
+ * (historical fallback requires it) and before today, so the migration posts no journal.
+ * Returns the loan number.
+ */
+export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'memberNumber' | 'name'>, input: MigrateLoanInput) {
+  await openAndFillMigrationForm(page, member, input);
   await page.getByTestId('koperasi-loan-migration-submit-button').click();
 
   const row = migrationLoanRow(page, member.memberNumber);
@@ -273,6 +286,32 @@ export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'mem
   }
 
   return loanNumber;
+}
+
+/**
+ * Attempts a migration with an out-of-range "paid through installment N" (greater than the tenor),
+ * asserts the validation error blocks the submit, and confirms no partial migration loan is left
+ * behind. Guards the migration-input hardening + atomic-flow acceptance criteria.
+ */
+export async function expectMigrationRejectedForInvalidSettledInstallment(
+  page: Page,
+  member: Pick<DemoMemberInput, 'memberNumber' | 'name'>,
+  input: { tenor: string; settledThrough: string; disbursementWeekday?: number },
+) {
+  await openAndFillMigrationForm(page, member, {
+    tenor: input.tenor,
+    settledThrough: input.settledThrough,
+    disbursementWeekday: input.disbursementWeekday,
+  });
+  await page.getByTestId('koperasi-loan-migration-submit-button').click();
+
+  await expect(
+    page.getByText(`Tidak boleh lebih dari ${input.tenor} angsuran.`),
+  ).toBeVisible();
+
+  await closeTopDialog(page);
+  // Atomic: percobaan yang ditolak tidak meninggalkan pinjaman migrasi parsial.
+  await expect(migrationLoanRow(page, member.memberNumber)).toBeHidden();
 }
 
 export async function expectInstallmentSchedule(page: Page, member: DemoMemberInput) {

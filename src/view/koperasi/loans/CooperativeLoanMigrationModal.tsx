@@ -78,6 +78,15 @@ export default function CooperativeLoanMigrationModal({
   const installmentCount = Number(Form.useWatch('installment_count', form) || 0);
   const totalInstallments = calculationType === 'MONTHLY_RATE' ? tenorMonths : installmentCount;
 
+  const principalAmount = Number(Form.useWatch('principal_amount', form) || 0);
+  const interestRatePerMonth = Number(Form.useWatch('interest_rate_per_month', form) || 0);
+  const loanServiceRate = Number(Form.useWatch('loan_service_rate', form) || 0);
+  // Batas atas sisa migrasi = total bunga pinjaman. Flat: pokok x bunga%/bln x tenor.
+  // Total-percent: pokok x jasa%. Dipakai sebagai `max` input agar sisa tak melebihi total bunga.
+  const totalInterest = calculationType === 'MONTHLY_RATE'
+    ? Math.round(principalAmount * (interestRatePerMonth / 100) * tenorMonths)
+    : Math.round(principalAmount * (loanServiceRate / 100));
+
   const memberOptions = useMemo(() => activeMembers.map((member) => ({
     value: member.id,
     label: `${member.member_number} - ${member.name}`,
@@ -375,10 +384,19 @@ export default function CooperativeLoanMigrationModal({
               rules={[
                 { required: true, message: t('cooperative.loans.migration.validation.outstandingPrincipalRequired') },
                 { type: 'number', min: 0, message: t('finance.amountMin') },
+                {
+                  type: 'number',
+                  max: principalAmount || undefined,
+                  message: t('cooperative.loans.migration.validation.outstandingPrincipalMax'),
+                },
               ]}
+              extra={principalAmount
+                ? t('cooperative.loans.migration.outstandingPrincipalExtra', { amount: formatCurrencyInput(principalAmount) })
+                : undefined}
             >
               <InputNumber<number>
                 min={0}
+                max={principalAmount || undefined}
                 className="w-full"
                 formatter={formatCurrencyInput}
                 parser={parseCurrencyInput}
@@ -389,10 +407,21 @@ export default function CooperativeLoanMigrationModal({
             <Form.Item
               name="outstanding_interest_amount"
               label={t('cooperative.loans.migration.outstandingInterest')}
-              extra={t('cooperative.loans.migration.outstandingInterestExtra')}
+              rules={[
+                { type: 'number', min: 0, message: t('finance.amountMin') },
+                {
+                  type: 'number',
+                  max: totalInterest || undefined,
+                  message: t('cooperative.loans.migration.validation.outstandingInterestMax'),
+                },
+              ]}
+              extra={totalInterest
+                ? t('cooperative.loans.migration.outstandingInterestMaxExtra', { amount: formatCurrencyInput(totalInterest) })
+                : t('cooperative.loans.migration.outstandingInterestExtra')}
             >
               <InputNumber<number>
                 min={0}
+                max={totalInterest || undefined}
                 className="w-full"
                 formatter={formatCurrencyInput}
                 parser={parseCurrencyInput}

@@ -173,14 +173,31 @@ export const cooperativeLoanDisbursementSchema = z.object({
   notes: z.string().optional(),
 }).superRefine((value, context) => {
   if (!value.migration_entry) return;
-  if (
-    value.settled_through_installment_number === undefined &&
-    value.migration_outstanding_principal_amount === undefined
-  ) {
+  const hasSettledInstallment = value.settled_through_installment_number !== undefined;
+  const hasOutstandingPrincipal = value.migration_outstanding_principal_amount !== undefined;
+  if (!hasSettledInstallment && !hasOutstandingPrincipal) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['settled_through_installment_number'],
       message: 'Migrasi wajib mengisi salah satu: jumlah angsuran yang sudah lunas atau sisa pokok.',
+    });
+    return;
+  }
+  // Mode posisi tidak boleh dicampur: pilih salah satu antara "lunas s/d angsuran" ATAU "sisa pokok"
+  // supaya penetapan paid_* historis tidak ambigu.
+  if (hasSettledInstallment && hasOutstandingPrincipal) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['migration_outstanding_principal_amount'],
+      message: 'Pilih salah satu mode posisi migrasi: jumlah angsuran lunas atau sisa pokok, tidak keduanya.',
+    });
+  }
+  // Sisa bunga hanya relevan pada mode sisa pokok.
+  if (!hasOutstandingPrincipal && value.migration_outstanding_interest_amount !== undefined) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['migration_outstanding_interest_amount'],
+      message: 'Sisa bunga hanya boleh diisi pada mode sisa pokok.',
     });
   }
 });

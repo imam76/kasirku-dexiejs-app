@@ -860,6 +860,48 @@ export interface CooperativeLoanMigrationState {
 const MIGRATION_EPSILON = 0.01;
 
 /**
+ * Menolak input posisi migrasi yang tidak mungkin secara bisnis, memakai data loan sebagai batas:
+ * settled installment <= jumlah angsuran, sisa pokok <= pokok, sisa bunga <= total bunga.
+ * Service jadi sumber kebenaran sehingga caller non-UI pun ikut terjaga.
+ */
+const assertMigrationPositionWithinLoan = (
+  loan: Pick<
+    CooperativeLoan,
+    'principal_amount' | 'total_interest_amount' | 'installment_count' | 'tenor_months'
+  >,
+  input: Pick<
+    ParsedCooperativeLoanDisbursementInput,
+    | 'settled_through_installment_number'
+    | 'migration_outstanding_principal_amount'
+    | 'migration_outstanding_interest_amount'
+  >,
+) => {
+  const installmentCount = resolveLoanInstallmentCount(loan);
+  const settledThrough = input.settled_through_installment_number;
+  if (settledThrough !== undefined && settledThrough > installmentCount) {
+    throw new Error(
+      `Jumlah angsuran yang sudah lunas (${settledThrough}) tidak boleh melebihi jumlah angsuran (${installmentCount}).`,
+    );
+  }
+
+  const outstandingPrincipal = input.migration_outstanding_principal_amount;
+  if (
+    outstandingPrincipal !== undefined &&
+    outstandingPrincipal > roundCurrency(Number(loan.principal_amount || 0)) + MIGRATION_EPSILON
+  ) {
+    throw new Error('Sisa pokok migrasi tidak boleh melebihi pokok pinjaman.');
+  }
+
+  const outstandingInterest = input.migration_outstanding_interest_amount;
+  if (
+    outstandingInterest !== undefined &&
+    outstandingInterest > roundCurrency(Number(loan.total_interest_amount || 0)) + MIGRATION_EPSILON
+  ) {
+    throw new Error('Sisa bunga migrasi tidak boleh melebihi total bunga pinjaman.');
+  }
+};
+
+/**
  * Menandai angsuran mana yang sudah lunas historis (tanpa jurnal & tanpa CooperativeLoanPayment)
  * berdasarkan posisi migrasi. Mengembalikan kartu angsuran dengan paid_* & status terisi.
  */
@@ -1088,12 +1130,21 @@ const getLoanNextStatus = (
   return isOutstandingSettled && areInstallmentsPaid ? 'PAID_OFF' as const : 'DISBURSED' as const;
 };
 
-export const createCooperativeLoanApplication = async (
-  input: CreateCooperativeLoanApplicationInput,
-): Promise<CooperativeLoan> => {
-  const currentUser = await getCurrentSessionUser();
-  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
-
+/**
+ * Membentuk record pinjaman berstatus SUBMITTED di dalam transaksi Dexie yang sedang berjalan.
+ * Dipakai bersama oleh pengajuan biasa (`createCooperativeLoanApplication`) dan alur migrasi
+ * atomic (`migrateCooperativeLoan`) agar logika perhitungan & pembentukan loan tidak terduplikasi.
+ * Pemanggil bertanggung jawab menambahkan loan ke db, menulis activity log, dan enqueue sync.
+ */
+const buildCooperativeLoanApplicationRecord = async ({
+  input,
+  now,
+  currentUser,
+}: {
+  input: CreateCooperativeLoanApplicationInput;
+  now: string;
+  currentUser: Awaited<ReturnType<typeof getCurrentSessionUser>>;
+}): Promise<CooperativeLoan> => {
   const parsedInput = cooperativeLoanApplicationSchema.parse(input);
   const calculationType = parsedInput.interest_calculation_type;
   const flatSummary = calculationType === 'MONTHLY_RATE'
@@ -1119,51 +1170,61 @@ export const createCooperativeLoanApplication = async (
   if (totalPercentSummary && totalPercentSummary.net_disbursement_amount < -0.01) {
     throw new Error('Estimasi uang diterima anggota tidak boleh negatif.');
   }
-  const now = new Date().toISOString();
   const applicationDate = parsedInput.application_date ?? now;
+  const member = assertActiveMember(await db.cooperativeMembers.get(parsedInput.member_id));
+
+  return withPendingCooperativeSync({
+    id: crypto.randomUUID(),
+    loan_number: await createCooperativeLoanNumber(applicationDate),
+    member_id: member.id,
+    member_number: member.member_number,
+    member_name: member.name,
+    principal_amount: summary.principal_amount,
+    interest_rate_per_month: flatSummary?.interest_rate_per_month ?? 0,
+    tenor_months: flatSummary?.tenor_months ?? totalPercentSummary?.installment_count ?? 1,
+    interest_calculation_type: calculationType,
+    billing_frequency: calculationType === 'TOTAL_PERCENT'
+      ? parsedInput.billing_frequency ?? 'MONTHLY'
+      : 'MONTHLY',
+    installment_count: flatSummary?.tenor_months ?? totalPercentSummary?.installment_count ?? 1,
+    loan_service_rate: flatSummary?.interest_rate_per_month ?? totalPercentSummary?.loan_service_rate ?? 0,
+    loan_service_amount: summary.total_interest_amount,
+    admin_fee_rate: totalPercentSummary?.admin_fee_rate ?? 0,
+    admin_fee_amount: totalPercentSummary?.admin_fee_amount ?? 0,
+    mandatory_saving_rate: totalPercentSummary?.mandatory_saving_rate ?? 0,
+    mandatory_saving_amount: totalPercentSummary?.mandatory_saving_amount ?? 0,
+    deduction_method: calculationType === 'TOTAL_PERCENT'
+      ? parsedInput.deduction_method ?? 'DEDUCT_ON_DISBURSEMENT'
+      : 'NONE',
+    net_disbursement_amount: totalPercentSummary?.net_disbursement_amount ?? summary.principal_amount,
+    total_interest_amount: summary.total_interest_amount,
+    total_payable_amount: summary.total_payable_amount,
+    outstanding_principal_amount: summary.principal_amount,
+    outstanding_interest_amount: summary.total_interest_amount,
+    outstanding_penalty_amount: 0,
+    status: 'SUBMITTED',
+    application_date: applicationDate,
+    notes: parsedInput.notes,
+    created_at: now,
+    updated_at: now,
+    created_by: currentUser?.id,
+    created_by_name: currentUser?.name,
+    updated_by: currentUser?.id,
+    updated_by_name: currentUser?.name,
+  });
+};
+
+export const createCooperativeLoanApplication = async (
+  input: CreateCooperativeLoanApplicationInput,
+): Promise<CooperativeLoan> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
+
+  const now = new Date().toISOString();
   let savedLoan: CooperativeLoan | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
-    const member = assertActiveMember(await db.cooperativeMembers.get(parsedInput.member_id));
-    const loan: CooperativeLoan = withPendingCooperativeSync({
-      id: crypto.randomUUID(),
-      loan_number: await createCooperativeLoanNumber(applicationDate),
-      member_id: member.id,
-      member_number: member.member_number,
-      member_name: member.name,
-      principal_amount: summary.principal_amount,
-      interest_rate_per_month: flatSummary?.interest_rate_per_month ?? 0,
-      tenor_months: flatSummary?.tenor_months ?? totalPercentSummary?.installment_count ?? 1,
-      interest_calculation_type: calculationType,
-      billing_frequency: calculationType === 'TOTAL_PERCENT'
-        ? parsedInput.billing_frequency ?? 'MONTHLY'
-        : 'MONTHLY',
-      installment_count: flatSummary?.tenor_months ?? totalPercentSummary?.installment_count ?? 1,
-      loan_service_rate: flatSummary?.interest_rate_per_month ?? totalPercentSummary?.loan_service_rate ?? 0,
-      loan_service_amount: summary.total_interest_amount,
-      admin_fee_rate: totalPercentSummary?.admin_fee_rate ?? 0,
-      admin_fee_amount: totalPercentSummary?.admin_fee_amount ?? 0,
-      mandatory_saving_rate: totalPercentSummary?.mandatory_saving_rate ?? 0,
-      mandatory_saving_amount: totalPercentSummary?.mandatory_saving_amount ?? 0,
-      deduction_method: calculationType === 'TOTAL_PERCENT'
-        ? parsedInput.deduction_method ?? 'DEDUCT_ON_DISBURSEMENT'
-        : 'NONE',
-      net_disbursement_amount: totalPercentSummary?.net_disbursement_amount ?? summary.principal_amount,
-      total_interest_amount: summary.total_interest_amount,
-      total_payable_amount: summary.total_payable_amount,
-      outstanding_principal_amount: summary.principal_amount,
-      outstanding_interest_amount: summary.total_interest_amount,
-      outstanding_penalty_amount: 0,
-      status: 'SUBMITTED',
-      application_date: applicationDate,
-      notes: parsedInput.notes,
-      created_at: now,
-      updated_at: now,
-      created_by: currentUser?.id,
-      created_by_name: currentUser?.name,
-      updated_by: currentUser?.id,
-      updated_by_name: currentUser?.name,
-    });
+    const loan = await buildCooperativeLoanApplicationRecord({ input, now, currentUser });
 
     await db.cooperativeLoans.add(loan);
     savedLoan = loan;
@@ -1173,7 +1234,7 @@ export const createCooperativeLoanApplication = async (
       action: 'COOPERATIVE_LOAN_SUBMITTED',
       entity: 'cooperativeLoans',
       entity_id: loan.id,
-      description: `${currentUser?.name ?? 'User'} mengajukan pinjaman ${loan.loan_number} untuk ${member.member_number} sebesar ${loan.principal_amount}.`,
+      description: `${currentUser?.name ?? 'User'} mengajukan pinjaman ${loan.loan_number} untuk ${loan.member_number} sebesar ${loan.principal_amount}.`,
     });
   });
 
@@ -1339,6 +1400,11 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
     throw new Error(
       'Pinjaman migrasi harus bertanggal sebelum cutoff buku besar. Piutangnya dicatat lewat saldo awal, bukan jurnal pencairan.',
     );
+  }
+  // Service adalah sumber kebenaran: tolak posisi migrasi yang mustahil secara bisnis sebelum
+  // mencemari kartu angsuran / outstanding. Validasi UI hanya lapis pertama.
+  if (isMigration) {
+    assertMigrationPositionWithinLoan(loan, parsedInput);
   }
 
   const existingInstallment = await db.cooperativeLoanInstallments
@@ -1622,6 +1688,112 @@ export const disburseCooperativeLoan = async (
   }
 
   await enqueueCooperativeLoanDisbursementResultSync(result);
+
+  return {
+    loan: result.loan,
+    installments: result.installments,
+  };
+};
+
+export interface MigrateCooperativeLoanInput {
+  member_id: string;
+  principal_amount: number;
+  interest_calculation_type?: CooperativeLoanInterestCalculationType;
+  interest_rate_per_month?: number;
+  tenor_months?: number;
+  billing_frequency?: CooperativeLoanBillingFrequency;
+  installment_count?: number;
+  loan_service_rate?: number;
+  admin_fee_rate?: number;
+  mandatory_saving_rate?: number;
+  application_date?: string;
+  disbursement_date: string;
+  first_due_date?: string;
+  settled_through_installment_number?: number;
+  migration_outstanding_principal_amount?: number;
+  migration_outstanding_interest_amount?: number;
+  notes?: string;
+}
+
+/**
+ * Mencatat pinjaman migrasi (pinjaman berjalan yang dibawa saat cut-off) secara ATOMIC:
+ * create + approve + disburse-mode-migrasi berjalan dalam satu transaksi Dexie. Bila salah satu
+ * tahap gagal (validasi/disburse), tidak ada loan `SUBMITTED`/`APPROVED` parsial yang tertinggal.
+ * Queue sync dijalankan hanya setelah transaksi lokal sukses.
+ */
+export const migrateCooperativeLoan = async (
+  input: MigrateCooperativeLoanInput,
+): Promise<DisburseCooperativeLoanResult> => {
+  const currentUser = await getCurrentSessionUser();
+  // Migrasi menjalankan create + approve + disburse; wajibkan izin ketiga operasi tersebut.
+  await requireUserPermission(currentUser, 'COOPERATIVE_PAYMENT_CREATE');
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_DISBURSE');
+
+  const parsedDisbursement = cooperativeLoanDisbursementSchema.parse({
+    disbursement_date: input.disbursement_date,
+    first_due_date: input.first_due_date,
+    migration_entry: true,
+    settled_through_installment_number: input.settled_through_installment_number,
+    migration_outstanding_principal_amount: input.migration_outstanding_principal_amount,
+    migration_outstanding_interest_amount: input.migration_outstanding_interest_amount,
+    notes: input.notes,
+  });
+
+  const applicationInput: CreateCooperativeLoanApplicationInput = {
+    member_id: input.member_id,
+    principal_amount: input.principal_amount,
+    interest_calculation_type: input.interest_calculation_type,
+    interest_rate_per_month: input.interest_rate_per_month,
+    tenor_months: input.tenor_months,
+    billing_frequency: input.billing_frequency,
+    installment_count: input.installment_count,
+    loan_service_rate: input.loan_service_rate,
+    admin_fee_rate: input.admin_fee_rate,
+    mandatory_saving_rate: input.mandatory_saving_rate,
+    application_date: input.application_date,
+    notes: input.notes,
+  };
+
+  const now = new Date().toISOString();
+  const approvalDate = input.application_date ?? now;
+  let result: CooperativeLoanDisbursementWriteResult | undefined;
+
+  await db.transaction('rw', cooperativeLoanTables, async () => {
+    // 1) Buat record pinjaman (SUBMITTED).
+    const loan = await buildCooperativeLoanApplicationRecord({ input: applicationInput, now, currentUser });
+    await db.cooperativeLoans.add(loan);
+
+    // 2) Setujui pinjaman (APPROVED) supaya memenuhi prasyarat pencairan.
+    const approvedLoan: CooperativeLoan = withPendingCooperativeSync({
+      ...loan,
+      status: 'APPROVED' as const,
+      approved_at: approvalDate,
+      approved_by: currentUser?.id,
+      approved_by_name: currentUser?.name,
+      updated_at: now,
+      updated_by: currentUser?.id,
+      updated_by_name: currentUser?.name,
+    });
+    await db.cooperativeLoans.put(approvedLoan);
+
+    // 3) Catat pencairan mode migrasi (tanpa jurnal & tanpa kas). Menandai angsuran lunas historis,
+    //    menurunkan outstanding dari sisa kartu, dan menulis activity log COOPERATIVE_LOAN_MIGRATED.
+    result = await writeCooperativeLoanDisbursementInCurrentTransaction({
+      loanId: loan.id,
+      parsedInput: parsedDisbursement,
+      now,
+      currentUser,
+    });
+  });
+
+  if (!result) {
+    throw new Error('Migrasi pinjaman gagal disimpan.');
+  }
+
+  // Sync hanya setelah transaksi lokal sukses. Loan baru dibuat -> 'create'.
+  await enqueueCooperativeLoansSync([result.loan], 'create');
+  await enqueueCooperativeLoanInstallmentsSync(result.installments, 'create');
 
   return {
     loan: result.loan,

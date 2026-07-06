@@ -1064,7 +1064,16 @@ export default function CooperativeReportManagement() {
                     <Statistic
                       title={t('cooperative.reports.reconciliation.title')}
                       value={reconciliation?.mismatch_count ?? 0}
-                      suffix={t(reconciliation?.status === 'WARNING' ? 'cooperative.reports.reconciliation.warning' : 'cooperative.reports.reconciliation.ok')}
+                      suffix={(
+                        <Tag
+                          className="ml-2"
+                          color={reconciliation?.status === 'WARNING' ? 'orange' : 'green'}
+                        >
+                          {t(reconciliation?.status === 'WARNING'
+                            ? 'cooperative.reports.reconciliation.warning'
+                            : 'cooperative.reports.reconciliation.ok')}
+                        </Tag>
+                      )}
                     />
                   </div>
                 </div>
@@ -1075,6 +1084,7 @@ export default function CooperativeReportManagement() {
                   loading={isLoading}
                   pagination={false}
                   scroll={{ x: 980 }}
+                  onRow={(row) => ({ 'data-testid': `koperasi-reconciliation-row-${row.key}` } as React.HTMLAttributes<HTMLElement>)}
                 />
                 <Table
                   dataSource={data?.memberRows ?? []}

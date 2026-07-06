@@ -28,9 +28,7 @@ export default function CooperativeLoanMigrationManagement() {
     selectedLoan,
     setSelectedLoan,
     selectedLoanInstallments,
-    createLoan,
-    approveLoan,
-    disburseLoan,
+    migrateLoan,
     isMutating,
   } = useCooperativeLoans();
 
@@ -121,9 +119,8 @@ export default function CooperativeLoanMigrationManagement() {
         application_date: applicationDate.toISOString(),
         notes: values.notes,
       };
-      const created = await createLoan(calculationType === 'TOTAL_PERCENT'
+      const schemeInput = calculationType === 'TOTAL_PERCENT'
         ? {
-            ...commonInput,
             billing_frequency: values.billing_frequency,
             installment_count: Number(values.installment_count || 0),
             loan_service_rate: Number(values.loan_service_rate || 0),
@@ -131,18 +128,17 @@ export default function CooperativeLoanMigrationManagement() {
             mandatory_saving_rate: Number(values.mandatory_saving_rate || 0),
           }
         : {
-            ...commonInput,
             interest_rate_per_month: Number(values.interest_rate_per_month || 0),
             tenor_months: Number(values.tenor_months || 0),
-          });
+          };
 
-      await approveLoan({ loan_id: created.id });
-
-      await disburseLoan({
-        loan_id: created.id,
+      // Satu mutation atomic: create + approve + disburse-migrasi dalam satu transaksi Dexie,
+      // sehingga kegagalan di tengah tidak meninggalkan pinjaman parsial.
+      await migrateLoan({
+        ...commonInput,
+        ...schemeInput,
         disbursement_date: disbursementDate.toISOString(),
         first_due_date: firstDueDate.toISOString(),
-        migration_entry: true,
         settled_through_installment_number: values.settled_mode === 'INSTALLMENT'
           ? Number(values.settled_through_installment_number ?? 0)
           : undefined,
@@ -152,7 +148,6 @@ export default function CooperativeLoanMigrationManagement() {
         migration_outstanding_interest_amount: values.settled_mode === 'PRINCIPAL' && values.outstanding_interest_amount != null
           ? Number(values.outstanding_interest_amount)
           : undefined,
-        notes: values.notes,
       });
 
       message.success(t('cooperative.loans.migration.success'));
