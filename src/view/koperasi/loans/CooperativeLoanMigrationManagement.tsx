@@ -3,6 +3,7 @@ import { App, Button, Card, Form, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DatabaseBackup, Plus } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
+import { useCooperativeLoanRatePreference } from '@/hooks/useCooperativeLoanRatePreference';
 import { useCooperativeLoans } from '@/hooks/useCooperativeLoans';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan } from '@/types';
@@ -20,6 +21,7 @@ export default function CooperativeLoanMigrationManagement() {
   const { can } = useAuth();
   const canMigrate = can('COOPERATIVE_LOAN_DISBURSE');
   const [form] = Form.useForm<CooperativeLoanMigrationFormValues>();
+  const { loanRatePreference, rememberLoanRates } = useCooperativeLoanRatePreference();
   const {
     members,
     activeMembers,
@@ -70,6 +72,8 @@ export default function CooperativeLoanMigrationManagement() {
       installment_count: 12,
       billing_frequency: 'WEEKLY',
       settled_mode: 'INSTALLMENT',
+      ...loanRatePreference,
+      remember_total_percent_rates: Boolean(loanRatePreference),
     });
     setModalOpen(true);
   };
@@ -149,6 +153,15 @@ export default function CooperativeLoanMigrationManagement() {
           ? Number(values.outstanding_interest_amount)
           : undefined,
       });
+      if (calculationType === 'TOTAL_PERCENT') {
+        rememberLoanRates(values.remember_total_percent_rates
+          ? {
+              loan_service_rate: Number(values.loan_service_rate || 0),
+              admin_fee_rate: Number(values.admin_fee_rate || 0),
+              mandatory_saving_rate: Number(values.mandatory_saving_rate || 0),
+            }
+          : undefined);
+      }
 
       message.success(t('cooperative.loans.migration.success'));
       closeModal();

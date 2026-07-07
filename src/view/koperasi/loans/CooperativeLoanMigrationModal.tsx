@@ -1,4 +1,4 @@
-import { Alert, DatePicker, Divider, Form, Input, InputNumber, Modal, Radio, Select, Typography } from 'antd';
+import { Alert, Checkbox, DatePicker, Divider, Form, Input, InputNumber, Modal, Radio, Select, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useMemo } from 'react';
@@ -32,6 +32,7 @@ export interface CooperativeLoanMigrationFormValues {
   loan_service_rate?: number;
   admin_fee_rate?: number;
   mandatory_saving_rate?: number;
+  remember_total_percent_rates?: boolean;
   installment_count?: number;
   billing_frequency?: CooperativeLoanBillingFrequency;
   settled_mode: CooperativeLoanMigrationSettledMode;
@@ -309,6 +310,15 @@ export default function CooperativeLoanMigrationModal({
                 />
               </Form.Item>
             </div>
+            <Form.Item
+              name="remember_total_percent_rates"
+              valuePropName="checked"
+              className="mb-4"
+            >
+              <Checkbox data-testid="koperasi-loan-migration-remember-total-percent-rates-checkbox">
+                {t('cooperative.loans.form.rememberTotalPercentRates')}
+              </Checkbox>
+            </Form.Item>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Form.Item
                 name="installment_count"
