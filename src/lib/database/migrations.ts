@@ -2038,4 +2038,11 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     accountingPeriods: 'id, name, period_type, start_date, end_date, status, closing_journal_entry_id, sync_status, updated_at, created_at',
     closingRuns: 'id, period_id, status, closing_journal_entry_id, posted_at, sync_status, updated_at, created_at',
   });
+
+  this.version(79).stores({
+    cashBankReconciliations: 'id, reconciliation_number, cash_account_id, statement_date, status, sync_status, updated_at, created_at',
+    financeTransactions: 'id, type, category, account_id, cash_account_id, cash_bank_reconciliation_id, field_cash_session_id, field_employee_id, transfer_group_id, sync_status, updated_at, created_at, reference_id',
+    accountingPeriods: 'id, name, period_type, start_date, end_date, status, closing_journal_entry_id, sync_status, updated_at, created_at',
+    closingRuns: 'id, period_id, status, closing_journal_entry_id, posted_at, sync_status, updated_at, created_at',
+  });
 }
