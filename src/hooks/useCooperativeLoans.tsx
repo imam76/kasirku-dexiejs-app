@@ -28,6 +28,15 @@ import type {
 
 export type CooperativeLoanStatusFilter = CooperativeLoanStatus | 'ALL';
 
+const isCashBankAccount = (account: ChartOfAccount) => (
+  account.id === 'cash' ||
+  account.id === 'bank' ||
+  account.code === '1010' ||
+  account.code === '1020' ||
+  account.parent_id === 'cash-and-bank' ||
+  account.parent_code === '1000'
+);
+
 const COOPERATIVE_LOAN_RELATED_QUERY_KEYS = [
   'cooperativeLoans',
   'cooperativeLoanInstallments',
@@ -114,7 +123,9 @@ export const useCooperativeLoans = () => {
     [fieldCashEmployees],
   );
   const financeAccounts = useMemo(
-    () => paymentAccounts.filter((account) => !fieldCashAccountIds.has(account.id)),
+    () => paymentAccounts.filter((account) => (
+      isCashBankAccount(account) && !fieldCashAccountIds.has(account.id)
+    )),
     [fieldCashAccountIds, paymentAccounts],
   );
 

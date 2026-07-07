@@ -79,6 +79,9 @@ export default function CooperativeLoanDisbursementModal({
   const selectedAccount = useMemo(() => (
     paymentAccounts.find((account) => account.id === selectedCashAccountId)
   ), [paymentAccounts, selectedCashAccountId]);
+  const isFieldCashAccountSelected = selectedAccount
+    ? fieldCashAccountIds.has(selectedAccount.id)
+    : false;
   const isDeductedLoan = loan?.deduction_method === 'DEDUCT_ON_DISBURSEMENT';
   const netDisbursementAmount = loan
     ? loan.net_disbursement_amount ?? loan.principal_amount
@@ -209,58 +212,60 @@ export default function CooperativeLoanDisbursementModal({
           </Form.Item>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Form.Item
-            noStyle
-            shouldUpdate={(previous, current) => previous.dropping_amount !== current.dropping_amount}
-          >
-            {({ getFieldValue }) => {
-              const droppingAmount = Number(getFieldValue('dropping_amount') || 0);
+        {isFieldCashAccountSelected && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Form.Item
+              noStyle
+              shouldUpdate={(previous, current) => previous.dropping_amount !== current.dropping_amount}
+            >
+              {({ getFieldValue }) => {
+                const droppingAmount = Number(getFieldValue('dropping_amount') || 0);
 
-              return (
-                <Form.Item
-                  name="finance_cash_account_id"
-                  label={t('cooperative.loans.form.financeCashAccount')}
-                  rules={[
-                    {
-                      validator: async (_rule, value) => {
-                        if (droppingAmount > 0 && !value) {
-                          throw new Error(t('cooperative.loans.validation.financeCashAccountRequired'));
-                        }
+                return (
+                  <Form.Item
+                    name="finance_cash_account_id"
+                    label={t('cooperative.loans.form.financeCashAccount')}
+                    rules={[
+                      {
+                        validator: async (_rule, value) => {
+                          if (droppingAmount > 0 && !value) {
+                            throw new Error(t('cooperative.loans.validation.financeCashAccountRequired'));
+                          }
+                        },
                       },
-                    },
-                  ]}
-                >
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    placeholder={t('cooperative.loans.form.financeCashAccountPlaceholder')}
-                    options={financeAccountOptions}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-          <Form.Item
-            name="dropping_amount"
-            label={t('cooperative.loans.form.droppingAmount')}
-            rules={[{ required: true, type: 'number', min: 0, message: t('cooperative.loans.validation.droppingAmountMin') }]}
-          >
-            <InputNumber<number>
-              min={0}
-              className="w-full"
-              formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-              parser={(value) => Number(value?.replace(/Rp\s?|(\.*)/g, '') || 0)}
-            />
-          </Form.Item>
-        </div>
+                    ]}
+                  >
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder={t('cooperative.loans.form.financeCashAccountPlaceholder')}
+                      options={financeAccountOptions}
+                    />
+                  </Form.Item>
+                );
+              }}
+            </Form.Item>
+            <Form.Item
+              name="dropping_amount"
+              label={t('cooperative.loans.form.droppingAmount')}
+              rules={[{ required: true, type: 'number', min: 0, message: t('cooperative.loans.validation.droppingAmountMin') }]}
+            >
+              <InputNumber<number>
+                min={0}
+                className="w-full"
+                formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                parser={(value) => Number(value?.replace(/Rp\s?|(\.*)/g, '') || 0)}
+              />
+            </Form.Item>
+          </div>
+        )}
 
         <Form.Item name="notes" label={t('cooperative.loans.form.disbursementNotes')}>
           <TextArea rows={3} placeholder={t('cooperative.loans.form.disbursementNotesPlaceholder')} />
         </Form.Item>
 
-        {selectedAccount && fieldCashAccountIds.has(selectedAccount.id) && (
+        {selectedAccount && isFieldCashAccountSelected && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <Tag color="green">
               {t('cooperative.loans.selectedFieldCash', { account: selectedAccount.code })}
@@ -294,9 +299,11 @@ export default function CooperativeLoanDisbursementModal({
               <Descriptions.Item label={t('cooperative.loans.netDisbursement')}>
                 Rp {formatCurrency(netDisbursementAmount)}
               </Descriptions.Item>
-              <Descriptions.Item label={t('cooperative.loans.preview.droppingAmount')}>
-                Rp {formatCurrency(selectedDroppingAmount)}
-              </Descriptions.Item>
+              {isFieldCashAccountSelected && (
+                <Descriptions.Item label={t('cooperative.loans.preview.droppingAmount')}>
+                  Rp {formatCurrency(selectedDroppingAmount)}
+                </Descriptions.Item>
+              )}
             </Descriptions>
           </div>
         )}

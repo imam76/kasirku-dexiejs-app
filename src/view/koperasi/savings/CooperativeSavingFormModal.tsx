@@ -12,11 +12,9 @@ import type {
   CooperativeSavingTransactionType,
   CooperativeSavingType,
   CooperativeSavingWithdrawalSource,
-  Employee,
   PaymentMethod,
 } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
-import { getResponsibleFieldCashAccountId } from '@/utils/koperasi/fieldCashDefaults';
 import { calculateCooperativeSavingInterest } from '@/utils/koperasi/savingInterest';
 import {
   cooperativeSavingTransactionTypeOptions,
@@ -53,7 +51,6 @@ interface CooperativeSavingFormModalProps {
   savingTransactions: CooperativeSavingTransaction[];
   pendingReturnByBalanceKey: Map<string, CooperativeSavingPendingReturn>;
   paymentAccounts: ChartOfAccount[];
-  fieldCashEmployees: Employee[];
   fieldCashAccountIds: Set<string>;
   fieldCashBalances: Map<string, number>;
   defaultCashAccountId?: string;
@@ -70,7 +67,6 @@ export default function CooperativeSavingFormModal({
   savingTransactions,
   pendingReturnByBalanceKey,
   paymentAccounts,
-  fieldCashEmployees,
   fieldCashAccountIds,
   fieldCashBalances,
   defaultCashAccountId,
@@ -95,9 +91,6 @@ export default function CooperativeSavingFormModal({
   const selectedAccount = useMemo(() => (
     paymentAccounts.find((account) => account.id === selectedCashAccountId)
   ), [paymentAccounts, selectedCashAccountId]);
-  const selectedMember = useMemo(() => (
-    activeMembers.find((member) => member.id === selectedMemberId)
-  ), [activeMembers, selectedMemberId]);
   const selectedSavingBalance = useMemo(() => (
     selectedMemberId && selectedSavingType
       ? savingBalances.find((balance) => (
@@ -138,22 +131,17 @@ export default function CooperativeSavingFormModal({
     selectedSavingType,
     selectedTransactionDate,
   ]);
-  const responsibleCashAccountId = useMemo(() => (
-    getResponsibleFieldCashAccountId(selectedMember, fieldCashEmployees, paymentAccounts)
-  ), [fieldCashEmployees, paymentAccounts, selectedMember]);
-
   const selectedCashAccountBalance = selectedCashAccountId
     ? Number(fieldCashBalances.get(selectedCashAccountId) || 0)
     : 0;
 
   useEffect(() => {
-    if (!open || !selectedMemberId) return;
+    if (!open || !defaultCashAccountId) return;
 
-    const nextCashAccountId = responsibleCashAccountId ?? defaultCashAccountId;
-    if (form.getFieldValue('cash_account_id') !== nextCashAccountId) {
-      form.setFieldValue('cash_account_id', nextCashAccountId);
+    if (!form.getFieldValue('cash_account_id')) {
+      form.setFieldValue('cash_account_id', defaultCashAccountId);
     }
-  }, [defaultCashAccountId, form, open, responsibleCashAccountId, selectedMemberId]);
+  }, [defaultCashAccountId, form, open]);
 
   useEffect(() => {
     if (!open || selectedTransactionType !== 'WITHDRAWAL') return;

@@ -17,6 +17,7 @@ import type {
   CooperativeSavingTransactionType,
   CooperativeSavingWithdrawalSource,
 } from '@/types';
+import { getDefaultCashAccountId } from '@/utils/chartOfAccounts/getDefaultCashAccountId';
 import CooperativeSavingBalanceTable from './CooperativeSavingBalanceTable';
 import CooperativeSavingDetailDrawer from './CooperativeSavingDetailDrawer';
 import CooperativeSavingFormModal, { type CooperativeSavingFormValues } from './CooperativeSavingFormModal';
@@ -36,7 +37,7 @@ export default function CooperativeSavingManagement() {
   const { t } = useI18n();
   const [form] = Form.useForm<CooperativeSavingFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('savings');
+  const { rememberCashAccount } = useCooperativeCashPreference('savings');
   const {
     activeMembers,
     transactions,
@@ -46,7 +47,6 @@ export default function CooperativeSavingManagement() {
     pendingReturnByBalanceKey,
     interestByBalanceKey,
     paymentAccounts,
-    fieldCashEmployees,
     fieldCashAccountIds,
     fieldCashBalances,
     selectedTransaction,
@@ -78,6 +78,7 @@ export default function CooperativeSavingManagement() {
     const withdrawalAmount = withdrawalSource === 'INTEREST'
       ? (balance ? interestByBalanceKey.get(balance.id) : 0) || undefined
       : (pendingReturn?.amount ?? Number(balance?.balance || 0)) || undefined;
+    const defaultCashAccountId = getDefaultCashAccountId(paymentAccounts);
     form.resetFields();
     form.setFieldsValue({
       member_id: balance?.member_id,
@@ -88,10 +89,10 @@ export default function CooperativeSavingManagement() {
       transaction_date: dayjs(),
       payment_method: 'TUNAI',
       remember_cash_account: true,
+      cash_account_id: defaultCashAccountId,
       notes: withdrawalSource === 'SAVING' && pendingReturn
         ? buildPendingReturnNotes(pendingReturn)
         : undefined,
-      ...getRememberedCashAccountFields(paymentAccounts),
     });
     setIsModalOpen(true);
   };
@@ -278,10 +279,9 @@ export default function CooperativeSavingManagement() {
         savingTransactions={transactions}
         pendingReturnByBalanceKey={pendingReturnByBalanceKey}
         paymentAccounts={paymentAccounts}
-        fieldCashEmployees={fieldCashEmployees}
         fieldCashAccountIds={fieldCashAccountIds}
         fieldCashBalances={fieldCashBalances}
-        defaultCashAccountId={getRememberedCashAccountFields(paymentAccounts).cash_account_id}
+        defaultCashAccountId={getDefaultCashAccountId(paymentAccounts)}
         onCancel={closeModal}
         onSubmit={handleSubmit}
       />

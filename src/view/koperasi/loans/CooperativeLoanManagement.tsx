@@ -11,6 +11,7 @@ import {
 } from '@/hooks/useCooperativeLoans';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan } from '@/types';
+import { getDefaultCashAccountId } from '@/utils/chartOfAccounts/getDefaultCashAccountId';
 import { getResponsibleFieldCashAccountFields } from '@/utils/koperasi/fieldCashDefaults';
 import {
   getFirstScheduledDueDate,
@@ -30,7 +31,7 @@ export default function CooperativeLoanManagement() {
   const [form] = Form.useForm<CooperativeLoanFormValues>();
   const [disbursementForm] = Form.useForm<CooperativeLoanDisbursementFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanDisbursement');
+  const { rememberCashAccount } = useCooperativeCashPreference('loanDisbursement');
   const { loanRatePreference, rememberLoanRates } = useCooperativeLoanRatePreference();
   const {
     activeMembers,
@@ -123,9 +124,8 @@ export default function CooperativeLoanManagement() {
       first_due_date: firstDueDate,
       payment_method: 'TUNAI',
       remember_cash_account: true,
-      finance_cash_account_id: financeAccounts[0]?.id,
+      finance_cash_account_id: getDefaultCashAccountId(financeAccounts),
       dropping_amount: Math.max(0, netDisbursementAmount - currentFieldCashBalance),
-      ...getRememberedCashAccountFields(paymentAccounts),
       ...responsibleAccountFields,
     });
     setDisbursingLoan(loan);
