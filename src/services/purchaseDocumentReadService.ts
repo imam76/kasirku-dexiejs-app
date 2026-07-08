@@ -7,6 +7,7 @@ import {
   type RemotePurchaseDocumentItemDto,
 } from '@/services/postgresAdapter';
 import type {
+  AccountType,
   PaymentMethod,
   ProductUnit,
   PromoType,
@@ -16,6 +17,7 @@ import type {
   PurchaseDocumentType,
   PurchaseInvoicePaymentStatus,
   TaxCalculationMode,
+  TaxFlow,
 } from '@/types';
 
 export interface PurchaseDocumentReadSyncResult {
@@ -51,6 +53,8 @@ const VALID_PURCHASE_DOCUMENT_STATUSES: PurchaseDocumentStatus[] = [
 const VALID_PAYMENT_STATUSES: PurchaseInvoicePaymentStatus[] = ['UNPAID', 'PARTIAL', 'PAID'];
 const VALID_PROMO_TYPES: PromoType[] = ['percent', 'fixed'];
 const VALID_TAX_CALCULATION_MODES: TaxCalculationMode[] = ['EXCLUSIVE', 'INCLUSIVE'];
+const VALID_TAX_FLOWS: TaxFlow[] = ['ADDITIVE', 'WITHHOLDING'];
+const VALID_ACCOUNT_TYPES: AccountType[] = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'CONTRA_REVENUE', 'EXPENSE'];
 const VALID_PAYMENT_METHODS: PaymentMethod[] = ['TUNAI', 'NON_TUNAI'];
 
 let isRefreshingPurchaseDocumentsFromPostgres = false;
@@ -78,6 +82,14 @@ const isPromoType = (type: string | null | undefined): type is PromoType => (
 
 const isTaxCalculationMode = (mode: string | null | undefined): mode is TaxCalculationMode => (
   Boolean(mode) && VALID_TAX_CALCULATION_MODES.includes(mode as TaxCalculationMode)
+);
+
+const isTaxFlow = (flow: string | null | undefined): flow is TaxFlow => (
+  Boolean(flow) && VALID_TAX_FLOWS.includes(flow as TaxFlow)
+);
+
+const isAccountType = (type: string | null | undefined): type is AccountType => (
+  Boolean(type) && VALID_ACCOUNT_TYPES.includes(type as AccountType)
 );
 
 const isPaymentMethod = (method: string | null | undefined): method is PaymentMethod => (
@@ -145,6 +157,11 @@ const mapRemotePurchaseDocumentToLocal = (
   tax_calculation_mode: isTaxCalculationMode(remoteDocument.tax_calculation_mode)
     ? remoteDocument.tax_calculation_mode
     : undefined,
+  tax_flow: isTaxFlow(remoteDocument.tax_flow) ? remoteDocument.tax_flow : undefined,
+  tax_account_id: optionalString(remoteDocument.tax_account_id),
+  tax_account_code: optionalString(remoteDocument.tax_account_code),
+  tax_account_name: optionalString(remoteDocument.tax_account_name),
+  tax_account_type: isAccountType(remoteDocument.tax_account_type) ? remoteDocument.tax_account_type : undefined,
   tax_amount: optionalNumber(remoteDocument.tax_amount),
   foreign_tax_amount: optionalNumber(remoteDocument.foreign_tax_amount),
   total_amount: optionalNumber(remoteDocument.total_amount),
@@ -216,6 +233,11 @@ const mapRemotePurchaseDocumentItemToLocal = (
   tax_calculation_mode: isTaxCalculationMode(remoteItem.tax_calculation_mode)
     ? remoteItem.tax_calculation_mode
     : undefined,
+  tax_flow: isTaxFlow(remoteItem.tax_flow) ? remoteItem.tax_flow : undefined,
+  tax_account_id: optionalString(remoteItem.tax_account_id),
+  tax_account_code: optionalString(remoteItem.tax_account_code),
+  tax_account_name: optionalString(remoteItem.tax_account_name),
+  tax_account_type: isAccountType(remoteItem.tax_account_type) ? remoteItem.tax_account_type : undefined,
   tax_base_amount: optionalNumber(remoteItem.tax_base_amount),
   foreign_tax_base_amount: optionalNumber(remoteItem.foreign_tax_base_amount),
   tax_amount: optionalNumber(remoteItem.tax_amount),

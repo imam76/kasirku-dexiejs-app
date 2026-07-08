@@ -48,6 +48,8 @@ const SOURCE_EVENTS = {
   SALES_INVOICE_PAYMENT_POSTED: 'SALES_INVOICE_PAYMENT_POSTED',
   SALES_INVOICE_PAYMENT_VOIDED: 'SALES_INVOICE_PAYMENT_VOIDED',
   SALES_RETURN_ISSUED: 'SALES_RETURN_ISSUED',
+  PURCHASE_INVOICE_ISSUED: 'PURCHASE_INVOICE_ISSUED',
+  PURCHASE_RETURN_ISSUED: 'PURCHASE_RETURN_ISSUED',
   PURCHASE_INVOICE_PAYMENT_POSTED: 'PURCHASE_INVOICE_PAYMENT_POSTED',
   CASH_BANK_TRANSFER_POSTED: 'CASH_BANK_TRANSFER_POSTED',
   PAYROLL_RUN_PAID: 'PAYROLL_RUN_PAID',
@@ -209,7 +211,6 @@ const ACCOUNT_CANDIDATES = {
   accountsReceivable: { ids: ['accounts-receivable', 'template-accounts-receivable'], codes: ['1100'] },
   accountsPayable: { ids: ['accounts-payable', 'template-accounts-payable'], codes: ['2000', '2010'] },
   inventory: { ids: ['inventory', 'template-inventory'], codes: ['1200'] },
-  outputTax: { ids: ['output-tax', 'template-tax-payable'], codes: ['2100'] },
   salesPos: { ids: ['sales-pos', 'template-sales-pos'], codes: ['4000', '4010'] },
   salesInvoiceRevenue: { ids: ['sales-invoice-revenue', 'template-sales-invoice-revenue'], codes: ['4010', '4020'] },
   salesReturn: { ids: ['sales-return', 'template-sales-return'], codes: ['4020', '4100'] },
@@ -361,6 +362,56 @@ const getPostableAccount = (
   }
 
   return account;
+};
+
+const getPostableAccountBySnapshot = (
+  accounts: ChartOfAccount[],
+  snapshot: {
+    tax_account_id?: string;
+    tax_account_code?: string;
+    tax_account_name?: string;
+  },
+  label: string,
+) => {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const accountByCode = new Map(accounts.map((account) => [account.code, account]));
+  const account = snapshot.tax_account_id
+    ? accountById.get(snapshot.tax_account_id)
+    : snapshot.tax_account_code
+      ? accountByCode.get(snapshot.tax_account_code)
+      : undefined;
+
+  if (!account) {
+    throw new Error(`${label} belum diatur di master tax.`);
+  }
+
+  if (!account.is_active || !account.is_postable) {
+    throw new Error(`Akun ${account.code} - ${account.name} harus aktif dan postable untuk posting pajak.`);
+  }
+
+  return account;
+};
+
+const hasTaxAccountSnapshot = (document: Pick<SalesDocument | PurchaseDocument | SalesReturn, 'tax_account_id' | 'tax_account_code'>) => (
+  Boolean(document.tax_account_id || document.tax_account_code)
+);
+
+const getSalesTaxAccount = (
+  accounts: ChartOfAccount[],
+  document: Pick<SalesDocument | PurchaseDocument | SalesReturn, 'tax_flow' | 'tax_account_id' | 'tax_account_code' | 'tax_account_name' | 'tax_code' | 'tax_name'>,
+) => {
+  if (document.tax_flow === 'WITHHOLDING') {
+    throw new Error('Sales invoice belum mendukung pajak potong. Gunakan pajak additive seperti PPN/PPnBM.');
+  }
+
+  return getPostableAccountBySnapshot(accounts, document, 'Akun pajak penjualan');
+};
+
+const getPurchaseTaxAccount = (
+  accounts: ChartOfAccount[],
+  document: Pick<PurchaseDocument, 'tax_flow' | 'tax_account_id' | 'tax_account_code' | 'tax_account_name' | 'tax_code' | 'tax_name'>,
+) => {
+  return getPostableAccountBySnapshot(accounts, document, 'Akun pajak pembelian/potongan');
 };
 
 const tryGetPostableAccount = (
@@ -1011,7 +1062,7 @@ export const postSalesInvoiceIssuedJournal = async (
   ].filter((line): line is JournalLineDraft => Boolean(line));
 
   if (taxAmount > 0) {
-    const taxAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.outputTax, 'Pajak Keluaran');
+    const taxAccount = getSalesTaxAccount(accounts, document);
     const taxLine = createCreditLine(taxAccount, taxAmount, 'Pajak keluaran sales invoice', document.department_id, document.project_id);
     if (taxLine) lines.push(taxLine);
   }
@@ -1111,6 +1162,127 @@ export const reverseSalesInvoicePaymentRecordJournal = async (
     actor,
   });
 };
+
+const getPurchaseAmountBeforeTax = (document: Pick<PurchaseDocument, 'total_amount' | 'tax_amount' | 'tax_flow'>) => {
+  const totalAmount = amountOrZero(document.total_amount);
+  const taxAmount = amountOrZero(document.tax_amount);
+
+  return document.tax_flow === 'WITHHOLDING'
+    ? roundCurrency(totalAmount + taxAmount)
+    : roundCurrency(totalAmount - taxAmount);
+};
+
+export const postPurchaseInvoiceIssuedJournal = async (
+  document: PurchaseDocument,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (document.type !== 'PURCHASE_INVOICE' || document.status === 'VOIDED') return undefined;
+  const entryDate = document.issued_at ?? document.document_date;
+  if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const payableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsPayable, 'Hutang Usaha');
+  const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+  const totalAmount = amountOrZero(document.total_amount);
+  const taxAmount = amountOrZero(document.tax_amount);
+  const purchaseAmount = getPurchaseAmountBeforeTax(document);
+
+  if (totalAmount <= 0 || purchaseAmount <= 0) return undefined;
+
+  const lines: JournalLineDraft[] = [
+    createDebitLine(inventoryAccount, purchaseAmount, 'Persediaan dari purchase invoice', document.department_id, document.project_id),
+  ].filter((line): line is JournalLineDraft => Boolean(line));
+
+  if (taxAmount > 0) {
+    const taxAccount = getPurchaseTaxAccount(accounts, document);
+    const taxLine = document.tax_flow === 'WITHHOLDING'
+      ? createCreditLine(taxAccount, taxAmount, 'Pajak potong terutang purchase invoice', document.department_id, document.project_id)
+      : createDebitLine(taxAccount, taxAmount, 'Pajak masukan purchase invoice', document.department_id, document.project_id);
+    if (taxLine) lines.push(taxLine);
+  }
+
+  const payableLine = createCreditLine(payableAccount, totalAmount, 'Hutang purchase invoice', document.department_id, document.project_id);
+  if (payableLine) lines.push(payableLine);
+
+  return postBalancedJournalEntry({
+    source_type: 'PURCHASE_INVOICE',
+    source_id: document.id,
+    source_number: document.document_number,
+    source_event: SOURCE_EVENTS.PURCHASE_INVOICE_ISSUED,
+    entry_date: entryDate,
+    description: `Purchase invoice ${document.document_number} diterbitkan`,
+    lines,
+    actor,
+  });
+};
+
+export const reversePurchaseInvoiceJournal = async (
+  document: PurchaseDocument,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => reverseJournalEntriesForSource({
+  source_type: 'PURCHASE_INVOICE',
+  source_id: document.id,
+  source_event: SOURCE_EVENTS.PURCHASE_INVOICE_ISSUED,
+  reason,
+  entry_date: document.voided_at,
+  actor,
+});
+
+export const postPurchaseReturnIssuedJournal = async (
+  document: PurchaseDocument,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (document.type !== 'PURCHASE_RETURN' || document.status === 'VOIDED') return undefined;
+  const entryDate = document.issued_at ?? document.document_date;
+  if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const payableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsPayable, 'Hutang Usaha');
+  const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+  const totalAmount = amountOrZero(document.total_amount);
+  const taxAmount = amountOrZero(document.tax_amount);
+  const purchaseAmount = getPurchaseAmountBeforeTax(document);
+
+  if (totalAmount <= 0 || purchaseAmount <= 0) return undefined;
+
+  const lines: JournalLineDraft[] = [
+    createDebitLine(payableAccount, totalAmount, 'Purchase return mengurangi hutang', document.department_id, document.project_id),
+    createCreditLine(inventoryAccount, purchaseAmount, 'Persediaan keluar karena purchase return', document.department_id, document.project_id),
+  ].filter((line): line is JournalLineDraft => Boolean(line));
+
+  if (taxAmount > 0) {
+    const taxAccount = getPurchaseTaxAccount(accounts, document);
+    const taxLine = document.tax_flow === 'WITHHOLDING'
+      ? createDebitLine(taxAccount, taxAmount, 'Koreksi pajak potong purchase return', document.department_id, document.project_id)
+      : createCreditLine(taxAccount, taxAmount, 'Koreksi pajak masukan purchase return', document.department_id, document.project_id);
+    if (taxLine) lines.push(taxLine);
+  }
+
+  return postBalancedJournalEntry({
+    source_type: 'PURCHASE_INVOICE',
+    source_id: document.id,
+    source_number: document.document_number,
+    source_event: SOURCE_EVENTS.PURCHASE_RETURN_ISSUED,
+    entry_date: entryDate,
+    description: `Purchase return ${document.document_number} diterbitkan`,
+    lines,
+    actor,
+  });
+};
+
+export const reversePurchaseReturnJournal = async (
+  document: PurchaseDocument,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => reverseJournalEntriesForSource({
+  source_type: 'PURCHASE_INVOICE',
+  source_id: document.id,
+  source_event: SOURCE_EVENTS.PURCHASE_RETURN_ISSUED,
+  reason,
+  entry_date: document.voided_at,
+  actor,
+});
 
 export const postPurchaseInvoicePaymentRecordJournal = async (
   document: PurchaseDocument,
@@ -1647,7 +1819,10 @@ export const postSalesReturnIssuedJournal = async (
   ].filter((line): line is JournalLineDraft => Boolean(line));
 
   if (taxAmount > 0) {
-    const taxAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.outputTax, 'Pajak Keluaran');
+    const sourceDocument = !hasTaxAccountSnapshot(salesReturn) && salesReturn.source_type !== 'POS_TRANSACTION'
+      ? await db.salesDocuments.get(salesReturn.source_id)
+      : undefined;
+    const taxAccount = getSalesTaxAccount(accounts, sourceDocument ?? salesReturn);
     const taxLine = createDebitLine(taxAccount, taxAmount, 'Koreksi pajak keluaran retur penjualan');
     if (taxLine) lines.push(taxLine);
   }

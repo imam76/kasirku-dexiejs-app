@@ -14,8 +14,24 @@ export const createContactFieldsSnapshot = (contact?: Contact) => {
   };
 };
 
-export const createTaxFieldsSnapshot = (tax?: Tax) => {
+export const createTaxFieldsSnapshot = (tax?: Tax, context?: 'sales' | 'purchase') => {
   if (!tax) return {};
+
+  const account = context === 'sales'
+    ? {
+      id: tax.sales_tax_account_id,
+      code: tax.sales_tax_account_code,
+      name: tax.sales_tax_account_name,
+      type: tax.sales_tax_account_type,
+    }
+    : context === 'purchase'
+      ? {
+        id: tax.purchase_tax_account_id,
+        code: tax.purchase_tax_account_code,
+        name: tax.purchase_tax_account_name,
+        type: tax.purchase_tax_account_type,
+      }
+      : undefined;
 
   return {
     tax_id: tax.id,
@@ -23,6 +39,11 @@ export const createTaxFieldsSnapshot = (tax?: Tax) => {
     tax_code: tax.code,
     tax_rate: tax.rate,
     tax_calculation_mode: tax.calculation_mode,
+    tax_flow: tax.tax_flow ?? 'ADDITIVE',
+    tax_account_id: account?.id,
+    tax_account_code: account?.code,
+    tax_account_name: account?.name,
+    tax_account_type: account?.type,
   };
 };
 

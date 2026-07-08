@@ -2,7 +2,7 @@ import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import { taxSchema } from '@/lib/validations/tax';
 import { enqueueTaxSync } from '@/services/syncQueueService';
-import type { Tax, TaxCalculationMode, TaxRateType } from '@/types';
+import type { ChartOfAccount, Tax, TaxCalculationMode, TaxFlow, TaxRateType } from '@/types';
 
 export interface TaxUpsertInput {
   name: string;
@@ -10,6 +10,9 @@ export interface TaxUpsertInput {
   rate: number;
   rate_type?: TaxRateType;
   calculation_mode: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  sales_tax_account_id?: string;
+  purchase_tax_account_id?: string;
   description?: string;
   effective_from?: string;
   effective_to?: string;
@@ -18,20 +21,57 @@ export interface TaxUpsertInput {
 }
 
 type SanitizedTaxInput =
-  Required<Pick<TaxUpsertInput, 'name' | 'rate' | 'rate_type' | 'calculation_mode' | 'is_default' | 'is_active'>> &
-  Omit<TaxUpsertInput, 'name' | 'rate' | 'rate_type' | 'calculation_mode' | 'is_default' | 'is_active'>;
+  Required<Pick<TaxUpsertInput, 'name' | 'rate' | 'rate_type' | 'calculation_mode' | 'tax_flow' | 'is_default' | 'is_active'>> &
+  Omit<TaxUpsertInput, 'name' | 'rate' | 'rate_type' | 'calculation_mode' | 'tax_flow' | 'is_default' | 'is_active' | 'sales_tax_account_id' | 'purchase_tax_account_id'> &
+  Pick<Tax, 'sales_tax_account_id' | 'sales_tax_account_code' | 'sales_tax_account_name' | 'sales_tax_account_type' | 'purchase_tax_account_id' | 'purchase_tax_account_code' | 'purchase_tax_account_name' | 'purchase_tax_account_type'>;
 
-const sanitizeTaxInput = (input: TaxUpsertInput): SanitizedTaxInput => {
+const getTaxAccountSnapshot = async (
+  accountId: string | undefined,
+  label: string,
+): Promise<Pick<ChartOfAccount, 'id' | 'code' | 'name' | 'type'> | undefined> => {
+  if (!accountId) return undefined;
+
+  const account = await db.chartOfAccounts.get(accountId);
+  if (!account) {
+    throw new Error(`${label} tidak ditemukan di Daftar Akun.`);
+  }
+  if (!account.is_active || !account.is_postable) {
+    throw new Error(`${label} harus aktif dan postable.`);
+  }
+
+  return {
+    id: account.id,
+    code: account.code,
+    name: account.name,
+    type: account.type,
+  };
+};
+
+const sanitizeTaxInput = async (input: TaxUpsertInput): Promise<SanitizedTaxInput> => {
   const parsed = taxSchema.parse({
     ...input,
     rate_type: input.rate_type ?? 'PERCENTAGE',
+    tax_flow: input.tax_flow ?? 'ADDITIVE',
   });
+  const [salesTaxAccount, purchaseTaxAccount] = await Promise.all([
+    getTaxAccountSnapshot(parsed.sales_tax_account_id, 'Akun pajak penjualan'),
+    getTaxAccountSnapshot(parsed.purchase_tax_account_id, 'Akun pajak pembelian/potongan'),
+  ]);
 
   return {
     ...parsed,
     code: parsed.code?.toUpperCase(),
     rate: Number(parsed.rate),
     rate_type: parsed.rate_type,
+    tax_flow: parsed.tax_flow,
+    sales_tax_account_id: salesTaxAccount?.id,
+    sales_tax_account_code: salesTaxAccount?.code,
+    sales_tax_account_name: salesTaxAccount?.name,
+    sales_tax_account_type: salesTaxAccount?.type,
+    purchase_tax_account_id: purchaseTaxAccount?.id,
+    purchase_tax_account_code: purchaseTaxAccount?.code,
+    purchase_tax_account_name: purchaseTaxAccount?.name,
+    purchase_tax_account_type: purchaseTaxAccount?.type,
     is_default: Boolean(parsed.is_default),
     is_active: parsed.is_active ?? true,
   };
@@ -65,7 +105,7 @@ export const createTax = async (input: TaxUpsertInput): Promise<Tax> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'TAX_MANAGE');
 
-  const sanitizedInput = sanitizeTaxInput(input);
+  const sanitizedInput = await sanitizeTaxInput(input);
   const now = new Date().toISOString();
   const tax: Tax = withPendingSync({
     id: crypto.randomUUID(),
@@ -107,7 +147,7 @@ export const updateTax = async (id: string, input: TaxUpsertInput): Promise<Tax>
     throw new Error('Tax tidak ditemukan.');
   }
 
-  const sanitizedInput = sanitizeTaxInput(input);
+  const sanitizedInput = await sanitizeTaxInput(input);
   const updatedTax: Tax = withPendingSync({
     ...existingTax,
     ...sanitizedInput,

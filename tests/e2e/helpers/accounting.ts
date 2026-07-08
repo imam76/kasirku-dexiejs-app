@@ -69,7 +69,7 @@ export async function expectAccountingMappingReady(page: Page) {
   await expectFinanceMappingVisible(page, 'KSP Penarikan Simpanan');
   await expectFinanceMappingVisible(page, 'KSP Pencairan Pinjaman');
   await expectFinanceMappingVisible(page, 'KSP Pembayaran Angsuran');
-  await expectFinanceMappingVisible(page, 'KSP_INSENTIF_PEMBAYARAN_TEPAT_WAKTU');
+  await expectFinanceMappingVisible(page, 'Insentif Pembayaran Tepat Waktu (IPTW)');
 }
 
 export async function postOpeningBalance(page: Page) {

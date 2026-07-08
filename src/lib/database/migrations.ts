@@ -2045,4 +2045,59 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     accountingPeriods: 'id, name, period_type, start_date, end_date, status, closing_journal_entry_id, sync_status, updated_at, created_at',
     closingRuns: 'id, period_id, status, closing_journal_entry_id, posted_at, sync_status, updated_at, created_at',
   });
+
+  this.version(80).stores({
+    taxes: 'id, name, code, rate_type, calculation_mode, tax_flow, sales_tax_account_id, purchase_tax_account_id, is_default, is_active, sync_status, effective_from, effective_to, created_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const chartOfAccounts = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const accounts = await chartOfAccounts.toArray();
+    const accountIds = new Set(accounts.map((account) => account.id));
+    const accountCodes = new Set(accounts.map((account) => account.code));
+    const taxAccountIds = [
+      'input-tax',
+      'output-tax',
+      'luxury-sales-tax-payable',
+      'pph23-payable',
+      'final-income-tax-payable',
+    ];
+    const accountsToAdd = DEFAULT_CHART_OF_ACCOUNTS
+      .filter((account) => taxAccountIds.includes(account.id))
+      .filter((account) => !accountIds.has(account.id) && !accountCodes.has(account.code))
+      .map((account) => ({
+        ...account,
+        created_at: now,
+        updated_at: now,
+        sync_status: 'pending' as const,
+      }));
+
+    if (accountsToAdd.length > 0) {
+      await chartOfAccounts.bulkPut(accountsToAdd);
+    }
+
+    const outputTax = await chartOfAccounts.get('output-tax');
+    if (outputTax?.name === 'Pajak Keluaran') {
+      await chartOfAccounts.put({
+        ...outputTax,
+        name: 'PPN Keluaran',
+        updated_at: now,
+        sync_status: 'pending' as const,
+        sync_error: undefined,
+      });
+    }
+
+    const taxes = await tx.table<Tax, string>('taxes').toArray();
+    const migratedTaxes = taxes
+      .filter((tax) => !tax.tax_flow)
+      .map((tax) => ({
+        ...tax,
+        tax_flow: 'ADDITIVE' as const,
+        sync_status: tax.sync_status ?? 'pending' as const,
+        sync_error: undefined,
+      }));
+
+    if (migratedTaxes.length > 0) {
+      await tx.table<Tax, string>('taxes').bulkPut(migratedTaxes);
+    }
+  });
 }

@@ -2,9 +2,9 @@ import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Archive, CheckCircle2, Edit2, RotateCcw } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
-import type { Tax, TaxCalculationMode } from '@/types';
+import type { Tax, TaxCalculationMode, TaxFlow } from '@/types';
 import { getTaxPeriodLabel } from './taxFormatters';
-import { taxCalculationModeOptions } from './taxOptions';
+import { taxCalculationModeOptions, taxFlowOptions } from './taxOptions';
 
 const { Text } = Typography;
 
@@ -22,6 +22,10 @@ export default function TaxTable({ taxes, onEdit, onArchive, onRestore, onSetDef
     acc[option.value] = t(option.labelKey);
     return acc;
   }, {} as Record<TaxCalculationMode, string>);
+  const flowLabelMap = taxFlowOptions.reduce<Record<TaxFlow, string>>((acc, option) => {
+    acc[option.value] = t(option.labelKey);
+    return acc;
+  }, {} as Record<TaxFlow, string>);
 
   const columns: ColumnsType<Tax> = [
     {
@@ -39,7 +43,17 @@ export default function TaxTable({ taxes, onEdit, onArchive, onRestore, onSetDef
       title: t('taxes.table.rate'),
       dataIndex: 'rate',
       key: 'rate',
-      render: (rate: number) => `${rate}%`,
+      render: (rate: number, tax) => `${tax.tax_flow === 'WITHHOLDING' ? '-' : ''}${rate}%`,
+    },
+    {
+      title: t('taxes.table.flow'),
+      dataIndex: 'tax_flow',
+      key: 'tax_flow',
+      render: (flow: TaxFlow | undefined) => {
+        const normalizedFlow = flow ?? 'ADDITIVE';
+        const option = taxFlowOptions.find((item) => item.value === normalizedFlow);
+        return <Tag color={option?.color}>{flowLabelMap[normalizedFlow]}</Tag>;
+      },
     },
     {
       title: t('taxes.table.mode'),
@@ -48,6 +62,20 @@ export default function TaxTable({ taxes, onEdit, onArchive, onRestore, onSetDef
       render: (mode: TaxCalculationMode) => {
         const option = taxCalculationModeOptions.find((item) => item.value === mode);
         return <Tag color={option?.color}>{modeLabelMap[mode]}</Tag>;
+      },
+    },
+    {
+      title: t('taxes.table.account'),
+      key: 'account',
+      render: (_value: unknown, tax) => {
+        const accountCode = tax.tax_flow === 'WITHHOLDING'
+          ? tax.purchase_tax_account_code
+          : tax.sales_tax_account_code ?? tax.purchase_tax_account_code;
+        const accountName = tax.tax_flow === 'WITHHOLDING'
+          ? tax.purchase_tax_account_name
+          : tax.sales_tax_account_name ?? tax.purchase_tax_account_name;
+
+        return accountCode || accountName ? `${accountCode ?? '-'} - ${accountName ?? '-'}` : '-';
       },
     },
     {

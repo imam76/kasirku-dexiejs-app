@@ -47,6 +47,7 @@ import {
   enqueuePendingRolesForSync,
   enqueuePendingSalesDocumentsForSync,
   enqueuePendingStockOpnamesForSync,
+  enqueuePendingTaxesForSync,
   processPendingSyncQueue,
   recoverStaleProcessingSyncQueueItems,
   retryFailedSyncQueueItems,
@@ -66,6 +67,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingAuthUsersForSync();
   await enqueuePendingChartOfAccountsForSync();
   await enqueuePendingAccountingSettingsForSync();
+  await enqueuePendingTaxesForSync();
   await enqueuePendingContactsForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingEmployeesForSync();

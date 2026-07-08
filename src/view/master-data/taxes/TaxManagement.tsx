@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select } from 'antd';
 import { Percent, Plus } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
 import { useTaxes, type TaxCalculationModeFilter, type TaxStatusFilter } from '@/hooks/useTaxes';
 import { useI18n } from '@/hooks/useI18n';
+import { db } from '@/lib/db';
 import type { Tax } from '@/types';
 import TaxFormModal, { type TaxFormValues } from './TaxFormModal';
 import TaxTable from './TaxTable';
@@ -31,6 +33,11 @@ export default function TaxManagement() {
     setDefaultTax,
     isSubmitting,
   } = useTaxes();
+  const accounts = useLiveQuery(
+    () => db.chartOfAccounts.orderBy('code').toArray(),
+    [],
+    [],
+  );
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -44,6 +51,7 @@ export default function TaxManagement() {
     form.setFieldsValue({
       rate_type: 'PERCENTAGE',
       calculation_mode: 'EXCLUSIVE',
+      tax_flow: 'ADDITIVE',
       is_default: false,
       is_active: true,
     });
@@ -59,6 +67,9 @@ export default function TaxManagement() {
       rate: tax.rate,
       rate_type: tax.rate_type,
       calculation_mode: tax.calculation_mode,
+      tax_flow: tax.tax_flow ?? 'ADDITIVE',
+      sales_tax_account_id: tax.sales_tax_account_id,
+      purchase_tax_account_id: tax.purchase_tax_account_id,
       effective_from: tax.effective_from ? dayjs(tax.effective_from) : null,
       effective_to: tax.effective_to ? dayjs(tax.effective_to) : null,
       description: tax.description,
@@ -74,6 +85,9 @@ export default function TaxManagement() {
     rate: Number(values.rate),
     rate_type: 'PERCENTAGE' as const,
     calculation_mode: values.calculation_mode,
+    tax_flow: values.tax_flow ?? 'ADDITIVE',
+    sales_tax_account_id: values.tax_flow === 'WITHHOLDING' ? undefined : values.sales_tax_account_id,
+    purchase_tax_account_id: values.purchase_tax_account_id,
     effective_from: values.effective_from?.toISOString(),
     effective_to: values.effective_to?.toISOString(),
     description: values.description,
@@ -181,6 +195,7 @@ export default function TaxManagement() {
         open={isModalOpen}
         isEditing={Boolean(editingTax)}
         isSubmitting={isSubmitting}
+        accounts={accounts}
         onCancel={closeModal}
         onSubmit={handleSubmit}
       />

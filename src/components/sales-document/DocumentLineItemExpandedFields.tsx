@@ -112,6 +112,11 @@ export const DocumentLineItemExpandedFields = ({
               tax_code: undefined,
               tax_rate: undefined,
               tax_calculation_mode: undefined,
+              tax_flow: undefined,
+              tax_account_id: undefined,
+              tax_account_code: undefined,
+              tax_account_name: undefined,
+              tax_account_type: undefined,
             })}
           />
         </div>

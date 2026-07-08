@@ -1,4 +1,4 @@
-import type { PromoType, Tax, TaxCalculationMode } from '@/types';
+import type { AccountType, PromoType, Tax, TaxCalculationMode, TaxFlow } from '@/types';
 
 export interface DocumentLineItemLike {
   quantity: number;
@@ -11,6 +11,11 @@ export interface DocumentLineItemLike {
   tax_code?: string;
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  tax_account_id?: string;
+  tax_account_code?: string;
+  tax_account_name?: string;
+  tax_account_type?: AccountType;
   tax_base_amount?: number;
   tax_amount?: number;
   subtotal?: number;
@@ -34,6 +39,12 @@ export interface DocumentTotalInput<TItem extends DocumentLineItemLike> {
   taxId?: string;
   taxName?: string;
   taxCode?: string;
+  taxFlow?: TaxFlow;
+  taxAccountId?: string;
+  taxAccountCode?: string;
+  taxAccountName?: string;
+  taxAccountType?: AccountType;
+  taxAccountContext?: 'sales' | 'purchase';
   taxes?: Tax[];
   config: DocumentTotalBehaviorConfig;
 }
@@ -86,6 +97,12 @@ export const calculateDocumentTotal = <TItem extends DocumentLineItemLike>({
   taxId,
   taxName,
   taxCode,
+  taxFlow,
+  taxAccountId,
+  taxAccountCode,
+  taxAccountName,
+  taxAccountType,
+  taxAccountContext,
   taxes = [],
   config,
 }: DocumentTotalInput<TItem>): DocumentTotalResult<TItem> => {
@@ -118,9 +135,29 @@ export const calculateDocumentTotal = <TItem extends DocumentLineItemLike>({
 
   const lineTaxReadyItems = lineItems.map((item) => {
     const selectedTax = item.tax_id ? taxes.find((tax) => tax.id === item.tax_id) : undefined;
+    const selectedTaxAccount = selectedTax && taxAccountContext === 'sales'
+      ? {
+        id: selectedTax.sales_tax_account_id,
+        code: selectedTax.sales_tax_account_code,
+        name: selectedTax.sales_tax_account_name,
+        type: selectedTax.sales_tax_account_type,
+      }
+      : selectedTax && taxAccountContext === 'purchase'
+        ? {
+          id: selectedTax.purchase_tax_account_id,
+          code: selectedTax.purchase_tax_account_code,
+          name: selectedTax.purchase_tax_account_name,
+          type: selectedTax.purchase_tax_account_type,
+        }
+        : undefined;
     const lineTaxId = item.tax_id ?? taxId;
     const lineTaxName = selectedTax?.name ?? item.tax_name ?? taxName;
     const lineTaxCode = selectedTax?.code ?? item.tax_code ?? taxCode;
+    const lineTaxFlow = selectedTax?.tax_flow ?? item.tax_flow ?? taxFlow ?? 'ADDITIVE';
+    const lineTaxAccountId = item.tax_account_id ?? selectedTaxAccount?.id ?? taxAccountId;
+    const lineTaxAccountCode = item.tax_account_code ?? selectedTaxAccount?.code ?? taxAccountCode;
+    const lineTaxAccountName = item.tax_account_name ?? selectedTaxAccount?.name ?? taxAccountName;
+    const lineTaxAccountType = item.tax_account_type ?? selectedTaxAccount?.type ?? taxAccountType;
     const lineTaxRate = Number(
       selectedTax?.rate ??
       item.tax_rate ??
@@ -140,9 +177,11 @@ export const calculateDocumentTotal = <TItem extends DocumentLineItemLike>({
       : lineTaxMode === 'INCLUSIVE'
         ? lineTaxBase - lineTaxBase / (1 + lineRate)
         : lineTaxBase * lineRate;
-    const lineTotal = lineTaxMode === 'INCLUSIVE'
-      ? lineTaxBase
-      : lineTaxBase + lineTax;
+    const lineTotal = lineTaxFlow === 'WITHHOLDING'
+      ? lineTaxBase - lineTax
+      : lineTaxMode === 'INCLUSIVE'
+        ? lineTaxBase
+        : lineTaxBase + lineTax;
 
     return {
       ...item,
@@ -151,6 +190,11 @@ export const calculateDocumentTotal = <TItem extends DocumentLineItemLike>({
       tax_code: config.behavior.hasTax ? lineTaxCode : undefined,
       tax_rate: config.behavior.hasTax ? normalizedLineRate : undefined,
       tax_calculation_mode: config.behavior.hasTax ? lineTaxMode : undefined,
+      tax_flow: config.behavior.hasTax && lineTaxId ? lineTaxFlow : undefined,
+      tax_account_id: config.behavior.hasTax && lineTaxId ? lineTaxAccountId : undefined,
+      tax_account_code: config.behavior.hasTax && lineTaxId ? lineTaxAccountCode : undefined,
+      tax_account_name: config.behavior.hasTax && lineTaxId ? lineTaxAccountName : undefined,
+      tax_account_type: config.behavior.hasTax && lineTaxId ? lineTaxAccountType : undefined,
       tax_base_amount: roundCurrency(lineTaxBase),
       tax_amount: roundCurrency(lineTax),
       total_amount: roundCurrency(lineTotal),
@@ -158,9 +202,7 @@ export const calculateDocumentTotal = <TItem extends DocumentLineItemLike>({
   });
 
   const taxAmount = lineTaxReadyItems.reduce((sum, item) => sum + Number(item.tax_amount || 0), 0);
-  const total = taxCalculationMode === 'INCLUSIVE'
-    ? subtotal - normalizedDiscount
-    : subtotal - normalizedDiscount + taxAmount;
+  const total = lineTaxReadyItems.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
 
   return {
     items: lineTaxReadyItems,

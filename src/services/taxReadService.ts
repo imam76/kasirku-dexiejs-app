@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { isTauriRuntime, taxPostgresAdapter, type RemoteTaxDto } from '@/services/postgresAdapter';
-import type { Tax, TaxCalculationMode, TaxRateType } from '@/types';
+import type { Tax, TaxCalculationMode, TaxFlow, TaxRateType } from '@/types';
 
 export interface TaxReadSyncResult {
   fetched: number;
@@ -26,6 +26,10 @@ const isTaxCalculationMode = (calculationMode: string): calculationMode is TaxCa
   calculationMode === 'EXCLUSIVE' || calculationMode === 'INCLUSIVE'
 );
 
+const isTaxFlow = (taxFlow: string | null | undefined): taxFlow is TaxFlow => (
+  taxFlow === 'ADDITIVE' || taxFlow === 'WITHHOLDING'
+);
+
 const mapRemoteTaxToLocal = (
   remoteTax: RemoteTaxDto,
   syncedAt: string,
@@ -36,6 +40,15 @@ const mapRemoteTaxToLocal = (
   rate: remoteTax.rate,
   rate_type: isTaxRateType(remoteTax.rate_type) ? remoteTax.rate_type : 'PERCENTAGE',
   calculation_mode: isTaxCalculationMode(remoteTax.calculation_mode) ? remoteTax.calculation_mode : 'EXCLUSIVE',
+  tax_flow: isTaxFlow(remoteTax.tax_flow) ? remoteTax.tax_flow : 'ADDITIVE',
+  sales_tax_account_id: remoteTax.sales_tax_account_id ?? undefined,
+  sales_tax_account_code: remoteTax.sales_tax_account_code ?? undefined,
+  sales_tax_account_name: remoteTax.sales_tax_account_name ?? undefined,
+  sales_tax_account_type: remoteTax.sales_tax_account_type ?? undefined,
+  purchase_tax_account_id: remoteTax.purchase_tax_account_id ?? undefined,
+  purchase_tax_account_code: remoteTax.purchase_tax_account_code ?? undefined,
+  purchase_tax_account_name: remoteTax.purchase_tax_account_name ?? undefined,
+  purchase_tax_account_type: remoteTax.purchase_tax_account_type ?? undefined,
   description: remoteTax.description ?? undefined,
   effective_from: remoteTax.effective_from ?? undefined,
   effective_to: remoteTax.effective_to ?? undefined,

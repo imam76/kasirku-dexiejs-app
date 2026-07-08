@@ -56,6 +56,11 @@ macro_rules! sales_document_select {
             tax_code,
             tax_rate,
             tax_calculation_mode,
+            tax_flow,
+            tax_account_id,
+            tax_account_code,
+            tax_account_name,
+            tax_account_type,
             tax_amount,
             foreign_tax_amount,
             total_amount,
@@ -113,6 +118,11 @@ macro_rules! sales_document_item_select {
             tax_code,
             tax_rate,
             tax_calculation_mode,
+            tax_flow,
+            tax_account_id,
+            tax_account_code,
+            tax_account_name,
+            tax_account_type,
             tax_base_amount,
             foreign_tax_base_amount,
             tax_amount,
@@ -315,6 +325,11 @@ async fn upsert_sales_document(
             tax_code,
             tax_rate,
             tax_calculation_mode,
+            tax_flow,
+            tax_account_id,
+            tax_account_code,
+            tax_account_name,
+            tax_account_type,
             tax_amount,
             total_amount,
             payment_status,
@@ -399,28 +414,33 @@ async fn upsert_sales_document(
             $47,
             $48,
             $49,
-            $50::TIMESTAMPTZ,
-            $51::TIMESTAMPTZ,
+            $50,
+            $51,
             $52,
             $53,
             $54,
-            $55,
-            $56,
+            $55::TIMESTAMPTZ,
+            $56::TIMESTAMPTZ,
             $57,
-            $58::TIMESTAMPTZ,
-            $59::TIMESTAMPTZ,
+            $58,
+            $59,
             $60,
             $61,
             $62,
-            $63,
-            $64,
+            $63::TIMESTAMPTZ,
+            $64::TIMESTAMPTZ,
             $65,
             $66,
             $67,
             $68,
             $69,
             $70,
-            $71
+            $71,
+            $72,
+            $73,
+            $74,
+            $75,
+            $76
         )
         ON CONFLICT (id) DO UPDATE SET
             document_number = EXCLUDED.document_number,
@@ -460,6 +480,11 @@ async fn upsert_sales_document(
             tax_code = EXCLUDED.tax_code,
             tax_rate = EXCLUDED.tax_rate,
             tax_calculation_mode = EXCLUDED.tax_calculation_mode,
+            tax_flow = EXCLUDED.tax_flow,
+            tax_account_id = EXCLUDED.tax_account_id,
+            tax_account_code = EXCLUDED.tax_account_code,
+            tax_account_name = EXCLUDED.tax_account_name,
+            tax_account_type = EXCLUDED.tax_account_type,
             tax_amount = EXCLUDED.tax_amount,
             total_amount = EXCLUDED.total_amount,
             payment_status = EXCLUDED.payment_status,
@@ -535,6 +560,11 @@ async fn upsert_sales_document(
             tax_code,
             tax_rate,
             tax_calculation_mode,
+            tax_flow,
+            tax_account_id,
+            tax_account_code,
+            tax_account_name,
+            tax_account_type,
             tax_amount,
             total_amount,
             payment_status,
@@ -608,6 +638,11 @@ async fn upsert_sales_document(
     .bind(input.tax_code)
     .bind(input.tax_rate)
     .bind(input.tax_calculation_mode)
+    .bind(input.tax_flow)
+    .bind(input.tax_account_id)
+    .bind(input.tax_account_code)
+    .bind(input.tax_account_name)
+    .bind(input.tax_account_type)
     .bind(input.tax_amount)
     .bind(input.total_amount)
     .bind(input.payment_status)
@@ -677,6 +712,11 @@ async fn replace_sales_document_items(
                 tax_code,
                 tax_rate,
                 tax_calculation_mode,
+                tax_flow,
+                tax_account_id,
+                tax_account_code,
+                tax_account_name,
+                tax_account_type,
                 tax_base_amount,
                 tax_amount,
                 subtotal,
@@ -726,19 +766,24 @@ async fn replace_sales_document_items(
                 $24,
                 $25,
                 $26,
-                $27::TIMESTAMPTZ,
-                $28::TIMESTAMPTZ,
+                $27,
+                $28,
                 $29,
                 $30,
                 $31,
-                $32,
-                $33,
+                $32::TIMESTAMPTZ,
+                $33::TIMESTAMPTZ,
                 $34,
                 $35,
                 $36,
                 $37,
                 $38,
-                $39
+                $39,
+                $40,
+                $41,
+                $42,
+                $43,
+                $44
             )
             "#,
         )
@@ -760,6 +805,11 @@ async fn replace_sales_document_items(
         .bind(item.tax_code)
         .bind(item.tax_rate)
         .bind(item.tax_calculation_mode)
+        .bind(item.tax_flow)
+        .bind(item.tax_account_id)
+        .bind(item.tax_account_code)
+        .bind(item.tax_account_name)
+        .bind(item.tax_account_type)
         .bind(item.tax_base_amount)
         .bind(item.tax_amount)
         .bind(item.subtotal)

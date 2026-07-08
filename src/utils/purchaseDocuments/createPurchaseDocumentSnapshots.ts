@@ -23,7 +23,7 @@ export const createSupplierSnapshot = (contact?: Contact): Partial<PurchaseDocum
 };
 
 export const createPurchaseTaxSnapshot = (tax?: Tax): Partial<PurchaseDocument> => {
-  return createTaxFieldsSnapshot(tax);
+  return createTaxFieldsSnapshot(tax, 'purchase');
 };
 
 export const createPurchaseDepartmentSnapshot = (department?: Department): Partial<PurchaseDocument> => {

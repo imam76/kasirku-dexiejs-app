@@ -101,6 +101,7 @@ export type MembershipPointTransactionType =
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type TaxRateType = 'PERCENTAGE';
 export type TaxCalculationMode = 'EXCLUSIVE' | 'INCLUSIVE';
+export type TaxFlow = 'ADDITIVE' | 'WITHHOLDING';
 export type CurrencyRateSource = 'BI_KURS_TRANSAKSI' | 'MANUAL' | 'SYSTEM';
 export type CurrencyRateBasis = 'MID';
 export type SalesDocumentType =
@@ -699,6 +700,15 @@ export interface Tax {
   rate: number;
   rate_type: TaxRateType;
   calculation_mode: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  sales_tax_account_id?: string;
+  sales_tax_account_code?: string;
+  sales_tax_account_name?: string;
+  sales_tax_account_type?: AccountType;
+  purchase_tax_account_id?: string;
+  purchase_tax_account_code?: string;
+  purchase_tax_account_name?: string;
+  purchase_tax_account_type?: AccountType;
   description?: string;
   effective_from?: string;
   effective_to?: string;
@@ -761,6 +771,11 @@ export interface SalesDocument {
   tax_code?: string;
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  tax_account_id?: string;
+  tax_account_code?: string;
+  tax_account_name?: string;
+  tax_account_type?: AccountType;
   tax_amount?: number;
   foreign_tax_amount?: number;
   total_amount?: number;
@@ -881,6 +896,11 @@ export interface SalesDocumentItem {
   tax_code?: string;
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  tax_account_id?: string;
+  tax_account_code?: string;
+  tax_account_name?: string;
+  tax_account_type?: AccountType;
   tax_base_amount?: number;
   foreign_tax_base_amount?: number;
   tax_amount?: number;
@@ -947,6 +967,11 @@ export interface PurchaseDocument {
   tax_code?: string;
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  tax_account_id?: string;
+  tax_account_code?: string;
+  tax_account_name?: string;
+  tax_account_type?: AccountType;
   tax_amount?: number;
   foreign_tax_amount?: number;
   total_amount?: number;
@@ -1078,6 +1103,11 @@ export interface PurchaseDocumentItem {
   tax_code?: string;
   tax_rate?: number;
   tax_calculation_mode?: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  tax_account_id?: string;
+  tax_account_code?: string;
+  tax_account_name?: string;
+  tax_account_type?: AccountType;
   tax_base_amount?: number;
   foreign_tax_base_amount?: number;
   tax_amount?: number;
@@ -1163,6 +1193,16 @@ export interface SalesReturn {
   reason?: string;
   subtotal_amount: number;
   discount_amount?: number;
+  tax_id?: string;
+  tax_name?: string;
+  tax_code?: string;
+  tax_rate?: number;
+  tax_calculation_mode?: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  tax_account_id?: string;
+  tax_account_code?: string;
+  tax_account_name?: string;
+  tax_account_type?: AccountType;
   tax_amount?: number;
   total_amount: number;
   refund_amount?: number;
@@ -1251,6 +1291,16 @@ export interface SalesReturnableSource {
   customer_email?: string;
   customer_address?: string;
   document_date: string;
+  tax_id?: string;
+  tax_name?: string;
+  tax_code?: string;
+  tax_rate?: number;
+  tax_calculation_mode?: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  tax_account_id?: string;
+  tax_account_code?: string;
+  tax_account_name?: string;
+  tax_account_type?: AccountType;
   source_chain_label?: string;
   source_chain_notice?: string;
   source_stock_document_id?: string;
@@ -2097,6 +2147,7 @@ export type JournalSourceType =
   | 'SALES_INVOICE_PAYMENT'
   | 'SALES_RETURN'
   | 'ACCOUNTS_PAYABLE'
+  | 'PURCHASE_INVOICE'
   | 'PURCHASE_INVOICE_PAYMENT'
   | 'CASH_BANK_TRANSFER'
   | 'PAYROLL_RUN'

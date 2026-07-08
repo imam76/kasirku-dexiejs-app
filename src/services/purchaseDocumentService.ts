@@ -16,6 +16,12 @@ import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getD
 import { getPurchasePrice } from '@/utils/pricing';
 import { getPurchaseReceiptStockQuantity } from '@/utils/purchaseDocuments/calculatePurchaseDocumentStockImpact';
 import { recalculatePurchaseInvoicePaymentsForReturnSource } from '@/services/accountsPayableService';
+import {
+  postPurchaseInvoiceIssuedJournal,
+  postPurchaseReturnIssuedJournal,
+  reversePurchaseInvoiceJournal,
+  reversePurchaseReturnJournal,
+} from '@/services/generalLedgerService';
 import { enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
 import { createPurchaseDocumentNumber } from '@/utils/purchaseDocuments/createPurchaseDocumentNumber';
 import {
@@ -53,6 +59,12 @@ const purchaseDocumentTables = [
   db.purchaseDocuments,
   db.purchaseDocumentItems,
   db.products,
+  db.chartOfAccounts,
+  db.enabledModules,
+  db.generalLedgerSetting,
+  db.accountingPeriods,
+  db.journalEntries,
+  db.journalEntryLines,
   db.activityLogs,
   db.inventoryLots,
 ];
@@ -118,6 +130,11 @@ const normalizeDocumentItems = (
   tax_code: item.tax_code,
   tax_rate: item.tax_rate === undefined ? undefined : Number(item.tax_rate),
   tax_calculation_mode: item.tax_calculation_mode,
+  tax_flow: item.tax_flow,
+  tax_account_id: item.tax_account_id,
+  tax_account_code: item.tax_account_code,
+  tax_account_name: item.tax_account_name,
+  tax_account_type: item.tax_account_type,
   tax_base_amount: item.tax_base_amount === undefined ? undefined : Number(item.tax_base_amount),
   tax_amount: item.tax_amount === undefined ? undefined : Number(item.tax_amount),
   subtotal: item.subtotal === undefined ? undefined : Number(item.subtotal),
@@ -235,6 +252,11 @@ const applyConfigBehavior = <T extends Partial<PurchaseDocument>>(
     delete nextDocument.tax_code;
     delete nextDocument.tax_rate;
     delete nextDocument.tax_calculation_mode;
+    delete nextDocument.tax_flow;
+    delete nextDocument.tax_account_id;
+    delete nextDocument.tax_account_code;
+    delete nextDocument.tax_account_name;
+    delete nextDocument.tax_account_type;
     delete nextDocument.tax_amount;
   }
 
@@ -549,6 +571,12 @@ const calculatePurchaseTotal = async (
     taxId: snapshot.tax_id,
     taxName: snapshot.tax_name,
     taxCode: snapshot.tax_code,
+    taxFlow: snapshot.tax_flow,
+    taxAccountId: snapshot.tax_account_id,
+    taxAccountCode: snapshot.tax_account_code,
+    taxAccountName: snapshot.tax_account_name,
+    taxAccountType: snapshot.tax_account_type,
+    taxAccountContext: 'purchase',
     taxes,
     config,
   });
@@ -751,6 +779,11 @@ export const issuePurchaseDocument = async (id: string) => {
     }
 
     await db.purchaseDocuments.put(issuedDocument);
+    if (issuedDocument.type === 'PURCHASE_INVOICE') {
+      await postPurchaseInvoiceIssuedJournal(issuedDocument, currentUser);
+    } else if (issuedDocument.type === 'PURCHASE_RETURN') {
+      await postPurchaseReturnIssuedJournal(issuedDocument, currentUser);
+    }
     await writeActivityLog({
       user: currentUser,
       action: 'PURCHASE_DOCUMENT_ISSUED',
@@ -904,6 +937,19 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
     }
 
     await db.purchaseDocuments.put(voidedDocument);
+    if (document.status === 'ISSUED' && document.type === 'PURCHASE_INVOICE') {
+      await reversePurchaseInvoiceJournal(
+        document,
+        `Pembalikan jurnal purchase invoice ${document.document_number}: ${normalizedReason}`,
+        currentUser,
+      );
+    } else if (document.status === 'ISSUED' && document.type === 'PURCHASE_RETURN') {
+      await reversePurchaseReturnJournal(
+        document,
+        `Pembalikan jurnal purchase return ${document.document_number}: ${normalizedReason}`,
+        currentUser,
+      );
+    }
     await writeActivityLog({
       user: currentUser,
       action: 'PURCHASE_DOCUMENT_VOIDED',

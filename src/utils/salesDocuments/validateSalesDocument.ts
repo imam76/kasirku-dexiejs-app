@@ -82,6 +82,10 @@ export const validateSalesDocument = ({
     throw new Error('Snapshot pajak belum lengkap.');
   }
 
+  if (document.tax_id && document.tax_flow === 'WITHHOLDING') {
+    throw new Error('Sales invoice belum mendukung pajak potong. Gunakan pajak additive seperti PPN/PPnBM.');
+  }
+
   if (config.behavior.hasPaymentStatus && !document.payment_status) {
     throw new Error('Status bayar invoice wajib diisi.');
   }

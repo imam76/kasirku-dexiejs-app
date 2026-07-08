@@ -2,8 +2,8 @@ import { DatePicker, Form, Input, InputNumber, Modal, Select, Switch } from 'ant
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useI18n } from '@/hooks/useI18n';
-import type { TaxCalculationMode } from '@/types';
-import { taxCalculationModeOptions } from './taxOptions';
+import type { ChartOfAccount, TaxCalculationMode, TaxFlow } from '@/types';
+import { taxCalculationModeOptions, taxFlowOptions } from './taxOptions';
 
 const { TextArea } = Input;
 
@@ -13,6 +13,9 @@ export interface TaxFormValues {
   rate: number;
   rate_type?: 'PERCENTAGE';
   calculation_mode: TaxCalculationMode;
+  tax_flow?: TaxFlow;
+  sales_tax_account_id?: string;
+  purchase_tax_account_id?: string;
   effective_from?: Dayjs | null;
   effective_to?: Dayjs | null;
   description?: string;
@@ -25,6 +28,7 @@ interface TaxFormModalProps {
   open: boolean;
   isEditing: boolean;
   isSubmitting: boolean;
+  accounts: ChartOfAccount[];
   onCancel: () => void;
   onSubmit: (values: TaxFormValues) => void;
 }
@@ -34,10 +38,18 @@ export default function TaxFormModal({
   open,
   isEditing,
   isSubmitting,
+  accounts,
   onCancel,
   onSubmit,
 }: TaxFormModalProps) {
   const { t } = useI18n();
+  const taxFlow = Form.useWatch('tax_flow', form) ?? 'ADDITIVE';
+  const accountOptions = accounts
+    .filter((account) => account.is_active && account.is_postable)
+    .map((account) => ({
+      value: account.id,
+      label: `${account.code} - ${account.name}`,
+    }));
 
   return (
     <Modal
@@ -74,6 +86,54 @@ export default function TaxFormModal({
             <Select options={taxCalculationModeOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))} />
           </Form.Item>
         </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Form.Item name="tax_flow" label={t('taxes.form.flow')} rules={[{ required: true, message: t('taxes.validation.flowRequired') }]}>
+            <Select options={taxFlowOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))} />
+          </Form.Item>
+          <Form.Item
+            name="sales_tax_account_id"
+            label={t('taxes.form.salesAccount')}
+            rules={[
+              {
+                validator(_, value: string | undefined) {
+                  if (taxFlow !== 'ADDITIVE' || value) return Promise.resolve();
+                  return Promise.reject(new Error(t('taxes.validation.salesAccountRequired')));
+                },
+              },
+            ]}
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              disabled={taxFlow === 'WITHHOLDING'}
+              placeholder={t('taxes.form.accountPlaceholder')}
+              options={accountOptions}
+            />
+          </Form.Item>
+        </div>
+
+        <Form.Item
+          name="purchase_tax_account_id"
+          label={taxFlow === 'WITHHOLDING' ? t('taxes.form.withholdingAccount') : t('taxes.form.purchaseAccount')}
+          rules={[
+            {
+              validator(_, value: string | undefined) {
+                if (taxFlow !== 'WITHHOLDING' || value) return Promise.resolve();
+                return Promise.reject(new Error(t('taxes.validation.purchaseAccountRequired')));
+              },
+            },
+          ]}
+        >
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('taxes.form.accountPlaceholder')}
+            options={accountOptions}
+          />
+        </Form.Item>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Form.Item name="effective_from" label={t('taxes.form.effectiveFrom')}>

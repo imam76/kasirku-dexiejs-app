@@ -69,6 +69,7 @@ const salesDocumentTables = [
   db.financeAccountMappings,
   db.enabledModules,
   db.generalLedgerSetting,
+  db.accountingPeriods,
   db.journalEntries,
   db.journalEntryLines,
   db.activityLogs,
@@ -121,6 +122,11 @@ const normalizeDocumentItems = (
   tax_code: item.tax_code,
   tax_rate: item.tax_rate === undefined ? undefined : Number(item.tax_rate),
   tax_calculation_mode: item.tax_calculation_mode,
+  tax_flow: item.tax_flow,
+  tax_account_id: item.tax_account_id,
+  tax_account_code: item.tax_account_code,
+  tax_account_name: item.tax_account_name,
+  tax_account_type: item.tax_account_type,
   tax_base_amount: item.tax_base_amount === undefined ? undefined : Number(item.tax_base_amount),
   tax_amount: item.tax_amount === undefined ? undefined : Number(item.tax_amount),
   subtotal: item.subtotal === undefined ? undefined : Number(item.subtotal),
@@ -323,6 +329,7 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
   const snapshot = applyPaymentStatusBehavior(await buildDocumentSnapshot(document), config);
   const documentNumber = document.document_number || await createSalesDocumentNumber(config.numberPrefix, now);
   const normalizedItems = normalizeDocumentItems(items, documentId, createdAt, snapshot as DocumentCurrencySnapshot);
+  const taxes = await db.taxes.toArray();
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: normalizedItems,
     discountType: snapshot.discount_type,
@@ -333,6 +340,12 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     taxId: snapshot.tax_id,
     taxName: snapshot.tax_name,
     taxCode: snapshot.tax_code,
+    taxFlow: snapshot.tax_flow,
+    taxAccountId: snapshot.tax_account_id,
+    taxAccountCode: snapshot.tax_account_code,
+    taxAccountName: snapshot.tax_account_name,
+    taxAccountType: snapshot.tax_account_type,
+    taxes,
     config,
   });
   const calculatedItemsWithFx = calculatedItems.map((item) => (
@@ -386,6 +399,7 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     config,
   );
   const normalizedItems = normalizeDocumentItems(items, id, existing.created_at, snapshot as DocumentCurrencySnapshot);
+  const taxes = await db.taxes.toArray();
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: normalizedItems,
     discountType: snapshot.discount_type,
@@ -396,6 +410,12 @@ export const updateSalesDocument = async (id: string, { document, items }: Sales
     taxId: snapshot.tax_id,
     taxName: snapshot.tax_name,
     taxCode: snapshot.tax_code,
+    taxFlow: snapshot.tax_flow,
+    taxAccountId: snapshot.tax_account_id,
+    taxAccountCode: snapshot.tax_account_code,
+    taxAccountName: snapshot.tax_account_name,
+    taxAccountType: snapshot.tax_account_type,
+    taxes,
     config,
   });
   const calculatedItemsWithFx = calculatedItems.map((item) => (
@@ -496,6 +516,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     id: crypto.randomUUID(),
     document_id: targetId,
   })), targetId, createdAt, sourceCurrencySnapshot);
+  const taxes = await db.taxes.toArray();
   const { items: calculatedItems, ...total } = calculateDocumentTotal({
     items: targetItems,
     discountType: source.discount_type,
@@ -506,6 +527,12 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
     taxId: source.tax_id,
     taxName: source.tax_name,
     taxCode: source.tax_code,
+    taxFlow: source.tax_flow,
+    taxAccountId: source.tax_account_id,
+    taxAccountCode: source.tax_account_code,
+    taxAccountName: source.tax_account_name,
+    taxAccountType: source.tax_account_type,
+    taxes,
     config: targetConfig,
   });
   const calculatedItemsWithFx = calculatedItems.map((item) => applyForeignAmountsToLineItem(item, sourceCurrencySnapshot));

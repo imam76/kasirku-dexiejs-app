@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import type { TaxCalculationMode, TaxRateType } from '@/types';
+import type { TaxCalculationMode, TaxFlow, TaxRateType } from '@/types';
 
 export const taxRateTypeValues = ['PERCENTAGE'] as const satisfies readonly TaxRateType[];
 export const taxCalculationModeValues = ['EXCLUSIVE', 'INCLUSIVE'] as const satisfies readonly TaxCalculationMode[];
+export const taxFlowValues = ['ADDITIVE', 'WITHHOLDING'] as const satisfies readonly TaxFlow[];
 
 const optionalTrimmedString = z
   .string()
@@ -24,6 +25,9 @@ export const taxSchema = z.object({
   rate: z.number({ message: 'Rate tax wajib diisi.' }).min(0, 'Rate tax tidak boleh negatif.').max(100, 'Rate tax maksimal 100%.'),
   rate_type: z.enum(taxRateTypeValues).optional().default('PERCENTAGE'),
   calculation_mode: z.enum(taxCalculationModeValues, { message: 'Mode kalkulasi tax wajib dipilih.' }),
+  tax_flow: z.enum(taxFlowValues).optional().default('ADDITIVE'),
+  sales_tax_account_id: optionalTrimmedString,
+  purchase_tax_account_id: optionalTrimmedString,
   description: optionalTrimmedString,
   effective_from: optionalDateString,
   effective_to: optionalDateString,

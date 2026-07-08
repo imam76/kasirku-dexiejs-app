@@ -56,6 +56,11 @@ macro_rules! purchase_document_select {
             tax_code,
             tax_rate,
             tax_calculation_mode,
+            tax_flow,
+            tax_account_id,
+            tax_account_code,
+            tax_account_name,
+            tax_account_type,
             tax_amount,
             foreign_tax_amount,
             total_amount,
@@ -125,6 +130,11 @@ macro_rules! purchase_document_item_select {
             tax_code,
             tax_rate,
             tax_calculation_mode,
+            tax_flow,
+            tax_account_id,
+            tax_account_code,
+            tax_account_name,
+            tax_account_type,
             tax_base_amount,
             foreign_tax_base_amount,
             tax_amount,
@@ -309,6 +319,11 @@ async fn upsert_purchase_document(
             tax_code,
             tax_rate,
             tax_calculation_mode,
+            tax_flow,
+            tax_account_id,
+            tax_account_code,
+            tax_account_name,
+            tax_account_type,
             tax_amount,
             total_amount,
             payment_status,
@@ -394,28 +409,33 @@ async fn upsert_purchase_document(
             $48,
             $49,
             $50,
-            $51::TIMESTAMPTZ,
-            $52::TIMESTAMPTZ,
+            $51,
+            $52,
             $53,
             $54,
             $55,
-            $56,
-            $57,
+            $56::TIMESTAMPTZ,
+            $57::TIMESTAMPTZ,
             $58,
-            $59::TIMESTAMPTZ,
-            $60::TIMESTAMPTZ,
+            $59,
+            $60,
             $61,
             $62,
             $63,
-            $64,
-            $65,
+            $64::TIMESTAMPTZ,
+            $65::TIMESTAMPTZ,
             $66,
             $67,
             $68,
             $69,
             $70,
             $71,
-            $72
+            $72,
+            $73,
+            $74,
+            $75,
+            $76,
+            $77
         )
         ON CONFLICT (id) DO UPDATE SET
             document_number = EXCLUDED.document_number,
@@ -456,6 +476,11 @@ async fn upsert_purchase_document(
             tax_code = EXCLUDED.tax_code,
             tax_rate = EXCLUDED.tax_rate,
             tax_calculation_mode = EXCLUDED.tax_calculation_mode,
+            tax_flow = EXCLUDED.tax_flow,
+            tax_account_id = EXCLUDED.tax_account_id,
+            tax_account_code = EXCLUDED.tax_account_code,
+            tax_account_name = EXCLUDED.tax_account_name,
+            tax_account_type = EXCLUDED.tax_account_type,
             tax_amount = EXCLUDED.tax_amount,
             total_amount = EXCLUDED.total_amount,
             payment_status = EXCLUDED.payment_status,
@@ -532,6 +557,11 @@ async fn upsert_purchase_document(
             tax_code,
             tax_rate,
             tax_calculation_mode,
+            tax_flow,
+            tax_account_id,
+            tax_account_code,
+            tax_account_name,
+            tax_account_type,
             tax_amount,
             total_amount,
             payment_status,
@@ -618,6 +648,11 @@ async fn upsert_purchase_document(
     .bind(input.tax_code)
     .bind(input.tax_rate)
     .bind(input.tax_calculation_mode)
+    .bind(input.tax_flow)
+    .bind(input.tax_account_id)
+    .bind(input.tax_account_code)
+    .bind(input.tax_account_name)
+    .bind(input.tax_account_type)
     .bind(input.tax_amount)
     .bind(input.total_amount)
     .bind(input.payment_status)
@@ -742,6 +777,11 @@ async fn replace_purchase_document_items(
                 tax_code,
                 tax_rate,
                 tax_calculation_mode,
+                tax_flow,
+                tax_account_id,
+                tax_account_code,
+                tax_account_name,
+                tax_account_type,
                 tax_base_amount,
                 tax_amount,
                 subtotal,
@@ -782,18 +822,23 @@ async fn replace_purchase_document_items(
                 $20,
                 $21,
                 $22,
-                $23::TIMESTAMPTZ,
+                $23,
                 $24,
                 $25,
                 $26,
                 $27,
-                $28,
+                $28::TIMESTAMPTZ,
                 $29,
                 $30,
                 $31,
                 $32,
                 $33,
-                $34
+                $34,
+                $35,
+                $36,
+                $37,
+                $38,
+                $39
             )
             "#,
         )
@@ -815,6 +860,11 @@ async fn replace_purchase_document_items(
         .bind(item.tax_code)
         .bind(item.tax_rate)
         .bind(item.tax_calculation_mode)
+        .bind(item.tax_flow)
+        .bind(item.tax_account_id)
+        .bind(item.tax_account_code)
+        .bind(item.tax_account_name)
+        .bind(item.tax_account_type)
         .bind(item.tax_base_amount)
         .bind(item.tax_amount)
         .bind(item.subtotal)

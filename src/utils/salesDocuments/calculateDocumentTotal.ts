@@ -1,4 +1,4 @@
-import type { PromoType, SalesDocument, SalesDocumentItem, Tax, TaxCalculationMode } from '@/types';
+import type { AccountType, PromoType, SalesDocument, SalesDocumentItem, Tax, TaxCalculationMode, TaxFlow } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { calculateDocumentTotal as calculateGenericDocumentTotal } from '@/utils/documentTotals';
 
@@ -12,6 +12,11 @@ export interface DocumentTotalInput {
   taxId?: string;
   taxName?: string;
   taxCode?: string;
+  taxFlow?: TaxFlow;
+  taxAccountId?: string;
+  taxAccountCode?: string;
+  taxAccountName?: string;
+  taxAccountType?: AccountType;
   taxes?: Tax[];
   config: SalesDocumentConfig;
 }
@@ -27,7 +32,10 @@ export interface DocumentTotalResult {
 }
 
 export const calculateDocumentTotal = (input: DocumentTotalInput): DocumentTotalResult => {
-  const result = calculateGenericDocumentTotal<SalesDocumentItem>(input);
+  const result = calculateGenericDocumentTotal<SalesDocumentItem>({
+    ...input,
+    taxAccountContext: 'sales',
+  });
 
   if (!input.config.behavior.hasPricing) {
     return {

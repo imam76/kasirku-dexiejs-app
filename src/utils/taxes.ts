@@ -1,4 +1,4 @@
-import type { Tax, TaxCalculationMode } from '@/types';
+import type { Tax, TaxCalculationMode, TaxFlow } from '@/types';
 
 export interface CalculateTaxInput {
   amount: number;
@@ -12,6 +12,7 @@ export interface TaxSnapshot {
   tax_code?: string;
   tax_rate: number;
   tax_calculation_mode: TaxCalculationMode;
+  tax_flow: TaxFlow;
 }
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -37,4 +38,5 @@ export const createTaxSnapshot = (tax: Tax): TaxSnapshot => ({
   tax_code: tax.code,
   tax_rate: tax.rate,
   tax_calculation_mode: tax.calculation_mode,
+  tax_flow: tax.tax_flow ?? 'ADDITIVE',
 });

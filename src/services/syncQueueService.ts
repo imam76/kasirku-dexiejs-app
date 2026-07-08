@@ -1264,6 +1264,11 @@ const mapSalesDocumentToRemoteDto = (document: SalesDocument): RemoteSalesDocume
   tax_code: document.tax_code,
   tax_rate: document.tax_rate,
   tax_calculation_mode: document.tax_calculation_mode,
+  tax_flow: document.tax_flow,
+  tax_account_id: document.tax_account_id,
+  tax_account_code: document.tax_account_code,
+  tax_account_name: document.tax_account_name,
+  tax_account_type: document.tax_account_type,
   tax_amount: document.tax_amount,
   foreign_tax_amount: document.foreign_tax_amount,
   total_amount: document.total_amount,
@@ -1315,6 +1320,11 @@ const mapSalesDocumentItemToRemoteDto = (item: SalesDocumentItem): RemoteSalesDo
   tax_code: item.tax_code,
   tax_rate: item.tax_rate,
   tax_calculation_mode: item.tax_calculation_mode,
+  tax_flow: item.tax_flow,
+  tax_account_id: item.tax_account_id,
+  tax_account_code: item.tax_account_code,
+  tax_account_name: item.tax_account_name,
+  tax_account_type: item.tax_account_type,
   tax_base_amount: item.tax_base_amount,
   foreign_tax_base_amount: item.foreign_tax_base_amount,
   tax_amount: item.tax_amount,
@@ -1389,6 +1399,11 @@ const mapPurchaseDocumentToRemoteDto = (document: PurchaseDocument): RemotePurch
   tax_code: document.tax_code,
   tax_rate: document.tax_rate,
   tax_calculation_mode: document.tax_calculation_mode,
+  tax_flow: document.tax_flow,
+  tax_account_id: document.tax_account_id,
+  tax_account_code: document.tax_account_code,
+  tax_account_name: document.tax_account_name,
+  tax_account_type: document.tax_account_type,
   tax_amount: document.tax_amount,
   foreign_tax_amount: document.foreign_tax_amount,
   total_amount: document.total_amount,
@@ -1452,6 +1467,11 @@ const mapPurchaseDocumentItemToRemoteDto = (item: PurchaseDocumentItem): RemoteP
   tax_code: item.tax_code,
   tax_rate: item.tax_rate,
   tax_calculation_mode: item.tax_calculation_mode,
+  tax_flow: item.tax_flow,
+  tax_account_id: item.tax_account_id,
+  tax_account_code: item.tax_account_code,
+  tax_account_name: item.tax_account_name,
+  tax_account_type: item.tax_account_type,
   tax_base_amount: item.tax_base_amount,
   foreign_tax_base_amount: item.foreign_tax_base_amount,
   tax_amount: item.tax_amount,
@@ -1490,6 +1510,15 @@ const mapTaxToRemoteDto = (tax: Tax): RemoteTaxDto => ({
   rate: tax.rate,
   rate_type: tax.rate_type,
   calculation_mode: tax.calculation_mode,
+  tax_flow: tax.tax_flow ?? 'ADDITIVE',
+  sales_tax_account_id: tax.sales_tax_account_id,
+  sales_tax_account_code: tax.sales_tax_account_code,
+  sales_tax_account_name: tax.sales_tax_account_name,
+  sales_tax_account_type: tax.sales_tax_account_type,
+  purchase_tax_account_id: tax.purchase_tax_account_id,
+  purchase_tax_account_code: tax.purchase_tax_account_code,
+  purchase_tax_account_name: tax.purchase_tax_account_name,
+  purchase_tax_account_type: tax.purchase_tax_account_type,
   description: tax.description,
   effective_from: tax.effective_from,
   effective_to: tax.effective_to,
@@ -6258,6 +6287,29 @@ export const enqueueTaxSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueuePendingTaxesForSync = async () => {
+  const taxes = (await db.taxes.toArray())
+    .filter((tax) => tax.sync_status === 'pending' || tax.sync_status === 'failed');
+
+  const taxQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(TAX_ENTITY)
+    .toArray();
+
+  for (const tax of taxes) {
+    const existingQueueItem = taxQueueItems.find((queueItem) => (
+      queueItem.entity_id === tax.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteTaxDto(queueItem.payload) &&
+      queueItem.payload.updated_at === tax.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueTaxSync(tax, 'update');
+    }
+  }
 };
 
 export const enqueueWarehouseSync = async (

@@ -51,6 +51,7 @@ import type {
   StockMutationSourceType,
   StockOpnameStatus,
   TaxCalculationMode,
+  TaxFlow,
   UserRole,
   WholesalePrice,
 } from '@/types';
@@ -397,6 +398,15 @@ export interface RemoteTaxDto {
   rate: number;
   rate_type: string;
   calculation_mode: string;
+  tax_flow?: TaxFlow | null;
+  sales_tax_account_id?: string | null;
+  sales_tax_account_code?: string | null;
+  sales_tax_account_name?: string | null;
+  sales_tax_account_type?: AccountType | null;
+  purchase_tax_account_id?: string | null;
+  purchase_tax_account_code?: string | null;
+  purchase_tax_account_name?: string | null;
+  purchase_tax_account_type?: AccountType | null;
   description?: string | null;
   effective_from?: string | null;
   effective_to?: string | null;
@@ -679,6 +689,11 @@ export interface RemoteSalesDocumentDto {
   tax_code?: string | null;
   tax_rate?: number | null;
   tax_calculation_mode?: TaxCalculationMode | null;
+  tax_flow?: TaxFlow | null;
+  tax_account_id?: string | null;
+  tax_account_code?: string | null;
+  tax_account_name?: string | null;
+  tax_account_type?: AccountType | null;
   tax_amount?: number | null;
   foreign_tax_amount?: number | null;
   total_amount?: number | null;
@@ -730,6 +745,11 @@ export interface RemoteSalesDocumentItemDto {
   tax_code?: string | null;
   tax_rate?: number | null;
   tax_calculation_mode?: TaxCalculationMode | null;
+  tax_flow?: TaxFlow | null;
+  tax_account_id?: string | null;
+  tax_account_code?: string | null;
+  tax_account_name?: string | null;
+  tax_account_type?: AccountType | null;
   tax_base_amount?: number | null;
   foreign_tax_base_amount?: number | null;
   tax_amount?: number | null;
@@ -801,6 +821,11 @@ export interface RemotePurchaseDocumentDto {
   tax_code?: string | null;
   tax_rate?: number | null;
   tax_calculation_mode?: TaxCalculationMode | null;
+  tax_flow?: TaxFlow | null;
+  tax_account_id?: string | null;
+  tax_account_code?: string | null;
+  tax_account_name?: string | null;
+  tax_account_type?: AccountType | null;
   tax_amount?: number | null;
   foreign_tax_amount?: number | null;
   total_amount?: number | null;
@@ -864,6 +889,11 @@ export interface RemotePurchaseDocumentItemDto {
   tax_code?: string | null;
   tax_rate?: number | null;
   tax_calculation_mode?: TaxCalculationMode | null;
+  tax_flow?: TaxFlow | null;
+  tax_account_id?: string | null;
+  tax_account_code?: string | null;
+  tax_account_name?: string | null;
+  tax_account_type?: AccountType | null;
   tax_base_amount?: number | null;
   foreign_tax_base_amount?: number | null;
   tax_amount?: number | null;

@@ -297,6 +297,11 @@ export const PurchaseDocumentForm = ({
   const taxId = selectedTax?.id ?? initialTaxSnapshot?.tax_id;
   const taxName = selectedTax?.name ?? initialTaxSnapshot?.tax_name;
   const taxCode = selectedTax?.code ?? initialTaxSnapshot?.tax_code;
+  const taxFlow = selectedTax?.tax_flow ?? initialTaxSnapshot?.tax_flow;
+  const taxAccountId = selectedTax?.purchase_tax_account_id ?? initialTaxSnapshot?.tax_account_id;
+  const taxAccountCode = selectedTax?.purchase_tax_account_code ?? initialTaxSnapshot?.tax_account_code;
+  const taxAccountName = selectedTax?.purchase_tax_account_name ?? initialTaxSnapshot?.tax_account_name;
+  const taxAccountType = selectedTax?.purchase_tax_account_type ?? initialTaxSnapshot?.tax_account_type;
   const total = useMemo(
     () => calculateDocumentTotal({
       items,
@@ -307,10 +312,32 @@ export const PurchaseDocumentForm = ({
       taxId,
       taxName,
       taxCode,
+      taxFlow,
+      taxAccountId,
+      taxAccountCode,
+      taxAccountName,
+      taxAccountType,
+      taxAccountContext: 'purchase',
       taxes,
       config,
     }),
-    [config, discountType, discountValue, items, taxCalculationMode, taxCode, taxId, taxName, taxRate, taxes],
+    [
+      config,
+      discountType,
+      discountValue,
+      items,
+      taxAccountCode,
+      taxAccountId,
+      taxAccountName,
+      taxAccountType,
+      taxCalculationMode,
+      taxCode,
+      taxFlow,
+      taxId,
+      taxName,
+      taxRate,
+      taxes,
+    ],
   );
   const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
   const displayedDiscountValue = discountType === 'fixed'
@@ -359,6 +386,11 @@ export const PurchaseDocumentForm = ({
     setValue('tax_code', tax?.code, { shouldDirty: true });
     setValue('tax_rate', tax?.rate, { shouldDirty: true });
     setValue('tax_calculation_mode', tax?.calculation_mode, { shouldDirty: true });
+    setValue('tax_flow', tax?.tax_flow, { shouldDirty: true });
+    setValue('tax_account_id', tax?.purchase_tax_account_id, { shouldDirty: true });
+    setValue('tax_account_code', tax?.purchase_tax_account_code, { shouldDirty: true });
+    setValue('tax_account_name', tax?.purchase_tax_account_name, { shouldDirty: true });
+    setValue('tax_account_type', tax?.purchase_tax_account_type, { shouldDirty: true });
   }, [setValue, taxes]);
 
   const handleFinish = async (values: PurchaseDocumentFormValues) => {
