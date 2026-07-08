@@ -2,7 +2,7 @@ import type { Permission } from '@/types';
 
 export interface ReportAccessDefinition {
   permission: Permission;
-  moduleCode: string;
+  moduleCode: string | string[];
 }
 
 export const GENERAL_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
@@ -60,6 +60,14 @@ export const COOPERATIVE_REPORT_ACCESS: Record<string, ReportAccessDefinition> =
   '/koperasi/laporan-simpanan-sukarela': {
     permission: 'COOPERATIVE_SAVING_VIEW',
     moduleCode: 'KOPERASI_SIMPANAN_SUKARELA',
+  },
+  '/koperasi/laporan-tabungan-masuk': {
+    permission: 'COOPERATIVE_SAVING_VIEW',
+    moduleCode: ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
+  },
+  '/koperasi/laporan-tabungan-keluar': {
+    permission: 'COOPERATIVE_SAVING_VIEW',
+    moduleCode: ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
   },
   '/koperasi/laporan-tunai': {
     permission: 'COOPERATIVE_CASH_REPORT_VIEW',

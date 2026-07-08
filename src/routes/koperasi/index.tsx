@@ -78,6 +78,20 @@ function Cooperative() {
       desc: t('cooperative.index.voluntarySavingsReportDesc'),
     },
     {
+      to: '/koperasi/laporan-tabungan-masuk',
+      label: t('nav.cooperative.savingInReport'),
+      icon: WalletOutlined,
+      color: 'text-green-700',
+      desc: t('cooperative.index.savingInReportDesc'),
+    },
+    {
+      to: '/koperasi/laporan-tabungan-keluar',
+      label: t('nav.cooperative.savingOutReport'),
+      icon: WalletOutlined,
+      color: 'text-red-700',
+      desc: t('cooperative.index.savingOutReportDesc'),
+    },
+    {
       to: '/koperasi/laporan-tunai',
       label: t('nav.cooperative.cashReport'),
       icon: BankOutlined,

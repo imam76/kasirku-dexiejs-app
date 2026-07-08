@@ -292,6 +292,8 @@ const RootLayout = () => {
           children: [
             { to: '/koperasi/laporan', label: t('nav.cooperative.reportsOverview'), icon: FileText },
             { to: '/koperasi/laporan-simpanan-sukarela', label: t('nav.cooperative.voluntarySavingsReport'), icon: WalletCards },
+            { to: '/koperasi/laporan-tabungan-masuk', label: t('nav.cooperative.savingInReport'), icon: WalletCards },
+            { to: '/koperasi/laporan-tabungan-keluar', label: t('nav.cooperative.savingOutReport'), icon: WalletCards },
             { to: '/koperasi/laporan-tunai', label: t('nav.cooperative.cashReport'), icon: Banknote },
             { to: '/koperasi/laporan-target-harian', label: t('nav.cooperative.dailyTarget'), icon: FileText },
             { to: '/koperasi/laporan-storting-harian', label: t('nav.cooperative.dailyStorting'), icon: FileText },

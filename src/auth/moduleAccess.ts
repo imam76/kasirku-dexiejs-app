@@ -82,7 +82,9 @@ export const getModuleCodesForPath = (path: string): string[] | undefined => {
   const documentModuleCodes = getDocumentModuleCodesForPath(normalizedPath);
   if (documentModuleCodes) return documentModuleCodes;
   const reportAccess = getReportAccessForPath(normalizedPath);
-  if (reportAccess) return [reportAccess.moduleCode];
+  if (reportAccess) {
+    return Array.isArray(reportAccess.moduleCode) ? reportAccess.moduleCode : [reportAccess.moduleCode];
+  }
 
   return routeModuleEntries.find(([routePath]) => {
     return normalizedPath === routePath || normalizedPath.startsWith(`${routePath}/`);

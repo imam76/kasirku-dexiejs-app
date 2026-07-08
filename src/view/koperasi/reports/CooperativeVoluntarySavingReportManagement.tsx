@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { FilePdfOutlined, FileTextOutlined } from '@ant-design/icons';
 import { App, Alert, Button, DatePicker, Empty, Input, Space, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { PiggyBank, RefreshCw } from 'lucide-react';
+import { FileText, RefreshCw } from 'lucide-react';
 import ExportActions from '@/components/ExportActions';
 import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 import { useCooperativeVoluntarySavingReport } from '@/hooks/useCooperativeVoluntarySavingReport';
@@ -154,7 +154,7 @@ export default function CooperativeVoluntarySavingReportManagement() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <Title level={2} className="!mb-1 flex items-center gap-2">
-            <PiggyBank size={24} />
+            <FileText size={24} />
             {t('cooperative.voluntarySavingReport.title')}
           </Title>
           <Text type="secondary">{t('cooperative.voluntarySavingReport.subtitle')}</Text>
