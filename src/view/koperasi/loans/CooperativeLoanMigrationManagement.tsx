@@ -8,7 +8,6 @@ import { useCooperativeLoans } from '@/hooks/useCooperativeLoans';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
-import { getFirstScheduledDueDate } from '@/utils/koperasi/collectionSchedule';
 import CooperativeLoanDetailDrawer from './CooperativeLoanDetailDrawer';
 import CooperativeLoanMigrationModal, {
   type CooperativeLoanMigrationFormValues,
@@ -106,14 +105,7 @@ export default function CooperativeLoanMigrationManagement() {
       message.error(t('cooperative.loans.validation.disbursementBeforeApplication'));
       return;
     }
-    const frequency = calculationType === 'TOTAL_PERCENT'
-      ? (values.billing_frequency ?? 'MONTHLY')
-      : 'MONTHLY';
-    const firstDueDate = getFirstScheduledDueDate({
-      disbursementDate,
-      frequency,
-      weekday: schedules[0].weekday,
-    });
+    const firstDueDate = values.first_due_date;
 
     try {
       const commonInput = {

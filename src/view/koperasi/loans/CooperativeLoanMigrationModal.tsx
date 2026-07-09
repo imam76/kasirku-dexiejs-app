@@ -1,7 +1,7 @@
 import { Alert, Checkbox, DatePicker, Divider, Form, Input, InputNumber, Modal, Radio, Select, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import dayjs from '@/lib/dayjs';
 import type {
@@ -10,7 +10,11 @@ import type {
   CooperativeMember,
   EmployeeCollectionSchedule,
 } from '@/types';
-import { findCollectionScheduleByWeekday } from '@/utils/koperasi/collectionSchedule';
+import {
+  findCollectionScheduleByWeekday,
+  getFirstScheduledDueDate,
+  getIsoWeekday,
+} from '@/utils/koperasi/collectionSchedule';
 import {
   cooperativeLoanBillingFrequencyOptions,
   cooperativeLoanCalculationTypeOptions,
@@ -25,6 +29,7 @@ export interface CooperativeLoanMigrationFormValues {
   member_id: string;
   application_date: Dayjs;
   disbursement_date: Dayjs;
+  first_due_date: Dayjs;
   interest_calculation_type: CooperativeLoanInterestCalculationType;
   principal_amount: number;
   interest_rate_per_month?: number;
@@ -73,6 +78,8 @@ export default function CooperativeLoanMigrationModal({
 }: CooperativeLoanMigrationModalProps) {
   const { t } = useI18n();
   const selectedMemberId = Form.useWatch('member_id', form);
+  const selectedDisbursementDate = Form.useWatch('disbursement_date', form);
+  const selectedBillingFrequency = Form.useWatch('billing_frequency', form);
   const calculationType = Form.useWatch('interest_calculation_type', form) ?? 'MONTHLY_RATE';
   const settledMode = Form.useWatch('settled_mode', form) ?? 'INSTALLMENT';
   const tenorMonths = Number(Form.useWatch('tenor_months', form) || 0);
@@ -92,6 +99,30 @@ export default function CooperativeLoanMigrationModal({
     value: member.id,
     label: `${member.member_number} - ${member.name}`,
   })), [activeMembers]);
+
+  useEffect(() => {
+    const matchingSchedule = selectedDisbursementDate
+      ? findCollectionScheduleByWeekday(collectionSchedules, selectedDisbursementDate)
+      : undefined;
+    if (!selectedDisbursementDate || !matchingSchedule) {
+      form.setFieldValue('first_due_date', undefined);
+      return;
+    }
+
+    form.setFieldValue('first_due_date', getFirstScheduledDueDate({
+      disbursementDate: selectedDisbursementDate,
+      frequency: calculationType === 'TOTAL_PERCENT'
+        ? (selectedBillingFrequency ?? 'MONTHLY')
+        : 'MONTHLY',
+      weekday: matchingSchedule.weekday,
+    }));
+  }, [
+    calculationType,
+    collectionSchedules,
+    form,
+    selectedBillingFrequency,
+    selectedDisbursementDate,
+  ]);
 
   return (
     <Modal
@@ -131,7 +162,10 @@ export default function CooperativeLoanMigrationModal({
               optionFilterProp="label"
               placeholder={t('cooperative.loans.form.memberPlaceholder')}
               options={memberOptions}
-              onChange={() => form.setFieldValue('disbursement_date', undefined)}
+              onChange={() => {
+                form.setFieldValue('disbursement_date', undefined);
+                form.setFieldValue('first_due_date', undefined);
+              }}
               data-testid="koperasi-loan-migration-member-select"
             />
           </Form.Item>
@@ -178,6 +212,22 @@ export default function CooperativeLoanMigrationModal({
                 !findCollectionScheduleByWeekday(collectionSchedules, current)
               )}
               data-testid="koperasi-loan-migration-date-input"
+            />
+          </Form.Item>
+          <Form.Item
+            name="first_due_date"
+            label={t('cooperative.loans.form.firstDueDate')}
+            rules={[{ required: true, message: t('cooperative.loans.validation.firstDueDateRequired') }]}
+          >
+            <DatePicker
+              disabledDate={(current) => (
+                selectedDisbursementDate
+                  ? !current.isAfter(selectedDisbursementDate, 'day') ||
+                    getIsoWeekday(current) !== getIsoWeekday(selectedDisbursementDate)
+                  : true
+              )}
+              className="w-full"
+              data-testid="koperasi-loan-migration-first-due-date-input"
             />
           </Form.Item>
         </div>
