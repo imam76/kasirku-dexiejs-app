@@ -283,7 +283,7 @@ pub async fn postgres_delete_cooperative_loan_application(
     state: State<'_, PostgresState>,
     id: String,
 ) -> PostgresCommandResult<bool> {
-    let pool = require_pool(&state).await?;
+    let pool = state.pool()?;
     Ok(cooperative_repository::delete_cooperative_loan_application(&pool, id).await?)
 }
 
