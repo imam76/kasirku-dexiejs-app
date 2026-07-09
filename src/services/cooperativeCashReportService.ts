@@ -62,10 +62,14 @@ export const createCooperativeCashReportEmployee = (
     },
     {
       key: 'DROP',
-      incoming_amount: source.dropping_from_finance_amount,
+      incoming_amount: roundCurrency(
+        source.dropping_from_finance_amount +
+        source.loan_disbursement_reversal_amount,
+      ),
       outgoing_amount: roundCurrency(
         source.deposit_to_finance_amount +
-        source.loan_disbursement_amount,
+        source.loan_disbursement_amount +
+        source.loan_disbursement_reversal_amount,
       ),
     },
     {

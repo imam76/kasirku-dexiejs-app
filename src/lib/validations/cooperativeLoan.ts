@@ -156,8 +156,17 @@ export const cooperativeLoanRejectionSchema = z.object({
   reason: z.string().trim().min(3, 'Alasan reject wajib diisi.'),
 });
 
+export const cooperativeLoanDeletionSchema = z.object({
+  reason: z.string().trim().min(3, 'Alasan penghapusan wajib diisi.'),
+});
+
+export const cooperativeLoanDisbursementReversalSchema = z.object({
+  reason: z.string().trim().min(3, 'Alasan reversal pencairan wajib diisi.'),
+});
+
 export const cooperativeLoanDisbursementSchema = z.object({
   disbursement_date: z.string().optional(),
+  scheduled_disbursement_date: z.string().optional(),
   first_due_date: z.string().optional(),
   historical_entry: z.boolean().optional().default(false),
   // Mode migrasi: mencatat posisi pinjaman berjalan per cut-off tanpa jurnal & tanpa kas.
@@ -243,6 +252,8 @@ export const cooperativeLoanPaymentReversalSchema = z.object({
 export type CooperativeLoanApplicationFormData = z.infer<typeof cooperativeLoanApplicationSchema>;
 export type CooperativeLoanApprovalFormData = z.infer<typeof cooperativeLoanApprovalSchema>;
 export type CooperativeLoanRejectionFormData = z.infer<typeof cooperativeLoanRejectionSchema>;
+export type CooperativeLoanDeletionFormData = z.infer<typeof cooperativeLoanDeletionSchema>;
+export type CooperativeLoanDisbursementReversalFormData = z.infer<typeof cooperativeLoanDisbursementReversalSchema>;
 export type CooperativeLoanDisbursementFormData = z.infer<typeof cooperativeLoanDisbursementSchema>;
 export type CooperativeLoanPaymentFormData = z.infer<typeof cooperativeLoanPaymentSchema>;
 export type CooperativeLoanInstallmentCollectionFormData = z.infer<typeof cooperativeLoanInstallmentCollectionSchema>;

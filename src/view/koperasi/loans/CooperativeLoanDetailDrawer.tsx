@@ -209,6 +209,16 @@ export default function CooperativeLoanDetailDrawer({
             <Descriptions.Item label={t('cooperative.loans.disbursedAt')}>
               {loan.disbursed_at ? formatDate(loan.disbursed_at) : '-'}
             </Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.loans.scheduledDisbursementDate')}>
+              {loan.scheduled_disbursement_date
+                ? formatDate(loan.scheduled_disbursement_date)
+                : loan.disbursed_at
+                  ? formatDate(loan.disbursed_at)
+                  : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('cooperative.loans.reversedAt')}>
+              {loan.reversed_at ? formatDate(loan.reversed_at) : '-'}
+            </Descriptions.Item>
             <Descriptions.Item label={t('finance.cashAccount')}>
               {loan.cash_account_code && loan.cash_account_name
                 ? `${loan.cash_account_code} - ${loan.cash_account_name}`
@@ -226,6 +236,19 @@ export default function CooperativeLoanDetailDrawer({
             <Descriptions.Item label={t('cooperative.savings.journalEntry')}>
               {loan.journal_entry_id || '-'}
             </Descriptions.Item>
+            {loan.status === 'REVERSED' && (
+              <>
+                <Descriptions.Item label={t('cooperative.loans.reversalReason')}>
+                  {loan.reversal_reason || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.savings.financeTransaction')}>
+                  {loan.reversal_finance_transaction_id || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.savings.journalEntry')}>
+                  {loan.reversal_journal_entry_id || '-'}
+                </Descriptions.Item>
+              </>
+            )}
             <Descriptions.Item label={t('cooperative.members.detail.createdBy')}>
               {loan.created_by_name || '-'}
             </Descriptions.Item>

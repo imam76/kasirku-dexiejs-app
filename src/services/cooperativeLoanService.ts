@@ -11,7 +11,9 @@ import dayjs from '@/lib/dayjs';
 import {
   cooperativeLoanApplicationSchema,
   cooperativeLoanApprovalSchema,
+  cooperativeLoanDeletionSchema,
   cooperativeLoanDisbursementSchema,
+  cooperativeLoanDisbursementReversalSchema,
   cooperativeLoanInstallmentCollectionSchema,
   cooperativeLoanPaymentReversalSchema,
   cooperativeLoanPaymentSchema,
@@ -25,6 +27,7 @@ import {
   postCooperativeLoanPaymentJournal,
   postCooperativeSavingTransactionJournal,
   reverseCooperativeIptwJournal,
+  reverseCooperativeLoanDisbursementJournal,
   reverseCooperativeLoanPaymentJournal,
   reverseCooperativeSavingTransactionJournal,
 } from '@/services/generalLedgerService';
@@ -52,6 +55,7 @@ import {
 } from '@/services/cooperativeCollectionEventService';
 import {
   cooperativeCollectionEventPostgresAdapter,
+  cooperativeLoanPostgresAdapter,
   cooperativePostingPostgresAdapter,
   postgresAdapter,
 } from '@/services/postgresAdapter';
@@ -105,7 +109,6 @@ import {
   isCooperativeLoanEligibleForIptw,
 } from '@/utils/koperasi/iptw';
 import {
-  findCollectionScheduleByWeekday,
   getCollectionWeekdayLabel,
   getFirstScheduledDueDate,
   getIsoWeekday,
@@ -140,9 +143,20 @@ export interface RejectCooperativeLoanInput {
   reason: string;
 }
 
+export interface DeleteCooperativeLoanApplicationInput {
+  loan_id: string;
+  reason: string;
+}
+
+export interface ReverseCooperativeLoanDisbursementInput {
+  loan_id: string;
+  reason: string;
+}
+
 export interface DisburseCooperativeLoanInput {
   loan_id: string;
   disbursement_date?: string;
+  scheduled_disbursement_date?: string;
   first_due_date?: string;
   historical_entry?: boolean;
   migration_entry?: boolean;
@@ -269,6 +283,7 @@ const cooperativeLoanTables = [
   db.journalEntries,
   db.journalEntryLines,
   db.activityLogs,
+  db.syncQueue,
 ];
 
 const assertActiveMember = (member: CooperativeMember | undefined) => {
@@ -322,9 +337,14 @@ const createCooperativeLoanPaymentGroupNumber = (date: Date, paymentGroupId: str
 
 const getMandatorySavingBalanceId = (memberId: string) => `${memberId}:WAJIB`;
 const AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX = 'AUTO_MANDATORY_SAVING_RETURN_PAYMENT';
+const LOAN_DISBURSEMENT_MANDATORY_SAVING_TOKEN_PREFIX = 'LOAN_DISBURSEMENT_MANDATORY_SAVING';
 
 const getAutoMandatorySavingReturnToken = (paymentId: string) => (
   `[${AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX}:${paymentId}]`
+);
+
+const getLoanDisbursementMandatorySavingToken = (loanId: string) => (
+  `[${LOAN_DISBURSEMENT_MANDATORY_SAVING_TOKEN_PREFIX}:${loanId}]`
 );
 
 const resolveLoanCalculationType = (
@@ -366,9 +386,15 @@ const addBillingInterval = (
   return date.add(intervalIndex, 'month');
 };
 
-const updateFinanceBalanceForDisbursement = async (amount: number, now: string) => {
+const updateFinanceBalanceForDisbursement = async (
+  amount: number,
+  now: string,
+  isReversal = false,
+) => {
   const currentFinanceBalance = await db.financeBalance.get('current');
-  const nextFinanceBalance = roundCurrency(Number(currentFinanceBalance?.amount || 0) - amount);
+  const nextFinanceBalance = roundCurrency(
+    Number(currentFinanceBalance?.amount || 0) + (isReversal ? amount : -amount),
+  );
 
   await db.financeBalance.put({
     id: 'current',
@@ -1078,7 +1104,7 @@ const recordMandatorySavingDeduction = async ({
     cash_account_name: cashAccount.name,
     payment_method: paymentMethod,
     payment_channel: paymentChannel,
-    notes: `Potongan simpanan wajib dari pencairan pinjaman ${loan.loan_number}.`,
+    notes: `Potongan simpanan wajib dari pencairan pinjaman ${loan.loan_number}. ${getLoanDisbursementMandatorySavingToken(loan.id)}`,
     created_at: now,
     updated_at: now,
     created_by: currentUser?.id,
@@ -1355,6 +1381,91 @@ export const rejectCooperativeLoan = async (
   return rejectedLoan;
 };
 
+const DELETABLE_COOPERATIVE_LOAN_STATUSES = new Set<CooperativeLoan['status']>([
+  'DRAFT',
+  'SUBMITTED',
+  'APPROVED',
+  'REJECTED',
+]);
+
+const assertCooperativeLoanCanBeDeleted = async (loan: CooperativeLoan) => {
+  if (!DELETABLE_COOPERATIVE_LOAN_STATUSES.has(loan.status)) {
+    throw new Error('Pinjaman yang sudah dicairkan tidak boleh dihapus. Gunakan reversal pencairan.');
+  }
+
+  const [installmentCount, paymentCount, collectionEventCount] = await Promise.all([
+    db.cooperativeLoanInstallments.where('loan_id').equals(loan.id).count(),
+    db.cooperativeLoanPayments.where('loan_id').equals(loan.id).count(),
+    db.cooperativeLoanCollectionEvents.where('loan_id').equals(loan.id).count(),
+  ]);
+  if (installmentCount > 0 || paymentCount > 0 || collectionEventCount > 0) {
+    throw new Error('Pengajuan memiliki data angsuran atau transaksi terkait dan tidak aman untuk dihapus.');
+  }
+  if (loan.finance_transaction_id || loan.journal_entry_id || loan.disbursed_at) {
+    throw new Error('Pengajuan sudah memiliki jejak pencairan dan tidak aman untuk dihapus.');
+  }
+};
+
+export const deleteCooperativeLoanApplication = async (
+  input: DeleteCooperativeLoanApplicationInput,
+): Promise<CooperativeLoan> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
+  const parsedInput = cooperativeLoanDeletionSchema.parse({ reason: input.reason });
+
+  const currentLoan = await db.cooperativeLoans.get(input.loan_id);
+  if (!currentLoan) {
+    throw new Error('Pengajuan pinjaman tidak ditemukan.');
+  }
+  await assertCooperativeLoanCanBeDeleted(currentLoan);
+
+  const postgresHealth = await postgresAdapter.healthCheck();
+  if (postgresHealth.available) {
+    const deletedRemotely = await cooperativeLoanPostgresAdapter.delete(input.loan_id);
+    if (!deletedRemotely) {
+      const remoteLoan = await cooperativeLoanPostgresAdapter.get(input.loan_id);
+      if (remoteLoan) {
+        throw new Error('Pengajuan di server sudah berubah atau memiliki data terkait sehingga tidak dapat dihapus.');
+      }
+    }
+  } else if (postgresHealth.status !== 'unconfigured') {
+    throw new Error(
+      'PostgreSQL sedang tidak dapat dijangkau. Penghapusan diblokir agar pengajuan tidak muncul kembali saat sinkronisasi.',
+    );
+  }
+
+  let deletedLoan: CooperativeLoan | undefined;
+  await db.transaction('rw', cooperativeLoanTables, async () => {
+    const loan = await db.cooperativeLoans.get(input.loan_id);
+    if (!loan) {
+      throw new Error('Pengajuan pinjaman tidak ditemukan.');
+    }
+    await assertCooperativeLoanCanBeDeleted(loan);
+
+    const pendingQueueIds = await db.syncQueue
+      .filter((item) => item.entity === 'cooperativeLoans' && item.entity_id === loan.id)
+      .primaryKeys();
+    if (pendingQueueIds.length > 0) {
+      await db.syncQueue.bulkDelete(pendingQueueIds);
+    }
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'COOPERATIVE_LOAN_APPLICATION_DELETED',
+      entity: 'cooperativeLoans',
+      entity_id: loan.id,
+      description: `${currentUser?.name ?? 'User'} menghapus pengajuan pinjaman ${loan.loan_number}. Alasan: ${parsedInput.reason}`,
+    });
+    await db.cooperativeLoans.delete(loan.id);
+    deletedLoan = loan;
+  });
+
+  if (!deletedLoan) {
+    throw new Error('Pengajuan pinjaman gagal dihapus.');
+  }
+  return deletedLoan;
+};
+
 type ParsedCooperativeLoanDisbursementInput = ReturnType<typeof cooperativeLoanDisbursementSchema.parse>;
 
 interface CooperativeLoanDisbursementWriteResult {
@@ -1441,17 +1552,25 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
     .where('[employee_id+area_id]')
     .equals([officer.id, member.area_id])
     .toArray() as EmployeeCollectionSchedule[];
+  const scheduledDisbursementDate = isMigration
+    ? disbursementDate
+    : parsedInput.scheduled_disbursement_date ?? disbursementDate;
+  if (
+    dayjs(scheduledDisbursementDate).tz().isBefore(dayjs(disbursementDate).tz(), 'day')
+  ) {
+    throw new Error('Tanggal jadwal resmi tidak boleh sebelum tanggal pencairan aktual.');
+  }
   const resolvedSchedule = resolveCollectionScheduleForDisbursement({
     schedules: collectionSchedules,
-    value: disbursementDate,
+    value: scheduledDisbursementDate,
     allowHistoricalFallback: historicalMode,
   });
   if (!resolvedSchedule) {
     const weekday = getCollectionWeekdayLabel(
-      ((dayjs(disbursementDate).tz().day() || 7)) as 1 | 2 | 3 | 4 | 5 | 6 | 7,
+      ((dayjs(scheduledDisbursementDate).tz().day() || 7)) as 1 | 2 | 3 | 4 | 5 | 6 | 7,
     );
     throw new Error(
-      `Pencairan tidak dapat dilakukan pada hari ${weekday}. Pilih tanggal sesuai jadwal penagihan ${officer.name} untuk area ${member.area_name ?? member.area_code ?? member.area_id}.`,
+      `Jadwal resmi tidak dapat dipilih pada hari ${weekday}. Pilih tanggal sesuai jadwal penagihan ${officer.name} untuk area ${member.area_name ?? member.area_code ?? member.area_id}.`,
     );
   }
   if (
@@ -1483,27 +1602,26 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
   if (fieldCashContext && cashAccount && disbursementAmount > 0) {
     await assertSufficientCashAccountBalance(cashAccount.id, disbursementAmount);
   }
-  const firstDueDate = historicalMode && parsedInput.first_due_date
+  const firstDueDate = parsedInput.first_due_date
     ? parsedInput.first_due_date
     : getFirstScheduledDueDate({
-        disbursementDate: dayjs(disbursementDate).tz(),
+        disbursementDate: dayjs(scheduledDisbursementDate).tz(),
         frequency: resolveLoanBillingFrequency(loan),
         weekday: resolvedSchedule.weekday,
       }).toISOString();
   if (!dayjs(firstDueDate).tz().isAfter(dayjs(disbursementDate).tz(), 'day')) {
     throw new Error('Jatuh tempo pertama harus setelah tanggal pencairan.');
   }
-  const collectionWeekday = historicalMode && parsedInput.first_due_date
-    ? getIsoWeekday(firstDueDate)
-    : resolvedSchedule.weekday;
-  const collectionSchedule = historicalMode
-    ? findCollectionScheduleByWeekday(collectionSchedules, firstDueDate)
-    : resolvedSchedule.schedule;
-  if (!collectionSchedule) {
+  if (dayjs(firstDueDate).tz().isBefore(dayjs(scheduledDisbursementDate).tz(), 'day')) {
+    throw new Error('Jatuh tempo pertama tidak boleh sebelum tanggal jadwal resmi.');
+  }
+  if (getIsoWeekday(firstDueDate) !== resolvedSchedule.weekday) {
     throw new Error(
-      `Jatuh tempo pertama harus mengikuti salah satu hari jadwal penagihan ${officer.name}.`,
+      `Jatuh tempo pertama harus mengikuti hari ${getCollectionWeekdayLabel(resolvedSchedule.weekday)} sesuai jadwal resmi ${officer.name}.`,
     );
   }
+  const collectionWeekday = resolvedSchedule.weekday;
+  const collectionSchedule = resolvedSchedule.schedule;
   if (!isMigration) {
     await updateFinanceBalanceForDisbursement(Math.max(0, disbursementAmount), now);
   }
@@ -1512,6 +1630,7 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
     ...loan,
     status: 'DISBURSED' as const,
     disbursed_at: disbursementDate,
+    scheduled_disbursement_date: scheduledDisbursementDate,
     officer_id: officer.id,
     officer_name: officer.name,
     officer_position: officer.position,
@@ -1632,7 +1751,9 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
     entity_id: loan.id,
     description: isMigration
       ? `${currentUser?.name ?? 'User'} mencatat migrasi pinjaman ${loan.loan_number} (sisa pokok ${nextDisbursedLoan.outstanding_principal_amount}).`
-      : `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)}.`,
+      : dayjs(disbursementDate).tz().isSame(dayjs(scheduledDisbursementDate).tz(), 'day')
+        ? `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)}.`
+        : `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)} pada ${dayjs(disbursementDate).tz().format('DD/MM/YYYY')}, jadwal resmi ${dayjs(scheduledDisbursementDate).tz().format('DD/MM/YYYY')}.`,
   });
 
   if (!disbursedLoan) {
@@ -1693,6 +1814,210 @@ export const disburseCooperativeLoan = async (
     loan: result.loan,
     installments: result.installments,
   };
+};
+
+const findLoanDisbursementMandatorySaving = async (loan: CooperativeLoan) => {
+  const token = getLoanDisbursementMandatorySavingToken(loan.id);
+  const legacyDescription = `Potongan simpanan wajib dari pencairan pinjaman ${loan.loan_number}.`;
+
+  return db.cooperativeSavingTransactions
+    .where('member_id')
+    .equals(loan.member_id)
+    .filter((transaction) => (
+      transaction.saving_type === 'WAJIB' &&
+      transaction.transaction_type === 'DEPOSIT' &&
+      (
+        Boolean(transaction.notes?.includes(token)) ||
+        transaction.notes?.trim() === legacyDescription
+      )
+    ))
+    .first();
+};
+
+export const reverseCooperativeLoanDisbursement = async (
+  input: ReverseCooperativeLoanDisbursementInput,
+): Promise<CooperativeLoan> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_DISBURSE');
+  const parsedInput = cooperativeLoanDisbursementReversalSchema.parse({ reason: input.reason });
+  const now = new Date().toISOString();
+  let reversedLoan: CooperativeLoan | undefined;
+  let reversalFinanceTransaction: FinanceTransaction | undefined;
+  let mandatorySavingReversal: CooperativeSavingTransaction | undefined;
+  let mandatorySavingOriginal: CooperativeSavingTransaction | undefined;
+  let mandatorySavingBalance: CooperativeMemberSavingBalance | undefined;
+
+  await db.transaction('rw', cooperativeLoanTables, async () => {
+    const loan = await db.cooperativeLoans.get(input.loan_id);
+    if (!loan) {
+      throw new Error('Pinjaman koperasi tidak ditemukan.');
+    }
+    if (loan.status !== 'DISBURSED' && loan.status !== 'PAID_OFF') {
+      throw new Error('Hanya pinjaman yang sudah dicairkan dan belum direversal yang dapat direversal.');
+    }
+
+    const postedPayment = await db.cooperativeLoanPayments
+      .where('loan_id')
+      .equals(loan.id)
+      .filter((payment) => (
+        payment.status === 'POSTED' &&
+        payment.payment_type !== 'REVERSAL' &&
+        !payment.reversal_of_payment_id
+      ))
+      .first();
+    if (postedPayment) {
+      throw new Error(
+        'Pencairan tidak dapat direversal karena sudah ada pembayaran aktif. Reversal seluruh pembayaran terlebih dahulu.',
+      );
+    }
+
+    const originalFinanceTransaction = loan.finance_transaction_id
+      ? await db.financeTransactions.get(loan.finance_transaction_id)
+      : undefined;
+    if (!loan.is_migration && !originalFinanceTransaction) {
+      throw new Error('Transaksi kas pencairan tidak ditemukan. Reversal diblokir untuk mencegah selisih kas.');
+    }
+
+    if (originalFinanceTransaction && originalFinanceTransaction.amount > 0) {
+      const reversalFieldCashContext = await getFieldCashContextForCashAccount(
+        originalFinanceTransaction.cash_account_id,
+      );
+      reversalFinanceTransaction = withPendingFinanceTransactionSync({
+        id: crypto.randomUUID(),
+        type: 'INCOME',
+        category: FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT,
+        amount: originalFinanceTransaction.amount,
+        description: `Reversal pencairan pinjaman ${loan.loan_number}. ${parsedInput.reason}`,
+        created_at: now,
+        reference_id: originalFinanceTransaction.id,
+        payment_method: originalFinanceTransaction.payment_method,
+        payment_channel: originalFinanceTransaction.payment_channel,
+        cash_account_id: originalFinanceTransaction.cash_account_id,
+        cash_account_code: originalFinanceTransaction.cash_account_code,
+        cash_account_name: originalFinanceTransaction.cash_account_name,
+        account_id: originalFinanceTransaction.account_id,
+        account_code: originalFinanceTransaction.account_code,
+        account_name: originalFinanceTransaction.account_name,
+        account_type: originalFinanceTransaction.account_type,
+        ...(reversalFieldCashContext
+          ? buildFieldCashFinanceTransactionFields(reversalFieldCashContext, 'LOAN_DISBURSEMENT')
+          : {}),
+      }, currentUser, now);
+      await db.financeTransactions.add(reversalFinanceTransaction);
+      await updateFinanceBalanceForDisbursement(originalFinanceTransaction.amount, now, true);
+    }
+
+    const mandatorySavingAmount = roundCurrency(Number(loan.mandatory_saving_amount || 0));
+    if (
+      resolveLoanDeductionMethod(loan) === 'DEDUCT_ON_DISBURSEMENT' &&
+      mandatorySavingAmount > 0 &&
+      !loan.is_migration
+    ) {
+      const originalSaving = await findLoanDisbursementMandatorySaving(loan);
+      if (!originalSaving || originalSaving.status !== 'POSTED') {
+        throw new Error(
+          'Setoran simpanan wajib dari pencairan tidak ditemukan atau sudah direversal. Reversal pinjaman diblokir.',
+        );
+      }
+
+      mandatorySavingBalance = await updateMandatorySavingBalance({
+        memberId: loan.member_id,
+        memberNumber: loan.member_number,
+        memberName: loan.member_name,
+        amountDelta: -mandatorySavingAmount,
+        now,
+      });
+      const reversalTransactionId = crypto.randomUUID();
+      mandatorySavingReversal = withPendingCooperativeSync({
+        id: reversalTransactionId,
+        member_id: originalSaving.member_id,
+        member_number: originalSaving.member_number,
+        member_name: originalSaving.member_name,
+        saving_type: originalSaving.saving_type,
+        transaction_type: 'REVERSAL' as const,
+        amount: mandatorySavingAmount,
+        transaction_date: now,
+        status: 'POSTED' as const,
+        cash_account_id: originalSaving.cash_account_id,
+        cash_account_code: originalSaving.cash_account_code,
+        cash_account_name: originalSaving.cash_account_name,
+        payment_method: originalSaving.payment_method,
+        payment_channel: originalSaving.payment_channel,
+        reversal_of_transaction_id: originalSaving.id,
+        notes: `Reversal simpanan wajib pencairan ${loan.loan_number}. ${parsedInput.reason}`,
+        created_at: now,
+        updated_at: now,
+        created_by: currentUser?.id,
+        created_by_name: currentUser?.name,
+        updated_by: currentUser?.id,
+        updated_by_name: currentUser?.name,
+      });
+      mandatorySavingOriginal = withPendingCooperativeSync({
+        ...originalSaving,
+        status: 'REVERSED' as const,
+        reversal_transaction_id: reversalTransactionId,
+        reversed_at: now,
+        reversal_reason: parsedInput.reason,
+        updated_at: now,
+        updated_by: currentUser?.id,
+        updated_by_name: currentUser?.name,
+      });
+      await db.cooperativeSavingTransactions.add(mandatorySavingReversal);
+      await db.cooperativeSavingTransactions.put(mandatorySavingOriginal);
+    }
+
+    const reversalEntries = loan.journal_entry_id
+      ? await reverseCooperativeLoanDisbursementJournal(
+          loan,
+          `Reversal pencairan pinjaman ${loan.loan_number}: ${parsedInput.reason}`,
+          currentUser,
+          now,
+        )
+      : [];
+    const nextLoan: CooperativeLoan = withPendingCooperativeSync({
+      ...loan,
+      status: 'REVERSED' as const,
+      outstanding_principal_amount: 0,
+      outstanding_interest_amount: 0,
+      outstanding_penalty_amount: 0,
+      reversal_finance_transaction_id: reversalFinanceTransaction?.id,
+      reversal_journal_entry_id: reversalEntries[0]?.id,
+      reversed_at: now,
+      reversal_reason: parsedInput.reason,
+      updated_at: now,
+      updated_by: currentUser?.id,
+      updated_by_name: currentUser?.name,
+    });
+    await db.cooperativeLoans.put(nextLoan);
+    reversedLoan = nextLoan;
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'COOPERATIVE_LOAN_DISBURSEMENT_REVERSED',
+      entity: 'cooperativeLoans',
+      entity_id: loan.id,
+      description: `${currentUser?.name ?? 'User'} reversal pencairan pinjaman ${loan.loan_number}. Alasan: ${parsedInput.reason}`,
+    });
+  });
+
+  if (!reversedLoan) {
+    throw new Error('Reversal pencairan pinjaman gagal disimpan.');
+  }
+  if (reversalFinanceTransaction) {
+    await enqueueFinanceTransactionsSync([reversalFinanceTransaction], 'create');
+  }
+  if (mandatorySavingReversal) {
+    await enqueueCooperativeSavingTransactionsSync([mandatorySavingReversal], 'create');
+  }
+  if (mandatorySavingOriginal) {
+    await enqueueCooperativeSavingTransactionsSync([mandatorySavingOriginal], 'update');
+  }
+  if (mandatorySavingBalance) {
+    await enqueueCooperativeMemberSavingBalancesSync([mandatorySavingBalance], 'update');
+  }
+  await enqueueCooperativeLoansSync([reversedLoan], 'update');
+
+  return reversedLoan;
 };
 
 export interface MigrateCooperativeLoanInput {

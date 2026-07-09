@@ -41,6 +41,8 @@ export interface CooperativeInstallmentBookReportRow {
   id: string;
   loan_id: string;
   loan_number: string;
+  actual_disbursement_date: string;
+  scheduled_disbursement_date: string;
   loan_date: string;
   member_id: string;
   member_number: string;
@@ -120,7 +122,9 @@ const summarizeRows = (
   ending_balance: roundCurrency(summary.ending_balance + row.ending_balance),
 }), createEmptySummary());
 
-const getLoanDate = (loan: CooperativeLoan) => loan.disbursed_at ?? loan.application_date;
+const getLoanDate = (loan: CooperativeLoan) => (
+  loan.scheduled_disbursement_date ?? loan.disbursed_at ?? loan.application_date
+);
 
 const isReportableLoan = (loan: CooperativeLoan) => (
   loan.status === 'DISBURSED' || loan.status === 'PAID_OFF'
@@ -332,6 +336,8 @@ const createReportRow = ({
     id: loan.id,
     loan_id: loan.id,
     loan_number: loan.loan_number,
+    actual_disbursement_date: loan.disbursed_at ?? loan.application_date,
+    scheduled_disbursement_date: loanDate,
     loan_date: loanDate,
     member_id: loan.member_id,
     member_number: loan.member_number,

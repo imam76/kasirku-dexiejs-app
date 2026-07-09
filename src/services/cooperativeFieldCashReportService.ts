@@ -27,6 +27,7 @@ export interface CooperativeFieldCashReportRow {
   storting_saving_deposit_reversal_amount: number;
   total_storting_amount: number;
   loan_disbursement_amount: number;
+  loan_disbursement_reversal_amount: number;
   saving_withdrawal_amount: number;
   saving_withdrawal_reversal_amount: number;
   iptw_payout_amount: number;
@@ -143,6 +144,7 @@ export const getCooperativeFieldCashReport = async (
     const stortingSavingDeposit = sumByKind(employeeTransactions, 'STORTING_SAVING_DEPOSIT', 'INCOME');
     const stortingSavingDepositReversal = sumByKind(employeeTransactions, 'STORTING_SAVING_DEPOSIT', 'EXPENSE');
     const loanDisbursement = sumByKind(employeeTransactions, 'LOAN_DISBURSEMENT', 'EXPENSE');
+    const loanDisbursementReversal = sumByKind(employeeTransactions, 'LOAN_DISBURSEMENT', 'INCOME');
     const savingWithdrawal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL', 'EXPENSE');
     const savingWithdrawalReversal = sumByKind(employeeTransactions, 'SAVING_WITHDRAWAL', 'INCOME');
     const iptwPayout = sumByKind(employeeTransactions, 'IPTW_PAYOUT', 'EXPENSE');
@@ -166,7 +168,8 @@ export const getCooperativeFieldCashReport = async (
       storting_saving_deposit_amount: stortingSavingDeposit,
       storting_saving_deposit_reversal_amount: stortingSavingDepositReversal,
       total_storting_amount: roundCurrency(stortingLoanPayment + stortingSavingDeposit),
-      loan_disbursement_amount: loanDisbursement,
+      loan_disbursement_amount: roundCurrency(loanDisbursement - loanDisbursementReversal),
+      loan_disbursement_reversal_amount: loanDisbursementReversal,
       saving_withdrawal_amount: savingWithdrawal,
       saving_withdrawal_reversal_amount: savingWithdrawalReversal,
       iptw_payout_amount: iptwPayout,

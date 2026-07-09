@@ -1210,6 +1210,7 @@ export interface RemoteCooperativeLoanDto {
   rejected_by_name?: string | null;
   rejection_reason?: string | null;
   disbursed_at?: string | null;
+  scheduled_disbursement_date?: string | null;
   officer_id?: string | null;
   officer_name?: string | null;
   officer_position?: string | null;
@@ -1225,6 +1226,10 @@ export interface RemoteCooperativeLoanDto {
   payment_channel?: string | null;
   finance_transaction_id?: string | null;
   journal_entry_id?: string | null;
+  reversal_finance_transaction_id?: string | null;
+  reversal_journal_entry_id?: string | null;
+  reversed_at?: string | null;
+  reversal_reason?: string | null;
   disbursement_notes?: string | null;
   notes?: string | null;
   is_migration?: boolean | null;
@@ -2243,6 +2248,11 @@ export const cooperativeLoanPostgresAdapter = {
   async upsert(input: RemoteCooperativeLoanDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteCooperativeLoanDto>('postgres_upsert_cooperative_loan', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return false;
+    return invoke<boolean>('postgres_delete_cooperative_loan_application', { id });
   },
 };
 

@@ -139,7 +139,8 @@ type LoanContext = {
   employee: EmployeeSnapshot;
   employee_key: string;
   collection_weekday: CooperativeCollectionWeekday;
-  disbursed_date_key: string;
+  actual_disbursed_date_key: string;
+  scheduled_start_date_key: string;
   paid_off_date_key?: string;
   contractual_installment_amount: number;
 };
@@ -312,7 +313,7 @@ const getLoanCollectionWeekday = (
   schedules: EmployeeCollectionSchedule[],
 ) => {
   if (loan.collection_weekday) return loan.collection_weekday;
-  const disbursedAt = loan.disbursed_at as string;
+  const disbursedAt = loan.scheduled_disbursement_date ?? loan.disbursed_at as string;
   return findScheduleWeekday({
     employeeId: employee.employee_id,
     areaId: loan.area_id ?? member?.area_id,
@@ -499,12 +500,12 @@ const addAmount = (amountByKey: Map<string, number>, key: string, amount: number
 };
 
 const isLoanActiveBeforeDate = (loan: LoanContext, dateKey: string) => (
-  loan.disbursed_date_key < dateKey &&
+  loan.scheduled_start_date_key < dateKey &&
   (!loan.paid_off_date_key || loan.paid_off_date_key >= dateKey)
 );
 
 const isLoanActiveAfterDate = (loan: LoanContext, dateKey: string) => (
-  loan.disbursed_date_key <= dateKey &&
+  loan.scheduled_start_date_key <= dateKey &&
   (!loan.paid_off_date_key || loan.paid_off_date_key > dateKey)
 );
 
@@ -513,7 +514,7 @@ const isLoanActiveInMonth = (
   startDateKey: string,
   endDateKey: string,
 ) => (
-  loan.disbursed_date_key <= endDateKey &&
+  loan.scheduled_start_date_key <= endDateKey &&
   (!loan.paid_off_date_key || loan.paid_off_date_key >= startDateKey)
 );
 
@@ -692,7 +693,10 @@ export const getCooperativeDailyTargetReport = async (
         employee,
         collectionSchedules,
       ),
-      disbursed_date_key: getDateKey(loan.disbursed_at as string),
+      actual_disbursed_date_key: getDateKey(loan.disbursed_at as string),
+      scheduled_start_date_key: getDateKey(
+        loan.scheduled_disbursement_date ?? loan.disbursed_at as string,
+      ),
       paid_off_date_key: paidOffDateByLoanId.get(loan.id),
       contractual_installment_amount: getCooperativeLoanContractualInstallmentAmount(
         loan,
@@ -708,7 +712,7 @@ export const getCooperativeDailyTargetReport = async (
     allLoanContextsByMemberId.set(context.loan.member_id, current);
   });
   allLoanContextsByMemberId.forEach((contexts) => contexts.sort((left, right) => (
-    left.disbursed_date_key.localeCompare(right.disbursed_date_key) ||
+    left.scheduled_start_date_key.localeCompare(right.scheduled_start_date_key) ||
     left.loan.loan_number.localeCompare(right.loan.loan_number)
   )));
 
@@ -750,7 +754,12 @@ export const getCooperativeDailyTargetReport = async (
       registerTrackDate(
         context.employee,
         context.collection_weekday,
-        context.disbursed_date_key,
+        context.scheduled_start_date_key,
+      );
+      registerTrackDate(
+        context.employee,
+        context.collection_weekday,
+        context.actual_disbursed_date_key,
       );
       if (context.paid_off_date_key) {
         registerTrackDate(
@@ -794,11 +803,14 @@ export const getCooperativeDailyTargetReport = async (
 
   loanContexts.forEach((context) => {
     if (!matchesEmployeeFilter(context.employee.employee_id, filters.employeeId)) return;
-    if (context.disbursed_date_key >= startDateKey && context.disbursed_date_key <= endDateKey) {
+    if (
+      context.actual_disbursed_date_key >= startDateKey &&
+      context.actual_disbursed_date_key <= endDateKey
+    ) {
       addAmount(
         dropByBucketKey,
         getBucketKey(
-          context.disbursed_date_key,
+          context.actual_disbursed_date_key,
           context.employee.employee_id,
           context.collection_weekday,
         ),
@@ -850,7 +862,7 @@ export const getCooperativeDailyTargetReport = async (
       const activeAfter = trackLoans.filter((context) => isLoanActiveAfterDate(context, dateKey));
       const activeBeforeMemberIds = new Set(activeBefore.map((context) => context.loan.member_id));
       const activeAfterMemberIds = new Set(activeAfter.map((context) => context.loan.member_id));
-      const incomingLoans = trackLoans.filter((context) => context.disbursed_date_key === dateKey);
+      const incomingLoans = trackLoans.filter((context) => context.scheduled_start_date_key === dateKey);
       const outgoingLoans = trackLoans.filter((context) => context.paid_off_date_key === dateKey);
       const incomingMemberIds = new Set(incomingLoans.map((context) => context.loan.member_id));
       const newMemberIds = new Set<string>();
@@ -858,7 +870,7 @@ export const getCooperativeDailyTargetReport = async (
 
       incomingMemberIds.forEach((memberId) => {
         const memberLoans = allLoanContextsByMemberId.get(memberId) ?? [];
-        const hasEarlierLoan = memberLoans.some((context) => context.disbursed_date_key < dateKey);
+        const hasEarlierLoan = memberLoans.some((context) => context.scheduled_start_date_key < dateKey);
         if (!hasEarlierLoan) {
           newMemberIds.add(memberId);
         } else if (!activeBeforeMemberIds.has(memberId)) {

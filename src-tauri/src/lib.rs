@@ -146,6 +146,7 @@ pub fn run() {
             commands::cooperative_commands::postgres_list_cooperative_loans,
             commands::cooperative_commands::postgres_get_cooperative_loan,
             commands::cooperative_commands::postgres_upsert_cooperative_loan,
+            commands::cooperative_commands::postgres_delete_cooperative_loan_application,
             commands::cooperative_commands::postgres_list_cooperative_loan_installments,
             commands::cooperative_commands::postgres_get_cooperative_loan_installment,
             commands::cooperative_commands::postgres_upsert_cooperative_loan_installment,

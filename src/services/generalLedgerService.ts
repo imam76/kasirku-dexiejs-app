@@ -1648,6 +1648,20 @@ export const postCooperativeLoanDisbursementJournal = async (
   });
 };
 
+export const reverseCooperativeLoanDisbursementJournal = async (
+  loan: CooperativeLoan,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  entryDate?: string,
+) => reverseJournalEntriesForSource({
+  source_type: 'COOPERATIVE_LOAN',
+  source_id: loan.id,
+  source_event: SOURCE_EVENTS.COOPERATIVE_LOAN_DISBURSED,
+  reason,
+  entry_date: entryDate,
+  actor,
+});
+
 export const postCooperativeLoanPaymentJournal = async (
   payment: CooperativeLoanPayment,
   actor?: Pick<AuthUser, 'id' | 'name'> | null,

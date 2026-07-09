@@ -2100,4 +2100,20 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       await tx.table<Tax, string>('taxes').bulkPut(migratedTaxes);
     }
   });
+
+  this.version(81).stores({}).upgrade(async (tx) => {
+    const loans = await tx.table<CooperativeLoan, string>('cooperativeLoans').toArray();
+    const migratedLoans = loans
+      .filter((loan) => loan.disbursed_at && !loan.scheduled_disbursement_date)
+      .map((loan) => ({
+        ...loan,
+        scheduled_disbursement_date: loan.disbursed_at,
+        sync_status: 'pending' as const,
+        sync_error: undefined,
+      }));
+
+    if (migratedLoans.length > 0) {
+      await tx.table<CooperativeLoan, string>('cooperativeLoans').bulkPut(migratedLoans);
+    }
+  });
 }

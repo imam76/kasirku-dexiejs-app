@@ -184,6 +184,7 @@ type LoanFixtureInput = {
   area: CooperativeArea;
   weekday: 1 | 3 | 4;
   disbursedAt: string;
+  scheduledAt?: string;
   principal: number;
   installmentAmount: number;
   status?: 'DISBURSED' | 'PAID_OFF';
@@ -197,6 +198,7 @@ const createLoan = ({
   area,
   weekday,
   disbursedAt,
+  scheduledAt,
   principal,
   installmentAmount,
   status = 'DISBURSED',
@@ -224,6 +226,7 @@ const createLoan = ({
     status,
     application_date: iso(disbursedAt),
     disbursed_at: iso(disbursedAt),
+    scheduled_disbursement_date: iso(scheduledAt ?? disbursedAt),
     officer_id: officer.id,
     officer_name: officer.name,
     officer_position: officer.position,
@@ -330,6 +333,25 @@ const loanFixtures = [
     officer: secondEmployee,
   }),
 ];
+
+const earlyDisbursementMember = createMember(
+  'e2e-target-member-early-disbursement',
+  'TH-007',
+  'Anggota Pencairan Awal',
+  areas[0],
+  '2026-06-04',
+);
+const earlyDisbursementLoan = createLoan({
+  id: 'e2e-target-loan-early-disbursement',
+  number: 'TH-PJ-007',
+  member: earlyDisbursementMember,
+  area: areas[0],
+  weekday: 1,
+  disbursedAt: '2026-06-04',
+  scheduledAt: '2026-06-08',
+  principal: 120_000,
+  installmentAmount: 60_000,
+});
 
 const payments: CooperativeLoanPayment[] = [
   {
@@ -496,6 +518,39 @@ export async function seedDailyTargetCloseBookResetFixture(page: Page) {
       };
     });
   }, closeBookTransactions);
+
+  await page.reload();
+}
+
+export async function seedEarlyDisbursementTargetFixture(page: Page) {
+  await seedDailyTargetFixture(page);
+
+  await page.evaluate(async (recordsByStore) => {
+    const storeNames = Object.keys(recordsByStore);
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('KasirkuDB');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(storeNames, 'readwrite');
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+
+        Object.entries(recordsByStore).forEach(([storeName, records]) => {
+          const store = transaction.objectStore(storeName);
+          records.forEach((record) => store.put(record));
+        });
+      };
+    });
+  }, {
+    cooperativeMembers: [earlyDisbursementMember],
+    cooperativeLoans: [earlyDisbursementLoan.loan],
+    cooperativeLoanInstallments: [earlyDisbursementLoan.installment],
+  });
 
   await page.reload();
 }

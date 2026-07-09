@@ -218,6 +218,7 @@ const createLoanFixture = ({
     approved_at: disbursementDate,
     approved_by_name: 'E2E Owner',
     disbursed_at: disbursementDate,
+    scheduled_disbursement_date: disbursementDate,
     officer_id: employee.id,
     officer_name: employee.name,
     officer_position: employee.position,

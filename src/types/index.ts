@@ -1954,6 +1954,7 @@ export interface CooperativeLoan {
   rejected_by_name?: string;
   rejection_reason?: string;
   disbursed_at?: string;
+  scheduled_disbursement_date?: string;
   officer_id?: string;
   officer_name?: string;
   officer_position?: string;
@@ -1969,6 +1970,10 @@ export interface CooperativeLoan {
   payment_channel?: string;
   finance_transaction_id?: string;
   journal_entry_id?: string;
+  reversal_finance_transaction_id?: string;
+  reversal_journal_entry_id?: string;
+  reversed_at?: string;
+  reversal_reason?: string;
   /** true = pinjaman migrasi/saldo awal: tidak menjurnal & tidak menggerakkan kas. Piutang masuk lewat saldo awal. */
   is_migration?: boolean;
   disbursement_notes?: string;

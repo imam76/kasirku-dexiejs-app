@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { App, Button, Card, Form, Input, Select } from 'antd';
 import { Banknote, Plus } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
@@ -27,6 +27,7 @@ export default function CooperativeLoanManagement() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
   const { can } = useAuth();
+  const canManageLoan = can('COOPERATIVE_LOAN_MANAGE');
   const canDisburseLoan = can('COOPERATIVE_LOAN_DISBURSE');
   const [form] = Form.useForm<CooperativeLoanFormValues>();
   const [disbursementForm] = Form.useForm<CooperativeLoanDisbursementFormValues>();
@@ -55,10 +56,19 @@ export default function CooperativeLoanManagement() {
     createLoan,
     approveLoan,
     rejectLoan,
+    deleteLoanApplication,
     disburseLoan,
     disburseLoanViaFieldCash,
+    reverseDisbursement,
     isMutating,
   } = useCooperativeLoans();
+  const disbursementCollectionSchedules = useMemo(() => {
+    const member = members.find((item) => item.id === disbursingLoan?.member_id);
+    return employeeCollectionSchedules.filter((schedule) => (
+      schedule.employee_id === member?.officer_id &&
+      schedule.area_id === member?.area_id
+    ));
+  }, [disbursingLoan?.member_id, employeeCollectionSchedules, members]);
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -95,7 +105,8 @@ export default function CooperativeLoanManagement() {
       schedule.employee_id === member?.officer_id &&
       schedule.area_id === member?.area_id
     ));
-    const disbursementDate = getNextCollectionDate(schedules, dayjs().tz(), true);
+    const disbursementDate = dayjs().tz();
+    const scheduledDisbursementDate = getNextCollectionDate(schedules, disbursementDate, true);
     const responsibleAccountFields = getResponsibleFieldCashAccountFields(member, fieldCashEmployees, paymentAccounts);
     const responsibleCashAccountId = responsibleAccountFields.cash_account_id;
     const netDisbursementAmount = loan.net_disbursement_amount ?? loan.principal_amount;
@@ -110,17 +121,18 @@ export default function CooperativeLoanManagement() {
       message.error(t('cooperative.loans.fieldCashAccountMissing'));
       return;
     }
-    const firstDueDate = disbursementDate
+    const firstDueDate = scheduledDisbursementDate
       ? getFirstScheduledDueDate({
-          disbursementDate,
+          disbursementDate: scheduledDisbursementDate,
           frequency: loan.billing_frequency ?? 'MONTHLY',
           weekday: schedules.find((schedule) => schedule.weekday === (
-            disbursementDate.day() === 0 ? 7 : disbursementDate.day()
+            scheduledDisbursementDate.day() === 0 ? 7 : scheduledDisbursementDate.day()
           ))?.weekday ?? schedules[0]?.weekday ?? 1,
         })
       : undefined;
     disbursementForm.setFieldsValue({
       disbursement_date: disbursementDate,
+      scheduled_disbursement_date: scheduledDisbursementDate,
       first_due_date: firstDueDate,
       payment_method: 'TUNAI',
       remember_cash_account: true,
@@ -232,6 +244,83 @@ export default function CooperativeLoanManagement() {
     });
   };
 
+  const handleDelete = (loan: CooperativeLoan) => {
+    let deletionReason = '';
+
+    modal.confirm({
+      title: t('cooperative.loans.deleteConfirmTitle'),
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">
+            {t('cooperative.loans.deleteConfirmContent', { loanNumber: loan.loan_number })}
+          </p>
+          <Input.TextArea
+            rows={3}
+            placeholder={t('cooperative.loans.deleteReasonPlaceholder')}
+            onChange={(event) => {
+              deletionReason = event.target.value;
+            }}
+          />
+        </div>
+      ),
+      okText: t('cooperative.loans.delete'),
+      okButtonProps: { danger: true, loading: isMutating },
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        const reason = deletionReason.trim();
+        if (reason.length < 3) {
+          throw new Error(t('cooperative.loans.deleteReasonRequired'));
+        }
+        try {
+          await deleteLoanApplication({ loan_id: loan.id, reason });
+          if (selectedLoan?.id === loan.id) setSelectedLoan(null);
+          message.success(t('cooperative.loans.deleteSuccess'));
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : t('cooperative.loans.deleteFailed'));
+          throw error;
+        }
+      },
+    });
+  };
+
+  const handleReverseDisbursement = (loan: CooperativeLoan) => {
+    let reversalReason = '';
+
+    modal.confirm({
+      title: t('cooperative.loans.reverseConfirmTitle'),
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">
+            {t('cooperative.loans.reverseConfirmContent', { loanNumber: loan.loan_number })}
+          </p>
+          <Input.TextArea
+            rows={3}
+            placeholder={t('cooperative.loans.reverseReasonPlaceholder')}
+            onChange={(event) => {
+              reversalReason = event.target.value;
+            }}
+          />
+        </div>
+      ),
+      okText: t('cooperative.loans.reverseDisbursement'),
+      okButtonProps: { danger: true, loading: isMutating },
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        const reason = reversalReason.trim();
+        if (reason.length < 3) {
+          throw new Error(t('cooperative.loans.reverseReasonRequired'));
+        }
+        try {
+          await reverseDisbursement({ loan_id: loan.id, reason });
+          message.success(t('cooperative.loans.reverseSuccess'));
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : t('cooperative.loans.reverseFailed'));
+          throw error;
+        }
+      },
+    });
+  };
+
   const handleDisburse = async (values: CooperativeLoanDisbursementFormValues) => {
     if (!disbursingLoan) return;
 
@@ -243,6 +332,7 @@ export default function CooperativeLoanManagement() {
         ? await disburseLoanViaFieldCash({
             loan_id: disbursingLoan.id,
             disbursement_date: values.disbursement_date?.toISOString(),
+            scheduled_disbursement_date: values.scheduled_disbursement_date?.toISOString(),
             first_due_date: values.first_due_date?.toISOString(),
             historical_entry: values.disbursement_date?.isBefore(dayjs().tz(), 'day'),
             field_cash_account_id: values.cash_account_id,
@@ -254,6 +344,7 @@ export default function CooperativeLoanManagement() {
         : await disburseLoan({
             loan_id: disbursingLoan.id,
             disbursement_date: values.disbursement_date?.toISOString(),
+            scheduled_disbursement_date: values.scheduled_disbursement_date?.toISOString(),
             first_due_date: values.first_due_date?.toISOString(),
             historical_entry: values.disbursement_date?.isBefore(dayjs().tz(), 'day'),
             payment_method: values.payment_method,
@@ -315,7 +406,10 @@ export default function CooperativeLoanManagement() {
         onView={setSelectedLoan}
         onApprove={handleApprove}
         onReject={handleReject}
+        onDelete={handleDelete}
         onDisburse={openDisbursementModal}
+        onReverseDisbursement={handleReverseDisbursement}
+        canManage={canManageLoan}
         canDisburse={canDisburseLoan}
         loading={isMutating}
       />
@@ -337,10 +431,7 @@ export default function CooperativeLoanManagement() {
         financeAccounts={financeAccounts}
         fieldCashAccountIds={fieldCashAccountIds}
         fieldCashBalances={fieldCashBalances}
-        collectionSchedules={employeeCollectionSchedules.filter((schedule) => (
-          schedule.employee_id === members.find((member) => member.id === disbursingLoan?.member_id)?.officer_id &&
-          schedule.area_id === members.find((member) => member.id === disbursingLoan?.member_id)?.area_id
-        ))}
+        collectionSchedules={disbursementCollectionSchedules}
         onCancel={closeDisbursementModal}
         onSubmit={handleDisburse}
       />

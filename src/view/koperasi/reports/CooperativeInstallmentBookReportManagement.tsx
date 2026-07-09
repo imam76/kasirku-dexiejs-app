@@ -105,6 +105,7 @@ export default function CooperativeInstallmentBookReportManagement() {
     title: t('cooperative.installmentBook.title'),
     resort: t('cooperative.installmentBook.resort'),
     date: t('cooperative.installmentBook.table.date'),
+    scheduledDate: t('cooperative.installmentBook.table.scheduledDate'),
     memberNumber: t('cooperative.installmentBook.table.memberNumber'),
     name: t('cooperative.installmentBook.table.name'),
     principal: t('cooperative.installmentBook.table.principal'),
@@ -147,6 +148,7 @@ export default function CooperativeInstallmentBookReportManagement() {
       rows.push([categoryLabels[section.category]]);
       rows.push([
         labels.date,
+        labels.scheduledDate,
         labels.memberNumber,
         'L/B',
         labels.name,
@@ -158,7 +160,8 @@ export default function CooperativeInstallmentBookReportManagement() {
       ]);
       section.rows.forEach((row) => {
         rows.push([
-          dayjs(row.loan_date).tz().format('YYYY-MM-DD'),
+          dayjs(row.actual_disbursement_date).tz().format('YYYY-MM-DD'),
+          dayjs(row.scheduled_disbursement_date).tz().format('YYYY-MM-DD'),
           row.member_number,
           row.member_category,
           row.member_name,
@@ -171,6 +174,7 @@ export default function CooperativeInstallmentBookReportManagement() {
       });
       rows.push([
         t('common.total'),
+        '',
         section.summary.row_count,
         '',
         '',
