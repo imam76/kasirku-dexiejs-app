@@ -27,6 +27,7 @@ export interface CooperativeReadSyncResult {
   fetched: number;
   inserted: number;
   updated: number;
+  deleted: number;
   skipped: number;
 }
 
@@ -43,6 +44,7 @@ const EMPTY_READ_SYNC_RESULT: CooperativeReadSyncResult = {
   fetched: 0,
   inserted: 0,
   updated: 0,
+  deleted: 0,
   skipped: 0,
 };
 
@@ -436,6 +438,42 @@ export const mergeRemoteCooperativeLoansIntoDexie = async (
   return result;
 };
 
+const reconcileDeletedRemoteCooperativeLoans = async (
+  remoteLoans: RemoteCooperativeLoanDto[],
+): Promise<number> => {
+  const remoteLoanIds = new Set(remoteLoans.map((loan) => loan.id));
+  let deleted = 0;
+
+  await db.transaction('rw', [db.cooperativeLoans, db.syncQueue], async () => {
+    const [localLoans, loanQueueItems] = await Promise.all([
+      db.cooperativeLoans.toArray(),
+      db.syncQueue.where('entity').equals('cooperativeLoans').toArray(),
+    ]);
+    const protectedLoanIds = new Set(
+      loanQueueItems
+        .filter((item) => item.status !== 'synced')
+        .map((item) => item.entity_id),
+    );
+    const deletedLoanIds = localLoans
+      .filter((loan) => !remoteLoanIds.has(loan.id))
+      .filter((loan) => !hasLocalUnsyncedChanges(loan))
+      .filter((loan) => !protectedLoanIds.has(loan.id))
+      .filter((loan) => (
+        loan.sync_status === 'synced' ||
+        Boolean(loan.last_synced_at) ||
+        Boolean(loan.remote_updated_at)
+      ))
+      .map((loan) => loan.id);
+
+    if (deletedLoanIds.length > 0) {
+      await db.cooperativeLoans.bulkDelete(deletedLoanIds);
+      deleted = deletedLoanIds.length;
+    }
+  });
+
+  return deleted;
+};
+
 export const mergeRemoteCooperativeLoanInstallmentsIntoDexie = async (
   remoteInstallments: RemoteCooperativeLoanInstallmentDto[],
   syncedAt = new Date().toISOString(),
@@ -502,11 +540,15 @@ export const refreshCooperativeDataFromPostgres = async (): Promise<CooperativeR
 
   isRefreshingCooperativeDataFromPostgres = true;
   try {
+    const remoteLoans = await cooperativeLoanPostgresAdapter.list();
+    const loans = await mergeRemoteCooperativeLoansIntoDexie(remoteLoans);
+    loans.deleted = await reconcileDeletedRemoteCooperativeLoans(remoteLoans);
+
     return {
       members: await mergeRemoteCooperativeMembersIntoDexie(await cooperativeMemberPostgresAdapter.list()),
       savingTransactions: await mergeRemoteCooperativeSavingTransactionsIntoDexie(await cooperativeSavingTransactionPostgresAdapter.list()),
       savingBalances: await mergeRemoteCooperativeMemberSavingBalancesIntoDexie(await cooperativeMemberSavingBalancePostgresAdapter.list()),
-      loans: await mergeRemoteCooperativeLoansIntoDexie(await cooperativeLoanPostgresAdapter.list()),
+      loans,
       loanInstallments: await mergeRemoteCooperativeLoanInstallmentsIntoDexie(await cooperativeLoanInstallmentPostgresAdapter.list()),
       loanPayments: await mergeRemoteCooperativeLoanPaymentsIntoDexie(await cooperativeLoanPaymentPostgresAdapter.list()),
     };
