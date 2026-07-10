@@ -219,6 +219,7 @@ export default function CooperativeMemberFormModal({
             showSearch
             optionFilterProp="label"
             placeholder={t('cooperative.members.form.officerPlaceholder')}
+            data-testid="koperasi-member-officer-select"
             onChange={handleOfficerChange}
             options={employees.map((employee) => ({
               value: employee.id,

@@ -169,13 +169,15 @@ export const cooperativeLoanDisbursementSchema = z.object({
   scheduled_disbursement_date: z.string().optional(),
   first_due_date: z.string().optional(),
   historical_entry: z.boolean().optional().default(false),
-  // Mode migrasi: mencatat posisi pinjaman berjalan per cut-off tanpa jurnal & tanpa kas.
+  // Mode saldo awal: mencatat posisi pinjaman aktif per cut-off tanpa jurnal & tanpa kas.
   migration_entry: z.boolean().optional().default(false),
   // Cara 1 (bunga flat): angsuran 1..N ditandai lunas historis.
   settled_through_installment_number: z.number().int().nonnegative().optional(),
   // Cara 2 (anuitas/menurun/bayar lompat): sisa pokok/bunga dinyatakan eksplisit.
   migration_outstanding_principal_amount: z.number().nonnegative().optional(),
   migration_outstanding_interest_amount: z.number().nonnegative().optional(),
+  // Cara 3: sisa total tagihan. Service akan mengalokasikan pembayaran historis ke kartu angsuran.
+  migration_outstanding_total_amount: z.number().nonnegative().optional(),
   payment_method: z.enum(cooperativeLoanPaymentMethodValues).optional(),
   cash_account_id: z.string().optional(),
   payment_channel: z.string().optional(),
@@ -184,21 +186,23 @@ export const cooperativeLoanDisbursementSchema = z.object({
   if (!value.migration_entry) return;
   const hasSettledInstallment = value.settled_through_installment_number !== undefined;
   const hasOutstandingPrincipal = value.migration_outstanding_principal_amount !== undefined;
-  if (!hasSettledInstallment && !hasOutstandingPrincipal) {
+  const hasOutstandingTotal = value.migration_outstanding_total_amount !== undefined;
+  if (!hasSettledInstallment && !hasOutstandingPrincipal && !hasOutstandingTotal) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['settled_through_installment_number'],
-      message: 'Migrasi wajib mengisi salah satu: jumlah angsuran yang sudah lunas atau sisa pokok.',
+      message: 'Migrasi wajib mengisi salah satu: jumlah angsuran yang sudah lunas, sisa pokok, atau sisa total tagihan.',
     });
     return;
   }
-  // Mode posisi tidak boleh dicampur: pilih salah satu antara "lunas s/d angsuran" ATAU "sisa pokok"
+  // Mode posisi tidak boleh dicampur: pilih salah satu antara "lunas s/d angsuran",
+  // "sisa pokok", atau "sisa total tagihan"
   // supaya penetapan paid_* historis tidak ambigu.
-  if (hasSettledInstallment && hasOutstandingPrincipal) {
+  if ([hasSettledInstallment, hasOutstandingPrincipal, hasOutstandingTotal].filter(Boolean).length > 1) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['migration_outstanding_principal_amount'],
-      message: 'Pilih salah satu mode posisi migrasi: jumlah angsuran lunas atau sisa pokok, tidak keduanya.',
+      message: 'Pilih salah satu mode posisi migrasi: jumlah angsuran lunas, sisa pokok, atau sisa total tagihan.',
     });
   }
   // Sisa bunga hanya relevan pada mode sisa pokok.

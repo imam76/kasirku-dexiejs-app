@@ -3,11 +3,12 @@ import { loginAsBootstrappedOwner } from './helpers/auth';
 import {
   expectMigrationRejectedForInvalidSettledInstallment,
   migrateLoan,
+  migrateLoanByRemainingTotal,
 } from './helpers/koperasi';
 import { migrationFixtureMember, seedMigrationFixture } from './helpers/koperasiMigration';
 
-test.describe.serial('migrasi pinjaman koperasi', () => {
-  test('LOAN-MIG-01 - migrasi mencatat sisa pokok & menandai angsuran lunas historis tanpa jurnal', async ({ page }) => {
+test.describe.serial('input saldo awal pinjaman koperasi', () => {
+  test('LOAN-MIG-01 - saldo awal mencatat sisa pokok & menandai angsuran lunas historis tanpa jurnal', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
     await seedMigrationFixture(page);
 
@@ -108,5 +109,30 @@ test.describe.serial('migrasi pinjaman koperasi', () => {
       settledThrough: '20',
       disbursementWeekday: migrationFixtureMember.officerWeekday,
     });
+  });
+
+  test('LOAN-MIG-05 - sisa total tagihan otomatis menandai angsuran lunas historis', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await seedMigrationFixture(page);
+
+    await migrateLoanByRemainingTotal(page, migrationFixtureMember, {
+      principal: '2000000',
+      loanServiceRate: '20',
+      adminFeeRate: '5',
+      mandatorySavingRate: '5',
+      installmentCount: '12',
+      remainingTotal: '2000000',
+      disbursementWeekday: migrationFixtureMember.officerWeekday,
+      expectedOutstanding: 'Rp 1.666.666,66',
+    });
+
+    await page.goto('/koperasi/angsuran');
+    await expect(page.getByText('Pembayaran Angsuran', { exact: true })).toBeVisible();
+    await expect(page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-1`)).toBeHidden();
+    await expect(page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-2`)).toBeHidden();
+
+    const thirdInstallment = page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-3`);
+    await expect(thirdInstallment).toBeVisible();
+    await expect(thirdInstallment).toContainText('Rp 200.000');
   });
 });

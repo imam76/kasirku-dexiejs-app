@@ -836,6 +836,66 @@ pub async fn delete_cooperative_loan_application(
     Ok(deleted_id.is_some())
 }
 
+/// Menghapus saldo awal pinjaman (loan migrasi) beserta kartu angsurannya secara atomic.
+///
+/// Berbeda dengan `delete_cooperative_loan_application` yang hanya menerima loan belum cair
+/// tanpa angsuran, loan migrasi berstatus DISBURSED/PAID_OFF dan MEMILIKI kartu angsuran yang
+/// ditandai lunas historis. Karena migrasi tidak menyentuh kas/jurnal/payment, penghapusannya
+/// aman: buang angsuran lalu loan dalam satu transaksi. Setiap DELETE memicu trigger NOTIFY
+/// sehingga device lain menerima perubahan realtime.
+///
+/// Guard: hanya loan `is_migration = TRUE` tanpa payment maupun collection event yang boleh
+/// dihapus. Bila ada jejak tersebut, kembalikan `false` (tolak) agar pemanggil membatalkan.
+pub async fn delete_cooperative_loan_migration(
+    pool: &PgPool,
+    id: String,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let deletable_loan_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT loan.id
+        FROM cooperative_loans AS loan
+        WHERE loan.id = $1
+          AND loan.is_migration IS TRUE
+          AND NOT EXISTS (
+              SELECT 1 FROM cooperative_loan_payments payment
+              WHERE payment.loan_id = loan.id
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM cooperative_loan_collection_events event
+              WHERE event.loan_id = loan.id
+          )
+        FOR UPDATE
+        "#,
+    )
+    .bind(&id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let loan_id = match deletable_loan_id {
+        Some(loan_id) => loan_id,
+        None => {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+    };
+
+    sqlx::query("DELETE FROM cooperative_loan_installments WHERE loan_id = $1")
+        .bind(&loan_id)
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query("DELETE FROM cooperative_loans WHERE id = $1")
+        .bind(&loan_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+
+    Ok(true)
+}
+
 pub async fn upsert_cooperative_loan(
     pool: &PgPool,
     input: CooperativeLoanDto,

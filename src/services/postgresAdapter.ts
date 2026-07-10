@@ -2254,6 +2254,11 @@ export const cooperativeLoanPostgresAdapter = {
     if (!isTauriRuntime()) return false;
     return invoke<boolean>('postgres_delete_cooperative_loan_application', { id });
   },
+
+  async deleteMigration(id: string) {
+    if (!isTauriRuntime()) return false;
+    return invoke<boolean>('postgres_delete_cooperative_loan_migration', { id });
+  },
 };
 
 export const cooperativeLoanInstallmentPostgresAdapter = {
