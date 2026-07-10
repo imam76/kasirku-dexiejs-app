@@ -69,7 +69,7 @@ export default function CooperativeLoanMigrationManagement() {
       application_date: today,
       disbursement_date: today,
       migration_input_mode: 'DETAILED',
-      interest_calculation_type: 'MONTHLY_RATE',
+      interest_calculation_type: 'TOTAL_PERCENT',
       interest_rate_per_month: 1,
       tenor_months: 12,
       loan_service_rate: 0,
@@ -77,9 +77,9 @@ export default function CooperativeLoanMigrationManagement() {
       mandatory_saving_rate: 0,
       installment_count: 12,
       billing_frequency: 'WEEKLY',
-      settled_mode: 'INSTALLMENT',
+      settled_mode: 'TOTAL',
       ...loanRatePreference,
-      remember_total_percent_rates: Boolean(loanRatePreference),
+      remember_total_percent_rates: true,
     });
     setModalOpen(true);
   };

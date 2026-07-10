@@ -422,18 +422,17 @@ export default function CooperativeLoanMigrationModal({
               </Form.Item>
             </div>
             {totalPayablePreview && (
-              <Descriptions size="small" bordered column={{ xs: 1, sm: 2 }} className="mb-4">
+              <Descriptions size="small" bordered column={1} className="mb-4">
                 <Descriptions.Item label={t('cooperative.loans.preview.installmentAmount')}>
                   {formatCurrencyInput(totalPayablePreview.installmentAmount)}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('cooperative.loans.migration.preview.paidThrough')}>
-                  {totalPayablePreview.paidThrough}
+                  {`ke ${totalPayablePreview.paidThrough}`}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('cooperative.loans.migration.preview.partialInstallment')}>
-                  {totalPayablePreview.partialInstallment ?? '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label={t('cooperative.loans.migration.preview.partialAmount')}>
-                  {formatCurrencyInput(totalPayablePreview.partialAmount)}
+                  {totalPayablePreview.partialInstallment != null
+                    ? `ke ${totalPayablePreview.partialInstallment} (${formatCurrencyInput(totalPayablePreview.partialAmount)})`
+                    : '-'}
                 </Descriptions.Item>
               </Descriptions>
             )}
@@ -732,18 +731,17 @@ export default function CooperativeLoanMigrationModal({
                   />
                 </Form.Item>
                 {totalPayablePreview && (
-                  <Descriptions size="small" bordered column={{ xs: 1, sm: 2 }} className="mb-4">
+                  <Descriptions size="small" bordered column={1} className="mb-4">
                     <Descriptions.Item label={t('cooperative.loans.preview.installmentAmount')}>
                       {formatCurrencyInput(totalPayablePreview.installmentAmount)}
                     </Descriptions.Item>
                     <Descriptions.Item label={t('cooperative.loans.migration.preview.paidThrough')}>
-                      {totalPayablePreview.paidThrough}
+                      {`ke ${totalPayablePreview.paidThrough}`}
                     </Descriptions.Item>
                     <Descriptions.Item label={t('cooperative.loans.migration.preview.partialInstallment')}>
-                      {totalPayablePreview.partialInstallment ?? '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label={t('cooperative.loans.migration.preview.partialAmount')}>
-                      {formatCurrencyInput(totalPayablePreview.partialAmount)}
+                      {totalPayablePreview.partialInstallment != null
+                        ? `ke ${totalPayablePreview.partialInstallment} (${formatCurrencyInput(totalPayablePreview.partialAmount)})`
+                        : '-'}
                     </Descriptions.Item>
                   </Descriptions>
                 )}
