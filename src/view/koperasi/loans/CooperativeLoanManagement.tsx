@@ -15,6 +15,7 @@ import { getDefaultCashAccountId } from '@/utils/chartOfAccounts/getDefaultCashA
 import { getResponsibleFieldCashAccountFields } from '@/utils/koperasi/fieldCashDefaults';
 import {
   getFirstScheduledDueDate,
+  getIsoWeekday,
   getNextCollectionDate,
 } from '@/utils/koperasi/collectionSchedule';
 import CooperativeLoanDetailDrawer from './CooperativeLoanDetailDrawer';
@@ -107,6 +108,9 @@ export default function CooperativeLoanManagement() {
     ));
     const disbursementDate = dayjs().tz();
     const scheduledDisbursementDate = getNextCollectionDate(schedules, disbursementDate, true);
+    const collectionWeekday = scheduledDisbursementDate
+      ? getIsoWeekday(scheduledDisbursementDate)
+      : schedules[0]?.weekday;
     const responsibleAccountFields = getResponsibleFieldCashAccountFields(member, fieldCashEmployees, paymentAccounts);
     const responsibleCashAccountId = responsibleAccountFields.cash_account_id;
     const netDisbursementAmount = loan.net_disbursement_amount ?? loan.principal_amount;
@@ -125,13 +129,12 @@ export default function CooperativeLoanManagement() {
       ? getFirstScheduledDueDate({
           disbursementDate: scheduledDisbursementDate,
           frequency: loan.billing_frequency ?? 'MONTHLY',
-          weekday: schedules.find((schedule) => schedule.weekday === (
-            scheduledDisbursementDate.day() === 0 ? 7 : scheduledDisbursementDate.day()
-          ))?.weekday ?? schedules[0]?.weekday ?? 1,
+          weekday: collectionWeekday ?? 1,
         })
       : undefined;
     disbursementForm.setFieldsValue({
       disbursement_date: disbursementDate,
+      collection_weekday: collectionWeekday,
       scheduled_disbursement_date: scheduledDisbursementDate,
       first_due_date: firstDueDate,
       payment_method: 'TUNAI',

@@ -71,7 +71,7 @@ export default function OpeningBalanceForm({
     }));
   };
 
-  // Jembatan migrasi pinjaman: pinjaman migrasi tidak menjurnal, jadi piutangnya harus masuk
+  // Jembatan saldo awal pinjaman: pinjaman migrasi tidak menjurnal, jadi piutangnya harus masuk
   // lewat baris Piutang Pinjaman (1120) di saldo awal ini.
   const migrationReceivableTotal = useLiveQuery(
     async () => {

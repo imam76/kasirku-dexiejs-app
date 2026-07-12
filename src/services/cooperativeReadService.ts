@@ -499,6 +499,48 @@ export const mergeRemoteCooperativeLoanInstallmentsIntoDexie = async (
   return result;
 };
 
+/**
+ * Membuang kartu angsuran lokal yang sudah tidak ada di remote — mis. setelah saldo awal pinjaman
+ * (loan migrasi) dihapus dari device lain. Tanpa ini, penghapusan loan direkonsiliasi
+ * (`reconcileDeletedRemoteCooperativeLoans`) tetapi angsurannya tertinggal yatim secara lokal.
+ * Angsuran dengan perubahan lokal belum tersinkron atau masih diantre sengaja dilindungi.
+ */
+const reconcileDeletedRemoteCooperativeLoanInstallments = async (
+  remoteInstallments: RemoteCooperativeLoanInstallmentDto[],
+): Promise<number> => {
+  const remoteInstallmentIds = new Set(remoteInstallments.map((installment) => installment.id));
+  let deleted = 0;
+
+  await db.transaction('rw', [db.cooperativeLoanInstallments, db.syncQueue], async () => {
+    const [localInstallments, installmentQueueItems] = await Promise.all([
+      db.cooperativeLoanInstallments.toArray(),
+      db.syncQueue.where('entity').equals('cooperativeLoanInstallments').toArray(),
+    ]);
+    const protectedInstallmentIds = new Set(
+      installmentQueueItems
+        .filter((item) => item.status !== 'synced')
+        .map((item) => item.entity_id),
+    );
+    const deletedInstallmentIds = localInstallments
+      .filter((installment) => !remoteInstallmentIds.has(installment.id))
+      .filter((installment) => !hasLocalUnsyncedChanges(installment))
+      .filter((installment) => !protectedInstallmentIds.has(installment.id))
+      .filter((installment) => (
+        installment.sync_status === 'synced' ||
+        Boolean(installment.last_synced_at) ||
+        Boolean(installment.remote_updated_at)
+      ))
+      .map((installment) => installment.id);
+
+    if (deletedInstallmentIds.length > 0) {
+      await db.cooperativeLoanInstallments.bulkDelete(deletedInstallmentIds);
+      deleted = deletedInstallmentIds.length;
+    }
+  });
+
+  return deleted;
+};
+
 export const mergeRemoteCooperativeLoanPaymentsIntoDexie = async (
   remotePayments: RemoteCooperativeLoanPaymentDto[],
   syncedAt = new Date().toISOString(),
@@ -544,12 +586,16 @@ export const refreshCooperativeDataFromPostgres = async (): Promise<CooperativeR
     const loans = await mergeRemoteCooperativeLoansIntoDexie(remoteLoans);
     loans.deleted = await reconcileDeletedRemoteCooperativeLoans(remoteLoans);
 
+    const remoteInstallments = await cooperativeLoanInstallmentPostgresAdapter.list();
+    const loanInstallments = await mergeRemoteCooperativeLoanInstallmentsIntoDexie(remoteInstallments);
+    loanInstallments.deleted = await reconcileDeletedRemoteCooperativeLoanInstallments(remoteInstallments);
+
     return {
       members: await mergeRemoteCooperativeMembersIntoDexie(await cooperativeMemberPostgresAdapter.list()),
       savingTransactions: await mergeRemoteCooperativeSavingTransactionsIntoDexie(await cooperativeSavingTransactionPostgresAdapter.list()),
       savingBalances: await mergeRemoteCooperativeMemberSavingBalancesIntoDexie(await cooperativeMemberSavingBalancePostgresAdapter.list()),
       loans,
-      loanInstallments: await mergeRemoteCooperativeLoanInstallmentsIntoDexie(await cooperativeLoanInstallmentPostgresAdapter.list()),
+      loanInstallments,
       loanPayments: await mergeRemoteCooperativeLoanPaymentsIntoDexie(await cooperativeLoanPaymentPostgresAdapter.list()),
     };
   } finally {

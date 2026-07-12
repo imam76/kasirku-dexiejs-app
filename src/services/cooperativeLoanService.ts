@@ -163,6 +163,7 @@ export interface DisburseCooperativeLoanInput {
   settled_through_installment_number?: number;
   migration_outstanding_principal_amount?: number;
   migration_outstanding_interest_amount?: number;
+  migration_outstanding_total_amount?: number;
   payment_method?: PaymentMethod;
   cash_account_id?: string;
   payment_channel?: string;
@@ -280,6 +281,7 @@ const cooperativeLoanTables = [
   db.financeAccountMappings,
   db.enabledModules,
   db.generalLedgerSetting,
+  db.accountingPeriods,
   db.journalEntries,
   db.journalEntryLines,
   db.activityLogs,
@@ -881,25 +883,29 @@ export interface CooperativeLoanMigrationState {
   outstandingPrincipalAmount?: number;
   /** Opsional: sisa bunga eksplisit. Bila kosong, bunga mengikuti pokok yang lunas penuh. */
   outstandingInterestAmount?: number;
+  /** Sisa total tagihan: pembayaran historis dialokasikan ke kartu angsuran berurutan. */
+  outstandingTotalAmount?: number;
 }
 
 const MIGRATION_EPSILON = 0.01;
 
 /**
  * Menolak input posisi migrasi yang tidak mungkin secara bisnis, memakai data loan sebagai batas:
- * settled installment <= jumlah angsuran, sisa pokok <= pokok, sisa bunga <= total bunga.
+ * settled installment <= jumlah angsuran, sisa pokok <= pokok, sisa bunga <= total bunga,
+ * sisa total tagihan <= total tagihan pinjaman.
  * Service jadi sumber kebenaran sehingga caller non-UI pun ikut terjaga.
  */
 const assertMigrationPositionWithinLoan = (
   loan: Pick<
     CooperativeLoan,
-    'principal_amount' | 'total_interest_amount' | 'installment_count' | 'tenor_months'
+    'principal_amount' | 'total_interest_amount' | 'total_payable_amount' | 'installment_count' | 'tenor_months'
   >,
   input: Pick<
     ParsedCooperativeLoanDisbursementInput,
     | 'settled_through_installment_number'
     | 'migration_outstanding_principal_amount'
     | 'migration_outstanding_interest_amount'
+    | 'migration_outstanding_total_amount'
   >,
 ) => {
   const installmentCount = resolveLoanInstallmentCount(loan);
@@ -925,6 +931,14 @@ const assertMigrationPositionWithinLoan = (
   ) {
     throw new Error('Sisa bunga migrasi tidak boleh melebihi total bunga pinjaman.');
   }
+
+  const outstandingTotal = input.migration_outstanding_total_amount;
+  if (
+    outstandingTotal !== undefined &&
+    outstandingTotal > roundCurrency(Number(loan.total_payable_amount || 0)) + MIGRATION_EPSILON
+  ) {
+    throw new Error('Sisa total tagihan migrasi tidak boleh melebihi total tagihan pinjaman.');
+  }
 };
 
 /**
@@ -938,7 +952,25 @@ const applyMigrationPaidState = (
 ): CooperativeLoanInstallment[] => {
   const ordered = [...installments].sort((a, b) => a.installment_number - b.installment_number);
 
-  if (migration.outstandingPrincipalAmount !== undefined) {
+  if (migration.outstandingTotalAmount !== undefined) {
+    const totalPayable = roundCurrency(
+      ordered.reduce((sum, row) => (
+        sum +
+        Number(row.principal_amount || 0) +
+        Number(row.interest_amount || 0) +
+        Number(row.penalty_amount || 0)
+      ), 0),
+    );
+    const paidTotalAmount = roundCurrency(Math.max(0, totalPayable - migration.outstandingTotalAmount));
+    const allocationRows = paidTotalAmount > MIGRATION_EPSILON
+      ? allocateLoanPaymentAcrossInstallments(ordered, paidTotalAmount)
+      : [];
+    for (const { installment, allocation } of allocationRows) {
+      installment.paid_principal_amount = allocation.principal_amount;
+      installment.paid_interest_amount = allocation.interest_amount;
+      installment.paid_penalty_amount = allocation.penalty_amount;
+    }
+  } else if (migration.outstandingPrincipalAmount !== undefined) {
     const totalPrincipal = roundCurrency(
       ordered.reduce((sum, row) => sum + Number(row.principal_amount || 0), 0),
     );
@@ -1466,6 +1498,116 @@ export const deleteCooperativeLoanApplication = async (
   return deletedLoan;
 };
 
+export interface DeleteCooperativeLoanMigrationInput {
+  loan_id: string;
+  reason: string;
+}
+
+/**
+ * Menolak penghapusan saldo awal yang tidak aman: hanya loan `is_migration` yang boleh, dan hanya
+ * bila belum ada CooperativeLoanPayment atau event penagihan yang menempel. Angsuran migrasi yang
+ * ditandai lunas historis (paid_* tanpa payment) tidak menghalangi hapus — memang itu yang dibuang.
+ */
+const assertCooperativeLoanMigrationCanBeDeleted = async (loan: CooperativeLoan) => {
+  if (!loan.is_migration) {
+    throw new Error('Hanya saldo awal pinjaman (migrasi) yang dapat dihapus lewat menu ini.');
+  }
+  if (loan.status !== 'DISBURSED' && loan.status !== 'PAID_OFF') {
+    throw new Error('Saldo awal pinjaman dengan status ini tidak dapat dihapus.');
+  }
+  if (loan.finance_transaction_id || loan.journal_entry_id) {
+    throw new Error('Saldo awal ini memiliki jejak kas/jurnal sehingga tidak aman dihapus.');
+  }
+
+  const [paymentCount, collectionEventCount] = await Promise.all([
+    db.cooperativeLoanPayments.where('loan_id').equals(loan.id).count(),
+    db.cooperativeLoanCollectionEvents.where('loan_id').equals(loan.id).count(),
+  ]);
+  if (paymentCount > 0 || collectionEventCount > 0) {
+    throw new Error('Saldo awal ini sudah memiliki pembayaran/penagihan. Reversal pembayaran terlebih dahulu.');
+  }
+};
+
+/**
+ * Menghapus saldo awal pinjaman (loan migrasi) beserta seluruh kartu angsuran yang terbentuk.
+ * Dipakai untuk membatalkan input yang salah. Migrasi tidak menggerakkan kas/jurnal/payment
+ * sehingga penghapusannya bersih: cukup buang loan + angsuran, bersihkan antrean sync yang belum
+ * jalan, lalu hapus di Postgres agar tidak muncul kembali saat sinkronisasi. Bila Postgres tidak
+ * dapat dijangkau, penghapusan diblokir (konsisten dengan penghapusan pengajuan pinjaman).
+ */
+export const deleteCooperativeLoanMigration = async (
+  input: DeleteCooperativeLoanMigrationInput,
+): Promise<CooperativeLoan> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_MANAGE');
+  await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_DISBURSE');
+  const parsedInput = cooperativeLoanDeletionSchema.parse({ reason: input.reason });
+
+  const currentLoan = await db.cooperativeLoans.get(input.loan_id);
+  if (!currentLoan) {
+    throw new Error('Saldo awal pinjaman tidak ditemukan.');
+  }
+  await assertCooperativeLoanMigrationCanBeDeleted(currentLoan);
+
+  const postgresHealth = await postgresAdapter.healthCheck();
+  if (postgresHealth.available) {
+    const deletedRemotely = await cooperativeLoanPostgresAdapter.deleteMigration(input.loan_id);
+    if (!deletedRemotely) {
+      const remoteLoan = await cooperativeLoanPostgresAdapter.get(input.loan_id);
+      if (remoteLoan) {
+        throw new Error('Saldo awal di server sudah berubah atau memiliki data terkait sehingga tidak dapat dihapus.');
+      }
+    }
+  } else if (postgresHealth.status !== 'unconfigured') {
+    throw new Error(
+      'PostgreSQL sedang tidak dapat dijangkau. Penghapusan diblokir agar saldo awal tidak muncul kembali saat sinkronisasi.',
+    );
+  }
+
+  let deletedLoan: CooperativeLoan | undefined;
+  await db.transaction('rw', cooperativeLoanTables, async () => {
+    const loan = await db.cooperativeLoans.get(input.loan_id);
+    if (!loan) {
+      throw new Error('Saldo awal pinjaman tidak ditemukan.');
+    }
+    await assertCooperativeLoanMigrationCanBeDeleted(loan);
+
+    const installmentIds = await db.cooperativeLoanInstallments
+      .where('loan_id')
+      .equals(loan.id)
+      .primaryKeys();
+
+    const pendingQueueIds = await db.syncQueue
+      .filter((item) => (
+        (item.entity === 'cooperativeLoans' && item.entity_id === loan.id) ||
+        (item.entity === 'cooperativeLoanInstallments' && installmentIds.includes(item.entity_id))
+      ))
+      .primaryKeys();
+    if (pendingQueueIds.length > 0) {
+      await db.syncQueue.bulkDelete(pendingQueueIds);
+    }
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'COOPERATIVE_LOAN_MIGRATION_DELETED',
+      entity: 'cooperativeLoans',
+      entity_id: loan.id,
+      description: `${currentUser?.name ?? 'User'} menghapus saldo awal pinjaman ${loan.loan_number} beserta ${installmentIds.length} angsuran. Alasan: ${parsedInput.reason}`,
+    });
+
+    if (installmentIds.length > 0) {
+      await db.cooperativeLoanInstallments.bulkDelete(installmentIds);
+    }
+    await db.cooperativeLoans.delete(loan.id);
+    deletedLoan = loan;
+  });
+
+  if (!deletedLoan) {
+    throw new Error('Saldo awal pinjaman gagal dihapus.');
+  }
+  return deletedLoan;
+};
+
 type ParsedCooperativeLoanDisbursementInput = ReturnType<typeof cooperativeLoanDisbursementSchema.parse>;
 
 interface CooperativeLoanDisbursementWriteResult {
@@ -1552,9 +1694,7 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
     .where('[employee_id+area_id]')
     .equals([officer.id, member.area_id])
     .toArray() as EmployeeCollectionSchedule[];
-  const scheduledDisbursementDate = isMigration
-    ? disbursementDate
-    : parsedInput.scheduled_disbursement_date ?? disbursementDate;
+  const scheduledDisbursementDate = parsedInput.scheduled_disbursement_date ?? disbursementDate;
   if (
     dayjs(scheduledDisbursementDate).tz().isBefore(dayjs(disbursementDate).tz(), 'day')
   ) {
@@ -1662,6 +1802,7 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
         settledThroughInstallmentNumber: parsedInput.settled_through_installment_number,
         outstandingPrincipalAmount: parsedInput.migration_outstanding_principal_amount,
         outstandingInterestAmount: parsedInput.migration_outstanding_interest_amount,
+        outstandingTotalAmount: parsedInput.migration_outstanding_total_amount,
       }
     : undefined;
   installments = buildInstallments(nextDisbursedLoan, firstDueDate, now, migrationState);
@@ -1750,7 +1891,7 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
     entity: 'cooperativeLoans',
     entity_id: loan.id,
     description: isMigration
-      ? `${currentUser?.name ?? 'User'} mencatat migrasi pinjaman ${loan.loan_number} (sisa pokok ${nextDisbursedLoan.outstanding_principal_amount}).`
+      ? `${currentUser?.name ?? 'User'} mencatat saldo awal pinjaman ${loan.loan_number} (sisa pokok ${nextDisbursedLoan.outstanding_principal_amount}).`
       : dayjs(disbursementDate).tz().isSame(dayjs(scheduledDisbursementDate).tz(), 'day')
         ? `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)}.`
         : `${currentUser?.name ?? 'User'} mencairkan pinjaman ${loan.loan_number} sebesar ${Math.max(0, disbursementAmount)} pada ${dayjs(disbursementDate).tz().format('DD/MM/YYYY')}, jadwal resmi ${dayjs(scheduledDisbursementDate).tz().format('DD/MM/YYYY')}.`,
@@ -2033,15 +2174,17 @@ export interface MigrateCooperativeLoanInput {
   mandatory_saving_rate?: number;
   application_date?: string;
   disbursement_date: string;
+  scheduled_disbursement_date?: string;
   first_due_date?: string;
   settled_through_installment_number?: number;
   migration_outstanding_principal_amount?: number;
   migration_outstanding_interest_amount?: number;
+  migration_outstanding_total_amount?: number;
   notes?: string;
 }
 
 /**
- * Mencatat pinjaman migrasi (pinjaman berjalan yang dibawa saat cut-off) secara ATOMIC:
+ * Mencatat saldo awal pinjaman (pinjaman aktif yang dibawa saat cut-off) secara ATOMIC:
  * create + approve + disburse-mode-migrasi berjalan dalam satu transaksi Dexie. Bila salah satu
  * tahap gagal (validasi/disburse), tidak ada loan `SUBMITTED`/`APPROVED` parsial yang tertinggal.
  * Queue sync dijalankan hanya setelah transaksi lokal sukses.
@@ -2057,11 +2200,13 @@ export const migrateCooperativeLoan = async (
 
   const parsedDisbursement = cooperativeLoanDisbursementSchema.parse({
     disbursement_date: input.disbursement_date,
+    scheduled_disbursement_date: input.scheduled_disbursement_date,
     first_due_date: input.first_due_date,
     migration_entry: true,
     settled_through_installment_number: input.settled_through_installment_number,
     migration_outstanding_principal_amount: input.migration_outstanding_principal_amount,
     migration_outstanding_interest_amount: input.migration_outstanding_interest_amount,
+    migration_outstanding_total_amount: input.migration_outstanding_total_amount,
     notes: input.notes,
   });
 

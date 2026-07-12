@@ -108,6 +108,38 @@ export const getNextCollectionDate = (
   return undefined;
 };
 
+export const getNextDateForWeekday = (
+  from: dayjs.Dayjs,
+  weekday: CooperativeCollectionWeekday,
+  includeCurrent = true,
+) => {
+  const start = includeCurrent ? from.startOf('day') : from.add(1, 'day').startOf('day');
+
+  for (let offset = 0; offset < 7; offset += 1) {
+    const candidate = start.add(offset, 'day');
+    if (getIsoWeekday(candidate) === weekday) return candidate;
+  }
+
+  return start;
+};
+
+export const getNextCollectionDateForWeekday = (
+  schedules: EmployeeCollectionSchedule[],
+  from: dayjs.Dayjs,
+  weekday: CooperativeCollectionWeekday,
+  includeCurrent = true,
+) => {
+  const start = includeCurrent ? from.startOf('day') : from.add(1, 'day').startOf('day');
+  const matchingSchedules = schedules.filter((schedule) => schedule.weekday === weekday);
+
+  for (let offset = 0; offset <= 366; offset += 1) {
+    const candidate = start.add(offset, 'day');
+    if (findMatchingCollectionSchedule(matchingSchedules, candidate)) return candidate;
+  }
+
+  return undefined;
+};
+
 const addBillingInterval = (
   value: dayjs.Dayjs,
   frequency: CooperativeLoanBillingFrequency,

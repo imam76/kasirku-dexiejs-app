@@ -560,6 +560,8 @@ async fn is_current_migration_schema_compatible(
         1 => Ok(department_table_has_current_columns(pool).await?
             && indexes_exist(pool, &["idx_departments_name", "idx_departments_is_active"]).await?),
         16 | 35 => column_exists(pool, "auth_users", "email").await,
+        26 => cooperative_payment_integrity_schema_exists(pool).await,
+        27 => cooperative_payment_maker_checker_schema_exists(pool).await,
         30 => {
             tables_exist(
                 pool,
@@ -587,6 +589,7 @@ async fn is_current_migration_schema_compatible(
         33 => column_exists(pool, "server_auth_sessions", "employee_id").await,
         34 => function_exists(pool, "kasirku_notify_data_change").await,
         42 => column_exists(pool, "finance_transactions", "field_cash_movement_kind").await,
+        43 => cooperative_payment_groups_schema_exists(pool).await,
         46 => Ok(table_exists(pool, "cash_bank_reconciliations").await?
             && column_exists(pool, "finance_transactions", "cash_bank_reconciliation_id").await?),
         47 => {
@@ -684,6 +687,142 @@ async fn department_table_has_current_columns(pool: &PgPool) -> Result<bool, sql
     .await
 }
 
+async fn cooperative_payment_integrity_schema_exists(pool: &PgPool) -> Result<bool, sqlx::Error> {
+    Ok(tables_exist(
+        pool,
+        &[
+            "server_auth_sessions",
+            "cooperative_posting_accounts",
+            "cooperative_payment_policy",
+            "cooperative_loan_collection_events",
+        ],
+    )
+    .await?
+        && column_exists(pool, "cooperative_loan_payments", "idempotency_key").await?
+        && indexes_exist(
+            pool,
+            &[
+                "idx_cooperative_loan_payments_idempotency_key",
+                "idx_cooperative_collection_events_installment_id",
+                "idx_cooperative_collection_events_loan_id",
+                "idx_cooperative_collection_events_contacted_at",
+            ],
+        )
+        .await?
+        && table_constraints_exist(
+            pool,
+            "cooperative_loan_payments",
+            &[
+                "cooperative_loan_payments_positive_amount_check",
+                "cooperative_loan_payments_status_check",
+                "cooperative_loan_payments_type_check",
+                "cooperative_loan_payments_loan_fk",
+                "cooperative_loan_payments_installment_fk",
+            ],
+        )
+        .await?
+        && table_constraints_exist(
+            pool,
+            "cooperative_loan_installments",
+            &["cooperative_loan_installments_paid_amount_check"],
+        )
+        .await?
+        && table_constraints_exist(
+            pool,
+            "cooperative_loan_collection_events",
+            &[
+                "cooperative_collection_events_installment_fk",
+                "cooperative_collection_events_loan_fk",
+            ],
+        )
+        .await?)
+}
+
+async fn cooperative_payment_maker_checker_schema_exists(
+    pool: &PgPool,
+) -> Result<bool, sqlx::Error> {
+    Ok(
+        table_exists(pool, "cooperative_payment_approval_requests").await?
+            && indexes_exist(
+                pool,
+                &[
+                    "idx_cooperative_payment_approval_idempotency",
+                    "idx_cooperative_payment_pending_reversal",
+                    "idx_cooperative_payment_approval_status",
+                    "idx_cooperative_payment_approval_maker",
+                ],
+            )
+            .await?
+            && table_constraints_exist(
+                pool,
+                "cooperative_payment_approval_requests",
+                &[
+                    "cooperative_payment_approval_action_check",
+                    "cooperative_payment_approval_status_check",
+                    "cooperative_payment_approval_reason_check",
+                    "cooperative_payment_approval_checker_check",
+                    "cooperative_payment_approval_payload_check",
+                    "cooperative_payment_approval_payment_fk",
+                    "cooperative_payment_approval_installment_fk",
+                    "cooperative_payment_approval_result_payment_fk",
+                ],
+            )
+            .await?
+            && table_constraints_exist(
+                pool,
+                "cooperative_loan_installments",
+                &["cooperative_loan_installments_paid_not_over_billed_check"],
+            )
+            .await?
+            && table_constraints_exist(
+                pool,
+                "cooperative_loan_payments",
+                &["cooperative_loan_payments_installment_required_check"],
+            )
+            .await?
+            && table_triggers_exist(
+                pool,
+                "cooperative_loan_payments",
+                &["cooperative_payment_reconciliation_from_payment"],
+            )
+            .await?
+            && table_triggers_exist(
+                pool,
+                "cooperative_loan_installments",
+                &["cooperative_payment_reconciliation_from_installment"],
+            )
+            .await?,
+    )
+}
+
+async fn cooperative_payment_groups_schema_exists(pool: &PgPool) -> Result<bool, sqlx::Error> {
+    Ok(table_has_columns(
+        pool,
+        "cooperative_loan_payments",
+        &[
+            "payment_group_id",
+            "payment_group_number",
+            "payment_group_sequence",
+            "payment_group_total",
+        ],
+    )
+    .await?
+        && indexes_exist(
+            pool,
+            &[
+                "idx_cooperative_loan_payments_payment_group_id",
+                "idx_cooperative_loan_payments_payment_group_number",
+            ],
+        )
+        .await?
+        && table_constraints_exist(
+            pool,
+            "cooperative_loan_payments",
+            &["cooperative_loan_payment_group_sequence_check"],
+        )
+        .await?)
+}
+
 async fn tables_exist(pool: &PgPool, tables: &[&str]) -> Result<bool, sqlx::Error> {
     for table in tables {
         if !table_exists(pool, table).await? {
@@ -697,6 +836,34 @@ async fn tables_exist(pool: &PgPool, tables: &[&str]) -> Result<bool, sqlx::Erro
 async fn indexes_exist(pool: &PgPool, indexes: &[&str]) -> Result<bool, sqlx::Error> {
     for index in indexes {
         if !relation_exists(pool, index).await? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+async fn table_constraints_exist(
+    pool: &PgPool,
+    table: &str,
+    constraints: &[&str],
+) -> Result<bool, sqlx::Error> {
+    for constraint in constraints {
+        if !table_constraint_exists(pool, table, constraint).await? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+async fn table_triggers_exist(
+    pool: &PgPool,
+    table: &str,
+    triggers: &[&str],
+) -> Result<bool, sqlx::Error> {
+    for trigger in triggers {
+        if !table_trigger_exists(pool, table, trigger).await? {
             return Ok(false);
         }
     }
@@ -724,6 +891,55 @@ async fn table_has_columns(
 
 async fn table_exists(pool: &PgPool, table: &str) -> Result<bool, sqlx::Error> {
     relation_exists(pool, table).await
+}
+
+async fn table_constraint_exists(
+    pool: &PgPool,
+    table: &str,
+    constraint: &str,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            JOIN pg_class ON pg_class.oid = pg_constraint.conrelid
+            JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
+            WHERE pg_namespace.nspname = 'public'
+              AND pg_class.relname = $1
+              AND pg_constraint.conname = $2
+        )
+        "#,
+    )
+    .bind(table)
+    .bind(constraint)
+    .fetch_one(pool)
+    .await
+}
+
+async fn table_trigger_exists(
+    pool: &PgPool,
+    table: &str,
+    trigger: &str,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM pg_trigger
+            JOIN pg_class ON pg_class.oid = pg_trigger.tgrelid
+            JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
+            WHERE pg_namespace.nspname = 'public'
+              AND pg_class.relname = $1
+              AND pg_trigger.tgname = $2
+              AND NOT pg_trigger.tgisinternal
+        )
+        "#,
+    )
+    .bind(table)
+    .bind(trigger)
+    .fetch_one(pool)
+    .await
 }
 
 async fn relation_exists(pool: &PgPool, relation: &str) -> Result<bool, sqlx::Error> {

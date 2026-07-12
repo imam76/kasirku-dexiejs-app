@@ -6,18 +6,18 @@ import { useI18n } from '@/hooks/useI18n';
 import dayjs from '@/lib/dayjs';
 import type {
   ChartOfAccount,
+  CooperativeCollectionWeekday,
   CooperativeLoan,
   EmployeeCollectionSchedule,
   PaymentMethod,
 } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import {
-  findCollectionScheduleByWeekday,
-  findMatchingCollectionSchedule,
   getCollectionWeekdayLabel,
   getFirstScheduledDueDate,
   getIsoWeekday,
-  getNextCollectionDate,
+  getNextCollectionDateForWeekday,
+  getNextDateForWeekday,
 } from '@/utils/koperasi/collectionSchedule';
 
 const { TextArea } = Input;
@@ -25,6 +25,7 @@ const { Text } = Typography;
 
 export interface CooperativeLoanDisbursementFormValues {
   disbursement_date: Dayjs;
+  collection_weekday: CooperativeCollectionWeekday;
   scheduled_disbursement_date: Dayjs;
   first_due_date: Dayjs;
   payment_method: PaymentMethod;
@@ -67,6 +68,7 @@ export default function CooperativeLoanDisbursementModal({
   const selectedCashAccountId = Form.useWatch('cash_account_id', form);
   const selectedDroppingAmount = Number(Form.useWatch('dropping_amount', form) || 0);
   const selectedDisbursementDate = Form.useWatch('disbursement_date', form);
+  const selectedCollectionWeekday = Form.useWatch('collection_weekday', form);
   const selectedScheduledDisbursementDate = Form.useWatch('scheduled_disbursement_date', form);
   const historicalEntry = Boolean(
     selectedDisbursementDate?.isBefore(dayjs().tz(), 'day'),
@@ -98,32 +100,54 @@ export default function CooperativeLoanDisbursementModal({
       .filter((schedule) => schedule.is_active)
       .map((schedule) => getCollectionWeekdayLabel(schedule.weekday)),
   )).join(', '), [collectionSchedules]);
+  const collectionWeekdayOptions = useMemo(() => Array.from(
+    new Map(
+      collectionSchedules
+        .filter((schedule) => schedule.is_active)
+        .map((schedule) => [schedule.weekday, schedule] as const),
+    ).values(),
+  )
+    .sort((left, right) => left.weekday - right.weekday)
+    .map((schedule) => ({
+      value: schedule.weekday,
+      label: getCollectionWeekdayLabel(schedule.weekday),
+    })), [collectionSchedules]);
+  const hasCollectionSchedule = collectionWeekdayOptions.length > 0;
 
   useEffect(() => {
-    if (!loan || !selectedDisbursementDate) return;
-    const scheduledDate = getNextCollectionDate(
-      collectionSchedules,
-      selectedDisbursementDate,
-      true,
-    );
-    form.setFieldValue('scheduled_disbursement_date', scheduledDate);
-    if (!scheduledDate) {
+    if (!loan || !hasCollectionSchedule) return;
+    if (collectionWeekdayOptions.some((option) => option.value === selectedCollectionWeekday)) return;
+    form.setFieldValue('collection_weekday', collectionWeekdayOptions[0].value);
+  }, [collectionWeekdayOptions, form, hasCollectionSchedule, loan, selectedCollectionWeekday]);
+
+  useEffect(() => {
+    if (!loan || !selectedDisbursementDate || !selectedCollectionWeekday) {
+      form.setFieldValue('scheduled_disbursement_date', undefined);
       form.setFieldValue('first_due_date', undefined);
       return;
     }
-  }, [collectionSchedules, form, loan, selectedDisbursementDate]);
+    const scheduledDate = historicalEntry
+      ? getNextDateForWeekday(selectedDisbursementDate, selectedCollectionWeekday, true)
+      : getNextCollectionDateForWeekday(
+          collectionSchedules,
+          selectedDisbursementDate,
+          selectedCollectionWeekday,
+          true,
+        );
+    form.setFieldValue('scheduled_disbursement_date', scheduledDate);
+  }, [collectionSchedules, form, historicalEntry, loan, selectedCollectionWeekday, selectedDisbursementDate]);
 
   useEffect(() => {
-    if (!loan || !selectedScheduledDisbursementDate) {
+    if (!loan || !selectedScheduledDisbursementDate || !selectedCollectionWeekday) {
       form.setFieldValue('first_due_date', undefined);
       return;
     }
     form.setFieldValue('first_due_date', getFirstScheduledDueDate({
       disbursementDate: selectedScheduledDisbursementDate,
       frequency: loan.billing_frequency ?? 'MONTHLY',
-      weekday: getIsoWeekday(selectedScheduledDisbursementDate),
+      weekday: selectedCollectionWeekday,
     }));
-  }, [form, loan, selectedScheduledDisbursementDate]);
+  }, [form, loan, selectedCollectionWeekday, selectedScheduledDisbursementDate]);
 
   return (
     <Modal
@@ -149,11 +173,13 @@ export default function CooperativeLoanDisbursementModal({
           type="info"
           showIcon
           className="mb-4"
-          message={historicalEntry
-            ? t('cooperative.loans.historicalEntryInfo')
-            : t('cooperative.loans.collectionScheduleInfo', {
-                days: scheduleText || '-',
-              })}
+          message={!hasCollectionSchedule
+            ? t('cooperative.loans.collectionScheduleMissing')
+            : historicalEntry
+              ? t('cooperative.loans.historicalEntryInfo')
+              : t('cooperative.loans.collectionScheduleInfo', {
+                  days: scheduleText,
+                })}
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Form.Item
@@ -168,22 +194,18 @@ export default function CooperativeLoanDisbursementModal({
             />
           </Form.Item>
           <Form.Item
-            name="scheduled_disbursement_date"
-            label={t('cooperative.loans.form.scheduledDisbursementDate')}
-            rules={[{ required: true, message: t('cooperative.loans.validation.scheduledDisbursementDateRequired') }]}
+            name="collection_weekday"
+            label={t('cooperative.loans.form.collectionWeekday')}
+            rules={[{ required: true, message: t('cooperative.loans.validation.collectionWeekdayRequired') }]}
           >
-            <DatePicker
-              disabledDate={(current) => (
-                selectedDisbursementDate
-                  ? current.isBefore(selectedDisbursementDate, 'day') ||
-                    (historicalEntry
-                      ? !findCollectionScheduleByWeekday(collectionSchedules, current)
-                      : !findMatchingCollectionSchedule(collectionSchedules, current))
-                  : true
-              )}
-              className="w-full"
-              data-testid="koperasi-loan-scheduled-disbursement-date-input"
+            <Select
+              disabled={!hasCollectionSchedule}
+              options={collectionWeekdayOptions}
+              data-testid="koperasi-loan-collection-weekday-select"
             />
+          </Form.Item>
+          <Form.Item name="scheduled_disbursement_date" hidden>
+            <DatePicker />
           </Form.Item>
           <Form.Item
             name="first_due_date"
@@ -192,10 +214,10 @@ export default function CooperativeLoanDisbursementModal({
           >
             <DatePicker
               disabledDate={(current) => (
-                selectedDisbursementDate && selectedScheduledDisbursementDate
+                selectedDisbursementDate && selectedScheduledDisbursementDate && selectedCollectionWeekday
                   ? !current.isAfter(selectedDisbursementDate, 'day') ||
                     current.isBefore(selectedScheduledDisbursementDate, 'day') ||
-                    getIsoWeekday(current) !== getIsoWeekday(selectedScheduledDisbursementDate)
+                    getIsoWeekday(current) !== selectedCollectionWeekday
                   : true
               )}
               className="w-full"

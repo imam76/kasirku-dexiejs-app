@@ -5,7 +5,7 @@ Tanggal catatan: 2026-07-06
 ## Ringkasan
 
 Laporan Koperasi tab Ringkasan/Rekonsiliasi bisa menampilkan warning yang tidak
-selalu berarti data rusak, terutama setelah memakai fitur Migrasi Pinjaman.
+selalu berarti data rusak, terutama setelah memakai fitur Input Saldo Awal Pinjaman.
 Pinjaman migrasi memang mencatat posisi historis angsuran melalui field
 `paid_*` dan outstanding pinjaman, tetapi sengaja tidak membuat mutasi kas,
 `financeTransactions`, atau jurnal pencairan seperti pinjaman baru.
@@ -171,7 +171,7 @@ Acceptance criteria:
 - Bila opening balance 1120 kosong, warning tetap muncul sebagai masalah setup
   GL yang valid.
 
-### Fase 3 - Atomic Flow Migrasi Pinjaman
+### Fase 3 - Atomic Flow Input Saldo Awal Pinjaman
 
 Tujuan:
 
@@ -250,8 +250,8 @@ Checklist:
 - Tambahkan helper fixture di `tests/e2e/helpers/koperasiMigration.ts` bila
   perlu.
 - Test minimal:
-  - migrasi pinjaman tidak membuat false warning payment-vs-installment;
-  - migrasi pinjaman tidak membuat false warning finance transaction;
+  - input saldo awal pinjaman tidak membuat false warning payment-vs-installment;
+  - input saldo awal pinjaman tidak membuat false warning finance transaction;
   - 1120 warning tetap muncul bila opening balance tidak disiapkan;
   - migration command atomic saat input invalid.
 - Update README atau docs singkat bila behavior migrasi dan opening balance 1120
