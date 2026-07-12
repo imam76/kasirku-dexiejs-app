@@ -2116,4 +2116,9 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       await tx.table<CooperativeLoan, string>('cooperativeLoans').bulkPut(migratedLoans);
     }
   });
+
+  this.version(82).stores({
+    salesInvoicePayments: 'id, sales_document_id, paid_at, status, finance_transaction_id, created_at',
+    purchaseInvoicePayments: 'id, purchase_document_id, paid_at, status, finance_transaction_id, created_at',
+  });
 }

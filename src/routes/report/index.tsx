@@ -25,6 +25,7 @@ function Laporan() {
     { to: '/report/purchase-report', label: t('report.index.purchaseShort'), icon: FileExcelOutlined, color: 'text-teal-600', desc: t('report.index.purchaseDesc') },
     { to: '/report/income-report', label: t('report.index.incomeShort'), icon: FileExcelOutlined, color: 'text-green-600', desc: t('report.index.incomeDesc') },
     { to: '/report/expense-report', label: t('report.index.expenseShort'), icon: FileExcelOutlined, color: 'text-red-600', desc: t('report.index.expenseDesc') },
+    { to: '/report/cash-flow-report', label: t('report.index.cashFlowShort'), icon: LineChartOutlined, color: 'text-sky-600', desc: t('report.index.cashFlowDesc') },
     { to: '/report/payroll-report', label: t('report.index.payrollShort'), icon: FileExcelOutlined, color: 'text-zinc-700', desc: t('report.index.payrollDesc') },
     { to: '/report/profit-loss-report', label: t('report.index.profitLossShort'), icon: LineChartOutlined, color: 'text-indigo-600', desc: t('report.index.profitLossDesc') },
     { to: '/report/aging-report', label: t('report.index.agingShort'), icon: ReconciliationOutlined, color: 'text-emerald-600', desc: t('report.index.agingDesc') },

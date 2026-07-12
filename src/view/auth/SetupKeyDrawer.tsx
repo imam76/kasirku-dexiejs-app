@@ -30,7 +30,6 @@ import {
   Lock,
   Unlock,
   ServerCog,
-  Fingerprint,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SETUP_MODULE_GROUPS, DEFAULT_SELECTED_MODULES } from '@/constants/setupModules';
@@ -412,7 +411,7 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
 
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
             <Paragraph className="!mb-0 text-xs text-gray-500">
-              <Fingerprint size={12} className="mr-1 inline align-text-bottom" />
+              <KeyRound size={12} className="mr-1 inline align-text-bottom" />
               License key diperlukan untuk mengakses konfigurasi setup. Hubungi developer
               jika belum memiliki license key.
             </Paragraph>

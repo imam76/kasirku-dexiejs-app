@@ -326,6 +326,7 @@ const RootLayout = () => {
         { to: '/report/purchase-report', label: t('nav.report.purchase'), icon: FileText },
         { to: '/report/income-report', label: t('nav.report.income'), icon: FileText },
         { to: '/report/expense-report', label: t('nav.report.expense'), icon: FileText },
+        { to: '/report/cash-flow-report', label: t('nav.report.cashFlow'), icon: Banknote },
         { to: '/report/payroll-report', label: t('nav.report.payroll'), icon: FileText },
         { to: '/report/profit-loss-report', label: t('report.index.profitLossShort'), icon: DollarSign },
         { to: '/report/aging-report', label: t('nav.report.aging'), icon: FileText },

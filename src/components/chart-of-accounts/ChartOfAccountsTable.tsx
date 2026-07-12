@@ -28,13 +28,13 @@ export default function ChartOfAccountsTable({
       title: t('coa.table.code'),
       dataIndex: 'code',
       key: 'code',
-      width: 140,
+      width: 220,
       render: (code: string, account) => (
-        <Space size={6}>
-          <Text style={{ paddingLeft: account.level * 16 }} strong>
+        <Space size={8} style={{ paddingLeft: account.level * 16, whiteSpace: 'nowrap' }}>
+          <Text strong style={{ whiteSpace: 'nowrap' }}>
             {code}
           </Text>
-          {account.is_system && <Tag color="blue">{t('coa.badge.system')}</Tag>}
+          {account.is_system && <Tag color="blue" style={{ marginInlineEnd: 0 }}>{t('coa.badge.system')}</Tag>}
         </Space>
       ),
     },
@@ -113,7 +113,7 @@ export default function ChartOfAccountsTable({
       columns={columns}
       rowKey="id"
       pagination={{ pageSize: 10 }}
-      scroll={{ x: 980 }}
+      scroll={{ x: 1060 }}
       locale={{ emptyText: t('coa.empty') }}
     />
   );

@@ -61,6 +61,7 @@ const accountsPayableTables = [
   db.chartOfAccounts,
   db.enabledModules,
   db.generalLedgerSetting,
+  db.accountingPeriods,
   db.journalEntries,
   db.journalEntryLines,
   db.activityLogs,

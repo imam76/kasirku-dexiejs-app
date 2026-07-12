@@ -7,7 +7,7 @@ import {
   ACCOUNTING_PROFILE_LABELS,
   INDUSTRY_EXTENSION_LABELS,
 } from '@/constants/accounting';
-import { FINANCE_CATEGORIES } from '@/constants/finance';
+import { FINANCE_CATEGORIES, isCooperativeOnlyFinanceCategory } from '@/constants/finance';
 import { SAK_EMKM_RETAIL_TEMPLATE, SAK_ETAP_KOPERASI_TEMPLATE } from '@/constants/chartOfAccounts';
 import { useI18n } from '@/hooks/useI18n';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
@@ -112,12 +112,17 @@ export default function FinanceAccountMappingPanel({
     label: `${account.code} - ${account.name}`,
   })), [accounts]);
   const mappingByKey = useMemo(() => new Map(mappings.map((mapping) => [mapping.key, mapping])), [mappings]);
-  const categoryKeys = useMemo(() => {
-    return Array.from(new Set([
+  const categoryKeys = useMemo<string[]>(() => {
+    const isCooperativeProfile = selectedProfile === 'SAK_ETAP' && selectedExtension === 'COOPERATIVE';
+    const keys = Array.from(new Set<string>([
       ...Object.values(FINANCE_CATEGORIES),
       ...mappings.map((mapping) => mapping.key),
-    ])).sort();
-  }, [mappings]);
+    ]));
+
+    return keys
+      .filter((key) => isCooperativeProfile || !isCooperativeOnlyFinanceCategory(key))
+      .sort();
+  }, [mappings, selectedExtension, selectedProfile]);
 
   const unmappedCategories = categoryKeys.filter((key) => !mappingByKey.has(key));
   const moduleRows = enabledModules.map((module) => ({
