@@ -2121,4 +2121,48 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     salesInvoicePayments: 'id, sales_document_id, paid_at, status, finance_transaction_id, created_at',
     purchaseInvoicePayments: 'id, purchase_document_id, paid_at, status, finance_transaction_id, created_at',
   });
+
+  this.version(83).stores({
+    // Repair migration for local IndexedDB instances that reached a newer app version
+    // before all POS checkout stores existed. Re-declaring the stores lets Dexie create
+    // any missing object stores during the next upgrade without clearing user data.
+    transactions: 'id, transaction_number, payment_method, cashier_session_id, cashier_user_id, member_contact_id, member_number, created_at',
+    transactionItems: 'id, transaction_id, product_id, hpp_status, created_at',
+    cashierSessions: 'id, session_number, status, cashier_user_id, opened_at, closed_at, balance_status, sync_status, created_at, updated_at',
+    contacts: 'id, name, contact_type, phone, email, is_active, is_member, membership_number, sync_status, created_at',
+    membershipPointTransactions: 'id, contact_id, membership_number, transaction_id, transaction_number, type, created_at',
+    membershipSettings: 'id, updated_at',
+    inventoryLots: 'id, product_id, quantity_remaining, cost_status, received_at, source_type, source_id, source_line_id, created_at',
+    inventoryLotConsumptions: 'id, lot_id, product_id, source_type, source_id, source_line_id, created_at',
+    financeTransactions: 'id, type, category, account_id, cash_account_id, cash_bank_reconciliation_id, field_cash_session_id, field_employee_id, transfer_group_id, sync_status, updated_at, created_at, reference_id',
+    financeBalance: 'id',
+    profitLogs: 'id, transaction_id, type, created_at',
+    profitBalance: 'id',
+    syncQueue: 'id, entity, entity_id, operation, status, created_at, updated_at',
+  });
+
+  this.version(84).stores({
+    // Complete POS checkout repair: these are all object stores opened by
+    // checkoutService.checkout() and its synchronous accounting side effects.
+    transactions: 'id, transaction_number, payment_method, cashier_session_id, cashier_user_id, member_contact_id, member_number, created_at',
+    transactionItems: 'id, transaction_id, product_id, hpp_status, created_at',
+    products: 'id, name, sku, category, sync_status, created_at',
+    profitLogs: 'id, transaction_id, type, created_at',
+    profitBalance: 'id',
+    financeTransactions: 'id, type, category, account_id, cash_account_id, cash_bank_reconciliation_id, field_cash_session_id, field_employee_id, transfer_group_id, sync_status, updated_at, created_at, reference_id',
+    financeBalance: 'id',
+    chartOfAccounts: 'id, code, name, type, parent_id, is_postable, is_system, is_active, sync_status, updated_at, created_at',
+    financeAccountMappings: 'id, key, category, account_id, is_system, sync_status, updated_at, created_at',
+    enabledModules: 'id, code, is_enabled, source, sync_status, updated_at',
+    generalLedgerSetting: 'id, is_ready, cutoff_date, inventory_policy, opening_balance_journal_id, activated_at, sync_status, updated_at',
+    journalEntries: 'id, entry_number, entry_date, status, source_type, source_id, source_event, reversed_entry_id, sync_status, updated_at, created_at',
+    journalEntryLines: 'id, journal_entry_id, account_id, account_code, account_type, created_at',
+    inventoryLots: 'id, product_id, quantity_remaining, cost_status, received_at, source_type, source_id, source_line_id, created_at',
+    inventoryLotConsumptions: 'id, lot_id, product_id, source_type, source_id, source_line_id, created_at',
+    cashierSessions: 'id, session_number, status, cashier_user_id, opened_at, closed_at, balance_status, sync_status, created_at, updated_at',
+    contacts: 'id, name, contact_type, phone, email, is_active, is_member, membership_number, sync_status, created_at',
+    membershipPointTransactions: 'id, contact_id, membership_number, transaction_id, transaction_number, type, created_at',
+    membershipSettings: 'id, updated_at',
+    syncQueue: 'id, entity, entity_id, operation, status, created_at, updated_at',
+  });
 }

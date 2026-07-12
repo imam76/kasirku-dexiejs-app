@@ -330,6 +330,12 @@ export const useTransaction = () => {
       window.dispatchEvent(new Event('check-feedback'));
     } catch (error) {
       console.error('Checkout failed:', error);
+      if (error instanceof Error && error.name === 'NotFoundError') {
+        void indexedDB.databases?.().then((databases) => {
+          console.error('IndexedDB databases:', databases);
+        });
+        console.error('Dexie tables:', db.tables.map((table) => table.name));
+      }
       modal.error({
         title: t('checkout.failedTitle'),
         content: error instanceof Error ? error.message : t('checkout.failedContent'),
