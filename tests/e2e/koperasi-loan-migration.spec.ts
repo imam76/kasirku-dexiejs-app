@@ -7,7 +7,7 @@ import {
 import { migrationFixtureMember, seedMigrationFixture } from './helpers/koperasiMigration';
 
 test.describe.serial('migrasi pinjaman koperasi', () => {
-  test('LOAN-MIG-01 - migrasi mencatat sisa pokok & menandai angsuran lunas historis tanpa jurnal', async ({ page }) => {
+  test('LOAN-MIG-01 - migrasi mencatat sisa pokok & menandai angsuran lunas historis tanpa transaksi kas', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
     await seedMigrationFixture(page);
 
@@ -33,8 +33,8 @@ test.describe.serial('migrasi pinjaman koperasi', () => {
     await expect(fifthInstallment).toBeVisible();
     await expect(fifthInstallment).toContainText('Rp 112.000');
 
-    // Jembatan saldo awal: total sisa pokok migrasi (800.000) disurfacing sebagai panduan
-    // untuk baris Piutang Pinjaman (1120) di form opening balance.
+    // Tanpa cutoff GL siap, total sisa pokok migrasi (800.000) tetap disurfacing sebagai panduan
+    // untuk baris Piutang Pinjaman (1120) / backfill opening balance.
     await page.goto('/finance/general-ledger');
     await expect(page.getByText('Setup Cutoff dan Opening Balance')).toBeVisible();
     const fillButton = page.getByTestId('gl-opening-balance-fill-migration');
@@ -68,7 +68,7 @@ test.describe.serial('migrasi pinjaman koperasi', () => {
     await expect(financeRow).toBeVisible();
     await expect(financeRow.getByText('OK', { exact: true })).toBeVisible();
 
-    // Opening balance 1120 belum diisi -> warning valid (masalah setup GL), sisa pokok 800.000.
+    // Cutoff GL belum siap -> warning setup valid, sisa pokok 800.000 belum punya jurnal saldo awal.
     const receivableRow = page.getByTestId('koperasi-reconciliation-row-LOAN_MIGRATION_OPENING');
     await expect(receivableRow).toBeVisible();
     await expect(receivableRow.getByText('Warning', { exact: true })).toBeVisible();

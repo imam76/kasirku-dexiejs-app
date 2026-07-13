@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { fillControlByTestId, selectAntdOptionByTestId, closeTopDialog } from './ui';
+import { fillControlByTestId, selectAntdOptionByTestId, closeTopDialog, setAntdDateByTestId } from './ui';
 
 export interface DemoMemberInput {
   memberNumber: string;
@@ -117,6 +117,8 @@ export async function recordSaving(page: Page, input: {
   transactionType: SavingTransactionType;
   savingType: SavingType;
   amount: number;
+  transactionDate?: string;
+  expectedMutationType?: SavingMutationType;
   expectedError?: string;
 }) {
   await page.goto('/koperasi/simpanan');
@@ -131,6 +133,9 @@ export async function recordSaving(page: Page, input: {
   );
   await selectAntdOptionByTestId(page, 'koperasi-saving-type-select', savingTypeLabels[input.savingType]);
   await fillControlByTestId(page, 'koperasi-saving-amount-input', String(input.amount));
+  if (input.transactionDate) {
+    await setAntdDateByTestId(page, 'koperasi-saving-date-input', input.transactionDate);
+  }
   await page.getByTestId('koperasi-saving-submit-button').click();
 
   if (input.expectedError) {
@@ -139,7 +144,15 @@ export async function recordSaving(page: Page, input: {
     return;
   }
 
-  await expect(savingMutationRow(page, input.member.name, input.savingType, input.transactionType, input.amount)).toBeVisible();
+  await expect(
+    savingMutationRow(
+      page,
+      input.member.name,
+      input.savingType,
+      input.expectedMutationType ?? input.transactionType,
+      input.amount,
+    ),
+  ).toBeVisible();
 }
 
 export async function recordOpeningSaving(page: Page, input: {
@@ -303,7 +316,8 @@ async function openAndFillMigrationForm(
 /**
  * Records a migration loan (running loan carried over at cut-off) via the dedicated
  * "Migrasi Pinjaman" menu. Picks a past disbursement date on the officer's collection weekday
- * (historical fallback requires it) and before today, so the migration posts no journal.
+ * (historical fallback requires it) and before today. If GL has a cutoff, migration posts an
+ * opening-balance journal instead of a disbursement journal.
  * Returns the loan number.
  */
 export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'memberNumber' | 'name'>, input: MigrateLoanInput) {

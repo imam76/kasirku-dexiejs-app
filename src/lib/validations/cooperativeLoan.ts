@@ -160,7 +160,7 @@ export const cooperativeLoanDisbursementSchema = z.object({
   disbursement_date: z.string().optional(),
   first_due_date: z.string().optional(),
   historical_entry: z.boolean().optional().default(false),
-  // Mode migrasi: mencatat posisi pinjaman berjalan per cut-off tanpa jurnal & tanpa kas.
+  // Mode migrasi: mencatat posisi pinjaman berjalan per cut-off tanpa mutasi kas.
   migration_entry: z.boolean().optional().default(false),
   // Cara 1 (bunga flat): angsuran 1..N ditandai lunas historis.
   settled_through_installment_number: z.number().int().nonnegative().optional(),

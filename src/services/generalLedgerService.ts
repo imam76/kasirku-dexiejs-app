@@ -57,7 +57,9 @@ const SOURCE_EVENTS = {
   COOPERATIVE_SAVING_DEPOSIT_POSTED: 'COOPERATIVE_SAVING_DEPOSIT_POSTED',
   COOPERATIVE_SAVING_WITHDRAWAL_POSTED: 'COOPERATIVE_SAVING_WITHDRAWAL_POSTED',
   COOPERATIVE_SAVING_INTEREST_PAID: 'COOPERATIVE_SAVING_INTEREST_PAID',
+  COOPERATIVE_SAVING_OPENING_BALANCE_POSTED: 'COOPERATIVE_SAVING_OPENING_BALANCE_POSTED',
   COOPERATIVE_LOAN_DISBURSED: 'COOPERATIVE_LOAN_DISBURSED',
+  COOPERATIVE_LOAN_OPENING_BALANCE_POSTED: 'COOPERATIVE_LOAN_OPENING_BALANCE_POSTED',
   COOPERATIVE_LOAN_PAYMENT_POSTED: 'COOPERATIVE_LOAN_PAYMENT_POSTED',
   COOPERATIVE_IPTW_PAID: 'COOPERATIVE_IPTW_PAID',
   PRODUCTION_ORDER_POSTED: 'PRODUCTION_ORDER_POSTED',
@@ -223,6 +225,16 @@ const ACCOUNT_CANDIDATES = {
   cooperativeLoanInterestIncome: { ids: ['cooperative-loan-interest-income'], codes: ['4040'] },
   cooperativeLoanPenaltyIncome: { ids: ['cooperative-loan-penalty-income'], codes: ['4050'] },
   cooperativeLoanAdminIncome: { ids: ['cooperative-loan-admin-income', 'template-loan-admin-income'], codes: ['4060'] },
+  cooperativeOpeningBalanceEquity: {
+    ids: [
+      'owner-capital',
+      'retained-earning',
+      'shu-belum-dibagikan',
+      'template-retained-earning',
+      'simpanan-pokok-modal',
+    ],
+    codes: ['3000', '3100', '3010'],
+  },
   cooperativeIptwExpense: { ids: ['cooperative-iptw-expense', 'template-cooperative-iptw-expense'], codes: ['6090'] },
   cooperativeSavingInterestExpense: {
     ids: ['cooperative-saving-interest-expense', 'template-cooperative-saving-interest-expense'],
@@ -252,6 +264,17 @@ const getGeneralLedgerSetting = async () => {
 const isDateBeforeCutoff = (entryDate: string, cutoffDate?: string) => {
   if (!cutoffDate) return true;
   return entryDate.slice(0, 10) < cutoffDate.slice(0, 10);
+};
+
+export const getGeneralLedgerCutoffDate = async () => {
+  const setting = await getGeneralLedgerSetting();
+  return setting?.is_ready ? setting.cutoff_date : undefined;
+};
+
+export const isBeforeGeneralLedgerCutoff = async (entryDate?: string) => {
+  if (!entryDate) return false;
+  const cutoffDate = await getGeneralLedgerCutoffDate();
+  return Boolean(cutoffDate && entryDate.slice(0, 10) < cutoffDate.slice(0, 10));
 };
 
 const toDateOnly = (value: string) => value.slice(0, 10);
@@ -716,6 +739,95 @@ export const reverseJournalEntriesForSource = async ({
       reversals.push(await reverseJournalEntry(entry, reason, reversalDate, actor));
     }
   });
+
+  return reversals;
+};
+
+const getOpeningBalanceJournalDate = async (fallbackDate: string) => {
+  const setting = await getGeneralLedgerSetting();
+  if (!setting?.is_ready || !setting.cutoff_date) return undefined;
+  return setting.cutoff_date || fallbackDate;
+};
+
+const postOpeningBalanceSourceJournal = async ({
+  source_id,
+  source_number,
+  source_event,
+  entry_date,
+  description,
+  lines,
+  actor,
+}: {
+  source_id: string;
+  source_number?: string;
+  source_event: JournalSourceEvent | string;
+  entry_date: string;
+  description: string;
+  lines: JournalLineDraft[];
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
+}) => {
+  const normalizedLines = normalizeLines(lines);
+  const existingEntry = await getPostedJournalEntryForSource('OPENING_BALANCE', source_id, source_event);
+
+  if (existingEntry) {
+    const existingLines = await db.journalEntryLines
+      .where('journal_entry_id')
+      .equals(existingEntry.id)
+      .toArray();
+
+    if (getJournalSignature(existingLines) === getJournalSignature(normalizedLines)) {
+      return existingEntry;
+    }
+
+    await reverseJournalEntry(
+      existingEntry,
+      `Pembalikan jurnal ${existingEntry.entry_number} karena saldo awal berubah.`,
+      entry_date,
+      actor,
+    );
+  }
+
+  return createPostedJournalEntry({
+    source_type: 'OPENING_BALANCE',
+    source_id,
+    source_number,
+    source_event,
+    entry_date,
+    description,
+    lines: normalizedLines,
+    actor,
+  });
+};
+
+const reverseOpeningBalanceSourceJournal = async ({
+  source_id,
+  source_event,
+  reason,
+  entry_date,
+  actor,
+}: {
+  source_id: string;
+  source_event?: string;
+  reason: string;
+  entry_date?: string;
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
+}) => {
+  const reversalDate = entry_date ?? new Date().toISOString();
+  const entries = await db.journalEntries
+    .where('source_type')
+    .equals('OPENING_BALANCE')
+    .filter((entry) => (
+      entry.status === 'POSTED' &&
+      entry.source_id === source_id &&
+      !entry.source_event?.endsWith(':REVERSAL') &&
+      (!source_event || entry.source_event === source_event)
+    ))
+    .toArray();
+  const reversals: JournalEntry[] = [];
+
+  for (const entry of entries) {
+    reversals.push(await reverseJournalEntry(entry, reason, reversalDate, actor));
+  }
 
   return reversals;
 };
@@ -1478,9 +1590,25 @@ const getCooperativeSavingSourceEvent = (transaction: CooperativeSavingTransacti
     }
     return SOURCE_EVENTS.COOPERATIVE_SAVING_WITHDRAWAL_POSTED;
   }
+  if (transaction.transaction_type === 'OPENING_BALANCE') {
+    return SOURCE_EVENTS.COOPERATIVE_SAVING_OPENING_BALANCE_POSTED;
+  }
 
   return undefined;
 };
+
+const getCooperativeSavingAccountCandidate = (savingType: CooperativeSavingTransaction['saving_type']) => {
+  switch (savingType) {
+    case 'POKOK': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsPokok;
+    case 'WAJIB': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsWajib;
+    case 'SUKARELA': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsSukarela;
+    default: return ACCOUNT_CANDIDATES.cooperativeMemberSavings;
+  }
+};
+
+const getCooperativeSavingAccountLabel = (savingType: CooperativeSavingTransaction['saving_type']) => (
+  `Simpanan ${savingType === 'POKOK' ? 'Pokok' : savingType === 'WAJIB' ? 'Wajib' : savingType === 'SUKARELA' ? 'Sukarela' : 'Anggota'}`
+);
 
 export const postCooperativeSavingTransactionJournal = async (
   transaction: CooperativeSavingTransaction,
@@ -1509,15 +1637,8 @@ export const postCooperativeSavingTransactionJournal = async (
     transaction.transaction_type === 'WITHDRAWAL' &&
     transaction.withdrawal_source === 'INTEREST'
   );
-  const savingAccountCandidate = (() => {
-    switch (transaction.saving_type) {
-      case 'POKOK': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsPokok;
-      case 'WAJIB': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsWajib;
-      case 'SUKARELA': return ACCOUNT_CANDIDATES.cooperativeMemberSavingsSukarela;
-      default: return ACCOUNT_CANDIDATES.cooperativeMemberSavings;
-    }
-  })();
-  const savingAccountLabel = `Simpanan ${transaction.saving_type === 'POKOK' ? 'Pokok' : transaction.saving_type === 'WAJIB' ? 'Wajib' : transaction.saving_type === 'SUKARELA' ? 'Sukarela' : 'Anggota'}`;
+  const savingAccountCandidate = getCooperativeSavingAccountCandidate(transaction.saving_type);
+  const savingAccountLabel = getCooperativeSavingAccountLabel(transaction.saving_type);
   const savingAccount = isInterestWithdrawal
     ? undefined
     : (
@@ -1559,6 +1680,45 @@ export const postCooperativeSavingTransactionJournal = async (
   });
 };
 
+export const postCooperativeSavingOpeningBalanceJournal = async (
+  transaction: CooperativeSavingTransaction,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (transaction.status !== 'POSTED') return undefined;
+  if (transaction.transaction_type !== 'OPENING_BALANCE') return undefined;
+
+  const entryDate = await getOpeningBalanceJournalDate(transaction.transaction_date);
+  if (!entryDate) return undefined;
+
+  const amount = amountOrZero(transaction.amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const openingEquityAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.cooperativeOpeningBalanceEquity,
+    'Ekuitas/Saldo Awal Koperasi',
+  );
+  const savingAccount = (
+    tryGetPostableAccount(accounts, getCooperativeSavingAccountCandidate(transaction.saving_type))
+    ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeMemberSavings, 'Simpanan Anggota')
+  );
+  const savingAccountLabel = getCooperativeSavingAccountLabel(transaction.saving_type);
+
+  return postOpeningBalanceSourceJournal({
+    source_id: transaction.id,
+    source_number: transaction.member_number,
+    source_event: SOURCE_EVENTS.COOPERATIVE_SAVING_OPENING_BALANCE_POSTED,
+    entry_date: entryDate,
+    description: `Saldo awal simpanan ${transaction.saving_type} ${transaction.member_number} - ${transaction.member_name}`,
+    lines: [
+      createDebitLine(openingEquityAccount, amount, 'Saldo awal ekuitas berkurang untuk kewajiban simpanan anggota'),
+      createCreditLine(savingAccount, amount, `Saldo awal kewajiban ${savingAccountLabel.toLowerCase()}`),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
 export const reverseCooperativeSavingTransactionJournal = async (
   transaction: CooperativeSavingTransaction,
   reason: string,
@@ -1567,6 +1727,16 @@ export const reverseCooperativeSavingTransactionJournal = async (
 ) => {
   const sourceEvent = getCooperativeSavingSourceEvent(transaction);
   if (!sourceEvent) return [];
+
+  if (transaction.transaction_type === 'OPENING_BALANCE') {
+    return reverseOpeningBalanceSourceJournal({
+      source_id: transaction.id,
+      source_event: sourceEvent,
+      reason,
+      entry_date: entryDate,
+      actor,
+    });
+  }
 
   return reverseJournalEntriesForSource({
     source_type: 'COOPERATIVE_SAVING',
@@ -1643,6 +1813,46 @@ export const postCooperativeLoanDisbursementJournal = async (
       memberSavingAccount
         ? createCreditLine(memberSavingAccount, mandatorySavingAmount, 'Simpanan wajib anggota dari potongan pencairan')
         : undefined,
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const postCooperativeLoanOpeningBalanceJournal = async (
+  loan: CooperativeLoan,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (!loan.is_migration) return undefined;
+  if (loan.status !== 'DISBURSED' && loan.status !== 'PAID_OFF') return undefined;
+  if (!loan.disbursed_at) return undefined;
+
+  const entryDate = await getOpeningBalanceJournalDate(loan.disbursed_at);
+  if (!entryDate) return undefined;
+
+  const amount = amountOrZero(loan.outstanding_principal_amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const receivableAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.cooperativeLoanReceivable,
+    'Piutang Pinjaman Anggota',
+  );
+  const openingEquityAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.cooperativeOpeningBalanceEquity,
+    'Ekuitas/Saldo Awal Koperasi',
+  );
+
+  return postOpeningBalanceSourceJournal({
+    source_id: loan.id,
+    source_number: loan.loan_number,
+    source_event: SOURCE_EVENTS.COOPERATIVE_LOAN_OPENING_BALANCE_POSTED,
+    entry_date: entryDate,
+    description: `Saldo awal pinjaman ${loan.loan_number} ${loan.member_number} - ${loan.member_name}`,
+    lines: [
+      createDebitLine(receivableAccount, amount, 'Saldo awal piutang pinjaman anggota'),
+      createCreditLine(openingEquityAccount, amount, 'Saldo awal ekuitas dari piutang pinjaman anggota'),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
     actor,
   });

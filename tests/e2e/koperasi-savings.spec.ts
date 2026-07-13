@@ -18,6 +18,16 @@ test.describe.serial('simpanan anggota koperasi', () => {
     await recordSaving(page, {
       member: demoMembers.siti,
       transactionType: 'DEPOSIT',
+      savingType: 'WAJIB',
+      amount: 120_000,
+      transactionDate: '2025-12-31 08:00:00',
+      expectedMutationType: 'OPENING_BALANCE',
+    });
+    await expectSavingBalance(page, demoMembers.siti, 'WAJIB', 120_000);
+
+    await recordSaving(page, {
+      member: demoMembers.siti,
+      transactionType: 'DEPOSIT',
       savingType: 'POKOK',
       amount: 500_000,
     });

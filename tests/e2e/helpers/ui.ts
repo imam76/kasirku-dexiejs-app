@@ -21,7 +21,9 @@ export async function selectAntdOptionByTestId(page: Page, testId: string, optio
 }
 
 export async function setAntdDateByTestId(page: Page, testId: string, value: string) {
-  const input = page.getByTestId(testId).locator('input').first();
+  const control = page.getByTestId(testId);
+  const nestedInput = control.locator('input');
+  const input = await nestedInput.count() ? nestedInput.first() : control;
   await input.click();
   await input.fill(value);
   await page.keyboard.press('Enter');

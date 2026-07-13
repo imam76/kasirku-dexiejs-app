@@ -1379,8 +1379,11 @@ const buildJournalEntryReconciliation = (
   loans: CooperativeLoan[],
   payments: CooperativeLoanPayment[],
   journalEntries: JournalEntryWithLines[],
+  referencedJournalEntries: JournalEntryWithLines[] = [],
 ) => {
-  const journalById = new Map(journalEntries.map((entry) => [entry.id, entry]));
+  const journalById = new Map(
+    [...journalEntries, ...referencedJournalEntries].map((entry) => [entry.id, entry]),
+  );
   const savingById = new Map(savingTransactions.map((transaction) => [transaction.id, transaction]));
   const loanById = new Map(loans.map((loan) => [loan.id, loan]));
   const paymentById = new Map(payments.map((payment) => [payment.id, payment]));
@@ -1510,9 +1513,15 @@ const buildReconciliationSummary = (
     buildLoanOutstandingReconciliation(loans, installments),
     buildPaymentInstallmentReconciliation(installments, payments, loans),
     buildFinanceTransactionReconciliation(savingTransactions, loans, payments, financeTransactions),
-    buildJournalEntryReconciliation(savingTransactions, loans, payments, journalEntries),
+    buildJournalEntryReconciliation(
+      savingTransactions,
+      loans,
+      payments,
+      journalEntries,
+      receivableJournalEntries,
+    ),
   ];
-  // Hanya relevan bila ada pinjaman migrasi (piutangnya lewat saldo awal, bukan jurnal);
+  // Hanya relevan bila ada pinjaman migrasi (piutangnya lewat jurnal saldo awal, bukan pencairan);
   // kalau tidak, hindari noise untuk koperasi tanpa migrasi.
   if (loans.some((loan) => loan.is_migration)) {
     rows.push(buildLoanReceivableLedgerReconciliation(loans, accounts, receivableJournalEntries));

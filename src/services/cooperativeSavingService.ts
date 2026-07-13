@@ -8,6 +8,8 @@ import {
 } from '@/lib/validations/cooperativeSaving';
 import {
   getCashOrBankAccountForPayment,
+  isBeforeGeneralLedgerCutoff,
+  postCooperativeSavingOpeningBalanceJournal,
   postCooperativeSavingTransactionJournal,
   reverseCooperativeSavingTransactionJournal,
 } from '@/services/generalLedgerService';
@@ -374,6 +376,23 @@ export const recordCooperativeSaving = async (
   const withdrawalSource = parsedInput.transaction_type === 'WITHDRAWAL'
     ? parsedInput.withdrawal_source ?? 'SAVING'
     : undefined;
+
+  if (await isBeforeGeneralLedgerCutoff(transactionDate)) {
+    if (parsedInput.transaction_type === 'DEPOSIT') {
+      return recordCooperativeSavingOpeningBalance({
+        member_id: parsedInput.member_id,
+        saving_type: parsedInput.saving_type,
+        amount,
+        transaction_date: transactionDate,
+        notes: parsedInput.notes,
+      });
+    }
+
+    throw new Error(
+      'Transaksi simpanan sebelum cutoff buku besar harus dicatat sebagai saldo awal net, bukan penarikan historis.',
+    );
+  }
+
   const paymentMethod = parsedInput.payment_method ?? 'TUNAI';
   const financeCategory = getFinanceCategoryForSaving(parsedInput.transaction_type, withdrawalSource);
   const savingTransactionId = crypto.randomUUID();
@@ -573,7 +592,26 @@ export const recordCooperativeSavingOpeningBalance = async (
 
     savedBalance = await buildBalance(member, parsedInput.saving_type, amount, now);
     await db.cooperativeSavingTransactions.add(savingTransaction);
-    savedTransaction = savingTransaction;
+
+    const journalEntry = await postCooperativeSavingOpeningBalanceJournal(savingTransaction, currentUser);
+    savedTransaction = journalEntry
+      ? {
+          ...savingTransaction,
+          journal_entry_id: journalEntry.id,
+          updated_at: now,
+          sync_status: 'pending',
+          sync_error: undefined,
+        }
+      : savingTransaction;
+
+    if (journalEntry) {
+      await db.cooperativeSavingTransactions.update(savingTransaction.id, {
+        journal_entry_id: journalEntry.id,
+        updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
+      });
+    }
 
     await writeActivityLog({
       user: currentUser,

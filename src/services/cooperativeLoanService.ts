@@ -19,8 +19,10 @@ import {
 } from '@/lib/validations/cooperativeLoan';
 import {
   getCashOrBankAccountForPayment,
-  isGeneralLedgerPostingEnabled,
+  getGeneralLedgerCutoffDate,
+  isBeforeGeneralLedgerCutoff,
   postCooperativeLoanDisbursementJournal,
+  postCooperativeLoanOpeningBalanceJournal,
   postCooperativeIptwJournal,
   postCooperativeLoanPaymentJournal,
   postCooperativeSavingTransactionJournal,
@@ -322,6 +324,7 @@ const createCooperativeLoanPaymentGroupNumber = (date: Date, paymentGroupId: str
 
 const getMandatorySavingBalanceId = (memberId: string) => `${memberId}:WAJIB`;
 const AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX = 'AUTO_MANDATORY_SAVING_RETURN_PAYMENT';
+const getDateKey = (value: string) => value.slice(0, 10);
 
 const getAutoMandatorySavingReturnToken = (paymentId: string) => (
   `[${AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX}:${paymentId}]`
@@ -902,7 +905,7 @@ const assertMigrationPositionWithinLoan = (
 };
 
 /**
- * Menandai angsuran mana yang sudah lunas historis (tanpa jurnal & tanpa CooperativeLoanPayment)
+ * Menandai angsuran mana yang sudah lunas historis (tanpa CooperativeLoanPayment)
  * berdasarkan posisi migrasi. Mengembalikan kartu angsuran dengan paid_* & status terisi.
  */
 const applyMigrationPaidState = (
@@ -1379,7 +1382,8 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
   const disbursementDate = parsedInput.disbursement_date ?? now;
   const paymentMethod = parsedInput.payment_method ?? 'TUNAI';
   const isMigration = parsedInput.migration_entry === true;
-  // Mode migrasi memakai relaksasi jadwal historis, tetapi tanpa jurnal & tanpa kas.
+  // Mode migrasi memakai relaksasi jadwal historis dan tidak menggerakkan kas.
+  // Bila GL sudah punya cutoff, piutangnya diposting lewat jurnal saldo awal.
   const historicalMode = Boolean(parsedInput.historical_entry) || isMigration;
   const financeTransactionId = crypto.randomUUID();
   let disbursedLoan: CooperativeLoan | undefined;
@@ -1394,11 +1398,12 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
   if (loan.status !== 'APPROVED') {
     throw new Error('Pinjaman hanya bisa dicairkan setelah approved.');
   }
-  // Piutang migrasi harus masuk periode saldo awal (sebelum cutoff) supaya tidak menghasilkan
-  // pinjaman berpiutang tanpa jejak GL. Bila posting sudah aktif untuk tanggal ini, tolak.
-  if (isMigration && await isGeneralLedgerPostingEnabled(disbursementDate)) {
+  // Piutang migrasi adalah posisi saldo awal, jadi bila cutoff sudah tersedia
+  // tanggalnya harus lebih tua dari cutoff, terlepas dari status aktivasi modul GL.
+  const cutoffDate = await getGeneralLedgerCutoffDate();
+  if (isMigration && cutoffDate && getDateKey(disbursementDate) >= getDateKey(cutoffDate)) {
     throw new Error(
-      'Pinjaman migrasi harus bertanggal sebelum cutoff buku besar. Piutangnya dicatat lewat saldo awal, bukan jurnal pencairan.',
+      'Pinjaman migrasi harus bertanggal sebelum cutoff buku besar. Piutangnya dicatat sebagai saldo awal, bukan pencairan berjalan.',
     );
   }
   // Service adalah sumber kebenaran: tolak posisi migrasi yang mustahil secara bisnis sebelum
@@ -1606,23 +1611,23 @@ const writeCooperativeLoanDisbursementInCurrentTransaction = async ({
   await db.cooperativeLoanInstallments.bulkAdd(installments);
   await db.cooperativeLoans.put(nextDisbursedLoan);
 
-  if (!isMigration) {
-    const journalEntry = await postCooperativeLoanDisbursementJournal(nextDisbursedLoan, currentUser);
-    if (journalEntry) {
-      disbursedLoan = {
-        ...nextDisbursedLoan,
-        journal_entry_id: journalEntry.id,
-        updated_at: now,
-        sync_status: 'pending',
-        sync_error: undefined,
-      };
-      await db.cooperativeLoans.update(loan.id, {
-        journal_entry_id: journalEntry.id,
-        updated_at: now,
-        sync_status: 'pending',
-        sync_error: undefined,
-      });
-    }
+  const journalEntry = isMigration
+    ? await postCooperativeLoanOpeningBalanceJournal(nextDisbursedLoan, currentUser)
+    : await postCooperativeLoanDisbursementJournal(nextDisbursedLoan, currentUser);
+  if (journalEntry) {
+    disbursedLoan = {
+      ...nextDisbursedLoan,
+      journal_entry_id: journalEntry.id,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    };
+    await db.cooperativeLoans.update(loan.id, {
+      journal_entry_id: journalEntry.id,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    });
   }
 
   await writeActivityLog({
@@ -1670,8 +1675,22 @@ export const disburseCooperativeLoan = async (
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_DISBURSE');
 
-  const parsedInput = cooperativeLoanDisbursementSchema.parse(input);
   const now = new Date().toISOString();
+  const disbursementDate = input.disbursement_date ?? now;
+  const shouldRecordAsOpeningBalance = !input.migration_entry && await isBeforeGeneralLedgerCutoff(disbursementDate);
+  const parsedInput = cooperativeLoanDisbursementSchema.parse(
+    shouldRecordAsOpeningBalance
+      ? {
+          ...input,
+          historical_entry: true,
+          migration_entry: true,
+          settled_through_installment_number: input.settled_through_installment_number ?? 0,
+          payment_method: undefined,
+          cash_account_id: undefined,
+          payment_channel: undefined,
+        }
+      : input,
+  );
   let result: CooperativeLoanDisbursementWriteResult | undefined;
 
   await db.transaction('rw', cooperativeLoanTables, async () => {
@@ -1777,8 +1796,8 @@ export const migrateCooperativeLoan = async (
     });
     await db.cooperativeLoans.put(approvedLoan);
 
-    // 3) Catat pencairan mode migrasi (tanpa jurnal & tanpa kas). Menandai angsuran lunas historis,
-    //    menurunkan outstanding dari sisa kartu, dan menulis activity log COOPERATIVE_LOAN_MIGRATED.
+    // 3) Catat pencairan mode migrasi (tanpa kas/finance transaction). Menandai angsuran lunas
+    //    historis, menurunkan outstanding dari sisa kartu, dan menulis activity log.
     result = await writeCooperativeLoanDisbursementInCurrentTransaction({
       loanId: loan.id,
       parsedInput: parsedDisbursement,
@@ -1806,6 +1825,12 @@ export const disburseCooperativeLoanViaFieldCash = async (
 ): Promise<DisburseCooperativeLoanViaFieldCashResult> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'COOPERATIVE_LOAN_DISBURSE');
+
+  if (await isBeforeGeneralLedgerCutoff(input.disbursement_date ?? new Date().toISOString())) {
+    throw new Error(
+      'Pencairan sebelum cutoff buku besar dicatat sebagai saldo awal pinjaman dan tidak boleh melalui kas petugas.',
+    );
+  }
 
   if (input.migration_entry) {
     throw new Error('Pinjaman migrasi tidak boleh melalui jalur kas petugas karena tidak menggerakkan kas. Gunakan pencatatan migrasi biasa.');
@@ -2409,6 +2434,13 @@ const recordCooperativeLoanPaymentLocally = async (
 export const recordCooperativeLoanPayment = async (
   input: RecordCooperativeLoanPaymentInput,
 ): Promise<RecordCooperativeLoanPaymentOutcome> => {
+  const parsedInput = cooperativeLoanPaymentSchema.parse(input);
+  if (await isBeforeGeneralLedgerCutoff(parsedInput.payment_date ?? new Date().toISOString())) {
+    throw new Error(
+      'Pembayaran angsuran sebelum cutoff buku besar harus tercermin sebagai saldo awal/sisa pinjaman, bukan transaksi kas historis.',
+    );
+  }
+
   const health = await postgresAdapter.healthCheck();
   if (health.available) {
     return recordCooperativeLoanPaymentOnServer(input);

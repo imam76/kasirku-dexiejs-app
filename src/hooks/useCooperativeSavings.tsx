@@ -208,6 +208,11 @@ export const useCooperativeSavings = () => {
     [],
     [],
   );
+  const generalLedgerSetting = useLiveQuery(
+    () => db.generalLedgerSetting.get('default'),
+    [],
+    undefined,
+  );
   const fieldCashEmployees = useLiveQuery(
     () => db.employees
       .where('field_cash_account_id')
@@ -329,6 +334,9 @@ export const useCooperativeSavings = () => {
     openingBalanceSuggestionByMemberId,
     interestByBalanceKey,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
+    openingBalanceCutoffDate: generalLedgerSetting?.is_ready
+      ? generalLedgerSetting.cutoff_date
+      : undefined,
     fieldCashEmployees: fieldCashEmployees as Employee[],
     fieldCashAccountIds,
     fieldCashBalances,

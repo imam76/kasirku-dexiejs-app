@@ -51,6 +51,7 @@ export default function CooperativeSavingManagement() {
     balances,
     pendingReturnByBalanceKey,
     openingBalanceSuggestionByMemberId,
+    openingBalanceCutoffDate,
     interestByBalanceKey,
     paymentAccounts,
     fieldCashAccountIds,
@@ -115,7 +116,7 @@ export default function CooperativeSavingManagement() {
     openingBalanceForm.resetFields();
     openingBalanceForm.setFieldsValue({
       saving_type: 'WAJIB',
-      transaction_date: dayjs(),
+      transaction_date: openingBalanceCutoffDate ? dayjs(openingBalanceCutoffDate) : dayjs(),
     });
     setIsOpeningBalanceModalOpen(true);
   };

@@ -17,14 +17,17 @@ Yang membedakannya dari pencairan biasa: pinjaman migrasi **sengaja tidak**:
 
 - menggerakkan kas / `financeBalance`;
 - membuat `financeTransactions`;
-- membuat jurnal pencairan (`finance_transaction_id` dan `journal_entry_id`
-  dibiarkan kosong).
+- membuat jurnal pencairan.
 
 Karena itu piutangnya **tidak** masuk lewat jurnal pencairan, melainkan lewat
-**saldo awal (opening balance) akun Piutang Pinjaman 1120**.
+**jurnal saldo awal (opening balance) akun Piutang Pinjaman 1120**. Jika GL
+sudah memiliki cutoff, service membentuk jurnal `OPENING_BALANCE` otomatis dan
+menyimpan `journal_entry_id` pada loan migrasi. Jika GL belum siap, loan tetap
+tersimpan sebagai subledger dan perlu dibackfill setelah setup GL selesai.
 
 Pinjaman migrasi ditandai dengan flag `is_migration = true` dan bertanggal
-sebelum cutoff buku besar (ditolak bila posting GL sudah aktif untuk tanggalnya).
+sebelum cutoff buku besar (ditolak bila cutoff GL sudah ada dan tanggal migrasi
+tidak lebih tua dari cutoff).
 
 ## Alur atomic
 
@@ -78,11 +81,11 @@ Karena pinjaman migrasi memakai jalur historis, cek rekonsiliasi dibuat
 
 ### Warning 1120 bukan selalu bug
 
-Bila pinjaman migrasi sudah ada tetapi **saldo awal akun 1120 belum diisi**,
-warning `LOAN_MIGRATION_OPENING` adalah **valid** dan harus diselesaikan lewat
-setup GL: isi baris Piutang Pinjaman (1120) di form Opening Balance sebesar total
-sisa pokok pinjaman migrasi. Form opening balance menyediakan tombol bantu untuk
-mengisi angka ini otomatis (`gl-opening-balance-fill-migration`).
+Bila pinjaman migrasi sudah ada tetapi **saldo awal akun 1120 belum terbentuk**,
+warning `LOAN_MIGRATION_OPENING` adalah **valid**. Ini biasanya terjadi pada data
+lama yang dibuat sebelum GL cutoff siap. Selesaikan lewat backfill jurnal saldo
+awal atau setup GL yang memuat Piutang Pinjaman (1120) sebesar total sisa pokok
+pinjaman migrasi.
 
 ## Laporan Perkembangan Resort/Karyawan
 

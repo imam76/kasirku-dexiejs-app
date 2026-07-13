@@ -6,7 +6,9 @@ Tanggal catatan: 2026-07-13
 
 Fitur **Input Saldo Awal Pinjaman** sudah menangani pinjaman berjalan saat
 cut-off sebagai data historis: pinjaman migrasi masuk ke operasional, tetapi
-tidak membuat mutasi kas, `financeTransactions`, atau jurnal pencairan. Untuk
+tidak membuat mutasi kas, `financeTransactions`, atau jurnal pencairan. Jika GL
+sudah memiliki cutoff, piutang pinjaman migrasi diposting lewat jurnal saldo awal.
+Untuk
 simpanan anggota perlu pola yang sama agar saldo simpanan sebelum sistem dipakai
 bisa dibawa masuk tanpa dianggap sebagai setoran harian baru.
 
@@ -22,9 +24,9 @@ dan laporan harian tidak boleh masuk sebagai storting/setoran biasa.
 - Saldo awal simpanan tidak mengubah `financeBalance`.
 - Saldo awal simpanan tidak membuat `financeTransactions`.
 - Saldo awal simpanan tidak membuat jurnal setoran simpanan.
-- Kewajiban simpanan di buku besar tetap diselesaikan lewat Opening Balance GL
-  pada akun simpanan anggota, mirip piutang pinjaman migrasi yang diselesaikan
-  lewat akun 1120.
+- Jika GL sudah memiliki cutoff, kewajiban simpanan otomatis diposting lewat
+  jurnal `OPENING_BALANCE` pada akun simpanan anggota, mirip piutang pinjaman
+  migrasi yang diposting ke akun 1120.
 - Rekonsiliasi koperasi tidak memunculkan warning palsu karena saldo awal
   simpanan tidak punya transaksi kas.
 
@@ -66,10 +68,10 @@ Alasan memakai `OPENING_BALANCE` dan bukan `DEPOSIT`:
 - jika saldo awal disimpan sebagai `DEPOSIT`, banyak laporan harus diberi guard
   tambahan agar tidak menghitung saldo awal sebagai kas masuk.
 
-### 3. GL tetap lewat Opening Balance, bukan jurnal simpanan
+### 3. GL lewat jurnal Opening Balance, bukan jurnal simpanan operasional
 
 Saldo awal simpanan koperasi adalah kewajiban kepada anggota. Di GL, nilainya
-harus masuk lewat jurnal opening balance:
+masuk lewat jurnal opening balance otomatis bila cutoff GL sudah tersedia:
 
 | Jenis simpanan | Akun default | Sisi |
 | --- | --- | --- |
@@ -79,6 +81,10 @@ harus masuk lewat jurnal opening balance:
 
 Jika akun detail belum tersedia, fallback ke `2300` Simpanan Anggota mengikuti
 candidate existing di `generalLedgerService.ts`.
+
+Akun lawan memakai akun ekuitas/saldo awal yang tersedia, misalnya Modal Pemilik
+atau SHU/Saldo Laba. Jurnal ini tidak membuat `financeTransactions` dan tidak
+masuk laporan kas/storting.
 
 ## File Terkait
 
@@ -351,8 +357,9 @@ Acceptance criteria:
 - Rekonsiliasi `SAVING_BALANCE` tetap OK.
 - Rekonsiliasi finance transaction tetap OK meski saldo awal tidak punya
   `finance_transaction_id`.
-- Jika Opening Balance GL akun simpanan belum diisi, rekonsiliasi kewajiban
-  simpanan memberi warning yang valid, bukan false positive.
+- Jika jurnal opening balance akun simpanan belum terbentuk karena GL belum
+  memiliki cutoff saat input, rekonsiliasi kewajiban simpanan memberi warning
+  setup yang valid, bukan false positive.
 
 ### Fase 5 - Edit/Hapus/Reversal Saldo Awal
 
@@ -460,8 +467,9 @@ Expected:
 - `SAVING_BALANCE` OK.
 - `FINANCE_TRANSACTION` tidak warning karena saldo awal tidak punya finance
   transaction.
-- Jika akun simpanan opening balance GL belum diisi, muncul warning khusus
-  kewajiban simpanan, bukan warning finance transaction.
+- Jika jurnal opening balance akun simpanan belum terbentuk karena GL belum
+  siap, muncul warning khusus kewajiban simpanan, bukan warning finance
+  transaction.
 
 ### SAV-OPEN-05 - Duplikasi saldo awal ditolak
 
@@ -509,24 +517,22 @@ Expected:
 
 ## Catatan Akuntansi
 
-Sama seperti saldo awal pinjaman, input saldo awal simpanan tidak otomatis
-menyelesaikan GL. Operator tetap harus memastikan Opening Balance GL berisi
-kewajiban simpanan anggota pada akun yang benar.
+Sama seperti saldo awal pinjaman, input saldo awal simpanan tidak membentuk
+transaksi kas atau jurnal operasional. Jika General Ledger sudah memiliki cutoff,
+service otomatis membuat jurnal `OPENING_BALANCE` terpisah sehingga neraca dan
+buku besar ikut terbentuk.
 
 Contoh:
 
 | Akun | Debit | Kredit |
 | --- | ---: | ---: |
-| Kas/Bank/Modal penyeimbang sesuai setup awal | sesuai neraca | - |
+| Ekuitas/Saldo Awal penyeimbang | total saldo awal simpanan | - |
 | Simpanan Pokok `2310` | - | total saldo awal pokok |
 | Simpanan Wajib `2320` | - | total saldo awal wajib |
 | Simpanan Sukarela `2330` | - | total saldo awal sukarela |
 
-Form opening balance GL boleh ditambahkan tombol bantu pada fase lanjutan:
-
-- isi otomatis `2310` dari total saldo awal `POKOK`;
-- isi otomatis `2320` dari total saldo awal `WAJIB`;
-- isi otomatis `2330` dari total saldo awal `SUKARELA`.
+Jika GL belum memiliki cutoff saat saldo awal dimasukkan, saldo subledger tetap
+tersimpan dan perlu proses backfill/rekonsiliasi setelah setup GL siap.
 
 ## Definisi Selesai
 
@@ -536,6 +542,7 @@ Form opening balance GL boleh ditambahkan tombol bantu pada fase lanjutan:
 - Saldo anggota, mutasi, sync, dan activity log konsisten.
 - Tidak ada mutasi kas, finance transaction, atau jurnal operasional untuk saldo
   awal.
+- Jurnal saldo awal GL terbentuk otomatis ketika cutoff GL sudah tersedia.
 - Rekonsiliasi koperasi membedakan saldo awal simpanan dari setoran biasa.
 - E2E mencakup input, duplikasi, laporan, rekonsiliasi, dan reversal/koreksi.
 - Sync db + realtime
