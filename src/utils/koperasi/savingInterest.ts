@@ -79,7 +79,7 @@ export const calculateCooperativeSavingInterest = (
   activeTransactions.forEach((transaction) => {
     accrueUntil(transaction.transaction_date);
 
-    if (transaction.transaction_type === 'DEPOSIT') {
+    if (transaction.transaction_type === 'DEPOSIT' || transaction.transaction_type === 'OPENING_BALANCE') {
       tranches.push({
         remainingAmount: roundCurrency(transaction.amount),
         depositDate: transaction.transaction_date,
@@ -112,4 +112,3 @@ export const calculateCooperativeSavingInterest = (
     availableInterest: Math.max(0, roundCurrency(grossInterest - withdrawnInterest)),
   };
 };
-

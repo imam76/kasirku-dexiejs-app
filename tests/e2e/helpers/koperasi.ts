@@ -11,6 +11,7 @@ export interface DemoMemberInput {
 
 type SavingType = 'POKOK' | 'WAJIB' | 'SUKARELA';
 type SavingTransactionType = 'DEPOSIT' | 'WITHDRAWAL';
+type SavingMutationType = SavingTransactionType | 'OPENING_BALANCE';
 
 const savingTypeLabels: Record<SavingType, string> = {
   POKOK: 'Pokok',
@@ -21,6 +22,11 @@ const savingTypeLabels: Record<SavingType, string> = {
 const savingTransactionTypeLabels: Record<SavingTransactionType, string> = {
   DEPOSIT: 'Setoran',
   WITHDRAWAL: 'Penarikan',
+};
+
+const savingMutationTypeLabels: Record<SavingMutationType, string> = {
+  ...savingTransactionTypeLabels,
+  OPENING_BALANCE: 'Saldo Awal',
 };
 
 const formatCurrency = (value: number) => value.toLocaleString('id-ID');
@@ -136,18 +142,48 @@ export async function recordSaving(page: Page, input: {
   await expect(savingMutationRow(page, input.member.name, input.savingType, input.transactionType, input.amount)).toBeVisible();
 }
 
+export async function recordOpeningSaving(page: Page, input: {
+  member: DemoMemberInput;
+  savingType: SavingType;
+  amount: number;
+  expectedError?: string;
+}) {
+  await page.goto('/koperasi/simpanan');
+  await expect(page.getByText('Simpanan Anggota')).toBeVisible();
+
+  await page.getByTestId('koperasi-saving-opening-button').click();
+  await selectAntdOptionByTestId(
+    page,
+    'koperasi-saving-opening-member-select',
+    `${input.member.memberNumber} - ${input.member.name}`,
+  );
+  await selectAntdOptionByTestId(page, 'koperasi-saving-opening-type-select', savingTypeLabels[input.savingType]);
+  await fillControlByTestId(page, 'koperasi-saving-opening-amount-input', String(input.amount));
+  await page.getByTestId('koperasi-saving-opening-submit-button').click();
+
+  if (input.expectedError) {
+    await expect(page.getByText(input.expectedError)).toBeVisible();
+    await closeTopDialog(page);
+    return;
+  }
+
+  await expect(
+    savingMutationRow(page, input.member.name, input.savingType, 'OPENING_BALANCE', input.amount),
+  ).toBeVisible();
+}
+
 export function savingMutationRow(
   page: Page,
   memberName: string,
   savingType: SavingType,
-  transactionType: SavingTransactionType,
+  transactionType: SavingMutationType,
   amount: number,
 ) {
   return page
     .locator('tr')
     .filter({ hasText: memberName })
     .filter({ hasText: savingTypeLabels[savingType] })
-    .filter({ hasText: savingTransactionTypeLabels[transactionType] })
+    .filter({ hasText: savingMutationTypeLabels[transactionType] })
     .filter({ hasText: `Rp ${formatCurrency(amount)}` })
     .first();
 }

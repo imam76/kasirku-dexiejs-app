@@ -3,8 +3,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import {
+  buildCooperativeSavingOpeningBalanceSuggestions,
   recordCooperativeSaving,
+  recordCooperativeSavingOpeningBalance,
   reverseCooperativeSaving,
+  type CooperativeSavingOpeningBalanceSuggestion,
+  type RecordCooperativeSavingOpeningBalanceInput,
   type RecordCooperativeSavingInput,
   type ReverseCooperativeSavingInput,
 } from '@/services/cooperativeSavingService';
@@ -270,6 +274,14 @@ export const useCooperativeSavings = () => {
   const pendingReturnByBalanceKey = useMemo(() => (
     buildPendingMandatorySavingReturns(loans, loanPayments, transactions)
   ), [loanPayments, loans, transactions]);
+  const openingBalanceSuggestionByMemberId = useMemo(() => {
+    const suggestions = buildCooperativeSavingOpeningBalanceSuggestions(
+      loans,
+      balances,
+      transactions,
+    );
+    return new Map(suggestions.map((suggestion) => [suggestion.member_id, suggestion]));
+  }, [balances, loans, transactions]);
   const interestByBalanceKey = useMemo(() => {
     const result = new Map<string, number>();
 
@@ -297,6 +309,10 @@ export const useCooperativeSavings = () => {
     mutationFn: recordCooperativeSaving,
     onSuccess: invalidate,
   });
+  const recordOpeningBalanceMutation = useMutation({
+    mutationFn: recordCooperativeSavingOpeningBalance,
+    onSuccess: invalidate,
+  });
   const reverseMutation = useMutation({
     mutationFn: reverseCooperativeSaving,
     onSuccess: invalidate,
@@ -310,6 +326,7 @@ export const useCooperativeSavings = () => {
     balances,
     filteredBalances,
     pendingReturnByBalanceKey,
+    openingBalanceSuggestionByMemberId,
     interestByBalanceKey,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
     fieldCashEmployees: fieldCashEmployees as Employee[],
@@ -326,10 +343,14 @@ export const useCooperativeSavings = () => {
     statusFilter,
     setStatusFilter,
     recordSaving: (input: RecordCooperativeSavingInput) => recordMutation.mutateAsync(input),
+    recordOpeningBalance: (input: RecordCooperativeSavingOpeningBalanceInput) => (
+      recordOpeningBalanceMutation.mutateAsync(input)
+    ),
     reverseSaving: (input: ReverseCooperativeSavingInput) => reverseMutation.mutateAsync(input),
-    isMutating: recordMutation.isPending || reverseMutation.isPending,
+    isMutating: recordMutation.isPending || recordOpeningBalanceMutation.isPending || reverseMutation.isPending,
   };
 };
 
 export type CooperativeSavingMemberOption = Pick<CooperativeMember, 'id' | 'member_number' | 'name'>;
 export type CooperativeSavingBalanceRow = CooperativeMemberSavingBalance;
+export type { CooperativeSavingOpeningBalanceSuggestion };

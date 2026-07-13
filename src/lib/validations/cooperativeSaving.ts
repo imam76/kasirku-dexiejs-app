@@ -31,9 +31,18 @@ export const cooperativeSavingTransactionSchema = z.object({
   notes: optionalTrimmedString,
 });
 
+export const cooperativeSavingOpeningBalanceSchema = z.object({
+  member_id: z.string().trim().min(1, 'Anggota wajib dipilih.'),
+  saving_type: z.enum(cooperativeSavingTypeValues, { message: 'Jenis simpanan wajib dipilih.' }),
+  amount: z.coerce.number().positive('Nominal saldo awal harus lebih dari 0.'),
+  transaction_date: z.string().trim().min(1, 'Tanggal saldo awal wajib diisi.'),
+  notes: optionalTrimmedString,
+});
+
 export const cooperativeSavingReversalSchema = z.object({
   reason: z.string().trim().min(1, 'Alasan reversal wajib diisi.'),
 });
 
 export type CooperativeSavingTransactionFormData = z.infer<typeof cooperativeSavingTransactionSchema>;
+export type CooperativeSavingOpeningBalanceFormData = z.infer<typeof cooperativeSavingOpeningBalanceSchema>;
 export type CooperativeSavingReversalFormData = z.infer<typeof cooperativeSavingReversalSchema>;

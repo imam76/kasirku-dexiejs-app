@@ -2,6 +2,7 @@ import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import {
+  cooperativeSavingOpeningBalanceSchema,
   cooperativeSavingReversalSchema,
   cooperativeSavingTransactionSchema,
 } from '@/lib/validations/cooperativeSaving';
@@ -24,6 +25,7 @@ import {
 import type {
   CooperativeMember,
   CooperativeMemberSavingBalance,
+  CooperativeLoan,
   CooperativeSavingTransaction,
   CooperativeSavingTransactionType,
   CooperativeSavingType,
@@ -50,6 +52,14 @@ export interface RecordCooperativeSavingInput {
   notes?: string;
 }
 
+export interface RecordCooperativeSavingOpeningBalanceInput {
+  member_id: string;
+  saving_type: CooperativeSavingType;
+  amount: number;
+  transaction_date: string;
+  notes?: string;
+}
+
 export interface ReverseCooperativeSavingInput {
   transaction_id: string;
   reason: string;
@@ -58,6 +68,19 @@ export interface ReverseCooperativeSavingInput {
 export interface RecordCooperativeSavingResult {
   transaction: CooperativeSavingTransaction;
   balance: CooperativeMemberSavingBalance;
+}
+
+export interface CooperativeSavingOpeningBalanceSuggestion {
+  key: string;
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  saving_type: 'WAJIB';
+  required_amount: number;
+  existing_opening_balance_amount: number;
+  current_balance_amount: number;
+  suggested_amount: number;
+  loan_numbers: string[];
 }
 
 const cooperativeSavingTables = [
@@ -72,6 +95,7 @@ const cooperativeSavingTables = [
   db.financeAccountMappings,
   db.enabledModules,
   db.generalLedgerSetting,
+  db.accountingPeriods,
   db.journalEntries,
   db.journalEntryLines,
   db.activityLogs,
@@ -80,6 +104,87 @@ const cooperativeSavingTables = [
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 const getSavingBalanceId = (memberId: string, savingType: CooperativeSavingType) => `${memberId}:${savingType}`;
+
+const getDateKey = (value: string) => value.slice(0, 10);
+
+const isOpeningBalanceReversal = (
+  transaction: CooperativeSavingTransaction,
+  transactionById: Map<string, CooperativeSavingTransaction>,
+) => (
+  transaction.transaction_type === 'REVERSAL' &&
+  transaction.reversal_of_transaction_id &&
+  transactionById.get(transaction.reversal_of_transaction_id)?.transaction_type === 'OPENING_BALANCE'
+);
+
+export const buildCooperativeSavingOpeningBalanceSuggestions = (
+  loans: CooperativeLoan[],
+  balances: CooperativeMemberSavingBalance[],
+  transactions: CooperativeSavingTransaction[],
+): CooperativeSavingOpeningBalanceSuggestion[] => {
+  const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+  const balanceByKey = new Map(balances.map((balance) => [balance.id, balance]));
+  const openingBalanceByMemberId = new Map<string, number>();
+  const requiredByMemberId = new Map<string, CooperativeSavingOpeningBalanceSuggestion>();
+
+  transactions
+    .filter((transaction) => (
+      transaction.saving_type === 'WAJIB' &&
+      (
+        transaction.transaction_type === 'OPENING_BALANCE' ||
+        isOpeningBalanceReversal(transaction, transactionById)
+      )
+    ))
+    .forEach((transaction) => {
+      const current = openingBalanceByMemberId.get(transaction.member_id) ?? 0;
+      const delta = transaction.transaction_type === 'OPENING_BALANCE'
+        ? Number(transaction.amount || 0)
+        : -Number(transaction.amount || 0);
+      openingBalanceByMemberId.set(transaction.member_id, roundCurrency(current + delta));
+    });
+
+  loans
+    .filter((loan) => loan.is_migration && loan.status !== 'REVERSED')
+    .forEach((loan) => {
+      const amount = roundCurrency(Number(loan.mandatory_saving_amount || 0));
+      if (amount <= 0) return;
+
+      const key = `${loan.member_id}:WAJIB`;
+      const current = requiredByMemberId.get(loan.member_id);
+      if (!current) {
+        requiredByMemberId.set(loan.member_id, {
+          key,
+          member_id: loan.member_id,
+          member_number: loan.member_number,
+          member_name: loan.member_name,
+          saving_type: 'WAJIB',
+          required_amount: amount,
+          existing_opening_balance_amount: roundCurrency(openingBalanceByMemberId.get(loan.member_id) ?? 0),
+          current_balance_amount: roundCurrency(Number(balanceByKey.get(key)?.balance || 0)),
+          suggested_amount: amount,
+          loan_numbers: [loan.loan_number],
+        });
+        return;
+      }
+
+      current.required_amount = roundCurrency(current.required_amount + amount);
+      current.suggested_amount = current.required_amount;
+      current.loan_numbers.push(loan.loan_number);
+    });
+
+  return Array.from(requiredByMemberId.values())
+    .map((suggestion) => {
+      const coveredAmount = Math.max(
+        suggestion.existing_opening_balance_amount,
+        suggestion.current_balance_amount,
+      );
+      return {
+        ...suggestion,
+        suggested_amount: Math.max(0, roundCurrency(suggestion.required_amount - coveredAmount)),
+      };
+    })
+    .filter((suggestion) => suggestion.suggested_amount > 0.01)
+    .sort((left, right) => left.member_number.localeCompare(right.member_number, undefined, { numeric: true }));
+};
 
 const getFinanceCategoryForSaving = (
   transactionType: CooperativeSavingTransactionType,
@@ -117,6 +222,36 @@ const assertActiveMember = (member: CooperativeMember | undefined) => {
   return member;
 };
 
+const assertOpeningBalanceDateWithinCutoff = async (transactionDate: string) => {
+  const setting = await db.generalLedgerSetting.get('default');
+  if (!setting?.is_ready || !setting.cutoff_date) return;
+
+  if (getDateKey(transactionDate) > getDateKey(setting.cutoff_date)) {
+    throw new Error(
+      'Tanggal saldo awal simpanan harus sebelum atau sama dengan cutoff buku besar.',
+    );
+  }
+};
+
+const assertNoDuplicateOpeningBalance = async (
+  memberId: string,
+  savingType: CooperativeSavingType,
+) => {
+  const existingOpeningBalance = await db.cooperativeSavingTransactions
+    .where('member_id')
+    .equals(memberId)
+    .filter((transaction) => (
+      transaction.saving_type === savingType &&
+      transaction.transaction_type === 'OPENING_BALANCE' &&
+      transaction.status === 'POSTED'
+    ))
+    .first();
+
+  if (existingOpeningBalance) {
+    throw new Error('Saldo awal untuk anggota dan jenis simpanan ini sudah pernah dicatat.');
+  }
+};
+
 const assertSavingBusinessRules = async (
   member: CooperativeMember,
   savingType: CooperativeSavingType,
@@ -131,7 +266,7 @@ const assertSavingBusinessRules = async (
       .equals(member.id)
       .filter((transaction) => (
         transaction.saving_type === 'POKOK' &&
-        transaction.transaction_type === 'DEPOSIT' &&
+        (transaction.transaction_type === 'DEPOSIT' || transaction.transaction_type === 'OPENING_BALANCE') &&
         transaction.status === 'POSTED'
       ))
       .first();
@@ -398,6 +533,70 @@ export const recordCooperativeSaving = async (
   };
 };
 
+export const recordCooperativeSavingOpeningBalance = async (
+  input: RecordCooperativeSavingOpeningBalanceInput,
+): Promise<RecordCooperativeSavingResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'COOPERATIVE_SAVING_MANAGE');
+
+  const parsedInput = cooperativeSavingOpeningBalanceSchema.parse(input);
+  const amount = roundCurrency(parsedInput.amount);
+  const now = new Date().toISOString();
+  const transactionDate = parsedInput.transaction_date;
+  const savingTransactionId = crypto.randomUUID();
+  let savedTransaction: CooperativeSavingTransaction | undefined;
+  let savedBalance: CooperativeMemberSavingBalance | undefined;
+
+  await db.transaction('rw', cooperativeSavingTables, async () => {
+    const member = assertActiveMember(await db.cooperativeMembers.get(parsedInput.member_id));
+    await assertOpeningBalanceDateWithinCutoff(transactionDate);
+    await assertNoDuplicateOpeningBalance(member.id, parsedInput.saving_type);
+
+    const savingTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
+      id: savingTransactionId,
+      member_id: member.id,
+      member_number: member.member_number,
+      member_name: member.name,
+      saving_type: parsedInput.saving_type,
+      transaction_type: 'OPENING_BALANCE',
+      amount,
+      transaction_date: transactionDate,
+      status: 'POSTED',
+      notes: parsedInput.notes,
+      created_at: now,
+      updated_at: now,
+      created_by: currentUser?.id,
+      created_by_name: currentUser?.name,
+      updated_by: currentUser?.id,
+      updated_by_name: currentUser?.name,
+    });
+
+    savedBalance = await buildBalance(member, parsedInput.saving_type, amount, now);
+    await db.cooperativeSavingTransactions.add(savingTransaction);
+    savedTransaction = savingTransaction;
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'COOPERATIVE_SAVING_OPENING_BALANCE_RECORDED',
+      entity: 'cooperativeSavingTransactions',
+      entity_id: savingTransaction.id,
+      description: `${currentUser?.name ?? 'User'} mencatat saldo awal simpanan ${parsedInput.saving_type} ${member.member_number} sebesar ${amount}.`,
+    });
+  });
+
+  if (!savedTransaction || !savedBalance) {
+    throw new Error('Saldo awal simpanan gagal disimpan.');
+  }
+
+  await enqueueCooperativeSavingTransactionsSync([savedTransaction], 'create');
+  await enqueueCooperativeMemberSavingBalancesSync([savedBalance], 'update');
+
+  return {
+    transaction: savedTransaction,
+    balance: savedBalance,
+  };
+};
+
 export const reverseCooperativeSaving = async (
   input: ReverseCooperativeSavingInput,
 ): Promise<CooperativeSavingTransaction> => {
@@ -434,7 +633,10 @@ export const reverseCooperativeSaving = async (
       throw new Error('Transaksi simpanan sudah memiliki reversal.');
     }
 
-    await updateFinanceBalance(originalTransaction.transaction_type, originalTransaction.amount, now, true);
+    const isOpeningBalance = originalTransaction.transaction_type === 'OPENING_BALANCE';
+    if (!isOpeningBalance) {
+      await updateFinanceBalance(originalTransaction.transaction_type, originalTransaction.amount, now, true);
+    }
     const reversalBalanceDelta = getBalanceDelta(
       originalTransaction.transaction_type,
       originalTransaction.amount,
@@ -459,31 +661,33 @@ export const reverseCooperativeSaving = async (
       );
     }
 
-    const reversalType = originalTransaction.transaction_type === 'WITHDRAWAL' ? 'INCOME' : 'EXPENSE';
-    const financeCategory = getFinanceCategoryForSaving(
-      originalTransaction.transaction_type,
-      originalTransaction.withdrawal_source,
-    );
-    const accountSnapshot = await getFinanceAccountSnapshotForCategory(financeCategory);
-    reversalFinanceTransaction = withPendingFinanceTransactionSync({
-      id: reversalFinanceTransactionId,
-      type: reversalType,
-      category: financeCategory,
-      amount: originalTransaction.amount,
-      description: `Reversal ${
-        originalTransaction.withdrawal_source === 'INTEREST'
-          ? 'pengambilan jasa'
-          : originalTransaction.transaction_type === 'DEPOSIT' ? 'setoran' : 'penarikan'
-      } simpanan ${originalTransaction.saving_type} ${originalTransaction.member_number}. ${parsedInput.reason}`,
-      created_at: now,
-      reference_id: reversalTransactionId,
-      payment_method: originalTransaction.payment_method,
-      payment_channel: originalTransaction.payment_channel,
-      cash_account_id: originalTransaction.cash_account_id,
-      cash_account_code: originalTransaction.cash_account_code,
-      cash_account_name: originalTransaction.cash_account_name,
-      ...accountSnapshot,
-    }, currentUser, now);
+    if (!isOpeningBalance) {
+      const reversalType = originalTransaction.transaction_type === 'WITHDRAWAL' ? 'INCOME' : 'EXPENSE';
+      const financeCategory = getFinanceCategoryForSaving(
+        originalTransaction.transaction_type,
+        originalTransaction.withdrawal_source,
+      );
+      const accountSnapshot = await getFinanceAccountSnapshotForCategory(financeCategory);
+      reversalFinanceTransaction = withPendingFinanceTransactionSync({
+        id: reversalFinanceTransactionId,
+        type: reversalType,
+        category: financeCategory,
+        amount: originalTransaction.amount,
+        description: `Reversal ${
+          originalTransaction.withdrawal_source === 'INTEREST'
+            ? 'pengambilan jasa'
+            : originalTransaction.transaction_type === 'DEPOSIT' ? 'setoran' : 'penarikan'
+        } simpanan ${originalTransaction.saving_type} ${originalTransaction.member_number}. ${parsedInput.reason}`,
+        created_at: now,
+        reference_id: reversalTransactionId,
+        payment_method: originalTransaction.payment_method,
+        payment_channel: originalTransaction.payment_channel,
+        cash_account_id: originalTransaction.cash_account_id,
+        cash_account_code: originalTransaction.cash_account_code,
+        cash_account_name: originalTransaction.cash_account_name,
+        ...accountSnapshot,
+      }, currentUser, now);
+    }
 
     const nextReversalTransaction: CooperativeSavingTransaction = withPendingCooperativeSync({
       id: reversalTransactionId,
@@ -502,7 +706,7 @@ export const reverseCooperativeSaving = async (
       cash_account_name: originalTransaction.cash_account_name,
       payment_method: originalTransaction.payment_method,
       payment_channel: originalTransaction.payment_channel,
-      finance_transaction_id: reversalFinanceTransactionId,
+      finance_transaction_id: reversalFinanceTransaction?.id,
       reversal_of_transaction_id: originalTransaction.id,
       notes: parsedInput.reason,
       created_at: now,
@@ -514,7 +718,9 @@ export const reverseCooperativeSaving = async (
     });
     reversalTransaction = nextReversalTransaction;
 
-    await db.financeTransactions.add(reversalFinanceTransaction);
+    if (reversalFinanceTransaction) {
+      await db.financeTransactions.add(reversalFinanceTransaction);
+    }
     await db.cooperativeSavingTransactions.add(nextReversalTransaction);
 
     const reversalEntries = originalTransaction.journal_entry_id
@@ -531,7 +737,7 @@ export const reverseCooperativeSaving = async (
       ...originalTransaction,
       status: 'REVERSED' as const,
       reversal_transaction_id: nextReversalTransaction.id,
-      reversal_finance_transaction_id: reversalFinanceTransactionId,
+      reversal_finance_transaction_id: reversalFinanceTransaction?.id,
       reversal_journal_entry_id: reversalJournalEntryId,
       reversed_at: now,
       reversal_reason: parsedInput.reason,

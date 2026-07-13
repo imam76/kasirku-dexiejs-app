@@ -76,12 +76,14 @@ const savingTransactionTypeColor: Record<CooperativeSavingTransactionType, strin
   DEPOSIT: 'green',
   WITHDRAWAL: 'red',
   REVERSAL: 'orange',
+  OPENING_BALANCE: 'blue',
 };
 
 const savingTransactionTypeLabelKey: Record<CooperativeSavingTransactionType, TranslationKey> = {
   DEPOSIT: 'cooperative.savings.transactionType.deposit',
   WITHDRAWAL: 'cooperative.savings.transactionType.withdrawal',
   REVERSAL: 'cooperative.savings.transactionType.reversal',
+  OPENING_BALANCE: 'cooperative.savings.transactionType.openingBalance',
 };
 
 const savingStatusColor: Record<CooperativeSavingTransactionStatus, string> = {
@@ -169,6 +171,7 @@ const reconciliationLabelKey: Record<CooperativeReconciliationKey, TranslationKe
   FINANCE_TRANSACTION: 'cooperative.reports.reconciliation.financeTransaction',
   JOURNAL_ENTRY: 'cooperative.reports.reconciliation.journalEntry',
   LOAN_MIGRATION_OPENING: 'cooperative.reports.reconciliation.loanMigrationOpening',
+  SAVING_LIABILITY_OPENING: 'cooperative.reports.reconciliation.savingLiabilityOpening',
 };
 
 const getSignedAmountClass = (value: number) => (

@@ -31,6 +31,9 @@ export async function closeTopDialog(page: Page) {
   const dialog = page.getByRole('dialog').last();
   await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
+  if (await dialog.isVisible()) {
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click({ force: true });
+  }
   await expect(dialog).toBeHidden();
 }
 

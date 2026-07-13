@@ -207,6 +207,7 @@ export default function CooperativeSavingFormModal({
       width={820}
     >
       <Form<CooperativeSavingFormValues>
+        name="cooperativeSavingTransactionForm"
         form={form}
         layout="vertical"
         onFinish={onSubmit}
@@ -233,7 +234,9 @@ export default function CooperativeSavingFormModal({
             rules={[{ required: true, message: t('cooperative.savings.validation.transactionTypeRequired') }]}
           >
             <Select
-              options={cooperativeSavingTransactionTypeOptions.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+              options={cooperativeSavingTransactionTypeOptions
+                .filter((option) => option.value !== 'OPENING_BALANCE')
+                .map((option) => ({ value: option.value, label: t(option.labelKey) }))}
               data-testid="koperasi-saving-transaction-type-select"
             />
           </Form.Item>

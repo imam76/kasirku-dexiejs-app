@@ -45,6 +45,7 @@ export default function CooperativeSavingTable({
   const getTransactionTypeColor = (transactionType: CooperativeSavingTransactionType) => {
     if (transactionType === 'DEPOSIT') return 'green';
     if (transactionType === 'WITHDRAWAL') return 'red';
+    if (transactionType === 'OPENING_BALANCE') return 'blue';
     return 'orange';
   };
 

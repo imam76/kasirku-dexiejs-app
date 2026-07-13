@@ -312,7 +312,8 @@ export type CooperativeReconciliationKey =
   | 'PAYMENT_INSTALLMENT'
   | 'FINANCE_TRANSACTION'
   | 'JOURNAL_ENTRY'
-  | 'LOAN_MIGRATION_OPENING';
+  | 'LOAN_MIGRATION_OPENING'
+  | 'SAVING_LIABILITY_OPENING';
 
 export interface CooperativeReconciliationRow {
   key: CooperativeReconciliationKey;
@@ -922,15 +923,20 @@ const getSavingTransactionDelta = (
   transaction: CooperativeSavingTransaction,
   transactionById: Map<string, CooperativeSavingTransaction>,
 ) => {
-  if (transaction.transaction_type === 'DEPOSIT') return transaction.amount;
-  if (transaction.transaction_type === 'WITHDRAWAL') return -transaction.amount;
+  if (transaction.transaction_type === 'DEPOSIT' || transaction.transaction_type === 'OPENING_BALANCE') {
+    return transaction.amount;
+  }
+  if (transaction.transaction_type === 'WITHDRAWAL') {
+    return transaction.withdrawal_source === 'INTEREST' ? 0 : -transaction.amount;
+  }
 
   const original = transaction.reversal_of_transaction_id
     ? transactionById.get(transaction.reversal_of_transaction_id)
     : undefined;
-  return original?.transaction_type === 'WITHDRAWAL'
-    ? transaction.amount
-    : -transaction.amount;
+  if (original?.transaction_type === 'WITHDRAWAL') {
+    return original.withdrawal_source === 'INTEREST' ? 0 : transaction.amount;
+  }
+  return -transaction.amount;
 };
 
 const buildExpectedSavingBalanceByKey = (
@@ -1317,11 +1323,23 @@ const buildFinanceTransactionReconciliation = (
   financeTransactions: FinanceTransaction[],
 ) => {
   const financeById = new Map(financeTransactions.map((transaction) => [transaction.id, transaction]));
+  const savingById = new Map(savingTransactions.map((transaction) => [transaction.id, transaction]));
+  const isCashBackedSavingTransaction = (transaction: CooperativeSavingTransaction) => {
+    if (transaction.transaction_type === 'OPENING_BALANCE') return false;
+    if (transaction.transaction_type !== 'REVERSAL') return true;
+
+    const original = transaction.reversal_of_transaction_id
+      ? savingById.get(transaction.reversal_of_transaction_id)
+      : undefined;
+    return original?.transaction_type !== 'OPENING_BALANCE';
+  };
   const expectedRefs: Array<{ financeTransactionId?: string; amount: number }> = [
-    ...savingTransactions.map((transaction) => ({
-      financeTransactionId: transaction.finance_transaction_id,
-      amount: transaction.amount,
-    })),
+    ...savingTransactions
+      .filter(isCashBackedSavingTransaction)
+      .map((transaction) => ({
+        financeTransactionId: transaction.finance_transaction_id,
+        amount: transaction.amount,
+      })),
     ...loans
       // Pencairan pinjaman migrasi sengaja tidak menggerakkan kas / financeTransactions,
       // jadi jangan diharapkan punya finance_transaction_id (menghindari false warning).
@@ -1434,6 +1452,47 @@ const buildLoanReceivableLedgerReconciliation = (
   return createReconciliationRow('LOAN_MIGRATION_OPENING', mismatchCount, expectedAmount, actualAmount);
 };
 
+const getSavingLiabilityAccountIds = (accounts: ChartOfAccount[]) => {
+  const candidates = [
+    { ids: ['template-member-savings-pokok'], codes: ['2310'] },
+    { ids: ['template-member-savings-wajib'], codes: ['2320'] },
+    { ids: ['template-member-savings-sukarela'], codes: ['2330'] },
+    { ids: ['cooperative-member-savings'], codes: ['2300'] },
+  ];
+  const accountIds = new Set<string>();
+
+  candidates.forEach((candidate) => {
+    accounts
+      .filter((account) => (
+        candidate.ids.includes(account.id) ||
+        candidate.codes.includes(account.code)
+      ))
+      .forEach((account) => accountIds.add(account.id));
+  });
+
+  return accountIds;
+};
+
+const buildSavingLiabilityLedgerReconciliation = (
+  savingBalances: CooperativeMemberSavingBalance[],
+  accounts: ChartOfAccount[],
+  journalEntries: JournalEntryWithLines[],
+): CooperativeReconciliationRow => {
+  const expectedAmount = savingBalances.reduce(
+    (sum, balance) => sum + Number(balance.balance || 0),
+    0,
+  );
+  const savingLiabilityAccountIds = getSavingLiabilityAccountIds(accounts);
+  const actualAmount = journalEntries.reduce((sum, entry) => sum + entry.lines.reduce(
+    (lineSum, line) => (savingLiabilityAccountIds.has(line.account_id)
+      ? lineSum + (Number(line.credit || 0) - Number(line.debit || 0))
+      : lineSum),
+    0,
+  ), 0);
+  const mismatchCount = isBalanceMismatch(actualAmount - expectedAmount) ? 1 : 0;
+  return createReconciliationRow('SAVING_LIABILITY_OPENING', mismatchCount, expectedAmount, actualAmount);
+};
+
 const buildReconciliationSummary = (
   savingBalances: CooperativeMemberSavingBalance[],
   savingTransactions: CooperativeSavingTransaction[],
@@ -1444,6 +1503,7 @@ const buildReconciliationSummary = (
   journalEntries: JournalEntryWithLines[],
   accounts: ChartOfAccount[],
   receivableJournalEntries: JournalEntryWithLines[],
+  isGeneralLedgerReady: boolean,
 ): CooperativeReconciliationSummary => {
   const rows = [
     buildSavingBalanceReconciliation(savingBalances, savingTransactions),
@@ -1456,6 +1516,12 @@ const buildReconciliationSummary = (
   // kalau tidak, hindari noise untuk koperasi tanpa migrasi.
   if (loans.some((loan) => loan.is_migration)) {
     rows.push(buildLoanReceivableLedgerReconciliation(loans, accounts, receivableJournalEntries));
+  }
+  if (
+    isGeneralLedgerReady ||
+    savingTransactions.some((transaction) => transaction.transaction_type === 'OPENING_BALANCE')
+  ) {
+    rows.push(buildSavingLiabilityLedgerReconciliation(savingBalances, accounts, receivableJournalEntries));
   }
   const mismatchCount = rows.reduce((sum, row) => sum + row.mismatch_count, 0);
 
@@ -1594,6 +1660,7 @@ export const getCooperativeReportData = async (
       reconciliationJournalEntries,
       accounts,
       formalStatementEntries,
+      financialReadiness.is_ready,
     ),
     journalEntries,
     incomeStatement,

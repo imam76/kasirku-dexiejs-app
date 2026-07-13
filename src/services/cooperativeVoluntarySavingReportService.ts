@@ -67,7 +67,9 @@ const getSavingTransactionDelta = (
   transaction: CooperativeSavingTransaction,
   transactionById: Map<string, CooperativeSavingTransaction>,
 ) => {
-  if (transaction.transaction_type === 'DEPOSIT') return Number(transaction.amount || 0);
+  if (transaction.transaction_type === 'DEPOSIT' || transaction.transaction_type === 'OPENING_BALANCE') {
+    return Number(transaction.amount || 0);
+  }
   if (transaction.transaction_type === 'WITHDRAWAL') {
     return transaction.withdrawal_source === 'INTEREST' ? 0 : -Number(transaction.amount || 0);
   }

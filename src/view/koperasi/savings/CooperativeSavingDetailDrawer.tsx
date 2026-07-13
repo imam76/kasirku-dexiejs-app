@@ -87,7 +87,9 @@ export default function CooperativeSavingDetailDrawer({
                 : '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('checkout.method')}>
-              {transaction.payment_method === 'NON_TUNAI' ? t('payment.nonCash') : t('payment.cash')}
+              {transaction.payment_method
+                ? transaction.payment_method === 'NON_TUNAI' ? t('payment.nonCash') : t('payment.cash')
+                : '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('finance.paymentChannel')}>
               {transaction.payment_channel || '-'}

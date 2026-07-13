@@ -12,12 +12,13 @@ export const cooperativeSavingTypeOptions: Array<{
 ];
 
 export const cooperativeSavingTransactionTypeOptions: Array<{
-  value: Extract<CooperativeSavingTransactionType, 'DEPOSIT' | 'WITHDRAWAL'>;
+  value: Exclude<CooperativeSavingTransactionType, 'REVERSAL'>;
   labelKey: TranslationKey;
   color: string;
 }> = [
   { value: 'DEPOSIT', labelKey: 'cooperative.savings.transactionType.deposit', color: 'green' },
   { value: 'WITHDRAWAL', labelKey: 'cooperative.savings.transactionType.withdrawal', color: 'red' },
+  { value: 'OPENING_BALANCE', labelKey: 'cooperative.savings.transactionType.openingBalance', color: 'blue' },
 ];
 
 export const cooperativeSavingStatusOptions: Array<{
