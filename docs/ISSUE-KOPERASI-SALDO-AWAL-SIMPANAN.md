@@ -538,3 +538,4 @@ Form opening balance GL boleh ditambahkan tombol bantu pada fase lanjutan:
   awal.
 - Rekonsiliasi koperasi membedakan saldo awal simpanan dari setoran biasa.
 - E2E mencakup input, duplikasi, laporan, rekonsiliasi, dan reversal/koreksi.
+- Sync db + realtime
