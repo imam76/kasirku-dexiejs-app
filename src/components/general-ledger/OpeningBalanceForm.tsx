@@ -1,13 +1,13 @@
-import { useMemo, useState, type HTMLAttributes } from 'react';
-import { App, Alert, Button, DatePicker, InputNumber, Select, Space, Table, Typography } from 'antd';
+import { useEffect, useMemo, useState, type HTMLAttributes } from 'react';
+import { useNavigate } from '@tanstack/react-router';
+import { App, Alert, Button, InputNumber, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { postOpeningBalanceJournal } from '@/services/generalLedgerService';
 import { useI18n } from '@/hooks/useI18n';
-import { formatCurrency } from '@/utils/formatters';
+import { formatCurrency, formatDateOnly } from '@/utils/formatters';
 import type { ChartOfAccount, GeneralLedgerSetting, InventoryAccountingPolicy } from '@/types';
 
 const LOAN_RECEIVABLE_ACCOUNT_ID = 'cooperative-loan-receivable';
@@ -36,16 +36,21 @@ export default function OpeningBalanceForm({
   onPosted,
 }: OpeningBalanceFormProps) {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { message } = App.useApp();
-  const [cutoffDate, setCutoffDate] = useState<Dayjs | null>(
-    setting?.cutoff_date ? dayjs(setting.cutoff_date) : dayjs(),
-  );
   const [inventoryPolicy, setInventoryPolicy] = useState<InventoryAccountingPolicy>(
     setting?.inventory_policy ?? 'PERPETUAL_INVENTORY',
   );
   const [amountByAccountId, setAmountByAccountId] = useState<Record<string, { debit: number; credit: number }>>({});
   const [isPosting, setIsPosting] = useState(false);
   const isLocked = Boolean(setting?.opening_balance_journal_id);
+  const configuredCutoffDate = setting?.cutoff_date ? dayjs(setting.cutoff_date) : null;
+
+  useEffect(() => {
+    if (setting?.inventory_policy) {
+      setInventoryPolicy(setting.inventory_policy);
+    }
+  }, [setting?.inventory_policy]);
 
   const rows = useMemo<OpeningBalanceRow[]>(() => {
     return accounts
@@ -100,7 +105,7 @@ export default function OpeningBalanceForm({
   };
 
   const handlePost = async () => {
-    if (!cutoffDate) {
+    if (!configuredCutoffDate) {
       message.warning(t('generalLedger.setup.cutoffRequired'));
       return;
     }
@@ -113,7 +118,7 @@ export default function OpeningBalanceForm({
     try {
       setIsPosting(true);
       await postOpeningBalanceJournal({
-        cutoff_date: cutoffDate.startOf('day').toISOString(),
+        cutoff_date: configuredCutoffDate.startOf('day').toISOString(),
         inventory_policy: inventoryPolicy,
         lines: rows
           .filter((row) => row.debit > 0 || row.credit > 0)
@@ -189,6 +194,21 @@ export default function OpeningBalanceForm({
         />
       )}
 
+      {!configuredCutoffDate && !isLocked && (
+        <Alert
+          className="mb-3"
+          type="warning"
+          showIcon
+          message={t('generalLedger.setup.cutoffMissingTitle')}
+          description={t('generalLedger.setup.cutoffMissingDescription')}
+          action={(
+            <Button size="small" onClick={() => navigate({ to: '/settings' })}>
+              {t('generalLedger.setup.openAccountingSettings')}
+            </Button>
+          )}
+        />
+      )}
+
       {showMigrationHint && (
         <Alert
           className="mb-3"
@@ -210,11 +230,11 @@ export default function OpeningBalanceForm({
       )}
 
       <Space wrap className="mb-3">
-        <DatePicker
-          value={cutoffDate}
-          disabled={isLocked}
-          onChange={setCutoffDate}
-        />
+        <Text type="secondary">
+          {configuredCutoffDate
+            ? `${t('generalLedger.cutoffDate')}: ${formatDateOnly(setting?.cutoff_date ?? configuredCutoffDate.toISOString())}`
+            : t('settings.accountingNoCutoff')}
+        </Text>
         <Select
           value={inventoryPolicy}
           disabled={isLocked}
@@ -265,7 +285,7 @@ export default function OpeningBalanceForm({
         <Button
           type="primary"
           loading={isPosting}
-          disabled={isLocked || !hasLines || !isBalanced || !cutoffDate}
+          disabled={isLocked || !hasLines || !isBalanced || !configuredCutoffDate}
           data-testid="gl-opening-balance-post-button"
           onClick={handlePost}
         >

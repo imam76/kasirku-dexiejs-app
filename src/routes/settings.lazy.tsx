@@ -8,6 +8,7 @@ import PrinterSettingsCard from '@/components/PrinterSettingsCard'
 import UsbPrinterCard from '@/components/UsbPrinterCard'
 import CompanyProfileSettingsCard from '@/components/CompanyProfileSettingsCard'
 import MembershipSettingsCard from '@/components/MembershipSettingsCard'
+import AccountingDateSettingsCard from '@/components/AccountingDateSettingsCard'
 import { useI18n } from '@/hooks/useI18n'
 import { useAuth } from '@/auth/useAuth'
 import { ActivityLogViewer } from '@/view/auth/ActivityLogViewer'
@@ -94,6 +95,10 @@ function Settings() {
 
       <div className="mb-6">
         <CompanyProfileSettingsCard />
+      </div>
+
+      <div className="mb-6">
+        <AccountingDateSettingsCard />
       </div>
 
       <div className="mb-6">
