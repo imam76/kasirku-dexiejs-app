@@ -2,6 +2,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { loginAsBootstrappedOwner } from './helpers/auth';
 import {
   dailyTargetFixtureIds,
+  seedEarlyDisbursementTargetFixture,
   seedDailyTargetCloseBookResetFixture,
   seedDailyTargetFixture,
 } from './helpers/koperasiDailyTarget';
@@ -121,4 +122,24 @@ test('laporan target harian mereset running drop setelah tutup buku petugas', as
   await expect(nextMondayCells.nth(12)).toHaveText('-');
   await expect(nextMondayCells.nth(14)).toHaveText('-');
   await expect(nextMondayCells.nth(15)).toHaveText('-');
+});
+
+test('pencairan lebih awal memisahkan tanggal drop dan tanggal masuk target', async ({ page }) => {
+  await loginAsBootstrappedOwner(page);
+  await seedEarlyDisbursementTargetFixture(page);
+  await page.goto('/koperasi/laporan-target-harian');
+  await selectJune2026(page);
+
+  const actualDisbursementRow = page.getByTestId(
+    `koperasi-daily-target-row-${dailyTargetFixtureIds.employee}-2026-06-04-1`,
+  );
+  await expect(actualDisbursementRow.locator('td').nth(6)).toHaveText('-');
+  await expect(actualDisbursementRow.locator('td').nth(13)).toContainText('Rp 120.000');
+
+  const scheduledStartRow = page.getByTestId(
+    `koperasi-daily-target-row-${dailyTargetFixtureIds.employee}-2026-06-08-1`,
+  );
+  await expect(scheduledStartRow.locator('td').nth(2)).toHaveText('1');
+  await expect(scheduledStartRow.locator('td').nth(6)).toContainText('Rp 60.000');
+  await expect(scheduledStartRow.locator('td').nth(13)).toHaveText('-');
 });

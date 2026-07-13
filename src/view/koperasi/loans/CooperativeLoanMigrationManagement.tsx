@@ -1,14 +1,14 @@
-import { useMemo, useState } from 'react';
-import { App, Button, Card, Form, Table, Tag } from 'antd';
+import { useCallback, useMemo, useState } from 'react';
+import { App, Button, Card, Form, Input, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DatabaseBackup, Plus } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
 import { useCooperativeLoanRatePreference } from '@/hooks/useCooperativeLoanRatePreference';
 import { useCooperativeLoans } from '@/hooks/useCooperativeLoans';
 import { useI18n } from '@/hooks/useI18n';
+import dayjs from '@/lib/dayjs';
 import type { CooperativeLoan } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
-import { getFirstScheduledDueDate } from '@/utils/koperasi/collectionSchedule';
 import CooperativeLoanDetailDrawer from './CooperativeLoanDetailDrawer';
 import CooperativeLoanMigrationModal, {
   type CooperativeLoanMigrationFormValues,
@@ -16,10 +16,11 @@ import CooperativeLoanMigrationModal, {
 import { cooperativeLoanStatusOptions } from './loanOptions';
 
 export default function CooperativeLoanMigrationManagement() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { t } = useI18n();
   const { can } = useAuth();
   const canMigrate = can('COOPERATIVE_LOAN_DISBURSE');
+  const canDeleteMigration = can('COOPERATIVE_LOAN_MANAGE') && can('COOPERATIVE_LOAN_DISBURSE');
   const [form] = Form.useForm<CooperativeLoanMigrationFormValues>();
   const { loanRatePreference, rememberLoanRates } = useCooperativeLoanRatePreference();
   const {
@@ -31,6 +32,7 @@ export default function CooperativeLoanMigrationManagement() {
     setSelectedLoan,
     selectedLoanInstallments,
     migrateLoan,
+    deleteMigration,
     isMutating,
   } = useCooperativeLoans();
 
@@ -62,8 +64,12 @@ export default function CooperativeLoanMigrationManagement() {
 
   const openModal = () => {
     form.resetFields();
+    const today = dayjs().tz();
     form.setFieldsValue({
-      interest_calculation_type: 'MONTHLY_RATE',
+      application_date: today,
+      disbursement_date: today,
+      migration_input_mode: 'DETAILED',
+      interest_calculation_type: 'TOTAL_PERCENT',
       interest_rate_per_month: 1,
       tenor_months: 12,
       loan_service_rate: 0,
@@ -71,9 +77,9 @@ export default function CooperativeLoanMigrationManagement() {
       mandatory_saving_rate: 0,
       installment_count: 12,
       billing_frequency: 'WEEKLY',
-      settled_mode: 'INSTALLMENT',
+      settled_mode: 'TOTAL',
       ...loanRatePreference,
-      remember_total_percent_rates: Boolean(loanRatePreference),
+      remember_total_percent_rates: true,
     });
     setModalOpen(true);
   };
@@ -99,31 +105,37 @@ export default function CooperativeLoanMigrationManagement() {
       return;
     }
 
-    const calculationType = values.interest_calculation_type;
+    const inputMode = values.migration_input_mode ?? 'DETAILED';
+    const isTotalPayableMode = inputMode === 'TOTAL_PAYABLE';
+    const calculationType = isTotalPayableMode ? 'TOTAL_PERCENT' : values.interest_calculation_type;
     const applicationDate = values.application_date;
     const disbursementDate = values.disbursement_date;
+    const scheduledDisbursementDate = values.scheduled_disbursement_date;
     if (disbursementDate.isBefore(applicationDate, 'day')) {
       message.error(t('cooperative.loans.validation.disbursementBeforeApplication'));
       return;
     }
-    const frequency = calculationType === 'TOTAL_PERCENT'
-      ? (values.billing_frequency ?? 'MONTHLY')
-      : 'MONTHLY';
-    const firstDueDate = getFirstScheduledDueDate({
-      disbursementDate,
-      frequency,
-      weekday: schedules[0].weekday,
-    });
+    const firstDueDate = values.first_due_date;
 
     try {
       const commonInput = {
         member_id: values.member_id,
-        principal_amount: Number(values.principal_amount || 0),
+        principal_amount: isTotalPayableMode
+          ? Number(values.total_payable_amount || 0)
+          : Number(values.principal_amount || 0),
         interest_calculation_type: calculationType,
         application_date: applicationDate.toISOString(),
         notes: values.notes,
       };
-      const schemeInput = calculationType === 'TOTAL_PERCENT'
+      const schemeInput = isTotalPayableMode
+        ? {
+            billing_frequency: values.billing_frequency,
+            installment_count: Number(values.installment_count || 12),
+            loan_service_rate: 0,
+            admin_fee_rate: 0,
+            mandatory_saving_rate: 0,
+          }
+        : calculationType === 'TOTAL_PERCENT'
         ? {
             billing_frequency: values.billing_frequency,
             installment_count: Number(values.installment_count || 0),
@@ -142,18 +154,22 @@ export default function CooperativeLoanMigrationManagement() {
         ...commonInput,
         ...schemeInput,
         disbursement_date: disbursementDate.toISOString(),
+        scheduled_disbursement_date: scheduledDisbursementDate.toISOString(),
         first_due_date: firstDueDate.toISOString(),
-        settled_through_installment_number: values.settled_mode === 'INSTALLMENT'
+        settled_through_installment_number: !isTotalPayableMode && values.settled_mode === 'INSTALLMENT'
           ? Number(values.settled_through_installment_number ?? 0)
           : undefined,
-        migration_outstanding_principal_amount: values.settled_mode === 'PRINCIPAL'
+        migration_outstanding_principal_amount: !isTotalPayableMode && values.settled_mode === 'PRINCIPAL'
           ? Number(values.outstanding_principal_amount ?? 0)
           : undefined,
-        migration_outstanding_interest_amount: values.settled_mode === 'PRINCIPAL' && values.outstanding_interest_amount != null
+        migration_outstanding_interest_amount: !isTotalPayableMode && values.settled_mode === 'PRINCIPAL' && values.outstanding_interest_amount != null
           ? Number(values.outstanding_interest_amount)
           : undefined,
+        migration_outstanding_total_amount: isTotalPayableMode || values.settled_mode === 'TOTAL'
+          ? Number(values.remaining_total_amount ?? 0)
+          : undefined,
       });
-      if (calculationType === 'TOTAL_PERCENT') {
+      if (!isTotalPayableMode && calculationType === 'TOTAL_PERCENT') {
         rememberLoanRates(values.remember_total_percent_rates
           ? {
               loan_service_rate: Number(values.loan_service_rate || 0),
@@ -169,6 +185,45 @@ export default function CooperativeLoanMigrationManagement() {
       message.error(error instanceof Error ? error.message : t('cooperative.loans.migration.failed'));
     }
   };
+
+  const handleDeleteMigration = useCallback((loan: CooperativeLoan) => {
+    let deletionReason = '';
+
+    modal.confirm({
+      title: t('cooperative.loans.migration.deleteConfirmTitle'),
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">
+            {t('cooperative.loans.migration.deleteConfirmContent', { loanNumber: loan.loan_number })}
+          </p>
+          <Input.TextArea
+            rows={3}
+            placeholder={t('cooperative.loans.migration.deleteReasonPlaceholder')}
+            onChange={(event) => {
+              deletionReason = event.target.value;
+            }}
+          />
+        </div>
+      ),
+      okText: t('cooperative.loans.migration.delete'),
+      okButtonProps: { danger: true, loading: isMutating },
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        const reason = deletionReason.trim();
+        if (reason.length < 3) {
+          throw new Error(t('cooperative.loans.migration.deleteReasonRequired'));
+        }
+        try {
+          await deleteMigration({ loan_id: loan.id, reason });
+          if (selectedLoan?.id === loan.id) setSelectedLoan(null);
+          message.success(t('cooperative.loans.migration.deleteSuccess'));
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : t('cooperative.loans.migration.deleteFailed'));
+          throw error;
+        }
+      },
+    });
+  }, [deleteMigration, isMutating, message, modal, selectedLoan, setSelectedLoan, t]);
 
   const columns = useMemo<ColumnsType<CooperativeLoan>>(() => [
     {
@@ -208,12 +263,24 @@ export default function CooperativeLoanMigrationManagement() {
       title: t('cooperative.loans.table.action'),
       key: 'action',
       render: (_value, loan) => (
-        <Button type="link" onClick={() => setSelectedLoan(loan)}>
-          {t('cooperative.loans.view')}
-        </Button>
+        <Space size={0}>
+          <Button type="link" onClick={() => setSelectedLoan(loan)}>
+            {t('cooperative.loans.view')}
+          </Button>
+          {canDeleteMigration && (
+            <Button
+              type="link"
+              danger
+              data-testid={`koperasi-loan-migration-delete-${loan.member_number}`}
+              onClick={() => handleDeleteMigration(loan)}
+            >
+              {t('cooperative.loans.migration.delete')}
+            </Button>
+          )}
+        </Space>
       ),
     },
-  ], [setSelectedLoan, statusLabels, t]);
+  ], [canDeleteMigration, handleDeleteMigration, setSelectedLoan, statusLabels, t]);
 
   return (
     <Card

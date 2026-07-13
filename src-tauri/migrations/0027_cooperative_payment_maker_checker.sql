@@ -77,29 +77,68 @@ ON cooperative_payment_approval_requests (status, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_cooperative_payment_approval_maker
 ON cooperative_payment_approval_requests (maker_user_id, requested_at DESC);
 
-ALTER TABLE cooperative_payment_approval_requests
-ADD CONSTRAINT cooperative_payment_approval_payment_fk
-FOREIGN KEY (payment_id) REFERENCES cooperative_loan_payments (id) NOT VALID;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_payment_approval_requests'::regclass
+      AND conname = 'cooperative_payment_approval_payment_fk'
+  ) THEN
+    ALTER TABLE cooperative_payment_approval_requests
+    ADD CONSTRAINT cooperative_payment_approval_payment_fk
+    FOREIGN KEY (payment_id) REFERENCES cooperative_loan_payments (id) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_payment_approval_requests
-ADD CONSTRAINT cooperative_payment_approval_installment_fk
-FOREIGN KEY (installment_id) REFERENCES cooperative_loan_installments (id) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_payment_approval_requests'::regclass
+      AND conname = 'cooperative_payment_approval_installment_fk'
+  ) THEN
+    ALTER TABLE cooperative_payment_approval_requests
+    ADD CONSTRAINT cooperative_payment_approval_installment_fk
+    FOREIGN KEY (installment_id) REFERENCES cooperative_loan_installments (id) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_payment_approval_requests
-ADD CONSTRAINT cooperative_payment_approval_result_payment_fk
-FOREIGN KEY (result_payment_id) REFERENCES cooperative_loan_payments (id) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_payment_approval_requests'::regclass
+      AND conname = 'cooperative_payment_approval_result_payment_fk'
+  ) THEN
+    ALTER TABLE cooperative_payment_approval_requests
+    ADD CONSTRAINT cooperative_payment_approval_result_payment_fk
+    FOREIGN KEY (result_payment_id) REFERENCES cooperative_loan_payments (id) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_loan_installments
-ADD CONSTRAINT cooperative_loan_installments_paid_not_over_billed_check
-CHECK (
-  paid_principal_amount <= principal_amount + 0.01 AND
-  paid_interest_amount <= interest_amount + 0.01 AND
-  paid_penalty_amount <= penalty_amount + 0.01
-) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_installments'::regclass
+      AND conname = 'cooperative_loan_installments_paid_not_over_billed_check'
+  ) THEN
+    ALTER TABLE cooperative_loan_installments
+    ADD CONSTRAINT cooperative_loan_installments_paid_not_over_billed_check
+    CHECK (
+      paid_principal_amount <= principal_amount + 0.01 AND
+      paid_interest_amount <= interest_amount + 0.01 AND
+      paid_penalty_amount <= penalty_amount + 0.01
+    ) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_loan_payments
-ADD CONSTRAINT cooperative_loan_payments_installment_required_check
-CHECK (installment_id IS NOT NULL) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_payments'::regclass
+      AND conname = 'cooperative_loan_payments_installment_required_check'
+  ) THEN
+    ALTER TABLE cooperative_loan_payments
+    ADD CONSTRAINT cooperative_loan_payments_installment_required_check
+    CHECK (installment_id IS NOT NULL) NOT VALID;
+  END IF;
+END
+$$;
 
 CREATE OR REPLACE FUNCTION validate_cooperative_payment_installment_reconciliation(
   target_installment_id TEXT
@@ -211,11 +250,15 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS cooperative_payment_reconciliation_from_payment ON cooperative_loan_payments;
+
 CREATE CONSTRAINT TRIGGER cooperative_payment_reconciliation_from_payment
 AFTER INSERT OR UPDATE OR DELETE ON cooperative_loan_payments
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 EXECUTE FUNCTION enforce_cooperative_payment_installment_reconciliation();
+
+DROP TRIGGER IF EXISTS cooperative_payment_reconciliation_from_installment ON cooperative_loan_installments;
 
 CREATE CONSTRAINT TRIGGER cooperative_payment_reconciliation_from_installment
 AFTER INSERT OR UPDATE ON cooperative_loan_installments

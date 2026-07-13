@@ -1,4 +1,10 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import type {
+  CooperativeArea,
+  Employee,
+  EmployeeArea,
+  EmployeeCollectionSchedule,
+} from '../../../src/types';
 import { fillControlByTestId, selectAntdOptionByTestId, closeTopDialog, setAntdDateByTestId } from './ui';
 
 export interface DemoMemberInput {
@@ -31,11 +37,99 @@ const savingMutationTypeLabels: Record<SavingMutationType, string> = {
 
 const formatCurrency = (value: number) => value.toLocaleString('id-ID');
 const defaultArea = {
+  id: '000-e2e-default-area',
   code: 'E2E',
   name: 'Area Demo E2E',
 };
+const defaultOfficer = {
+  id: '000-e2e-default-officer',
+  name: 'Petugas Demo E2E',
+  position: 'PDL Demo',
+  fieldCashAccountId: 'cash',
+  fieldCashAccountCode: '1010',
+  fieldCashAccountName: 'Kas Tunai',
+};
+const defaultCreatedAt = '2026-01-01T08:00:00.000+07:00';
+
+async function seedDefaultFieldCollectionSetup(page: Page) {
+  const area: CooperativeArea = {
+    id: defaultArea.id,
+    code: defaultArea.code,
+    name: defaultArea.name,
+    is_active: true,
+    created_at: defaultCreatedAt,
+    updated_at: defaultCreatedAt,
+    sync_status: 'synced',
+  };
+  const officer: Employee = {
+    id: defaultOfficer.id,
+    name: defaultOfficer.name,
+    position: defaultOfficer.position,
+    field_cash_account_id: defaultOfficer.fieldCashAccountId,
+    field_cash_account_code: defaultOfficer.fieldCashAccountCode,
+    field_cash_account_name: defaultOfficer.fieldCashAccountName,
+    is_active: true,
+    created_at: defaultCreatedAt,
+    updated_at: defaultCreatedAt,
+    sync_status: 'synced',
+  };
+  const employeeArea: EmployeeArea = {
+    id: '000-e2e-default-employee-area',
+    employee_id: officer.id,
+    area_id: area.id,
+    area_name: area.name,
+    area_code: area.code,
+    created_at: defaultCreatedAt,
+    updated_at: defaultCreatedAt,
+    sync_status: 'synced',
+  };
+  const schedule: EmployeeCollectionSchedule = {
+    id: '000-e2e-default-collection-schedule',
+    employee_id: officer.id,
+    employee_name: officer.name,
+    employee_position: officer.position,
+    area_id: area.id,
+    area_name: area.name,
+    area_code: area.code,
+    weekday: 1,
+    effective_from: defaultCreatedAt,
+    is_active: true,
+    created_at: defaultCreatedAt,
+    updated_at: defaultCreatedAt,
+    sync_status: 'synced',
+  };
+
+  await page.evaluate(async (recordsByStore) => {
+    const storeNames = Object.keys(recordsByStore);
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('KasirkuDB');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction(storeNames, 'readwrite');
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+
+        Object.entries(recordsByStore).forEach(([storeName, records]) => {
+          const store = transaction.objectStore(storeName);
+          (records as unknown[]).forEach((record) => store.put(record));
+        });
+      };
+    });
+  }, {
+    cooperativeAreas: [area],
+    employees: [officer],
+    employeeAreas: [employeeArea],
+    employeeCollectionSchedules: [schedule],
+  });
+}
 
 async function ensureDefaultArea(page: Page) {
+  await seedDefaultFieldCollectionSetup(page);
   await page.goto('/master-data/areas');
   await expect(page.getByText('Master Data Area')).toBeVisible();
 
@@ -50,10 +144,16 @@ async function ensureDefaultArea(page: Page) {
 
 async function clickCooperativeReportTab(page: Page, name: string) {
   const tab = page.getByRole('tab', { name, exact: true });
-  await expect(tab).toBeVisible();
-  await tab.scrollIntoViewIfNeeded();
-  await tab.click({ force: true });
-  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  if (await tab.isVisible()) {
+    await tab.scrollIntoViewIfNeeded();
+    await tab.click({ force: true });
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    return;
+  }
+
+  await page.locator('.ant-tabs-nav-more').last().click();
+  const dropdown = page.locator('.ant-tabs-dropdown:not(.ant-tabs-dropdown-hidden)').last();
+  await dropdown.getByText(name, { exact: true }).click();
 }
 
 export async function expectCooperativeOverview(page: Page) {
@@ -82,6 +182,11 @@ export async function createActiveMember(page: Page, member: DemoMemberInput) {
     page,
     'koperasi-member-area-select',
     `${defaultArea.code} - ${defaultArea.name}`,
+  );
+  await selectAntdOptionByTestId(
+    page,
+    'koperasi-member-officer-select',
+    `${defaultOfficer.name} - ${defaultOfficer.position}`,
   );
   await page.getByTestId('koperasi-member-submit-button').click();
 
@@ -252,6 +357,7 @@ export async function disburseLoan(page: Page, member: DemoMemberInput) {
   await row.getByRole('button', { name: 'Cairkan' }).click();
 
   await expect(page.getByRole('dialog').filter({ hasText: 'Pencairan Pinjaman' })).toBeVisible();
+  await expect(page.getByTestId('koperasi-loan-collection-weekday-select')).toContainText(/Monday|Senin/);
   await page.getByTestId('koperasi-loan-disbursement-submit-button').click();
 
   await expect(row).toContainText('Disbursed');
@@ -270,14 +376,27 @@ interface MigrateLoanInput {
   ratePercent?: string;
   tenor?: string;
   settledThrough?: string;
-  /** ISO weekday (1=Mon..7=Sun) the officer collects on; disbursement date must land on it. */
+  /** ISO weekday (1=Mon..7=Sun) the officer collects on; official schedule date must land on it. */
+  disbursementWeekday?: number;
+  expectedOutstanding: string;
+}
+
+interface MigrateLoanByRemainingTotalInput {
+  principal: string;
+  loanServiceRate: string;
+  adminFeeRate?: string;
+  mandatorySavingRate?: string;
+  installmentCount?: string;
+  remainingTotal: string;
+  /** ISO weekday (1=Mon..7=Sun) the officer collects on; official schedule date must land on it. */
   disbursementWeekday?: number;
   expectedOutstanding: string;
 }
 
 /**
- * Opens the "Migrasi Pinjaman" modal and fills the form (member, historical dates on the officer's
- * collection weekday, scheme fields, and "paid through installment N") WITHOUT submitting.
+ * Opens the "Input Saldo Awal Pinjaman" modal and fills the form (member, a free historical
+ * disbursement date, auto official schedule, scheme fields, and "paid through installment N")
+ * WITHOUT submitting.
  * Shared by the happy-path {@link migrateLoan} and the invalid-input rejection test.
  */
 async function openAndFillMigrationForm(
@@ -287,41 +406,90 @@ async function openAndFillMigrationForm(
 ) {
   const pad = (value: number) => String(value).padStart(2, '0');
   const isoWeekday = (date: Date) => (date.getDay() === 0 ? 7 : date.getDay());
-  const past = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  while (isoWeekday(past) !== (input.disbursementWeekday ?? 1)) {
-    past.setDate(past.getDate() - 1);
+  const scheduled = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  while (isoWeekday(scheduled) !== (input.disbursementWeekday ?? 1)) {
+    scheduled.setDate(scheduled.getDate() - 1);
   }
-  const migrationDate = `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())} 09:00:00`;
+  const actualDisbursement = new Date(scheduled);
+  actualDisbursement.setDate(actualDisbursement.getDate() - 1);
+  const applicationDate = `${actualDisbursement.getFullYear()}-${pad(actualDisbursement.getMonth() + 1)}-${pad(actualDisbursement.getDate())} 09:00:00`;
+  const disbursementDate = `${actualDisbursement.getFullYear()}-${pad(actualDisbursement.getMonth() + 1)}-${pad(actualDisbursement.getDate())} 09:00:00`;
 
   await page.goto('/koperasi/migrasi-pinjaman');
   await expect(page.getByTestId('koperasi-loan-migration-add-button')).toBeVisible();
 
   await page.getByTestId('koperasi-loan-migration-add-button').click();
   await selectAntdOptionByTestId(page, 'koperasi-loan-migration-member-select', `${member.memberNumber} - ${member.name}`);
+  await expect(page.getByTestId('koperasi-loan-migration-collection-weekday-select')).toContainText(/Monday|Senin/);
   // AntD DatePicker does not forward data-testid onto the <input>; target it by its label.
   const applicationInput = page.getByRole('textbox', { name: 'Tanggal Pengajuan' });
   await applicationInput.click();
-  await applicationInput.fill(migrationDate);
+  await applicationInput.fill(applicationDate);
   await page.keyboard.press('Enter');
   const disbursementInput = page.getByRole('textbox', { name: 'Tanggal Pencairan' });
   await disbursementInput.click();
-  await disbursementInput.fill(migrationDate);
+  await disbursementInput.fill(disbursementDate);
   await page.keyboard.press('Enter');
+  await selectAntdOptionByTestId(
+    page,
+    'koperasi-loan-migration-calculation-type-select',
+    /Bunga per bulan|Monthly interest/i,
+  );
   await fillControlByTestId(page, 'koperasi-loan-migration-principal-input', input.principal ?? '1200000');
   await fillControlByTestId(page, 'koperasi-loan-migration-interest-input', input.ratePercent ?? '1');
   await fillControlByTestId(page, 'koperasi-loan-migration-tenor-input', input.tenor ?? '12');
+  await page
+    .getByTestId('koperasi-loan-migration-settled-mode')
+    .getByText(/Lunas s\/d angsuran ke-N|Paid through installment N/i)
+    .click();
   await fillControlByTestId(page, 'koperasi-loan-migration-settled-installment-input', input.settledThrough ?? '4');
 }
 
 /**
- * Records a migration loan (running loan carried over at cut-off) via the dedicated
- * "Migrasi Pinjaman" menu. Picks a past disbursement date on the officer's collection weekday
- * (historical fallback requires it) and before today. If GL has a cutoff, migration posts an
- * opening-balance journal instead of a disbursement journal.
+ * Records an opening loan balance (active loan carried over at cut-off) via the dedicated
+ * "Input Saldo Awal Pinjaman" menu. It moves no cash/finance transaction; when GL
+ * has a cutoff, the receivable is posted through an opening-balance journal.
  * Returns the loan number.
  */
 export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'memberNumber' | 'name'>, input: MigrateLoanInput) {
   await openAndFillMigrationForm(page, member, input);
+  await page.getByTestId('koperasi-loan-migration-submit-button').click();
+
+  const row = migrationLoanRow(page, member.memberNumber);
+  await expect(row).toContainText(member.name);
+  await expect(row).toContainText('Disbursed');
+  await expect(row).toContainText(input.expectedOutstanding);
+
+  const rowText = await row.innerText();
+  const loanNumber = rowText.match(/KSP-PJ-\d{8}-\d{4}/)?.[0];
+  if (!loanNumber) {
+    throw new Error(`Nomor pinjaman migrasi tidak ditemukan di row ${member.memberNumber}.`);
+  }
+
+  return loanNumber;
+}
+
+export async function migrateLoanByRemainingTotal(
+  page: Page,
+  member: Pick<DemoMemberInput, 'memberNumber' | 'name'>,
+  input: MigrateLoanByRemainingTotalInput,
+) {
+  await openAndFillMigrationForm(page, member, {
+    principal: input.principal,
+    settledThrough: '0',
+    disbursementWeekday: input.disbursementWeekday,
+  });
+  await selectAntdOptionByTestId(
+    page,
+    'koperasi-loan-migration-calculation-type-select',
+    /Jasa pinjaman total|Total loan service/i,
+  );
+  await fillControlByTestId(page, 'koperasi-loan-migration-service-rate-input', input.loanServiceRate);
+  await fillControlByTestId(page, 'koperasi-loan-migration-admin-fee-rate-input', input.adminFeeRate ?? '0');
+  await fillControlByTestId(page, 'koperasi-loan-migration-mandatory-saving-rate-input', input.mandatorySavingRate ?? '0');
+  await fillControlByTestId(page, 'koperasi-loan-migration-installment-count-input', input.installmentCount ?? '12');
+  await page.getByTestId('koperasi-loan-migration-settled-mode').getByText('Sisa total tagihan', { exact: true }).click();
+  await fillControlByTestId(page, 'koperasi-loan-migration-remaining-total-detailed-input', input.remainingTotal);
   await page.getByTestId('koperasi-loan-migration-submit-button').click();
 
   const row = migrationLoanRow(page, member.memberNumber);
@@ -448,16 +616,12 @@ export async function expectCooperativeReportSummary(page: Page) {
   await expect(page.getByText('Outstanding Pinjaman').first()).toBeVisible();
   await expect(page.getByText('Rekonsiliasi').first()).toBeVisible();
 
-  await expect(page.getByRole('tab', { name: 'Neraca' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Perhitungan SHU' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Arus Kas' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Perubahan Ekuitas' })).toBeVisible();
-
   await clickCooperativeReportTab(page, 'Perhitungan SHU');
   await expect(page.getByTestId('koperasi-shu-report')).toContainText('SHU Periode');
   await expect(page.getByTestId('koperasi-shu-report')).toContainText('Rp 30.000');
 
-  await clickCooperativeReportTab(page, 'Arus Kas');
+  await page.goto('/koperasi/arus-kas');
+  await expect(page.getByTestId('koperasi-cash-flow-report')).toBeVisible();
   await expect(page.getByTestId('koperasi-cash-flow-operating-net')).toContainText('Rp -2.470.000');
   await expect(page.getByTestId('koperasi-cash-flow-financing-net')).toContainText('Rp 0');
 

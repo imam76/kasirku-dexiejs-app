@@ -41,6 +41,8 @@ export interface CooperativeInstallmentBookReportRow {
   id: string;
   loan_id: string;
   loan_number: string;
+  actual_disbursement_date: string;
+  scheduled_disbursement_date: string;
   loan_date: string;
   member_id: string;
   member_number: string;
@@ -120,15 +122,17 @@ const summarizeRows = (
   ending_balance: roundCurrency(summary.ending_balance + row.ending_balance),
 }), createEmptySummary());
 
-const getLoanDate = (loan: CooperativeLoan) => loan.disbursed_at ?? loan.application_date;
+const getLoanDate = (loan: CooperativeLoan) => (
+  loan.scheduled_disbursement_date ?? loan.disbursed_at ?? loan.application_date
+);
 
 const isReportableLoan = (loan: CooperativeLoan) => (
   loan.status === 'DISBURSED' || loan.status === 'PAID_OFF'
 );
 
-const getLoanStartingBalance = (loan: CooperativeLoan) => roundCurrency(
-  Number(loan.total_payable_amount || 0) ||
-  Number(loan.principal_amount || 0) + Number(loan.total_interest_amount || 0),
+const getLoanRemainingBalance = (loan: CooperativeLoan) => roundCurrency(
+  Math.max(0, Number(loan.outstanding_principal_amount || 0)) +
+  Math.max(0, Number(loan.outstanding_interest_amount || 0)),
 );
 
 const getEffectivePaymentAmount = (payment: CooperativeLoanPayment) => {
@@ -297,18 +301,20 @@ const createReportRow = ({
   const loanDateKey = dayjs(loanDate).tz().format('YYYY-MM-DD');
   if (loanDateKey > endDateKey) return undefined;
 
-  let paidBeforeMonth = 0;
+  let paidAfterMonth = 0;
   let installmentAmount = 0;
   const paymentByCollectionDate: Record<number, number> = {};
 
   payments.forEach((payment) => {
     const paymentDate = dayjs(payment.payment_date).tz();
     const paymentDateKey = paymentDate.format('YYYY-MM-DD');
-    if (paymentDateKey > endDateKey) return;
-
     const signedAmount = getSignedPaymentAmount(payment);
+    if (paymentDateKey > endDateKey) {
+      paidAfterMonth = roundCurrency(paidAfterMonth + signedAmount);
+      return;
+    }
+
     if (paymentDateKey < startDateKey) {
-      paidBeforeMonth = roundCurrency(paidBeforeMonth + signedAmount);
       return;
     }
 
@@ -319,8 +325,12 @@ const createReportRow = ({
     );
   });
 
-  const startingBalance = getLoanStartingBalance(loan);
-  const openingBalance = roundCurrency(Math.max(0, startingBalance - paidBeforeMonth));
+  // Saldo laporan bersumber dari sisa pokok + sisa bunga yang tersimpan pada
+  // pinjaman. Pembayaran setelah periode dikembalikan untuk merekonstruksi
+  // posisi historis, lalu pembayaran bulan berjalan ditambahkan ke saldo awal.
+  const currentRemainingBalance = getLoanRemainingBalance(loan);
+  const endingBalance = roundCurrency(Math.max(0, currentRemainingBalance + paidAfterMonth));
+  const openingBalance = roundCurrency(Math.max(0, endingBalance + installmentAmount));
   if (openingBalance <= 0 && Math.abs(installmentAmount) < 0.01) return undefined;
 
   const officerId = loan.officer_id;
@@ -332,6 +342,8 @@ const createReportRow = ({
     id: loan.id,
     loan_id: loan.id,
     loan_number: loan.loan_number,
+    actual_disbursement_date: loan.disbursed_at ?? loan.application_date,
+    scheduled_disbursement_date: loanDate,
     loan_date: loanDate,
     member_id: loan.member_id,
     member_number: loan.member_number,
@@ -357,7 +369,7 @@ const createReportRow = ({
     opening_balance: openingBalance,
     payment_by_collection_date: paymentByCollectionDate,
     installment_amount: installmentAmount,
-    ending_balance: roundCurrency(Math.max(0, openingBalance - installmentAmount)),
+    ending_balance: endingBalance,
   };
 };
 

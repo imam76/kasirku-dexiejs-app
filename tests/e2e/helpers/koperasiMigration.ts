@@ -12,7 +12,7 @@ const createdAt = '2026-01-01T08:00:00.000+07:00';
 export const migrationFixtureMember = {
   memberNumber: 'MIG-001',
   name: 'Anggota Migrasi',
-  // Officer collects on Monday (ISO weekday 1); the migration disbursement date must land on it.
+  // Officer collects on Monday (ISO weekday 1); the official schedule date must land on it.
   officerWeekday: 1,
 } as const;
 

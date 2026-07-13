@@ -1,10 +1,10 @@
-# Migrasi Pinjaman Koperasi & Rekonsiliasi
+# Input Saldo Awal Pinjaman Koperasi & Rekonsiliasi
 
-Dokumen ini menjelaskan perilaku fitur **Migrasi Pinjaman** (menu Koperasi →
-Migrasi Pinjaman) dan hubungannya dengan rekonsiliasi laporan koperasi. Ditulis
+Dokumen ini menjelaskan perilaku fitur **Input Saldo Awal Pinjaman** (menu Koperasi →
+Input Saldo Awal Pinjaman) dan hubungannya dengan rekonsiliasi laporan koperasi. Ditulis
 sebagai tindak lanjut dari `ISSUE-KOPERASI-MIGRASI-REKONSILIASI.md`.
 
-## Apa itu pinjaman migrasi
+## Apa itu input saldo awal pinjaman
 
 Pinjaman migrasi adalah pinjaman yang **sudah berjalan** sebelum sistem dipakai,
 lalu dibawa masuk pada saat cut-off. Tujuannya mencatat posisi historis:
@@ -39,7 +39,7 @@ pinjaman `SUBMITTED`/`APPROVED` parsial yang tertinggal. Queue sync hanya
 dijalankan setelah transaksi lokal sukses. UI (`CooperativeLoanMigrationManagement`)
 hanya memanggil satu mutation ini.
 
-## Dua mode posisi per cut-off
+## Mode posisi per cut-off
 
 Isi **salah satu** (tidak boleh dicampur):
 
@@ -48,13 +48,20 @@ Isi **salah satu** (tidak boleh dicampur):
 2. **Sisa pokok langsung** (`migration_outstanding_principal_amount`, opsional
    `migration_outstanding_interest_amount`) — cocok untuk anuitas/menurun/bayar
    tidak berurutan.
+3. **Sisa total tagihan** (`migration_outstanding_total_amount`) — sistem
+   menghitung total yang sudah dibayar dari `total_payable_amount -
+   migration_outstanding_total_amount`, lalu mengalokasikannya ke kartu angsuran
+   berurutan memakai aturan alokasi pembayaran biasa. Mode ini dapat menandai
+   angsuran awal lunas penuh dan angsuran berikutnya parsial tanpa perlu input
+   sisa pokok/sisa jasa manual.
 
 ### Validasi (service sebagai sumber kebenaran)
 
 - `settled_through_installment_number <= jumlah angsuran`;
 - `migration_outstanding_principal_amount <= principal_amount`;
 - `migration_outstanding_interest_amount <= total_interest_amount`;
-- minimal salah satu mode terisi, dan kedua mode tidak boleh dicampur;
+- `migration_outstanding_total_amount <= total_payable_amount`;
+- minimal salah satu mode terisi, dan mode posisi tidak boleh dicampur;
 - sisa bunga hanya boleh diisi pada mode sisa pokok.
 
 Validasi UI hanya lapis pertama; validasi service tetap berlaku untuk caller

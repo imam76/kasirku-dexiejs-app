@@ -5,16 +5,22 @@ import { db } from '@/lib/db';
 import {
   approveCooperativeLoan,
   createCooperativeLoanApplication,
+  deleteCooperativeLoanApplication,
+  deleteCooperativeLoanMigration,
   disburseCooperativeLoan,
   disburseCooperativeLoanViaFieldCash,
   migrateCooperativeLoan,
   rejectCooperativeLoan,
+  reverseCooperativeLoanDisbursement,
   type ApproveCooperativeLoanInput,
   type CreateCooperativeLoanApplicationInput,
+  type DeleteCooperativeLoanApplicationInput,
+  type DeleteCooperativeLoanMigrationInput,
   type DisburseCooperativeLoanInput,
   type DisburseCooperativeLoanViaFieldCashInput,
   type MigrateCooperativeLoanInput,
   type RejectCooperativeLoanInput,
+  type ReverseCooperativeLoanDisbursementInput,
 } from '@/services/cooperativeLoanService';
 import { getCashAccountBalance } from '@/services/cooperativeFieldCashService';
 import type {
@@ -178,6 +184,10 @@ export const useCooperativeLoans = () => {
     mutationFn: rejectCooperativeLoan,
     onSuccess: invalidate,
   });
+  const deleteMutation = useMutation({
+    mutationFn: deleteCooperativeLoanApplication,
+    onSuccess: invalidate,
+  });
   const disburseMutation = useMutation({
     mutationFn: disburseCooperativeLoan,
     onSuccess: invalidate,
@@ -188,6 +198,14 @@ export const useCooperativeLoans = () => {
   });
   const migrateMutation = useMutation({
     mutationFn: migrateCooperativeLoan,
+    onSuccess: invalidate,
+  });
+  const deleteMigrationMutation = useMutation({
+    mutationFn: deleteCooperativeLoanMigration,
+    onSuccess: invalidate,
+  });
+  const reverseDisbursementMutation = useMutation({
+    mutationFn: reverseCooperativeLoanDisbursement,
     onSuccess: invalidate,
   });
 
@@ -215,14 +233,20 @@ export const useCooperativeLoans = () => {
     createLoan: (input: CreateCooperativeLoanApplicationInput) => createMutation.mutateAsync(input),
     approveLoan: (input: ApproveCooperativeLoanInput) => approveMutation.mutateAsync(input),
     rejectLoan: (input: RejectCooperativeLoanInput) => rejectMutation.mutateAsync(input),
+    deleteLoanApplication: (input: DeleteCooperativeLoanApplicationInput) => deleteMutation.mutateAsync(input),
     disburseLoan: (input: DisburseCooperativeLoanInput) => disburseMutation.mutateAsync(input),
     disburseLoanViaFieldCash: (input: DisburseCooperativeLoanViaFieldCashInput) => disburseViaFieldCashMutation.mutateAsync(input),
     migrateLoan: (input: MigrateCooperativeLoanInput) => migrateMutation.mutateAsync(input),
+    deleteMigration: (input: DeleteCooperativeLoanMigrationInput) => deleteMigrationMutation.mutateAsync(input),
+    reverseDisbursement: (input: ReverseCooperativeLoanDisbursementInput) => reverseDisbursementMutation.mutateAsync(input),
     isMutating: createMutation.isPending ||
       approveMutation.isPending ||
       rejectMutation.isPending ||
+      deleteMutation.isPending ||
       disburseMutation.isPending ||
       disburseViaFieldCashMutation.isPending ||
-      migrateMutation.isPending,
+      migrateMutation.isPending ||
+      deleteMigrationMutation.isPending ||
+      reverseDisbursementMutation.isPending,
   };
 };

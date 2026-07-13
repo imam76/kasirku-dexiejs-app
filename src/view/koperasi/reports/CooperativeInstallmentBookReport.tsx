@@ -196,6 +196,7 @@ const renderTableHeader = (
   collectionDates: number[],
   labels: {
     date: string;
+    scheduledDate: string;
     memberNumber: string;
     name: string;
     principal: string;
@@ -208,6 +209,7 @@ const renderTableHeader = (
   <thead>
     <tr>
       <th style={thStyle} rowSpan={2}>{labels.date}</th>
+      <th style={thStyle} rowSpan={2}>{labels.scheduledDate}</th>
       <th style={{ ...thStyle, textAlign: 'center' }} rowSpan={2}>{labels.memberNumber}</th>
       <th style={{ ...thStyle, textAlign: 'center' }} rowSpan={2}>L/B</th>
       <th style={thStyle} rowSpan={2}>{labels.name}</th>
@@ -233,7 +235,8 @@ const renderRow = (
   rowColor: string,
 ) => (
   <tr key={row.id} style={{ background: rowColor }}>
-    <td style={tdStyle}>{dayjs(row.loan_date).tz().format('DD.MM.YYYY')}</td>
+    <td style={tdStyle}>{dayjs(row.actual_disbursement_date).tz().format('DD.MM.YYYY')}</td>
+    <td style={tdStyle}>{dayjs(row.scheduled_disbursement_date).tz().format('DD.MM.YYYY')}</td>
     <td style={centerCellStyle}>{row.member_number}</td>
     <td style={centerCellStyle}>{row.member_category}</td>
     <td style={tdStyle}>
@@ -285,6 +288,7 @@ const renderSection = ({
       <table style={tableStyle}>
         <colgroup>
           <col style={{ width: 120 }} />
+          <col style={{ width: 120 }} />
           <col style={{ width: 86 }} />
           <col style={{ width: 44 }} />
           <col style={{ width: 170 }} />
@@ -298,7 +302,7 @@ const renderSection = ({
         <tbody>
           {section.rows.map((row) => renderRow(row, collectionDates, colors.row))}
           <tr style={{ background: '#67c2d8', fontWeight: 700 }}>
-            <td style={tdStyle} colSpan={3}>TOTAL</td>
+            <td style={tdStyle} colSpan={4}>TOTAL</td>
             <td style={tdStyle}>{section.summary.row_count} anggota</td>
             <td style={numberCellStyle}>{money(section.summary.principal_amount)}</td>
             <td style={numberCellStyle}>{money(section.summary.opening_balance)}</td>
@@ -334,6 +338,7 @@ const CooperativeInstallmentBookReport = forwardRef<
     : '-';
   const labels = {
     date: t('cooperative.installmentBook.table.date'),
+    scheduledDate: t('cooperative.installmentBook.table.scheduledDate'),
     memberNumber: t('cooperative.installmentBook.table.memberNumber'),
     name: t('cooperative.installmentBook.table.name'),
     principal: t('cooperative.installmentBook.table.principal'),

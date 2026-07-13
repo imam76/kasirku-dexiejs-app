@@ -257,6 +257,7 @@ export const getCooperativeDailyFieldCashReport = async (
       const stortingSavingDepositReversal = sumByKind(dayTransactions, 'STORTING_SAVING_DEPOSIT', 'EXPENSE');
       
       const loanDisbursement = sumByKind(dayTransactions, 'LOAN_DISBURSEMENT', 'EXPENSE');
+      const loanDisbursementReversal = sumByKind(dayTransactions, 'LOAN_DISBURSEMENT', 'INCOME');
       
       const savingWithdrawal = sumByKind(dayTransactions, 'SAVING_WITHDRAWAL', 'EXPENSE');
       const savingWithdrawalReversal = sumByKind(dayTransactions, 'SAVING_WITHDRAWAL', 'INCOME');
@@ -268,6 +269,7 @@ export const getCooperativeDailyFieldCashReport = async (
 
       const netStortingLoanPayment = roundCurrency(stortingLoanPayment - stortingLoanPaymentReversal);
       const netStortingSavingDeposit = roundCurrency(stortingSavingDeposit - stortingSavingDepositReversal);
+      const netLoanDisbursement = roundCurrency(loanDisbursement - loanDisbursementReversal);
       const netSavingWithdrawal = roundCurrency(savingWithdrawal - savingWithdrawalReversal);
       const netIptwPayout = roundCurrency(iptwPayout - iptwPayoutReversal);
 
@@ -275,7 +277,7 @@ export const getCooperativeDailyFieldCashReport = async (
         netStortingLoanPayment + 
         netStortingSavingDeposit + 
         droppingFromFinance - 
-        loanDisbursement - 
+        netLoanDisbursement -
         netSavingWithdrawal - 
         netIptwPayout - 
         depositToFinance
@@ -289,7 +291,7 @@ export const getCooperativeDailyFieldCashReport = async (
         employee_position: employee.position,
         storting_loan_payment_amount: netStortingLoanPayment,
         storting_saving_deposit_amount: netStortingSavingDeposit,
-        loan_disbursement_amount: loanDisbursement,
+        loan_disbursement_amount: netLoanDisbursement,
         saving_withdrawal_amount: netSavingWithdrawal,
         iptw_payout_amount: netIptwPayout,
         dropping_from_finance_amount: droppingFromFinance,

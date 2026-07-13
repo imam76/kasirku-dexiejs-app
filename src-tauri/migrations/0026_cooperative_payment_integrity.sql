@@ -67,31 +67,70 @@ BEGIN
 END
 $$;
 
-ALTER TABLE cooperative_loan_payments
-ADD CONSTRAINT cooperative_loan_payments_positive_amount_check
-CHECK (
-  amount > 0 AND
-  principal_amount >= 0 AND
-  interest_amount >= 0 AND
-  penalty_amount >= 0 AND
-  ABS(amount - principal_amount - interest_amount - penalty_amount) <= 0.01
-) NOT VALID;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_payments'::regclass
+      AND conname = 'cooperative_loan_payments_positive_amount_check'
+  ) THEN
+    ALTER TABLE cooperative_loan_payments
+    ADD CONSTRAINT cooperative_loan_payments_positive_amount_check
+    CHECK (
+      amount > 0 AND
+      principal_amount >= 0 AND
+      interest_amount >= 0 AND
+      penalty_amount >= 0 AND
+      ABS(amount - principal_amount - interest_amount - penalty_amount) <= 0.01
+    ) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_loan_payments
-ADD CONSTRAINT cooperative_loan_payments_status_check
-CHECK (status IN ('POSTED', 'REVERSED')) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_payments'::regclass
+      AND conname = 'cooperative_loan_payments_status_check'
+  ) THEN
+    ALTER TABLE cooperative_loan_payments
+    ADD CONSTRAINT cooperative_loan_payments_status_check
+    CHECK (status IN ('POSTED', 'REVERSED')) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_loan_payments
-ADD CONSTRAINT cooperative_loan_payments_type_check
-CHECK (COALESCE(payment_type, 'PAYMENT') IN ('PAYMENT', 'REVERSAL')) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_payments'::regclass
+      AND conname = 'cooperative_loan_payments_type_check'
+  ) THEN
+    ALTER TABLE cooperative_loan_payments
+    ADD CONSTRAINT cooperative_loan_payments_type_check
+    CHECK (COALESCE(payment_type, 'PAYMENT') IN ('PAYMENT', 'REVERSAL')) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_loan_payments
-ADD CONSTRAINT cooperative_loan_payments_loan_fk
-FOREIGN KEY (loan_id) REFERENCES cooperative_loans (id) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_payments'::regclass
+      AND conname = 'cooperative_loan_payments_loan_fk'
+  ) THEN
+    ALTER TABLE cooperative_loan_payments
+    ADD CONSTRAINT cooperative_loan_payments_loan_fk
+    FOREIGN KEY (loan_id) REFERENCES cooperative_loans (id) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_loan_payments
-ADD CONSTRAINT cooperative_loan_payments_installment_fk
-FOREIGN KEY (installment_id) REFERENCES cooperative_loan_installments (id) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_payments'::regclass
+      AND conname = 'cooperative_loan_payments_installment_fk'
+  ) THEN
+    ALTER TABLE cooperative_loan_payments
+    ADD CONSTRAINT cooperative_loan_payments_installment_fk
+    FOREIGN KEY (installment_id) REFERENCES cooperative_loan_installments (id) NOT VALID;
+  END IF;
+END
+$$;
 
 DO $$
 BEGIN
@@ -109,13 +148,24 @@ BEGIN
 END
 $$;
 
-ALTER TABLE cooperative_loan_installments
-ADD CONSTRAINT cooperative_loan_installments_paid_amount_check
-CHECK (
-  paid_principal_amount >= 0 AND
-  paid_interest_amount >= 0 AND
-  paid_penalty_amount >= 0
-) NOT VALID;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_installments'::regclass
+      AND conname = 'cooperative_loan_installments_paid_amount_check'
+  ) THEN
+    ALTER TABLE cooperative_loan_installments
+    ADD CONSTRAINT cooperative_loan_installments_paid_amount_check
+    CHECK (
+      paid_principal_amount >= 0 AND
+      paid_interest_amount >= 0 AND
+      paid_penalty_amount >= 0
+    ) NOT VALID;
+  END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS cooperative_loan_collection_events (
     id TEXT PRIMARY KEY,
@@ -139,13 +189,31 @@ CREATE TABLE IF NOT EXISTS cooperative_loan_collection_events (
       CHECK (LENGTH(BTRIM(collection_notes)) >= 3)
 );
 
-ALTER TABLE cooperative_loan_collection_events
-ADD CONSTRAINT cooperative_collection_events_installment_fk
-FOREIGN KEY (installment_id) REFERENCES cooperative_loan_installments (id) NOT VALID;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_collection_events'::regclass
+      AND conname = 'cooperative_collection_events_installment_fk'
+  ) THEN
+    ALTER TABLE cooperative_loan_collection_events
+    ADD CONSTRAINT cooperative_collection_events_installment_fk
+    FOREIGN KEY (installment_id) REFERENCES cooperative_loan_installments (id) NOT VALID;
+  END IF;
 
-ALTER TABLE cooperative_loan_collection_events
-ADD CONSTRAINT cooperative_collection_events_loan_fk
-FOREIGN KEY (loan_id) REFERENCES cooperative_loans (id) NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.cooperative_loan_collection_events'::regclass
+      AND conname = 'cooperative_collection_events_loan_fk'
+  ) THEN
+    ALTER TABLE cooperative_loan_collection_events
+    ADD CONSTRAINT cooperative_collection_events_loan_fk
+    FOREIGN KEY (loan_id) REFERENCES cooperative_loans (id) NOT VALID;
+  END IF;
+END
+$$;
 
 CREATE INDEX IF NOT EXISTS idx_cooperative_collection_events_installment_id
 ON cooperative_loan_collection_events (installment_id);

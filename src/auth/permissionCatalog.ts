@@ -246,6 +246,13 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'REPORT_CASH_FLOW_VIEW',
+    label: 'Lihat Laporan Arus Kas',
+    group: 'Laporan',
+    moduleCodes: ['REPORT_CASH_FLOW'],
+    isSensitive: true,
+  },
+  {
     code: 'REPORT_PAYROLL_VIEW',
     label: 'Lihat Laporan Penggajian',
     group: 'Laporan',

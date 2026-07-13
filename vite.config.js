@@ -132,7 +132,7 @@ export default defineConfig(function () { return __awaiter(void 0, void 0, void 
                     }
                 },
                 optimizeDeps: {
-                    exclude: ['lucide-react'],
+                    include: ['lucide-react'],
                 },
             }];
     });

@@ -34,6 +34,10 @@ export const GENERAL_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
     permission: 'REPORT_EXPENSE_VIEW',
     moduleCode: 'REPORT_EXPENSE',
   },
+  '/report/cash-flow-report': {
+    permission: 'REPORT_CASH_FLOW_VIEW',
+    moduleCode: 'REPORT_CASH_FLOW',
+  },
   '/report/payroll-report': {
     permission: 'REPORT_PAYROLL_VIEW',
     moduleCode: 'REPORT_PAYROLL',

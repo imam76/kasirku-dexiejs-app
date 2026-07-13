@@ -279,6 +279,24 @@ pub async fn postgres_upsert_cooperative_loan(
 }
 
 #[tauri::command]
+pub async fn postgres_delete_cooperative_loan_application(
+    state: State<'_, PostgresState>,
+    id: String,
+) -> PostgresCommandResult<bool> {
+    let pool = state.pool()?;
+    Ok(cooperative_repository::delete_cooperative_loan_application(&pool, id).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_delete_cooperative_loan_migration(
+    state: State<'_, PostgresState>,
+    id: String,
+) -> PostgresCommandResult<bool> {
+    let pool = state.pool()?;
+    Ok(cooperative_repository::delete_cooperative_loan_migration(&pool, id).await?)
+}
+
+#[tauri::command]
 pub async fn postgres_list_cooperative_loan_installments(
     state: State<'_, PostgresState>,
 ) -> PostgresCommandResult<Vec<CooperativeLoanInstallmentDto>> {

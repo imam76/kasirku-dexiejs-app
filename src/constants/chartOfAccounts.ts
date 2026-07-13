@@ -275,7 +275,7 @@ export const SAK_EMKM_RETAIL_TEMPLATE: ChartOfAccountTemplate = {
   accounting_profile: 'SAK_EMKM',
   industry_extension: 'RETAIL',
   description: 'Template akun ringan untuk toko retail dengan POS, stok, piutang, hutang, dan beban sederhana.',
-  account_count_hint: 33,
+  account_count_hint: 31,
   is_system: true,
   is_active: true,
   created_at: '',
@@ -532,7 +532,6 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     mapping_keys: [
       FINANCE_CATEGORIES.OPENING_BALANCE,
       FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
-      FINANCE_CATEGORIES.KSP_LOAN_PAYMENT,
       FINANCE_CATEGORIES.WITHDRAWAL,
       FINANCE_CATEGORIES.DEPOSIT,
     ],
@@ -547,7 +546,6 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('accounts-receivable', '1100', 'Piutang Usaha', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createTemplateLine('other-receivable', '1110', 'Piutang Lain-lain', 'ASSET', {
     parent_template_account_id: 'asset-current',
-    mapping_keys: [FINANCE_CATEGORIES.KSP_LOAN_DISBURSEMENT],
   }),
   createTemplateLine('inventory', '1200', 'Persediaan Barang', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createTemplateLine('prepaid-expense', '1300', 'Biaya Dibayar Dimuka', 'ASSET', { parent_template_account_id: 'asset-current' }),
@@ -558,10 +556,6 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('liability', '2000', 'Liabilitas', 'LIABILITY', { is_postable: false }),
   createTemplateLine('accounts-payable', '2010', 'Hutang Usaha', 'LIABILITY', {
     parent_template_account_id: 'liability',
-    mapping_keys: [
-      FINANCE_CATEGORIES.KSP_SAVING_DEPOSIT,
-      FINANCE_CATEGORIES.KSP_SAVING_WITHDRAWAL,
-    ],
   }),
   createTemplateLine('tax-payable', '2100', 'PPN Keluaran', 'LIABILITY', { parent_template_account_id: 'liability' }),
   createTemplateLine('luxury-sales-tax-payable', '2110', 'PPnBM Terutang', 'LIABILITY', { parent_template_account_id: 'liability' }),
@@ -607,14 +601,7 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('electricity-expense', '6030', 'Beban Listrik', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('transport-expense', '6040', 'Beban Transport', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('supplies-expense', '6050', 'Beban Perlengkapan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
-  createTemplateLine('cooperative-iptw-expense', '6090', 'Beban Insentif Pembayaran Tepat Waktu (IPTW)', 'EXPENSE', {
-    parent_template_account_id: 'operational-expense',
-    mapping_keys: [FINANCE_CATEGORIES.KSP_IPTW],
-  }),
-  createTemplateLine('cooperative-saving-interest-expense', '6095', 'Beban Jasa Simpanan Anggota', 'EXPENSE', {
-    parent_template_account_id: 'operational-expense',
-    mapping_keys: [FINANCE_CATEGORIES.KSP_SAVING_INTEREST_PAYOUT],
-  }),
+
   createTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
     mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
   }),

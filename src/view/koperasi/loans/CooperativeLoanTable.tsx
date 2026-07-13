@@ -1,6 +1,6 @@
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Check, Eye, Send, X } from 'lucide-react';
+import { Check, Eye, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import type { HTMLAttributes } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoan, CooperativeLoanStatus } from '@/types';
@@ -18,7 +18,10 @@ interface CooperativeLoanTableProps {
   onView: (loan: CooperativeLoan) => void;
   onApprove: (loan: CooperativeLoan) => void;
   onReject: (loan: CooperativeLoan) => void;
+  onDelete: (loan: CooperativeLoan) => void;
   onDisburse: (loan: CooperativeLoan) => void;
+  onReverseDisbursement: (loan: CooperativeLoan) => void;
+  canManage: boolean;
   canDisburse: boolean;
   loading?: boolean;
 }
@@ -28,7 +31,10 @@ export default function CooperativeLoanTable({
   onView,
   onApprove,
   onReject,
+  onDelete,
   onDisburse,
+  onReverseDisbursement,
+  canManage,
   canDisburse,
   loading,
 }: CooperativeLoanTableProps) {
@@ -143,7 +149,7 @@ export default function CooperativeLoanTable({
       title: t('cooperative.loans.table.action'),
       key: 'action',
       fixed: 'right',
-      width: 300,
+      width: 420,
       render: (_value: unknown, loan) => (
         <Space wrap>
           <Button type="text" icon={<Eye size={16} />} onClick={() => onView(loan)}>
@@ -152,7 +158,7 @@ export default function CooperativeLoanTable({
           <Button
             type="text"
             icon={<Check size={16} />}
-            disabled={loan.status !== 'SUBMITTED'}
+            disabled={loan.status !== 'SUBMITTED' || !canManage}
             data-testid={`koperasi-loan-approve-${loan.loan_number}`}
             onClick={() => onApprove(loan)}
           >
@@ -162,7 +168,7 @@ export default function CooperativeLoanTable({
             danger
             type="text"
             icon={<X size={16} />}
-            disabled={loan.status !== 'SUBMITTED'}
+            disabled={loan.status !== 'SUBMITTED' || !canManage}
             data-testid={`koperasi-loan-reject-${loan.loan_number}`}
             onClick={() => onReject(loan)}
           >
@@ -176,6 +182,26 @@ export default function CooperativeLoanTable({
             onClick={() => onDisburse(loan)}
           >
             {t('cooperative.loans.disburse')}
+          </Button>
+          <Button
+            danger
+            type="text"
+            icon={<Trash2 size={16} />}
+            disabled={!['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'].includes(loan.status) || !canManage}
+            data-testid={`koperasi-loan-delete-${loan.loan_number}`}
+            onClick={() => onDelete(loan)}
+          >
+            {t('cooperative.loans.delete')}
+          </Button>
+          <Button
+            danger
+            type="text"
+            icon={<RotateCcw size={16} />}
+            disabled={!['DISBURSED', 'PAID_OFF'].includes(loan.status) || !canDisburse}
+            data-testid={`koperasi-loan-reverse-${loan.loan_number}`}
+            onClick={() => onReverseDisbursement(loan)}
+          >
+            {t('cooperative.loans.reverseDisbursement')}
           </Button>
         </Space>
       ),
