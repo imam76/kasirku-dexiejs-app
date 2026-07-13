@@ -19,6 +19,24 @@ export const isReportableCooperativeLoanPayment = (
   !payment.reversal_payment_id
 );
 
+export const getLatestReportableLoanPaymentDateByLoanId = (
+  payments: CooperativeLoanPayment[],
+) => {
+  const latestDateByLoanId = new Map<string, string>();
+
+  payments
+    .filter(isReportableCooperativeLoanPayment)
+    .forEach((payment) => {
+      const dateKey = getDateKey(payment.payment_date);
+      const currentDateKey = latestDateByLoanId.get(payment.loan_id);
+      if (!currentDateKey || dateKey > currentDateKey) {
+        latestDateByLoanId.set(payment.loan_id, dateKey);
+      }
+    });
+
+  return latestDateByLoanId;
+};
+
 export const getCooperativeLoanPaidOffDateByLoanId = (
   loans: CooperativeLoan[],
   payments: CooperativeLoanPayment[],

@@ -22,6 +22,7 @@ import {
 import {
   getCooperativeLoanContractualInstallmentAmount,
   getCooperativeLoanPaidOffDateByLoanId,
+  getLatestReportableLoanPaymentDateByLoanId,
   isReportableCooperativeLoanPayment,
 } from '@/utils/koperasi/loanReport';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
@@ -677,6 +678,7 @@ export const getCooperativeDailyTargetReport = async (
     payments,
     installments,
   );
+  const latestPaymentDateByLoanId = getLatestReportableLoanPaymentDateByLoanId(payments);
   const reportableLoans = loans.filter(isReportableLoan);
   const loanContexts = reportableLoans.map((loan): LoanContext => {
     const member = memberById.get(loan.member_id);
@@ -693,7 +695,9 @@ export const getCooperativeDailyTargetReport = async (
         collectionSchedules,
       ),
       disbursed_date_key: getDateKey(loan.disbursed_at as string),
-      paid_off_date_key: paidOffDateByLoanId.get(loan.id),
+      paid_off_date_key: loan.is_migration
+        ? latestPaymentDateByLoanId.get(loan.id)
+        : paidOffDateByLoanId.get(loan.id),
       contractual_installment_amount: getCooperativeLoanContractualInstallmentAmount(
         loan,
         installmentsByLoanId.get(loan.id) ?? [],
@@ -747,11 +751,13 @@ export const getCooperativeDailyTargetReport = async (
             startDate.date(dayOfMonth).format(DATE_KEY_FORMAT),
           ));
       }
-      registerTrackDate(
-        context.employee,
-        context.collection_weekday,
-        context.disbursed_date_key,
-      );
+      if (!context.loan.is_migration) {
+        registerTrackDate(
+          context.employee,
+          context.collection_weekday,
+          context.disbursed_date_key,
+        );
+      }
       if (context.paid_off_date_key) {
         registerTrackDate(
           context.employee,
@@ -794,6 +800,7 @@ export const getCooperativeDailyTargetReport = async (
 
   loanContexts.forEach((context) => {
     if (!matchesEmployeeFilter(context.employee.employee_id, filters.employeeId)) return;
+    if (context.loan.is_migration) return;
     if (context.disbursed_date_key >= startDateKey && context.disbursed_date_key <= endDateKey) {
       addAmount(
         dropByBucketKey,
@@ -850,7 +857,10 @@ export const getCooperativeDailyTargetReport = async (
       const activeAfter = trackLoans.filter((context) => isLoanActiveAfterDate(context, dateKey));
       const activeBeforeMemberIds = new Set(activeBefore.map((context) => context.loan.member_id));
       const activeAfterMemberIds = new Set(activeAfter.map((context) => context.loan.member_id));
-      const incomingLoans = trackLoans.filter((context) => context.disbursed_date_key === dateKey);
+      const incomingLoans = trackLoans.filter((context) => (
+        context.disbursed_date_key === dateKey &&
+        !context.loan.is_migration
+      ));
       const outgoingLoans = trackLoans.filter((context) => context.paid_off_date_key === dateKey);
       const incomingMemberIds = new Set(incomingLoans.map((context) => context.loan.member_id));
       const newMemberIds = new Set<string>();

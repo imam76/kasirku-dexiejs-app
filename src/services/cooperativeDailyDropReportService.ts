@@ -5,7 +5,10 @@ import type {
   CooperativeMember,
   Employee,
 } from '@/types';
-import { getCooperativeLoanPaidOffDateByLoanId } from '@/utils/koperasi/loanReport';
+import {
+  getCooperativeLoanPaidOffDateByLoanId,
+  getLatestReportableLoanPaymentDateByLoanId,
+} from '@/utils/koperasi/loanReport';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
 import { getCurrentSessionUser, requireAnyUserPermission } from '@/auth/authService';
 
@@ -99,6 +102,10 @@ const isDateKeyInRange = (value: string, startDate?: string, endDate?: string) =
 
 const isDroppedLoan = (loan: CooperativeLoan) => (
   (loan.status === 'DISBURSED' || loan.status === 'PAID_OFF') && Boolean(loan.disbursed_at)
+);
+
+const isOperationalDropLoan = (loan: CooperativeLoan) => (
+  isDroppedLoan(loan) && !loan.is_migration
 );
 
 const getOfficer = (
@@ -225,8 +232,9 @@ export const getCooperativeDailyDropReport = async (
     payments,
     installments,
   );
+  const latestPaymentDateByLoanId = getLatestReportableLoanPaymentDateByLoanId(payments);
   const dropRows = loans
-    .filter(isDroppedLoan)
+    .filter(isOperationalDropLoan)
     .filter((loan) => loan.disbursed_at && isDateKeyInRange(loan.disbursed_at, filters.startDate, filters.endDate))
     .map((loan) => createRowFromLoan({
       loan,
@@ -239,7 +247,9 @@ export const getCooperativeDailyDropReport = async (
   const paidOffRows = loans
     .filter((loan) => loan.status === 'PAID_OFF')
     .map((loan) => {
-      const paidOffDate = paidOffDateByLoanId.get(loan.id);
+      const paidOffDate = loan.is_migration
+        ? latestPaymentDateByLoanId.get(loan.id)
+        : paidOffDateByLoanId.get(loan.id);
       if (!paidOffDate || !isDateKeyInRange(paidOffDate, filters.startDate, filters.endDate)) return undefined;
 
       return createRowFromLoan({
