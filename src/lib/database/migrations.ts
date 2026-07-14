@@ -1,5 +1,6 @@
 import type {
   AccountingProfileSetting,
+  AccountingFiscalYear,
   AccountingInitialSetupSetting,
   AuthUser,
   CashierSession,
@@ -39,6 +40,7 @@ import type {
   PayrollRunItem,
   OpeningBalanceBatch,
   OpeningBalanceLine,
+  AccountingPeriod,
   Role,
   RolePermission,
   SalesDocument,
@@ -2285,6 +2287,77 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
 
     if (accountsToAdd.length > 0) {
       await accountTable.bulkPut(accountsToAdd);
+    }
+  });
+
+  this.version(89).stores({
+    accountingFiscalYears: 'id, name, start_date, end_date, status, closing_journal_entry_id, sync_status, updated_at, created_at',
+    fiscalYearClosingRuns: 'id, fiscal_year_id, status, closing_journal_entry_id, posted_at, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const fiscalYearTable = tx.table<AccountingFiscalYear, string>('accountingFiscalYears');
+    const existingFiscalYears = await fiscalYearTable.toArray();
+    if (existingFiscalYears.length > 0) return;
+
+    const setup = await tx.table<AccountingInitialSetupSetting, string>('accountingInitialSetupSetting').get('default');
+    const yearlyPeriods = await tx.table<AccountingPeriod, string>('accountingPeriods')
+      .filter((period) => !period.deleted_at && period.period_type === 'YEARLY')
+      .toArray();
+    const fiscalStart = setup?.fiscal_period_start ?? yearlyPeriods[0]?.start_date;
+    const fiscalEnd = setup?.fiscal_period_end ?? yearlyPeriods[0]?.end_date;
+    if (!fiscalStart || !fiscalEnd) return;
+
+    const start = fiscalStart.slice(0, 10);
+    const end = fiscalEnd.slice(0, 10);
+    const startYear = start.slice(0, 4);
+    const endYear = end.slice(0, 4);
+    const now = new Date().toISOString();
+    const fiscalYear: AccountingFiscalYear = {
+      id: `fiscal-year-${start}-${end}`,
+      name: startYear === endYear ? `Tahun Fiskal ${startYear}` : `Tahun Fiskal ${startYear}-${endYear}`,
+      start_date: start,
+      end_date: end,
+      status: 'OPEN',
+      notes: 'Tahun fiskal dibuat dari setup akuntansi awal.',
+      version: 1,
+      created_at: setup?.created_at ?? now,
+      updated_at: setup?.updated_at ?? now,
+      sync_status: setup?.sync_status ?? 'pending',
+      sync_error: undefined,
+    };
+
+    await fiscalYearTable.put(fiscalYear);
+  });
+
+  this.version(90).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingPermissions = await rolePermissionTable.toArray();
+    const existingIds = new Set(existingPermissions.map((permission) => permission.id));
+    const balanceSheetPermissionCode: RolePermission['permission_code'] = 'REPORT_BALANCE_SHEET_VIEW';
+    const migratedPermissions = existingPermissions
+      .filter((permission) => permission.permission_code === 'REPORT_PROFIT_LOSS_VIEW')
+      .flatMap((profitLossPermission) => {
+        const id = `${profitLossPermission.role_id}:${balanceSheetPermissionCode}`;
+        if (existingIds.has(id)) return [];
+        existingIds.add(id);
+
+        return [{
+          id,
+          role_id: profitLossPermission.role_id,
+          permission_code: balanceSheetPermissionCode,
+          created_at: now,
+          updated_at: now,
+          sync_status: 'pending' as const,
+        }];
+      });
+    const systemPermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingIds.has(permission.id));
+
+    if (migratedPermissions.length > 0 || systemPermissions.length > 0) {
+      await rolePermissionTable.bulkPut([
+        ...migratedPermissions,
+        ...systemPermissions,
+      ]);
     }
   });
 }

@@ -660,6 +660,7 @@ const buildCooperativeBalanceSheetReport = (
     total_liabilities_and_equity: totalLiabilitiesAndEquity,
     difference,
     is_balanced: Math.abs(difference) <= MONEY_TOLERANCE,
+    sections: [],
     rows,
   };
 };
@@ -1646,6 +1647,7 @@ export const getCooperativeReportData = async (
     total_liabilities_and_equity: cooperativeBalanceSheet.total_liabilities_and_equity,
     difference: cooperativeBalanceSheet.difference,
     is_balanced: cooperativeBalanceSheet.is_balanced,
+    sections: cooperativeBalanceSheet.sections,
   };
 
   return {

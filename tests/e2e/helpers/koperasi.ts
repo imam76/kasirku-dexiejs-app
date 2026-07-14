@@ -164,7 +164,7 @@ export async function expectCooperativeOverview(page: Page) {
   await expect(page.getByRole('link', { name: 'Simpanan', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Pinjaman', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Angsuran', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Laporan', exact: true })).toBeVisible();
+  await expect(page.locator('main a[href="/koperasi/laporan"]')).toBeVisible();
 }
 
 export async function createActiveMember(page: Page, member: DemoMemberInput) {

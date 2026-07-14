@@ -87,6 +87,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'REPORT_AGING', label: 'Aging Report', description: 'Laporan umur piutang/hutang' },
       { code: 'REPORT_STOCK_CARD', label: 'Stock Card', description: 'Kartu stok per produk' },
       { code: 'REPORT_PROFIT', label: 'Profit Report', description: 'Laporan laba rugi' },
+      { code: 'REPORT_BALANCE_SHEET', label: 'Balance Sheet Report', description: 'Laporan neraca dari General Ledger' },
     ],
   },
   {
@@ -149,6 +150,7 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   'REPORT_DEPOSIT',
   'REPORT_PAYROLL',
   'REPORT_PROFIT',
+  'REPORT_BALANCE_SHEET',
 ];
 
 /** localStorage key for the setup configuration */

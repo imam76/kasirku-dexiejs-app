@@ -19,9 +19,11 @@ import {
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { getBaseCurrencyLockSignals } from '@/services/baseCurrencyService';
+import { findOrCreateAccountingFiscalYear } from '@/services/accountingFiscalYearService';
 import { saveSetupConfig, saveSetupConfigToRemote } from '@/services/setupKeyService';
 import {
   enqueueAccountingInitialSetupSettingSync,
+  enqueueAccountingFiscalYearSync,
   enqueueAccountingPeriodSync,
   enqueueAccountingProfileSettingSync,
   enqueueChartOfAccountSync,
@@ -33,6 +35,7 @@ import {
 } from '@/services/syncQueueService';
 import type {
   AccountingBusinessTemplateCode,
+  AccountingFiscalYear,
   AccountingInitialSetupSetting,
   AccountingPeriod,
   AccountingProfileSetting,
@@ -51,6 +54,7 @@ import { isTauriRuntime } from '@/utils/export/platform';
 export interface SaveInitialAccountingSetupInput {
   enabledModules: string[];
   configuredBy: string;
+  configuredByName?: string;
   business_template_code: AccountingBusinessTemplateCode;
   cutoff_date: string;
   fiscal_period_start: string;
@@ -58,6 +62,7 @@ export interface SaveInitialAccountingSetupInput {
   current_period_start: string;
   current_period_end: string;
   base_currency_code: string;
+  persistSetupConfig?: boolean;
 }
 
 export interface SaveInitialAccountingSetupResult {
@@ -65,6 +70,7 @@ export interface SaveInitialAccountingSetupResult {
   accountingProfileSetting?: AccountingProfileSetting;
   generalLedgerSetting?: GeneralLedgerSetting;
   accountingPeriod?: AccountingPeriod;
+  accountingFiscalYear?: AccountingFiscalYear;
   createdAccounts: ChartOfAccount[];
   updatedMappings: FinanceAccountMapping[];
   updatedModules: EnabledModule[];
@@ -103,6 +109,7 @@ const ACCOUNTING_TRIGGER_MODULES = new Set([
   'REPORT_PAYROLL',
   'REPORT_AGING',
   'REPORT_PROFIT',
+  'REPORT_BALANCE_SHEET',
   'REPORT_PURCHASE',
   'REPORT_POS_SALES',
   'REPORT_DEPOSIT',
@@ -535,7 +542,7 @@ const findOrCreateCurrentPeriod = async (
     start_date: input.currentStart,
     end_date: input.currentEnd,
     status: 'OPEN',
-    notes: 'Periode berjalan dibuat dari Developer Setup.',
+    notes: 'Periode berjalan dibuat dari setup akuntansi awal.',
     version: 1,
     created_by: input.actorId,
     created_by_name: input.actorName,
@@ -626,6 +633,7 @@ const buildSetupSnapshot = ({
   requiresAccountingBaseline,
   templateDefinition,
   configuredBy,
+  configuredByName,
   now,
 }: {
   baseCurrencyCode: string;
@@ -640,6 +648,7 @@ const buildSetupSnapshot = ({
   requiresAccountingBaseline: boolean;
   templateDefinition: typeof ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[AccountingBusinessTemplateCode];
   configuredBy: string;
+  configuredByName?: string;
   now: string;
 }): AccountingInitialSetupSetting => ({
   id: 'default',
@@ -657,7 +666,9 @@ const buildSetupSnapshot = ({
   inventory_policy: templateDefinition.default_inventory_policy,
   setup_completed_at: requiresAccountingBaseline ? now : existingSetup?.setup_completed_at,
   setup_completed_by: requiresAccountingBaseline ? configuredBy : existingSetup?.setup_completed_by,
-  setup_completed_by_name: existingSetup?.setup_completed_by_name,
+  setup_completed_by_name: requiresAccountingBaseline
+    ? configuredByName ?? existingSetup?.setup_completed_by_name
+    : existingSetup?.setup_completed_by_name,
   version: Math.max(0, Number(existingSetup?.version || 0)) + 1,
   created_at: existingSetup?.created_at ?? now,
   updated_at: now,
@@ -682,7 +693,7 @@ const assertLockedFieldsCanChange = async (
     existingLedger.cutoff_date &&
     toDateOnly(existingLedger.cutoff_date) !== toDateOnly(input.cutoff_date)
   ) {
-    throw new Error('Cutoff sudah dipakai opening balance. Cutoff tidak bisa diubah dari Developer Setup.');
+    throw new Error('Cutoff sudah dipakai opening balance. Cutoff tidak bisa diubah dari setup akuntansi awal.');
   }
 
   if (
@@ -745,7 +756,7 @@ export const saveInitialAccountingSetup = async (
       toDateOnly(existingCurrentPeriod.end_date) !== dates.currentEnd
     )
   ) {
-    throw new Error('Periode berjalan sudah terkunci/ditutup dan tidak bisa diganti dari Developer Setup.');
+    throw new Error('Periode berjalan sudah terkunci/ditutup dan tidak bisa diganti dari setup akuntansi awal.');
   }
 
   const actor = await getCurrentSessionUser({ touchSession: false, cleanupInvalidSession: false });
@@ -759,6 +770,7 @@ export const saveInitialAccountingSetup = async (
     updatedCurrencyRates: [],
   };
   let periodChange: ChangedRecord<AccountingPeriod> | undefined;
+  let fiscalYearChange: ChangedRecord<AccountingFiscalYear> | undefined;
   let profileChange: ChangedRecord<AccountingProfileSetting> | undefined;
   let ledgerChange: ChangedRecord<GeneralLedgerSetting> | undefined;
   let setupOperation: SyncOperation = existingSetup ? 'update' : 'create';
@@ -772,6 +784,7 @@ export const saveInitialAccountingSetup = async (
     db.enabledModules,
     db.generalLedgerSetting,
     db.accountingPeriods,
+    db.accountingFiscalYears,
     db.accountingInitialSetupSetting,
     db.currencies,
     db.currencyRates,
@@ -819,8 +832,8 @@ export const saveInitialAccountingSetup = async (
         fiscalStart: dates.fiscalStart,
         fiscalEnd: dates.fiscalEnd,
         now,
-        actorId: actor?.id,
-        actorName: actor?.name,
+        actorId: actor?.id ?? input.configuredBy,
+        actorName: actor?.name ?? input.configuredByName,
       });
       currentPeriodId = currentPeriod.period.id;
       result.accountingPeriod = currentPeriod.period;
@@ -828,6 +841,22 @@ export const saveInitialAccountingSetup = async (
         periodChange = {
           record: currentPeriod.period,
           operation: currentPeriod.operation,
+        };
+      }
+
+      const fiscalYear = await findOrCreateAccountingFiscalYear({
+        fiscalStart: dates.fiscalStart,
+        fiscalEnd: dates.fiscalEnd,
+        now,
+        actorId: actor?.id ?? input.configuredBy,
+        actorName: actor?.name ?? input.configuredByName,
+        notes: 'Tahun fiskal dibuat dari setup akuntansi awal.',
+      });
+      result.accountingFiscalYear = fiscalYear.fiscalYear;
+      if (fiscalYear.operation) {
+        fiscalYearChange = {
+          record: fiscalYear.fiscalYear,
+          operation: fiscalYear.operation,
         };
       }
     }
@@ -849,6 +878,7 @@ export const saveInitialAccountingSetup = async (
         ? templateDefinition
         : ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[existingSetup?.business_template_code ?? 'RETAIL'],
       configuredBy: input.configuredBy,
+      configuredByName: input.configuredByName,
       now,
     });
 
@@ -863,7 +893,7 @@ export const saveInitialAccountingSetup = async (
         : 'ACCOUNTING_INITIAL_SETUP_COMPLETED',
       entity: 'accountingInitialSetupSetting',
       entity_id: 'default',
-      description: `${actor?.name ?? 'Developer Setup'} menyimpan setup awal akuntansi ${setupSnapshot.business_template_code}, cutoff ${setupSnapshot.cutoff_date}, periode ${setupSnapshot.current_period_start} s/d ${setupSnapshot.current_period_end}, base currency ${setupSnapshot.base_currency_code}.`,
+      description: `${actor?.name ?? input.configuredByName ?? 'Registrasi Owner'} menyimpan setup awal akuntansi ${setupSnapshot.business_template_code}, cutoff ${setupSnapshot.cutoff_date}, periode ${setupSnapshot.current_period_start} s/d ${setupSnapshot.current_period_end}, base currency ${setupSnapshot.base_currency_code}.`,
     });
   });
 
@@ -885,6 +915,9 @@ export const saveInitialAccountingSetup = async (
   if (periodChange) {
     await enqueueAccountingPeriodSync(periodChange.record, periodChange.operation);
   }
+  if (fiscalYearChange) {
+    await enqueueAccountingFiscalYearSync(fiscalYearChange.record, fiscalYearChange.operation);
+  }
   await enqueueAccountingInitialSetupSettingSync(result.setupSnapshot, setupOperation);
   for (const { record, operation } of currencyChanges) {
     await enqueueCurrencySync(record, operation);
@@ -893,15 +926,17 @@ export const saveInitialAccountingSetup = async (
     await enqueueCurrencyRateSync(record, operation);
   }
 
-  const setupConfig = {
-    enabledModules: input.enabledModules,
-    configuredAt: now,
-    configuredBy: input.configuredBy,
-  };
-  if (isTauriRuntime()) {
-    await saveSetupConfigToRemote(setupConfig);
-  } else {
-    saveSetupConfig(setupConfig);
+  if (input.persistSetupConfig !== false) {
+    const setupConfig = {
+      enabledModules: input.enabledModules,
+      configuredAt: now,
+      configuredBy: input.configuredBy,
+    };
+    if (isTauriRuntime()) {
+      await saveSetupConfigToRemote(setupConfig);
+    } else {
+      saveSetupConfig(setupConfig);
+    }
   }
 
   return result;

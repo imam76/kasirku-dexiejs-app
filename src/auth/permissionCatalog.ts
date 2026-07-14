@@ -267,6 +267,13 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'REPORT_BALANCE_SHEET_VIEW',
+    label: 'Lihat Laporan Neraca',
+    group: 'Laporan',
+    moduleCodes: ['REPORT_BALANCE_SHEET'],
+    isSensitive: true,
+  },
+  {
     code: 'REPORT_AGING_VIEW',
     label: 'Lihat Laporan Aging',
     group: 'Laporan',

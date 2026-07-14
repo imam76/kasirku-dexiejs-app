@@ -201,6 +201,7 @@ export type Permission =
   | 'REPORT_CASH_FLOW_VIEW'
   | 'REPORT_PAYROLL_VIEW'
   | 'REPORT_PROFIT_LOSS_VIEW'
+  | 'REPORT_BALANCE_SHEET_VIEW'
   | 'REPORT_AGING_VIEW'
   | 'REPORT_STOCK_CARD_VIEW'
   | 'FINANCE_ACCESS'
@@ -432,6 +433,8 @@ export type CashBankReconciliationSyncStatus = EntitySyncStatus;
 export type JournalEntrySyncStatus = EntitySyncStatus;
 export type AccountingPeriodSyncStatus = EntitySyncStatus;
 export type ClosingRunSyncStatus = EntitySyncStatus;
+export type AccountingFiscalYearSyncStatus = EntitySyncStatus;
+export type FiscalYearClosingRunSyncStatus = EntitySyncStatus;
 export type CurrencySyncStatus = EntitySyncStatus;
 export type CurrencyRateSyncStatus = EntitySyncStatus;
 export type CooperativeMemberSyncStatus = EntitySyncStatus;
@@ -2488,6 +2491,7 @@ export interface CashBankReconciliation {
 
 export type AccountingPeriodStatus = 'OPEN' | 'LOCKED' | 'CLOSED';
 export type AccountingPeriodType = 'MONTHLY' | 'YEARLY';
+export type AccountingFiscalYearStatus = 'OPEN' | 'CLOSED';
 
 export interface AccountingPeriod {
   id: string;
@@ -2524,6 +2528,35 @@ export interface AccountingPeriod {
 
 export type ClosingRunStatus = 'DRAFT' | 'POSTED' | 'REVERSED';
 
+export interface AccountingFiscalYear {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: AccountingFiscalYearStatus;
+  closed_at?: string;
+  closed_by?: string;
+  closed_by_name?: string;
+  closing_journal_entry_id?: string;
+  reopened_at?: string;
+  reopened_by?: string;
+  reopened_by_name?: string;
+  reopen_reason?: string;
+  notes?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  sync_status?: AccountingFiscalYearSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
 export interface ClosingRun {
   id: string;
   period_id: string;
@@ -2555,6 +2588,42 @@ export interface ClosingRun {
   updated_at: string;
   deleted_at?: string;
   sync_status?: ClosingRunSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface FiscalYearClosingRun {
+  id: string;
+  fiscal_year_id: string;
+  fiscal_year_name: string;
+  start_date: string;
+  end_date: string;
+  status: ClosingRunStatus;
+  retained_earning_account_id: string;
+  retained_earning_account_code: string;
+  retained_earning_account_name: string;
+  net_income_amount: number;
+  total_revenue_amount: number;
+  total_contra_revenue_amount: number;
+  total_expense_amount: number;
+  closing_journal_entry_id?: string;
+  posted_at?: string;
+  reversed_at?: string;
+  reversed_by?: string;
+  reversed_by_name?: string;
+  reversal_journal_entry_id?: string;
+  reversal_reason?: string;
+  notes?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  sync_status?: FiscalYearClosingRunSyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;

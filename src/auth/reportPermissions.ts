@@ -46,6 +46,10 @@ export const GENERAL_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
     permission: 'REPORT_PROFIT_LOSS_VIEW',
     moduleCode: 'REPORT_PROFIT',
   },
+  '/report/balance-sheet-report': {
+    permission: 'REPORT_BALANCE_SHEET_VIEW',
+    moduleCode: 'REPORT_BALANCE_SHEET',
+  },
   '/report/aging-report': {
     permission: 'REPORT_AGING_VIEW',
     moduleCode: 'REPORT_AGING',

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AccountType,
+  AccountingFiscalYearStatus,
   AccountingPeriodStatus,
   AccountingPeriodType,
   ClosingRunStatus,
@@ -1043,10 +1044,67 @@ export interface RemoteAccountingPeriodDto {
   deleted_at?: string | null;
 }
 
+export interface RemoteAccountingFiscalYearDto {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: AccountingFiscalYearStatus;
+  closed_at?: string | null;
+  closed_by?: string | null;
+  closed_by_name?: string | null;
+  closing_journal_entry_id?: string | null;
+  reopened_at?: string | null;
+  reopened_by?: string | null;
+  reopened_by_name?: string | null;
+  reopen_reason?: string | null;
+  notes?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
 export interface RemoteClosingRunDto {
   id: string;
   period_id: string;
   period_name: string;
+  start_date: string;
+  end_date: string;
+  status: ClosingRunStatus;
+  retained_earning_account_id: string;
+  retained_earning_account_code: string;
+  retained_earning_account_name: string;
+  net_income_amount: number;
+  total_revenue_amount: number;
+  total_contra_revenue_amount: number;
+  total_expense_amount: number;
+  closing_journal_entry_id?: string | null;
+  posted_at?: string | null;
+  reversed_at?: string | null;
+  reversed_by?: string | null;
+  reversed_by_name?: string | null;
+  reversal_journal_entry_id?: string | null;
+  reversal_reason?: string | null;
+  notes?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteFiscalYearClosingRunDto {
+  id: string;
+  fiscal_year_id: string;
+  fiscal_year_name: string;
   start_date: string;
   end_date: string;
   status: ClosingRunStatus;
@@ -2226,6 +2284,23 @@ export const accountingPeriodPostgresAdapter = {
   },
 };
 
+export const accountingFiscalYearPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteAccountingFiscalYearDto[]>('postgres_list_accounting_fiscal_years');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAccountingFiscalYearDto | null>('postgres_get_accounting_fiscal_year', { id });
+  },
+
+  async upsert(input: RemoteAccountingFiscalYearDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAccountingFiscalYearDto>('postgres_upsert_accounting_fiscal_year', { input });
+  },
+};
+
 export const closingRunPostgresAdapter = {
   async list() {
     if (!isTauriRuntime()) return [];
@@ -2240,6 +2315,23 @@ export const closingRunPostgresAdapter = {
   async upsert(input: RemoteClosingRunDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteClosingRunDto>('postgres_upsert_closing_run', { input });
+  },
+};
+
+export const fiscalYearClosingRunPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteFiscalYearClosingRunDto[]>('postgres_list_fiscal_year_closing_runs');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteFiscalYearClosingRunDto | null>('postgres_get_fiscal_year_closing_run', { id });
+  },
+
+  async upsert(input: RemoteFiscalYearClosingRunDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteFiscalYearClosingRunDto>('postgres_upsert_fiscal_year_closing_run', { input });
   },
 };
 

@@ -665,6 +665,73 @@ async fn is_current_migration_schema_compatible(
             )
             .await
         }
+        54 => {
+            Ok(table_has_columns(
+                pool,
+                "accounting_fiscal_years",
+                &[
+                    "id",
+                    "name",
+                    "start_date",
+                    "end_date",
+                    "status",
+                    "closed_at",
+                    "closed_by",
+                    "closed_by_name",
+                    "closing_journal_entry_id",
+                    "reopened_at",
+                    "reopened_by",
+                    "reopened_by_name",
+                    "reopen_reason",
+                    "notes",
+                    "version",
+                    "created_by",
+                    "created_by_name",
+                    "updated_by",
+                    "updated_by_name",
+                    "created_at",
+                    "updated_at",
+                    "deleted_at",
+                ],
+            )
+            .await?
+                && table_has_columns(
+                    pool,
+                    "fiscal_year_closing_runs",
+                    &[
+                        "id",
+                        "fiscal_year_id",
+                        "fiscal_year_name",
+                        "start_date",
+                        "end_date",
+                        "status",
+                        "retained_earning_account_id",
+                        "retained_earning_account_code",
+                        "retained_earning_account_name",
+                        "net_income_amount",
+                        "total_revenue_amount",
+                        "total_contra_revenue_amount",
+                        "total_expense_amount",
+                        "closing_journal_entry_id",
+                        "posted_at",
+                        "reversed_at",
+                        "reversed_by",
+                        "reversed_by_name",
+                        "reversal_journal_entry_id",
+                        "reversal_reason",
+                        "notes",
+                        "version",
+                        "created_by",
+                        "created_by_name",
+                        "updated_by",
+                        "updated_by_name",
+                        "created_at",
+                        "updated_at",
+                        "deleted_at",
+                    ],
+                )
+                .await?)
+        }
         _ => Ok(false),
     }
 }

@@ -139,13 +139,15 @@ export interface GeneralLedgerReportFilters {
   startDate?: string;
   endDate?: string;
   accountId?: string;
+  departmentId?: string;
+  contactId?: string;
+  currencyCode?: string;
   sourceTypes?: JournalSourceType[];
   sourceEvents?: string[];
   /**
    * Sertakan jurnal penutup (`CLOSING_JOURNAL`) dalam hasil report.
-   * Default `false`: laporan operasional (laba rugi/SHU) mengecualikan jurnal
-   * penutup agar tidak menjadi nol. Set `true` untuk neraca/trial balance mode
-   * "setelah closing" dan untuk journal list.
+   * Default report ledger efektif menyertakan closing journal. Laba rugi dan
+   * preview closing harus mengirim `false` agar close/reversal tidak bocor ke P/L.
    */
   includeClosingEntries?: boolean;
 }
@@ -156,8 +158,10 @@ export interface TrialBalanceRow {
   account_name: string;
   account_type: AccountType;
   normal_balance: AccountNormalBalance;
+  opening_balance: number;
   debit_movement: number;
   credit_movement: number;
+  ending_balance: number;
   debit_balance: number;
   credit_balance: number;
 }
@@ -209,6 +213,31 @@ export interface BalanceSheetReport {
   total_liabilities_and_equity: number;
   difference: number;
   is_balanced: boolean;
+  sections: BalanceSheetSection[];
+}
+
+export type BalanceSheetSectionKey = 'ASSET' | 'LIABILITY' | 'EQUITY';
+
+export type BalanceSheetRowType = 'section' | 'account' | 'current_income';
+
+export interface BalanceSheetTreeRow {
+  id: string;
+  row_type: BalanceSheetRowType;
+  account_id?: string;
+  account_code?: string;
+  account_name: string;
+  account_type?: AccountType;
+  normal_balance?: AccountNormalBalance;
+  amount: number;
+  level: number;
+  is_postable?: boolean;
+  children?: BalanceSheetTreeRow[];
+}
+
+export interface BalanceSheetSection {
+  key: BalanceSheetSectionKey;
+  total: number;
+  rows: BalanceSheetTreeRow[];
 }
 
 const ACCOUNT_CANDIDATES = {
@@ -2244,20 +2273,173 @@ const entryMatchesFilters = (entry: JournalEntry, filters: GeneralLedgerReportFi
   const matchesSourceEvent = !filters.sourceEvents?.length || (
     Boolean(entry.source_event) && filters.sourceEvents.includes(entry.source_event as string)
   );
-  const matchesClosing = filters.includeClosingEntries === true || entry.source_type !== 'CLOSING_JOURNAL';
+  const matchesClosing = filters.includeClosingEntries !== false || entry.source_type !== 'CLOSING_JOURNAL';
 
   return matchesDate && matchesSourceType && matchesSourceEvent && matchesClosing;
+};
+
+interface JournalEntryFilterMetadata {
+  contactIds: Set<string>;
+  currencyCodes: Set<string>;
+}
+
+const normalizeFilterCode = (value?: string) => value?.trim().toUpperCase();
+
+const createMetadata = (input: { contactId?: string; currencyCode?: string } = {}): JournalEntryFilterMetadata => {
+  const metadata: JournalEntryFilterMetadata = {
+    contactIds: new Set(),
+    currencyCodes: new Set(),
+  };
+  const contactId = input.contactId?.trim();
+  const currencyCode = normalizeFilterCode(input.currencyCode);
+
+  if (contactId) metadata.contactIds.add(contactId);
+  if (currencyCode) metadata.currencyCodes.add(currencyCode);
+
+  return metadata;
+};
+
+const addMetadata = (
+  target: JournalEntryFilterMetadata,
+  source?: { contact_id?: string; member_contact_id?: string; currency_code?: string; base_currency_code?: string },
+) => {
+  const contactId = source?.contact_id?.trim() || source?.member_contact_id?.trim();
+  const currencyCode = normalizeFilterCode(source?.currency_code ?? source?.base_currency_code);
+
+  if (contactId) target.contactIds.add(contactId);
+  if (currencyCode) target.currencyCodes.add(currencyCode);
+};
+
+const sourceNeedsMetadataLookup = (entry: JournalEntry) => Boolean(entry.source_id);
+
+const getEntrySourceMetadataMap = async (
+  entries: JournalEntry[],
+): Promise<Map<string, JournalEntryFilterMetadata>> => {
+  const metadataByEntryId = new Map<string, JournalEntryFilterMetadata>();
+  const idsBySourceType = entries.reduce<Record<string, Set<string>>>((acc, entry) => {
+    if (!sourceNeedsMetadataLookup(entry)) return acc;
+
+    acc[entry.source_type] = acc[entry.source_type] ?? new Set<string>();
+    acc[entry.source_type].add(entry.source_id as string);
+    return acc;
+  }, {});
+  const getIds = (sourceType: JournalSourceType) => Array.from(idsBySourceType[sourceType] ?? []);
+  const [
+    transactions,
+    salesDocuments,
+    salesInvoicePayments,
+    salesReturns,
+    purchaseDocuments,
+    purchaseInvoicePayments,
+    openingBalanceLines,
+  ] = await Promise.all([
+    db.transactions.bulkGet(getIds('POS_TRANSACTION')),
+    db.salesDocuments.bulkGet([
+      ...getIds('SALES_INVOICE'),
+      ...getIds('SALES_INVOICE_PAYMENT'),
+    ]),
+    db.salesInvoicePayments.bulkGet([
+      ...getIds('SALES_INVOICE_PAYMENT'),
+      ...getIds('OPENING_BALANCE'),
+    ]),
+    db.salesReturns.bulkGet(getIds('SALES_RETURN')),
+    db.purchaseDocuments.bulkGet([
+      ...getIds('PURCHASE_INVOICE'),
+      ...getIds('PURCHASE_INVOICE_PAYMENT'),
+    ]),
+    db.purchaseInvoicePayments.bulkGet([
+      ...getIds('PURCHASE_INVOICE_PAYMENT'),
+      ...getIds('OPENING_BALANCE'),
+    ]),
+    db.openingBalanceLines.toArray(),
+  ]);
+  const transactionById = new Map(transactions.filter(Boolean).map((item) => [item!.id, item!]));
+  const salesDocumentById = new Map(salesDocuments.filter(Boolean).map((item) => [item!.id, item!]));
+  const salesPaymentById = new Map(salesInvoicePayments.filter(Boolean).map((item) => [item!.id, item!]));
+  const salesReturnById = new Map(salesReturns.filter(Boolean).map((item) => [item!.id, item!]));
+  const purchaseDocumentById = new Map(purchaseDocuments.filter(Boolean).map((item) => [item!.id, item!]));
+  const purchasePaymentById = new Map(purchaseInvoicePayments.filter(Boolean).map((item) => [item!.id, item!]));
+  const openingLinesByBatchId = openingBalanceLines.reduce<Map<string, OpeningBalanceLine[]>>((acc, line) => {
+    const current = acc.get(line.batch_id) ?? [];
+    current.push(line);
+    acc.set(line.batch_id, current);
+    return acc;
+  }, new Map());
+
+  entries.forEach((entry) => {
+    const metadata = createMetadata();
+    const sourceId = entry.source_id;
+    if (!sourceId) {
+      metadataByEntryId.set(entry.id, metadata);
+      return;
+    }
+
+    if (entry.source_type === 'POS_TRANSACTION') {
+      addMetadata(metadata, transactionById.get(sourceId));
+    } else if (entry.source_type === 'SALES_INVOICE') {
+      addMetadata(metadata, salesDocumentById.get(sourceId));
+    } else if (entry.source_type === 'SALES_INVOICE_PAYMENT') {
+      const payment = salesPaymentById.get(sourceId);
+      addMetadata(metadata, payment);
+      addMetadata(metadata, payment ? salesDocumentById.get(payment.sales_document_id) : salesDocumentById.get(sourceId));
+    } else if (entry.source_type === 'SALES_RETURN') {
+      const salesReturn = salesReturnById.get(sourceId);
+      addMetadata(metadata, salesReturn);
+      addMetadata(metadata, salesReturn?.source_id ? salesDocumentById.get(salesReturn.source_id) : undefined);
+    } else if (entry.source_type === 'PURCHASE_INVOICE') {
+      addMetadata(metadata, purchaseDocumentById.get(sourceId));
+    } else if (entry.source_type === 'PURCHASE_INVOICE_PAYMENT') {
+      const payment = purchasePaymentById.get(sourceId);
+      addMetadata(metadata, payment);
+      addMetadata(metadata, payment ? purchaseDocumentById.get(payment.purchase_document_id) : purchaseDocumentById.get(sourceId));
+    } else if (entry.source_type === 'OPENING_BALANCE') {
+      const salesPayment = salesPaymentById.get(sourceId);
+      const purchasePayment = purchasePaymentById.get(sourceId);
+      addMetadata(metadata, salesPayment);
+      addMetadata(metadata, purchasePayment);
+      openingLinesByBatchId.get(sourceId)?.forEach((line) => {
+        addMetadata(metadata, {
+          contact_id: line.contact_id,
+          currency_code: line.currency_code,
+          base_currency_code: line.base_currency_code,
+        });
+      });
+    }
+
+    metadataByEntryId.set(entry.id, metadata);
+  });
+
+  return metadataByEntryId;
+};
+
+const entryMetadataMatchesFilters = (
+  metadata: JournalEntryFilterMetadata | undefined,
+  filters: GeneralLedgerReportFilters,
+) => {
+  const contactId = filters.contactId?.trim();
+  const currencyCode = normalizeFilterCode(filters.currencyCode);
+
+  if (contactId && !metadata?.contactIds.has(contactId)) return false;
+  if (currencyCode && !metadata?.currencyCodes.has(currencyCode)) return false;
+
+  return true;
 };
 
 export const getJournalEntriesWithLines = async (
   filters: GeneralLedgerReportFilters = {},
 ): Promise<JournalEntryWithLines[]> => {
-  const entries = (await db.journalEntries.orderBy('entry_date').reverse().toArray())
+  const dateMatchedEntries = (await db.journalEntries.orderBy('entry_date').reverse().toArray())
     .filter((entry) => entryMatchesFilters(entry, filters));
+  const metadataByEntryId = filters.contactId || filters.currencyCode
+    ? await getEntrySourceMetadataMap(dateMatchedEntries)
+    : undefined;
+  const entries = dateMatchedEntries
+    .filter((entry) => entryMetadataMatchesFilters(metadataByEntryId?.get(entry.id), filters));
   const entryIds = new Set(entries.map((entry) => entry.id));
   const lines = (await db.journalEntryLines.toArray())
     .filter((line) => entryIds.has(line.journal_entry_id))
-    .filter((line) => !filters.accountId || line.account_id === filters.accountId);
+    .filter((line) => !filters.accountId || line.account_id === filters.accountId)
+    .filter((line) => !filters.departmentId || line.department_id === filters.departmentId);
   const lineByEntryId = lines.reduce<Record<string, JournalEntryLine[]>>((acc, line) => {
     acc[line.journal_entry_id] = acc[line.journal_entry_id] ?? [];
     acc[line.journal_entry_id].push(line);
@@ -2275,7 +2457,7 @@ export const getJournalEntriesWithLines = async (
 const getPostedReportLines = async (filters: GeneralLedgerReportFilters = {}) => {
   const entries = await getJournalEntriesWithLines(filters);
   return entries
-    .filter((entry) => entry.status === 'POSTED')
+    .filter((entry) => entry.status === 'POSTED' || entry.status === 'REVERSED')
     .flatMap((entry) => entry.lines.map((line) => ({ entry, line })));
 };
 
@@ -2298,21 +2480,38 @@ const isCostOfRevenueAccount = (line: Pick<JournalEntryLine, 'account_id' | 'acc
 export const getTrialBalanceReport = async (
   filters: GeneralLedgerReportFilters = {},
 ): Promise<TrialBalanceReport> => {
+  const startDate = filters.startDate ? filters.startDate.slice(0, 10) : undefined;
   const [accounts, reportLines] = await Promise.all([
     db.chartOfAccounts.orderBy('code').toArray(),
-    getPostedReportLines(filters),
+    getPostedReportLines({
+      ...filters,
+      startDate: undefined,
+    }),
   ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const movementByAccountId = new Map<string, {
-    debit: number;
-    credit: number;
+    openingDebit: number;
+    openingCredit: number;
+    movementDebit: number;
+    movementCredit: number;
     line: JournalEntryLine;
   }>();
 
-  reportLines.forEach(({ line }) => {
-    const current = movementByAccountId.get(line.account_id) ?? { debit: 0, credit: 0, line };
-    current.debit += line.debit;
-    current.credit += line.credit;
+  reportLines.forEach(({ entry, line }) => {
+    const current = movementByAccountId.get(line.account_id) ?? {
+      openingDebit: 0,
+      openingCredit: 0,
+      movementDebit: 0,
+      movementCredit: 0,
+      line,
+    };
+    if (startDate && entry.entry_date.slice(0, 10) < startDate) {
+      current.openingDebit += line.debit;
+      current.openingCredit += line.credit;
+    } else {
+      current.movementDebit += line.debit;
+      current.movementCredit += line.credit;
+    }
     movementByAccountId.set(line.account_id, current);
   });
 
@@ -2320,7 +2519,12 @@ export const getTrialBalanceReport = async (
     .map(([accountId, movement]) => {
       const account = accountById.get(accountId);
       const normalBalance = account?.normal_balance ?? getAccountNormalBalance(movement.line.account_type);
-      const endingBalance = getAccountBalance(movement.debit, movement.credit, normalBalance);
+      const openingBalance = getAccountBalance(movement.openingDebit, movement.openingCredit, normalBalance);
+      const endingBalance = getAccountBalance(
+        movement.openingDebit + movement.movementDebit,
+        movement.openingCredit + movement.movementCredit,
+        normalBalance,
+      );
       const isNormalDebit = normalBalance === 'DEBIT';
 
       return {
@@ -2329,8 +2533,10 @@ export const getTrialBalanceReport = async (
         account_name: account?.name ?? movement.line.account_name,
         account_type: account?.type ?? movement.line.account_type,
         normal_balance: normalBalance,
-        debit_movement: roundCurrency(movement.debit),
-        credit_movement: roundCurrency(movement.credit),
+        opening_balance: openingBalance,
+        debit_movement: roundCurrency(movement.movementDebit),
+        credit_movement: roundCurrency(movement.movementCredit),
+        ending_balance: endingBalance,
         debit_balance: endingBalance >= 0 && isNormalDebit
           ? endingBalance
           : endingBalance < 0 && !isNormalDebit
@@ -2358,7 +2564,10 @@ export const getTrialBalanceReport = async (
 export const getIncomeStatementReport = async (
   filters: GeneralLedgerReportFilters = {},
 ): Promise<IncomeStatementReport> => {
-  const reportLines = await getPostedReportLines(filters);
+  const reportLines = await getPostedReportLines({
+    ...filters,
+    includeClosingEntries: false,
+  });
   const rowsBySection = new Map<IncomeStatementSectionKey, Map<string, IncomeStatementAccountRow>>();
   const addAccountRow = (
     sectionKey: IncomeStatementSectionKey,
@@ -2434,32 +2643,183 @@ export const getIncomeStatementReport = async (
   };
 };
 
+const getBalanceSheetSignedAmount = (row: TrialBalanceRow) => {
+  if (row.account_type === 'ASSET' || row.account_type === 'EXPENSE' || row.account_type === 'CONTRA_REVENUE') {
+    return roundCurrency(row.debit_balance - row.credit_balance);
+  }
+
+  return roundCurrency(row.credit_balance - row.debit_balance);
+};
+
+interface BalanceSheetNode extends BalanceSheetTreeRow {
+  raw_amount: number;
+  children: BalanceSheetNode[];
+}
+
+const createBalanceSheetNode = (
+  account: ChartOfAccount,
+  rawAmount: number,
+): BalanceSheetNode => ({
+  id: account.id,
+  row_type: 'account',
+  account_id: account.id,
+  account_code: account.code,
+  account_name: account.name,
+  account_type: account.type,
+  normal_balance: account.normal_balance,
+  amount: 0,
+  raw_amount: rawAmount,
+  level: 0,
+  is_postable: account.is_postable,
+  children: [],
+});
+
+const pruneBalanceSheetNodes = (nodes: BalanceSheetNode[]): BalanceSheetTreeRow[] => (
+  nodes
+    .reduce<BalanceSheetTreeRow[]>((acc, node) => {
+      const children = pruneBalanceSheetNodes(node.children);
+      const shouldKeep = Math.abs(node.amount) > JOURNAL_TOLERANCE || children.length > 0;
+      if (!shouldKeep) return acc;
+
+      const row: BalanceSheetTreeRow = {
+        id: node.id,
+        row_type: node.row_type,
+        account_id: node.account_id,
+        account_code: node.account_code,
+        account_name: node.account_name,
+        account_type: node.account_type,
+        normal_balance: node.normal_balance,
+        amount: node.amount,
+        level: node.level,
+        is_postable: node.is_postable,
+        children: children.length > 0 ? children : undefined,
+      };
+      acc.push(row);
+      return acc;
+    }, [])
+);
+
+const buildBalanceSheetAccountRows = (
+  accounts: ChartOfAccount[],
+  trialRows: TrialBalanceRow[],
+  accountType: BalanceSheetSectionKey,
+): BalanceSheetTreeRow[] => {
+  const trialRowByAccountId = new Map(trialRows.map((row) => [row.account_id, row]));
+  const nodeMap = new Map<string, BalanceSheetNode>();
+
+  accounts
+    .filter((account) => account.is_active && account.type === accountType)
+    .sort((left, right) => left.code.localeCompare(right.code, undefined, { numeric: true, sensitivity: 'base' }))
+    .forEach((account) => {
+      const trialRow = trialRowByAccountId.get(account.id);
+      nodeMap.set(account.id, createBalanceSheetNode(account, trialRow ? getBalanceSheetSignedAmount(trialRow) : 0));
+    });
+
+  trialRows
+    .filter((row) => row.account_type === accountType && !nodeMap.has(row.account_id))
+    .forEach((row) => {
+      nodeMap.set(row.account_id, createBalanceSheetNode({
+        id: row.account_id,
+        code: row.account_code,
+        name: row.account_name,
+        type: row.account_type,
+        normal_balance: row.normal_balance,
+        is_postable: true,
+        is_system: false,
+        is_active: true,
+        created_at: '',
+        updated_at: '',
+      }, getBalanceSheetSignedAmount(row)));
+    });
+
+  const roots: BalanceSheetNode[] = [];
+  nodeMap.forEach((node) => {
+    const parent = node.account_id
+      ? nodeMap.get(accounts.find((account) => account.id === node.account_id)?.parent_id ?? '')
+      : undefined;
+
+    if (parent) {
+      node.level = parent.level + 1;
+      parent.children.push(node);
+      return;
+    }
+
+    roots.push(node);
+  });
+
+  const sortAndRollup = (nodes: BalanceSheetNode[], level = 0): number => nodes
+    .sort((left, right) => (left.account_code ?? '').localeCompare(right.account_code ?? '', undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    }))
+    .reduce((sum, node) => {
+      node.level = level;
+      const childAmount = sortAndRollup(node.children, level + 1);
+      node.amount = roundCurrency(node.raw_amount + childAmount);
+      return roundCurrency(sum + node.amount);
+    }, 0);
+
+  sortAndRollup(roots);
+
+  return pruneBalanceSheetNodes(roots);
+};
+
+const createBalanceSheetSection = (
+  key: BalanceSheetSectionKey,
+  rows: BalanceSheetTreeRow[],
+  total: number,
+): BalanceSheetSection => ({
+  key,
+  total,
+  rows,
+});
+
 export const getBalanceSheetReport = async (
   filters: GeneralLedgerReportFilters = {},
 ): Promise<BalanceSheetReport> => {
-  const [trialBalance, incomeStatement] = await Promise.all([
-    getTrialBalanceReport(filters),
-    getIncomeStatementReport(filters),
+  const [accounts, trialBalance] = await Promise.all([
+    db.chartOfAccounts.orderBy('code').toArray(),
+    getTrialBalanceReport({
+      ...filters,
+      startDate: undefined,
+      includeClosingEntries: true,
+    }),
   ]);
   const totals = trialBalance.rows.reduce((acc, row) => {
-    const balance = row.debit_balance > 0 ? row.debit_balance : row.credit_balance;
+    const balance = getBalanceSheetSignedAmount(row);
 
     if (row.account_type === 'ASSET') {
-      acc.assets += row.debit_balance - row.credit_balance;
+      acc.assets += balance;
     } else if (row.account_type === 'LIABILITY') {
       acc.liabilities += balance;
     } else if (row.account_type === 'EQUITY') {
       acc.equity += balance;
+    } else if (row.account_type === 'REVENUE' || row.account_type === 'CONTRA_REVENUE' || row.account_type === 'EXPENSE') {
+      acc.currentIncome += row.account_type === 'REVENUE' ? balance : -balance;
     }
 
     return acc;
-  }, { assets: 0, liabilities: 0, equity: 0 });
+  }, { assets: 0, liabilities: 0, equity: 0, currentIncome: 0 });
   const assets = roundCurrency(totals.assets);
   const liabilities = roundCurrency(totals.liabilities);
   const equity = roundCurrency(totals.equity);
-  const currentPeriodIncome = roundCurrency(incomeStatement.net_income);
+  const currentPeriodIncome = roundCurrency(totals.currentIncome);
   const totalLiabilitiesAndEquity = roundCurrency(liabilities + equity + currentPeriodIncome);
   const difference = roundCurrency(assets - totalLiabilitiesAndEquity);
+  const assetRows = buildBalanceSheetAccountRows(accounts, trialBalance.rows, 'ASSET');
+  const liabilityRows = buildBalanceSheetAccountRows(accounts, trialBalance.rows, 'LIABILITY');
+  const equityRows = buildBalanceSheetAccountRows(accounts, trialBalance.rows, 'EQUITY');
+  const currentIncomeRow: BalanceSheetTreeRow = {
+    id: 'current-period-income',
+    row_type: 'current_income',
+    account_name: 'Laba Berjalan',
+    amount: currentPeriodIncome,
+    level: 0,
+  };
+  const equitySectionRows = [
+    ...equityRows,
+    currentIncomeRow,
+  ];
 
   return {
     assets,
@@ -2469,6 +2829,11 @@ export const getBalanceSheetReport = async (
     total_liabilities_and_equity: totalLiabilitiesAndEquity,
     difference,
     is_balanced: Math.abs(difference) <= JOURNAL_TOLERANCE,
+    sections: [
+      createBalanceSheetSection('ASSET', assetRows, assets),
+      createBalanceSheetSection('LIABILITY', liabilityRows, liabilities),
+      createBalanceSheetSection('EQUITY', equitySectionRows, roundCurrency(equity + currentPeriodIncome)),
+    ],
   };
 };
 

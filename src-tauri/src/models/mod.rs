@@ -1,3 +1,4 @@
+pub mod accounting_fiscal_year;
 pub mod accounting_period;
 pub mod accounting_setting;
 pub mod app_setup_config;
@@ -13,6 +14,7 @@ pub mod currency;
 pub mod department;
 pub mod employee;
 pub mod finance_transaction;
+pub mod fiscal_year_closing_run;
 pub mod journal_entry;
 pub mod opening_balance;
 pub mod payroll;

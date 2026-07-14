@@ -56,6 +56,10 @@ export const backupDatabase = async () => {
       financeAccountMappings: await db.financeAccountMappings.toArray(),
       accountingProfileSetting: await db.accountingProfileSetting.toArray(),
       accountingInitialSetupSetting: await db.accountingInitialSetupSetting.toArray(),
+      accountingPeriods: await db.accountingPeriods.toArray(),
+      accountingFiscalYears: await db.accountingFiscalYears.toArray(),
+      closingRuns: await db.closingRuns.toArray(),
+      fiscalYearClosingRuns: await db.fiscalYearClosingRuns.toArray(),
       enabledModules: await db.enabledModules.toArray(),
       generalLedgerSetting: await db.generalLedgerSetting.toArray(),
       openingBalanceBatches: await db.openingBalanceBatches.toArray(),
@@ -75,7 +79,7 @@ export const backupDatabase = async () => {
       membershipSettings: await db.membershipSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 23,
+      version: 24,
       timestamp: new Date().toISOString(),
     };
 
@@ -100,7 +104,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'accountingPeriods', 'accountingFiscalYears', 'closingRuns', 'fiscalYearClosingRuns', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -164,6 +168,10 @@ export const restoreDatabase = async (file: File) => {
           db.financeAccountMappings,
           db.accountingProfileSetting,
           db.accountingInitialSetupSetting,
+          db.accountingPeriods,
+          db.accountingFiscalYears,
+          db.closingRuns,
+          db.fiscalYearClosingRuns,
           db.enabledModules,
           db.generalLedgerSetting,
           db.openingBalanceBatches,
@@ -229,6 +237,10 @@ export const restoreDatabase = async (file: File) => {
           await db.financeAccountMappings.clear();
           await db.accountingProfileSetting.clear();
           await db.accountingInitialSetupSetting.clear();
+          await db.accountingPeriods.clear();
+          await db.accountingFiscalYears.clear();
+          await db.closingRuns.clear();
+          await db.fiscalYearClosingRuns.clear();
           await db.enabledModules.clear();
           await db.generalLedgerSetting.clear();
           await db.openingBalanceBatches.clear();
@@ -298,6 +310,10 @@ export const restoreDatabase = async (file: File) => {
           if (data.financeAccountMappings?.length) await db.financeAccountMappings.bulkAdd(data.financeAccountMappings);
           if (data.accountingProfileSetting?.length) await db.accountingProfileSetting.bulkAdd(data.accountingProfileSetting);
           if (data.accountingInitialSetupSetting?.length) await db.accountingInitialSetupSetting.bulkAdd(data.accountingInitialSetupSetting);
+          if (data.accountingPeriods?.length) await db.accountingPeriods.bulkAdd(data.accountingPeriods);
+          if (data.accountingFiscalYears?.length) await db.accountingFiscalYears.bulkAdd(data.accountingFiscalYears);
+          if (data.closingRuns?.length) await db.closingRuns.bulkAdd(data.closingRuns);
+          if (data.fiscalYearClosingRuns?.length) await db.fiscalYearClosingRuns.bulkAdd(data.fiscalYearClosingRuns);
           if (data.enabledModules?.length) await db.enabledModules.bulkAdd(data.enabledModules);
           if (data.generalLedgerSetting?.length) await db.generalLedgerSetting.bulkAdd(data.generalLedgerSetting);
           if (data.openingBalanceBatches?.length) await db.openingBalanceBatches.bulkAdd(data.openingBalanceBatches);

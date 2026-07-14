@@ -1,17 +1,36 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
+import dayjs from '@/lib/dayjs';
+import {
+  buildFiscalYearName,
+  buildNextFiscalYearRange,
+  bumpFiscalYearSync,
+  findOrCreateAccountingFiscalYear,
+} from '@/services/accountingFiscalYearService';
 import {
   buildClosingJournalPreview,
   createClosingJournalEntry,
   getIncomeStatementReport,
+  getRetainedEarningsAccount,
   getTrialBalanceReport,
   reverseClosingJournalEntry,
   type ClosingJournalPreview,
   type IncomeStatementReport,
   type TrialBalanceReport,
 } from '@/services/generalLedgerService';
-import { enqueueAccountingPeriodSync, enqueueClosingRunSync } from '@/services/syncQueueService';
-import type { AccountingPeriod, AuthUser, ClosingRun } from '@/types';
+import {
+  enqueueAccountingFiscalYearSync,
+  enqueueAccountingPeriodSync,
+  enqueueClosingRunSync,
+  enqueueFiscalYearClosingRunSync,
+} from '@/services/syncQueueService';
+import type {
+  AccountingFiscalYear,
+  AccountingPeriod,
+  AuthUser,
+  ClosingRun,
+  FiscalYearClosingRun,
+} from '@/types';
 
 type ClosingRunActor = Pick<AuthUser, 'id' | 'name'> | null | undefined;
 
@@ -22,14 +41,26 @@ export interface ClosingPrecheck {
   message: string;
 }
 
-export interface ClosingPreviewResult {
+export interface PeriodClosingPreviewResult {
   period: AccountingPeriod;
+  trial_balance: TrialBalanceReport;
+  income_statement: IncomeStatementReport;
+  prechecks: ClosingPrecheck[];
+  can_post: boolean;
+}
+
+export interface FiscalYearClosingPreviewResult {
+  fiscal_year: AccountingFiscalYear;
   preview: ClosingJournalPreview;
   trial_balance: TrialBalanceReport;
   income_statement: IncomeStatementReport;
   prechecks: ClosingPrecheck[];
   can_post: boolean;
 }
+
+export type ClosingPreviewResult = PeriodClosingPreviewResult;
+
+const toDateOnly = (value: string) => value.slice(0, 10);
 
 const bumpPeriodSync = (
   period: AccountingPeriod,
@@ -53,8 +84,23 @@ const getPeriodOrThrow = async (periodId: string): Promise<AccountingPeriod> => 
   return period;
 };
 
+const getFiscalYearOrThrow = async (fiscalYearId: string): Promise<AccountingFiscalYear> => {
+  const fiscalYear = await db.accountingFiscalYears.get(fiscalYearId);
+  if (!fiscalYear || fiscalYear.deleted_at) {
+    throw new Error('Tahun fiskal tidak ditemukan.');
+  }
+  return fiscalYear;
+};
+
 const getActivePostedClosingRun = async (periodId: string): Promise<ClosingRun | undefined> => {
   const runs = await db.closingRuns.where('period_id').equals(periodId).toArray();
+  return runs.find((run) => !run.deleted_at && run.status === 'POSTED');
+};
+
+const getActivePostedFiscalYearClosingRun = async (
+  fiscalYearId: string,
+): Promise<FiscalYearClosingRun | undefined> => {
+  const runs = await db.fiscalYearClosingRuns.where('fiscal_year_id').equals(fiscalYearId).toArray();
   return runs.find((run) => !run.deleted_at && run.status === 'POSTED');
 };
 
@@ -65,69 +111,125 @@ const countUnhealthyQueueItems = async () => {
   return { failed, pending };
 };
 
-const hasDraftJournalInPeriod = async (period: AccountingPeriod) => {
-  const start = period.start_date.slice(0, 10);
-  const end = period.end_date.slice(0, 10);
+const hasDraftJournalInRange = async (startDate: string, endDate: string) => {
+  const start = toDateOnly(startDate);
+  const end = toDateOnly(endDate);
   const entries = await db.journalEntries.toArray();
   return entries.some((entry) => (
     entry.status === 'DRAFT' &&
     !entry.deleted_at &&
-    entry.entry_date.slice(0, 10) >= start &&
-    entry.entry_date.slice(0, 10) <= end
+    toDateOnly(entry.entry_date) >= start &&
+    toDateOnly(entry.entry_date) <= end
   ));
 };
 
-const buildPrechecks = async (
-  period: AccountingPeriod,
-  preview: ClosingJournalPreview,
-  trialBalance: TrialBalanceReport,
-): Promise<ClosingPrecheck[]> => {
-  const prechecks: ClosingPrecheck[] = [];
+const getPeriodsWithinFiscalYear = async (fiscalYear: AccountingFiscalYear) => {
+  const start = toDateOnly(fiscalYear.start_date);
+  const end = toDateOnly(fiscalYear.end_date);
+  const periods = await db.accountingPeriods.toArray();
+  return periods
+    .filter((period) => (
+      !period.deleted_at &&
+      toDateOnly(period.start_date) >= start &&
+      toDateOnly(period.end_date) <= end
+    ))
+    .sort((left, right) => left.start_date.localeCompare(right.start_date));
+};
 
+const buildPeriodName = (
+  startDate: string,
+  endDate: string,
+  periodType: AccountingPeriod['period_type'],
+) => {
+  if (periodType === 'MONTHLY') {
+    return `Periode ${dayjs(startDate).format('MMM YYYY')}`;
+  }
+
+  const startYear = startDate.slice(0, 4);
+  const endYear = endDate.slice(0, 4);
+  return startYear === endYear
+    ? `Tahun Buku ${startYear}`
+    : `Tahun Buku ${startYear}-${endYear}`;
+};
+
+const buildNextAccountingPeriodRange = (period: AccountingPeriod) => {
+  const nextStart = dayjs(toDateOnly(period.end_date)).add(1, 'day');
+  const nextEnd = period.period_type === 'MONTHLY'
+    ? nextStart.endOf('month')
+    : nextStart.add(1, 'year').subtract(1, 'day');
+
+  return {
+    start: nextStart.format('YYYY-MM-DD'),
+    end: nextEnd.format('YYYY-MM-DD'),
+  };
+};
+
+const findOrCreateNextAccountingPeriod = async (
+  period: AccountingPeriod,
+  actor: ClosingRunActor,
+  now: string,
+) => {
+  const range = buildNextAccountingPeriodRange(period);
+  const periods = await db.accountingPeriods.toArray();
+  const activePeriods = periods.filter((item) => !item.deleted_at);
+  const exactPeriod = activePeriods.find((item) => (
+    toDateOnly(item.start_date) === range.start &&
+    toDateOnly(item.end_date) === range.end
+  ));
+  const overlappingPeriod = activePeriods.find((item) => (
+    item.id !== exactPeriod?.id &&
+    range.start <= toDateOnly(item.end_date) &&
+    toDateOnly(item.start_date) <= range.end
+  ));
+
+  if (overlappingPeriod) {
+    throw new Error(
+      `Periode berikutnya tumpang tindih dengan "${overlappingPeriod.name}" (${toDateOnly(overlappingPeriod.start_date)} s/d ${toDateOnly(overlappingPeriod.end_date)}).`,
+    );
+  }
+
+  if (exactPeriod) {
+    return {
+      period: exactPeriod,
+      operation: undefined,
+    };
+  }
+
+  const nextPeriod: AccountingPeriod = {
+    id: crypto.randomUUID(),
+    name: buildPeriodName(range.start, range.end, period.period_type),
+    period_type: period.period_type,
+    start_date: range.start,
+    end_date: range.end,
+    status: 'OPEN',
+    notes: `Periode otomatis dibuat setelah tutup buku ${period.name}.`,
+    version: 1,
+    created_by: actor?.id,
+    created_by_name: actor?.name,
+    updated_by: actor?.id,
+    updated_by_name: actor?.name,
+    created_at: now,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  };
+
+  await db.accountingPeriods.add(nextPeriod);
+  return {
+    period: nextPeriod,
+    operation: 'create' as const,
+  };
+};
+
+const buildCommonPrechecks = async (): Promise<ClosingPrecheck[]> => {
+  const prechecks: ClosingPrecheck[] = [];
   const module = await db.enabledModules.get('GENERAL_LEDGER');
   const setting = await db.generalLedgerSetting.get('default');
   prechecks.push({
     key: 'general_ledger_ready',
     ok: Boolean(module?.is_enabled && setting?.is_ready),
     blocking: true,
-    message: 'General Ledger aktif dan opening balance sudah posted.',
-  });
-
-  const existingPosted = await getActivePostedClosingRun(period.id);
-  prechecks.push({
-    key: 'not_yet_closed',
-    ok: period.status !== 'CLOSED' && !existingPosted,
-    blocking: true,
-    message: 'Periode belum pernah ditutup (tidak ada closing run POSTED).',
-  });
-
-  prechecks.push({
-    key: 'period_locked',
-    ok: period.status === 'LOCKED',
-    blocking: true,
-    message: 'Periode sudah dikunci (LOCKED) sebelum posting tutup buku.',
-  });
-
-  prechecks.push({
-    key: 'trial_balance_balanced',
-    ok: trialBalance.is_balanced,
-    blocking: true,
-    message: 'Trial balance seimbang (debit = kredit).',
-  });
-
-  prechecks.push({
-    key: 'closing_preview_balanced',
-    ok: preview.is_balanced,
-    blocking: true,
-    message: 'Jurnal penutup seimbang.',
-  });
-
-  const draft = await hasDraftJournalInPeriod(period);
-  prechecks.push({
-    key: 'no_draft_journal',
-    ok: !draft,
-    blocking: true,
-    message: 'Tidak ada jurnal draft/unposted di periode ini.',
+    message: 'General Ledger aktif dan baseline awal sudah siap.',
   });
 
   const { failed, pending } = await countUnhealthyQueueItems();
@@ -147,27 +249,137 @@ const buildPrechecks = async (
   return prechecks;
 };
 
-export const getClosingPreview = async (periodId: string): Promise<ClosingPreviewResult> => {
+const buildPeriodPrechecks = async (
+  period: AccountingPeriod,
+  trialBalance: TrialBalanceReport,
+): Promise<ClosingPrecheck[]> => {
+  const prechecks = await buildCommonPrechecks();
+  const existingPosted = await getActivePostedClosingRun(period.id);
+  prechecks.push({
+    key: 'not_yet_closed',
+    ok: period.status !== 'CLOSED' && !existingPosted,
+    blocking: true,
+    message: 'Periode belum pernah ditutup (tidak ada period closing run POSTED).',
+  });
+  prechecks.push({
+    key: 'period_locked',
+    ok: period.status === 'LOCKED',
+    blocking: true,
+    message: 'Periode sudah dikunci (LOCKED) sebelum tutup buku.',
+  });
+  prechecks.push({
+    key: 'trial_balance_balanced',
+    ok: trialBalance.is_balanced,
+    blocking: true,
+    message: 'Trial balance periode seimbang (debit = kredit).',
+  });
+
+  const draft = await hasDraftJournalInRange(period.start_date, period.end_date);
+  prechecks.push({
+    key: 'no_draft_journal',
+    ok: !draft,
+    blocking: true,
+    message: 'Tidak ada jurnal draft/unposted di periode ini.',
+  });
+
+  return prechecks;
+};
+
+const buildFiscalYearPrechecks = async (
+  fiscalYear: AccountingFiscalYear,
+  preview: ClosingJournalPreview,
+  trialBalance: TrialBalanceReport,
+): Promise<ClosingPrecheck[]> => {
+  const prechecks = await buildCommonPrechecks();
+  const existingPosted = await getActivePostedFiscalYearClosingRun(fiscalYear.id);
+  const periods = await getPeriodsWithinFiscalYear(fiscalYear);
+  const allPeriodsClosed = periods.length > 0 && periods.every((period) => period.status === 'CLOSED');
+
+  prechecks.push({
+    key: 'fiscal_year_open',
+    ok: fiscalYear.status === 'OPEN' && !existingPosted,
+    blocking: true,
+    message: 'Tahun fiskal masih OPEN dan belum memiliki closing run POSTED.',
+  });
+  prechecks.push({
+    key: 'periods_closed',
+    ok: allPeriodsClosed,
+    blocking: true,
+    message: 'Semua periode operasional dalam tahun fiskal sudah CLOSED.',
+  });
+  prechecks.push({
+    key: 'trial_balance_balanced',
+    ok: trialBalance.is_balanced,
+    blocking: true,
+    message: 'Trial balance tahun fiskal seimbang (debit = kredit).',
+  });
+  prechecks.push({
+    key: 'closing_preview_balanced',
+    ok: preview.is_balanced,
+    blocking: true,
+    message: 'Jurnal penutup tahun fiskal seimbang.',
+  });
+
+  const draft = await hasDraftJournalInRange(fiscalYear.start_date, fiscalYear.end_date);
+  prechecks.push({
+    key: 'no_draft_journal',
+    ok: !draft,
+    blocking: true,
+    message: 'Tidak ada jurnal draft/unposted di tahun fiskal ini.',
+  });
+
+  return prechecks;
+};
+
+export const getClosingPreview = async (periodId: string): Promise<PeriodClosingPreviewResult> => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'PERIOD_CLOSE');
 
   const period = await getPeriodOrThrow(periodId);
   const filters = {
-    startDate: period.start_date.slice(0, 10),
-    endDate: period.end_date.slice(0, 10),
+    startDate: toDateOnly(period.start_date),
+    endDate: toDateOnly(period.end_date),
+    includeClosingEntries: true,
   };
 
-  const [preview, trialBalance, incomeStatement] = await Promise.all([
-    buildClosingJournalPreview(filters),
+  const [trialBalance, incomeStatement] = await Promise.all([
     getTrialBalanceReport(filters),
     getIncomeStatementReport(filters),
   ]);
-
-  const prechecks = await buildPrechecks(period, preview, trialBalance);
+  const prechecks = await buildPeriodPrechecks(period, trialBalance);
   const canPost = prechecks.every((precheck) => !precheck.blocking || precheck.ok);
 
   return {
     period,
+    trial_balance: trialBalance,
+    income_statement: incomeStatement,
+    prechecks,
+    can_post: canPost,
+  };
+};
+
+export const getFiscalYearClosingPreview = async (
+  fiscalYearId: string,
+): Promise<FiscalYearClosingPreviewResult> => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'PERIOD_CLOSE');
+
+  const fiscalYear = await getFiscalYearOrThrow(fiscalYearId);
+  const filters = {
+    startDate: toDateOnly(fiscalYear.start_date),
+    endDate: toDateOnly(fiscalYear.end_date),
+  };
+
+  const [preview, trialBalance, incomeStatement] = await Promise.all([
+    buildClosingJournalPreview(filters),
+    getTrialBalanceReport({ ...filters, includeClosingEntries: true }),
+    getIncomeStatementReport(filters),
+  ]);
+  const prechecks = await buildFiscalYearPrechecks(fiscalYear, preview, trialBalance);
+  const canPost = prechecks.every((precheck) => !precheck.blocking || precheck.ok);
+
+  return {
+    fiscal_year: fiscalYear,
     preview,
     trial_balance: trialBalance,
     income_statement: incomeStatement,
@@ -188,17 +400,17 @@ export const postClosingRun = async (input: PostClosingRunInput): Promise<Closin
   const now = new Date().toISOString();
   let closingRun!: ClosingRun;
   let closedPeriod!: AccountingPeriod;
+  let nextPeriodChange: { record: AccountingPeriod; operation: 'create' } | undefined;
 
-  // Pre-check di luar transaksi (kualitas data + sync health).
   const previewResult = await getClosingPreview(input.period_id);
   if (!previewResult.can_post) {
     const blocker = previewResult.prechecks.find((precheck) => precheck.blocking && !precheck.ok);
-    throw new Error(`Pre-check tutup buku gagal: ${blocker?.message ?? 'periksa kembali data periode.'}`);
+    throw new Error(`Pre-check tutup buku periode gagal: ${blocker?.message ?? 'periksa kembali data periode.'}`);
   }
 
   await db.transaction(
     'rw',
-    [db.accountingPeriods, db.closingRuns, db.journalEntries, db.journalEntryLines, db.chartOfAccounts, db.activityLogs],
+    [db.accountingPeriods, db.closingRuns, db.chartOfAccounts, db.activityLogs],
     async () => {
       const period = await getPeriodOrThrow(input.period_id);
       if (period.status !== 'LOCKED') {
@@ -206,25 +418,136 @@ export const postClosingRun = async (input: PostClosingRunInput): Promise<Closin
       }
       const existingPosted = await getActivePostedClosingRun(period.id);
       if (existingPosted) {
-        throw new Error('Periode ini sudah memiliki closing run POSTED.');
+        throw new Error('Periode ini sudah memiliki period closing run POSTED.');
       }
 
-      // Hitung ulang preview di dalam transaksi agar konsisten dengan data terbaru.
+      const retainedEarningsAccount = await getRetainedEarningsAccount();
+      closingRun = {
+        id: crypto.randomUUID(),
+        period_id: period.id,
+        period_name: period.name,
+        start_date: toDateOnly(period.start_date),
+        end_date: toDateOnly(period.end_date),
+        status: 'POSTED',
+        retained_earning_account_id: retainedEarningsAccount.id,
+        retained_earning_account_code: retainedEarningsAccount.code,
+        retained_earning_account_name: retainedEarningsAccount.name,
+        net_income_amount: 0,
+        total_revenue_amount: 0,
+        total_contra_revenue_amount: 0,
+        total_expense_amount: 0,
+        posted_at: now,
+        notes: input.notes?.trim() || undefined,
+        version: 1,
+        created_by: currentUser?.id,
+        created_by_name: currentUser?.name,
+        updated_by: currentUser?.id,
+        updated_by_name: currentUser?.name,
+        created_at: now,
+        updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
+      };
+      await db.closingRuns.add(closingRun);
+
+      closedPeriod = bumpPeriodSync({
+        ...period,
+        status: 'CLOSED',
+        closed_at: now,
+        closed_by: currentUser?.id,
+        closed_by_name: currentUser?.name,
+        closing_journal_entry_id: undefined,
+      }, currentUser, now);
+      await db.accountingPeriods.put(closedPeriod);
+
+      const nextPeriod = await findOrCreateNextAccountingPeriod(period, currentUser, now);
+      if (nextPeriod.operation) {
+        nextPeriodChange = {
+          record: nextPeriod.period,
+          operation: nextPeriod.operation,
+        };
+      }
+
+      await writeActivityLog({
+        user: currentUser,
+        action: 'PERIOD_CLOSING_POSTED',
+        entity: 'closingRuns',
+        entity_id: closingRun.id,
+        description: `${currentUser?.name ?? 'User'} menutup periode ${period.name}.`,
+      });
+    },
+  );
+
+  await enqueueAccountingPeriodSync(closedPeriod, 'update');
+  if (nextPeriodChange) {
+    await enqueueAccountingPeriodSync(nextPeriodChange.record, nextPeriodChange.operation);
+  }
+  await enqueueClosingRunSync(closingRun, 'update');
+
+  return closingRun;
+};
+
+export interface PostFiscalYearClosingRunInput {
+  fiscal_year_id: string;
+  notes?: string;
+}
+
+export const postFiscalYearClosingRun = async (
+  input: PostFiscalYearClosingRunInput,
+): Promise<FiscalYearClosingRun> => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'PERIOD_CLOSE');
+
+  const now = new Date().toISOString();
+  let closingRun!: FiscalYearClosingRun;
+  let closedFiscalYear!: AccountingFiscalYear;
+  let nextFiscalYearChange: { record: AccountingFiscalYear; operation: 'create' } | undefined;
+
+  const previewResult = await getFiscalYearClosingPreview(input.fiscal_year_id);
+  if (!previewResult.can_post) {
+    const blocker = previewResult.prechecks.find((precheck) => precheck.blocking && !precheck.ok);
+    throw new Error(`Pre-check tutup buku tahun fiskal gagal: ${blocker?.message ?? 'periksa kembali data tahun fiskal.'}`);
+  }
+
+  await db.transaction(
+    'rw',
+    [
+      db.accountingFiscalYears,
+      db.fiscalYearClosingRuns,
+      db.accountingPeriods,
+      db.journalEntries,
+      db.journalEntryLines,
+      db.chartOfAccounts,
+      db.activityLogs,
+    ],
+    async () => {
+      const fiscalYear = await getFiscalYearOrThrow(input.fiscal_year_id);
+      if (fiscalYear.status !== 'OPEN') {
+        throw new Error('Tahun fiskal harus berstatus OPEN sebelum tutup buku.');
+      }
+      const existingPosted = await getActivePostedFiscalYearClosingRun(fiscalYear.id);
+      if (existingPosted) {
+        throw new Error('Tahun fiskal ini sudah memiliki closing run POSTED.');
+      }
+
+      const periods = await getPeriodsWithinFiscalYear(fiscalYear);
+      if (periods.length === 0 || periods.some((period) => period.status !== 'CLOSED')) {
+        throw new Error('Semua periode operasional dalam tahun fiskal harus CLOSED sebelum tutup buku tahunan.');
+      }
+
       const preview = await buildClosingJournalPreview({
-        startDate: period.start_date.slice(0, 10),
-        endDate: period.end_date.slice(0, 10),
+        startDate: toDateOnly(fiscalYear.start_date),
+        endDate: toDateOnly(fiscalYear.end_date),
       });
       if (!preview.is_balanced) {
-        throw new Error('Jurnal penutup tidak seimbang. Tutup buku dibatalkan.');
+        throw new Error('Jurnal penutup tahun fiskal tidak seimbang. Tutup buku dibatalkan.');
       }
 
-      // Jika tidak ada saldo akun nominal, tidak ada jurnal penutup yang dibuat
-      // (periode tetap ditutup, closing run tercatat dengan net income 0).
       const closingEntry = preview.lines.length >= 2
         ? await createClosingJournalEntry({
-          periodId: period.id,
-          periodName: period.name,
-          entryDate: period.end_date.slice(0, 10),
+          periodId: fiscalYear.id,
+          periodName: fiscalYear.name,
+          entryDate: toDateOnly(fiscalYear.end_date),
           lines: preview.lines,
           actor: currentUser,
         })
@@ -232,10 +555,10 @@ export const postClosingRun = async (input: PostClosingRunInput): Promise<Closin
 
       closingRun = {
         id: crypto.randomUUID(),
-        period_id: period.id,
-        period_name: period.name,
-        start_date: period.start_date.slice(0, 10),
-        end_date: period.end_date.slice(0, 10),
+        fiscal_year_id: fiscalYear.id,
+        fiscal_year_name: fiscalYear.name,
+        start_date: toDateOnly(fiscalYear.start_date),
+        end_date: toDateOnly(fiscalYear.end_date),
         status: 'POSTED',
         retained_earning_account_id: preview.retained_earning_account_id,
         retained_earning_account_code: preview.retained_earning_account_code,
@@ -257,32 +580,49 @@ export const postClosingRun = async (input: PostClosingRunInput): Promise<Closin
         sync_status: 'pending',
         sync_error: undefined,
       };
-      await db.closingRuns.add(closingRun);
+      await db.fiscalYearClosingRuns.add(closingRun);
 
-      closedPeriod = bumpPeriodSync({
-        ...period,
+      closedFiscalYear = bumpFiscalYearSync({
+        ...fiscalYear,
         status: 'CLOSED',
         closed_at: now,
         closed_by: currentUser?.id,
         closed_by_name: currentUser?.name,
         closing_journal_entry_id: closingEntry?.id,
       }, currentUser, now);
-      await db.accountingPeriods.put(closedPeriod);
+      await db.accountingFiscalYears.put(closedFiscalYear);
+
+      const nextRange = buildNextFiscalYearRange(fiscalYear);
+      const nextFiscalYear = await findOrCreateAccountingFiscalYear({
+        fiscalStart: nextRange.start,
+        fiscalEnd: nextRange.end,
+        now,
+        actorId: currentUser?.id,
+        actorName: currentUser?.name,
+        notes: `Tahun fiskal otomatis dibuat setelah tutup buku ${fiscalYear.name}.`,
+      });
+      if (nextFiscalYear.operation) {
+        nextFiscalYearChange = {
+          record: nextFiscalYear.fiscalYear,
+          operation: nextFiscalYear.operation,
+        };
+      }
 
       await writeActivityLog({
         user: currentUser,
-        action: 'YEAR_END_CLOSING_POSTED',
-        entity: 'closingRuns',
+        action: 'FISCAL_YEAR_CLOSING_POSTED',
+        entity: 'fiscalYearClosingRuns',
         entity_id: closingRun.id,
-        description: `${currentUser?.name ?? 'User'} menutup buku periode ${period.name}. Laba/SHU periode: ${preview.net_income_amount}.`,
+        description: `${currentUser?.name ?? 'User'} menutup tahun fiskal ${fiscalYear.name}. Laba/SHU: ${preview.net_income_amount}.`,
       });
     },
   );
 
-  // Enqueue sync sesuai urutan remote: period (CLOSED) + closing run.
-  // Journal bundle di-enqueue otomatis oleh createClosingJournalEntry.
-  await enqueueAccountingPeriodSync(closedPeriod, 'update');
-  await enqueueClosingRunSync(closingRun, 'update');
+  await enqueueAccountingFiscalYearSync(closedFiscalYear, 'update');
+  if (nextFiscalYearChange) {
+    await enqueueAccountingFiscalYearSync(nextFiscalYearChange.record, nextFiscalYearChange.operation);
+  }
+  await enqueueFiscalYearClosingRunSync(closingRun, 'update');
 
   return closingRun;
 };
@@ -312,7 +652,7 @@ export const reopenClosedPeriod = async (input: ReopenPeriodInput): Promise<Acco
 
   await db.transaction(
     'rw',
-    [db.accountingPeriods, db.closingRuns, db.journalEntries, db.journalEntryLines, db.activityLogs],
+    [db.accountingPeriods, db.closingRuns, db.activityLogs],
     async () => {
       const period = await getPeriodOrThrow(input.period_id);
       if (period.status !== 'CLOSED') {
@@ -320,19 +660,6 @@ export const reopenClosedPeriod = async (input: ReopenPeriodInput): Promise<Acco
       }
 
       const postedRun = await getActivePostedClosingRun(period.id);
-
-      // Reversal jurnal penutup bila ada.
-      let reversalEntryId: string | undefined;
-      if (period.closing_journal_entry_id) {
-        const reversal = await reverseClosingJournalEntry({
-          entryId: period.closing_journal_entry_id,
-          reason: `Reopen periode ${period.name}: ${reason}`,
-          entryDate: period.end_date.slice(0, 10),
-          actor: currentUser,
-        });
-        reversalEntryId = reversal?.id;
-      }
-
       if (postedRun) {
         reversedRun = {
           ...postedRun,
@@ -340,7 +667,6 @@ export const reopenClosedPeriod = async (input: ReopenPeriodInput): Promise<Acco
           reversed_at: now,
           reversed_by: currentUser?.id,
           reversed_by_name: currentUser?.name,
-          reversal_journal_entry_id: reversalEntryId,
           reversal_reason: reason,
           version: Math.max(1, Number(postedRun.version || 1)) + 1,
           updated_by: currentUser?.id,
@@ -371,7 +697,7 @@ export const reopenClosedPeriod = async (input: ReopenPeriodInput): Promise<Acco
 
       await writeActivityLog({
         user: currentUser,
-        action: 'YEAR_END_CLOSING_REVERSED',
+        action: 'PERIOD_CLOSING_REVERSED',
         entity: 'accountingPeriods',
         entity_id: period.id,
         description: `${currentUser?.name ?? 'User'} membuka ulang periode ${period.name}. Alasan: ${reason}.`,
@@ -387,9 +713,115 @@ export const reopenClosedPeriod = async (input: ReopenPeriodInput): Promise<Acco
   return reopenedPeriod;
 };
 
+export interface ReopenFiscalYearInput {
+  fiscal_year_id: string;
+  reason: string;
+}
+
+export const reopenClosedFiscalYear = async (
+  input: ReopenFiscalYearInput,
+): Promise<AccountingFiscalYear> => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'PERIOD_REOPEN');
+
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new Error('Alasan reopen wajib diisi.');
+  }
+
+  const { failed } = await countUnhealthyQueueItems();
+  if (failed > 0) {
+    throw new Error('Ada sync queue yang gagal. Selesaikan sync sebelum reopen tahun fiskal.');
+  }
+
+  const now = new Date().toISOString();
+  let reopenedFiscalYear!: AccountingFiscalYear;
+  let reversedRun: FiscalYearClosingRun | undefined;
+
+  await db.transaction(
+    'rw',
+    [db.accountingFiscalYears, db.fiscalYearClosingRuns, db.journalEntries, db.journalEntryLines, db.activityLogs],
+    async () => {
+      const fiscalYear = await getFiscalYearOrThrow(input.fiscal_year_id);
+      if (fiscalYear.status !== 'CLOSED') {
+        throw new Error('Hanya tahun fiskal CLOSED yang bisa dibuka ulang.');
+      }
+
+      const postedRun = await getActivePostedFiscalYearClosingRun(fiscalYear.id);
+      let reversalEntryId: string | undefined;
+      if (fiscalYear.closing_journal_entry_id) {
+        const reversal = await reverseClosingJournalEntry({
+          entryId: fiscalYear.closing_journal_entry_id,
+          reason: `Reopen tahun fiskal ${fiscalYear.name}: ${reason}`,
+          entryDate: toDateOnly(fiscalYear.end_date),
+          actor: currentUser,
+        });
+        reversalEntryId = reversal?.id;
+      }
+
+      if (postedRun) {
+        reversedRun = {
+          ...postedRun,
+          status: 'REVERSED',
+          reversed_at: now,
+          reversed_by: currentUser?.id,
+          reversed_by_name: currentUser?.name,
+          reversal_journal_entry_id: reversalEntryId,
+          reversal_reason: reason,
+          version: Math.max(1, Number(postedRun.version || 1)) + 1,
+          updated_by: currentUser?.id,
+          updated_by_name: currentUser?.name,
+          updated_at: now,
+          sync_status: 'pending',
+          sync_error: undefined,
+        };
+        await db.fiscalYearClosingRuns.put(reversedRun);
+      }
+
+      reopenedFiscalYear = bumpFiscalYearSync({
+        ...fiscalYear,
+        status: 'OPEN',
+        closing_journal_entry_id: undefined,
+        closed_at: undefined,
+        closed_by: undefined,
+        closed_by_name: undefined,
+        reopened_at: now,
+        reopened_by: currentUser?.id,
+        reopened_by_name: currentUser?.name,
+        reopen_reason: reason,
+      }, currentUser, now);
+      await db.accountingFiscalYears.put(reopenedFiscalYear);
+
+      await writeActivityLog({
+        user: currentUser,
+        action: 'FISCAL_YEAR_CLOSING_REVERSED',
+        entity: 'accountingFiscalYears',
+        entity_id: fiscalYear.id,
+        description: `${currentUser?.name ?? 'User'} membuka ulang tahun fiskal ${fiscalYear.name}. Alasan: ${reason}.`,
+      });
+    },
+  );
+
+  await enqueueAccountingFiscalYearSync(reopenedFiscalYear, 'update');
+  if (reversedRun) {
+    await enqueueFiscalYearClosingRunSync(reversedRun, 'update');
+  }
+
+  return reopenedFiscalYear;
+};
+
 export const listClosingRuns = async (): Promise<ClosingRun[]> => {
   const runs = await db.closingRuns.toArray();
   return runs
     .filter((run) => !run.deleted_at)
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 };
+
+export const listFiscalYearClosingRuns = async (): Promise<FiscalYearClosingRun[]> => {
+  const runs = await db.fiscalYearClosingRuns.toArray();
+  return runs
+    .filter((run) => !run.deleted_at)
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+};
+
+export const getDefaultFiscalYearName = buildFiscalYearName;

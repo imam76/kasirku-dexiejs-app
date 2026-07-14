@@ -1,3 +1,4 @@
+pub mod accounting_fiscal_year_repository;
 pub mod accounting_period_repository;
 pub mod accounting_setting_repository;
 pub mod app_setup_config_repository;
@@ -14,6 +15,7 @@ pub mod currency_repository;
 pub mod department_repository;
 pub mod employee_repository;
 pub mod finance_transaction_repository;
+pub mod fiscal_year_closing_run_repository;
 pub mod journal_entry_repository;
 pub mod opening_balance_repository;
 pub mod payroll_repository;

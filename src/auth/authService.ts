@@ -321,7 +321,7 @@ export const hasActiveOwner = async () => {
   return Boolean(owner);
 };
 
-export const createOwnerUser = async (input: { name: string; email: string; pin: string }): Promise<AuthUser> => {
+export const createOwnerUser = async (input: { id?: string; name: string; email: string; pin: string }): Promise<AuthUser> => {
   await seedSystemRoles(db);
 
   const hasOwner = await hasActiveOwner();
@@ -329,11 +329,16 @@ export const createOwnerUser = async (input: { name: string; email: string; pin:
     throw new Error('Owner aktif sudah ada.');
   }
 
+  const name = normalizeName(input.name);
+  assertValidName(name);
+  assertValidPin(input.pin);
+  await assertPinAvailable(input.pin);
+
   const now = new Date().toISOString();
   const { hash, salt } = await createPinHash(input.pin);
   const owner: AuthUser = withPendingAuthUserSync({
-    id: crypto.randomUUID(),
-    name: input.name,
+    id: input.id ?? crypto.randomUUID(),
+    name,
     email: normalizeAuthEmail(input.email),
     role: 'OWNER',
     role_id: resolveLegacyRoleId('OWNER'),

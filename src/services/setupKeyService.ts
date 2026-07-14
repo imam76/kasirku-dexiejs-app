@@ -5,7 +5,7 @@ import { isTauriRuntime } from '@/utils/export/platform';
 import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
-export const CURRENT_MODULE_CATALOG_VERSION = 8;
+export const CURRENT_MODULE_CATALOG_VERSION = 9;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
@@ -79,6 +79,9 @@ const migrateEnabledModules = (modules: string[]): string[] => {
   }
   if (['CASH_FLOW', 'REPORT_EXPENSE', 'REPORT_PROFIT'].some((moduleCode) => enabledModules.has(moduleCode))) {
     enabledModules.add('REPORT_PAYROLL');
+  }
+  if (enabledModules.has('REPORT_PROFIT')) {
+    enabledModules.add('REPORT_BALANCE_SHEET');
   }
   if (enabledModules.has('KOPERASI_SHU')) {
     [
@@ -173,6 +176,16 @@ export const saveSetupConfigToRemote = async (config: SetupConfig): Promise<Setu
 
   saveSetupConfig(savedConfig);
   return savedConfig;
+};
+
+export const saveSetupConfigForRuntime = async (config: SetupConfig): Promise<SetupConfig> => {
+  const normalizedConfig = normalizeSetupConfig(config);
+  if (isTauriRuntime()) {
+    return saveSetupConfigToRemote(normalizedConfig);
+  }
+
+  saveSetupConfig(normalizedConfig);
+  return normalizedConfig;
 };
 
 /**

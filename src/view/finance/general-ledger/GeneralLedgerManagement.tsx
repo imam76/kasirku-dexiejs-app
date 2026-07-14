@@ -177,10 +177,14 @@ export default function GeneralLedgerManagement() {
   const ledgerRows = useMemo<LedgerRow[]>(() => {
     if (!selectedAccount) return [];
 
-    let runningBalance = 0;
-    return (journalQuery.data ?? [])
+    const openingBalance = dateRange
+      ? trialBalanceQuery.data?.rows.find((row) => row.account_id === selectedAccount.id)?.opening_balance ?? 0
+      : 0;
+    let runningBalance = openingBalance;
+    const movementRows = (journalQuery.data ?? [])
       .slice()
       .reverse()
+      .filter((entry) => entry.status === 'POSTED' || entry.status === 'REVERSED')
       .flatMap((entry) => entry.lines.map((line) => ({ entry, line })))
       .filter(({ line }) => line.account_id === selectedAccount.id)
       .map(({ entry, line }) => {
@@ -199,7 +203,22 @@ export default function GeneralLedgerManagement() {
           running_balance: runningBalance,
         };
       });
-  }, [journalQuery.data, selectedAccount]);
+
+    if (!dateRange) return movementRows;
+
+    return [
+      {
+        id: `opening-${selectedAccount.id}-${dateRange[0].format('YYYY-MM-DD')}`,
+        entry_date: dateRange[0].startOf('day').toISOString(),
+        entry_number: t('generalLedger.ledger.openingNumber'),
+        description: t('generalLedger.ledger.openingBalance'),
+        debit: 0,
+        credit: 0,
+        running_balance: openingBalance,
+      },
+      ...movementRows,
+    ];
+  }, [dateRange, journalQuery.data, selectedAccount, t, trialBalanceQuery.data?.rows]);
 
   const journalColumns: ColumnsType<JournalEntryWithLines> = [
     {
@@ -293,6 +312,8 @@ export default function GeneralLedgerManagement() {
       title: t('generalLedger.account'),
       key: 'account',
       render: (_value, record) => `${record.account_code} - ${record.account_name}`,
+      fixed: 'left',
+      width: 260,
     },
     {
       title: t('generalLedger.accountType'),
@@ -301,7 +322,31 @@ export default function GeneralLedgerManagement() {
       width: 150,
     },
     {
-      title: t('generalLedger.debit'),
+      title: t('generalLedger.openingBalance'),
+      dataIndex: 'opening_balance',
+      key: 'opening_balance',
+      align: 'right',
+      render: (value: number) => value !== 0 ? money(value) : '-',
+      width: 180,
+    },
+    {
+      title: t('generalLedger.movementDebit'),
+      dataIndex: 'debit_movement',
+      key: 'debit_movement',
+      align: 'right',
+      render: (value: number) => value > 0 ? money(value) : '-',
+      width: 180,
+    },
+    {
+      title: t('generalLedger.movementCredit'),
+      dataIndex: 'credit_movement',
+      key: 'credit_movement',
+      align: 'right',
+      render: (value: number) => value > 0 ? money(value) : '-',
+      width: 180,
+    },
+    {
+      title: t('generalLedger.endingDebit'),
       dataIndex: 'debit_balance',
       key: 'debit_balance',
       align: 'right',
@@ -309,7 +354,7 @@ export default function GeneralLedgerManagement() {
       width: 180,
     },
     {
-      title: t('generalLedger.credit'),
+      title: t('generalLedger.endingCredit'),
       dataIndex: 'credit_balance',
       key: 'credit_balance',
       align: 'right',
@@ -560,16 +605,16 @@ export default function GeneralLedgerManagement() {
                     columns={trialBalanceColumns}
                     rowKey="account_id"
                     loading={trialBalanceQuery.isLoading}
-                    scroll={{ x: 760 }}
+                    scroll={{ x: 1210 }}
                     summary={() => (
                       <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={2}>
+                        <Table.Summary.Cell index={0} colSpan={5}>
                           <Text strong>{t('common.total')}</Text>
                         </Table.Summary.Cell>
-                        <Table.Summary.Cell index={2} align="right">
+                        <Table.Summary.Cell index={5} align="right">
                           <Text strong>{money(trialBalance?.total_debit)}</Text>
                         </Table.Summary.Cell>
-                        <Table.Summary.Cell index={3} align="right">
+                        <Table.Summary.Cell index={6} align="right">
                           <Text strong>{money(trialBalance?.total_credit)}</Text>
                         </Table.Summary.Cell>
                       </Table.Summary.Row>

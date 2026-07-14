@@ -13,6 +13,10 @@ import { refreshCashierSessionsFromPostgres } from '@/services/cashierSessionRea
 import { refreshCashBankReconciliationsFromPostgres } from '@/services/cashBankReconciliationReadService';
 import { refreshAccountingPeriodsFromPostgres } from '@/services/accountingPeriodReadService';
 import { refreshClosingRunsFromPostgres } from '@/services/closingRunReadService';
+import {
+  refreshAccountingFiscalYearsFromPostgres,
+  refreshFiscalYearClosingRunsFromPostgres,
+} from '@/services/fiscalYearReadService';
 import { refreshChartOfAccountsFromPostgres } from '@/services/chartOfAccountReadService';
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
@@ -36,7 +40,9 @@ import {
   enqueuePendingCashierSessionsForSync,
   enqueuePendingCashBankReconciliationsForSync,
   enqueuePendingAccountingPeriodsForSync,
+  enqueuePendingAccountingFiscalYearsForSync,
   enqueuePendingClosingRunsForSync,
+  enqueuePendingFiscalYearClosingRunsForSync,
   enqueuePendingChartOfAccountsForSync,
   enqueuePendingContactsForSync,
   enqueuePendingCooperativeDataForSync,
@@ -80,9 +86,11 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingFinanceTransactionsForSync();
   await enqueuePendingCashBankReconciliationsForSync();
   await enqueuePendingAccountingPeriodsForSync();
+  await enqueuePendingAccountingFiscalYearsForSync();
   await enqueuePendingJournalEntriesForSync();
   await enqueuePendingOpeningBalancesForSync();
   await enqueuePendingClosingRunsForSync();
+  await enqueuePendingFiscalYearClosingRunsForSync();
   await enqueuePendingProductionOrdersForSync();
   await enqueuePendingPurchaseDocumentsForSync();
   await enqueuePendingSalesDocumentsForSync();
@@ -128,9 +136,11 @@ export const refreshAllDataFromPostgres = async () => {
     financeTransactions: await refreshFinanceTransactionsFromPostgres(),
     cashBankReconciliations: await refreshCashBankReconciliationsFromPostgres(),
     accountingPeriods: await refreshAccountingPeriodsFromPostgres(),
+    accountingFiscalYears: await refreshAccountingFiscalYearsFromPostgres(),
     journalEntries: await refreshJournalEntriesFromPostgres(),
     openingBalances: await refreshOpeningBalancesFromPostgres(),
     closingRuns: await refreshClosingRunsFromPostgres(),
+    fiscalYearClosingRuns: await refreshFiscalYearClosingRunsFromPostgres(),
     productionOrders: await refreshProductionOrdersFromPostgres(),
     cooperative: await refreshCooperativeDataFromPostgres(),
     cooperativeCollectionEvents: await refreshCooperativeCollectionEventsFromPostgres(),

@@ -65,6 +65,9 @@ const ReportDepositReportLazyRouteImport = createFileRoute(
 const ReportCashFlowReportLazyRouteImport = createFileRoute(
   '/report/cash-flow-report',
 )()
+const ReportBalanceSheetReportLazyRouteImport = createFileRoute(
+  '/report/balance-sheet-report',
+)()
 const ReportAgingReportLazyRouteImport = createFileRoute(
   '/report/aging-report',
 )()
@@ -410,6 +413,14 @@ const ReportCashFlowReportLazyRoute =
     getParentRoute: () => rootRouteImport,
   } as any).lazy(() =>
     import('./routes/report/cash-flow-report.lazy').then((d) => d.Route),
+  )
+const ReportBalanceSheetReportLazyRoute =
+  ReportBalanceSheetReportLazyRouteImport.update({
+    id: '/report/balance-sheet-report',
+    path: '/report/balance-sheet-report',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/report/balance-sheet-report.lazy').then((d) => d.Route),
   )
 const ReportAgingReportLazyRoute = ReportAgingReportLazyRouteImport.update({
   id: '/report/aging-report',
@@ -1141,6 +1152,7 @@ export interface FileRoutesByFullPath {
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
   '/purchases/pending-costs': typeof PurchasesPendingCostsLazyRoute
   '/report/aging-report': typeof ReportAgingReportLazyRoute
+  '/report/balance-sheet-report': typeof ReportBalanceSheetReportLazyRoute
   '/report/cash-flow-report': typeof ReportCashFlowReportLazyRoute
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
@@ -1251,6 +1263,7 @@ export interface FileRoutesByTo {
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
   '/purchases/pending-costs': typeof PurchasesPendingCostsLazyRoute
   '/report/aging-report': typeof ReportAgingReportLazyRoute
+  '/report/balance-sheet-report': typeof ReportBalanceSheetReportLazyRoute
   '/report/cash-flow-report': typeof ReportCashFlowReportLazyRoute
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
@@ -1362,6 +1375,7 @@ export interface FileRoutesById {
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
   '/purchases/pending-costs': typeof PurchasesPendingCostsLazyRoute
   '/report/aging-report': typeof ReportAgingReportLazyRoute
+  '/report/balance-sheet-report': typeof ReportBalanceSheetReportLazyRoute
   '/report/cash-flow-report': typeof ReportCashFlowReportLazyRoute
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
@@ -1474,6 +1488,7 @@ export interface FileRouteTypes {
     | '/master-data/warehouses'
     | '/purchases/pending-costs'
     | '/report/aging-report'
+    | '/report/balance-sheet-report'
     | '/report/cash-flow-report'
     | '/report/deposit-report'
     | '/report/expense-report'
@@ -1584,6 +1599,7 @@ export interface FileRouteTypes {
     | '/master-data/warehouses'
     | '/purchases/pending-costs'
     | '/report/aging-report'
+    | '/report/balance-sheet-report'
     | '/report/cash-flow-report'
     | '/report/deposit-report'
     | '/report/expense-report'
@@ -1694,6 +1710,7 @@ export interface FileRouteTypes {
     | '/master-data/warehouses'
     | '/purchases/pending-costs'
     | '/report/aging-report'
+    | '/report/balance-sheet-report'
     | '/report/cash-flow-report'
     | '/report/deposit-report'
     | '/report/expense-report'
@@ -1805,6 +1822,7 @@ export interface RootRouteChildren {
   MasterDataWarehousesLazyRoute: typeof MasterDataWarehousesLazyRoute
   PurchasesPendingCostsLazyRoute: typeof PurchasesPendingCostsLazyRoute
   ReportAgingReportLazyRoute: typeof ReportAgingReportLazyRoute
+  ReportBalanceSheetReportLazyRoute: typeof ReportBalanceSheetReportLazyRoute
   ReportCashFlowReportLazyRoute: typeof ReportCashFlowReportLazyRoute
   ReportDepositReportLazyRoute: typeof ReportDepositReportLazyRoute
   ReportExpenseReportLazyRoute: typeof ReportExpenseReportLazyRoute
@@ -2026,6 +2044,13 @@ declare module '@tanstack/react-router' {
       path: '/report/cash-flow-report'
       fullPath: '/report/cash-flow-report'
       preLoaderRoute: typeof ReportCashFlowReportLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report/balance-sheet-report': {
+      id: '/report/balance-sheet-report'
+      path: '/report/balance-sheet-report'
+      fullPath: '/report/balance-sheet-report'
+      preLoaderRoute: typeof ReportBalanceSheetReportLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report/aging-report': {
@@ -2745,6 +2770,7 @@ const rootRouteChildren: RootRouteChildren = {
   MasterDataWarehousesLazyRoute: MasterDataWarehousesLazyRoute,
   PurchasesPendingCostsLazyRoute: PurchasesPendingCostsLazyRoute,
   ReportAgingReportLazyRoute: ReportAgingReportLazyRoute,
+  ReportBalanceSheetReportLazyRoute: ReportBalanceSheetReportLazyRoute,
   ReportCashFlowReportLazyRoute: ReportCashFlowReportLazyRoute,
   ReportDepositReportLazyRoute: ReportDepositReportLazyRoute,
   ReportExpenseReportLazyRoute: ReportExpenseReportLazyRoute,

@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   DatePicker,
+  Descriptions,
   Form,
   Input,
   Modal,
@@ -20,7 +21,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { useQuery } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CheckCircle2, Lock, Unlock, Plus, XCircle } from 'lucide-react';
+import { CheckCircle2, Lock, Plus, Unlock, XCircle } from 'lucide-react';
 import { db } from '@/lib/db';
 import {
   createAccountingPeriod,
@@ -30,20 +31,37 @@ import {
 } from '@/services/accountingPeriodService';
 import {
   getClosingPreview,
+  getFiscalYearClosingPreview,
   postClosingRun,
+  postFiscalYearClosingRun,
+  reopenClosedFiscalYear,
   reopenClosedPeriod,
+  type ClosingPrecheck,
 } from '@/services/closingRunService';
 import { hasPermission } from '@/auth/permissions';
 import { useAuth } from '@/auth/useAuth';
 import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import type { AccountingPeriod, AccountingPeriodStatus, AccountingPeriodType, ClosingRun } from '@/types';
+import type {
+  AccountingFiscalYear,
+  AccountingFiscalYearStatus,
+  AccountingPeriod,
+  AccountingPeriodStatus,
+  AccountingPeriodType,
+  ClosingRun,
+  FiscalYearClosingRun,
+} from '@/types';
 
 const { Text, Title } = Typography;
 
-const statusColor: Record<AccountingPeriodStatus, string> = {
+const periodStatusColor: Record<AccountingPeriodStatus, string> = {
   OPEN: 'green',
   LOCKED: 'gold',
+  CLOSED: 'red',
+};
+
+const fiscalYearStatusColor: Record<AccountingFiscalYearStatus, string> = {
+  OPEN: 'green',
   CLOSED: 'red',
 };
 
@@ -54,6 +72,10 @@ interface CreatePeriodFormValues {
   end_date: Dayjs;
   notes?: string;
 }
+
+type ReopenTarget =
+  | { type: 'period'; record: AccountingPeriod }
+  | { type: 'fiscalYear'; record: AccountingFiscalYear };
 
 function ClosingManagement() {
   const { t } = useI18n();
@@ -67,7 +89,8 @@ function ClosingManagement() {
 
   const [submitting, setSubmitting] = useState(false);
   const [previewPeriodId, setPreviewPeriodId] = useState<string | undefined>();
-  const [reopenPeriod, setReopenPeriod] = useState<AccountingPeriod | undefined>();
+  const [previewFiscalYearId, setPreviewFiscalYearId] = useState<string | undefined>();
+  const [reopenTarget, setReopenTarget] = useState<ReopenTarget | undefined>();
   const [reopenReason, setReopenReason] = useState('');
 
   const periods = useLiveQuery(async () => {
@@ -77,17 +100,37 @@ function ClosingManagement() {
       .sort((a, b) => (a.start_date < b.start_date ? 1 : -1));
   }, [], [] as AccountingPeriod[]);
 
-  const closingRuns = useLiveQuery(async () => {
+  const fiscalYears = useLiveQuery(async () => {
+    const rows = await db.accountingFiscalYears.toArray();
+    return rows
+      .filter((fiscalYear) => !fiscalYear.deleted_at)
+      .sort((a, b) => (a.start_date < b.start_date ? 1 : -1));
+  }, [], [] as AccountingFiscalYear[]);
+
+  const periodClosingRuns = useLiveQuery(async () => {
     const rows = await db.closingRuns.toArray();
     return rows
       .filter((run) => !run.deleted_at)
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   }, [], [] as ClosingRun[]);
 
-  const previewQuery = useQuery({
-    queryKey: ['closingPreview', previewPeriodId],
+  const fiscalYearClosingRuns = useLiveQuery(async () => {
+    const rows = await db.fiscalYearClosingRuns.toArray();
+    return rows
+      .filter((run) => !run.deleted_at)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  }, [], [] as FiscalYearClosingRun[]);
+
+  const periodPreviewQuery = useQuery({
+    queryKey: ['periodClosingPreview', previewPeriodId],
     queryFn: () => getClosingPreview(previewPeriodId as string),
     enabled: Boolean(previewPeriodId),
+  });
+
+  const fiscalYearPreviewQuery = useQuery({
+    queryKey: ['fiscalYearClosingPreview', previewFiscalYearId],
+    queryFn: () => getFiscalYearClosingPreview(previewFiscalYearId as string),
+    enabled: Boolean(previewFiscalYearId),
   });
 
   const runAction = async (action: () => Promise<unknown>, successMessage: string) => {
@@ -112,25 +155,48 @@ function ClosingManagement() {
         notes: values.notes,
       });
       form.resetFields();
+      form.setFieldsValue({ period_type: 'MONTHLY' });
       return created;
     }, t('closing.message.periodCreated').replace('{name}', values.name));
   };
 
-  const handlePostClosing = async () => {
+  const handlePostPeriodClosing = async () => {
     if (!previewPeriodId) return;
     await runAction(async () => {
       await postClosingRun({ period_id: previewPeriodId });
       setPreviewPeriodId(undefined);
-    }, t('closing.message.closingPosted'));
+    }, t('closing.message.periodClosingPosted'));
+  };
+
+  const handlePostFiscalYearClosing = async () => {
+    if (!previewFiscalYearId) return;
+    await runAction(async () => {
+      await postFiscalYearClosingRun({ fiscal_year_id: previewFiscalYearId });
+      setPreviewFiscalYearId(undefined);
+    }, t('closing.message.fiscalYearClosingPosted'));
   };
 
   const handleReopen = async () => {
-    if (!reopenPeriod) return;
+    if (!reopenTarget) return;
     await runAction(async () => {
-      await reopenClosedPeriod({ period_id: reopenPeriod.id, reason: reopenReason });
-      setReopenPeriod(undefined);
+      if (reopenTarget.type === 'period') {
+        await reopenClosedPeriod({ period_id: reopenTarget.record.id, reason: reopenReason });
+      } else {
+        await reopenClosedFiscalYear({
+          fiscal_year_id: reopenTarget.record.id,
+          reason: reopenReason,
+        });
+      }
+      setReopenTarget(undefined);
       setReopenReason('');
-    }, t('closing.message.reopened'));
+    }, reopenTarget.type === 'period'
+      ? t('closing.message.periodReopened')
+      : t('closing.message.fiscalYearReopened'));
+  };
+
+  const closeReopenModal = () => {
+    setReopenTarget(undefined);
+    setReopenReason('');
   };
 
   const periodColumns: ColumnsType<AccountingPeriod> = [
@@ -139,44 +205,59 @@ function ClosingManagement() {
       title: t('closing.period.type'),
       dataIndex: 'period_type',
       render: (value: AccountingPeriodType) => (
-        value === 'YEARLY' ? t('closing.period.typeYearly') : t('closing.period.typeMonthly')
+        value === 'YEARLY'
+          ? <Tag color="default">{t('closing.period.typeYearlyLegacy')}</Tag>
+          : t('closing.period.typeMonthly')
       ),
+      width: 150,
     },
     {
       title: t('closing.period.startDate'),
       dataIndex: 'start_date',
       render: (value: string) => formatDate(value),
+      width: 150,
     },
     {
       title: t('closing.period.endDate'),
       dataIndex: 'end_date',
       render: (value: string) => formatDate(value),
+      width: 150,
     },
     {
       title: t('closing.period.status'),
       dataIndex: 'status',
       render: (value: AccountingPeriodStatus) => (
-        <Tag color={statusColor[value]}>{t(`closing.status.${value}`)}</Tag>
+        <Tag color={periodStatusColor[value]}>{t(`closing.status.${value}`)}</Tag>
       ),
+      width: 130,
     },
     {
       title: t('closing.period.actions'),
       key: 'actions',
+      width: 360,
       render: (_, period) => (
         <Space wrap size="small">
           {canManagePeriod && period.status === 'OPEN' && (
-            <Button size="small" icon={<Lock size={14} />} onClick={() => runAction(
-              () => lockAccountingPeriod(period.id),
-              t('closing.message.periodLocked'),
-            )}>
+            <Button
+              size="small"
+              icon={<Lock size={14} />}
+              onClick={() => runAction(
+                () => lockAccountingPeriod(period.id),
+                t('closing.message.periodLocked'),
+              )}
+            >
               {t('closing.period.lock')}
             </Button>
           )}
           {canManagePeriod && period.status === 'LOCKED' && (
-            <Button size="small" icon={<Unlock size={14} />} onClick={() => runAction(
-              () => unlockAccountingPeriod(period.id),
-              t('closing.message.periodUnlocked'),
-            )}>
+            <Button
+              size="small"
+              icon={<Unlock size={14} />}
+              onClick={() => runAction(
+                () => unlockAccountingPeriod(period.id),
+                t('closing.message.periodUnlocked'),
+              )}
+            >
               {t('closing.period.unlock')}
             </Button>
           )}
@@ -186,7 +267,11 @@ function ClosingManagement() {
             </Button>
           )}
           {canReopen && period.status === 'CLOSED' && (
-            <Button size="small" danger onClick={() => setReopenPeriod(period)}>
+            <Button
+              size="small"
+              danger
+              onClick={() => setReopenTarget({ type: 'period', record: period })}
+            >
               {t('closing.period.reopen')}
             </Button>
           )}
@@ -206,29 +291,105 @@ function ClosingManagement() {
     },
   ];
 
-  const runColumns: ColumnsType<ClosingRun> = [
-    { title: t('closing.runs.periodName'), dataIndex: 'period_name' },
+  const fiscalYearColumns: ColumnsType<AccountingFiscalYear> = [
+    { title: t('closing.fiscalYear.name'), dataIndex: 'name' },
     {
-      title: t('closing.runs.netIncome'),
-      dataIndex: 'net_income_amount',
-      align: 'right',
-      render: (value: number) => formatCurrency(value),
+      title: t('closing.fiscalYear.startDate'),
+      dataIndex: 'start_date',
+      render: (value: string) => formatDate(value),
+      width: 150,
     },
+    {
+      title: t('closing.fiscalYear.endDate'),
+      dataIndex: 'end_date',
+      render: (value: string) => formatDate(value),
+      width: 150,
+    },
+    {
+      title: t('closing.fiscalYear.status'),
+      dataIndex: 'status',
+      render: (value: AccountingFiscalYearStatus) => (
+        <Tag color={fiscalYearStatusColor[value]}>{t(`closing.fiscalYear.status.${value}`)}</Tag>
+      ),
+      width: 130,
+    },
+    {
+      title: t('closing.fiscalYear.actions'),
+      key: 'actions',
+      width: 260,
+      render: (_, fiscalYear) => (
+        <Space wrap size="small">
+          {canClose && fiscalYear.status === 'OPEN' && (
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => setPreviewFiscalYearId(fiscalYear.id)}
+            >
+              {t('closing.fiscalYear.close')}
+            </Button>
+          )}
+          {canReopen && fiscalYear.status === 'CLOSED' && (
+            <Button
+              size="small"
+              danger
+              onClick={() => setReopenTarget({ type: 'fiscalYear', record: fiscalYear })}
+            >
+              {t('closing.fiscalYear.reopen')}
+            </Button>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  const periodRunColumns: ColumnsType<ClosingRun> = [
+    { title: t('closing.runs.periodName'), dataIndex: 'period_name' },
     {
       title: t('closing.runs.status'),
       dataIndex: 'status',
       render: (value: ClosingRun['status']) => (
         <Tag color={value === 'POSTED' ? 'green' : value === 'REVERSED' ? 'red' : 'default'}>{value}</Tag>
       ),
+      width: 130,
     },
     {
       title: t('closing.runs.postedAt'),
       dataIndex: 'posted_at',
       render: (value?: string) => (value ? formatDate(value) : '-'),
+      width: 160,
     },
   ];
 
-  const preview = previewQuery.data;
+  const fiscalYearRunColumns: ColumnsType<FiscalYearClosingRun> = [
+    { title: t('closing.fiscalRuns.fiscalYearName'), dataIndex: 'fiscal_year_name' },
+    {
+      title: t('closing.runs.netIncome'),
+      dataIndex: 'net_income_amount',
+      align: 'right',
+      render: (value: number) => formatCurrency(value),
+      width: 170,
+    },
+    {
+      title: t('closing.runs.status'),
+      dataIndex: 'status',
+      render: (value: FiscalYearClosingRun['status']) => (
+        <Tag color={value === 'POSTED' ? 'green' : value === 'REVERSED' ? 'red' : 'default'}>{value}</Tag>
+      ),
+      width: 130,
+    },
+    {
+      title: t('closing.runs.postedAt'),
+      dataIndex: 'posted_at',
+      render: (value?: string) => (value ? formatDate(value) : '-'),
+      width: 160,
+    },
+  ];
+
+  const periodPreview = periodPreviewQuery.data;
+  const fiscalYearPreview = fiscalYearPreviewQuery.data;
+  const reopenTitle = reopenTarget?.type === 'fiscalYear'
+    ? t('closing.reopen.fiscalYearTitle')
+    : t('closing.reopen.periodTitle');
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4">
@@ -250,7 +411,7 @@ function ClosingManagement() {
                       form={form}
                       layout="vertical"
                       onFinish={handleCreate}
-                      initialValues={{ period_type: 'YEARLY' as AccountingPeriodType }}
+                      initialValues={{ period_type: 'MONTHLY' as AccountingPeriodType }}
                     >
                       <div className="grid gap-3 md:grid-cols-2">
                         <Form.Item
@@ -258,12 +419,11 @@ function ClosingManagement() {
                           label={t('closing.period.name')}
                           rules={[{ required: true }]}
                         >
-                          <Input placeholder="Tahun Buku 2026" data-testid="gl-closing-period-name" />
+                          <Input placeholder="Periode Januari 2026" data-testid="gl-closing-period-name" />
                         </Form.Item>
                         <Form.Item name="period_type" label={t('closing.period.type')}>
                           <Select
                             options={[
-                              { value: 'YEARLY', label: t('closing.period.typeYearly') },
                               { value: 'MONTHLY', label: t('closing.period.typeMonthly') },
                             ]}
                           />
@@ -299,7 +459,7 @@ function ClosingManagement() {
                   </Card>
                 )}
 
-                <Card size="small">
+                <Card size="small" title={t('closing.period.listTitle')}>
                   <Table<AccountingPeriod>
                     rowKey="id"
                     size="small"
@@ -307,32 +467,60 @@ function ClosingManagement() {
                     dataSource={periods ?? []}
                     locale={{ emptyText: t('closing.period.empty') }}
                     pagination={false}
+                    scroll={{ x: 960 }}
+                  />
+                </Card>
+
+                <Card size="small" title={t('closing.periodRuns.title')}>
+                  <Table<ClosingRun>
+                    rowKey="id"
+                    size="small"
+                    columns={periodRunColumns}
+                    dataSource={periodClosingRuns ?? []}
+                    locale={{ emptyText: t('closing.runs.empty') }}
+                    pagination={false}
+                    scroll={{ x: 620 }}
                   />
                 </Card>
               </div>
             ),
           },
           {
-            key: 'runs',
-            label: t('closing.tabs.runs'),
+            key: 'fiscal-years',
+            label: t('closing.tabs.fiscalYears'),
             children: (
-              <Card size="small">
-                <Table<ClosingRun>
-                  rowKey="id"
-                  size="small"
-                  columns={runColumns}
-                  dataSource={closingRuns ?? []}
-                  locale={{ emptyText: t('closing.runs.empty') }}
-                  pagination={false}
-                />
-              </Card>
+              <div className="space-y-4">
+                <Card size="small" title={t('closing.fiscalYear.listTitle')}>
+                  <Table<AccountingFiscalYear>
+                    rowKey="id"
+                    size="small"
+                    columns={fiscalYearColumns}
+                    dataSource={fiscalYears ?? []}
+                    locale={{ emptyText: t('closing.fiscalYear.empty') }}
+                    pagination={false}
+                    scroll={{ x: 760 }}
+                  />
+                </Card>
+
+                <Card size="small" title={t('closing.fiscalRuns.title')}>
+                  <Table<FiscalYearClosingRun>
+                    rowKey="id"
+                    size="small"
+                    columns={fiscalYearRunColumns}
+                    dataSource={fiscalYearClosingRuns ?? []}
+                    locale={{ emptyText: t('closing.fiscalRuns.empty') }}
+                    pagination={false}
+                    scroll={{ x: 760 }}
+                  />
+                </Card>
+              </div>
             ),
           },
         ]}
       />
 
       <Modal
-        title={t('closing.preview.title')}
+        title={t('closing.periodPreview.title')}
         open={Boolean(previewPeriodId)}
         onCancel={() => setPreviewPeriodId(undefined)}
         width={760}
@@ -345,50 +533,96 @@ function ClosingManagement() {
             type="primary"
             danger
             loading={submitting}
-            disabled={!preview?.can_post || !preview?.preview.is_balanced}
-            onClick={handlePostClosing}
+            disabled={!periodPreview?.can_post || !periodPreview?.trial_balance.is_balanced}
+            onClick={handlePostPeriodClosing}
             data-testid="gl-closing-post"
           >
-            {t('closing.preview.post')}
+            {t('closing.periodPreview.post')}
           </Button>,
         ]}
       >
-        {previewQuery.isLoading && <Text type="secondary">Loading...</Text>}
-        {previewQuery.isError && (
-          <Alert type="error" showIcon message={(previewQuery.error as Error).message} />
+        {periodPreviewQuery.isLoading && <Text type="secondary">Loading...</Text>}
+        {periodPreviewQuery.isError && (
+          <Alert type="error" showIcon message={(periodPreviewQuery.error as Error).message} />
         )}
-        {preview && (
+        {periodPreview && (
+          <div className="space-y-3">
+            <Descriptions size="small" bordered column={1}>
+              <Descriptions.Item label={t('closing.period.name')}>
+                {periodPreview.period.name}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('closing.preview.netIncome')}>
+                {formatCurrency(periodPreview.income_statement.net_income)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('closing.preview.trialBalance')}>
+                {periodPreview.trial_balance.is_balanced
+                  ? t('closing.preview.balanced')
+                  : t('closing.preview.notBalanced')}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Alert
+              type="info"
+              showIcon
+              message={t('closing.periodPreview.noJournal')}
+            />
+
+            <PrecheckList prechecks={periodPreview.prechecks} title={t('closing.preview.prechecks')} />
+
+            {!periodPreview.can_post && (
+              <Alert type="warning" showIcon message={t('closing.preview.cannotPost')} />
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={t('closing.fiscalPreview.title')}
+        open={Boolean(previewFiscalYearId)}
+        onCancel={() => setPreviewFiscalYearId(undefined)}
+        width={860}
+        footer={[
+          <Button key="cancel" onClick={() => setPreviewFiscalYearId(undefined)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="post"
+            type="primary"
+            danger
+            loading={submitting}
+            disabled={!fiscalYearPreview?.can_post || !fiscalYearPreview?.preview.is_balanced}
+            onClick={handlePostFiscalYearClosing}
+          >
+            {t('closing.fiscalPreview.post')}
+          </Button>,
+        ]}
+      >
+        {fiscalYearPreviewQuery.isLoading && <Text type="secondary">Loading...</Text>}
+        {fiscalYearPreviewQuery.isError && (
+          <Alert type="error" showIcon message={(fiscalYearPreviewQuery.error as Error).message} />
+        )}
+        {fiscalYearPreview && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <StatBox label={t('closing.preview.netIncome')} value={formatCurrency(preview.preview.net_income_amount)} />
-              <StatBox label={t('closing.preview.totalRevenue')} value={formatCurrency(preview.preview.total_revenue_amount)} />
-              <StatBox label={t('closing.preview.totalContraRevenue')} value={formatCurrency(preview.preview.total_contra_revenue_amount)} />
-              <StatBox label={t('closing.preview.totalExpense')} value={formatCurrency(preview.preview.total_expense_amount)} />
+              <StatBox label={t('closing.preview.netIncome')} value={formatCurrency(fiscalYearPreview.preview.net_income_amount)} />
+              <StatBox label={t('closing.preview.totalRevenue')} value={formatCurrency(fiscalYearPreview.preview.total_revenue_amount)} />
+              <StatBox label={t('closing.preview.totalContraRevenue')} value={formatCurrency(fiscalYearPreview.preview.total_contra_revenue_amount)} />
+              <StatBox label={t('closing.preview.totalExpense')} value={formatCurrency(fiscalYearPreview.preview.total_expense_amount)} />
             </div>
 
             <Text type="secondary">
-              {t('closing.preview.retainedAccount')}: {preview.preview.retained_earning_account_code} - {preview.preview.retained_earning_account_name}
+              {t('closing.preview.retainedAccount')}: {fiscalYearPreview.preview.retained_earning_account_code} - {fiscalYearPreview.preview.retained_earning_account_name}
             </Text>
 
             <Alert
-              type={preview.preview.is_balanced ? 'success' : 'error'}
+              type={fiscalYearPreview.preview.is_balanced ? 'success' : 'error'}
               showIcon
-              message={preview.preview.is_balanced ? t('closing.preview.balanced') : t('closing.preview.notBalanced')}
+              message={fiscalYearPreview.preview.is_balanced
+                ? t('closing.preview.balanced')
+                : t('closing.preview.notBalanced')}
             />
 
-            <div>
-              <Text strong>{t('closing.preview.prechecks')}</Text>
-              <ul className="mt-1 space-y-1">
-                {preview.prechecks.map((precheck) => (
-                  <li key={precheck.key} className="flex items-center gap-2 text-sm">
-                    {precheck.ok
-                      ? <CheckCircle2 size={15} className="text-green-600" />
-                      : <XCircle size={15} className={precheck.blocking ? 'text-red-600' : 'text-amber-500'} />}
-                    <span>{precheck.message}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <PrecheckList prechecks={fiscalYearPreview.prechecks} title={t('closing.preview.prechecks')} />
 
             <div>
               <Text strong>{t('closing.preview.journalLines')}</Text>
@@ -398,15 +632,15 @@ function ClosingManagement() {
                 className="mt-1"
                 pagination={false}
                 columns={[
-                  { title: 'Akun', render: (_, row) => `${row.account_code} - ${row.account_name}` },
-                  { title: 'Debit', dataIndex: 'debit', align: 'right', render: (v: number) => (v ? formatCurrency(v) : '-') },
-                  { title: 'Kredit', dataIndex: 'credit', align: 'right', render: (v: number) => (v ? formatCurrency(v) : '-') },
+                  { title: t('generalLedger.account'), render: (_, row) => `${row.account_code} - ${row.account_name}` },
+                  { title: t('generalLedger.debit'), dataIndex: 'debit', align: 'right', render: (value: number) => (value ? formatCurrency(value) : '-') },
+                  { title: t('generalLedger.credit'), dataIndex: 'credit', align: 'right', render: (value: number) => (value ? formatCurrency(value) : '-') },
                 ]}
-                dataSource={preview.preview.lines}
+                dataSource={fiscalYearPreview.preview.lines}
               />
             </div>
 
-            {!preview.can_post && (
+            {!fiscalYearPreview.can_post && (
               <Alert type="warning" showIcon message={t('closing.preview.cannotPost')} />
             )}
           </div>
@@ -414,9 +648,9 @@ function ClosingManagement() {
       </Modal>
 
       <Modal
-        title={t('closing.reopen.title')}
-        open={Boolean(reopenPeriod)}
-        onCancel={() => { setReopenPeriod(undefined); setReopenReason(''); }}
+        title={reopenTitle}
+        open={Boolean(reopenTarget)}
+        onCancel={closeReopenModal}
         onOk={handleReopen}
         okText={t('closing.reopen.confirm')}
         okButtonProps={{ danger: true, loading: submitting, disabled: !reopenReason.trim() }}
@@ -431,6 +665,24 @@ function ClosingManagement() {
           </Form.Item>
         </Form>
       </Modal>
+    </div>
+  );
+}
+
+function PrecheckList({ prechecks, title }: { prechecks: ClosingPrecheck[]; title: string }) {
+  return (
+    <div>
+      <Text strong>{title}</Text>
+      <ul className="mt-1 space-y-1">
+        {prechecks.map((precheck) => (
+          <li key={precheck.key} className="flex items-center gap-2 text-sm">
+            {precheck.ok
+              ? <CheckCircle2 size={15} className="text-green-600" />
+              : <XCircle size={15} className={precheck.blocking ? 'text-red-600' : 'text-amber-500'} />}
+            <span>{precheck.message}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

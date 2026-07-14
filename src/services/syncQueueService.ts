@@ -52,6 +52,7 @@ import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
 import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
 import {
   activityLogPostgresAdapter,
+  accountingFiscalYearPostgresAdapter,
   accountingInitialSetupSettingPostgresAdapter,
   accountingPeriodPostgresAdapter,
   accountingProfileSettingPostgresAdapter,
@@ -63,6 +64,7 @@ import {
   contactPostgresAdapter,
   enabledModulePostgresAdapter,
   financeAccountMappingPostgresAdapter,
+  fiscalYearClosingRunPostgresAdapter,
   generalLedgerSettingPostgresAdapter,
   cooperativeAreaPostgresAdapter,
   cooperativeCollectionEventPostgresAdapter,
@@ -96,6 +98,7 @@ import {
   stockMutationPostgresAdapter,
   taxPostgresAdapter,
   warehousePostgresAdapter,
+  type RemoteAccountingFiscalYearDto,
   type RemoteAccountingPeriodDto,
   type RemoteAccountingInitialSetupSettingDto,
   type RemoteActivityLogDto,
@@ -127,6 +130,7 @@ import {
   type RemoteEmployeeCollectionScheduleDto,
   type RemoteEmployeeDto,
   type RemoteFinanceTransactionDto,
+  type RemoteFiscalYearClosingRunDto,
   type RemoteJournalEntryBundleDto,
   type RemoteJournalEntryDto,
   type RemoteJournalEntryLineDto,
@@ -161,7 +165,11 @@ import {
 import { mergeRemoteCashBankReconciliationsIntoDexie } from '@/services/cashBankReconciliationReadService';
 import { mergeRemoteAccountingPeriodsIntoDexie } from '@/services/accountingPeriodReadService';
 import { mergeRemoteClosingRunsIntoDexie } from '@/services/closingRunReadService';
-import type { AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import {
+  mergeRemoteAccountingFiscalYearsIntoDexie,
+  mergeRemoteFiscalYearClosingRunsIntoDexie,
+} from '@/services/fiscalYearReadService';
+import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -174,6 +182,8 @@ const CASHIER_SESSION_ENTITY = 'cashierSessions';
 const CASH_BANK_RECONCILIATION_ENTITY = 'cashBankReconciliations';
 const ACCOUNTING_PERIOD_ENTITY = 'accountingPeriods';
 const CLOSING_RUN_ENTITY = 'closingRuns';
+const ACCOUNTING_FISCAL_YEAR_ENTITY = 'accountingFiscalYears';
+const FISCAL_YEAR_CLOSING_RUN_ENTITY = 'fiscalYearClosingRuns';
 const CONTACT_ENTITY = 'contacts';
 const COOPERATIVE_AREA_ENTITY = 'cooperativeAreas';
 const COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY = 'cooperativeLoanCollectionEvents';
@@ -1172,12 +1182,73 @@ const mapAccountingPeriodToRemoteDto = (
   deleted_at: period.deleted_at,
 });
 
+const mapAccountingFiscalYearToRemoteDto = (
+  fiscalYear: AccountingFiscalYear,
+): RemoteAccountingFiscalYearDto => ({
+  id: fiscalYear.id,
+  name: fiscalYear.name,
+  start_date: fiscalYear.start_date,
+  end_date: fiscalYear.end_date,
+  status: fiscalYear.status,
+  closed_at: fiscalYear.closed_at,
+  closed_by: fiscalYear.closed_by,
+  closed_by_name: fiscalYear.closed_by_name,
+  closing_journal_entry_id: fiscalYear.closing_journal_entry_id,
+  reopened_at: fiscalYear.reopened_at,
+  reopened_by: fiscalYear.reopened_by,
+  reopened_by_name: fiscalYear.reopened_by_name,
+  reopen_reason: fiscalYear.reopen_reason,
+  notes: fiscalYear.notes,
+  version: fiscalYear.version ?? 1,
+  created_by: fiscalYear.created_by,
+  created_by_name: fiscalYear.created_by_name,
+  updated_by: fiscalYear.updated_by,
+  updated_by_name: fiscalYear.updated_by_name,
+  created_at: fiscalYear.created_at,
+  updated_at: fiscalYear.updated_at,
+  deleted_at: fiscalYear.deleted_at,
+});
+
 const mapClosingRunToRemoteDto = (
   run: ClosingRun,
 ): RemoteClosingRunDto => ({
   id: run.id,
   period_id: run.period_id,
   period_name: run.period_name,
+  start_date: run.start_date,
+  end_date: run.end_date,
+  status: run.status,
+  retained_earning_account_id: run.retained_earning_account_id,
+  retained_earning_account_code: run.retained_earning_account_code,
+  retained_earning_account_name: run.retained_earning_account_name,
+  net_income_amount: normalizeRemoteNumber(run.net_income_amount),
+  total_revenue_amount: normalizeRemoteNumber(run.total_revenue_amount),
+  total_contra_revenue_amount: normalizeRemoteNumber(run.total_contra_revenue_amount),
+  total_expense_amount: normalizeRemoteNumber(run.total_expense_amount),
+  closing_journal_entry_id: run.closing_journal_entry_id,
+  posted_at: run.posted_at,
+  reversed_at: run.reversed_at,
+  reversed_by: run.reversed_by,
+  reversed_by_name: run.reversed_by_name,
+  reversal_journal_entry_id: run.reversal_journal_entry_id,
+  reversal_reason: run.reversal_reason,
+  notes: run.notes,
+  version: run.version ?? 1,
+  created_by: run.created_by,
+  created_by_name: run.created_by_name,
+  updated_by: run.updated_by,
+  updated_by_name: run.updated_by_name,
+  created_at: run.created_at,
+  updated_at: run.updated_at,
+  deleted_at: run.deleted_at,
+});
+
+const mapFiscalYearClosingRunToRemoteDto = (
+  run: FiscalYearClosingRun,
+): RemoteFiscalYearClosingRunDto => ({
+  id: run.id,
+  fiscal_year_id: run.fiscal_year_id,
+  fiscal_year_name: run.fiscal_year_name,
   start_date: run.start_date,
   end_date: run.end_date,
   status: run.status,
@@ -2415,6 +2486,22 @@ const isRemoteAccountingPeriodDto = (payload: unknown): payload is RemoteAccount
   );
 };
 
+const isRemoteAccountingFiscalYearDto = (payload: unknown): payload is RemoteAccountingFiscalYearDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteAccountingFiscalYearDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.start_date === 'string' &&
+    typeof candidate.end_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteClosingRunDto = (payload: unknown): payload is RemoteClosingRunDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -2423,6 +2510,25 @@ const isRemoteClosingRunDto = (payload: unknown): payload is RemoteClosingRunDto
     typeof candidate.id === 'string' &&
     typeof candidate.period_id === 'string' &&
     typeof candidate.period_name === 'string' &&
+    typeof candidate.start_date === 'string' &&
+    typeof candidate.end_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.retained_earning_account_id === 'string' &&
+    typeof candidate.net_income_amount === 'number' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteFiscalYearClosingRunDto = (payload: unknown): payload is RemoteFiscalYearClosingRunDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteFiscalYearClosingRunDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.fiscal_year_id === 'string' &&
+    typeof candidate.fiscal_year_name === 'string' &&
     typeof candidate.start_date === 'string' &&
     typeof candidate.end_date === 'string' &&
     typeof candidate.status === 'string' &&
@@ -2980,6 +3086,17 @@ const updateAccountingPeriodSyncMetadata = async (
   await db.accountingPeriods.update(periodId, syncMetadata);
 };
 
+const updateAccountingFiscalYearSyncMetadata = async (
+  fiscalYearId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<AccountingFiscalYear, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentFiscalYear = await db.accountingFiscalYears.get(fiscalYearId);
+  if (!currentFiscalYear || currentFiscalYear.updated_at !== sourceUpdatedAt) return;
+
+  await db.accountingFiscalYears.update(fiscalYearId, syncMetadata);
+};
+
 const updateClosingRunSyncMetadata = async (
   runId: string,
   sourceUpdatedAt: string,
@@ -2989,6 +3106,17 @@ const updateClosingRunSyncMetadata = async (
   if (!currentRun || currentRun.updated_at !== sourceUpdatedAt) return;
 
   await db.closingRuns.update(runId, syncMetadata);
+};
+
+const updateFiscalYearClosingRunSyncMetadata = async (
+  runId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<FiscalYearClosingRun, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentRun = await db.fiscalYearClosingRuns.get(runId);
+  if (!currentRun || currentRun.updated_at !== sourceUpdatedAt) return;
+
+  await db.fiscalYearClosingRuns.update(runId, syncMetadata);
 };
 
 const updateJournalEntrySyncMetadata = async (
@@ -3408,10 +3536,30 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
   }
 
   if (
+    queueItem.entity === ACCOUNTING_FISCAL_YEAR_ENTITY &&
+    isRemoteAccountingFiscalYearDto(queueItem.payload)
+  ) {
+    await updateAccountingFiscalYearSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
     queueItem.entity === CLOSING_RUN_ENTITY &&
     isRemoteClosingRunDto(queueItem.payload)
   ) {
     await updateClosingRunSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (
+    queueItem.entity === FISCAL_YEAR_CLOSING_RUN_ENTITY &&
+    isRemoteFiscalYearClosingRunDto(queueItem.payload)
+  ) {
+    await updateFiscalYearClosingRunSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -3826,6 +3974,18 @@ const processAccountingPeriodQueueItem = async (queueItem: SyncQueueItem) => {
   return accountingPeriodPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processAccountingFiscalYearQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Tahun fiskal sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteAccountingFiscalYearDto(queueItem.payload)) {
+    throw new Error('Payload tahun fiskal sync queue tidak valid.');
+  }
+
+  return accountingFiscalYearPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processClosingRunQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Closing run sync queue tidak mendukung operasi delete.');
@@ -3836,6 +3996,18 @@ const processClosingRunQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return closingRunPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processFiscalYearClosingRunQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Closing run tahun fiskal sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteFiscalYearClosingRunDto(queueItem.payload)) {
+    throw new Error('Payload closing run tahun fiskal sync queue tidak valid.');
+  }
+
+  return fiscalYearClosingRunPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processJournalEntryQueueItem = async (queueItem: SyncQueueItem) => {
@@ -4057,7 +4229,9 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
     let remoteCashBankReconciliation: RemoteCashBankReconciliationDto | null = null;
     let remoteAccountingPeriod: RemoteAccountingPeriodDto | null = null;
+    let remoteAccountingFiscalYear: RemoteAccountingFiscalYearDto | null = null;
     let remoteClosingRun: RemoteClosingRunDto | null = null;
+    let remoteFiscalYearClosingRun: RemoteFiscalYearClosingRunDto | null = null;
     let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
     let remoteOpeningBalanceBundle: RemoteOpeningBalanceBundleDto | null = null;
     let remotePayrollRunBundle: RemotePayrollRunBundleDto | null = null;
@@ -4129,8 +4303,12 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteCashBankReconciliation = await processCashBankReconciliationQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === ACCOUNTING_PERIOD_ENTITY) {
       remoteAccountingPeriod = await processAccountingPeriodQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === ACCOUNTING_FISCAL_YEAR_ENTITY) {
+      remoteAccountingFiscalYear = await processAccountingFiscalYearQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CLOSING_RUN_ENTITY) {
       remoteClosingRun = await processClosingRunQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === FISCAL_YEAR_CLOSING_RUN_ENTITY) {
+      remoteFiscalYearClosingRun = await processFiscalYearClosingRunQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === JOURNAL_ENTRY_ENTITY) {
       remoteJournalEntryBundle = await processJournalEntryQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === OPENING_BALANCE_ENTITY) {
@@ -4698,6 +4876,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       return;
     }
 
+    if (remoteAccountingFiscalYear && isRemoteAccountingFiscalYearDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateAccountingFiscalYearSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteAccountingFiscalYear.updated_at,
+      });
+      await mergeRemoteAccountingFiscalYearsIntoDexie([remoteAccountingFiscalYear], syncedAt);
+      return;
+    }
+
     if (remoteClosingRun && isRemoteClosingRunDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateClosingRunSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
@@ -4707,6 +4897,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteClosingRun.updated_at,
       });
       await mergeRemoteClosingRunsIntoDexie([remoteClosingRun], syncedAt);
+      return;
+    }
+
+    if (remoteFiscalYearClosingRun && isRemoteFiscalYearClosingRunDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateFiscalYearClosingRunSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteFiscalYearClosingRun.updated_at,
+      });
+      await mergeRemoteFiscalYearClosingRunsIntoDexie([remoteFiscalYearClosingRun], syncedAt);
       return;
     }
 
@@ -6146,6 +6348,29 @@ export const enqueueAccountingPeriodSync = async (
   return queueItem;
 };
 
+export const enqueueAccountingFiscalYearSync = async (
+  fiscalYear: AccountingFiscalYear,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ACCOUNTING_FISCAL_YEAR_ENTITY,
+    entity_id: fiscalYear.id,
+    operation,
+    payload: mapAccountingFiscalYearToRemoteDto(fiscalYear),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueueClosingRunSync = async (
   run: ClosingRun,
   operation: Extract<SyncQueueOperation, 'create' | 'update'>,
@@ -6157,6 +6382,29 @@ export const enqueueClosingRunSync = async (
     entity_id: run.id,
     operation,
     payload: mapClosingRunToRemoteDto(run),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueFiscalYearClosingRunSync = async (
+  run: FiscalYearClosingRun,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: FISCAL_YEAR_CLOSING_RUN_ENTITY,
+    entity_id: run.id,
+    operation,
+    payload: mapFiscalYearClosingRunToRemoteDto(run),
     status: 'pending',
     attempts: 0,
     created_at: now,
@@ -6248,6 +6496,33 @@ export const enqueuePendingAccountingPeriodsForSync = async () => {
   }
 };
 
+export const enqueuePendingAccountingFiscalYearsForSync = async () => {
+  const fiscalYears = (await db.accountingFiscalYears.toArray())
+    .filter((fiscalYear) => (
+      fiscalYear.sync_status === 'pending' ||
+      fiscalYear.sync_status === 'failed'
+    ));
+
+  const queueItems = await db.syncQueue
+    .where('entity')
+    .equals(ACCOUNTING_FISCAL_YEAR_ENTITY)
+    .toArray();
+
+  for (const fiscalYear of fiscalYears) {
+    const existingQueueItem = queueItems.find((queueItem) => (
+      queueItem.entity_id === fiscalYear.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteAccountingFiscalYearDto(queueItem.payload) &&
+      queueItem.payload.updated_at === fiscalYear.updated_at &&
+      queueItem.payload.version === (fiscalYear.version ?? 1)
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueAccountingFiscalYearSync(fiscalYear, 'update');
+    }
+  }
+};
+
 export const enqueuePendingClosingRunsForSync = async () => {
   const runs = (await db.closingRuns.toArray())
     .filter((run) => (
@@ -6271,6 +6546,33 @@ export const enqueuePendingClosingRunsForSync = async () => {
 
     if (!existingQueueItem) {
       await enqueueClosingRunSync(run, 'update');
+    }
+  }
+};
+
+export const enqueuePendingFiscalYearClosingRunsForSync = async () => {
+  const runs = (await db.fiscalYearClosingRuns.toArray())
+    .filter((run) => (
+      run.sync_status === 'pending' ||
+      run.sync_status === 'failed'
+    ));
+
+  const queueItems = await db.syncQueue
+    .where('entity')
+    .equals(FISCAL_YEAR_CLOSING_RUN_ENTITY)
+    .toArray();
+
+  for (const run of runs) {
+    const existingQueueItem = queueItems.find((queueItem) => (
+      queueItem.entity_id === run.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteFiscalYearClosingRunDto(queueItem.payload) &&
+      queueItem.payload.updated_at === run.updated_at &&
+      queueItem.payload.version === (run.version ?? 1)
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueFiscalYearClosingRunSync(run, 'update');
     }
   }
 };

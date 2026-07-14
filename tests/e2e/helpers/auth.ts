@@ -25,7 +25,11 @@ export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
 }
 
 export async function logout(page: Page) {
-  await page.getByLabel('Logout').click();
+  const logoutButton = page.getByRole('button', { name: 'Logout' });
+  if (!await logoutButton.isVisible()) {
+    await page.getByLabel(/Profil login|Logged-in profile/).click();
+  }
+  await logoutButton.click();
 
   const logoutDialog = page.getByRole('dialog').filter({ hasText: 'Logout dari Frayukti?' });
   await expect(logoutDialog).toBeVisible();
