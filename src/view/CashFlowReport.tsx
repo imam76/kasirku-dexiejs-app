@@ -1,12 +1,13 @@
 import { FilePdfOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
 import { App, Button, Card, Checkbox, DatePicker, Select, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ExportActions from '@/components/ExportActions';
 import { Loading } from '@/components/Loading';
 import { getFinanceTransactionBusinessType } from '@/constants/finance';
 import { useCashBankTransfer } from '@/hooks/useCashBankTransfer';
 import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useFinance } from '@/hooks/useFinance';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -18,7 +19,6 @@ import { formatCurrency, formatDate } from '@/utils/formatters';
 
 const { Text, Title } = Typography;
 const ALL_VALUE = 'ALL';
-const BASE_CURRENCY_CODE = 'IDR';
 
 type CashFlowDateShortcut = 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_YEAR' | 'CUSTOM';
 
@@ -71,6 +71,7 @@ const getSignedAmount = (transaction: FinanceTransaction) => (
 export default function CashFlowReport() {
   const { message } = App.useApp();
   const { t, locale } = useI18n();
+  const { baseCurrency, baseCurrencyCode, baseCurrencySymbol } = useBaseCurrency();
   const isMobile = useIsMobile();
   const { profile } = useCompanyProfileSetting();
   const { transactions, isLoading, recalculate, isRecalculating } = useFinance();
@@ -78,9 +79,14 @@ export default function CashFlowReport() {
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [dateShortcut, setDateShortcut] = useState<CashFlowDateShortcut>('THIS_MONTH');
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(() => getDateRange('THIS_MONTH'));
-  const [currencyCode, setCurrencyCode] = useState(BASE_CURRENCY_CODE);
+  const [currencyCode, setCurrencyCode] = useState(baseCurrencyCode);
   const [classification, setClassification] = useState(ALL_VALUE);
   const [showZeroBalance, setShowZeroBalance] = useState(false);
+  const money = (value: number) => `${baseCurrencySymbol} ${formatCurrency(value || 0)}`;
+
+  useEffect(() => {
+    setCurrencyCode(baseCurrencyCode);
+  }, [baseCurrencyCode]);
 
   const classificationOptions = useMemo(() => {
     const categories = Array.from(new Set(transactions.map((transaction) => transaction.category))).sort();
@@ -104,7 +110,7 @@ export default function CashFlowReport() {
       .filter((transaction) => {
         const transactionDate = dayjs(transaction.created_at).tz();
         if (transactionDate.isBefore(startDate) || transactionDate.isAfter(endDate)) return false;
-        if (currencyCode !== BASE_CURRENCY_CODE) return false;
+        if (currencyCode !== baseCurrencyCode) return false;
 
         if (classification.startsWith('TYPE:')) {
           const type = classification.replace('TYPE:', '') as FinanceTransactionType;
@@ -118,7 +124,7 @@ export default function CashFlowReport() {
         return true;
       })
       .sort((left, right) => left.created_at.localeCompare(right.created_at));
-  }, [classification, currencyCode, dateRange, transactions]);
+  }, [baseCurrencyCode, classification, currencyCode, dateRange, transactions]);
 
   const groups = useMemo<CashFlowGroup[]>(() => {
     const groupMap = new Map<string, CashFlowGroup>();
@@ -345,7 +351,7 @@ export default function CashFlowReport() {
             <Select
               className="mt-2 w-full"
               value={currencyCode}
-              options={[{ value: BASE_CURRENCY_CODE, label: 'IDR - Rupiah Indonesia' }]}
+              options={[{ value: baseCurrencyCode, label: `${baseCurrencyCode} - ${baseCurrency.name}` }]}
               onChange={setCurrencyCode}
             />
           </div>
@@ -400,9 +406,9 @@ export default function CashFlowReport() {
 
           <div style={{ border: '1px solid #111827', display: 'grid', gridTemplateColumns: '1fr 180px 180px 180px', marginBottom: 18 }}>
             <div style={{ fontWeight: 700, padding: '10px 12px' }}>Total</div>
-            <div style={{ fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>Rp {formatCurrency(totals.cashIn)}</div>
-            <div style={{ fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>Rp {formatCurrency(totals.cashOut)}</div>
-            <div style={{ color: totals.net < 0 ? '#dc2626' : '#111827', fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>Rp {formatCurrency(totals.net)}</div>
+            <div style={{ fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.cashIn)}</div>
+            <div style={{ fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.cashOut)}</div>
+            <div style={{ color: totals.net < 0 ? '#dc2626' : '#111827', fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.net)}</div>
           </div>
 
           {groups.length === 0 ? (
@@ -414,9 +420,9 @@ export default function CashFlowReport() {
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{group.accountCode ? `${group.accountCode} - ${group.accountName}` : group.accountName}</div>
                   <div style={{ color: '#6b7280', fontSize: 12 }}>{group.transactions.length} transaksi</div>
                 </div>
-                <div style={{ textAlign: 'right' }}><div style={{ color: '#4b5563', fontSize: 12 }}>Kas Masuk</div><strong>Rp {formatCurrency(group.cashIn)}</strong></div>
-                <div style={{ textAlign: 'right' }}><div style={{ color: '#4b5563', fontSize: 12 }}>Kas Keluar</div><strong>Rp {formatCurrency(group.cashOut)}</strong></div>
-                <div style={{ textAlign: 'right' }}><div style={{ color: '#4b5563', fontSize: 12 }}>Net</div><strong style={{ color: group.net < 0 ? '#dc2626' : '#111827' }}>Rp {formatCurrency(group.net)}</strong></div>
+                <div style={{ textAlign: 'right' }}><div style={{ color: '#4b5563', fontSize: 12 }}>Kas Masuk</div><strong>{money(group.cashIn)}</strong></div>
+                <div style={{ textAlign: 'right' }}><div style={{ color: '#4b5563', fontSize: 12 }}>Kas Keluar</div><strong>{money(group.cashOut)}</strong></div>
+                <div style={{ textAlign: 'right' }}><div style={{ color: '#4b5563', fontSize: 12 }}>Net</div><strong style={{ color: group.net < 0 ? '#dc2626' : '#111827' }}>{money(group.net)}</strong></div>
               </div>
               <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%' }}>
                 <colgroup>
@@ -444,9 +450,9 @@ export default function CashFlowReport() {
                         <td style={{ border: '1px solid #d1d5db', fontSize: 13, padding: '8px 10px' }}>{formatDate(transaction.created_at)}</td>
                         <td style={{ border: '1px solid #d1d5db', fontSize: 13, padding: '8px 10px' }}>{getFinanceCategoryLabel(transaction.category, t)}</td>
                         <td style={{ border: '1px solid #d1d5db', fontSize: 13, padding: '8px 10px' }}>{transaction.description}</td>
-                        <td style={{ border: '1px solid #d1d5db', fontSize: 13, padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{signedAmount >= 0 ? `Rp ${formatCurrency(signedAmount)}` : '-'}</td>
-                        <td style={{ border: '1px solid #d1d5db', fontSize: 13, padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{signedAmount < 0 ? `Rp ${formatCurrency(Math.abs(signedAmount))}` : '-'}</td>
-                        <td style={{ border: '1px solid #d1d5db', color: signedAmount < 0 ? '#dc2626' : '#111827', fontSize: 13, padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>Rp {formatCurrency(signedAmount)}</td>
+                        <td style={{ border: '1px solid #d1d5db', fontSize: 13, padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{signedAmount >= 0 ? money(signedAmount) : '-'}</td>
+                        <td style={{ border: '1px solid #d1d5db', fontSize: 13, padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{signedAmount < 0 ? money(Math.abs(signedAmount)) : '-'}</td>
+                        <td style={{ border: '1px solid #d1d5db', color: signedAmount < 0 ? '#dc2626' : '#111827', fontSize: 13, padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{money(signedAmount)}</td>
                       </tr>
                     );
                   })}

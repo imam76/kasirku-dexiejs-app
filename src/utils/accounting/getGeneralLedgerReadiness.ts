@@ -46,11 +46,28 @@ const findAccountCandidate = (
 };
 
 export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadinessResult> => {
-  const [accounts, mappings, setting] = await Promise.all([
+  const [accounts, mappings, setting, setup] = await Promise.all([
     db.chartOfAccounts.toArray(),
     db.financeAccountMappings.toArray(),
     db.generalLedgerSetting.get('default'),
+    db.accountingInitialSetupSetting.get('default'),
   ]);
+  const effectiveSetting: GeneralLedgerSetting | undefined = setup
+    ? {
+      id: 'default' as const,
+      is_ready: setting?.is_ready ?? false,
+      cutoff_date: setup.cutoff_date,
+      inventory_policy: setup.inventory_policy,
+      opening_balance_journal_id: setting?.opening_balance_journal_id,
+      activated_at: setting?.activated_at,
+      created_at: setting?.created_at ?? setup.created_at,
+      updated_at: setting?.updated_at ?? setup.updated_at,
+      sync_status: setting?.sync_status,
+      sync_error: setting?.sync_error,
+      last_synced_at: setting?.last_synced_at,
+      remote_updated_at: setting?.remote_updated_at,
+    }
+    : setting;
   const requiredAccounts = REQUIRED_ACCOUNT_CANDIDATES.map((candidate) => ({
     ...candidate,
     account: findAccountCandidate(accounts, candidate),
@@ -61,8 +78,8 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
     const account = accountById.get(mapping.account_id);
     return !account || !account.is_active || !account.is_postable;
   });
-  const openingBalanceJournal = setting?.opening_balance_journal_id
-    ? await db.journalEntries.get(setting.opening_balance_journal_id)
+  const openingBalanceJournal = effectiveSetting?.opening_balance_journal_id
+    ? await db.journalEntries.get(effectiveSetting.opening_balance_journal_id)
     : undefined;
   const checks: GeneralLedgerReadinessCheck[] = [
     {
@@ -84,9 +101,9 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
     {
       key: 'cutoffDate',
       label: 'Cutoff ledger',
-      passed: Boolean(setting?.cutoff_date),
-      message: setting?.cutoff_date
-        ? `Cutoff ledger tersimpan pada ${setting.cutoff_date.slice(0, 10)}.`
+      passed: Boolean(effectiveSetting?.cutoff_date),
+      message: effectiveSetting?.cutoff_date
+        ? `Cutoff ledger tersimpan pada ${effectiveSetting.cutoff_date.slice(0, 10)}.`
         : 'Cutoff ledger belum diisi.',
     },
     {
@@ -100,8 +117,8 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
     {
       key: 'inventoryPolicy',
       label: 'Policy persediaan',
-      passed: setting?.inventory_policy === 'PERPETUAL_INVENTORY',
-      message: setting?.inventory_policy === 'PERPETUAL_INVENTORY'
+      passed: effectiveSetting?.inventory_policy === 'PERPETUAL_INVENTORY',
+      message: effectiveSetting?.inventory_policy === 'PERPETUAL_INVENTORY'
         ? 'Policy persediaan memakai perpetual inventory.'
         : 'Policy persediaan belum siap untuk balance sheet inventory.',
     },
@@ -115,7 +132,7 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
 
   return {
     isReady: checks.every((check) => check.passed),
-    setting,
+    setting: effectiveSetting,
     checks,
     requiredAccounts,
   };

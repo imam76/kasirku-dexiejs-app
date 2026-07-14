@@ -847,6 +847,16 @@ export const postOpeningBalanceJournal = async ({
   const normalizedCutoffDate = cutoff_date.includes('T')
     ? cutoff_date
     : `${cutoff_date}T00:00:00.000`;
+  const accountingSetup = await db.accountingInitialSetupSetting.get('default');
+  if (accountingSetup) {
+    if (accountingSetup.cutoff_date.slice(0, 10) !== normalizedCutoffDate.slice(0, 10)) {
+      throw new Error('Opening balance wajib memakai cutoff dari setup awal akuntansi.');
+    }
+    if (accountingSetup.inventory_policy !== inventory_policy) {
+      throw new Error('Opening balance wajib memakai policy persediaan dari setup awal akuntansi.');
+    }
+  }
+
   const now = new Date().toISOString();
   let createdEntry: JournalEntry | undefined;
   let updatedGeneralLedger: GeneralLedgerSetting | undefined;

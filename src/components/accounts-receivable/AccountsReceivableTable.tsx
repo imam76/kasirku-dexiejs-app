@@ -7,11 +7,12 @@ import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import type { AccountsReceivableRow, ReceivableAgingBucket, SalesInvoicePaymentStatus } from '@/types';
 import {
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   toDocumentCurrencyAmount,
 } from '@/utils/documentCurrency';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatDate } from '@/utils/formatters';
 import { salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 
 interface AccountsReceivableTableProps {
@@ -55,14 +56,14 @@ export function AccountsReceivableTable({
     highlight?: string,
   ) => {
     const displayValue = foreignValue ?? toDocumentCurrencyAmount(value, record);
-    const isForeign = !isBaseCurrency(record.currency_code);
+    const isForeign = !isBaseCurrency(record.currency_code, record.base_currency_code);
 
     return (
       <span className={highlight}>
         {formatDocumentCurrencyAmount(displayValue, record)}
         {isForeign && (
           <span className="block text-[11px] font-normal text-gray-400">
-            Rp {formatCurrency(value || 0)}
+            {formatBaseCurrencyAmount(value || 0, record)}
           </span>
         )}
       </span>

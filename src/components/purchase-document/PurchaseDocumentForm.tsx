@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, DatePicker, Input, InputNumber, Segmented, Select, Tooltip } from 'antd';
 import { Settings } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
@@ -8,11 +8,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import type { TranslationKey } from '@/i18n/messages';
 import { DocumentDiscountSettingsModal } from '@/components/DocumentDiscountSettingsModal';
 import { DocumentCurrencyFields } from '@/components/DocumentCurrencyFields';
 import { db } from '@/lib/db';
-import { BASE_CURRENCY_CODE, DEFAULT_EXCHANGE_RATE } from '@/constants/currencies';
+import { getCachedBaseCurrency } from '@/services/baseCurrencyService';
 import type {
   Contact,
   CurrencyRate,
@@ -30,6 +31,8 @@ import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDo
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import {
   applyCurrencySnapshotToLineItem,
+  buildDocumentCurrencySnapshot,
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   normalizeCurrencyCode,
@@ -38,7 +41,6 @@ import {
   toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
-import { formatCurrency } from '@/utils/formatters';
 import { PurchaseDocumentLineItems } from './PurchaseDocumentLineItems';
 
 import { BasicProductFormModal } from '@/components/BasicProductFormModal';
@@ -77,19 +79,20 @@ const toFormInitialValues = (
   config: PurchaseDocumentConfig,
 ): DefaultValues<PurchaseDocumentFormValues> => {
   if (!document) {
+    const fallbackBaseCurrency = getCachedBaseCurrency();
+    const fallbackDate = dayjs().format('YYYY-MM-DD');
+    const fallbackCurrencySnapshot = buildDocumentCurrencySnapshot(
+      fallbackBaseCurrency,
+      undefined,
+      fallbackDate,
+      fallbackBaseCurrency,
+    );
     const values: DefaultValues<PurchaseDocumentFormValues> = {
       document_date: dayjs(),
       discount_type: 'fixed',
       discount_value: 0,
       discount_amount: 0,
-      currency_code: BASE_CURRENCY_CODE,
-      currency_name: 'Rupiah Indonesia',
-      currency_symbol: 'Rp',
-      base_currency_code: BASE_CURRENCY_CODE,
-      exchange_rate: DEFAULT_EXCHANGE_RATE,
-      exchange_rate_source: 'SYSTEM',
-      exchange_rate_basis: 'MID',
-      exchange_rate_date: dayjs().format('YYYY-MM-DD'),
+      ...fallbackCurrencySnapshot,
       items: [],
     };
 
@@ -166,6 +169,8 @@ export const PurchaseDocumentForm = ({
   submitting,
 }: PurchaseDocumentFormProps) => {
   const { t } = useI18n();
+  const { baseCurrency, baseCurrencyCode } = useBaseCurrency();
+  const defaultCurrencyAppliedRef = useRef(Boolean(initialData?.document));
   const documentId = initialData?.document?.id ?? 'draft';
   const warehouseHelperKey = warehouseHelperKeysByType[config.type];
   const [isDiscountSettingsOpen, setIsDiscountSettingsOpen] = useState(false);
@@ -190,6 +195,9 @@ export const PurchaseDocumentForm = ({
   const documentDate = useWatch({ control, name: 'document_date' });
   const watchedCostStatus = useWatch({ control, name: 'cost_status' });
   const watchedCurrencyCode = useWatch({ control, name: 'currency_code' });
+  const watchedCurrencyName = useWatch({ control, name: 'currency_name' });
+  const watchedCurrencySymbol = useWatch({ control, name: 'currency_symbol' });
+  const watchedBaseCurrencyCode = useWatch({ control, name: 'base_currency_code' });
   const watchedExchangeRate = useWatch({ control, name: 'exchange_rate' });
   const watchedExchangeRateSource = useWatch({ control, name: 'exchange_rate_source' });
   const watchedExchangeRateBasis = useWatch({ control, name: 'exchange_rate_basis' });
@@ -261,20 +269,29 @@ export const PurchaseDocumentForm = ({
   );
   const latestRateByCurrency = useMemo(() => (
     currencyRates.reduce<Record<string, CurrencyRate>>((acc, rate) => {
+      if (rate.base_currency_code !== baseCurrencyCode) return acc;
       if (!acc[rate.currency_code]) acc[rate.currency_code] = rate;
       return acc;
     }, {})
-  ), [currencyRates]);
+  ), [baseCurrencyCode, currencyRates]);
   const documentCurrencySnapshot = useMemo<DocumentCurrencySnapshot>(() => snapshotFromDocumentInput({
     currency_code: watchedCurrencyCode,
+    currency_name: watchedCurrencyName,
+    currency_symbol: watchedCurrencySymbol,
+    base_currency_code: watchedBaseCurrencyCode,
     exchange_rate: watchedExchangeRate,
     exchange_rate_source: watchedExchangeRateSource,
     exchange_rate_basis: watchedExchangeRateBasis,
     exchange_rate_date: watchedExchangeRateDate,
-  }, currencies.find((currency) => currency.code === normalizeCurrencyCode(watchedCurrencyCode)), dayjs.isDayjs(documentDate) ? documentDate.format('YYYY-MM-DD') : undefined), [
+  }, currencies.find((currency) => currency.code === normalizeCurrencyCode(watchedCurrencyCode, baseCurrencyCode)), dayjs.isDayjs(documentDate) ? documentDate.format('YYYY-MM-DD') : undefined, baseCurrency), [
+    baseCurrency,
+    baseCurrencyCode,
     currencies,
     documentDate,
+    watchedBaseCurrencyCode,
     watchedCurrencyCode,
+    watchedCurrencyName,
+    watchedCurrencySymbol,
     watchedExchangeRate,
     watchedExchangeRateBasis,
     watchedExchangeRateDate,
@@ -339,7 +356,10 @@ export const PurchaseDocumentForm = ({
       taxes,
     ],
   );
-  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const isForeignCurrency = !isBaseCurrency(
+    documentCurrencySnapshot.currency_code,
+    documentCurrencySnapshot.base_currency_code,
+  );
   const displayedDiscountValue = discountType === 'fixed'
     ? toDocumentCurrencyAmount(discountValue, documentCurrencySnapshot)
     : discountValue;
@@ -353,7 +373,7 @@ export const PurchaseDocumentForm = ({
       </span>
       {isForeignCurrency && (
         <span className="block text-[11px] font-normal text-gray-400">
-          Rp {formatCurrency(amount || 0)}
+          {formatBaseCurrencyAmount(amount || 0, documentCurrencySnapshot)}
         </span>
       )}
     </span>
@@ -363,7 +383,7 @@ export const PurchaseDocumentForm = ({
     setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
   }, [setValue]);
   const handleCurrencySnapshotChange = useCallback((snapshot: DocumentCurrencySnapshot, previousCurrencyCode?: string) => {
-    const previousCode = normalizeCurrencyCode(previousCurrencyCode);
+    const previousCode = normalizeCurrencyCode(previousCurrencyCode, snapshot.base_currency_code);
 
     setValue('items', items.map((item) => {
       return applyCurrencySnapshotToLineItem({
@@ -378,6 +398,26 @@ export const PurchaseDocumentForm = ({
       });
     }), { shouldDirty: true, shouldValidate: true });
   }, [items, setValue]);
+
+  useEffect(() => {
+    if (defaultCurrencyAppliedRef.current || !baseCurrency) return;
+    const snapshot = buildDocumentCurrencySnapshot(
+      baseCurrency,
+      undefined,
+      dayjs.isDayjs(documentDate) ? documentDate.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+      baseCurrency,
+    );
+
+    setValue('currency_code', snapshot.currency_code, { shouldDirty: false, shouldValidate: true });
+    setValue('currency_name', snapshot.currency_name, { shouldDirty: false });
+    setValue('currency_symbol', snapshot.currency_symbol, { shouldDirty: false });
+    setValue('base_currency_code', snapshot.base_currency_code, { shouldDirty: false });
+    setValue('exchange_rate', snapshot.exchange_rate, { shouldDirty: false, shouldValidate: true });
+    setValue('exchange_rate_source', snapshot.exchange_rate_source, { shouldDirty: false });
+    setValue('exchange_rate_basis', snapshot.exchange_rate_basis, { shouldDirty: false });
+    setValue('exchange_rate_date', snapshot.exchange_rate_date, { shouldDirty: false });
+    defaultCurrencyAppliedRef.current = true;
+  }, [baseCurrency, documentDate, setValue]);
 
   const handleTaxChange = useCallback((taxId?: string) => {
     const tax = taxes.find((candidate) => candidate.id === taxId);

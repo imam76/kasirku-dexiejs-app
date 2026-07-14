@@ -21,6 +21,7 @@ import {
 } from '@/services/cooperativeReadService';
 import { mergeRemoteCurrenciesIntoDexie, mergeRemoteCurrencyRatesIntoDexie } from '@/services/currencyReadService';
 import {
+  mergeRemoteAccountingInitialSetupSettingIntoDexie,
   mergeRemoteAccountingProfileSettingIntoDexie,
   mergeRemoteEnabledModulesIntoDexie,
   mergeRemoteFinanceAccountMappingsIntoDexie,
@@ -50,6 +51,7 @@ import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
 import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
 import {
   activityLogPostgresAdapter,
+  accountingInitialSetupSettingPostgresAdapter,
   accountingPeriodPostgresAdapter,
   accountingProfileSettingPostgresAdapter,
   authUserPostgresAdapter,
@@ -93,6 +95,7 @@ import {
   taxPostgresAdapter,
   warehousePostgresAdapter,
   type RemoteAccountingPeriodDto,
+  type RemoteAccountingInitialSetupSettingDto,
   type RemoteActivityLogDto,
   type RemoteAuthUserDto,
   type RemoteCashBankReconciliationDto,
@@ -153,7 +156,7 @@ import {
 import { mergeRemoteCashBankReconciliationsIntoDexie } from '@/services/cashBankReconciliationReadService';
 import { mergeRemoteAccountingPeriodsIntoDexie } from '@/services/accountingPeriodReadService';
 import { mergeRemoteClosingRunsIntoDexie } from '@/services/closingRunReadService';
-import type { AccountingPeriod, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -180,6 +183,7 @@ const CURRENCY_RATE_ENTITY = 'currencyRates';
 const CHART_OF_ACCOUNT_ENTITY = 'chartOfAccounts';
 const FINANCE_ACCOUNT_MAPPING_ENTITY = 'financeAccountMappings';
 const ACCOUNTING_PROFILE_SETTING_ENTITY = 'accountingProfileSetting';
+const ACCOUNTING_INITIAL_SETUP_SETTING_ENTITY = 'accountingInitialSetupSetting';
 const ENABLED_MODULE_ENTITY = 'enabledModules';
 const GENERAL_LEDGER_SETTING_ENTITY = 'generalLedgerSetting';
 const DEPARTMENT_ENTITY = 'departments';
@@ -635,6 +639,30 @@ const mapAccountingProfileSettingToRemoteDto = (
   industry_extension: setting.industry_extension,
   template_id: setting.template_id ?? null,
   locked_after_transaction: setting.locked_after_transaction ?? null,
+  created_at: setting.created_at,
+  updated_at: setting.updated_at,
+});
+
+const mapAccountingInitialSetupSettingToRemoteDto = (
+  setting: AccountingInitialSetupSetting,
+): RemoteAccountingInitialSetupSettingDto => ({
+  id: setting.id,
+  business_template_code: setting.business_template_code,
+  accounting_profile: setting.accounting_profile,
+  industry_extension: setting.industry_extension,
+  template_id: setting.template_id,
+  cutoff_date: setting.cutoff_date,
+  fiscal_period_start: setting.fiscal_period_start,
+  fiscal_period_end: setting.fiscal_period_end,
+  current_period_start: setting.current_period_start,
+  current_period_end: setting.current_period_end,
+  current_period_id: setting.current_period_id ?? null,
+  base_currency_code: setting.base_currency_code,
+  inventory_policy: setting.inventory_policy,
+  setup_completed_at: setting.setup_completed_at ?? null,
+  setup_completed_by: setting.setup_completed_by ?? null,
+  setup_completed_by_name: setting.setup_completed_by_name ?? null,
+  version: setting.version,
   created_at: setting.created_at,
   updated_at: setting.updated_at,
 });
@@ -1872,6 +1900,31 @@ const isRemoteAccountingProfileSettingDto = (
   );
 };
 
+const isRemoteAccountingInitialSetupSettingDto = (
+  payload: unknown,
+): payload is RemoteAccountingInitialSetupSettingDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteAccountingInitialSetupSettingDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.business_template_code === 'string' &&
+    typeof candidate.accounting_profile === 'string' &&
+    typeof candidate.industry_extension === 'string' &&
+    typeof candidate.template_id === 'string' &&
+    typeof candidate.cutoff_date === 'string' &&
+    typeof candidate.fiscal_period_start === 'string' &&
+    typeof candidate.fiscal_period_end === 'string' &&
+    typeof candidate.current_period_start === 'string' &&
+    typeof candidate.current_period_end === 'string' &&
+    typeof candidate.base_currency_code === 'string' &&
+    typeof candidate.inventory_policy === 'string' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteEnabledModuleDto = (payload: unknown): payload is RemoteEnabledModuleDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -2675,6 +2728,17 @@ const updateAccountingProfileSettingSyncMetadata = async (
   await db.accountingProfileSetting.update(settingId as 'default', syncMetadata);
 };
 
+const updateAccountingInitialSetupSettingSyncMetadata = async (
+  settingId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<AccountingInitialSetupSetting, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const current = await db.accountingInitialSetupSetting.get(settingId as 'default');
+  if (!current || current.updated_at !== sourceUpdatedAt) return;
+
+  await db.accountingInitialSetupSetting.update(settingId as 'default', syncMetadata);
+};
+
 const updateEnabledModuleSyncMetadata = async (
   moduleId: string,
   sourceUpdatedAt: string,
@@ -3102,6 +3166,16 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (
+    queueItem.entity === ACCOUNTING_INITIAL_SETUP_SETTING_ENTITY &&
+    isRemoteAccountingInitialSetupSettingDto(queueItem.payload)
+  ) {
+    await updateAccountingInitialSetupSettingSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === ENABLED_MODULE_ENTITY && isRemoteEnabledModuleDto(queueItem.payload)) {
     await updateEnabledModuleSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -3471,6 +3545,14 @@ const processAccountingProfileSettingQueueItem = async (queueItem: SyncQueueItem
   return accountingProfileSettingPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processAccountingInitialSetupSettingQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteAccountingInitialSetupSettingDto(queueItem.payload)) {
+    throw new Error('Payload accounting initial setup setting sync queue tidak valid.');
+  }
+
+  return accountingInitialSetupSettingPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processEnabledModuleQueueItem = async (queueItem: SyncQueueItem) => {
   if (!isRemoteEnabledModuleDto(queueItem.payload)) {
     throw new Error('Payload enabled module sync queue tidak valid.');
@@ -3802,6 +3884,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteChartOfAccount: RemoteChartOfAccountDto | null = null;
     let remoteFinanceAccountMapping: RemoteFinanceAccountMappingDto | null = null;
     let remoteAccountingProfileSetting: RemoteAccountingProfileSettingDto | null = null;
+    let remoteAccountingInitialSetupSetting: RemoteAccountingInitialSetupSettingDto | null = null;
     let remoteEnabledModule: RemoteEnabledModuleDto | null = null;
     let remoteGeneralLedgerSetting: RemoteGeneralLedgerSettingDto | null = null;
     let remoteCashierSession: RemoteCashierSessionDto | null = null;
@@ -3860,6 +3943,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteFinanceAccountMapping = await processFinanceAccountMappingQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === ACCOUNTING_PROFILE_SETTING_ENTITY) {
       remoteAccountingProfileSetting = await processAccountingProfileSettingQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === ACCOUNTING_INITIAL_SETUP_SETTING_ENTITY) {
+      remoteAccountingInitialSetupSetting = await processAccountingInitialSetupSettingQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === ENABLED_MODULE_ENTITY) {
       remoteEnabledModule = await processEnabledModuleQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === GENERAL_LEDGER_SETTING_ENTITY) {
@@ -4269,6 +4354,25 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteAccountingProfileSetting.updated_at,
       });
       await mergeRemoteAccountingProfileSettingIntoDexie(remoteAccountingProfileSetting, syncedAt);
+      return;
+    }
+
+    if (
+      remoteAccountingInitialSetupSetting &&
+      isRemoteAccountingInitialSetupSettingDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateAccountingInitialSetupSettingSyncMetadata(
+        currentQueueItem.entity_id,
+        currentQueueItem.payload.updated_at,
+        {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at: remoteAccountingInitialSetupSetting.updated_at,
+        },
+      );
+      await mergeRemoteAccountingInitialSetupSettingIntoDexie(remoteAccountingInitialSetupSetting, syncedAt);
       return;
     }
 
@@ -5317,6 +5421,29 @@ export const enqueueAccountingProfileSettingSync = async (
   return queueItem;
 };
 
+export const enqueueAccountingInitialSetupSettingSync = async (
+  setting: AccountingInitialSetupSetting,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: ACCOUNTING_INITIAL_SETUP_SETTING_ENTITY,
+    entity_id: setting.id,
+    operation,
+    payload: mapAccountingInitialSetupSettingToRemoteDto(setting),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueueEnabledModuleSync = async (
   module: EnabledModule,
   operation: Extract<SyncQueueOperation, 'create' | 'update'>,
@@ -5367,11 +5494,13 @@ export const enqueuePendingAccountingSettingsForSync = async () => {
   const [
     mappingQueueItems,
     profileQueueItems,
+    initialSetupQueueItems,
     moduleQueueItems,
     glQueueItems,
   ] = await Promise.all([
     db.syncQueue.where('entity').equals(FINANCE_ACCOUNT_MAPPING_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(ACCOUNTING_PROFILE_SETTING_ENTITY).toArray(),
+    db.syncQueue.where('entity').equals(ACCOUNTING_INITIAL_SETUP_SETTING_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(ENABLED_MODULE_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(GENERAL_LEDGER_SETTING_ENTITY).toArray(),
   ]);
@@ -5398,6 +5527,18 @@ export const enqueuePendingAccountingSettingsForSync = async () => {
       queueItem.payload.updated_at === profile.updated_at
     ));
     if (!existing) await enqueueAccountingProfileSettingSync(profile, 'update');
+  }
+
+  const initialSetupSettings = (await db.accountingInitialSetupSetting.toArray())
+    .filter((setting) => setting.sync_status === 'pending' || setting.sync_status === 'failed');
+  for (const setting of initialSetupSettings) {
+    const existing = initialSetupQueueItems.find((queueItem) => (
+      queueItem.entity_id === setting.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteAccountingInitialSetupSettingDto(queueItem.payload) &&
+      queueItem.payload.updated_at === setting.updated_at
+    ));
+    if (!existing) await enqueueAccountingInitialSetupSettingSync(setting, 'update');
   }
 
   const modules = (await db.enabledModules.toArray())

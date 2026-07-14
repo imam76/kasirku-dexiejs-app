@@ -1,6 +1,7 @@
 import { forwardRef, type CSSProperties } from 'react';
 import { Building2 } from 'lucide-react';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import dayjs from '@/lib/dayjs';
 import type { FinanceTransaction } from '@/types';
@@ -121,8 +122,6 @@ const numberCellStyle: CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-const money = (value: number) => `Rp ${formatCurrency(value || 0)}`;
-
 const IncomeReportDocument = forwardRef<HTMLDivElement, IncomeReportDocumentProps>(
   function IncomeReportDocument({
     transactions,
@@ -135,6 +134,8 @@ const IncomeReportDocument = forwardRef<HTMLDivElement, IncomeReportDocumentProp
     printDateText,
   }, ref) {
     const { t } = useI18n();
+    const { baseCurrencySymbol } = useBaseCurrency();
+    const money = (value: number) => `${baseCurrencySymbol} ${formatCurrency(value || 0)}`;
     const breakdownRows = Object.entries(breakdown)
       .sort(([, firstAmount], [, secondAmount]) => secondAmount - firstAmount);
 

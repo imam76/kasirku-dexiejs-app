@@ -3,6 +3,7 @@ import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshCooperativeAreasFromPostgres } from '@/services/cooperativeAreaReadService';
 import { refreshCooperativeDataFromPostgres } from '@/services/cooperativeReadService';
 import {
+  refreshAccountingInitialSetupSettingFromPostgres,
   refreshAccountingProfileSettingFromPostgres,
   refreshEnabledModulesFromPostgres,
   refreshFinanceAccountMappingsFromPostgres,
@@ -26,6 +27,7 @@ import { refreshProductionOrdersFromPostgres } from '@/services/productionReadSe
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
+import { syncSetupConfigFromRemote } from '@/services/setupKeyService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import {
   enqueuePendingAccountingSettingsForSync,
@@ -100,10 +102,12 @@ export const refreshAllDataFromPostgres = async () => {
     roles: await refreshRolesFromPostgres(),
     authUsers: await refreshAuthUsersFromPostgres(),
     activityLogs: await refreshActivityLogsFromPostgres(),
+    appSetupConfig: await syncSetupConfigFromRemote(),
     departments: await refreshDepartmentsFromPostgres(),
     chartOfAccounts: await refreshChartOfAccountsFromPostgres(),
     financeAccountMappings: await refreshFinanceAccountMappingsFromPostgres(),
     accountingProfileSetting: await refreshAccountingProfileSettingFromPostgres(),
+    accountingInitialSetupSetting: await refreshAccountingInitialSetupSettingFromPostgres(),
     enabledModules: await refreshEnabledModulesFromPostgres(),
     generalLedgerSetting: await refreshGeneralLedgerSettingFromPostgres(),
     projects: await refreshProjectsFromPostgres(),

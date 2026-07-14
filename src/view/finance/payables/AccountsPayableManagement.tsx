@@ -8,12 +8,14 @@ import type { ColumnsType } from 'antd/es/table';
 import dayjs from '@/lib/dayjs';
 import { getPurchaseDocumentTypePathSegment } from '@/configs/purchase-document';
 import { useAccountsPayable, type AccountsPayableSummary } from '@/hooks/useAccountsPayable';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import type { AccountsPayableRow, PaymentMethod, PurchaseInvoicePaymentStatus, ReceivableAgingBucket } from '@/types';
 import type { RecordPurchaseInvoicePaymentInput } from '@/services/accountsPayableService';
 import type { TranslationKey } from '@/i18n/messages';
 import {
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   toDocumentCurrencyAmount,
@@ -52,14 +54,14 @@ const renderPayableMoney = (
   className = 'font-semibold',
 ) => {
   const displayValue = foreignValue ?? toDocumentCurrencyAmount(value, row);
-  const isForeign = !isBaseCurrency(row.currency_code);
+  const isForeign = !isBaseCurrency(row.currency_code, row.base_currency_code);
 
   return (
     <span className={className}>
       {formatDocumentCurrencyAmount(displayValue, row)}
       {isForeign && (
         <span className="block text-xs font-normal text-gray-500">
-          Rp {formatCurrency(value || 0)}
+          {formatBaseCurrencyAmount(value || 0, row)}
         </span>
       )}
     </span>
@@ -77,6 +79,7 @@ interface PayablePaymentFormValues {
 
 function AccountsPayableSummaryCards({ summary }: { summary: AccountsPayableSummary }) {
   const { t } = useI18n();
+  const { baseCurrencySymbol } = useBaseCurrency();
 
   return (
     <Row gutter={[12, 12]}>
@@ -85,7 +88,7 @@ function AccountsPayableSummaryCards({ summary }: { summary: AccountsPayableSumm
           <Statistic
             title={t('accountsPayable.totalOutstanding')}
             value={summary.total_outstanding}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<Wallet size={18} className="mr-2 text-emerald-700" />}
           />
         </Card>
@@ -95,7 +98,7 @@ function AccountsPayableSummaryCards({ summary }: { summary: AccountsPayableSumm
           <Statistic
             title={t('accountsPayable.current')}
             value={summary.total_current}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<Clock size={18} className="mr-2 text-blue-600" />}
           />
         </Card>
@@ -105,7 +108,7 @@ function AccountsPayableSummaryCards({ summary }: { summary: AccountsPayableSumm
           <Statistic
             title={t('accountsPayable.overdue')}
             value={summary.total_overdue}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<AlertCircle size={18} className="mr-2 text-rose-600" />}
           />
         </Card>

@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { postOpeningBalanceJournal } from '@/services/generalLedgerService';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency, formatDateOnly } from '@/utils/formatters';
 import type { ChartOfAccount, GeneralLedgerSetting, InventoryAccountingPolicy } from '@/types';
@@ -36,6 +37,7 @@ export default function OpeningBalanceForm({
   onPosted,
 }: OpeningBalanceFormProps) {
   const { t } = useI18n();
+  const { baseCurrencySymbol } = useBaseCurrency();
   const navigate = useNavigate();
   const { message } = App.useApp();
   const [inventoryPolicy, setInventoryPolicy] = useState<InventoryAccountingPolicy>(
@@ -65,6 +67,7 @@ export default function OpeningBalanceForm({
   const totalCredit = roundCurrency(rows.reduce((sum, row) => sum + row.credit, 0));
   const isBalanced = Math.abs(totalDebit - totalCredit) <= 0.01;
   const hasLines = rows.some((row) => row.debit > 0 || row.credit > 0);
+  const money = (value: number) => `${baseCurrencySymbol} ${formatCurrency(value || 0)}`;
 
   const updateAmount = (accountId: string, side: 'debit' | 'credit', value: number | null) => {
     const amount = Number(value || 0);
@@ -215,7 +218,7 @@ export default function OpeningBalanceForm({
           type="warning"
           showIcon
           message={t('generalLedger.setup.migrationReceivableHint', {
-            amount: `Rp ${formatCurrency(migrationReceivableTotal)}`,
+            amount: money(migrationReceivableTotal),
           })}
           action={(
             <Button
@@ -268,10 +271,10 @@ export default function OpeningBalanceForm({
               <Text strong>{t('common.total')}</Text>
             </Table.Summary.Cell>
             <Table.Summary.Cell index={1} align="right">
-              <Text strong>Rp {formatCurrency(totalDebit)}</Text>
+              <Text strong>{money(totalDebit)}</Text>
             </Table.Summary.Cell>
             <Table.Summary.Cell index={2} align="right">
-              <Text strong>Rp {formatCurrency(totalCredit)}</Text>
+              <Text strong>{money(totalCredit)}</Text>
             </Table.Summary.Cell>
           </Table.Summary.Row>
         )}

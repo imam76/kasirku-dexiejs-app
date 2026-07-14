@@ -7,6 +7,7 @@
     "dev": "vite --config vite.config.ts",
     "build": "tsc -b && vite build --config vite.config.ts",
     "lint": "eslint .",
+    "test:unit": "bun test tests/unit",
     "preview": "vite preview",
     "tauri": "tauri",
     "clean:dexie": "node scripts/clean-dexie-dev.mjs",

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BASE_CURRENCY_CODE } from '@/constants/currencies';
 
 const optionalTrimmedString = z
   .string()
@@ -17,7 +18,7 @@ export const currencySchema = z.object({
 
 export const currencyRateSchema = z.object({
   currency_code: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
-  base_currency_code: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).default('IDR'),
+  base_currency_code: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).default(BASE_CURRENCY_CODE),
   rate_date: z.string().trim().min(1),
   unit_amount: z.coerce.number().positive(),
   bi_buy_rate: z.coerce.number().positive().optional(),

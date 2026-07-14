@@ -23,6 +23,7 @@ import type {
   PurchaseInvoicePaymentStatus,
 } from '@/types';
 import {
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   snapshotFromDocumentInput,
@@ -174,7 +175,10 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
     </span>
   ) : null;
   const documentCurrencySnapshot = snapshotFromDocumentInput(document, undefined, document.document_date);
-  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const isForeignCurrency = !isBaseCurrency(
+    documentCurrencySnapshot.currency_code,
+    documentCurrencySnapshot.base_currency_code,
+  );
   const renderMoney = (amount?: number, foreignAmount?: number, className = 'font-bold') => (
     <span className={className}>
       {formatDocumentCurrencyAmount(
@@ -183,7 +187,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
       )}
       {isForeignCurrency && (
         <span className="block text-[11px] font-normal text-gray-500">
-          Rp {formatCurrency(amount || 0)}
+          {formatBaseCurrencyAmount(amount || 0, documentCurrencySnapshot)}
         </span>
       )}
     </span>

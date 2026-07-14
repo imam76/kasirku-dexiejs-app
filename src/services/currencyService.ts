@@ -1,8 +1,13 @@
 import dayjs from '@/lib/dayjs';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
-import { BASE_CURRENCY_CODE, buildBaseCurrency, buildBaseCurrencyRate } from '@/constants/currencies';
+import {
+  BASE_CURRENCY_CODE,
+  buildBaseCurrencyForCode,
+  buildBaseCurrencyRateForCode,
+} from '@/constants/currencies';
 import { db } from '@/lib/db';
 import { currencyRateSchema, currencySchema } from '@/lib/validations/currency';
+import { getBaseCurrency, getBaseCurrencyCode } from '@/services/baseCurrencyService';
 import { biKursAdapter, isTauriRuntime, type BiKursTransaksiRateDto } from '@/services/postgresAdapter';
 import { enqueueCurrencyRateSync, enqueueCurrencySync } from '@/services/syncQueueService';
 import type { Currency, CurrencyRate, CurrencyRateSource, Permission } from '@/types';
@@ -33,10 +38,10 @@ const normalizeCurrencyInput = (input: CurrencyUpsertInput) => ({
   ...currencySchema.parse(input),
 });
 
-const normalizeRateInput = (input: CurrencyRateUpsertInput) => ({
+const normalizeRateInput = (input: CurrencyRateUpsertInput, baseCurrencyCode: string) => ({
   ...currencyRateSchema.parse({
     ...input,
-    base_currency_code: input.base_currency_code ?? BASE_CURRENCY_CODE,
+    base_currency_code: input.base_currency_code ?? baseCurrencyCode,
   }),
   source: (input.source ?? 'MANUAL') as CurrencyRateSource,
   fetched_at: input.fetched_at,
@@ -60,18 +65,39 @@ const createCurrencyRateId = (currencyCode: string, rateDate: string, source: Cu
 
 export const ensureBaseCurrency = async () => {
   const now = new Date().toISOString();
-  const baseCurrency = await db.currencies.get(BASE_CURRENCY_CODE);
-  if (!baseCurrency) {
-    await db.currencies.put(buildBaseCurrency(now));
+  const activeBaseCurrency = await getBaseCurrency();
+  const baseCurrencyCode = activeBaseCurrency.code;
+  const currencies = await db.currencies.toArray();
+
+  for (const currency of currencies) {
+    const shouldBeBase = currency.code === baseCurrencyCode;
+    if (currency.is_base !== shouldBeBase || (shouldBeBase && !currency.is_active)) {
+      await db.currencies.put({
+        ...currency,
+        is_base: shouldBeBase,
+        is_active: shouldBeBase ? true : currency.is_active,
+        updated_at: now,
+      });
+    }
+  }
+
+  if (!currencies.some((currency) => currency.code === baseCurrencyCode)) {
+    await db.currencies.put({
+      ...buildBaseCurrencyForCode(baseCurrencyCode, now),
+      name: activeBaseCurrency.name,
+      symbol: activeBaseCurrency.symbol,
+      decimal_places: activeBaseCurrency.decimal_places,
+    });
   }
 
   const baseRateCount = await db.currencyRates
     .where('currency_code')
-    .equals(BASE_CURRENCY_CODE)
+    .equals(baseCurrencyCode)
+    .filter((rate) => rate.base_currency_code === baseCurrencyCode)
     .count();
 
   if (baseRateCount === 0) {
-    await db.currencyRates.put(buildBaseCurrencyRate(now));
+    await db.currencyRates.put(buildBaseCurrencyRateForCode(baseCurrencyCode, now));
   }
 };
 
@@ -79,7 +105,10 @@ export const createCurrency = async (input: CurrencyUpsertInput): Promise<Curren
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'CURRENCY_MANAGE');
 
-  const parsed = normalizeCurrencyInput(input);
+  const [parsed, baseCurrencyCode] = await Promise.all([
+    Promise.resolve(normalizeCurrencyInput(input)),
+    getBaseCurrencyCode(),
+  ]);
   const existing = await db.currencies.get(parsed.code);
   if (existing) {
     throw new Error('Kode mata uang sudah dipakai.');
@@ -92,8 +121,8 @@ export const createCurrency = async (input: CurrencyUpsertInput): Promise<Curren
     name: parsed.name,
     symbol: parsed.symbol,
     decimal_places: parsed.decimal_places,
-    is_base: parsed.code === BASE_CURRENCY_CODE,
-    is_active: parsed.code === BASE_CURRENCY_CODE ? true : parsed.is_active ?? true,
+    is_base: parsed.code === baseCurrencyCode,
+    is_active: parsed.code === baseCurrencyCode ? true : parsed.is_active ?? true,
     created_at: now,
     updated_at: now,
   });
@@ -152,7 +181,7 @@ export const archiveCurrency = async (id: string): Promise<Currency> => {
     throw new Error('Mata uang tidak ditemukan.');
   }
   if (currency.is_base || currency.code === BASE_CURRENCY_CODE) {
-    throw new Error('Mata uang dasar IDR tidak bisa diarsipkan.');
+    throw new Error('Mata uang dasar/fallback tidak bisa diarsipkan.');
   }
 
   const archivedCurrency = withPendingCurrencySync({
@@ -209,7 +238,7 @@ export const upsertCurrencyRate = async (
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, permission);
 
-  const parsed = normalizeRateInput(input);
+  const parsed = normalizeRateInput(input, await getBaseCurrencyCode());
   const currency = await db.currencies.get(parsed.currency_code);
   if (!currency) {
     throw new Error('Mata uang tidak ditemukan.');
@@ -246,9 +275,12 @@ export const upsertCurrencyRate = async (
   return rate;
 };
 
-const mapBiRateToCurrencyRateInput = (rate: BiKursTransaksiRateDto): CurrencyRateUpsertInput => ({
+const mapBiRateToCurrencyRateInput = (
+  rate: BiKursTransaksiRateDto,
+  baseCurrencyCode: string,
+): CurrencyRateUpsertInput => ({
   currency_code: rate.currency_code,
-  base_currency_code: BASE_CURRENCY_CODE,
+  base_currency_code: baseCurrencyCode,
   rate_date: rate.rate_date,
   source: 'BI_KURS_TRANSAKSI',
   unit_amount: rate.unit_amount,
@@ -264,14 +296,20 @@ export const fetchAndCacheBiCurrencyRate = async (
 ): Promise<CurrencyRate> => {
   const normalizedCode = currencyCode.trim().toUpperCase();
   const normalizedDate = dayjs(targetDate).format('YYYY-MM-DD');
+  const baseCurrencyCode = await getBaseCurrencyCode();
 
-  if (normalizedCode === BASE_CURRENCY_CODE) {
+  if (normalizedCode === baseCurrencyCode) {
     await ensureBaseCurrency();
     const baseRate = (await db.currencyRates
       .where('currency_code')
-      .equals(BASE_CURRENCY_CODE)
-      .first()) ?? buildBaseCurrencyRate(new Date().toISOString());
+      .equals(baseCurrencyCode)
+      .filter((rate) => rate.base_currency_code === baseCurrencyCode)
+      .first()) ?? buildBaseCurrencyRateForCode(baseCurrencyCode, new Date().toISOString());
     return baseRate;
+  }
+
+  if (baseCurrencyCode !== BASE_CURRENCY_CODE) {
+    throw new Error('Fetch Kurs BI otomatis hanya tersedia untuk base currency IDR. Gunakan input manual untuk pair non-IDR.');
   }
 
   if (!isTauriRuntime()) {
@@ -293,7 +331,7 @@ export const fetchAndCacheBiCurrencyRate = async (
     throw new Error('Kurs BI tidak ditemukan untuk tanggal tersebut atau rentang fallback.');
   }
 
-  return upsertCurrencyRate(mapBiRateToCurrencyRateInput(selectedRate), 'FINANCE_ACCESS');
+  return upsertCurrencyRate(mapBiRateToCurrencyRateInput(selectedRate, baseCurrencyCode), 'FINANCE_ACCESS');
 };
 
 export const getLatestCurrencyRate = async (
@@ -302,8 +340,9 @@ export const getLatestCurrencyRate = async (
 ) => {
   const normalizedCode = currencyCode.trim().toUpperCase();
   const normalizedDate = dayjs(targetDate).format('YYYY-MM-DD');
+  const baseCurrencyCode = await getBaseCurrencyCode();
 
-  if (normalizedCode === BASE_CURRENCY_CODE) {
+  if (normalizedCode === baseCurrencyCode) {
     await ensureBaseCurrency();
   }
 
@@ -313,6 +352,6 @@ export const getLatestCurrencyRate = async (
     .toArray();
 
   return rates
-    .filter((rate) => rate.rate_date <= normalizedDate)
+    .filter((rate) => rate.base_currency_code === baseCurrencyCode && rate.rate_date <= normalizedDate)
     .sort((left, right) => right.rate_date.localeCompare(left.rate_date) || right.updated_at.localeCompare(left.updated_at))[0];
 };

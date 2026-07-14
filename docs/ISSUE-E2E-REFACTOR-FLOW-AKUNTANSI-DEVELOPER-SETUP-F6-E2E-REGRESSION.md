@@ -170,21 +170,66 @@ Expected:
 
 ## Checklist
 
-- Tambahkan/ubah `tests/e2e/accounting-setup.spec.ts`.
-- Siapkan helper seed/fresh database untuk setup flow.
-- Siapkan helper fake/offline remote jika test harness mendukung.
-- Tambahkan assertion Dexie untuk setup snapshot dan canonical tables.
-- Tambahkan assertion UI untuk lock/warning.
-- Tambahkan regression untuk save ulang setup agar idempotent.
-- Dokumentasikan test manual jika multi-device realtime belum mudah diotomasi.
+- [x] Tambahkan/ubah `tests/e2e/accounting-setup.spec.ts`.
+- [x] Siapkan helper seed/fresh database untuk setup flow.
+- [ ] Siapkan helper fake/offline remote jika test harness mendukung.
+- [x] Tambahkan assertion Dexie untuk setup snapshot dan canonical tables.
+- [x] Tambahkan assertion UI untuk lock/warning.
+- [x] Tambahkan regression untuk save ulang setup agar idempotent.
+- [x] Dokumentasikan test manual jika multi-device realtime belum mudah
+  diotomasi.
+
+## Catatan Implementasi 2026-07-14
+
+- `tests/e2e/helpers/accounting.ts` menambah fixture save setup awal,
+  pembacaan state Dexie untuk snapshot/canonical tables/sync queue, helper lock
+  signal transaksi finance, dan helper cutoff legacy sebelum post opening
+  balance.
+- Regression lama `ACC-01 sampai ACC-07` tetap dipertahankan dan disesuaikan:
+  mapping KSP default dibuktikan dari Dexie karena UI mapping sekarang mengikuti
+  profile/template aktif, dan post opening balance legacy memastikan cutoff
+  tersedia lebih dulu.
+- `AIS-SETUP-01` dan `AIS-SETUP-08` otomatis: retail setup menyimpan
+  `app_setup_config`, setup snapshot, profile, GL setting, period, base
+  currency, COA/mapping, sync queue inti, serta maintenance UI Settings/COA/
+  Currency/GL membaca baseline yang sama.
+- `AIS-SETUP-02` otomatis: setup koperasi menerapkan `SAK_ETAP +
+  COOPERATIVE`, akun koperasi, dan mapping koperasi v1.
+- `AIS-SETUP-04` otomatis: setelah opening balance posted, perubahan cutoff
+  ditolak dan cutoff lama tetap tersimpan.
+- `AIS-SETUP-05` otomatis: save ulang idempotent, transaksi finance membuat
+  baseline locked, perubahan jenis bisnis/base currency ditolak, dan UI
+  Settings/COA/Currency menampilkan state locked.
+- `AIS-SETUP-06` otomatis: current period di luar fiscal period ditolak tanpa
+  setup snapshot parsial.
+- `AIS-SETUP-03` masih manual karena butuh dua device/session yang tersambung
+  backend realtime yang sama.
+- `AIS-SETUP-07` masih manual untuk tahap upload queue `pending -> synced`
+  karena test harness saat ini belum menyediakan fake remote/sync adapter.
+
+## Validasi 2026-07-14
+
+- `bun run test:e2e:chromium tests/e2e/accounting-setup.spec.ts`
+  - 6 passed.
+- `bun run test:unit`
+  - 2 passed.
+- `bun run lint`
+  - 0 errors.
+  - Warning existing: dependency hook di `SetupKeyDrawer.tsx`.
+- `bun run build`
+  - Pass.
+  - Warning existing: `beep.mp3` runtime URL dan chunk Vite lebih besar dari
+    500 kB.
+- `git diff --check`
+  - Pass.
 
 ## Acceptance Criteria
 
-- Semua test E2E scope v1 pass.
-- Ada test atau catatan manual untuk realtime multi-device.
-- Ada test untuk guard cutoff/template/base currency.
-- Ada test untuk offline pending -> synced.
-- Save ulang tidak menggandakan COA, mapping, period, atau setup snapshot.
+- [x] Semua test E2E otomatis scope v1 yang tersedia di harness lokal pass.
+- [x] Ada test atau catatan manual untuk realtime multi-device.
+- [x] Ada test untuk guard cutoff/template/base currency.
+- [ ] Ada test untuk offline pending -> synced.
+- [x] Save ulang tidak menggandakan COA, mapping, period, atau setup snapshot.
 
 ## Referensi Issue Induk
 

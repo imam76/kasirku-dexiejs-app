@@ -6,6 +6,8 @@ Parent issue:
 
 Tanggal catatan: 2026-07-13
 
+Status implementasi: selesai untuk wizard UI Fase 2 pada 2026-07-13.
+
 ## Ringkasan
 
 Fase ini memindahkan pengalaman setup akuntansi awal ke Developer Setup setelah
@@ -89,42 +91,58 @@ manual.
 
 ## Checklist
 
-- Refactor state `SetupKeyDrawer` agar punya step eksplisit.
-- Pisahkan module selection ke component kecil.
-- Tambahkan satu field/kartu pilihan **Jenis Bisnis**:
-  - Ritel (SAK EMKM);
-  - Koperasi (SAK ETAP);
-  - Perdagangan Umum (SAK EMKM);
-  - Jasa Umum (SAK EMKM);
-  - preview disabled untuk Manufaktur, Konstruksi, Pemerintahan.
-- Pastikan UI tidak menampilkan `accounting_profile`, `industry_extension`, atau
+- [x] Refactor state `SetupKeyDrawer` agar punya step eksplisit.
+- [x] Pisahkan module selection ke component kecil.
+- [x] Tambahkan satu field/kartu pilihan **Jenis Bisnis**:
+  - [x] Ritel (SAK EMKM);
+  - [x] Koperasi (SAK ETAP);
+  - [x] Perdagangan Umum (SAK EMKM);
+  - [x] Jasa Umum (SAK EMKM);
+  - [x] preview disabled untuk Manufaktur, Konstruksi, Pemerintahan.
+- [x] Pastikan UI tidak menampilkan `accounting_profile`, `industry_extension`, atau
   `template_id` sebagai input manual.
-- Tambahkan field tanggal:
-  - `cutoff_date`;
-  - `fiscal_period_start`;
-  - `fiscal_period_end`;
-  - `current_period_start`;
-  - `current_period_end`.
-- Tambahkan pilihan base currency:
-  - default IDR;
-  - non-IDR hanya jika policy Fase 0 mengizinkan sebelum transaksi pertama.
-- Tambahkan validasi client-side:
-  - fiscal end >= fiscal start;
-  - current period berada dalam fiscal period;
-  - current end >= current start;
-  - cutoff <= current end;
-  - base currency code uppercase 3 huruf.
-- Review menampilkan:
-  - module aktif;
-  - jenis bisnis dan standard otomatis, misalnya `Koperasi (SAK ETAP)`;
-  - cutoff;
-  - periode fiskal;
-  - periode berjalan;
-  - base currency;
-  - warning lock setelah transaksi/opening balance.
-- Save menampilkan loading.
-- Drawer tidak menutup bila local write/upload gagal.
-- Error dari service ditampilkan di step terkait atau di review.
+- [x] Tambahkan field tanggal:
+  - [x] `cutoff_date`;
+  - [x] `fiscal_period_start`;
+  - [x] `fiscal_period_end`;
+  - [x] `current_period_start`;
+  - [x] `current_period_end`.
+- [x] Tambahkan pilihan base currency:
+  - [x] default IDR;
+  - [x] non-IDR hanya jika policy Fase 0 mengizinkan sebelum transaksi pertama.
+- [x] Tambahkan validasi client-side:
+  - [x] fiscal end >= fiscal start;
+  - [x] current period berada dalam fiscal period;
+  - [x] current end >= current start;
+  - [x] cutoff <= current end;
+  - [x] base currency code uppercase 3 huruf.
+- [x] Review menampilkan:
+  - [x] module aktif;
+  - [x] jenis bisnis dan standard otomatis, misalnya `Koperasi (SAK ETAP)`;
+  - [x] cutoff;
+  - [x] periode fiskal;
+  - [x] periode berjalan;
+  - [x] base currency;
+  - [x] warning lock setelah transaksi/opening balance.
+- [x] Save menampilkan loading.
+- [x] Drawer tidak menutup bila local write/upload gagal.
+- [x] Error dari service ditampilkan di step terkait atau di review.
+
+## Catatan Implementasi 2026-07-13
+
+- `SetupKeyDrawer` sekarang memiliki step eksplisit: License, Module,
+  Akuntansi, dan Review.
+- Step module dipisah menjadi `SetupModuleStep`; step akuntansi dipecah menjadi
+  `AccountingBusinessTemplateStep`, `AccountingPeriodStep`,
+  `AccountingBaseCurrencyStep`, dan `SetupReviewStep`.
+- Step akuntansi tampil penuh saat module terpilih membutuhkan baseline. Jika
+  tidak, wizard memakai mode ringkas dengan default minimum dan warning.
+- Save wizard sekarang mendelegasikan submit ke
+  `saveInitialAccountingSetup(input)` dari Fase 3, sehingga UI tidak lagi
+  menulis snapshot akuntansi sendiri.
+- Atomic final save yang menerapkan COA, periode canonical, profile, base
+  currency, snapshot, activity log, dan sync queue ditangani di Fase 3.
+- Validasi teknis yang sudah dijalankan: `git diff --check` dan `bun run build`.
 
 ## Acceptance Criteria
 

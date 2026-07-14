@@ -371,6 +371,28 @@ export interface RemoteGeneralLedgerSettingDto {
   updated_at: string;
 }
 
+export interface RemoteAccountingInitialSetupSettingDto {
+  id: string;
+  business_template_code: string;
+  accounting_profile: string;
+  industry_extension: string;
+  template_id: string;
+  cutoff_date: string;
+  fiscal_period_start: string;
+  fiscal_period_end: string;
+  current_period_start: string;
+  current_period_end: string;
+  current_period_id?: string | null;
+  base_currency_code: string;
+  inventory_policy: string;
+  setup_completed_at?: string | null;
+  setup_completed_by?: string | null;
+  setup_completed_by_name?: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RemoteProjectDto {
   id: string;
   code?: string | null;
@@ -1818,6 +1840,18 @@ export const generalLedgerSettingPostgresAdapter = {
   async upsert(input: RemoteGeneralLedgerSettingDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteGeneralLedgerSettingDto>('postgres_upsert_general_ledger_setting', { input });
+  },
+};
+
+export const accountingInitialSetupSettingPostgresAdapter = {
+  async get() {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAccountingInitialSetupSettingDto | null>('postgres_get_accounting_initial_setup_setting');
+  },
+
+  async upsert(input: RemoteAccountingInitialSetupSettingDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteAccountingInitialSetupSettingDto>('postgres_upsert_accounting_initial_setup_setting', { input });
   },
 };
 

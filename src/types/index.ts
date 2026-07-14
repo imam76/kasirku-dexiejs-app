@@ -410,6 +410,7 @@ export type EntitySyncStatus = 'pending' | 'synced' | 'failed';
 export type ChartOfAccountSyncStatus = EntitySyncStatus;
 export type FinanceAccountMappingSyncStatus = EntitySyncStatus;
 export type AccountingProfileSettingSyncStatus = EntitySyncStatus;
+export type AccountingInitialSetupSettingSyncStatus = EntitySyncStatus;
 export type EnabledModuleSyncStatus = EntitySyncStatus;
 export type GeneralLedgerSettingSyncStatus = EntitySyncStatus;
 export type AuthUserSyncStatus = EntitySyncStatus;
@@ -2179,6 +2180,20 @@ export type IndustryExtensionCode =
   | 'CONSTRUCTION'
   | 'COOPERATIVE';
 
+export type AccountingBusinessTemplateCode =
+  | 'RETAIL'
+  | 'COOPERATIVE'
+  | 'GENERAL_TRADING'
+  | 'GENERAL_SERVICE'
+  | 'MANUFACTURING_PREVIEW'
+  | 'CONSTRUCTION_PREVIEW'
+  | 'GOVERNMENT_PREVIEW';
+
+export type AccountingBusinessTemplateStatus =
+  | 'ENABLED'
+  | 'DISABLED'
+  | 'PREVIEW_DISABLED';
+
 export type AccountingModuleCode =
   | 'CHART_OF_ACCOUNTS'
   | 'CASH_FLOW_ACCOUNT_FILTER'
@@ -2245,6 +2260,32 @@ export interface AccountingProfileSetting {
   created_at: string;
   updated_at: string;
   sync_status?: AccountingProfileSettingSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface AccountingInitialSetupSetting {
+  id: 'default';
+  business_template_code: AccountingBusinessTemplateCode;
+  accounting_profile: AccountingProfileCode;
+  industry_extension: IndustryExtensionCode;
+  template_id: string;
+  cutoff_date: string;
+  fiscal_period_start: string;
+  fiscal_period_end: string;
+  current_period_start: string;
+  current_period_end: string;
+  current_period_id?: string;
+  base_currency_code: string;
+  inventory_policy: InventoryAccountingPolicy;
+  setup_completed_at?: string;
+  setup_completed_by?: string;
+  setup_completed_by_name?: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  sync_status?: AccountingInitialSetupSettingSyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;

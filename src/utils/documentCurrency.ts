@@ -1,4 +1,13 @@
-import { BASE_CURRENCY_CODE, BASE_CURRENCY_NAME, DEFAULT_EXCHANGE_RATE } from '@/constants/currencies';
+import {
+  DEFAULT_EXCHANGE_RATE,
+  getCurrencyPreset,
+  normalizeIsoCurrencyCode,
+} from '@/constants/currencies';
+import {
+  getCachedBaseCurrency,
+  getCachedBaseCurrencyCode,
+  getCurrencySymbol,
+} from '@/services/baseCurrencyService';
 import type { Currency, CurrencyRate, CurrencyRateBasis, CurrencyRateSource } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 
@@ -42,8 +51,11 @@ export interface DocumentCurrencyTotalLike {
 
 export const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-export const normalizeCurrencyCode = (value?: string | null) => (
-  value?.trim().toUpperCase().match(/^[A-Z]{3}$/) ? value.trim().toUpperCase() : BASE_CURRENCY_CODE
+export const normalizeCurrencyCode = (
+  value?: string | null,
+  fallback = getCachedBaseCurrencyCode(),
+) => (
+  normalizeIsoCurrencyCode(value, fallback)
 );
 
 export const normalizeExchangeRate = (value?: number | null) => {
@@ -51,8 +63,33 @@ export const normalizeExchangeRate = (value?: number | null) => {
   return numericValue > 0 ? numericValue : DEFAULT_EXCHANGE_RATE;
 };
 
-export const isBaseCurrency = (currencyCode?: string | null) => (
-  normalizeCurrencyCode(currencyCode) === BASE_CURRENCY_CODE
+export const isBaseCurrency = (
+  currencyCode?: string | null,
+  baseCurrencyCode?: string | null,
+) => {
+  const normalizedBaseCode = normalizeCurrencyCode(baseCurrencyCode);
+  return normalizeCurrencyCode(currencyCode, normalizedBaseCode) === normalizedBaseCode;
+};
+
+const getSnapshotBaseCurrencyCode = (
+  snapshot?: { base_currency_code?: string | null },
+) => normalizeCurrencyCode(snapshot?.base_currency_code);
+
+export const formatBaseCurrencyAmount = (
+  amount?: number | null,
+  snapshot?: { base_currency_code?: string | null },
+) => {
+  const baseCurrencyCode = getSnapshotBaseCurrencyCode(snapshot);
+  const cachedBaseCurrency = getCachedBaseCurrency();
+  const prefix = cachedBaseCurrency.code === baseCurrencyCode
+    ? cachedBaseCurrency.symbol || getCurrencySymbol(baseCurrencyCode)
+    : getCurrencySymbol(baseCurrencyCode);
+
+  return `${prefix} ${formatCurrency(Number(amount || 0))}`;
+};
+
+const resolveBaseCurrency = (baseCurrency?: Currency) => (
+  baseCurrency ?? getCachedBaseCurrency()
 );
 
 export const toBaseAmount = (foreignAmount?: number | null, exchangeRate?: number | null) => (
@@ -65,18 +102,18 @@ export const toForeignAmount = (baseAmount?: number | null, exchangeRate?: numbe
 
 export const toBaseCurrencyAmount = (
   documentCurrencyAmount?: number | null,
-  snapshot?: { currency_code?: string | null; exchange_rate?: number | null },
+  snapshot?: { currency_code?: string | null; base_currency_code?: string | null; exchange_rate?: number | null },
 ) => (
-  isBaseCurrency(snapshot?.currency_code)
+  isBaseCurrency(snapshot?.currency_code, snapshot?.base_currency_code)
     ? roundCurrency(Number(documentCurrencyAmount || 0))
     : toBaseAmount(documentCurrencyAmount, snapshot?.exchange_rate)
 );
 
 export const toDocumentCurrencyAmount = (
   baseAmount?: number | null,
-  snapshot?: { currency_code?: string | null; exchange_rate?: number | null },
+  snapshot?: { currency_code?: string | null; base_currency_code?: string | null; exchange_rate?: number | null },
 ) => (
-  isBaseCurrency(snapshot?.currency_code)
+  isBaseCurrency(snapshot?.currency_code, snapshot?.base_currency_code)
     ? roundCurrency(Number(baseAmount || 0))
     : toForeignAmount(baseAmount, snapshot?.exchange_rate)
 );
@@ -95,16 +132,20 @@ export const buildDocumentCurrencySnapshot = (
   currency?: Currency,
   rate?: CurrencyRate,
   fallbackDate?: string,
+  baseCurrency?: Currency,
 ): DocumentCurrencySnapshot => {
-  const currencyCode = normalizeCurrencyCode(currency?.code ?? rate?.currency_code);
+  const resolvedBaseCurrency = resolveBaseCurrency(baseCurrency);
+  const baseCurrencyCode = normalizeCurrencyCode(resolvedBaseCurrency.code);
+  const currencyCode = normalizeCurrencyCode(currency?.code ?? rate?.currency_code, baseCurrencyCode);
   const rateDate = rate?.rate_date ?? fallbackDate;
 
-  if (currencyCode === BASE_CURRENCY_CODE) {
+  if (currencyCode === baseCurrencyCode) {
+    const preset = getCurrencyPreset(baseCurrencyCode);
     return {
-      currency_code: BASE_CURRENCY_CODE,
-      currency_name: currency?.name ?? BASE_CURRENCY_NAME,
-      currency_symbol: currency?.symbol ?? 'Rp',
-      base_currency_code: BASE_CURRENCY_CODE,
+      currency_code: baseCurrencyCode,
+      currency_name: currency?.name ?? resolvedBaseCurrency.name ?? preset.name,
+      currency_symbol: currency?.symbol ?? resolvedBaseCurrency.symbol ?? preset.symbol,
+      base_currency_code: baseCurrencyCode,
       exchange_rate: DEFAULT_EXCHANGE_RATE,
       exchange_rate_source: 'SYSTEM',
       exchange_rate_basis: 'MID',
@@ -116,7 +157,7 @@ export const buildDocumentCurrencySnapshot = (
     currency_code: currencyCode,
     currency_name: currency?.name ?? currencyCode,
     currency_symbol: currency?.symbol,
-    base_currency_code: BASE_CURRENCY_CODE,
+    base_currency_code: baseCurrencyCode,
     exchange_rate: normalizeExchangeRate(rate?.middle_rate),
     exchange_rate_source: rate?.source ?? 'MANUAL',
     exchange_rate_basis: 'MID',
@@ -128,18 +169,40 @@ export const snapshotFromDocumentInput = <T extends Partial<DocumentCurrencySnap
   input: T,
   currency?: Currency,
   fallbackDate?: string,
+  baseCurrency?: Currency,
 ): DocumentCurrencySnapshot => {
-  const currencyCode = normalizeCurrencyCode(input.currency_code ?? currency?.code);
+  const resolvedBaseCurrency = resolveBaseCurrency(baseCurrency);
+  const baseCurrencyCode = normalizeCurrencyCode(input.base_currency_code, resolvedBaseCurrency.code);
+  const currencyCode = normalizeCurrencyCode(input.currency_code ?? currency?.code, baseCurrencyCode);
 
-  if (currencyCode === BASE_CURRENCY_CODE) {
-    return buildDocumentCurrencySnapshot(currency, undefined, input.exchange_rate_date ?? fallbackDate);
+  if (currencyCode === baseCurrencyCode) {
+    const preset = getCurrencyPreset(baseCurrencyCode);
+    const snapshotBaseCurrency: Currency = currency?.code === baseCurrencyCode
+      ? currency
+      : {
+        id: baseCurrencyCode,
+        code: baseCurrencyCode,
+        name: input.currency_name ?? preset.name,
+        symbol: input.currency_symbol ?? preset.symbol,
+        decimal_places: preset.decimal_places,
+        is_base: true,
+        is_active: true,
+        created_at: '',
+        updated_at: '',
+      };
+    return buildDocumentCurrencySnapshot(
+      snapshotBaseCurrency,
+      undefined,
+      input.exchange_rate_date ?? fallbackDate,
+      snapshotBaseCurrency,
+    );
   }
 
   return {
     currency_code: currencyCode,
     currency_name: currency?.name ?? input.currency_name ?? currencyCode,
     currency_symbol: currency?.symbol ?? input.currency_symbol,
-    base_currency_code: BASE_CURRENCY_CODE,
+    base_currency_code: baseCurrencyCode,
     exchange_rate: normalizeExchangeRate(input.exchange_rate),
     exchange_rate_source: input.exchange_rate_source ?? 'MANUAL',
     exchange_rate_basis: input.exchange_rate_basis ?? 'MID',
@@ -153,11 +216,11 @@ export const applyCurrencySnapshotToLineItem = <TItem extends DocumentCurrencyLi
   options: { preferForeignPrice?: boolean } = {},
 ): TItem => {
   const exchangeRate = normalizeExchangeRate(snapshot.exchange_rate);
-  const currencyCode = normalizeCurrencyCode(snapshot.currency_code);
+  const currencyCode = normalizeCurrencyCode(snapshot.currency_code, snapshot.base_currency_code);
   const foreignPrice = options.preferForeignPrice && item.foreign_price !== undefined
     ? Number(item.foreign_price || 0)
-    : toForeignAmount(item.price, exchangeRate);
-  const price = options.preferForeignPrice
+    : toDocumentCurrencyAmount(item.price, snapshot);
+  const price = options.preferForeignPrice && !isBaseCurrency(currencyCode, snapshot.base_currency_code)
     ? toBaseAmount(foreignPrice, exchangeRate)
     : item.price;
 
@@ -181,17 +244,17 @@ export const applyForeignAmountsToLineItem = <TItem extends DocumentCurrencyLine
 
   return {
     ...item,
-    currency_code: normalizeCurrencyCode(snapshot.currency_code),
+    currency_code: normalizeCurrencyCode(snapshot.currency_code, snapshot.base_currency_code),
     exchange_rate: exchangeRate,
     exchange_rate_source: snapshot.exchange_rate_source,
     exchange_rate_basis: snapshot.exchange_rate_basis,
     exchange_rate_date: snapshot.exchange_rate_date,
-    foreign_price: item.foreign_price ?? toForeignAmount(item.price, exchangeRate),
-    foreign_discount_amount: toForeignAmount(item.discount_amount, exchangeRate),
-    foreign_tax_base_amount: toForeignAmount(item.tax_base_amount, exchangeRate),
-    foreign_tax_amount: toForeignAmount(item.tax_amount, exchangeRate),
-    foreign_subtotal: toForeignAmount(item.subtotal, exchangeRate),
-    foreign_total_amount: toForeignAmount(item.total_amount, exchangeRate),
+    foreign_price: item.foreign_price ?? toDocumentCurrencyAmount(item.price, snapshot),
+    foreign_discount_amount: toDocumentCurrencyAmount(item.discount_amount, snapshot),
+    foreign_tax_base_amount: toDocumentCurrencyAmount(item.tax_base_amount, snapshot),
+    foreign_tax_amount: toDocumentCurrencyAmount(item.tax_amount, snapshot),
+    foreign_subtotal: toDocumentCurrencyAmount(item.subtotal, snapshot),
+    foreign_total_amount: toDocumentCurrencyAmount(item.total_amount, snapshot),
   };
 };
 
@@ -199,8 +262,8 @@ export const getForeignDocumentTotals = (
   total: DocumentCurrencyTotalLike,
   snapshot: DocumentCurrencySnapshot,
 ) => ({
-  foreign_subtotal_amount: toForeignAmount(total.subtotal_amount, snapshot.exchange_rate),
-  foreign_discount_amount: toForeignAmount(total.discount_amount, snapshot.exchange_rate),
-  foreign_tax_amount: toForeignAmount(total.tax_amount, snapshot.exchange_rate),
-  foreign_total_amount: toForeignAmount(total.total_amount, snapshot.exchange_rate),
+  foreign_subtotal_amount: toDocumentCurrencyAmount(total.subtotal_amount, snapshot),
+  foreign_discount_amount: toDocumentCurrencyAmount(total.discount_amount, snapshot),
+  foreign_tax_amount: toDocumentCurrencyAmount(total.tax_amount, snapshot),
+  foreign_total_amount: toDocumentCurrencyAmount(total.total_amount, snapshot),
 });

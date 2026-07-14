@@ -1,5 +1,5 @@
-import { BASE_CURRENCY_CODE } from '@/constants/currencies';
 import { db } from '@/lib/db';
+import { getBaseCurrencyCode } from '@/services/baseCurrencyService';
 import {
   currencyPostgresAdapter,
   currencyRatePostgresAdapter,
@@ -196,7 +196,7 @@ export const refreshCurrencyRatesFromPostgres = async (): Promise<CurrencyReadSy
 
   isRefreshingCurrencyRatesFromPostgres = true;
   try {
-    const remoteRates = await currencyRatePostgresAdapter.list({ baseCurrencyCode: BASE_CURRENCY_CODE });
+    const remoteRates = await currencyRatePostgresAdapter.list({ baseCurrencyCode: await getBaseCurrencyCode() });
     return mergeRemoteCurrencyRatesIntoDexie(remoteRates);
   } finally {
     isRefreshingCurrencyRatesFromPostgres = false;

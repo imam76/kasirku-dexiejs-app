@@ -8,11 +8,12 @@ import { db } from '@/lib/db';
 import type { AccountsReceivableRow, PaymentMethod } from '@/types';
 import type { RecordSalesInvoicePaymentInput } from '@/services/accountsReceivableService';
 import {
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   toDocumentCurrencyAmount,
 } from '@/utils/documentCurrency';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatDate } from '@/utils/formatters';
 
 const { Text } = Typography;
 
@@ -57,14 +58,14 @@ export function ReceivablePaymentModal({
   })), [paymentAccounts]);
   const renderMoney = (value: number, row: AccountsReceivableRow, foreignValue?: number, className = 'font-semibold') => {
     const displayValue = foreignValue ?? toDocumentCurrencyAmount(value, row);
-    const isForeign = !isBaseCurrency(row.currency_code);
+    const isForeign = !isBaseCurrency(row.currency_code, row.base_currency_code);
 
     return (
       <div className={className}>
         {formatDocumentCurrencyAmount(displayValue, row)}
         {isForeign && (
           <div className="text-xs font-normal text-gray-500">
-            Rp {formatCurrency(value || 0)}
+            {formatBaseCurrencyAmount(value || 0, row)}
           </div>
         )}
       </div>

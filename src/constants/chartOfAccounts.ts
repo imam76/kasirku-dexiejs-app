@@ -303,6 +303,16 @@ export const ACCOUNTING_PROFILE_TEMPLATE_RECOMMENDATIONS: AccountingProfileTempl
     created_at: '',
     updated_at: '',
   },
+  {
+    id: 'SAK_EMKM-NONE-default-sak-emkm-general-service',
+    accounting_profile: 'SAK_EMKM',
+    industry_extension: 'NONE',
+    template_id: 'default-sak-emkm-general-service',
+    is_default: true,
+    sort_order: 30,
+    created_at: '',
+    updated_at: '',
+  },
 ];
 
 export const SAK_ETAP_KOPERASI_TEMPLATE: ChartOfAccountTemplate = {
@@ -603,6 +613,124 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('supplies-expense', '6050', 'Beban Perlengkapan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
 
   createTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
+    mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
+  }),
+];
+
+export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE: ChartOfAccountTemplate = {
+  id: 'default-sak-emkm-general-service',
+  code: 'SAK_EMKM_GENERAL_SERVICE',
+  name: 'SAK EMKM Jasa Umum',
+  accounting_profile: 'SAK_EMKM',
+  industry_extension: 'NONE',
+  description: 'Template akun ringan untuk bisnis jasa tanpa akun dan mapping inventory-heavy.',
+  account_count_hint: 23,
+  is_system: true,
+  is_active: true,
+  created_at: '',
+  updated_at: '',
+};
+
+const createServiceTemplateLine = (
+  templateAccountId: string,
+  code: string,
+  name: string,
+  type: AccountType,
+  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> = {},
+): ChartOfAccountTemplateLine => ({
+  id: `${SAK_EMKM_GENERAL_SERVICE_TEMPLATE.id}-${templateAccountId}`,
+  template_id: SAK_EMKM_GENERAL_SERVICE_TEMPLATE.id,
+  template_account_id: templateAccountId,
+  code,
+  name,
+  type,
+  normal_balance: getAccountNormalBalance(type),
+  is_postable: options.is_postable ?? true,
+  created_at: '',
+  ...options,
+});
+
+export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
+  createServiceTemplateLine('asset-current', '1000', 'Aset Lancar', 'ASSET', { is_postable: false }),
+  createServiceTemplateLine('cash', '1010', 'Kas Tunai', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+    mapping_keys: [
+      FINANCE_CATEGORIES.OPENING_BALANCE,
+      FINANCE_CATEGORIES.CASH_BANK_TRANSFER,
+      FINANCE_CATEGORIES.WITHDRAWAL,
+      FINANCE_CATEGORIES.DEPOSIT,
+    ],
+  }),
+  createServiceTemplateLine('bank', '1020', 'Bank / Non Tunai', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+    mapping_keys: [
+      FINANCE_CATEGORIES.SALES_INVOICE_PAYMENT,
+      FINANCE_CATEGORIES.PURCHASE_INVOICE_PAYMENT,
+    ],
+  }),
+  createServiceTemplateLine('accounts-receivable', '1100', 'Piutang Usaha', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+  }),
+  createServiceTemplateLine('other-receivable', '1110', 'Piutang Lain-lain', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+  }),
+  createServiceTemplateLine('prepaid-expense', '1300', 'Biaya Dibayar Dimuka', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+  }),
+  createServiceTemplateLine('fixed-asset', '1500', 'Aset Tetap', 'ASSET', { is_postable: false }),
+  createServiceTemplateLine('equipment', '1510', 'Peralatan', 'ASSET', {
+    parent_template_account_id: 'fixed-asset',
+  }),
+  createServiceTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', {
+    parent_template_account_id: 'fixed-asset',
+  }),
+  createServiceTemplateLine('liability', '2000', 'Liabilitas', 'LIABILITY', { is_postable: false }),
+  createServiceTemplateLine('accounts-payable', '2010', 'Hutang Usaha', 'LIABILITY', {
+    parent_template_account_id: 'liability',
+    mapping_keys: [FINANCE_CATEGORIES.LOAN],
+  }),
+  createServiceTemplateLine('tax-payable', '2100', 'Pajak Terutang', 'LIABILITY', {
+    parent_template_account_id: 'liability',
+  }),
+  createServiceTemplateLine('equity', '3000', 'Ekuitas', 'EQUITY', { is_postable: false }),
+  createServiceTemplateLine('owner-capital', '3010', 'Modal Pemilik', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    mapping_keys: [FINANCE_CATEGORIES.CAPITAL_ADDITION],
+  }),
+  createServiceTemplateLine('owner-draw', '3020', 'Prive Pemilik', 'EQUITY', {
+    parent_template_account_id: 'equity',
+  }),
+  createServiceTemplateLine('retained-earning', '3100', 'Saldo Laba', 'EQUITY', {
+    parent_template_account_id: 'equity',
+  }),
+  createServiceTemplateLine('revenue', '4000', 'Pendapatan', 'REVENUE', { is_postable: false }),
+  createServiceTemplateLine('service-revenue', '4010', 'Pendapatan Jasa', 'REVENUE', {
+    parent_template_account_id: 'revenue',
+    mapping_keys: [FINANCE_CATEGORIES.SALES, FINANCE_CATEGORIES.SERVICE],
+  }),
+  createServiceTemplateLine('other-income', '4090', 'Pendapatan Lainnya', 'REVENUE', {
+    parent_template_account_id: 'revenue',
+    mapping_keys: [FINANCE_CATEGORIES.BONUS_GRANT],
+  }),
+  createServiceTemplateLine('sales-return', '4100', 'Retur Pendapatan', 'CONTRA_REVENUE', {
+    mapping_keys: [FINANCE_CATEGORIES.SALES_REFUND],
+  }),
+  createServiceTemplateLine('sales-discount', '4110', 'Diskon Pendapatan', 'CONTRA_REVENUE'),
+  createServiceTemplateLine('operational-expense', '6000', 'Beban Operasional', 'EXPENSE', { is_postable: false }),
+  createServiceTemplateLine('salary-expense', '6010', 'Beban Gaji', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+    mapping_keys: [FINANCE_CATEGORIES.PAYROLL],
+  }),
+  createServiceTemplateLine('rent-expense', '6020', 'Beban Sewa', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+  }),
+  createServiceTemplateLine('utility-expense', '6030', 'Beban Utilitas', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+  }),
+  createServiceTemplateLine('supplies-expense', '6040', 'Beban Perlengkapan', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+  }),
+  createServiceTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
     mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
   }),
 ];

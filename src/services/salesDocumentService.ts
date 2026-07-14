@@ -2,6 +2,7 @@ import { getSalesDocumentConfig, type SalesDocumentConfig } from '@/configs/sale
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { getSalesDocumentPermission } from '@/auth/documentPermissions';
 import { db } from '@/lib/db';
+import { getBaseCurrency } from '@/services/baseCurrencyService';
 import {
   recalculateSalesInvoicePaidAmount,
   recordSalesInvoicePayment,
@@ -77,16 +78,18 @@ const salesDocumentTables = [
 ];
 
 const buildDocumentSnapshot = async (input: Partial<SalesDocument>): Promise<Partial<SalesDocument>> => {
+  const baseCurrency = await getBaseCurrency();
+  const inputCurrencyCode = normalizeCurrencyCode(input.currency_code, input.base_currency_code ?? baseCurrency.code);
   const [contact, tax, department, project, warehouse, currency, discountAccountSnapshot] = await Promise.all([
     input.contact_id ? db.contacts.get(input.contact_id) : undefined,
     input.tax_id ? db.taxes.get(input.tax_id) : undefined,
     input.department_id ? db.departments.get(input.department_id) : undefined,
     input.project_id ? db.projects.get(input.project_id) : undefined,
     input.warehouse_id ? db.warehouses.get(input.warehouse_id) : undefined,
-    db.currencies.get(normalizeCurrencyCode(input.currency_code)),
+    db.currencies.get(inputCurrencyCode),
     getDocumentDiscountAccountSnapshot('sales', input.discount_account_id),
   ]);
-  const currencySnapshot = snapshotFromDocumentInput(input, currency, input.document_date);
+  const currencySnapshot = snapshotFromDocumentInput(input, currency, input.document_date, baseCurrency);
 
   return {
     ...input,
@@ -148,7 +151,7 @@ const normalizeDocumentItems = (
   foreign_subtotal: item.foreign_subtotal === undefined ? undefined : Number(item.foreign_subtotal),
   foreign_total_amount: item.foreign_total_amount === undefined ? undefined : Number(item.foreign_total_amount),
   created_at: item.created_at || createdAt,
-}, documentCurrency, { preferForeignPrice: item.foreign_price !== undefined && !isBaseCurrency(documentCurrency.currency_code) }));
+}, documentCurrency, { preferForeignPrice: item.foreign_price !== undefined && !isBaseCurrency(documentCurrency.currency_code, documentCurrency.base_currency_code) }));
 
 const getSalesDocumentWarehouse = (document: SalesDocument) => ({
   id: document.warehouse_id,

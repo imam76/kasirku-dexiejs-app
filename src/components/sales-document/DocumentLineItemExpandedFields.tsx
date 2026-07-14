@@ -2,6 +2,7 @@ import { Button, InputNumber, Select } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
 import type { PromoType, SalesDocumentItem } from '@/types';
 import {
+  formatBaseCurrencyAmount,
   isBaseCurrency,
   toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
@@ -42,7 +43,7 @@ export const DocumentLineItemExpandedFields = ({
   const { t } = useI18n();
   const displayedItem = calculatedItem ?? item;
   const isPriceEdited = Boolean(item.is_price_edited && item.original_price !== undefined);
-  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code, documentCurrencySnapshot.base_currency_code);
   const displayedPrice = isForeignCurrency
     ? item.foreign_price ?? toDocumentCurrencyAmount(item.price, documentCurrencySnapshot)
     : item.price;
@@ -125,7 +126,7 @@ export const DocumentLineItemExpandedFields = ({
           <InputNumber
             className={expandedFieldControlClassName}
             value={displayedItem.tax_amount}
-            formatter={(value) => `Rp ${formatCurrency(Number(value || 0))}`}
+            formatter={(value) => formatBaseCurrencyAmount(Number(value || 0), documentCurrencySnapshot)}
             disabled
           />
         </div>

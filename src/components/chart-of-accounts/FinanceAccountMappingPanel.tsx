@@ -13,6 +13,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import type {
   AccountingProfileCode,
+  AccountingInitialSetupSetting,
   AccountingProfileSetting,
   AccountingModuleCode,
   ChartOfAccount,
@@ -38,8 +39,11 @@ interface FinanceAccountMappingPanelProps {
   accounts: ChartOfAccount[];
   profileSetting?: AccountingProfileSetting;
   enabledModules: EnabledModule[];
+  accountingSetup?: AccountingInitialSetupSetting;
   templatePreview?: ChartOfAccountTemplatePreview;
   mappingHealth: MappingHealth;
+  templateLocked: boolean;
+  templateLockLabels: string[];
   isUpdatingMapping: boolean;
   isApplyingTemplate: boolean;
   isBackfilling: boolean;
@@ -79,8 +83,11 @@ export default function FinanceAccountMappingPanel({
   accounts,
   profileSetting,
   enabledModules,
+  accountingSetup,
   templatePreview,
   mappingHealth,
+  templateLocked,
+  templateLockLabels,
   isUpdatingMapping,
   isApplyingTemplate,
   isBackfilling,
@@ -98,6 +105,7 @@ export default function FinanceAccountMappingPanel({
   const [selectedExtensionDraft, setSelectedExtensionDraft] = useState<IndustryExtensionCode>();
   const selectedProfile = selectedProfileDraft ?? profileSetting?.accounting_profile ?? 'SAK_EMKM';
   const selectedExtension = selectedExtensionDraft ?? profileSetting?.industry_extension ?? 'RETAIL';
+  const activeTemplateId = accountingSetup?.template_id ?? profileSetting?.template_id ?? '-';
   const selectedTemplatePreviewQuery = useQuery({
     queryKey: ['chartOfAccountTemplatePreviewDraft', selectedProfile, selectedExtension],
     queryFn: () => getChartOfAccountTemplatePreview({
@@ -143,6 +151,11 @@ export default function FinanceAccountMappingPanel({
 
   const handleSaveProfile = async () => {
     try {
+      if (templateLocked) {
+        message.warning(t('coa.template.lockedTitle'));
+        return;
+      }
+
       let templateId: string | undefined;
       if (selectedProfile === 'SAK_EMKM' && selectedExtension === 'RETAIL') {
         templateId = SAK_EMKM_RETAIL_TEMPLATE.id;
@@ -163,6 +176,11 @@ export default function FinanceAccountMappingPanel({
 
   const handleApplyTemplate = async () => {
     try {
+      if (templateLocked) {
+        message.warning(t('coa.template.lockedTitle'));
+        return;
+      }
+
       if (!selectedTemplatePreview?.canApply) {
         message.warning(t('coa.template.previewOnly'));
         return;
@@ -234,21 +252,32 @@ export default function FinanceAccountMappingPanel({
             <Wand2 size={18} />
             <span>{t('coa.template.title')}</span>
           </div>
+          {templateLocked && (
+            <Alert
+              className="mb-3"
+              type="info"
+              showIcon
+              title={t('coa.template.lockedTitle')}
+              description={t('coa.template.lockedDescription', { labels: templateLockLabels.join(', ') })}
+            />
+          )}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Select
               value={selectedProfile}
               options={profileOptions}
+              disabled={templateLocked}
               onChange={setSelectedProfileDraft}
             />
             <Select
               value={selectedExtension}
               options={extensionOptions}
+              disabled={templateLocked}
               onChange={setSelectedExtensionDraft}
             />
           </div>
           <Descriptions size="small" column={2} className="mt-4">
             <Descriptions.Item label={t('coa.template.activeTemplate')}>
-              {profileSetting?.template_id ?? '-'}
+              {activeTemplateId}
             </Descriptions.Item>
             <Descriptions.Item label={t('coa.template.missingAccounts')}>
               {selectedTemplatePreview?.missingAccounts.length ?? 0}
@@ -279,6 +308,7 @@ export default function FinanceAccountMappingPanel({
             <Button
               icon={<Save size={16} />}
               loading={isUpdatingProfile}
+              disabled={templateLocked}
               onClick={handleSaveProfile}
             >
               {t('coa.template.saveProfile')}
@@ -288,7 +318,7 @@ export default function FinanceAccountMappingPanel({
               icon={<Wand2 size={16} />}
               loading={isApplyingTemplate || selectedTemplatePreviewQuery.isLoading}
               onClick={handleApplyTemplate}
-              disabled={!selectedTemplatePreview?.canApply}
+              disabled={templateLocked || !selectedTemplatePreview?.canApply}
             >
               {t('coa.template.apply')}
             </Button>

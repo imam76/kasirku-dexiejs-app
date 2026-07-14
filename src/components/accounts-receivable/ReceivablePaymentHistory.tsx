@@ -4,11 +4,12 @@ import type { ColumnsType } from 'antd/es/table';
 import { useI18n } from '@/hooks/useI18n';
 import type { SalesInvoicePayment } from '@/types';
 import {
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   toDocumentCurrencyAmount,
 } from '@/utils/documentCurrency';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatDate } from '@/utils/formatters';
 
 const { Text } = Typography;
 
@@ -28,14 +29,14 @@ export function ReceivablePaymentHistory({
   const { t } = useI18n();
   const renderPaymentAmount = (payment: SalesInvoicePayment) => {
     const displayAmount = payment.foreign_amount ?? toDocumentCurrencyAmount(payment.amount, payment);
-    const isForeign = !isBaseCurrency(payment.currency_code);
+    const isForeign = !isBaseCurrency(payment.currency_code, payment.base_currency_code);
 
     return (
       <span className={payment.status === 'VOIDED' ? 'line-through text-gray-400' : 'font-semibold'}>
         {formatDocumentCurrencyAmount(displayAmount, payment)}
         {isForeign && (
           <span className="block text-xs font-normal text-gray-500">
-            Rp {formatCurrency(payment.amount || 0)}
+            {formatBaseCurrencyAmount(payment.amount || 0, payment)}
           </span>
         )}
       </span>

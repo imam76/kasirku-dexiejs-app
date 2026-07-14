@@ -5,11 +5,13 @@ import { Controller, useWatch } from 'react-hook-form';
 import type { Control, FieldValues, Path, UseFormSetValue } from 'react-hook-form';
 import dayjs from '@/lib/dayjs';
 import { BASE_CURRENCY_CODE, DEFAULT_EXCHANGE_RATE } from '@/constants/currencies';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import { fetchAndCacheBiCurrencyRate } from '@/services/currencyService';
 import type { Currency, CurrencyRate } from '@/types';
 import {
   buildDocumentCurrencySnapshot,
+  isBaseCurrency,
   normalizeCurrencyCode,
   normalizeExchangeRate,
   type DocumentCurrencySnapshot,
@@ -44,11 +46,12 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
 }: DocumentCurrencyFieldsProps<TFieldValues>) {
   const { t } = useI18n();
   const { message } = App.useApp();
+  const { baseCurrency, baseCurrencyCode, baseCurrencySymbol } = useBaseCurrency();
   const [fetching, setFetching] = useState(false);
   const currencyCode = normalizeCurrencyCode(useWatch({
     control,
     name: 'currency_code' as Path<TFieldValues>,
-  }) as string | undefined);
+  }) as string | undefined, baseCurrencyCode);
   const exchangeRate = normalizeExchangeRate(useWatch({
     control,
     name: 'exchange_rate' as Path<TFieldValues>,
@@ -68,23 +71,15 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
   ) => void;
 
   const activeCurrencies = useMemo(() => {
-    const nextCurrencies = currencies.filter((currency) => currency.is_active || currency.code === BASE_CURRENCY_CODE);
-    if (nextCurrencies.some((currency) => currency.code === BASE_CURRENCY_CODE)) return nextCurrencies;
-    return [{
-      id: BASE_CURRENCY_CODE,
-      code: BASE_CURRENCY_CODE,
-      name: 'Rupiah Indonesia',
-      symbol: 'Rp',
-      decimal_places: 2,
-      is_base: true,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } satisfies Currency, ...nextCurrencies];
-  }, [currencies]);
+    const nextCurrencies = currencies.filter((currency) => currency.is_active || currency.code === baseCurrencyCode);
+    if (nextCurrencies.some((currency) => currency.code === baseCurrencyCode)) return nextCurrencies;
+    return [baseCurrency, ...nextCurrencies];
+  }, [baseCurrency, baseCurrencyCode, currencies]);
 
   const selectedCurrency = activeCurrencies.find((currency) => currency.code === currencyCode);
   const selectedLatestRate = latestRateByCurrency[currencyCode];
+  const selectedIsBaseCurrency = isBaseCurrency(currencyCode, baseCurrencyCode);
+  const canFetchBiRate = !selectedIsBaseCurrency && baseCurrencyCode === BASE_CURRENCY_CODE;
 
   const applySnapshot = (snapshot: DocumentCurrencySnapshot, previousCurrencyCode?: string) => {
     setFormValue('currency_code', snapshot.currency_code, { shouldDirty: true, shouldValidate: true });
@@ -102,27 +97,27 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
     const previousCurrencyCode = currencyCode;
     const nextCurrency = activeCurrencies.find((currency) => currency.code === nextCurrencyCode);
     const latestRate = latestRateByCurrency[nextCurrencyCode];
-    const snapshot = buildDocumentCurrencySnapshot(nextCurrency, latestRate, getDocumentDate(documentDate));
+    const snapshot = buildDocumentCurrencySnapshot(nextCurrency, latestRate, getDocumentDate(documentDate), baseCurrency);
     applySnapshot(snapshot, previousCurrencyCode);
   };
 
   const handleManualRateChange = (value?: number | null) => {
-    const snapshot = buildDocumentCurrencySnapshot(selectedCurrency, undefined, getDocumentDate(documentDate));
+    const snapshot = buildDocumentCurrencySnapshot(selectedCurrency, undefined, getDocumentDate(documentDate), baseCurrency);
     applySnapshot({
       ...snapshot,
-      exchange_rate: currencyCode === BASE_CURRENCY_CODE ? DEFAULT_EXCHANGE_RATE : normalizeExchangeRate(value),
-      exchange_rate_source: currencyCode === BASE_CURRENCY_CODE ? 'SYSTEM' : 'MANUAL',
+      exchange_rate: selectedIsBaseCurrency ? DEFAULT_EXCHANGE_RATE : normalizeExchangeRate(value),
+      exchange_rate_source: selectedIsBaseCurrency ? 'SYSTEM' : 'MANUAL',
       exchange_rate_date: getDocumentDate(documentDate),
     }, currencyCode);
   };
 
   const handleFetchBi = async () => {
-    if (currencyCode === BASE_CURRENCY_CODE) return;
+    if (!canFetchBiRate) return;
 
     setFetching(true);
     try {
       const rate = await fetchAndCacheBiCurrencyRate(currencyCode, getDocumentDate(documentDate));
-      const snapshot = buildDocumentCurrencySnapshot(selectedCurrency, rate, rate.rate_date);
+      const snapshot = buildDocumentCurrencySnapshot(selectedCurrency, rate, rate.rate_date, baseCurrency);
       applySnapshot(snapshot, currencyCode);
       message.success(t('documents.biFetchSuccess'));
     } catch (error) {
@@ -143,7 +138,7 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
             <Select
               showSearch={{ optionFilterProp: 'label' }}
               className="w-full"
-              value={field.value ?? BASE_CURRENCY_CODE}
+              value={field.value ?? baseCurrencyCode}
               options={activeCurrencies.map((currency) => ({
                 value: currency.code,
                 label: `${currency.code} - ${currency.name}`,
@@ -157,8 +152,8 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
       <div className={fieldContainerClassName}>
         <label className={labelClassName}>{t('documents.exchangeRate')}</label>
         <InputNumber
-          min={currencyCode === BASE_CURRENCY_CODE ? 1 : 0.000001}
-          disabled={currencyCode === BASE_CURRENCY_CODE}
+          min={selectedIsBaseCurrency ? 1 : 0.000001}
+          disabled={selectedIsBaseCurrency}
           className="w-full"
           value={exchangeRate}
           formatter={(value) => formatCurrency(Number(value || 0))}
@@ -167,11 +162,11 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
       </div>
       <div className={fieldContainerClassName}>
         <label className={labelClassName}>{t('documents.rateSource')}</label>
-        <Tooltip title={currencyCode === BASE_CURRENCY_CODE ? t('documents.baseCurrency') : t('documents.fetchBiRate')}>
+        <Tooltip title={selectedIsBaseCurrency ? t('documents.baseCurrency') : t('documents.fetchBiRate')}>
           <Button
             block
             icon={<RefreshCw size={16} />}
-            disabled={currencyCode === BASE_CURRENCY_CODE}
+            disabled={!canFetchBiRate}
             loading={fetching}
             onClick={handleFetchBi}
           >
@@ -184,8 +179,8 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
           {exchangeRateSource === 'BI_KURS_TRANSAKSI' ? t('documents.biRate') : t('documents.manualRate')}
         </Tag>
         <span>{t('documents.rateDate')}: {exchangeRateDate || selectedLatestRate?.rate_date || getDocumentDate(documentDate)}</span>
-        {currencyCode !== BASE_CURRENCY_CODE && (
-          <span>{currencyCode}/IDR: Rp {formatCurrency(exchangeRate)}</span>
+        {!selectedIsBaseCurrency && (
+          <span>{currencyCode}/{baseCurrencyCode}: {baseCurrencySymbol} {formatCurrency(exchangeRate)}</span>
         )}
       </div>
     </div>

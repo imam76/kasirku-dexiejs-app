@@ -13,6 +13,7 @@ import {
 import { getPurchaseDocumentTypePathSegment } from '@/configs/purchase-document';
 import { getSalesDocumentTypePathSegment } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useAccountsAgingReport, type AccountsAgingReportFilters } from '@/hooks/useReports';
 import type { TranslationKey } from '@/i18n/messages';
 import dayjs from '@/lib/dayjs';
@@ -24,6 +25,7 @@ import type {
   SalesInvoicePaymentStatus,
 } from '@/types';
 import {
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   toDocumentCurrencyAmount,
@@ -38,6 +40,7 @@ const { Text, Title } = Typography;
 type AgingTab = 'receivable' | 'payable';
 type CurrencyAmountSnapshot = {
   currency_code?: string;
+  base_currency_code?: string;
   exchange_rate?: number;
 };
 
@@ -69,8 +72,8 @@ const moneyForExport = (
   foreignValue?: number,
 ) => {
   const displayValue = foreignValue ?? toDocumentCurrencyAmount(value, row);
-  if (isBaseCurrency(row.currency_code)) return value;
-  return `${row.currency_code || ''} ${displayValue} / Rp ${value}`;
+  if (isBaseCurrency(row.currency_code, row.base_currency_code)) return value;
+  return `${row.currency_code || ''} ${displayValue} / ${formatBaseCurrencyAmount(value, row)}`;
 };
 
 const createDefaultAdvancedFilters = (): AgingReportAdvancedFilters => ({
@@ -94,6 +97,7 @@ const countActiveAdvancedFilters = (filters: AgingReportAdvancedFilters) => {
 export default function AgingReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
+  const { baseCurrencySymbol } = useBaseCurrency();
   const [activeTab, setActiveTab] = useState<AgingTab>('receivable');
   const [searchText, setSearchText] = useState('');
   const [advancedFilters, setAdvancedFilters] = useState<AgingReportAdvancedFilters>(() => createDefaultAdvancedFilters());
@@ -117,14 +121,14 @@ export default function AgingReport() {
     className = 'font-medium',
   ) => {
     const displayValue = foreignValue ?? toDocumentCurrencyAmount(value, row);
-    const isForeign = !isBaseCurrency(row.currency_code);
+    const isForeign = !isBaseCurrency(row.currency_code, row.base_currency_code);
 
     return (
       <span className={className}>
         {formatDocumentCurrencyAmount(displayValue, row)}
         {isForeign && (
           <span className="block text-[11px] font-normal text-gray-500">
-            Rp {formatCurrency(value || 0)}
+            {formatBaseCurrencyAmount(value || 0, row)}
           </span>
         )}
       </span>
@@ -395,7 +399,7 @@ export default function AgingReport() {
           <Statistic
             title={t('report.aging.totalReceivable')}
             value={data?.totalReceivable ?? 0}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<Wallet size={18} className="mr-2 text-blue-600" />}
           />
         </Card>
@@ -403,7 +407,7 @@ export default function AgingReport() {
           <Statistic
             title={t('report.aging.totalPayable')}
             value={data?.totalPayable ?? 0}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<Wallet size={18} className="mr-2 text-emerald-600" />}
           />
         </Card>
@@ -411,7 +415,7 @@ export default function AgingReport() {
           <Statistic
             title={t('report.aging.netReceivablePayable')}
             value={data?.netReceivablePayable ?? 0}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<Scale size={18} className="mr-2 text-slate-600" />}
             valueStyle={{ color: (data?.netReceivablePayable ?? 0) < 0 ? '#dc2626' : '#111827' }}
           />
@@ -420,7 +424,7 @@ export default function AgingReport() {
           <Statistic
             title={t('report.aging.totalOverdue')}
             value={data?.totalOverdue ?? 0}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<AlertCircle size={18} className="mr-2 text-rose-600" />}
           />
         </Card>

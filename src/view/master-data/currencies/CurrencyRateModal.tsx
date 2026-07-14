@@ -1,6 +1,7 @@
 import { App, DatePicker, Form, InputNumber, Modal, Segmented } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
+import { BASE_CURRENCY_CODE } from '@/constants/currencies';
 import { useI18n } from '@/hooks/useI18n';
 import type { Currency, CurrencyRate } from '@/types';
 
@@ -17,6 +18,8 @@ interface CurrencyRateModalProps {
   open: boolean;
   currency?: Currency | null;
   latestRate?: CurrencyRate;
+  baseCurrencyCode: string;
+  baseCurrencySymbol: string;
   isSavingRate: boolean;
   isFetchingBiRate: boolean;
   onCancel: () => void;
@@ -28,6 +31,8 @@ export default function CurrencyRateModal({
   open,
   currency,
   latestRate,
+  baseCurrencyCode,
+  baseCurrencySymbol,
   isSavingRate,
   isFetchingBiRate,
   onCancel,
@@ -37,7 +42,9 @@ export default function CurrencyRateModal({
   const { message } = App.useApp();
   const { t } = useI18n();
   const [form] = Form.useForm<CurrencyRateFormValues>();
-  const mode = Form.useWatch('mode', form) ?? 'BI';
+  const canFetchBiRate = Boolean(currency) && currency?.code !== baseCurrencyCode && baseCurrencyCode === BASE_CURRENCY_CODE;
+  const defaultMode = canFetchBiRate ? 'BI' : 'MANUAL';
+  const mode = Form.useWatch('mode', form) ?? defaultMode;
 
   const closeModal = () => {
     form.resetFields();
@@ -50,7 +57,7 @@ export default function CurrencyRateModal({
       const rateDate = values.rate_date?.format('YYYY-MM-DD') ?? dayjs().format('YYYY-MM-DD');
       if (!currency) return;
 
-      if (values.mode === 'MANUAL') {
+      if ((values.mode ?? defaultMode) === 'MANUAL') {
         if (!values.middle_rate || values.middle_rate <= 0) {
           message.error(t('currencies.validation.rateRequired'));
           return;
@@ -91,7 +98,7 @@ export default function CurrencyRateModal({
         requiredMark={false}
         className="mt-4"
         initialValues={{
-          mode: 'BI',
+          mode: defaultMode,
           rate_date: latestRate?.rate_date ? dayjs(latestRate.rate_date) : dayjs(),
           unit_amount: latestRate?.unit_amount ?? 1,
           bi_buy_rate: latestRate?.bi_buy_rate,
@@ -103,7 +110,7 @@ export default function CurrencyRateModal({
           <Segmented
             block
             options={[
-              { value: 'BI', label: t('currencies.rateModeBi') },
+              { value: 'BI', label: t('currencies.rateModeBi'), disabled: !canFetchBiRate },
               { value: 'MANUAL', label: t('currencies.rateModeManual') },
             ]}
           />
@@ -115,7 +122,11 @@ export default function CurrencyRateModal({
           <InputNumber min={0.000001} className="w-full" />
         </Form.Item>
         {mode === 'MANUAL' && (
-          <Form.Item name="middle_rate" label={t('currencies.middleRate')} rules={[{ required: true, message: t('currencies.validation.rateRequired') }]}>
+          <Form.Item
+            name="middle_rate"
+            label={`${t('currencies.middleRate')} (${currency?.code ?? '-'}/${baseCurrencyCode}, ${baseCurrencySymbol})`}
+            rules={[{ required: true, message: t('currencies.validation.rateRequired') }]}
+          >
             <InputNumber min={0.000001} className="w-full" />
           </Form.Item>
         )}

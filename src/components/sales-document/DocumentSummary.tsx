@@ -11,13 +11,13 @@ import { db } from '@/lib/db';
 import type { PromoType, SalesDocument, Tax } from '@/types';
 import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import {
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   toBaseCurrencyAmount,
   toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
-import { formatCurrency } from '@/utils/formatters';
 import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
 
@@ -65,7 +65,7 @@ export const DocumentSummary = ({
     () => getDefaultDocumentDiscountAccount('sales', discountAccounts),
     [discountAccounts],
   );
-  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code);
+  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code, documentCurrencySnapshot.base_currency_code);
   const displayedDiscountValue = discountType === 'fixed'
     ? toDocumentCurrencyAmount(discountValue, documentCurrencySnapshot)
     : discountValue;
@@ -79,7 +79,7 @@ export const DocumentSummary = ({
       </span>
       {isForeignCurrency && (
         <span className="block text-[11px] font-normal text-gray-400">
-          Rp {formatCurrency(amount || 0)}
+          {formatBaseCurrencyAmount(amount || 0, documentCurrencySnapshot)}
         </span>
       )}
     </span>

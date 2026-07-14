@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
+import { getAccountingSetupLockSignals } from '@/services/accountingSetupLockService';
 import { enqueueAccountingPeriodSync, enqueueGeneralLedgerSettingSync } from '@/services/syncQueueService';
 import type { AccountingPeriod, GeneralLedgerSetting, InventoryAccountingPolicy } from '@/types';
 
@@ -56,6 +57,26 @@ export const saveAccountingReferenceSetting = async (
 
   if (periodEnd < periodStart) {
     throw new Error('Tanggal akhir periode tidak boleh sebelum tanggal awal.');
+  }
+
+  const [existingSetup, currentSetting, lockSignals] = await Promise.all([
+    db.accountingInitialSetupSetting.get('default'),
+    db.generalLedgerSetting.get('default'),
+    getAccountingSetupLockSignals(),
+  ]);
+  const protectedCutoffDate = existingSetup?.cutoff_date ?? currentSetting?.cutoff_date;
+  const protectedInventoryPolicy = existingSetup?.inventory_policy ?? currentSetting?.inventory_policy;
+  const changesLockedCutoff = protectedCutoffDate && toDateOnly(protectedCutoffDate) !== toDateOnly(cutoffDate);
+  const changesLockedPolicy = protectedInventoryPolicy && protectedInventoryPolicy !== input.inventory_policy;
+  const changesLockedPeriod = existingSetup && (
+    toDateOnly(existingSetup.current_period_start) !== periodStart ||
+    toDateOnly(existingSetup.current_period_end) !== periodEnd
+  );
+
+  if (lockSignals.hasSignal && (changesLockedCutoff || changesLockedPolicy || changesLockedPeriod)) {
+    throw new Error(
+      `Rujukan akuntansi sudah terkunci oleh ${lockSignals.labels.join(', ')}. Ubah baseline lewat flow reset/migration terpisah.`,
+    );
   }
 
   const now = new Date().toISOString();

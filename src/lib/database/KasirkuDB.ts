@@ -67,6 +67,7 @@ import type {
   CashierSession,
   CashBankReconciliation,
   AccountingPeriod,
+  AccountingInitialSetupSetting,
   ClosingRun,
   CooperativeFieldCashSession,
   MembershipPointTransaction,
@@ -126,6 +127,7 @@ export class KasirkuDB extends Dexie {
   chartOfAccounts!: Table<ChartOfAccount>;
   financeAccountMappings!: Table<FinanceAccountMapping>;
   accountingProfileSetting!: Table<AccountingProfileSetting>;
+  accountingInitialSetupSetting!: Table<AccountingInitialSetupSetting>;
   enabledModules!: Table<EnabledModule>;
   generalLedgerSetting!: Table<GeneralLedgerSetting>;
   journalEntries!: Table<JournalEntry>;

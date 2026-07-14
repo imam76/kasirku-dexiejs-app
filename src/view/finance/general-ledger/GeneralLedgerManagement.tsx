@@ -18,9 +18,11 @@ import {
 } from '@/services/generalLedgerService';
 import { hasPermission } from '@/auth/permissions';
 import { useAuth } from '@/auth/useAuth';
+import { useAccountingSetupStatus } from '@/hooks/useAccountingSetupStatus';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import type { JournalEntryLine, JournalEntryStatus } from '@/types';
+import type { GeneralLedgerSetting, JournalEntryLine, JournalEntryStatus } from '@/types';
 import { getGeneralLedgerReadiness } from '@/utils/accounting/getGeneralLedgerReadiness';
 
 const { Text, Title } = Typography;
@@ -48,6 +50,7 @@ interface LedgerRow {
 
 export default function GeneralLedgerManagement() {
   const { t } = useI18n();
+  const { baseCurrencySymbol } = useBaseCurrency();
   const { currentUser } = useAuth();
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [accountFilter, setAccountFilter] = useState<string>();
@@ -62,13 +65,37 @@ export default function GeneralLedgerManagement() {
     [],
     undefined,
   );
+  const { setup: accountingSetup } = useAccountingSetupStatus();
   const accounts = useLiveQuery(
     () => db.chartOfAccounts.orderBy('code').toArray(),
     [],
     [],
   );
+  const effectiveGeneralLedgerSetting = useMemo<GeneralLedgerSetting | undefined>(() => {
+    if (!accountingSetup) return generalLedgerSetting;
+
+    return {
+      id: 'default',
+      is_ready: generalLedgerSetting?.is_ready ?? false,
+      cutoff_date: accountingSetup.cutoff_date,
+      inventory_policy: accountingSetup.inventory_policy,
+      opening_balance_journal_id: generalLedgerSetting?.opening_balance_journal_id,
+      activated_at: generalLedgerSetting?.activated_at,
+      created_at: generalLedgerSetting?.created_at ?? accountingSetup.created_at,
+      updated_at: generalLedgerSetting?.updated_at ?? accountingSetup.updated_at,
+      sync_status: generalLedgerSetting?.sync_status,
+      sync_error: generalLedgerSetting?.sync_error,
+      last_synced_at: generalLedgerSetting?.last_synced_at,
+      remote_updated_at: generalLedgerSetting?.remote_updated_at,
+    };
+  }, [accountingSetup, generalLedgerSetting]);
   const readinessQuery = useQuery({
-    queryKey: ['generalLedgerReadiness', generalLedgerSetting?.updated_at, accounts.length],
+    queryKey: [
+      'generalLedgerReadiness',
+      generalLedgerSetting?.updated_at,
+      accountingSetup?.updated_at,
+      accounts.length,
+    ],
     queryFn: getGeneralLedgerReadiness,
   });
   const readiness = readinessQuery.data;
@@ -76,6 +103,7 @@ export default function GeneralLedgerManagement() {
   const isModuleEnabled = Boolean(generalLedgerModule?.is_enabled);
   const canShowReports = isModuleEnabled && isLedgerReady;
   const canManageManualJournal = canShowReports && hasPermission(currentUser?.role, 'JOURNAL_MANAGE');
+  const money = (value?: number) => `${baseCurrencySymbol} ${formatCurrency(Number(value || 0))}`;
   const filters = useMemo(() => ({
     startDate: dateRange?.[0].startOf('day').toISOString(),
     endDate: dateRange?.[1].endOf('day').toISOString(),
@@ -190,7 +218,7 @@ export default function GeneralLedgerManagement() {
       title: t('generalLedger.debit'),
       dataIndex: 'total_debit',
       key: 'total_debit',
-      render: (value: number) => `Rp ${formatCurrency(value)}`,
+      render: (value: number) => money(value),
       align: 'right',
       width: 160,
     },
@@ -198,7 +226,7 @@ export default function GeneralLedgerManagement() {
       title: t('generalLedger.credit'),
       dataIndex: 'total_credit',
       key: 'total_credit',
-      render: (value: number) => `Rp ${formatCurrency(value)}`,
+      render: (value: number) => money(value),
       align: 'right',
       width: 160,
     },
@@ -215,7 +243,7 @@ export default function GeneralLedgerManagement() {
       dataIndex: 'debit',
       key: 'debit',
       align: 'right',
-      render: (value: number) => value > 0 ? `Rp ${formatCurrency(value)}` : '-',
+      render: (value: number) => value > 0 ? money(value) : '-',
       width: 180,
     },
     {
@@ -223,7 +251,7 @@ export default function GeneralLedgerManagement() {
       dataIndex: 'credit',
       key: 'credit',
       align: 'right',
-      render: (value: number) => value > 0 ? `Rp ${formatCurrency(value)}` : '-',
+      render: (value: number) => value > 0 ? money(value) : '-',
       width: 180,
     },
     {
@@ -250,7 +278,7 @@ export default function GeneralLedgerManagement() {
       dataIndex: 'debit_balance',
       key: 'debit_balance',
       align: 'right',
-      render: (value: number) => value > 0 ? `Rp ${formatCurrency(value)}` : '-',
+      render: (value: number) => value > 0 ? money(value) : '-',
       width: 180,
     },
     {
@@ -258,7 +286,7 @@ export default function GeneralLedgerManagement() {
       dataIndex: 'credit_balance',
       key: 'credit_balance',
       align: 'right',
-      render: (value: number) => value > 0 ? `Rp ${formatCurrency(value)}` : '-',
+      render: (value: number) => value > 0 ? money(value) : '-',
       width: 180,
     },
   ];
@@ -287,7 +315,7 @@ export default function GeneralLedgerManagement() {
       dataIndex: 'debit',
       key: 'debit',
       align: 'right',
-      render: (value: number) => value > 0 ? `Rp ${formatCurrency(value)}` : '-',
+      render: (value: number) => value > 0 ? money(value) : '-',
       width: 160,
     },
     {
@@ -295,7 +323,7 @@ export default function GeneralLedgerManagement() {
       dataIndex: 'credit',
       key: 'credit',
       align: 'right',
-      render: (value: number) => value > 0 ? `Rp ${formatCurrency(value)}` : '-',
+      render: (value: number) => value > 0 ? money(value) : '-',
       width: 160,
     },
     {
@@ -304,7 +332,7 @@ export default function GeneralLedgerManagement() {
       key: 'running_balance',
       align: 'right',
       render: (value: number) => (
-        <Text className={getSignedAmountClass(value)}>Rp {formatCurrency(value)}</Text>
+        <Text className={getSignedAmountClass(value)}>{money(value)}</Text>
       ),
       width: 190,
     },
@@ -359,11 +387,11 @@ export default function GeneralLedgerManagement() {
       <Card>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }}>
           <Descriptions.Item label={t('generalLedger.cutoffDate')}>
-            {generalLedgerSetting?.cutoff_date ? formatDate(generalLedgerSetting.cutoff_date) : '-'}
+            {effectiveGeneralLedgerSetting?.cutoff_date ? formatDate(effectiveGeneralLedgerSetting.cutoff_date) : '-'}
           </Descriptions.Item>
           <Descriptions.Item label={t('generalLedger.inventoryPolicy')}>
-            {generalLedgerSetting?.inventory_policy
-              ? generalLedgerSetting.inventory_policy === 'PERPETUAL_INVENTORY'
+            {effectiveGeneralLedgerSetting?.inventory_policy
+              ? effectiveGeneralLedgerSetting.inventory_policy === 'PERPETUAL_INVENTORY'
                 ? t('generalLedger.inventoryPolicy.perpetual')
                 : t('generalLedger.inventoryPolicy.cashFlowOnly')
               : '-'}
@@ -403,7 +431,7 @@ export default function GeneralLedgerManagement() {
       {!isLedgerReady && (
         <OpeningBalanceForm
           accounts={accounts}
-          setting={generalLedgerSetting}
+          setting={effectiveGeneralLedgerSetting}
           onPosted={() => void readinessQuery.refetch()}
         />
       )}
@@ -422,7 +450,7 @@ export default function GeneralLedgerManagement() {
           type="info"
           showIcon
           title={t('generalLedger.reportCutoffWarning', {
-            date: generalLedgerSetting?.cutoff_date?.slice(0, 10) ?? '-',
+            date: effectiveGeneralLedgerSetting?.cutoff_date?.slice(0, 10) ?? '-',
           })}
         />
       )}
@@ -492,10 +520,10 @@ export default function GeneralLedgerManagement() {
                           <Text strong>{t('common.total')}</Text>
                         </Table.Summary.Cell>
                         <Table.Summary.Cell index={2} align="right">
-                          <Text strong>Rp {formatCurrency(trialBalance?.total_debit ?? 0)}</Text>
+                          <Text strong>{money(trialBalance?.total_debit)}</Text>
                         </Table.Summary.Cell>
                         <Table.Summary.Cell index={3} align="right">
-                          <Text strong>Rp {formatCurrency(trialBalance?.total_credit ?? 0)}</Text>
+                          <Text strong>{money(trialBalance?.total_credit)}</Text>
                         </Table.Summary.Cell>
                       </Table.Summary.Row>
                     )}
@@ -513,20 +541,20 @@ export default function GeneralLedgerManagement() {
                 <Card loading={incomeStatementQuery.isLoading}>
                   <Descriptions bordered column={1}>
                     <Descriptions.Item label={t('generalLedger.income.revenue')}>
-                      Rp {formatCurrency(incomeStatement?.revenue ?? 0)}
+                      {money(incomeStatement?.revenue)}
                     </Descriptions.Item>
                     <Descriptions.Item label={t('generalLedger.income.contraRevenue')}>
-                      Rp {formatCurrency(incomeStatement?.contra_revenue ?? 0)}
+                      {money(incomeStatement?.contra_revenue)}
                     </Descriptions.Item>
                     <Descriptions.Item label={t('generalLedger.income.netRevenue')}>
-                      Rp {formatCurrency(incomeStatement?.net_revenue ?? 0)}
+                      {money(incomeStatement?.net_revenue)}
                     </Descriptions.Item>
                     <Descriptions.Item label={t('generalLedger.income.expense')}>
-                      Rp {formatCurrency(incomeStatement?.expense ?? 0)}
+                      {money(incomeStatement?.expense)}
                     </Descriptions.Item>
                     <Descriptions.Item label={t('generalLedger.income.netIncome')}>
                       <Text strong className={getSignedAmountClass(incomeStatement?.net_income ?? 0)}>
-                        Rp {formatCurrency(incomeStatement?.net_income ?? 0)}
+                        {money(incomeStatement?.net_income)}
                       </Text>
                     </Descriptions.Item>
                   </Descriptions>
@@ -540,23 +568,23 @@ export default function GeneralLedgerManagement() {
                 <Card loading={balanceSheetQuery.isLoading}>
                 <Descriptions bordered column={1}>
                   <Descriptions.Item label={t('generalLedger.balance.assets')}>
-                    Rp {formatCurrency(balanceSheet?.assets ?? 0)}
+                    {money(balanceSheet?.assets)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.liabilities')}>
-                    Rp {formatCurrency(balanceSheet?.liabilities ?? 0)}
+                    {money(balanceSheet?.liabilities)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.equity')}>
-                    Rp {formatCurrency(balanceSheet?.equity ?? 0)}
+                    {money(balanceSheet?.equity)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.currentIncome')}>
-                    Rp {formatCurrency(balanceSheet?.current_period_income ?? 0)}
+                    {money(balanceSheet?.current_period_income)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.totalLiabilitiesAndEquity')}>
-                    Rp {formatCurrency(balanceSheet?.total_liabilities_and_equity ?? 0)}
+                    {money(balanceSheet?.total_liabilities_and_equity)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t('generalLedger.balance.difference')}>
                     <Text strong className={getSignedAmountClass(balanceSheet?.difference ?? 0)}>
-                      Rp {formatCurrency(balanceSheet?.difference ?? 0)}
+                      {money(balanceSheet?.difference)}
                     </Text>
                   </Descriptions.Item>
                 </Descriptions>

@@ -56,6 +56,8 @@ pub fn run() {
             commands::accounting_setting_commands::postgres_upsert_enabled_module,
             commands::accounting_setting_commands::postgres_get_general_ledger_setting,
             commands::accounting_setting_commands::postgres_upsert_general_ledger_setting,
+            commands::accounting_setting_commands::postgres_get_accounting_initial_setup_setting,
+            commands::accounting_setting_commands::postgres_upsert_accounting_initial_setup_setting,
             commands::employee_commands::postgres_list_employees,
             commands::employee_commands::postgres_get_employee,
             commands::employee_commands::postgres_upsert_employee,

@@ -38,31 +38,64 @@ satu PR raksasa.
 
 ## Checklist
 
-- Tambahkan helper async:
-  - `getBaseCurrency`;
-  - `getBaseCurrencyCode`;
-  - `getBaseCurrencySymbol`.
-- Tambahkan hook:
-  - `useBaseCurrency`.
-- Pastikan fallback IDR tetap ada untuk fresh install dan data lama.
-- Ubah `documentCurrency.ts`:
-  - `isBaseCurrency` membaca base aktif;
-  - default document currency memakai base aktif;
-  - snapshot document menyimpan currency code/symbol/rate saat dokumen dibuat.
-- Ubah `currencyReadService` agar refresh rate memakai base currency aktif.
-- Ubah `DocumentCurrencyFields` agar label rate tidak selalu `currency/IDR`.
-- Ubah formatter/report scope v1 dari hardcoded `Rp` ke symbol base currency.
-- Tambahkan guard perubahan base currency jika sudah ada:
-  - dokumen;
-  - finance transaction;
-  - journal;
-  - payment;
-  - payroll;
-  - koperasi transaction;
-  - opening balance posted.
-- Pastikan `ensureBaseCurrency` tidak selalu menjadikan IDR sebagai base jika
+- [x] Tambahkan helper async:
+  - [x] `getBaseCurrency`;
+  - [x] `getBaseCurrencyCode`;
+  - [x] `getBaseCurrencySymbol`.
+- [x] Tambahkan hook:
+  - [x] `useBaseCurrency`.
+- [x] Pastikan fallback IDR tetap ada untuk fresh install dan data lama.
+- [x] Ubah `documentCurrency.ts`:
+  - [x] `isBaseCurrency` membaca base aktif/snapshot;
+  - [x] default document currency memakai base aktif;
+  - [x] snapshot document menyimpan currency code/symbol/rate saat dokumen dibuat.
+- [x] Ubah `currencyReadService` agar refresh rate memakai base currency aktif.
+- [x] Ubah `DocumentCurrencyFields` agar label rate tidak selalu `currency/IDR`.
+- [x] Ubah formatter/report scope v1 dari hardcoded `Rp` ke symbol base currency.
+- [x] Tambahkan guard perubahan base currency jika sudah ada:
+  - [x] dokumen;
+  - [x] finance transaction;
+  - [x] journal;
+  - [x] payment;
+  - [x] payroll;
+  - [x] koperasi transaction;
+  - [x] opening balance posted.
+- [x] Pastikan `ensureBaseCurrency` tidak selalu menjadikan IDR sebagai base jika
   setup memilih currency lain sebelum transaksi pertama.
-- Tambahkan test minimal untuk IDR dan non-IDR.
+- [x] Tambahkan test minimal untuk IDR dan non-IDR.
+  - Test unit pure helper ditambahkan di `tests/unit/base-currency.test.ts`.
+
+## Catatan Implementasi 2026-07-13
+
+- Read model base currency ditambahkan di `src/services/baseCurrencyService.ts`.
+  Prioritas resolve: setup snapshot, currency yang ditandai base, IDR lama, lalu
+  fallback IDR.
+- `useBaseCurrency` ditambahkan untuk UI live query.
+- Sales/purchase document form dan service sekarang membangun snapshot currency
+  dari base aktif, tetapi detail/list/AR/AP tetap membaca `base_currency_code`
+  yang tersimpan pada snapshot dokumen lama.
+- Fetch BI otomatis tetap dibatasi untuk base IDR; pair non-IDR diarahkan ke
+  input manual sesuai non-scope provider overhaul.
+- Scope hardcoded `Rp` v1 yang dekat dengan dokumen, AR/AP, aging, cash flow,
+  income/expense document, dan general ledger sudah memakai symbol base currency.
+
+## Validasi 2026-07-13
+
+- `git diff --check`
+- `bun run build`
+  - Warning existing: `beep.mp3` runtime URL.
+  - Warning existing: chunk Vite lebih besar dari 500 kB.
+
+## Validasi 2026-07-14
+
+- `bun run test:unit`
+- `bun run build`
+  - Warning existing: `beep.mp3` runtime URL.
+  - Warning existing: chunk Vite lebih besar dari 500 kB.
+- `bun run lint`
+  - Warning existing: dependency hook di `AccountingDateSettingsCard.tsx`.
+  - Warning existing: dependency hook di `SetupKeyDrawer.tsx`.
+- `git diff --check`
 
 ## Acceptance Criteria
 

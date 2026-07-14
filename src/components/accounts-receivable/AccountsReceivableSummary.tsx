@@ -1,5 +1,6 @@
 import { Card, Col, Row, Statistic } from 'antd';
 import { AlertCircle, Clock, FileText, Wallet } from 'lucide-react';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import type { AccountsReceivableSummary as AccountsReceivableSummaryValue } from '@/hooks/useAccountsReceivable';
 import { formatCurrency } from '@/utils/formatters';
@@ -10,6 +11,7 @@ interface AccountsReceivableSummaryProps {
 
 export function AccountsReceivableSummary({ summary }: AccountsReceivableSummaryProps) {
   const { t } = useI18n();
+  const { baseCurrencySymbol } = useBaseCurrency();
 
   return (
     <Row gutter={[12, 12]}>
@@ -18,7 +20,7 @@ export function AccountsReceivableSummary({ summary }: AccountsReceivableSummary
           <Statistic
             title={t('accountsReceivable.totalOutstanding')}
             value={summary.total_outstanding}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<Wallet size={18} className="mr-2 text-blue-600" />}
           />
         </Card>
@@ -28,7 +30,7 @@ export function AccountsReceivableSummary({ summary }: AccountsReceivableSummary
           <Statistic
             title={t('accountsReceivable.current')}
             value={summary.total_current}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<Clock size={18} className="mr-2 text-emerald-600" />}
           />
         </Card>
@@ -38,7 +40,7 @@ export function AccountsReceivableSummary({ summary }: AccountsReceivableSummary
           <Statistic
             title={t('accountsReceivable.overdue')}
             value={summary.total_overdue}
-            formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+            formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
             prefix={<AlertCircle size={18} className="mr-2 text-rose-600" />}
           />
         </Card>

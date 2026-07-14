@@ -13,6 +13,8 @@ import {
   MANUFACTURING_EXTENSION_TEMPLATE_PREVIEW,
   PSAP_TEMPLATE_LINES,
   PSAP_TEMPLATE_PREVIEW,
+  SAK_EMKM_GENERAL_SERVICE_TEMPLATE,
+  SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES,
   SAK_EMKM_RETAIL_TEMPLATE,
   SAK_EMKM_RETAIL_TEMPLATE_LINES,
   SAK_ETAP_KOPERASI_TEMPLATE,
@@ -21,6 +23,7 @@ import {
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { chartOfAccountSchema } from '@/lib/validations/chartOfAccount';
+import { getAccountingSetupLockSignals } from '@/services/accountingSetupLockService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import {
   enqueueAccountingProfileSettingSync,
@@ -619,7 +622,27 @@ export const updateAccountingProfileSetting = async (
 ): Promise<AccountingProfileSetting> => {
   const currentUser = await requireFinanceActor();
   assertAccountingProfileCombination(accountingProfile, industryExtension);
-  const existingProfile = await db.accountingProfileSetting.get('default');
+  const [existingProfile, existingSetup, lockSignals] = await Promise.all([
+    db.accountingProfileSetting.get('default'),
+    db.accountingInitialSetupSetting.get('default'),
+    getAccountingSetupLockSignals(),
+  ]);
+  const changesProfile = !existingProfile ||
+    existingProfile.accounting_profile !== accountingProfile ||
+    existingProfile.industry_extension !== industryExtension ||
+    existingProfile.template_id !== templateId;
+  const changesSetupBaseline = existingSetup && (
+    existingSetup.accounting_profile !== accountingProfile ||
+    existingSetup.industry_extension !== industryExtension ||
+    existingSetup.template_id !== templateId
+  );
+
+  if (lockSignals.hasSignal && (changesProfile || changesSetupBaseline)) {
+    throw new Error(
+      `Profile/template COA sudah terkunci oleh ${lockSignals.labels.join(', ')}. Gunakan flow reset/migration terpisah untuk mengganti template.`,
+    );
+  }
+
   const now = new Date().toISOString();
   const profile: AccountingProfileSetting = withPendingSync({
     id: 'default' as const,
@@ -680,6 +703,19 @@ const getTemplateForInput = (
     return {
       template: SAK_EMKM_RETAIL_TEMPLATE,
       lines: SAK_EMKM_RETAIL_TEMPLATE_LINES,
+      canApply: true,
+      warningMessages: [] as string[],
+      requiredDomainFeatures: [] as string[],
+    };
+  }
+
+  if (
+    templateId === SAK_EMKM_GENERAL_SERVICE_TEMPLATE.id ||
+    (!templateId && accountingProfile === 'SAK_EMKM' && industryExtension === 'NONE')
+  ) {
+    return {
+      template: SAK_EMKM_GENERAL_SERVICE_TEMPLATE,
+      lines: SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES,
       canApply: true,
       warningMessages: [] as string[],
       requiredDomainFeatures: [] as string[],
@@ -953,6 +989,13 @@ const updateModulesFromRules = async (
 export const applyChartOfAccountTemplate = async (input: ApplyChartOfAccountTemplateInput) => {
   const currentUser = await requireFinanceActor();
   assertAccountingProfileCombination(input.accounting_profile, input.industry_extension);
+  const lockSignals = await getAccountingSetupLockSignals();
+  if (lockSignals.hasSignal) {
+    throw new Error(
+      `Template COA sudah terkunci oleh ${lockSignals.labels.join(', ')}. Gunakan flow reset/migration terpisah untuk menerapkan ulang template.`,
+    );
+  }
+
   const { template, lines, canApply } = getTemplateForInput(
     input.accounting_profile,
     input.industry_extension,

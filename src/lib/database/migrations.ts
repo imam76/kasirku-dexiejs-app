@@ -1,5 +1,6 @@
 import type {
   AccountingProfileSetting,
+  AccountingInitialSetupSetting,
   AuthUser,
   CashierSession,
   CashBankReconciliation,
@@ -2164,5 +2165,20 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     membershipPointTransactions: 'id, contact_id, membership_number, transaction_id, transaction_number, type, created_at',
     membershipSettings: 'id, updated_at',
     syncQueue: 'id, entity, entity_id, operation, status, created_at, updated_at',
+  });
+
+  this.version(85).stores({
+    accountingInitialSetupSetting: 'id, business_template_code, accounting_profile, industry_extension, template_id, base_currency_code, current_period_id, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const setupTable = tx.table<AccountingInitialSetupSetting, string>('accountingInitialSetupSetting');
+    const existingSetup = await setupTable.get('default');
+    if (existingSetup && !existingSetup.sync_status) {
+      await setupTable.put({
+        ...existingSetup,
+        version: existingSetup.version ?? 1,
+        sync_status: 'pending' as const,
+        sync_error: undefined,
+      });
+    }
   });
 }

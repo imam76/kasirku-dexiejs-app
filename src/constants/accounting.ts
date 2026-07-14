@@ -1,10 +1,14 @@
 import type {
+  AccountingBusinessTemplateCode,
+  AccountingBusinessTemplateStatus,
   AccountingModuleActivationRule,
+  AccountingModuleCode,
   AccountingProfileCode,
   AccountingProfileSetting,
   EnabledModule,
   GeneralLedgerSetting,
   IndustryExtensionCode,
+  InventoryAccountingPolicy,
 } from '@/types';
 
 export const ACCOUNTING_PROFILE_LABELS: Record<AccountingProfileCode, string> = {
@@ -22,6 +26,113 @@ export const INDUSTRY_EXTENSION_LABELS: Record<IndustryExtensionCode, string> = 
   CONSTRUCTION: 'Konstruksi',
   COOPERATIVE: 'Koperasi',
 };
+
+export interface AccountingBusinessTemplateDefinition {
+  code: AccountingBusinessTemplateCode;
+  label: string;
+  standard_label: string;
+  status: AccountingBusinessTemplateStatus;
+  accounting_profile: AccountingProfileCode;
+  industry_extension: IndustryExtensionCode;
+  template_id: string;
+  default_inventory_policy: InventoryAccountingPolicy;
+  default_enabled_modules: AccountingModuleCode[];
+  description?: string;
+  warning?: string;
+  disabled_reason?: string;
+}
+
+export const ACCOUNTING_BUSINESS_TEMPLATES: AccountingBusinessTemplateDefinition[] = [
+  {
+    code: 'RETAIL',
+    label: 'Ritel (SAK EMKM)',
+    standard_label: 'SAK EMKM',
+    status: 'ENABLED',
+    accounting_profile: 'SAK_EMKM',
+    industry_extension: 'RETAIL',
+    template_id: 'default-sak-emkm-retail',
+    default_inventory_policy: 'PERPETUAL_INVENTORY',
+    default_enabled_modules: ['CHART_OF_ACCOUNTS', 'CASH_FLOW_ACCOUNT_FILTER', 'ACCOUNT_TEMPLATES'],
+    description: 'Template existing untuk retail, POS, stok, piutang, hutang, dan beban sederhana.',
+  },
+  {
+    code: 'COOPERATIVE',
+    label: 'Koperasi (SAK ETAP)',
+    standard_label: 'SAK ETAP',
+    status: 'ENABLED',
+    accounting_profile: 'SAK_ETAP',
+    industry_extension: 'COOPERATIVE',
+    template_id: 'default-sak-etap-koperasi',
+    default_inventory_policy: 'CASH_FLOW_ONLY',
+    default_enabled_modules: ['CHART_OF_ACCOUNTS', 'CASH_FLOW_ACCOUNT_FILTER', 'ACCOUNT_TEMPLATES'],
+    description: 'Template existing koperasi simpan pinjam mengikuti SAK ETAP.',
+  },
+  {
+    code: 'GENERAL_TRADING',
+    label: 'Perdagangan Umum (SAK EMKM)',
+    standard_label: 'SAK EMKM',
+    status: 'ENABLED',
+    accounting_profile: 'SAK_EMKM',
+    industry_extension: 'RETAIL',
+    template_id: 'default-sak-emkm-retail',
+    default_inventory_policy: 'PERPETUAL_INVENTORY',
+    default_enabled_modules: ['CHART_OF_ACCOUNTS', 'CASH_FLOW_ACCOUNT_FILTER', 'ACCOUNT_TEMPLATES'],
+    description: 'Alias v1 ke template retail; snapshot tetap menyimpan pilihan perdagangan umum.',
+    warning: 'Perdagangan Umum memakai template retail pada v1 sampai template khusus tersedia.',
+  },
+  {
+    code: 'GENERAL_SERVICE',
+    label: 'Jasa Umum (SAK EMKM)',
+    standard_label: 'SAK EMKM',
+    status: 'ENABLED',
+    accounting_profile: 'SAK_EMKM',
+    industry_extension: 'NONE',
+    template_id: 'default-sak-emkm-general-service',
+    default_inventory_policy: 'CASH_FLOW_ONLY',
+    default_enabled_modules: ['CHART_OF_ACCOUNTS', 'CASH_FLOW_ACCOUNT_FILTER', 'ACCOUNT_TEMPLATES'],
+    description: 'Template jasa tanpa akun dan mapping inventory-heavy.',
+  },
+  {
+    code: 'MANUFACTURING_PREVIEW',
+    label: 'Manufaktur',
+    standard_label: 'SAK EP',
+    status: 'PREVIEW_DISABLED',
+    accounting_profile: 'SAK_EP',
+    industry_extension: 'MANUFACTURING',
+    template_id: 'preview-manufacturing-extension',
+    default_inventory_policy: 'PERPETUAL_INVENTORY',
+    default_enabled_modules: ['CHART_OF_ACCOUNTS', 'ACCOUNT_TEMPLATES', 'MANUFACTURING'],
+    disabled_reason: 'Preview roadmap; belum bisa diterapkan sebelum domain produksi, costing, dan WIP siap.',
+  },
+  {
+    code: 'CONSTRUCTION_PREVIEW',
+    label: 'Konstruksi',
+    standard_label: 'SAK EP',
+    status: 'PREVIEW_DISABLED',
+    accounting_profile: 'SAK_EP',
+    industry_extension: 'CONSTRUCTION',
+    template_id: 'preview-construction-extension',
+    default_inventory_policy: 'CASH_FLOW_ONLY',
+    default_enabled_modules: ['CHART_OF_ACCOUNTS', 'ACCOUNT_TEMPLATES', 'CONSTRUCTION'],
+    disabled_reason: 'Preview roadmap; belum bisa diterapkan sebelum kontrak, progress billing, dan retensi siap.',
+  },
+  {
+    code: 'GOVERNMENT_PREVIEW',
+    label: 'Pemerintahan (PSAP)',
+    standard_label: 'PSAP',
+    status: 'PREVIEW_DISABLED',
+    accounting_profile: 'PSAP',
+    industry_extension: 'NONE',
+    template_id: 'preview-psap-profile',
+    default_inventory_policy: 'CASH_FLOW_ONLY',
+    default_enabled_modules: ['CHART_OF_ACCOUNTS', 'ACCOUNT_TEMPLATES', 'PSAP_REPORTING'],
+    disabled_reason: 'Preview roadmap; belum bisa diterapkan sebelum mode dan report PSAP siap.',
+  },
+];
+
+export const ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE = Object.fromEntries(
+  ACCOUNTING_BUSINESS_TEMPLATES.map((template) => [template.code, template]),
+) as Record<AccountingBusinessTemplateCode, AccountingBusinessTemplateDefinition>;
 
 export const DEFAULT_ACCOUNTING_PROFILE_SETTING: AccountingProfileSetting = {
   id: 'default',
@@ -151,6 +262,54 @@ export const ACCOUNTING_MODULE_ACTIVATION_RULES: AccountingModuleActivationRule[
     id: 'SAK_EMKM-RETAIL-GENERAL_LEDGER',
     accounting_profile: 'SAK_EMKM',
     industry_extension: 'RETAIL',
+    module_code: 'GENERAL_LEDGER',
+    default_enabled: false,
+    requires_confirmation: true,
+    requires_data_safety_check: true,
+    description: 'General ledger double-entry. Aktifkan setelah siap mulai posting dari tanggal cutoff.',
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'SAK_EMKM-NONE-CHART_OF_ACCOUNTS',
+    accounting_profile: 'SAK_EMKM',
+    industry_extension: 'NONE',
+    module_code: 'CHART_OF_ACCOUNTS',
+    default_enabled: true,
+    requires_confirmation: false,
+    requires_data_safety_check: false,
+    description: 'Daftar akun operasional untuk bisnis jasa umum.',
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'SAK_EMKM-NONE-CASH_FLOW_ACCOUNT_FILTER',
+    accounting_profile: 'SAK_EMKM',
+    industry_extension: 'NONE',
+    module_code: 'CASH_FLOW_ACCOUNT_FILTER',
+    default_enabled: true,
+    requires_confirmation: false,
+    requires_data_safety_check: false,
+    description: 'Filter dan grouping arus kas berdasarkan snapshot akun.',
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'SAK_EMKM-NONE-ACCOUNT_TEMPLATES',
+    accounting_profile: 'SAK_EMKM',
+    industry_extension: 'NONE',
+    module_code: 'ACCOUNT_TEMPLATES',
+    default_enabled: true,
+    requires_confirmation: true,
+    requires_data_safety_check: true,
+    description: 'Template akun SAK EMKM untuk bisnis jasa umum.',
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'SAK_EMKM-NONE-GENERAL_LEDGER',
+    accounting_profile: 'SAK_EMKM',
+    industry_extension: 'NONE',
     module_code: 'GENERAL_LEDGER',
     default_enabled: false,
     requires_confirmation: true,

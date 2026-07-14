@@ -7,6 +7,7 @@ import { BookOpen, CalendarClock } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { useAuth } from '@/auth/useAuth';
+import { useAccountingSetupStatus } from '@/hooks/useAccountingSetupStatus';
 import { useI18n } from '@/hooks/useI18n';
 import { saveAccountingReferenceSetting } from '@/services/accountingReferenceSettingService';
 import { formatDateOnly } from '@/utils/formatters';
@@ -54,6 +55,11 @@ export default function AccountingDateSettingsCard() {
 
   const canManagePeriod = can('ACCOUNTING_PERIOD_MANAGE');
   const canOpenLedger = can('FINANCE_ACCESS');
+  const {
+    setup: accountingSetup,
+    lockSignals,
+    isSetupComplete,
+  } = useAccountingSetupStatus();
   const generalLedgerSetting = useLiveQuery(
     () => db.generalLedgerSetting.get('default'),
     [],
@@ -65,24 +71,26 @@ export default function AccountingDateSettingsCard() {
     [] as AccountingPeriod[],
   );
   const referencePeriod = useMemo(() => getReferencePeriod(periods ?? []), [periods]);
-  const cutoffLocked = Boolean(generalLedgerSetting?.opening_balance_journal_id);
+  const cutoffLocked = Boolean(generalLedgerSetting?.opening_balance_journal_id || lockSignals.hasSignal);
 
   useEffect(() => {
     form.setFieldsValue({
-      cutoff_date: generalLedgerSetting?.cutoff_date
-        ? dayjs(generalLedgerSetting.cutoff_date)
+      cutoff_date: accountingSetup?.cutoff_date || generalLedgerSetting?.cutoff_date
+        ? dayjs(accountingSetup?.cutoff_date ?? generalLedgerSetting?.cutoff_date)
         : undefined,
-      inventory_policy: generalLedgerSetting?.inventory_policy ?? 'PERPETUAL_INVENTORY',
-      period_range: referencePeriod
-        ? [dayjs(referencePeriod.start_date), dayjs(referencePeriod.end_date)]
-        : [dayjs().startOf('year'), dayjs().endOf('year')],
+      inventory_policy: accountingSetup?.inventory_policy ?? generalLedgerSetting?.inventory_policy ?? 'PERPETUAL_INVENTORY',
+      period_range: accountingSetup
+        ? [dayjs(accountingSetup.current_period_start), dayjs(accountingSetup.current_period_end)]
+        : referencePeriod
+          ? [dayjs(referencePeriod.start_date), dayjs(referencePeriod.end_date)]
+          : [dayjs().startOf('year'), dayjs().endOf('year')],
     });
   }, [
+    accountingSetup,
     form,
     generalLedgerSetting?.cutoff_date,
     generalLedgerSetting?.inventory_policy,
-    referencePeriod?.id,
-    referencePeriod?.updated_at,
+    referencePeriod,
   ]);
 
   const handleSave = async (values: AccountingReferenceFormValues) => {
@@ -125,11 +133,35 @@ export default function AccountingDateSettingsCard() {
           {t('settings.accountingDateDescription')}
         </Paragraph>
 
+        <Alert
+          type={isSetupComplete ? 'success' : 'warning'}
+          showIcon
+          message={isSetupComplete ? t('settings.accountingSetupComplete') : t('settings.accountingSetupIncomplete')}
+          description={accountingSetup ? (
+            <Descriptions size="small" column={{ xs: 1, md: 2 }} className="mt-2">
+              <Descriptions.Item label={t('settings.accountingCutoff')}>
+                {formatDateOnly(accountingSetup.cutoff_date)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('settings.accountingFiscalPeriod')}>
+                {`${formatDateOnly(accountingSetup.fiscal_period_start)} - ${formatDateOnly(accountingSetup.fiscal_period_end)}`}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('settings.accountingCurrentPeriod')}>
+                {`${formatDateOnly(accountingSetup.current_period_start)} - ${formatDateOnly(accountingSetup.current_period_end)}`}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('settings.accountingBaseCurrency')}>
+                {accountingSetup.base_currency_code}
+              </Descriptions.Item>
+            </Descriptions>
+          ) : t('settings.accountingSetupIncompleteDescription')}
+        />
+
         {cutoffLocked && (
           <Alert
             type="info"
             showIcon
-            message={t('settings.accountingLockedWarning')}
+            message={lockSignals.hasSignal
+              ? t('settings.accountingOperationalLockWarning', { labels: lockSignals.labels.join(', ') })
+              : t('settings.accountingLockedWarning')}
           />
         )}
 
@@ -167,7 +199,7 @@ export default function AccountingDateSettingsCard() {
               <RangePicker
                 className="w-full"
                 format="YYYY-MM-DD"
-                disabled={!canManagePeriod}
+                disabled={!canManagePeriod || cutoffLocked}
               />
             </Form.Item>
 
@@ -198,7 +230,7 @@ export default function AccountingDateSettingsCard() {
                 type="primary"
                 htmlType="submit"
                 loading={saving}
-                disabled={!canManagePeriod}
+                disabled={!canManagePeriod || cutoffLocked}
               >
                 {t('settings.accountingSaveReference')}
               </Button>

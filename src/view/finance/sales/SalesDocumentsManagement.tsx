@@ -23,11 +23,12 @@ import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import type { SalesDocument, SalesDocumentStatus, SalesDocumentType } from '@/types';
 import {
+  formatBaseCurrencyAmount,
   formatDocumentCurrencyAmount,
   isBaseCurrency,
   toDocumentCurrencyAmount,
 } from '@/utils/documentCurrency';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatDate } from '@/utils/formatters';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 import { canAccessPath } from '@/auth/routePermissions';
 import { useAuth } from '@/auth/useAuth';
@@ -43,14 +44,14 @@ const statusColor: Record<SalesDocumentStatus, string> = {
 
 const renderDocumentTotal = (document: SalesDocument) => {
   const displayValue = document.foreign_total_amount ?? toDocumentCurrencyAmount(document.total_amount, document);
-  const isForeign = !isBaseCurrency(document.currency_code);
+  const isForeign = !isBaseCurrency(document.currency_code, document.base_currency_code);
 
   return (
     <span>
       {formatDocumentCurrencyAmount(displayValue, document)}
       {isForeign && (
         <span className="block text-xs text-gray-500">
-          Rp {formatCurrency(document.total_amount || 0)}
+          {formatBaseCurrencyAmount(document.total_amount || 0, document)}
         </span>
       )}
     </span>

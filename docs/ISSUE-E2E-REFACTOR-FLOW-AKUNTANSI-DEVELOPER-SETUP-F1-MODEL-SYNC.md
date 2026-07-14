@@ -6,6 +6,8 @@ Parent issue:
 
 Tanggal catatan: 2026-07-13
 
+Status implementasi: selesai untuk fondasi model/sync Fase 1 pada 2026-07-13.
+
 ## Ringkasan
 
 Fase ini membuat fondasi data untuk Accounting Initial Setup. Hasil setup tidak
@@ -86,41 +88,53 @@ Catatan UX/model:
 
 ## Checklist
 
-- Tambahkan type `AccountingBusinessTemplateCode`.
-- Tambahkan registry/mapping awal template bisnis sebagai kontrak turunan:
-  - label UI;
-  - standard display, misalnya `SAK ETAP`;
-  - `accounting_profile`;
-  - `industry_extension`;
-  - `template_id`;
-  - status enabled/preview/disabled;
-  - warning.
-- Tambahkan tabel Dexie `accountingInitialSetupSetting` atau field setup yang
+- [x] Tambahkan type `AccountingBusinessTemplateCode`.
+- [x] Tambahkan registry/mapping awal template bisnis sebagai kontrak turunan:
+  - [x] label UI;
+  - [x] standard display, misalnya `SAK ETAP`;
+  - [x] `accounting_profile`;
+  - [x] `industry_extension`;
+  - [x] `template_id`;
+  - [x] status enabled/preview/disabled;
+  - [x] warning.
+- [x] Tambahkan tabel Dexie `accountingInitialSetupSetting` atau field setup yang
   setara.
-- Tambahkan migration Dexie.
-- Tambahkan backup/restore support untuk tabel setup baru.
-- Tambahkan migration PostgreSQL:
-  - table setup singleton;
-  - index;
-  - sync metadata columns;
-  - realtime trigger ke `kasirku_data_changes`.
-- Tambahkan realtime trigger untuk `app_setup_config`.
-- Tambahkan Rust model/repository/command untuk setup snapshot.
-- Tambahkan registration command di `src-tauri/src/lib.rs`.
-- Tambahkan remote DTO dan adapter di `postgresAdapter.ts`.
-- Tambahkan read service:
-  - refresh setup accounting dari Postgres;
-  - merge remote setup accounting ke Dexie.
-- Tambahkan sync queue support:
-  - entity name;
-  - mapper;
-  - validator payload;
-  - processor;
-  - metadata updater;
-  - enqueue helper;
-  - pending scanner.
-- Tambahkan refresh setup config/accounting setup ke `syncOrchestratorService`.
-- Tambahkan query key/invalidation yang dipakai realtime setup.
+- [x] Tambahkan migration Dexie.
+- [x] Tambahkan backup/restore support untuk tabel setup baru.
+- [x] Tambahkan migration PostgreSQL:
+  - [x] table setup singleton;
+  - [x] index;
+  - [x] sync metadata columns;
+  - [x] realtime trigger ke `kasirku_data_changes`.
+- [x] Tambahkan realtime trigger untuk `app_setup_config`.
+- [x] Tambahkan Rust model/repository/command untuk setup snapshot.
+- [x] Tambahkan registration command di `src-tauri/src/lib.rs`.
+- [x] Tambahkan remote DTO dan adapter di `postgresAdapter.ts`.
+- [x] Tambahkan read service:
+  - [x] refresh setup accounting dari Postgres;
+  - [x] merge remote setup accounting ke Dexie.
+- [x] Tambahkan sync queue support:
+  - [x] entity name;
+  - [x] mapper;
+  - [x] validator payload;
+  - [x] processor;
+  - [x] metadata updater;
+  - [x] enqueue helper;
+  - [x] pending scanner.
+- [x] Tambahkan refresh setup config/accounting setup ke `syncOrchestratorService`.
+- [x] Tambahkan query key/invalidation yang dipakai realtime setup.
+
+## Catatan Implementasi 2026-07-13
+
+- Business template registry Fase 1 dibuat di `src/constants/accounting.ts`.
+- Setup snapshot disimpan sebagai singleton `accountingInitialSetupSetting` di
+  Dexie dan `accounting_initial_setup_setting` di PostgreSQL.
+- Jalur sync mencakup mapper, validator, processor queue, metadata updater,
+  enqueue helper, pending scanner, remote refresh, dan realtime invalidation.
+- Validasi teknis yang sudah dijalankan: `git diff --check`, `bun run build`,
+  `cargo check`, dan `rustfmt --check` scoped untuk file Rust yang disentuh.
+- Acceptance multi-device tetap perlu dibuktikan pada Fase 6/E2E karena belum
+  dijalankan manual pada dua device.
 
 ## Acceptance Criteria
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import {
   archiveCurrency,
   createCurrency,
@@ -19,6 +20,7 @@ export type CurrencyStatusFilter = 'active' | 'inactive' | 'all';
 
 export const useCurrencies = () => {
   const queryClient = useQueryClient();
+  const { baseCurrencyCode, baseCurrencySymbol } = useBaseCurrency();
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<CurrencyStatusFilter>('active');
@@ -41,6 +43,7 @@ export const useCurrencies = () => {
 
   const latestRateByCurrency = useMemo(() => {
     return currencyRates.reduce<Record<string, CurrencyRate>>((acc, rate) => {
+      if (rate.base_currency_code !== baseCurrencyCode) return acc;
       const existing = acc[rate.currency_code];
       if (!existing || rate.rate_date > existing.rate_date || (
         rate.rate_date === existing.rate_date && rate.updated_at > existing.updated_at
@@ -49,7 +52,7 @@ export const useCurrencies = () => {
       }
       return acc;
     }, {});
-  }, [currencyRates]);
+  }, [baseCurrencyCode, currencyRates]);
 
   const filteredCurrencies = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -119,6 +122,8 @@ export const useCurrencies = () => {
     currencyRates,
     filteredCurrencies,
     latestRateByCurrency,
+    baseCurrencyCode,
+    baseCurrencySymbol,
     editingCurrency,
     searchText,
     setSearchText,

@@ -5,6 +5,7 @@ import type { Dayjs } from 'dayjs';
 import { Plus, Trash2 } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { postManualJournal } from '@/services/generalLedgerService';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency } from '@/utils/formatters';
 import type { ChartOfAccount } from '@/types';
@@ -193,6 +194,7 @@ export default function ManualJournalForm({
 }: ManualJournalFormProps) {
   const { t } = useI18n();
   const { message } = App.useApp();
+  const { baseCurrencySymbol } = useBaseCurrency();
   const [form] = Form.useForm<ManualJournalFormValues>();
   const [isPosting, setIsPosting] = useState(false);
   const watchedLines = Form.useWatch('lines', form) ?? [];
@@ -348,8 +350,8 @@ export default function ManualJournalForm({
             <Alert type="error" showIcon title={t('generalLedger.manual.validation.balance')} />
           )}
           <Space className="md:ml-auto">
-            <Text strong>{t('generalLedger.debit')}: Rp {formatCurrency(totalDebit)}</Text>
-            <Text strong>{t('generalLedger.credit')}: Rp {formatCurrency(totalCredit)}</Text>
+            <Text strong>{t('generalLedger.debit')}: {baseCurrencySymbol} {formatCurrency(totalDebit)}</Text>
+            <Text strong>{t('generalLedger.credit')}: {baseCurrencySymbol} {formatCurrency(totalCredit)}</Text>
           </Space>
         </div>
       </Form>

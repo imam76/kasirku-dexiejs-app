@@ -10,6 +10,8 @@ const { Text } = Typography;
 interface CurrencyTableProps {
   currencies: Currency[];
   latestRateByCurrency: Record<string, CurrencyRate>;
+  baseCurrencyCode: string;
+  baseCurrencySymbol: string;
   onEdit: (currency: Currency) => void;
   onOpenRate: (currency: Currency) => void;
   onArchive: (currency: Currency) => void;
@@ -19,6 +21,8 @@ interface CurrencyTableProps {
 export default function CurrencyTable({
   currencies,
   latestRateByCurrency,
+  baseCurrencyCode,
+  baseCurrencySymbol,
   onEdit,
   onOpenRate,
   onArchive,
@@ -35,7 +39,7 @@ export default function CurrencyTable({
         <Space orientation="vertical" size={0}>
           <Space size={6}>
             <Text strong>{currency.code}</Text>
-            {currency.is_base ? <Tag color="blue">{t('currencies.base')}</Tag> : null}
+            {currency.code === baseCurrencyCode ? <Tag color="blue">{t('currencies.base')}</Tag> : null}
           </Space>
           <Text type="secondary">{currency.name}</Text>
         </Space>
@@ -56,7 +60,11 @@ export default function CurrencyTable({
 
         return (
           <Space orientation="vertical" size={0}>
-            <Text>{currency.code === 'IDR' ? '1' : `Rp ${formatCurrency(rate.middle_rate)}`}</Text>
+            <Text>
+              {currency.code === baseCurrencyCode
+                ? '1'
+                : `${currency.code}/${baseCurrencyCode}: ${baseCurrencySymbol} ${formatCurrency(rate.middle_rate)}`}
+            </Text>
             <Text type="secondary" className="text-xs">
               {rate.rate_date} - {t(`currencies.source.${rate.source}`)}
             </Text>
@@ -80,7 +88,12 @@ export default function CurrencyTable({
       render: (_value: unknown, currency) => (
         <Space wrap>
           <Tooltip title={t('currencies.rate')}>
-            <Button type="text" icon={<RefreshCw size={16} />} onClick={() => onOpenRate(currency)}>
+            <Button
+              type="text"
+              icon={<RefreshCw size={16} />}
+              disabled={currency.code === baseCurrencyCode}
+              onClick={() => onOpenRate(currency)}
+            >
               {t('currencies.rate')}
             </Button>
           </Tooltip>
@@ -92,7 +105,7 @@ export default function CurrencyTable({
               danger
               type="text"
               icon={<Archive size={16} />}
-              disabled={currency.is_base}
+              disabled={currency.code === baseCurrencyCode}
               onClick={() => onArchive(currency)}
             >
               {t('currencies.archive')}

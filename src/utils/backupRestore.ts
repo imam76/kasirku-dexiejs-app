@@ -55,6 +55,7 @@ export const backupDatabase = async () => {
       chartOfAccounts: await db.chartOfAccounts.toArray(),
       financeAccountMappings: await db.financeAccountMappings.toArray(),
       accountingProfileSetting: await db.accountingProfileSetting.toArray(),
+      accountingInitialSetupSetting: await db.accountingInitialSetupSetting.toArray(),
       enabledModules: await db.enabledModules.toArray(),
       generalLedgerSetting: await db.generalLedgerSetting.toArray(),
       journalEntries: await db.journalEntries.toArray(),
@@ -72,7 +73,7 @@ export const backupDatabase = async () => {
       membershipSettings: await db.membershipSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 21,
+      version: 22,
       timestamp: new Date().toISOString(),
     };
 
@@ -97,7 +98,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -160,6 +161,7 @@ export const restoreDatabase = async (file: File) => {
           db.chartOfAccounts,
           db.financeAccountMappings,
           db.accountingProfileSetting,
+          db.accountingInitialSetupSetting,
           db.enabledModules,
           db.generalLedgerSetting,
           db.journalEntries,
@@ -222,6 +224,7 @@ export const restoreDatabase = async (file: File) => {
           await db.chartOfAccounts.clear();
           await db.financeAccountMappings.clear();
           await db.accountingProfileSetting.clear();
+          await db.accountingInitialSetupSetting.clear();
           await db.enabledModules.clear();
           await db.generalLedgerSetting.clear();
           await db.journalEntries.clear();
@@ -288,6 +291,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.chartOfAccounts?.length) await db.chartOfAccounts.bulkAdd(data.chartOfAccounts);
           if (data.financeAccountMappings?.length) await db.financeAccountMappings.bulkAdd(data.financeAccountMappings);
           if (data.accountingProfileSetting?.length) await db.accountingProfileSetting.bulkAdd(data.accountingProfileSetting);
+          if (data.accountingInitialSetupSetting?.length) await db.accountingInitialSetupSetting.bulkAdd(data.accountingInitialSetupSetting);
           if (data.enabledModules?.length) await db.enabledModules.bulkAdd(data.enabledModules);
           if (data.generalLedgerSetting?.length) await db.generalLedgerSetting.bulkAdd(data.generalLedgerSetting);
           if (data.journalEntries?.length) await db.journalEntries.bulkAdd(data.journalEntries);

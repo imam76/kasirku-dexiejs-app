@@ -11,6 +11,7 @@ import {
   type ChartOfAccountStatusFilter,
   type ChartOfAccountTypeFilter,
 } from '@/hooks/useChartOfAccounts';
+import { useAccountingSetupStatus } from '@/hooks/useAccountingSetupStatus';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import { accountTypeValues } from '@/lib/validations/chartOfAccount';
@@ -24,6 +25,10 @@ export default function ChartOfAccountsManagement() {
   const [form] = Form.useForm<ChartOfAccountFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ChartOfAccountsTab>('accounts');
+  const {
+    setup: accountingSetup,
+    lockSignals,
+  } = useAccountingSetupStatus();
   const {
     accounts,
     accountTree,
@@ -200,8 +205,11 @@ export default function ChartOfAccountsManagement() {
                 accounts={activePostableAccounts}
                 profileSetting={profileSetting}
                 enabledModules={enabledModules}
+                accountingSetup={accountingSetup}
                 templatePreview={templatePreview}
                 mappingHealth={mappingHealth}
+                templateLocked={lockSignals.hasSignal}
+                templateLockLabels={lockSignals.labels}
                 isUpdatingMapping={isUpdatingMapping}
                 isApplyingTemplate={isApplyingTemplate}
                 isBackfilling={isBackfilling}

@@ -1,8 +1,10 @@
 use crate::models::accounting_setting::{
-    AccountingProfileSettingDto, EnabledModuleDto, FinanceAccountMappingDto, GeneralLedgerSettingDto,
+    AccountingInitialSetupSettingDto, AccountingProfileSettingDto, EnabledModuleDto,
+    FinanceAccountMappingDto, GeneralLedgerSettingDto,
 };
 use sqlx::PgPool;
 
+const ACCOUNTING_INITIAL_SETUP_SETTING_ID: &str = "default";
 const ACCOUNTING_PROFILE_SETTING_ID: &str = "default";
 const GENERAL_LEDGER_SETTING_ID: &str = "default";
 
@@ -309,6 +311,162 @@ pub async fn upsert_general_ledger_setting(
     }
 
     get_general_ledger_setting(pool)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)
+}
+
+// ---- Accounting initial setup setting (singleton) ----
+
+pub async fn get_accounting_initial_setup_setting(
+    pool: &PgPool,
+) -> Result<Option<AccountingInitialSetupSettingDto>, sqlx::Error> {
+    sqlx::query_as::<_, AccountingInitialSetupSettingDto>(
+        r#"
+        SELECT
+            id,
+            business_template_code,
+            accounting_profile,
+            industry_extension,
+            template_id,
+            cutoff_date::TEXT AS cutoff_date,
+            fiscal_period_start::TEXT AS fiscal_period_start,
+            fiscal_period_end::TEXT AS fiscal_period_end,
+            current_period_start::TEXT AS current_period_start,
+            current_period_end::TEXT AS current_period_end,
+            current_period_id,
+            base_currency_code,
+            inventory_policy,
+            setup_completed_at::TEXT AS setup_completed_at,
+            setup_completed_by,
+            setup_completed_by_name,
+            version,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at
+        FROM accounting_initial_setup_setting
+        WHERE id = $1
+        "#,
+    )
+    .bind(ACCOUNTING_INITIAL_SETUP_SETTING_ID)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn upsert_accounting_initial_setup_setting(
+    pool: &PgPool,
+    input: AccountingInitialSetupSettingDto,
+) -> Result<AccountingInitialSetupSettingDto, sqlx::Error> {
+    let upserted = sqlx::query_as::<_, AccountingInitialSetupSettingDto>(
+        r#"
+        INSERT INTO accounting_initial_setup_setting (
+            id,
+            business_template_code,
+            accounting_profile,
+            industry_extension,
+            template_id,
+            cutoff_date,
+            fiscal_period_start,
+            fiscal_period_end,
+            current_period_start,
+            current_period_end,
+            current_period_id,
+            base_currency_code,
+            inventory_policy,
+            setup_completed_at,
+            setup_completed_by,
+            setup_completed_by_name,
+            version,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6::DATE,
+            $7::DATE,
+            $8::DATE,
+            $9::DATE,
+            $10::DATE,
+            $11,
+            $12,
+            $13,
+            $14::TIMESTAMPTZ,
+            $15,
+            $16,
+            $17,
+            $18::TIMESTAMPTZ,
+            $19::TIMESTAMPTZ
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            business_template_code = EXCLUDED.business_template_code,
+            accounting_profile = EXCLUDED.accounting_profile,
+            industry_extension = EXCLUDED.industry_extension,
+            template_id = EXCLUDED.template_id,
+            cutoff_date = EXCLUDED.cutoff_date,
+            fiscal_period_start = EXCLUDED.fiscal_period_start,
+            fiscal_period_end = EXCLUDED.fiscal_period_end,
+            current_period_start = EXCLUDED.current_period_start,
+            current_period_end = EXCLUDED.current_period_end,
+            current_period_id = EXCLUDED.current_period_id,
+            base_currency_code = EXCLUDED.base_currency_code,
+            inventory_policy = EXCLUDED.inventory_policy,
+            setup_completed_at = EXCLUDED.setup_completed_at,
+            setup_completed_by = EXCLUDED.setup_completed_by,
+            setup_completed_by_name = EXCLUDED.setup_completed_by_name,
+            version = EXCLUDED.version,
+            updated_at = EXCLUDED.updated_at
+        WHERE EXCLUDED.updated_at >= accounting_initial_setup_setting.updated_at
+        RETURNING
+            id,
+            business_template_code,
+            accounting_profile,
+            industry_extension,
+            template_id,
+            cutoff_date::TEXT AS cutoff_date,
+            fiscal_period_start::TEXT AS fiscal_period_start,
+            fiscal_period_end::TEXT AS fiscal_period_end,
+            current_period_start::TEXT AS current_period_start,
+            current_period_end::TEXT AS current_period_end,
+            current_period_id,
+            base_currency_code,
+            inventory_policy,
+            setup_completed_at::TEXT AS setup_completed_at,
+            setup_completed_by,
+            setup_completed_by_name,
+            version,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at
+        "#,
+    )
+    .bind(input.id)
+    .bind(input.business_template_code)
+    .bind(input.accounting_profile)
+    .bind(input.industry_extension)
+    .bind(input.template_id)
+    .bind(input.cutoff_date)
+    .bind(input.fiscal_period_start)
+    .bind(input.fiscal_period_end)
+    .bind(input.current_period_start)
+    .bind(input.current_period_end)
+    .bind(input.current_period_id)
+    .bind(input.base_currency_code)
+    .bind(input.inventory_policy)
+    .bind(input.setup_completed_at)
+    .bind(input.setup_completed_by)
+    .bind(input.setup_completed_by_name)
+    .bind(input.version)
+    .bind(input.created_at)
+    .bind(input.updated_at)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(setting) = upserted {
+        return Ok(setting);
+    }
+
+    get_accounting_initial_setup_setting(pool)
         .await?
         .ok_or(sqlx::Error::RowNotFound)
 }

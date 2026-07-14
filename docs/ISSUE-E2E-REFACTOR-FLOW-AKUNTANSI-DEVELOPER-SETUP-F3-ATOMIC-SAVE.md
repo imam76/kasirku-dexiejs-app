@@ -6,6 +6,8 @@ Parent issue:
 
 Tanggal catatan: 2026-07-13
 
+Status implementasi: core service Fase 3 selesai pada 2026-07-13.
+
 ## Ringkasan
 
 Fase ini membuat service orchestrator untuk menyimpan setup akuntansi awal
@@ -75,48 +77,65 @@ Tanggung jawab:
 
 ## Checklist
 
-- Buat `accountingInitialSetupService.ts`.
-- Tambahkan schema/type input command.
-- Pastikan input command user-facing cukup memakai `business_template_code`
+- [x] Buat `accountingInitialSetupService.ts`.
+- [x] Tambahkan schema/type input command.
+- [x] Pastikan input command user-facing cukup memakai `business_template_code`
   untuk pilihan jenis bisnis.
-- Tambahkan resolver registry jenis bisnis:
-  - `Ritel (SAK EMKM)`;
-  - `Koperasi (SAK ETAP)`;
-  - `Perdagangan Umum (SAK EMKM)`;
-  - `Jasa Umum (SAK EMKM)`;
-  - preview disabled untuk Manufaktur, Konstruksi, Pemerintahan.
-- Tambahkan helper guard transaksi existing:
-  - dokumen sales/purchase/POS;
-  - finance transaction;
-  - journal entry;
-  - payment;
-  - payroll;
-  - koperasi transaction;
-  - opening balance posted.
-- Reuse logic `applyChartOfAccountTemplate` dengan mode idempotent:
-  - tidak menggandakan akun;
-  - tidak menggandakan mapping;
-  - tidak menimpa akun yang sudah locked tanpa policy jelas.
-- Reuse logic `saveAccountingReferenceSetting`, tetapi pisahkan core write bila
+- [x] Tambahkan resolver registry jenis bisnis:
+  - [x] `Ritel (SAK EMKM)`;
+  - [x] `Koperasi (SAK ETAP)`;
+  - [x] `Perdagangan Umum (SAK EMKM)`;
+  - [x] `Jasa Umum (SAK EMKM)`;
+  - [x] preview disabled untuk Manufaktur, Konstruksi, Pemerintahan.
+- [x] Tambahkan helper guard transaksi existing:
+  - [x] dokumen sales/purchase/POS;
+  - [x] finance transaction;
+  - [x] journal entry;
+  - [x] payment;
+  - [x] payroll;
+  - [x] koperasi transaction;
+  - [x] opening balance posted.
+- [x] Reuse logic `applyChartOfAccountTemplate` dengan mode idempotent:
+  - [x] tidak menggandakan akun;
+  - [x] tidak menggandakan mapping;
+  - [x] tidak menimpa akun yang sudah locked tanpa policy jelas.
+- [x] Reuse logic `saveAccountingReferenceSetting`, tetapi pisahkan core write bila
   helper existing terlalu self-contained.
-- Buat/update `accountingPeriods` untuk periode berjalan.
-- Simpan `generalLedgerSetting.cutoff_date` dan `inventory_policy`.
-- Set base currency sesuai input.
-- Simpan setup snapshot.
-- Tulis activity log:
-  - `ACCOUNTING_INITIAL_SETUP_COMPLETED`;
-  - `ACCOUNTING_INITIAL_SETUP_UPDATED`.
-- Enqueue sync untuk:
-  - `app_setup_config`;
-  - setup snapshot;
-  - chart of accounts;
-  - finance account mappings;
-  - accounting profile setting;
-  - general ledger setting;
-  - accounting periods;
-  - currencies/currency rates bila berubah.
-- Pastikan error validasi terjadi sebelum partial write.
-- Tambahkan unit/service test untuk idempotency.
+- [x] Buat/update `accountingPeriods` untuk periode berjalan.
+- [x] Simpan `generalLedgerSetting.cutoff_date` dan `inventory_policy`.
+- [x] Set base currency sesuai input.
+- [x] Simpan setup snapshot.
+- [x] Tulis activity log:
+  - [x] `ACCOUNTING_INITIAL_SETUP_COMPLETED`;
+  - [x] `ACCOUNTING_INITIAL_SETUP_UPDATED`.
+- [x] Enqueue sync untuk:
+  - [x] `app_setup_config`;
+  - [x] setup snapshot;
+  - [x] chart of accounts;
+  - [x] finance account mappings;
+  - [x] accounting profile setting;
+  - [x] general ledger setting;
+  - [x] accounting periods;
+  - [x] currencies/currency rates bila berubah.
+- [x] Pastikan error validasi terjadi sebelum partial write.
+- [ ] Tambahkan unit/service test untuk idempotency.
+
+## Catatan Implementasi 2026-07-13
+
+- Command `saveInitialAccountingSetup(input)` ditambahkan di
+  `src/services/accountingInitialSetupService.ts`.
+- Service bootstrap ini tidak membutuhkan user login/permission finance, karena
+  Developer Setup dapat berjalan sebelum sesi user tersedia. Jika ada current
+  user, activity log tetap memakai user tersebut.
+- Template `Jasa Umum (SAK EMKM)` ditambahkan dan registry-nya diaktifkan dengan
+  `default-sak-emkm-general-service`.
+- Period model mengikuti keputusan Fase 0: `accountingPeriods` hanya menyimpan
+  periode berjalan; fiscal period disimpan di snapshot setup.
+- `app_setup_config` tetap memakai jalur direct remote/local existing, bukan
+  sync queue Dexie, karena belum ada entity queue untuk tabel itu.
+- Belum ada unit test runner di repo ini; idempotency perlu dibuktikan lewat
+  E2E Fase 6 atau penambahan runner unit/service terpisah.
+- Validasi teknis yang sudah dijalankan: `git diff --check` dan `bun run build`.
 
 ## Acceptance Criteria
 

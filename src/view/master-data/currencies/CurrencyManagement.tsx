@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { App, Button, Card, Form, Input, Select } from 'antd';
+import { Alert, App, Button, Card, Form, Input, Select } from 'antd';
 import { Banknote, Plus } from 'lucide-react';
+import { useAccountingSetupStatus } from '@/hooks/useAccountingSetupStatus';
 import { useCurrencies, type CurrencyStatusFilter } from '@/hooks/useCurrencies';
 import { useI18n } from '@/hooks/useI18n';
 import type { Currency } from '@/types';
@@ -14,9 +15,12 @@ export default function CurrencyManagement() {
   const [form] = Form.useForm<CurrencyFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rateCurrency, setRateCurrency] = useState<Currency | null>(null);
+  const { lockSignals } = useAccountingSetupStatus();
   const {
     filteredCurrencies,
     latestRateByCurrency,
+    baseCurrencyCode,
+    baseCurrencySymbol,
     editingCurrency,
     searchText,
     setSearchText,
@@ -105,6 +109,7 @@ export default function CurrencyManagement() {
 
     await submitRate({
       currency_code: rateCurrency.code,
+      base_currency_code: baseCurrencyCode,
       rate_date: values.rate_date.format('YYYY-MM-DD'),
       unit_amount: values.unit_amount,
       middle_rate: values.middle_rate,
@@ -151,9 +156,23 @@ export default function CurrencyManagement() {
         />
       </div>
 
+      <Alert
+        className="mb-4"
+        type={lockSignals.hasSignal ? 'info' : 'warning'}
+        showIcon
+        message={lockSignals.hasSignal
+          ? t('currencies.baseCurrencyLockedTitle')
+          : t('currencies.baseCurrencyEditableTitle')}
+        description={lockSignals.hasSignal
+          ? t('currencies.baseCurrencyLockedDescription', { labels: lockSignals.labels.join(', ') })
+          : t('currencies.baseCurrencyEditableDescription', { code: baseCurrencyCode })}
+      />
+
       <CurrencyTable
         currencies={filteredCurrencies}
         latestRateByCurrency={latestRateByCurrency}
+        baseCurrencyCode={baseCurrencyCode}
+        baseCurrencySymbol={baseCurrencySymbol}
         onEdit={openEditModal}
         onOpenRate={setRateCurrency}
         onArchive={handleArchive}
@@ -163,16 +182,18 @@ export default function CurrencyManagement() {
         form={form}
         open={isModalOpen}
         isEditing={Boolean(editingCurrency)}
-        isBaseCurrency={Boolean(editingCurrency?.is_base)}
+        isBaseCurrency={editingCurrency?.code === baseCurrencyCode}
         isSubmitting={isSubmitting}
         onCancel={closeModal}
         onSubmit={handleSubmit}
       />
       <CurrencyRateModal
-        key={rateCurrency?.id ?? 'rate'}
+        key={`${rateCurrency?.id ?? 'rate'}-${baseCurrencyCode}`}
         open={Boolean(rateCurrency)}
         currency={rateCurrency}
         latestRate={rateCurrency ? latestRateByCurrency[rateCurrency.code] : undefined}
+        baseCurrencyCode={baseCurrencyCode}
+        baseCurrencySymbol={baseCurrencySymbol}
         isSavingRate={isSavingRate}
         isFetchingBiRate={isFetchingBiRate}
         onCancel={() => setRateCurrency(null)}

@@ -48,3 +48,26 @@ pub struct GeneralLedgerSettingDto {
     pub created_at: String,
     pub updated_at: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AccountingInitialSetupSettingDto {
+    pub id: String,
+    pub business_template_code: String,
+    pub accounting_profile: String,
+    pub industry_extension: String,
+    pub template_id: String,
+    pub cutoff_date: String,
+    pub fiscal_period_start: String,
+    pub fiscal_period_end: String,
+    pub current_period_start: String,
+    pub current_period_end: String,
+    pub current_period_id: Option<String>,
+    pub base_currency_code: String,
+    pub inventory_policy: String,
+    pub setup_completed_at: Option<String>,
+    pub setup_completed_by: Option<String>,
+    pub setup_completed_by_name: Option<String>,
+    pub version: i32,
+    pub created_at: String,
+    pub updated_at: String,
+}

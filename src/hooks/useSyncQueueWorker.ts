@@ -35,6 +35,18 @@ const EMPLOYEE_REALTIME_TABLES = new Set([
   'employees',
 ]);
 
+const SETUP_REALTIME_TABLES = new Set([
+  'app_setup_config',
+  'accounting_initial_setup_setting',
+]);
+
+const SETUP_QUERY_KEYS = [
+  'setupConfig',
+  'moduleAccess',
+  'enabledModules',
+  'accountingInitialSetup',
+];
+
 const COOPERATIVE_QUERY_KEYS = [
   'cooperativeAreas',
   'cooperativeMembers',
@@ -66,6 +78,7 @@ const COOPERATIVE_QUERY_KEYS = [
 ];
 
 const FINANCE_REALTIME_TABLES = new Set([
+  'accounting_initial_setup_setting',
   'accounting_profile_setting',
   'chart_of_accounts',
   'enabled_modules',
@@ -123,6 +136,7 @@ const PAYROLL_QUERY_KEYS = [
 
 const DATABASE_SYNC_QUERY_KEYS = Array.from(new Set([
   ...CASHIER_QUERY_KEYS,
+  ...SETUP_QUERY_KEYS,
   ...COOPERATIVE_QUERY_KEYS,
   ...FINANCE_QUERY_KEYS,
   ...PAYROLL_QUERY_KEYS,
@@ -157,6 +171,10 @@ const invalidateServerAuthoritativeQueries = (change: PostgresRealtimeChangeEven
 
   if (change.table && EMPLOYEE_REALTIME_TABLES.has(change.table)) {
     invalidateQueryKeys(COOPERATIVE_QUERY_KEYS);
+  }
+
+  if (change.table && SETUP_REALTIME_TABLES.has(change.table)) {
+    invalidateQueryKeys(SETUP_QUERY_KEYS);
   }
 
   if (change.table && FINANCE_REALTIME_TABLES.has(change.table)) {

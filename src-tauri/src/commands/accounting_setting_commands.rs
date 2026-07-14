@@ -1,8 +1,8 @@
 use crate::{
     db::{PostgresCommandResult, PostgresState},
     models::accounting_setting::{
-        AccountingProfileSettingDto, EnabledModuleDto, FinanceAccountMappingDto,
-        GeneralLedgerSettingDto,
+        AccountingInitialSetupSettingDto, AccountingProfileSettingDto, EnabledModuleDto,
+        FinanceAccountMappingDto, GeneralLedgerSettingDto,
     },
     repositories::accounting_setting_repository,
 };
@@ -74,4 +74,24 @@ pub async fn postgres_upsert_general_ledger_setting(
 ) -> PostgresCommandResult<GeneralLedgerSettingDto> {
     let pool = state.pool()?;
     Ok(accounting_setting_repository::upsert_general_ledger_setting(&pool, input).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_get_accounting_initial_setup_setting(
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<Option<AccountingInitialSetupSettingDto>> {
+    let pool = state.pool()?;
+    Ok(accounting_setting_repository::get_accounting_initial_setup_setting(&pool).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_upsert_accounting_initial_setup_setting(
+    state: State<'_, PostgresState>,
+    input: AccountingInitialSetupSettingDto,
+) -> PostgresCommandResult<AccountingInitialSetupSettingDto> {
+    let pool = state.pool()?;
+    Ok(
+        accounting_setting_repository::upsert_accounting_initial_setup_setting(&pool, input)
+            .await?,
+    )
 }
