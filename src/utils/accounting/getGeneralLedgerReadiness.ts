@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import {
+  ACCOUNT_OPENING_BALANCE_SOURCE_EVENT,
   OPENING_BALANCE_MODULE_ORDER,
   getOpeningBalanceBatchId,
 } from '@/services/openingBalanceService';
@@ -35,6 +36,11 @@ const REQUIRED_ACCOUNT_CANDIDATES: RequiredAccountCandidate[] = [
   { key: 'salesInvoiceRevenue', label: 'Pendapatan Sales Invoice', ids: ['sales-invoice-revenue', 'template-sales-invoice-revenue'], codes: ['4010', '4020'] },
   { key: 'salesReturn', label: 'Retur Penjualan', ids: ['sales-return', 'template-sales-return'], codes: ['4020', '4100'] },
   { key: 'cogs', label: 'HPP', ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
+];
+
+const ACCOUNT_OPENING_BALANCE_SOURCE_EVENTS = [
+  'OPENING_BALANCE_POSTED',
+  ACCOUNT_OPENING_BALANCE_SOURCE_EVENT,
 ];
 
 const findAccountCandidate = (
@@ -82,10 +88,28 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
     const account = accountById.get(mapping.account_id);
     return !account || !account.is_active || !account.is_postable;
   });
-  const openingBalanceJournal = effectiveSetting?.opening_balance_journal_id
+  const settingOpeningBalanceJournal = effectiveSetting?.opening_balance_journal_id
     ? await db.journalEntries.get(effectiveSetting.opening_balance_journal_id)
     : undefined;
   const openingBalanceBatches = await db.openingBalanceBatches.toArray();
+  const accountBatchId = effectiveSetting?.cutoff_date
+    ? getOpeningBalanceBatchId('ACCOUNT', effectiveSetting.cutoff_date)
+    : undefined;
+  const sourceJournalMatchesAccountOpening = (entry: NonNullable<typeof settingOpeningBalanceJournal>) => (
+    entry.status === 'POSTED' &&
+    entry.source_type === 'OPENING_BALANCE' &&
+    ACCOUNT_OPENING_BALANCE_SOURCE_EVENTS.includes(entry.source_event ?? '') &&
+    (!accountBatchId || entry.source_id === accountBatchId || entry.source_id === 'default')
+  );
+  const accountOpeningBalanceJournal = settingOpeningBalanceJournal && sourceJournalMatchesAccountOpening(settingOpeningBalanceJournal)
+    ? settingOpeningBalanceJournal
+    : accountBatchId
+      ? await db.journalEntries
+        .where('source_type')
+        .equals('OPENING_BALANCE')
+        .filter(sourceJournalMatchesAccountOpening)
+        .first()
+      : undefined;
   const getBatch = (module: OpeningBalanceBatch['module']) => {
     if (!effectiveSetting?.cutoff_date) return undefined;
     return openingBalanceBatches.find((batch) => (
@@ -93,17 +117,15 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
       batch.status !== 'VOIDED'
     ));
   };
-  const legacyAccountOpeningPosted =
-    openingBalanceJournal?.status === 'POSTED' &&
-    openingBalanceJournal.source_type === 'OPENING_BALANCE';
+  const accountOpeningPosted = Boolean(accountOpeningBalanceJournal);
   const openingBalanceStatuses = OPENING_BALANCE_MODULE_ORDER.map((module) => {
     const batch = getBatch(module);
-    const isLegacyAccountPosted = module === 'ACCOUNT' && !batch && legacyAccountOpeningPosted;
+    const isAccountJournalPosted = module === 'ACCOUNT' && !batch && accountOpeningPosted;
 
     return {
       module,
       batch,
-      isDone: isLegacyAccountPosted || batch?.status === 'POSTED' || batch?.status === 'SKIPPED',
+      isDone: isAccountJournalPosted || batch?.status === 'POSTED' || batch?.status === 'SKIPPED',
       label: module
         .toLowerCase()
         .replace(/_/g, ' '),
@@ -114,13 +136,13 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
     .map((status) => status.batch)
     .filter((batch): batch is OpeningBalanceBatch => Boolean(batch && batch.status === 'POSTED'));
   const openingTotalDebit = postedOpeningBatches.reduce((sum, batch) => sum + Number(batch.total_debit || 0), 0) +
-    (postedOpeningBatches.some((batch) => batch.module === 'ACCOUNT') || !legacyAccountOpeningPosted
+    (postedOpeningBatches.some((batch) => batch.module === 'ACCOUNT') || !accountOpeningPosted
       ? 0
-      : Number(openingBalanceJournal?.total_debit || 0));
+      : Number(accountOpeningBalanceJournal?.total_debit || 0));
   const openingTotalCredit = postedOpeningBatches.reduce((sum, batch) => sum + Number(batch.total_credit || 0), 0) +
-    (postedOpeningBatches.some((batch) => batch.module === 'ACCOUNT') || !legacyAccountOpeningPosted
+    (postedOpeningBatches.some((batch) => batch.module === 'ACCOUNT') || !accountOpeningPosted
       ? 0
-      : Number(openingBalanceJournal?.total_credit || 0));
+      : Number(accountOpeningBalanceJournal?.total_credit || 0));
   const isOpeningTotalBalanced = Math.abs(openingTotalDebit - openingTotalCredit) <= 0.01;
   const checks: GeneralLedgerReadinessCheck[] = [
     {

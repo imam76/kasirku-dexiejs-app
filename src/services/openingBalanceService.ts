@@ -41,6 +41,23 @@ export interface OpeningBalanceSourceLineInput {
   notes?: string;
 }
 
+export interface AccountOpeningBalanceLineInput {
+  account_id: string;
+  debit?: number;
+  credit?: number;
+  notes?: string;
+}
+
+export interface AccountOpeningBalancePreviewLine {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  debit: number;
+  credit: number;
+  notes?: string;
+  is_adjustment?: boolean;
+}
+
 export interface PostOpeningBalanceDetailBatchInput {
   module: Exclude<OpeningBalanceModule, 'ACCOUNT'>;
   lines: OpeningBalanceSourceLineInput[];
@@ -56,8 +73,17 @@ const MODULE_ORDER: OpeningBalanceModule[] = [
 ];
 
 const EQUITY_CANDIDATE: AccountCandidate = {
-  ids: ['owner-capital', 'retained-earning', 'template-retained-earning', 'simpanan-pokok-modal'],
-  codes: ['3000', '3010', '3100'],
+  ids: [
+    'opening-balance-equity',
+    'template-opening-balance-equity',
+    'owner-capital',
+    'template-owner-capital',
+    'retained-earning',
+    'template-retained-earning',
+    'simpanan-pokok-modal',
+    'template-simpanan-pokok-modal',
+  ],
+  codes: ['3050', '3000', '3010', '3100'],
 };
 
 export const OPENING_BALANCE_MODULE_DEFINITIONS: OpeningBalanceModuleDefinition[] = [
@@ -117,6 +143,37 @@ export const OPENING_BALANCE_MODULE_DEFINITIONS: OpeningBalanceModuleDefinition[
 
 export const OPENING_BALANCE_MODULE_ORDER = MODULE_ORDER;
 
+export const ACCOUNT_OPENING_BALANCE_SOURCE_EVENT = 'ACCOUNT_OPENING_BALANCE_POSTED';
+
+export const OPENING_BALANCE_EQUITY_CANDIDATE = EQUITY_CANDIDATE;
+
+const MANAGED_ACCOUNT_CANDIDATES: Array<{
+  module: Exclude<OpeningBalanceModule, 'ACCOUNT'>;
+  candidate: AccountCandidate;
+  label: string;
+}> = [
+  {
+    module: 'RECEIVABLE',
+    candidate: { ids: ['accounts-receivable', 'template-accounts-receivable'], codes: ['1100'] },
+    label: 'Piutang Usaha',
+  },
+  {
+    module: 'PAYABLE',
+    candidate: { ids: ['accounts-payable', 'template-accounts-payable'], codes: ['2000', '2010'] },
+    label: 'Hutang Usaha',
+  },
+  {
+    module: 'ADVANCE_RECEIVED',
+    candidate: { ids: ['deposit-payable', 'loan-payable', 'accounts-payable'], codes: ['2200', '2010', '2000'] },
+    label: 'Uang Muka Diterima',
+  },
+  {
+    module: 'ADVANCE_PAID',
+    candidate: { ids: ['prepaid-expense', 'employee-cash-advance-receivable', 'other-receivable'], codes: ['1300', '1130', '1110'] },
+    label: 'Uang Muka Dibayar',
+  },
+];
+
 export const getOpeningBalanceModuleDefinition = (module: OpeningBalanceModule) => {
   const definition = OPENING_BALANCE_MODULE_DEFINITIONS.find((item) => item.module === module);
   if (!definition) {
@@ -130,6 +187,15 @@ export const getOpeningBalanceBatchId = (module: OpeningBalanceModule, cutoffDat
 );
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+const normalizeStartOfDay = (value: string) => (
+  value.includes('T') ? value : `${value.slice(0, 10)}T00:00:00.000`
+);
+
+const amountOrZero = (value: number | undefined) => {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? roundCurrency(amount) : 0;
+};
 
 const getEffectiveOpeningBalanceSetting = async () => {
   const [setup, setting] = await Promise.all([
@@ -189,6 +255,142 @@ const requirePostableAccount = (
   return account;
 };
 
+const normalizeAccountOpeningLines = (
+  lines: AccountOpeningBalanceLineInput[],
+  accounts: ChartOfAccount[],
+) => {
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+
+  return lines
+    .map((line) => {
+      const account = accountById.get(line.account_id);
+      if (!account) {
+        throw new Error('Akun saldo awal tidak ditemukan.');
+      }
+
+      const debit = amountOrZero(line.debit);
+      const credit = amountOrZero(line.credit);
+      if (debit > 0 && credit > 0) {
+        throw new Error(`Akun ${account.code} - ${account.name} tidak boleh berisi debit dan kredit sekaligus.`);
+      }
+
+      return {
+        account,
+        debit,
+        credit,
+        notes: line.notes?.trim() || undefined,
+      };
+    })
+    .filter((line) => line.debit > 0 || line.credit > 0);
+};
+
+const getManagedAccountBlocks = async (
+  accounts: ChartOfAccount[],
+  cutoffDate: string,
+) => {
+  const batches = await db.openingBalanceBatches.toArray();
+  const batchById = new Map(batches.map((batch) => [batch.id, batch]));
+
+  return MANAGED_ACCOUNT_CANDIDATES.flatMap((item) => {
+    const batch = batchById.get(getOpeningBalanceBatchId(item.module, cutoffDate));
+    if (batch?.status !== 'POSTED' && batch?.status !== 'SKIPPED') return [];
+
+    const account = findAccountCandidate(accounts, item.candidate);
+    return account
+      ? [{
+        module: item.module,
+        account,
+        label: item.label,
+        status: batch.status,
+      }]
+      : [];
+  });
+};
+
+export const getManagedAccountOpeningBalanceBlocks = async (cutoffDate?: string) => {
+  const effective = cutoffDate
+    ? { cutoffDate }
+    : await requireCutoff();
+  const accounts = await db.chartOfAccounts.toArray();
+  return getManagedAccountBlocks(accounts, effective.cutoffDate);
+};
+
+const assertAccountOpeningLinesNotManaged = async (
+  accounts: ChartOfAccount[],
+  cutoffDate: string,
+  lines: Array<{ account: ChartOfAccount; debit: number; credit: number }>,
+) => {
+  const blocks = await getManagedAccountBlocks(accounts, cutoffDate);
+  if (blocks.length === 0) return;
+
+  const blockedByAccountId = new Map(blocks.map((block) => [block.account.id, block]));
+  const blockedLine = lines.find((line) => blockedByAccountId.has(line.account.id));
+  if (!blockedLine) return;
+
+  const block = blockedByAccountId.get(blockedLine.account.id);
+  throw new Error(
+    `Akun ${blockedLine.account.code} - ${blockedLine.account.name} dikelola oleh module ${block?.label ?? block?.module}. Isi saldo awalnya dari submodule detail.`,
+  );
+};
+
+const resolveOpeningBalanceEquityAccount = (accounts: ChartOfAccount[]) => (
+  requirePostableAccount(accounts, OPENING_BALANCE_EQUITY_CANDIDATE, 'Ekuitas Saldo Awal')
+);
+
+export const getOpeningBalanceEquityAccount = async () => {
+  const accounts = await db.chartOfAccounts.toArray();
+  return resolveOpeningBalanceEquityAccount(accounts);
+};
+
+export const buildAccountOpeningBalancePreview = ({
+  lines,
+  equityAccount,
+  adjustmentNotes = 'Ekuitas Saldo Awal',
+}: {
+  lines: Array<{
+    account: ChartOfAccount;
+    debit: number;
+    credit: number;
+    notes?: string;
+  }>;
+  equityAccount?: ChartOfAccount;
+  adjustmentNotes?: string;
+}): AccountOpeningBalancePreviewLine[] => {
+  const normalizedLines = lines
+    .map((line) => ({
+      account: line.account,
+      debit: amountOrZero(line.debit),
+      credit: amountOrZero(line.credit),
+      notes: line.notes,
+    }))
+    .filter((line) => line.debit > 0 || line.credit > 0);
+  const totalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
+  const totalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
+  const difference = roundCurrency(totalDebit - totalCredit);
+  const previewLines: AccountOpeningBalancePreviewLine[] = normalizedLines.map((line) => ({
+    account_id: line.account.id,
+    account_code: line.account.code,
+    account_name: line.account.name,
+    debit: line.debit,
+    credit: line.credit,
+    notes: line.notes,
+  }));
+
+  if (Math.abs(difference) > 0.01 && equityAccount) {
+    previewLines.push({
+      account_id: equityAccount.id,
+      account_code: equityAccount.code,
+      account_name: equityAccount.name,
+      debit: difference < 0 ? Math.abs(difference) : 0,
+      credit: difference > 0 ? difference : 0,
+      notes: adjustmentNotes,
+      is_adjustment: true,
+    });
+  }
+
+  return previewLines;
+};
+
 const buildSkippedBatch = ({
   module,
   cutoffDate,
@@ -224,18 +426,20 @@ const buildReadyGeneralLedgerSetting = ({
   setting,
   cutoffDate,
   inventoryPolicy,
+  openingBalanceJournalId,
   now,
 }: {
   setting?: GeneralLedgerSetting;
   cutoffDate: string;
   inventoryPolicy: InventoryAccountingPolicy;
+  openingBalanceJournalId?: string;
   now: string;
 }): GeneralLedgerSetting => ({
   id: 'default',
   is_ready: true,
-  cutoff_date: cutoffDate,
+  cutoff_date: normalizeStartOfDay(cutoffDate),
   inventory_policy: inventoryPolicy,
-  opening_balance_journal_id: setting?.opening_balance_journal_id,
+  opening_balance_journal_id: openingBalanceJournalId ?? setting?.opening_balance_journal_id,
   activated_at: setting?.activated_at ?? now,
   created_at: setting?.created_at ?? now,
   updated_at: now,
@@ -294,6 +498,240 @@ export const markOpeningBalanceModuleSkipped = async (
 
   if (updatedGeneralLedger) {
     await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
+  }
+
+  return batch;
+};
+
+export const saveAccountOpeningBalanceDraft = async ({
+  lines,
+  notes,
+}: {
+  lines: AccountOpeningBalanceLineInput[];
+  notes?: string;
+}) => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+
+  const { cutoffDate } = await requireCutoff();
+  const batchId = getOpeningBalanceBatchId('ACCOUNT', cutoffDate);
+  const existingBatch = await db.openingBalanceBatches.get(batchId);
+  if (existingBatch?.status === 'POSTED') {
+    throw new Error('Saldo awal akun sudah posted.');
+  }
+  if (existingBatch?.status === 'SKIPPED') {
+    throw new Error('Saldo awal akun sudah ditandai dilewati. Flow reset belum tersedia.');
+  }
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const normalizedLines = normalizeAccountOpeningLines(lines, accounts);
+  await assertAccountOpeningLinesNotManaged(accounts, cutoffDate, normalizedLines);
+
+  const now = new Date().toISOString();
+  const totalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
+  const totalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
+  const batch: OpeningBalanceBatch = {
+    id: batchId,
+    module: 'ACCOUNT',
+    cutoff_date: cutoffDate,
+    status: 'DRAFT',
+    total_debit: totalDebit,
+    total_credit: totalCredit,
+    notes,
+    created_by: existingBatch?.created_by ?? currentUser?.id,
+    created_by_name: existingBatch?.created_by_name ?? currentUser?.name,
+    updated_by: currentUser?.id,
+    updated_by_name: currentUser?.name,
+    created_at: existingBatch?.created_at ?? now,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  };
+  const openingLines: OpeningBalanceLine[] = normalizedLines.map((line, index) => ({
+    id: `${batchId}-line-${line.account.id}`,
+    batch_id: batchId,
+    module: 'ACCOUNT',
+    line_number: index + 1,
+    base_amount: amountOrZero(line.debit || line.credit),
+    account_id: line.account.id,
+    account_code: line.account.code,
+    account_name: line.account.name,
+    debit: line.debit,
+    credit: line.credit,
+    notes: line.notes,
+    created_at: now,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  }));
+
+  await db.transaction('rw', [
+    db.openingBalanceBatches,
+    db.openingBalanceLines,
+    db.activityLogs,
+  ], async () => {
+    await db.openingBalanceBatches.put(batch);
+    await db.openingBalanceLines.where('batch_id').equals(batchId).delete();
+    if (openingLines.length > 0) {
+      await db.openingBalanceLines.bulkPut(openingLines);
+    }
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'ACCOUNT_OPENING_BALANCE_DRAFT_SAVED',
+      entity: 'openingBalanceBatches',
+      entity_id: batchId,
+      description: `${currentUser?.name ?? 'User'} menyimpan draft saldo awal akun per ${cutoffDate.slice(0, 10)}.`,
+    });
+  });
+
+  return batch;
+};
+
+export const postAccountOpeningBalanceBatch = async ({
+  lines,
+  notes,
+}: {
+  lines?: AccountOpeningBalanceLineInput[];
+  notes?: string;
+}) => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+
+  const { cutoffDate, inventoryPolicy, setting } = await requireCutoff();
+  const batchId = getOpeningBalanceBatchId('ACCOUNT', cutoffDate);
+  const existingBatch = await db.openingBalanceBatches.get(batchId);
+  if (existingBatch?.status === 'POSTED') {
+    return existingBatch;
+  }
+  if (existingBatch?.status === 'SKIPPED') {
+    throw new Error('Saldo awal akun sudah ditandai dilewati. Flow reset belum tersedia.');
+  }
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const inputLines = lines ?? (await db.openingBalanceLines.where('batch_id').equals(batchId).toArray())
+    .map((line) => ({
+      account_id: line.account_id ?? '',
+      debit: line.debit,
+      credit: line.credit,
+      notes: line.notes,
+    }))
+    .filter((line) => line.account_id);
+  const normalizedLines = normalizeAccountOpeningLines(inputLines, accounts);
+  if (normalizedLines.length === 0) {
+    throw new Error('Minimal satu baris saldo awal dengan nominal lebih dari 0 wajib diisi.');
+  }
+  await assertAccountOpeningLinesNotManaged(accounts, cutoffDate, normalizedLines);
+
+  const equityAccount = resolveOpeningBalanceEquityAccount(accounts);
+  const previewLines = buildAccountOpeningBalancePreview({
+    lines: normalizedLines,
+    equityAccount,
+    adjustmentNotes: 'Ekuitas Saldo Awal',
+  });
+  const journalLines = previewLines.map((line) => {
+    const account = accounts.find((item) => item.id === line.account_id);
+    if (!account) {
+      throw new Error('Akun saldo awal tidak ditemukan.');
+    }
+
+    return {
+      account,
+      debit: line.debit,
+      credit: line.credit,
+      description: line.notes ?? 'Saldo awal akun',
+    };
+  });
+  const now = new Date().toISOString();
+  let batch: OpeningBalanceBatch | undefined;
+  let updatedGeneralLedger: GeneralLedgerSetting | undefined;
+
+  await db.transaction('rw', [
+    db.generalLedgerSetting,
+    db.openingBalanceBatches,
+    db.openingBalanceLines,
+    db.journalEntries,
+    db.journalEntryLines,
+    db.activityLogs,
+  ], async () => {
+    const journalEntry = await postOpeningBalanceSourceJournal({
+      source_id: batchId,
+      source_number: 'ACCOUNT',
+      source_event: ACCOUNT_OPENING_BALANCE_SOURCE_EVENT,
+      entry_date: cutoffDate,
+      description: `Saldo awal akun per ${cutoffDate.slice(0, 10)}`,
+      lines: journalLines,
+      actor: currentUser,
+    });
+
+    batch = {
+      id: batchId,
+      module: 'ACCOUNT',
+      cutoff_date: cutoffDate,
+      status: 'POSTED',
+      total_debit: journalEntry.total_debit,
+      total_credit: journalEntry.total_credit,
+      journal_entry_id: journalEntry.id,
+      posted_at: journalEntry.posted_at,
+      notes,
+      created_by: existingBatch?.created_by ?? currentUser?.id,
+      created_by_name: existingBatch?.created_by_name ?? currentUser?.name,
+      updated_by: currentUser?.id,
+      updated_by_name: currentUser?.name,
+      created_at: existingBatch?.created_at ?? now,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    };
+
+    const openingLines: OpeningBalanceLine[] = previewLines.map((line, index) => ({
+      id: line.is_adjustment
+        ? `${batchId}-line-opening-balance-equity`
+        : `${batchId}-line-${line.account_id}`,
+      batch_id: batchId,
+      module: 'ACCOUNT',
+      line_number: index + 1,
+      base_amount: amountOrZero(line.debit || line.credit),
+      account_id: line.account_id,
+      account_code: line.account_code,
+      account_name: line.account_name,
+      debit: line.debit,
+      credit: line.credit,
+      notes: line.notes,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    }));
+
+    await db.openingBalanceBatches.put(batch);
+    await db.openingBalanceLines.where('batch_id').equals(batchId).delete();
+    await db.openingBalanceLines.bulkPut(openingLines);
+
+    updatedGeneralLedger = buildReadyGeneralLedgerSetting({
+      setting,
+      cutoffDate,
+      inventoryPolicy,
+      openingBalanceJournalId: journalEntry.id,
+      now,
+    });
+    await db.generalLedgerSetting.put(updatedGeneralLedger);
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'ACCOUNT_OPENING_BALANCE_POSTED',
+      entity: 'openingBalanceBatches',
+      entity_id: batchId,
+      description: `${currentUser?.name ?? 'User'} posting saldo awal akun per ${cutoffDate.slice(0, 10)}.`,
+    });
+  });
+
+  if (updatedGeneralLedger) {
+    await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
+  }
+
+  if (!batch) {
+    throw new Error('Batch saldo awal akun gagal dibuat.');
   }
 
   return batch;

@@ -25,6 +25,18 @@ tabel akun besar:
 | Add Cash Advance Income Opening Balance | Uang Muka Masuk | Advance Received | `/finance/opening-balances/advance-received` |
 | Add Cash Advance Expense Opening Balance | Uang Muka Keluar | Advance Paid | `/finance/opening-balances/advance-paid` |
 
+## Issue Lanjutan Per Submodule
+
+Setelah fondasi menu Saldo Awal, route, batch, line, dan readiness GL tersedia,
+implementasi detail tiap jenis saldo awal dipisah agar bisa dikerjakan dan
+dites bertahap:
+
+- [Fase 7A - Saldo Awal Akun](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F7A-OPENING-BALANCE-ACCOUNTS.md)
+- [Fase 7B - Saldo Awal Piutang](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F7B-OPENING-BALANCE-RECEIVABLES.md)
+- [Fase 7C - Saldo Awal Hutang](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F7C-OPENING-BALANCE-PAYABLES.md)
+- [Fase 7D - Uang Muka Masuk](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F7D-OPENING-BALANCE-ADVANCE-RECEIVED.md)
+- [Fase 7E - Uang Muka Keluar](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F7E-OPENING-BALANCE-ADVANCE-PAID.md)
+
 ## Kenapa Perlu Sub-Issue
 
 Saat ini `OpeningBalanceForm` masih muncul langsung di
@@ -132,7 +144,11 @@ Aturan:
 
 - akun Piutang Usaha, Hutang Usaha, Uang Muka Masuk, dan Uang Muka Keluar harus
   readonly atau diberi warning jika sudah dikelola submodule khusus;
-- total debit dan kredit harus balance;
+- draft boleh tidak balance dan bisa diedit bertahap;
+- saat posting, jurnal tetap balance. Jika total debit/kredit input tidak sama,
+  sistem otomatis menambahkan line `Ekuitas Saldo Awal` /
+  `Opening Balance Equity` sebesar selisih;
+- line penyeimbang harus terlihat di preview/jurnal, bukan angka tersembunyi;
 - posting membuat journal `OPENING_BALANCE` dengan source event khusus Saldo
   Awal Akun;
 - jika sudah posted, form menjadi readonly.

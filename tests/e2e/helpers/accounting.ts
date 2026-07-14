@@ -174,7 +174,7 @@ async function gotoOpeningBalanceAccount(page: Page, accountCode: string) {
   for (let pageNumber = 0; pageNumber < 20; pageNumber += 1) {
     if (await accountInput.isVisible()) return;
     const nextButton = page.locator('li[title="Next Page"]').last().getByRole('button');
-    if (!await nextButton.isEnabled()) break;
+    if (await nextButton.count() === 0 || !await nextButton.isEnabled({ timeout: 1000 })) break;
     await nextButton.click();
   }
 }
@@ -184,6 +184,16 @@ async function fillOpeningBalanceAmount(page: Page, accountCode: string, side: '
   const testId = `gl-opening-balance-${side}-${accountCode}`;
   await expect(page.getByTestId(testId)).toBeVisible();
   await fillControlByTestId(page, testId, amount);
+}
+
+async function skipEmptyDetailOpeningBalanceModules(page: Page) {
+  await page.evaluate(async () => {
+    const { markOpeningBalanceModuleSkipped } = await import('/src/services/openingBalanceService.ts');
+    await markOpeningBalanceModuleSkipped('RECEIVABLE', 'Tidak ada saldo awal piutang untuk fixture E2E.');
+    await markOpeningBalanceModuleSkipped('PAYABLE', 'Tidak ada saldo awal hutang untuk fixture E2E.');
+    await markOpeningBalanceModuleSkipped('ADVANCE_RECEIVED', 'Tidak ada saldo awal uang muka masuk untuk fixture E2E.');
+    await markOpeningBalanceModuleSkipped('ADVANCE_PAID', 'Tidak ada saldo awal uang muka keluar untuk fixture E2E.');
+  });
 }
 
 async function expectFinanceMappingVisible(page: Page, label: string) {
@@ -268,22 +278,26 @@ export async function postOpeningBalance(
 
   await ensureAccountingReferenceSetting(page);
 
-  await page.goto('/finance/general-ledger');
-  await expect(page.getByText('Setup Cutoff dan Opening Balance')).toBeVisible();
-  await expect(page.getByText('Readiness')).toBeVisible();
+  await page.goto('/finance/opening-balances/accounts');
+  await expect(page.getByText('Saldo Awal Akun').first()).toBeVisible();
 
   await gotoOpeningBalancePage(page, 1);
   await fillOpeningBalanceAmount(page, '1010', 'debit', demoOpeningBalance[0].debit);
+  await expect(page.getByText('Selisih debit/kredit').first()).toBeVisible();
+  await expect(page.getByTestId('gl-opening-balance-save-draft-button')).toBeEnabled();
+  await page.getByTestId('gl-opening-balance-save-draft-button').click();
+  await expect(page.getByText('Draft', { exact: true })).toBeVisible();
 
   await fillOpeningBalanceAmount(page, equityAccountCode, 'credit', '4000000');
-  await expect(page.getByText('Total debit dan kredit opening balance harus balance.')).toBeVisible();
-  await expect(page.getByTestId('gl-opening-balance-post-button')).toBeDisabled();
 
   await fillOpeningBalanceAmount(page, '1020', 'debit', demoOpeningBalance[1].debit);
 
   await fillOpeningBalanceAmount(page, equityAccountCode, 'credit', demoOpeningBalance[2].credit);
   await expect(page.getByTestId('gl-opening-balance-post-button')).toBeEnabled();
   await page.getByTestId('gl-opening-balance-post-button').click();
+  await skipEmptyDetailOpeningBalanceModules(page);
+
+  await page.goto('/finance/general-ledger');
 
   if (expectInactiveModule) {
     await expect(page.getByText('General Ledger belum aktif')).toBeVisible();

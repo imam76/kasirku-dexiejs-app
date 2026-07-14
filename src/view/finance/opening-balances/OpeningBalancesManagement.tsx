@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { App, Alert, Button, Card, DatePicker, Descriptions, Input, InputNumber, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -226,10 +226,16 @@ export function OpeningBalanceAccountsPage() {
         db.generalLedgerSetting.get('default'),
         db.openingBalanceBatches.toArray(),
       ]);
-      return { accounts, setting, batches };
+      const cutoffDate = setup?.cutoff_date ?? setting?.cutoff_date;
+      const batch = getBatchForModule(batches, 'ACCOUNT', cutoffDate);
+      const lines = batch
+        ? await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray()
+        : [];
+
+      return { accounts, setting, batches, lines };
     },
-    [],
-    { accounts: [], setting: undefined, batches: [] },
+    [setup?.cutoff_date],
+    { accounts: [], setting: undefined, batches: [], lines: [] },
   );
   const effectiveSetting = useMemo<GeneralLedgerSetting | undefined>(() => {
     if (!setup) return state.setting;
@@ -290,6 +296,8 @@ export function OpeningBalanceAccountsPage() {
         <OpeningBalanceForm
           accounts={state.accounts}
           setting={effectiveSetting}
+          batch={batch}
+          lines={state.lines}
         />
       )}
     </div>
@@ -325,15 +333,11 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
   const money = moneyFactory(baseCurrencySymbol);
   const draftTotal = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const persistedTotal = state.lines.reduce((sum, row) => sum + Number(row.base_amount || 0), 0);
-
-  useEffect(() => {
-    if (!state.cutoffDate || isLocked) return;
-    setRows((current) => (
-      current.length === 1 && !current[0].document_date
-        ? [{ ...current[0], document_date: state.cutoffDate, due_date: state.cutoffDate }]
-        : current
-    ));
-  }, [isLocked, state.cutoffDate]);
+  const displayRows = useMemo(() => rows.map((row) => ({
+    ...row,
+    document_date: row.document_date ?? state.cutoffDate,
+    due_date: row.due_date ?? state.cutoffDate,
+  })), [rows, state.cutoffDate]);
 
   const updateRow = (rowId: string, patch: Partial<EditableSourceLine>) => {
     setRows((current) => current.map((row) => row.id === rowId ? { ...row, ...patch } : row));
@@ -341,7 +345,7 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
 
   const handlePost = async () => {
     try {
-      const payload: OpeningBalanceSourceLineInput[] = rows.map((row) => ({
+      const payload: OpeningBalanceSourceLineInput[] = displayRows.map((row) => ({
         party_name: row.party_name,
         document_number: row.document_number,
         document_date: row.document_date,
@@ -563,7 +567,7 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
           />
         ) : (
           <Table<EditableSourceLine>
-            dataSource={rows}
+            dataSource={displayRows}
             columns={draftColumns}
             rowKey="id"
             pagination={false}

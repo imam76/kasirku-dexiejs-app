@@ -2243,4 +2243,25 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       })));
     }
   });
+
+  this.version(87).stores({}).upgrade(async (tx) => {
+    const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const accounts = await accountTable.toArray();
+    const hasOpeningBalanceEquity = accounts.some((account) => (
+      account.id === 'opening-balance-equity' || account.code === '3050'
+    ));
+    if (hasOpeningBalanceEquity) return;
+
+    const now = new Date().toISOString();
+    const openingBalanceEquity = DEFAULT_CHART_OF_ACCOUNTS.find((account) => account.id === 'opening-balance-equity');
+    if (!openingBalanceEquity) return;
+
+    await accountTable.put({
+      ...openingBalanceEquity,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    });
+  });
 }

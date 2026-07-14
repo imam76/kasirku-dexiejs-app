@@ -56,6 +56,9 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('final-income-tax-payable', '2130', 'PPh Final Terutang', 'LIABILITY'),
   createAccountSeed('cooperative-member-savings', '2300', 'Simpanan Anggota', 'LIABILITY'),
   createAccountSeed('owner-capital', '3000', 'Modal Pemilik', 'EQUITY'),
+  createAccountSeed('opening-balance-equity', '3050', 'Ekuitas Saldo Awal', 'EQUITY', {
+    description: 'Akun penyeimbang otomatis untuk posting saldo awal akun.',
+  }),
   createAccountSeed('sales-pos', '4000', 'Penjualan POS', 'REVENUE'),
   createAccountSeed('sales-invoice-revenue', '4010', 'Pendapatan Sales Invoice', 'REVENUE'),
   createAccountSeed('sales-return', '4020', 'Retur Penjualan', 'CONTRA_REVENUE'),
@@ -435,6 +438,10 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     parent_template_account_id: 'equity',
     description: 'Dana sosial dari alokasi SHU untuk kegiatan sosial koperasi',
   }),
+  createEtapTemplateLine('opening-balance-equity', '3050', 'Ekuitas Saldo Awal', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    description: 'Akun penyeimbang otomatis untuk posting saldo awal akun.',
+  }),
   createEtapTemplateLine('shu-belum-dibagikan', '3100', 'SHU Belum Dibagikan', 'EQUITY', {
     parent_template_account_id: 'equity',
     description: 'Sisa Hasil Usaha tahun berjalan yang belum dialokasikan',
@@ -581,6 +588,10 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     mapping_keys: [FINANCE_CATEGORIES.CAPITAL_ADDITION],
   }),
   createTemplateLine('owner-draw', '3020', 'Prive Pemilik', 'EQUITY', { parent_template_account_id: 'equity' }),
+  createTemplateLine('opening-balance-equity', '3050', 'Ekuitas Saldo Awal', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    description: 'Akun penyeimbang otomatis untuk posting saldo awal akun.',
+  }),
   createTemplateLine('retained-earning', '3100', 'Saldo Laba', 'EQUITY', { parent_template_account_id: 'equity' }),
   createTemplateLine('revenue', '4000', 'Pendapatan', 'REVENUE', { is_postable: false }),
   createTemplateLine('sales-pos', '4010', 'Penjualan POS', 'REVENUE', {
@@ -699,6 +710,10 @@ export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES: ChartOfAccountTemplateLine
   }),
   createServiceTemplateLine('owner-draw', '3020', 'Prive Pemilik', 'EQUITY', {
     parent_template_account_id: 'equity',
+  }),
+  createServiceTemplateLine('opening-balance-equity', '3050', 'Ekuitas Saldo Awal', 'EQUITY', {
+    parent_template_account_id: 'equity',
+    description: 'Akun penyeimbang otomatis untuk posting saldo awal akun.',
   }),
   createServiceTemplateLine('retained-earning', '3100', 'Saldo Laba', 'EQUITY', {
     parent_template_account_id: 'equity',

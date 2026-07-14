@@ -96,7 +96,8 @@ test.describe.serial('accounting initial setup regression', () => {
     await expect(page.getByRole('row', { name: /IDR/ })).toContainText('Base');
 
     await page.goto('/finance/general-ledger');
-    await expect(page.getByText('Setup Cutoff dan Opening Balance')).toBeVisible();
+    await expect(page.getByText('General Ledger').first()).toBeVisible();
+    await expect(page.getByText('Readiness')).toBeVisible();
     await expect(page.getByText('1 Januari 2026 00:00').first()).toBeVisible();
   });
 
@@ -147,7 +148,7 @@ test.describe.serial('accounting initial setup regression', () => {
 
     await page.evaluate(async () => {
       const { db } = await import('/src/lib/db.ts');
-      const { postOpeningBalanceJournal } = await import('/src/services/generalLedgerService.ts');
+      const { postAccountOpeningBalanceBatch } = await import('/src/services/openingBalanceService.ts');
       const accounts = await db.chartOfAccounts.toArray();
       const accountIdByCode = new Map(accounts.map((account) => [account.code, account.id]));
       const requireAccountId = (code: string) => {
@@ -156,9 +157,7 @@ test.describe.serial('accounting initial setup regression', () => {
         return accountId;
       };
 
-      await postOpeningBalanceJournal({
-        cutoff_date: '2026-01-01T00:00:00.000',
-        inventory_policy: 'PERPETUAL_INVENTORY',
+      await postAccountOpeningBalanceBatch({
         lines: [
           { account_id: requireAccountId('1010'), debit: 5000000, credit: 0 },
           { account_id: requireAccountId('1020'), debit: 10000000, credit: 0 },
