@@ -80,6 +80,14 @@ export default function GeneralLedgerManagement() {
     [],
     '',
   );
+  const accountingPeriodRevision = useLiveQuery(
+    async () => {
+      const periods = await db.accountingPeriods.toArray();
+      return periods.map((period) => `${period.id}:${period.status}:${period.updated_at}`).sort().join('|');
+    },
+    [],
+    '',
+  );
   const effectiveGeneralLedgerSetting = useMemo<GeneralLedgerSetting | undefined>(() => {
     if (!accountingSetup) return generalLedgerSetting;
 
@@ -104,15 +112,24 @@ export default function GeneralLedgerManagement() {
       generalLedgerSetting?.updated_at,
       accountingSetup?.updated_at,
       openingBalanceBatchRevision,
+      accountingPeriodRevision,
       accounts.length,
     ],
     queryFn: getGeneralLedgerReadiness,
   });
   const readiness = readinessQuery.data;
   const isLedgerReady = Boolean(readiness?.isReady);
+  const isLedgerAvailable = Boolean(readiness?.isAvailable);
   const isModuleEnabled = Boolean(generalLedgerModule?.is_enabled);
-  const canShowReports = isModuleEnabled && isLedgerReady;
+  const canShowReports = isModuleEnabled && isLedgerAvailable;
   const canManageManualJournal = canShowReports && hasPermission(currentUser?.role, 'JOURNAL_MANAGE');
+  const readinessTagColor = isLedgerReady ? 'green' : isLedgerAvailable ? 'blue' : 'orange';
+  const readinessTagLabel = isLedgerReady
+    ? t('generalLedger.ready')
+    : isLedgerAvailable
+      ? t('generalLedger.available')
+      : t('generalLedger.notReady');
+  const failedProductionChecks = readiness?.checks.filter((check) => !check.passed) ?? [];
   const money = (value?: number) => `${baseCurrencySymbol} ${formatCurrency(Number(value || 0))}`;
   const filters = useMemo(() => ({
     startDate: dateRange?.[0].startOf('day').toISOString(),
@@ -407,8 +424,8 @@ export default function GeneralLedgerManagement() {
               : '-'}
           </Descriptions.Item>
           <Descriptions.Item label={t('generalLedger.readiness')}>
-            <Tag color={isLedgerReady ? 'green' : 'orange'}>
-              {isLedgerReady ? t('generalLedger.ready') : t('generalLedger.notReady')}
+            <Tag color={readinessTagColor}>
+              {readinessTagLabel}
             </Tag>
           </Descriptions.Item>
           <Descriptions.Item label={t('coa.modules.title')}>
@@ -419,17 +436,37 @@ export default function GeneralLedgerManagement() {
         </Descriptions>
       </Card>
 
-      {!isLedgerReady && readiness && (
+      {!isLedgerAvailable && readiness && (
         <Card>
           <Alert
             type="warning"
             showIcon
-            title={t('generalLedger.notReadyTitle')}
+            title={t('generalLedger.notAvailableTitle')}
             description={(
               <Space orientation="vertical" size={4}>
-                {readiness.checks.map((check) => (
+                {readiness.availabilityChecks.map((check) => (
                   <Text key={check.key} type={check.passed ? 'secondary' : 'danger'}>
                     {check.passed ? 'OK' : '!'} {check.message}
+                  </Text>
+                ))}
+              </Space>
+            )}
+          />
+        </Card>
+      )}
+
+      {isLedgerAvailable && !isLedgerReady && readiness && (
+        <Card>
+          <Alert
+            type="warning"
+            showIcon
+            title={t('generalLedger.partialBaselineTitle')}
+            description={(
+              <Space orientation="vertical" size={4}>
+                <Text>{t('generalLedger.partialBaselineDescription')}</Text>
+                {failedProductionChecks.map((check) => (
+                  <Text key={check.key} type="secondary">
+                    ! {check.message}
                   </Text>
                 ))}
               </Space>
@@ -446,7 +483,7 @@ export default function GeneralLedgerManagement() {
         </Card>
       )}
 
-      {isLedgerReady && !isModuleEnabled && (
+      {isLedgerAvailable && !isModuleEnabled && (
         <Alert
           type="warning"
           showIcon

@@ -1,24 +1,31 @@
 import { useEffect, useMemo, useState, type HTMLAttributes } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { App, Alert, Button, InputNumber, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Alert, Button, DatePicker, Input, InputNumber, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import {
+  ACCOUNT_OPENING_BALANCE_ADJUSTMENT_SOURCE_EVENT,
   OPENING_BALANCE_EQUITY_CANDIDATE,
   buildAccountOpeningBalancePreview,
+  getDefaultAccountOpeningBalanceAdjustmentDate,
   getManagedAccountOpeningBalanceBlocks,
   postAccountOpeningBalanceBatch,
+  postAccountOpeningBalanceAdjustment,
   type AccountOpeningBalancePreviewLine,
 } from '@/services/openingBalanceService';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import { formatCurrency, formatDateOnly } from '@/utils/formatters';
-import type { ChartOfAccount, GeneralLedgerSetting, InventoryAccountingPolicy, OpeningBalanceBatch, OpeningBalanceLine } from '@/types';
+import type { ChartOfAccount, GeneralLedgerSetting, InventoryAccountingPolicy, JournalEntry, OpeningBalanceBatch, OpeningBalanceLine } from '@/types';
 
 const LOAN_RECEIVABLE_ACCOUNT_ID = 'cooperative-loan-receivable';
 const LOAN_RECEIVABLE_ACCOUNT_CODE = '1120';
+const OWNER_CAPITAL_CANDIDATE = {
+  ids: ['owner-capital', 'template-owner-capital'],
+  codes: ['3000'],
+};
 const roundCurrencyValue = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 const { Text } = Typography;
@@ -71,6 +78,13 @@ export default function OpeningBalanceForm({
   const [amountByAccountId, setAmountByAccountId] = useState<Record<string, { debit: number; credit: number }>>({});
   const [isDirty, setIsDirty] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+  const [isPostingAdjustment, setIsPostingAdjustment] = useState(false);
+  const [adjustmentEntryDate, setAdjustmentEntryDate] = useState<string>();
+  const [adjustmentDebitAccountId, setAdjustmentDebitAccountId] = useState<string>();
+  const [adjustmentCreditAccountId, setAdjustmentCreditAccountId] = useState<string>();
+  const [adjustmentAmount, setAdjustmentAmount] = useState<number>(0);
+  const [adjustmentNotes, setAdjustmentNotes] = useState<string>();
   const isLocked = batch?.status === 'POSTED' || batch?.status === 'SKIPPED' || (!batch && Boolean(setting?.opening_balance_journal_id));
   const configuredCutoffDate = setting?.cutoff_date ? dayjs(setting.cutoff_date) : null;
   const configuredCutoffDateValue = setting?.cutoff_date;
@@ -130,7 +144,21 @@ export default function OpeningBalanceForm({
     () => findAccountCandidate(accounts, OPENING_BALANCE_EQUITY_CANDIDATE),
     [accounts],
   );
+  const ownerCapitalAccount = useMemo(
+    () => findAccountCandidate(accounts, OWNER_CAPITAL_CANDIDATE),
+    [accounts],
+  );
   const isEquityAccountReady = Boolean(equityAccount?.is_active && equityAccount.is_postable);
+  const balanceAccountOptions = useMemo(() => accounts
+    .filter((account) => (
+      account.is_active &&
+      account.is_postable &&
+      (account.type === 'ASSET' || account.type === 'LIABILITY' || account.type === 'EQUITY')
+    ))
+    .map((account) => ({
+      value: account.id,
+      label: `${account.code} - ${account.name}`,
+    })), [accounts]);
   const rows = useMemo<OpeningBalanceRow[]>(() => {
     return accounts
       .filter((account) => account.is_active && account.is_postable)
@@ -187,6 +215,33 @@ export default function OpeningBalanceForm({
   const previewTotalDebit = roundCurrency(previewLines.reduce((sum, line) => sum + line.debit, 0));
   const previewTotalCredit = roundCurrency(previewLines.reduce((sum, line) => sum + line.credit, 0));
   const hasDebitEquityAdjustment = previewLines.some((line) => line.is_adjustment && line.debit > 0);
+  const postedEquityResidual = useMemo(() => {
+    if (!equityAccount) return 0;
+    const equityLine = lines.find((line) => (
+      line.account_id === equityAccount.id ||
+      line.account_code === equityAccount.code
+    ));
+    return roundCurrency(Number(equityLine?.credit || 0) - Number(equityLine?.debit || 0));
+  }, [equityAccount, lines]);
+  const adjustmentEntries = useLiveQuery(
+    async () => {
+      if (!batch?.id) return [];
+      const sourceIdPrefix = `${batch.id}:adjustment:`;
+      const entries = await db.journalEntries
+        .where('source_type')
+        .equals('OPENING_BALANCE')
+        .filter((entry) => (
+          entry.status === 'POSTED' &&
+          entry.source_event === ACCOUNT_OPENING_BALANCE_ADJUSTMENT_SOURCE_EVENT &&
+          (entry.source_number === batch.id || Boolean(entry.source_id?.startsWith(sourceIdPrefix)))
+        ))
+        .toArray();
+
+      return entries.sort((a, b) => (a.entry_date < b.entry_date ? 1 : -1));
+    },
+    [batch?.id],
+    [],
+  );
 
   const updateAmount = (accountId: string, side: 'debit' | 'credit', value: number | null) => {
     const amount = Number(value || 0);
@@ -225,6 +280,40 @@ export default function OpeningBalanceForm({
   const fillMigrationReceivable = () => {
     if (!loanReceivableAccount) return;
     updateAmount(loanReceivableAccount.id, 'debit', migrationReceivableTotal);
+  };
+
+  const openAdjustmentModal = async () => {
+    if (batch?.status !== 'POSTED') return;
+
+    try {
+      const defaultDate = await getDefaultAccountOpeningBalanceAdjustmentDate();
+      setAdjustmentEntryDate(defaultDate);
+      setAdjustmentNotes(t('openingBalances.account.adjustmentDefaultNotes'));
+
+      if (equityAccount && ownerCapitalAccount && postedEquityResidual !== 0) {
+        setAdjustmentAmount(Math.abs(postedEquityResidual));
+        if (postedEquityResidual > 0) {
+          setAdjustmentDebitAccountId(equityAccount.id);
+          setAdjustmentCreditAccountId(ownerCapitalAccount.id);
+        } else {
+          setAdjustmentDebitAccountId(ownerCapitalAccount.id);
+          setAdjustmentCreditAccountId(equityAccount.id);
+        }
+      } else {
+        setAdjustmentAmount(0);
+        setAdjustmentDebitAccountId(equityAccount?.id);
+        setAdjustmentCreditAccountId(ownerCapitalAccount?.id);
+      }
+
+      setIsAdjustmentModalOpen(true);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('openingBalances.message.adjustmentFailed'));
+    }
+  };
+
+  const closeAdjustmentModal = () => {
+    if (isPostingAdjustment) return;
+    setIsAdjustmentModalOpen(false);
   };
 
   const handlePost = async () => {
@@ -268,6 +357,41 @@ export default function OpeningBalanceForm({
       message.error(error instanceof Error ? error.message : t('generalLedger.setup.postFailed'));
     } finally {
       setIsPosting(false);
+    }
+  };
+
+  const handlePostAdjustment = async () => {
+    if (!adjustmentDebitAccountId || !adjustmentCreditAccountId || adjustmentAmount <= 0) {
+      message.warning(t('openingBalances.account.adjustmentRequired'));
+      return;
+    }
+
+    try {
+      setIsPostingAdjustment(true);
+      await postAccountOpeningBalanceAdjustment({
+        entry_date: adjustmentEntryDate,
+        lines: [
+          {
+            account_id: adjustmentDebitAccountId,
+            debit: adjustmentAmount,
+            credit: 0,
+            notes: adjustmentNotes,
+          },
+          {
+            account_id: adjustmentCreditAccountId,
+            debit: 0,
+            credit: adjustmentAmount,
+            notes: adjustmentNotes,
+          },
+        ],
+        notes: adjustmentNotes,
+      });
+      message.success(t('openingBalances.message.adjustmentPosted'));
+      setIsAdjustmentModalOpen(false);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('openingBalances.message.adjustmentFailed'));
+    } finally {
+      setIsPostingAdjustment(false);
     }
   };
 
@@ -354,6 +478,35 @@ export default function OpeningBalanceForm({
     },
   ];
 
+  const adjustmentHistoryColumns: ColumnsType<JournalEntry> = [
+    {
+      title: t('generalLedger.manual.entryDate'),
+      dataIndex: 'entry_date',
+      key: 'entry_date',
+      render: (value: string) => formatDateOnly(value),
+      width: 140,
+    },
+    {
+      title: t('generalLedger.journal.number'),
+      dataIndex: 'entry_number',
+      key: 'entry_number',
+      width: 170,
+    },
+    {
+      title: t('generalLedger.journal.description'),
+      dataIndex: 'description',
+      key: 'description',
+    },
+    {
+      title: t('generalLedger.debit'),
+      dataIndex: 'total_debit',
+      key: 'total_debit',
+      align: 'right',
+      render: (value: number) => money(value),
+      width: 180,
+    },
+  ];
+
   return (
     <div className="rounded-md border border-gray-100 bg-white p-4">
       <div className="mb-3">
@@ -367,6 +520,15 @@ export default function OpeningBalanceForm({
           type="success"
           showIcon
           title={batch?.status === 'SKIPPED' ? t('openingBalances.skippedTitle') : t('generalLedger.setup.alreadyPosted')}
+          action={batch?.status === 'POSTED' ? (
+            <Button
+              size="small"
+              data-testid="gl-opening-balance-adjustment-button"
+              onClick={openAdjustmentModal}
+            >
+              {t('openingBalances.account.adjustmentAction')}
+            </Button>
+          ) : undefined}
         />
       )}
 
@@ -509,6 +671,21 @@ export default function OpeningBalanceForm({
         <Text className="mt-3 block" type="secondary">{t('openingBalances.account.unsavedChanges')}</Text>
       )}
 
+      {adjustmentEntries.length > 0 && (
+        <div className="mt-4">
+          <Text strong>{t('openingBalances.account.adjustmentHistoryTitle')}</Text>
+          <Table
+            className="mt-2"
+            dataSource={adjustmentEntries}
+            columns={adjustmentHistoryColumns}
+            rowKey="id"
+            pagination={false}
+            size="small"
+            scroll={{ x: 720 }}
+          />
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         <Button
           type="primary"
@@ -520,6 +697,67 @@ export default function OpeningBalanceForm({
           {t('generalLedger.setup.postOpeningBalance')}
         </Button>
       </div>
+
+      <Modal
+        title={t('openingBalances.account.adjustmentModalTitle')}
+        open={isAdjustmentModalOpen}
+        onCancel={closeAdjustmentModal}
+        onOk={handlePostAdjustment}
+        confirmLoading={isPostingAdjustment}
+        okText={t('openingBalances.account.adjustmentPost')}
+        destroyOnHidden
+      >
+        <Space direction="vertical" size="middle" className="w-full">
+          <div>
+            <Text type="secondary">{t('openingBalances.account.adjustmentDate')}</Text>
+            <DatePicker
+              className="mt-1 w-full"
+              value={adjustmentEntryDate ? dayjs(adjustmentEntryDate) : null}
+              onChange={(value) => setAdjustmentEntryDate(value?.startOf('day').toISOString())}
+            />
+          </div>
+          <div>
+            <Text type="secondary">{t('openingBalances.account.adjustmentDebitAccount')}</Text>
+            <Select
+              className="mt-1 w-full"
+              showSearch
+              optionFilterProp="label"
+              value={adjustmentDebitAccountId}
+              options={balanceAccountOptions}
+              onChange={setAdjustmentDebitAccountId}
+            />
+          </div>
+          <div>
+            <Text type="secondary">{t('openingBalances.account.adjustmentCreditAccount')}</Text>
+            <Select
+              className="mt-1 w-full"
+              showSearch
+              optionFilterProp="label"
+              value={adjustmentCreditAccountId}
+              options={balanceAccountOptions}
+              onChange={setAdjustmentCreditAccountId}
+            />
+          </div>
+          <div>
+            <Text type="secondary">{t('openingBalances.account.adjustmentAmount')}</Text>
+            <InputNumber
+              className="mt-1 w-full"
+              min={0}
+              value={adjustmentAmount}
+              onChange={(value) => setAdjustmentAmount(Number(value || 0))}
+            />
+          </div>
+          <div>
+            <Text type="secondary">{t('openingBalances.account.adjustmentNotes')}</Text>
+            <Input.TextArea
+              className="mt-1"
+              rows={3}
+              value={adjustmentNotes}
+              onChange={(event) => setAdjustmentNotes(event.target.value)}
+            />
+          </div>
+        </Space>
+      </Modal>
     </div>
   );
 }

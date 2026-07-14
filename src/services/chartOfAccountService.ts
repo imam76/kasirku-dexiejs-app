@@ -557,13 +557,13 @@ export const updateEnabledModule = async (
 
   if (isEnabled && code === 'GENERAL_LEDGER') {
     const readiness = await getGeneralLedgerReadiness();
-    if (!readiness.isReady) {
-      const failedChecks = readiness.checks
+    if (!readiness.isAvailable) {
+      const failedChecks = readiness.availabilityChecks
         .filter((check) => !check.passed)
         .map((check) => check.message)
         .join(' ');
 
-      throw new Error(`General Ledger belum siap production. ${failedChecks}`);
+      throw new Error(`General Ledger belum bisa dibuka. ${failedChecks}`);
     }
   }
 

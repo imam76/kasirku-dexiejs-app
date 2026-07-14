@@ -22,7 +22,9 @@ export interface GeneralLedgerReadinessCheck {
 
 export interface GeneralLedgerReadinessResult {
   isReady: boolean;
+  isAvailable: boolean;
   setting?: GeneralLedgerSetting;
+  availabilityChecks: GeneralLedgerReadinessCheck[];
   checks: GeneralLedgerReadinessCheck[];
   requiredAccounts: Array<RequiredAccountCandidate & { account?: ChartOfAccount }>;
 }
@@ -56,11 +58,12 @@ const findAccountCandidate = (
 };
 
 export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadinessResult> => {
-  const [accounts, mappings, setting, setup] = await Promise.all([
+  const [accounts, mappings, setting, setup, accountingPeriods] = await Promise.all([
     db.chartOfAccounts.toArray(),
     db.financeAccountMappings.toArray(),
     db.generalLedgerSetting.get('default'),
     db.accountingInitialSetupSetting.get('default'),
+    db.accountingPeriods.toArray(),
   ]);
   const effectiveSetting: GeneralLedgerSetting | undefined = setup
     ? {
@@ -83,6 +86,14 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
     account: findAccountCandidate(accounts, candidate),
   }));
   const missingRequiredAccounts = requiredAccounts.filter(({ account }) => !account?.is_active || !account?.is_postable);
+  const activePostableAccounts = accounts.filter((account) => account.is_active && account.is_postable);
+  const currentPeriod = setup?.current_period_id
+    ? accountingPeriods.find((period) => period.id === setup.current_period_id && !period.deleted_at)
+    : undefined;
+  const hasAccountingPeriod = Boolean(
+    currentPeriod ||
+    accountingPeriods.some((period) => !period.deleted_at && period.status !== 'CLOSED'),
+  );
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const invalidMappings = mappings.filter((mapping) => {
     const account = accountById.get(mapping.account_id);
@@ -144,6 +155,39 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
       ? 0
       : Number(accountOpeningBalanceJournal?.total_credit || 0));
   const isOpeningTotalBalanced = Math.abs(openingTotalDebit - openingTotalCredit) <= 0.01;
+  const hasLedgerTables = Boolean(db.generalLedgerSetting && db.journalEntries && db.journalEntryLines);
+  const availabilityChecks: GeneralLedgerReadinessCheck[] = [
+    {
+      key: 'accountCatalog',
+      label: 'Daftar akun',
+      passed: activePostableAccounts.length > 0,
+      message: activePostableAccounts.length > 0
+        ? 'Daftar akun memiliki akun aktif dan postable.'
+        : 'Daftar akun belum memiliki akun aktif dan postable.',
+    },
+    {
+      key: 'cutoffDate',
+      label: 'Cutoff ledger',
+      passed: Boolean(effectiveSetting?.cutoff_date),
+      message: effectiveSetting?.cutoff_date
+        ? `Cutoff ledger tersimpan pada ${effectiveSetting.cutoff_date.slice(0, 10)}.`
+        : 'Cutoff ledger belum diisi.',
+    },
+    {
+      key: 'accountingPeriod',
+      label: 'Periode akuntansi',
+      passed: hasAccountingPeriod,
+      message: hasAccountingPeriod
+        ? 'Periode akuntansi tersedia.'
+        : 'Periode akuntansi belum tersedia.',
+    },
+    {
+      key: 'backupTables',
+      label: 'Backup/restore ledger',
+      passed: hasLedgerTables,
+      message: 'Table setting ledger dan journal tersedia untuk backup/restore.',
+    },
+  ];
   const checks: GeneralLedgerReadinessCheck[] = [
     {
       key: 'requiredAccounts',
@@ -196,14 +240,17 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
     {
       key: 'backupTables',
       label: 'Backup/restore ledger',
-      passed: Boolean(db.generalLedgerSetting && db.journalEntries && db.journalEntryLines),
+      passed: hasLedgerTables,
       message: 'Table setting ledger dan journal tersedia untuk backup/restore.',
     },
   ];
+  const isAvailable = availabilityChecks.every((check) => check.passed);
 
   return {
-    isReady: checks.every((check) => check.passed),
+    isReady: isAvailable && checks.every((check) => check.passed),
+    isAvailable,
     setting: effectiveSetting,
+    availabilityChecks,
     checks,
     requiredAccounts,
   };

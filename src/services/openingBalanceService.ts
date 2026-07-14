@@ -5,7 +5,11 @@ import {
   writeActivityLog,
 } from '@/auth/authService';
 import { enqueueGeneralLedgerSettingSync, enqueueOpeningBalanceBundleSync } from '@/services/syncQueueService';
-import { postOpeningBalanceSourceJournal } from '@/services/generalLedgerService';
+import {
+  assertAccountingPeriodOpen,
+  isAccountingPeriodPostable,
+  postOpeningBalanceSourceJournal,
+} from '@/services/generalLedgerService';
 import { getBaseCurrency } from '@/services/baseCurrencyService';
 import { getCurrencyPreset } from '@/constants/currencies';
 import {
@@ -16,6 +20,7 @@ import {
 import type {
   ChartOfAccount,
   GeneralLedgerSetting,
+  JournalEntry,
   InventoryAccountingPolicy,
   OpeningBalanceBatch,
   OpeningBalanceLine,
@@ -52,6 +57,13 @@ export interface OpeningBalanceSourceLineInput {
 }
 
 export interface AccountOpeningBalanceLineInput {
+  account_id: string;
+  debit?: number;
+  credit?: number;
+  notes?: string;
+}
+
+export interface AccountOpeningBalanceAdjustmentLineInput {
   account_id: string;
   debit?: number;
   credit?: number;
@@ -154,6 +166,7 @@ export const OPENING_BALANCE_MODULE_DEFINITIONS: OpeningBalanceModuleDefinition[
 export const OPENING_BALANCE_MODULE_ORDER = MODULE_ORDER;
 
 export const ACCOUNT_OPENING_BALANCE_SOURCE_EVENT = 'ACCOUNT_OPENING_BALANCE_POSTED';
+export const ACCOUNT_OPENING_BALANCE_ADJUSTMENT_SOURCE_EVENT = 'ACCOUNT_OPENING_BALANCE_ADJUSTMENT_POSTED';
 
 export const OPENING_BALANCE_EQUITY_CANDIDATE = EQUITY_CANDIDATE;
 
@@ -209,6 +222,8 @@ const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 1
 const normalizeStartOfDay = (value: string) => (
   value.includes('T') ? value : `${value.slice(0, 10)}T00:00:00.000`
 );
+
+const toDateOnly = (value: string) => value.slice(0, 10);
 
 const amountOrZero = (value: number | undefined) => {
   const amount = Number(value || 0);
@@ -431,6 +446,85 @@ const assertAccountOpeningLinesNotManaged = async (
   throw new Error(
     `Akun ${blockedLine.account.code} - ${blockedLine.account.name} dikelola oleh module ${block?.label ?? block?.module}. Isi saldo awalnya dari submodule detail.`,
   );
+};
+
+const resolveEarliestOpenPeriodDate = async (cutoffDate: string) => {
+  const cutoff = toDateOnly(cutoffDate);
+  const periods = await db.accountingPeriods.toArray();
+  const openPeriod = periods
+    .filter((period) => (
+      !period.deleted_at &&
+      period.status === 'OPEN' &&
+      toDateOnly(period.end_date) >= cutoff
+    ))
+    .sort((a, b) => (toDateOnly(a.start_date) > toDateOnly(b.start_date) ? 1 : -1))[0];
+
+  if (!openPeriod) return undefined;
+
+  const startDate = toDateOnly(openPeriod.start_date);
+  return normalizeStartOfDay(startDate < cutoff ? cutoff : startDate);
+};
+
+export const getDefaultAccountOpeningBalanceAdjustmentDate = async () => {
+  const { cutoffDate } = await requireCutoff();
+  const normalizedCutoff = normalizeStartOfDay(cutoffDate);
+
+  if (await isAccountingPeriodPostable(normalizedCutoff)) {
+    return normalizedCutoff;
+  }
+
+  const fallbackDate = await resolveEarliestOpenPeriodDate(cutoffDate);
+  if (!fallbackDate) {
+    throw new Error('Tidak ada periode akuntansi OPEN untuk koreksi saldo awal.');
+  }
+
+  return fallbackDate;
+};
+
+const resolveAccountOpeningBalanceAdjustmentDate = async (
+  requestedDate: string | undefined,
+  cutoffDate: string,
+) => {
+  if (!requestedDate) {
+    return getDefaultAccountOpeningBalanceAdjustmentDate();
+  }
+
+  const normalizedDate = normalizeStartOfDay(requestedDate);
+  if (toDateOnly(normalizedDate) < toDateOnly(cutoffDate)) {
+    throw new Error('Tanggal koreksi saldo awal tidak boleh sebelum cutoff.');
+  }
+
+  await assertAccountingPeriodOpen(normalizedDate);
+  return normalizedDate;
+};
+
+const normalizeAccountOpeningAdjustmentLines = (
+  lines: AccountOpeningBalanceAdjustmentLineInput[],
+  accounts: ChartOfAccount[],
+) => {
+  const normalizedLines = normalizeAccountOpeningLines(lines, accounts);
+  if (normalizedLines.length < 2) {
+    throw new Error('Jurnal koreksi saldo awal wajib memiliki minimal dua line.');
+  }
+
+  const invalidAccount = normalizedLines.find((line) => (
+    line.account.type !== 'ASSET' &&
+    line.account.type !== 'LIABILITY' &&
+    line.account.type !== 'EQUITY'
+  ));
+  if (invalidAccount) {
+    throw new Error(
+      `Koreksi saldo awal hanya boleh memakai akun neraca. Akun ${invalidAccount.account.code} - ${invalidAccount.account.name} bukan akun neraca.`,
+    );
+  }
+
+  const totalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
+  const totalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
+  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    throw new Error(`Jurnal koreksi saldo awal tidak balance. Debit ${totalDebit}, kredit ${totalCredit}.`);
+  }
+
+  return normalizedLines;
 };
 
 const resolveOpeningBalanceEquityAccount = (accounts: ChartOfAccount[]) => (
@@ -752,6 +846,70 @@ export const postAccountOpeningBalanceBatch = async ({
   await enqueueOpeningBalanceBatchForSync(batch, existingBatch ? 'update' : 'create');
 
   return batch;
+};
+
+export const postAccountOpeningBalanceAdjustment = async ({
+  entry_date,
+  lines,
+  notes,
+}: {
+  entry_date?: string;
+  lines: AccountOpeningBalanceAdjustmentLineInput[];
+  notes?: string;
+}): Promise<JournalEntry> => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+
+  const { cutoffDate } = await requireCutoff();
+  const batchId = getOpeningBalanceBatchId('ACCOUNT', cutoffDate);
+  const existingBatch = await db.openingBalanceBatches.get(batchId);
+  if (existingBatch?.status !== 'POSTED') {
+    throw new Error('Koreksi saldo awal hanya tersedia setelah Saldo Awal Akun posted.');
+  }
+
+  const [accounts, adjustmentDate] = await Promise.all([
+    db.chartOfAccounts.toArray(),
+    resolveAccountOpeningBalanceAdjustmentDate(entry_date, cutoffDate),
+  ]);
+  const normalizedLines = normalizeAccountOpeningAdjustmentLines(lines, accounts);
+  const sourceId = `${batchId}:adjustment:${crypto.randomUUID()}`;
+  const description = notes?.trim() || `Koreksi saldo awal akun per ${toDateOnly(cutoffDate)}`;
+  let journalEntry: JournalEntry | undefined;
+
+  await db.transaction('rw', [
+    db.journalEntries,
+    db.journalEntryLines,
+    db.activityLogs,
+  ], async () => {
+    journalEntry = await postOpeningBalanceSourceJournal({
+      source_id: sourceId,
+      source_number: batchId,
+      source_event: ACCOUNT_OPENING_BALANCE_ADJUSTMENT_SOURCE_EVENT,
+      entry_date: adjustmentDate,
+      description,
+      lines: normalizedLines.map((line) => ({
+        account: line.account,
+        debit: line.debit,
+        credit: line.credit,
+        description: line.notes ?? description,
+      })),
+      actor: currentUser,
+    });
+
+    await writeActivityLog({
+      user: currentUser,
+      action: ACCOUNT_OPENING_BALANCE_ADJUSTMENT_SOURCE_EVENT,
+      entity: 'journalEntries',
+      entity_id: journalEntry.id,
+      description: `${currentUser?.name ?? 'User'} posting koreksi saldo awal akun untuk batch ${batchId}.`,
+    });
+  });
+
+  if (!journalEntry) {
+    throw new Error('Jurnal koreksi saldo awal gagal dibuat.');
+  }
+
+  return journalEntry;
 };
 
 export const saveOpeningBalanceDetailDraft = async ({

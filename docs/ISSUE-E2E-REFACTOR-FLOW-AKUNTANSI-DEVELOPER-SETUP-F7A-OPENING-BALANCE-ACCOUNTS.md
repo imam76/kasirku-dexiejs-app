@@ -18,6 +18,10 @@ Implementasi fondasi F7 sudah memindahkan form dari General Ledger ke route
 melanjutkan hardening agar input akun umum tidak menggandakan saldo yang sudah
 dikelola oleh submodule Piutang, Hutang, Uang Muka Masuk, dan Uang Muka Keluar.
 
+Catatan UX: Saldo Awal Akun bukan syarat agar halaman General Ledger bisa
+dibuka. GL tetap tampil setelah fondasi minimum akuntansi tersedia; saldo awal
+akun menentukan kelengkapan baseline dan status production-ready.
+
 ## Tujuan
 
 - Saldo awal akun umum memakai pola post langsung: user mengisi angka lalu post, tanpa
@@ -30,6 +34,9 @@ dikelola oleh submodule Piutang, Hutang, Uang Muka Masuk, dan Uang Muka Keluar.
   ke akun `Ekuitas Saldo Awal`.
 - Posting memakai source event `ACCOUNT_OPENING_BALANCE_POSTED`.
 - Setelah posted atau skipped, form readonly.
+- Jika user lupa mengisi modal/ekuitas setelah saldo awal akun terlanjur
+  posted, koreksi dilakukan lewat jurnal penyesuaian saldo awal, bukan membuka
+  ulang batch posted.
 - Legacy opening balance tetap terbaca sebagai batch `ACCOUNT`.
 
 ## Keputusan UX: Post Sekali Lalu Locked
@@ -70,6 +77,48 @@ Catatan: `Ekuitas Saldo Awal` bukan angka tersembunyi. Akun ini harus tampil di
 neraca/trial balance agar user bisa melihat bahwa ada angka residual dari setup
 saldo awal.
 
+## Tambalan Flow: Koreksi Modal Setelah Posted
+
+Kasus nyata: user sudah post Saldo Awal Akun, lalu sadar akun `Modal Pemilik`
+belum diisi. Karena batch `ACCOUNT` yang posted adalah jurnal resmi, sistem
+tidak boleh mengedit ulang batch tersebut secara diam-diam.
+
+Solusi akuntansi:
+
+- Jika aset dan liabilitas awal sudah benar, tetapi modal pemilik lupa diinput,
+  angka residual yang sebelumnya masuk `Ekuitas Saldo Awal` dipindahkan ke
+  `Modal Pemilik` lewat jurnal koreksi:
+
+```txt
+Dr Ekuitas Saldo Awal / Opening Balance Equity
+  Cr Modal Pemilik
+```
+
+- Jika aset setoran modal juga belum masuk, misalnya kas awal dari pemilik belum
+  dicatat, koreksi memakai akun aset terkait:
+
+```txt
+Dr Kas/Bank/Aset terkait
+  Cr Modal Pemilik
+```
+
+Flow produk:
+
+1. Saldo Awal Akun yang sudah `POSTED` tetap readonly.
+2. UI menampilkan action `Koreksi Saldo Awal` dari state posted.
+3. User memilih tanggal koreksi:
+   - default: tanggal cutoff bila periode cutoff masih terbuka;
+   - fallback: tanggal awal periode terbuka paling awal bila cutoff sudah
+     terkunci/tutup.
+4. User mengisi jurnal koreksi balance dengan akun neraca saja.
+5. Sistem membuat journal baru dengan source event
+   `ACCOUNT_OPENING_BALANCE_ADJUSTMENT_POSTED`, linked ke batch `ACCOUNT`, dan
+   menampilkan audit trail di halaman Saldo Awal Akun/General Ledger.
+
+Tambalan ini menjaga dua hal sekaligus: posting awal tetap immutable, tetapi
+user tetap punya jalan akuntansi yang benar untuk memindahkan residual
+`Ekuitas Saldo Awal` ke akun modal/ekuitas yang tepat.
+
 ## Scope
 
 - Refactor `OpeningBalanceForm` agar memakai `openingBalanceBatches` dan
@@ -85,13 +134,16 @@ saldo awal.
 - Tambahkan akun/mapping `Ekuitas Saldo Awal` jika belum tersedia di template.
 - Tambahkan preview line penyeimbang otomatis sebelum posting.
 - Update posting account opening agar idempotent berdasarkan `ACCOUNT + cutoff`.
+- Tambahkan flow koreksi saldo awal setelah batch `ACCOUNT` posted, dengan
+  journal adjustment yang linked ke batch awal.
 - Update activity log dan i18n.
 - Update E2E helper lama yang masih mengisi saldo awal melalui
   `/finance/general-ledger`.
 
 ## Non-Scope
 
-- Tidak membuat reset/reversal opening balance setelah posted.
+- Tidak membuat reset/reversal opening balance setelah posted. Koreksi setelah
+  posted dilakukan lewat jurnal penyesuaian baru, bukan mengubah batch awal.
 - Tidak otomatis mengubah saldo awal piutang/hutang detail menjadi baris akun.
 - Tidak mengubah struktur template COA di luar akun penyeimbang
   `Ekuitas Saldo Awal` yang wajib tersedia untuk posting selisih.
@@ -124,6 +176,9 @@ Dr akun debit saldo awal
 
 6. Batch `ACCOUNT` berubah menjadi `POSTED`, form readonly, dan hub Saldo Awal
    menampilkan status posted.
+7. Jika ada akun modal/ekuitas yang terlupa setelah posted, user memakai
+   `Koreksi Saldo Awal` untuk membuat jurnal penyesuaian yang linked ke batch
+   `ACCOUNT`, tanpa membuka kembali posting awal.
 
 ## Validasi
 
@@ -140,6 +195,15 @@ Dr akun debit saldo awal
 - Akun yang dikelola submodule detail tidak bisa diisi bila batch detail sudah
   `POSTED` atau `SKIPPED` dengan catatan module tersebut bertanggung jawab atas
   saldonya.
+- Koreksi saldo awal hanya tersedia setelah batch `ACCOUNT` berstatus `POSTED`.
+- Jurnal koreksi wajib balance dan hanya memakai akun neraca
+  `ASSET`, `LIABILITY`, atau `EQUITY`.
+- Jurnal koreksi wajib memakai source event
+  `ACCOUNT_OPENING_BALANCE_ADJUSTMENT_POSTED` dan menyimpan referensi ke batch
+  `ACCOUNT`.
+- Jika tanggal cutoff sudah berada di periode terkunci/tutup, sistem memakai
+  periode terbuka paling awal dan memberi catatan audit bahwa koreksi berasal
+  dari saldo awal.
 
 ## Checklist
 
@@ -157,10 +221,16 @@ Dr akun debit saldo awal
 - [x] Hapus action `Simpan Draft` dari Saldo Awal Akun.
 - [x] Tambahkan status dirty/unsaved changes.
 - [x] Kunci batch `ACCOUNT` berstatus `POSTED` agar tidak bisa diedit/post ulang.
+- [x] Tambahkan action `Koreksi Saldo Awal` pada state posted.
+- [x] Tambahkan service journal adjustment linked ke batch `ACCOUNT`.
+- [x] Tambahkan source event `ACCOUNT_OPENING_BALANCE_ADJUSTMENT_POSTED`.
+- [x] Tambahkan audit trail koreksi di halaman Saldo Awal Akun dan General
+  Ledger.
 - [x] Update `getGeneralLedgerReadiness` agar legacy event dan event baru sama
   sama valid.
 - [x] Update i18n ID/EN.
 - [x] Update E2E `accounting-setup` untuk route Saldo Awal Akun.
+- [x] Tambahkan E2E `OBA-06` untuk koreksi modal pemilik setelah posted.
 
 ## Catatan Implementasi 2026-07-14
 
@@ -172,6 +242,13 @@ Dr akun debit saldo awal
   draft yang bertabrakan dengan jurnal aktif.
 - Batch `ACCOUNT` yang sudah `POSTED` kembali readonly dan pemanggilan service
   post ulang tidak mengubah batch/jurnal yang sudah posted.
+- Action `Koreksi Saldo Awal` ditambahkan pada state posted. Service
+  `postAccountOpeningBalanceAdjustment` membuat jurnal baru dengan source event
+  `ACCOUNT_OPENING_BALANCE_ADJUSTMENT_POSTED`, source id unik ber-prefix batch
+  `ACCOUNT`, dan validasi hanya akun neraca.
+- Modal koreksi default mengarahkan kasus lupa modal pemilik menjadi jurnal
+  `Dr Ekuitas Saldo Awal / Cr Modal Pemilik`; riwayat koreksi tampil di halaman
+  Saldo Awal Akun.
 - Verifikasi: `bun run build` dan
   `bunx playwright test tests/e2e/accounting-setup.spec.ts --project=chromium`
   sudah hijau.
@@ -186,6 +263,9 @@ Dr akun debit saldo awal
 - Baris akun Piutang/Hutang/Uang Muka tidak menyebabkan double input bila
   submodule detail sudah mengelola saldo tersebut.
 - Setelah posted, form readonly dan tidak ada post ulang.
+- User tetap bisa membuat jurnal koreksi saldo awal yang linked ke batch posted.
+- Koreksi modal pemilik memindahkan saldo dari `Ekuitas Saldo Awal` ke
+  `Modal Pemilik` tanpa masuk ke pendapatan atau beban.
 - Trial Balance tetap balance setelah posting.
 
 ## Test Case
@@ -259,6 +339,32 @@ Expected:
 - Tombol post disabled.
 - Batch dan jurnal tetap mengikuti nominal posting pertama.
 - Tidak ada jurnal reversal atau jurnal aktif baru.
+
+### OBA-06 - Koreksi Modal Pemilik Setelah Posted
+
+Langkah:
+
+1. Post Saldo Awal Akun dengan selisih yang otomatis masuk ke
+   `Ekuitas Saldo Awal`.
+2. Buka kembali `/finance/opening-balances/accounts`.
+3. Klik `Koreksi Saldo Awal`.
+4. Isi jurnal koreksi:
+
+```txt
+Dr Ekuitas Saldo Awal
+  Cr Modal Pemilik
+```
+
+5. Post koreksi dan buka General Ledger/Trial Balance.
+
+Expected:
+
+- Batch `ACCOUNT` awal tetap `POSTED` dan readonly.
+- Jurnal koreksi baru terbentuk dengan source event
+  `ACCOUNT_OPENING_BALANCE_ADJUSTMENT_POSTED`.
+- Jurnal koreksi linked ke batch `ACCOUNT`.
+- Saldo `Ekuitas Saldo Awal` berkurang dan `Modal Pemilik` bertambah.
+- Tidak ada line pendapatan atau beban pada jurnal koreksi.
 
 ## Referensi File
 

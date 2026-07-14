@@ -98,7 +98,38 @@ test.describe.serial('accounting initial setup regression', () => {
     await page.goto('/finance/general-ledger');
     await expect(page.getByText('General Ledger').first()).toBeVisible();
     await expect(page.getByText('Readiness')).toBeVisible();
+    await expect(page.getByText('Bisa Dibuka', { exact: true })).toBeVisible();
+    await expect(page.getByText('Saldo awal belum lengkap', { exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Jurnal' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Trial Balance' })).toBeVisible();
     await expect(page.getByText('1 Januari 2026 00:00').first()).toBeVisible();
+
+    const glAvailability = await page.evaluate(async () => {
+      const { db } = await import('/src/lib/db.ts');
+      const { updateEnabledModule } = await import('/src/services/chartOfAccountService.ts');
+      const { getGeneralLedgerReadiness } = await import('/src/utils/accounting/getGeneralLedgerReadiness.ts');
+
+      const before = await getGeneralLedgerReadiness();
+      await updateEnabledModule('GENERAL_LEDGER', true);
+      const after = await getGeneralLedgerReadiness();
+      const module = await db.enabledModules.get('GENERAL_LEDGER');
+
+      return {
+        beforeIsAvailable: before.isAvailable,
+        beforeIsReady: before.isReady,
+        afterIsAvailable: after.isAvailable,
+        afterIsReady: after.isReady,
+        moduleEnabled: module?.is_enabled,
+      };
+    });
+
+    expect(glAvailability).toMatchObject({
+      beforeIsAvailable: true,
+      beforeIsReady: false,
+      afterIsAvailable: true,
+      afterIsReady: false,
+      moduleEnabled: true,
+    });
   });
 
   test('AIS-SETUP-02 - setup koperasi menerapkan template dan mapping koperasi', async ({ page }) => {
@@ -288,6 +319,111 @@ test.describe.serial('accounting initial setup regression', () => {
     });
     expect(result.batchJournalEntryId).toBe(result.settingJournalEntryId);
     expect(result.equityAdjustmentCredit ?? 0).toBe(0);
+  });
+
+  test('OBA-06 - koreksi modal pemilik setelah saldo awal akun posted', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await saveInitialAccountingSetupFixture(page);
+
+    const result = await page.evaluate(async () => {
+      const { db } = await import('/src/lib/db.ts');
+      const {
+        ACCOUNT_OPENING_BALANCE_ADJUSTMENT_SOURCE_EVENT,
+        ACCOUNT_OPENING_BALANCE_SOURCE_EVENT,
+        postAccountOpeningBalanceAdjustment,
+        postAccountOpeningBalanceBatch,
+      } = await import('/src/services/openingBalanceService.ts');
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountIdByCode = new Map(accounts.map((account) => [account.code, account.id]));
+      const requireAccountId = (code: string) => {
+        const accountId = accountIdByCode.get(code);
+        if (!accountId) throw new Error(`Akun ${code} tidak tersedia untuk opening balance.`);
+        return accountId;
+      };
+
+      const batch = await postAccountOpeningBalanceBatch({
+        lines: [
+          { account_id: requireAccountId('1010'), debit: 1000000, credit: 0 },
+        ],
+      });
+      const batchBefore = await db.openingBalanceBatches.get(batch.id);
+      const openingLinesBefore = await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray();
+
+      const adjustmentEntry = await postAccountOpeningBalanceAdjustment({
+        lines: [
+          { account_id: requireAccountId('3050'), debit: 1000000, credit: 0, notes: 'Koreksi modal pemilik E2E' },
+          { account_id: requireAccountId('3000'), debit: 0, credit: 1000000, notes: 'Koreksi modal pemilik E2E' },
+        ],
+        notes: 'Koreksi modal pemilik E2E',
+      });
+
+      const batchAfter = await db.openingBalanceBatches.get(batch.id);
+      const openingLinesAfter = await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray();
+      const adjustmentLines = await db.journalEntryLines
+        .where('journal_entry_id')
+        .equals(adjustmentEntry.id)
+        .toArray();
+      const openingEntries = await db.journalEntries
+        .where('source_type')
+        .equals('OPENING_BALANCE')
+        .filter((entry) => entry.source_id === batch.id || entry.source_id?.startsWith(`${batch.id}:adjustment:`) === true)
+        .toArray();
+
+      return {
+        batchStatus: batchAfter?.status,
+        batchJournalEntryIdBefore: batchBefore?.journal_entry_id,
+        batchJournalEntryIdAfter: batchAfter?.journal_entry_id,
+        batchTotalDebitBefore: batchBefore?.total_debit,
+        batchTotalDebitAfter: batchAfter?.total_debit,
+        batchTotalCreditBefore: batchBefore?.total_credit,
+        batchTotalCreditAfter: batchAfter?.total_credit,
+        openingLineCountBefore: openingLinesBefore.length,
+        openingLineCountAfter: openingLinesAfter.length,
+        openingEquityCredit: openingLinesAfter.find((line) => line.account_code === '3050')?.credit,
+        adjustmentSourceId: adjustmentEntry.source_id,
+        adjustmentSourceNumber: adjustmentEntry.source_number,
+        adjustmentSourceEvent: adjustmentEntry.source_event,
+        adjustmentTotalDebit: adjustmentEntry.total_debit,
+        adjustmentTotalCredit: adjustmentEntry.total_credit,
+        adjustmentEquityDebit: adjustmentLines.find((line) => line.account_code === '3050')?.debit,
+        adjustmentOwnerCapitalCredit: adjustmentLines.find((line) => line.account_code === '3000')?.credit,
+        adjustmentProfitLossLineCount: adjustmentLines.filter((line) => (
+          line.account_type === 'REVENUE' ||
+          line.account_type === 'CONTRA_REVENUE' ||
+          line.account_type === 'EXPENSE'
+        )).length,
+        postedOpeningEntryCount: openingEntries.filter(
+          (entry) => entry.status === 'POSTED' && entry.source_event === ACCOUNT_OPENING_BALANCE_SOURCE_EVENT,
+        ).length,
+        postedAdjustmentEntryCount: openingEntries.filter(
+          (entry) => entry.status === 'POSTED' && entry.source_event === ACCOUNT_OPENING_BALANCE_ADJUSTMENT_SOURCE_EVENT,
+        ).length,
+        reversedEntryCount: openingEntries.filter((entry) => entry.status === 'REVERSED').length,
+      };
+    });
+
+    expect(result).toMatchObject({
+      batchStatus: 'POSTED',
+      batchTotalDebitBefore: 1000000,
+      batchTotalDebitAfter: 1000000,
+      batchTotalCreditBefore: 1000000,
+      batchTotalCreditAfter: 1000000,
+      openingLineCountBefore: 2,
+      openingLineCountAfter: 2,
+      openingEquityCredit: 1000000,
+      adjustmentSourceEvent: 'ACCOUNT_OPENING_BALANCE_ADJUSTMENT_POSTED',
+      adjustmentTotalDebit: 1000000,
+      adjustmentTotalCredit: 1000000,
+      adjustmentEquityDebit: 1000000,
+      adjustmentOwnerCapitalCredit: 1000000,
+      adjustmentProfitLossLineCount: 0,
+      postedOpeningEntryCount: 1,
+      postedAdjustmentEntryCount: 1,
+      reversedEntryCount: 0,
+    });
+    expect(result.batchJournalEntryIdAfter).toBe(result.batchJournalEntryIdBefore);
+    expect(result.adjustmentSourceId).toContain('opening-balance-account-2026-01-01:adjustment:');
+    expect(result.adjustmentSourceNumber).toBe('opening-balance-account-2026-01-01');
   });
 
   test('OB-03 - saldo awal piutang muncul di AR dan bisa dibayar sebagian lalu lunas', async ({ page }) => {

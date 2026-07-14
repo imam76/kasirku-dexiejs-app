@@ -25,6 +25,12 @@ tabel akun besar:
 | Add Cash Advance Income Opening Balance | Uang Muka Masuk | Advance Received | `/finance/opening-balances/advance-received` |
 | Add Cash Advance Expense Opening Balance | Uang Muka Keluar | Advance Paid | `/finance/opening-balances/advance-paid` |
 
+Keputusan tambahan: General Ledger tidak menunggu semua saldo awal selesai untuk
+bisa dibuka. Setelah fondasi minimum tersedia (COA, cutoff, periode akuntansi,
+dan module GL aktif), halaman GL tetap menampilkan jurnal/report. Kelengkapan
+saldo awal menjadi status baseline dan warning bahwa trial balance/neraca belum
+final, bukan gate akses halaman.
+
 ## Issue Lanjutan Per Submodule
 
 Setelah fondasi menu Saldo Awal, route, batch, line, dan readiness GL tersedia,
@@ -84,16 +90,19 @@ audit, bukan form setup campur aduk.
 - Refactor `OpeningBalanceForm` menjadi form Saldo Awal Akun yang tidak dirender
   langsung dari GL.
 - Service posting saldo awal per submodule.
-- Readiness General Ledger membaca status saldo awal per submodule, bukan hanya
-  satu field journal id.
+- Readiness General Ledger membaca status saldo awal per submodule sebagai
+  baseline completeness, bukan gate untuk membuka halaman GL.
 - Guard posted/locked untuk mencegah perubahan cutoff atau saldo awal setelah
   posted.
+- Flow koreksi saldo awal setelah posted lewat jurnal adjustment yang linked ke
+  batch awal, bukan edit ulang batch posted.
 - i18n ID/EN untuk menu, title, CTA, status, validation, dan activity log.
 - E2E regression untuk GL, hub saldo awal, dan posting minimal.
 
 ## Non-Scope
 
-- Tidak membuat reset ledger atau edit opening balance setelah posted.
+- Tidak membuat reset ledger atau edit opening balance setelah posted. Koreksi
+  setelah posted memakai jurnal adjustment baru yang dapat diaudit.
 - Tidak backfill semua invoice historis menjadi opening balance otomatis.
 - Tidak mengubah flow Developer Setup yang sudah selesai di fase sebelumnya.
 - Tidak membuat compliance PSAK/PSAP penuh.
@@ -115,8 +124,22 @@ Menu Finance menampilkan item baru:
 - General Ledger
 - Closing
 
-General Ledger tetap bisa memberi CTA ke Saldo Awal bila ledger belum ready,
-tetapi tidak merender form input saldo awal langsung di halaman GL.
+General Ledger tetap bisa memberi CTA ke Saldo Awal bila baseline saldo awal
+belum lengkap, tetapi tidak merender form input saldo awal langsung di halaman
+GL dan tidak memblokir jurnal/report hanya karena saldo awal belum full.
+
+### 1A. Keputusan UX: GL Bisa Dibuka Sebelum Saldo Awal Lengkap
+
+Perilaku target mengikuti pola aplikasi akuntansi desktop seperti Zahir:
+
+- General Ledger tampil begitu module GL aktif dan fondasi minimum tersedia.
+- Jika belum ada jurnal, tabel jurnal/buku besar boleh kosong.
+- Jika saldo awal belum lengkap, tampilkan status `Bisa Dibuka` dan warning
+  `Saldo awal belum lengkap`.
+- Status `Siap` / production-ready baru tercapai setelah semua module saldo
+  awal diposting atau dilewati dan check baseline lain lolos.
+- Gate yang boleh tetap ketat adalah closing periode pertama, laporan formal
+  final, atau action yang membutuhkan baseline lengkap.
 
 ### 2. Hub Saldo Awal
 
@@ -151,7 +174,42 @@ Aturan:
 - line penyeimbang harus terlihat di preview/jurnal, bukan angka tersembunyi;
 - posting membuat journal `OPENING_BALANCE` dengan source event khusus Saldo
   Awal Akun;
-- jika sudah posted, form menjadi readonly.
+- jika sudah posted, form menjadi readonly;
+- jika user lupa mengisi modal/ekuitas setelah posted, gunakan flow
+  `Koreksi Saldo Awal`, bukan membuka ulang form posted.
+
+### 3A. Koreksi Saldo Awal Setelah Posted
+
+Flow ini menambal kasus ketika saldo awal akun sudah posted tetapi user lupa
+memasukkan akun modal/ekuitas, misalnya `Modal Pemilik`.
+
+Aturan:
+
+- batch saldo awal yang sudah posted tetap immutable dan readonly;
+- koreksi dibuat sebagai jurnal baru yang linked ke batch `ACCOUNT`;
+- source event jurnal koreksi:
+  `ACCOUNT_OPENING_BALANCE_ADJUSTMENT_POSTED`;
+- akun yang dipakai hanya akun neraca;
+- koreksi tidak boleh masuk pendapatan atau beban.
+
+Jika aset dan liabilitas awal sudah benar tetapi modal pemilik lupa diinput,
+jurnal koreksinya:
+
+```txt
+Dr Ekuitas Saldo Awal / Opening Balance Equity
+  Cr Modal Pemilik
+```
+
+Jika aset setoran modal juga belum masuk, jurnal memakai aset terkait:
+
+```txt
+Dr Kas/Bank/Aset terkait
+  Cr Modal Pemilik
+```
+
+Halaman Saldo Awal Akun dan General Ledger harus menampilkan audit trail
+koreksi ini agar user bisa melihat perbedaan antara posting awal dan
+penyesuaian saldo awal.
 
 ### 4. Saldo Awal Piutang
 
