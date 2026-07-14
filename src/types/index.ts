@@ -112,6 +112,7 @@ export type SalesDocumentType =
 export type SalesDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type SalesInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 export type SalesInvoicePaymentRecordStatus = 'ACTIVE' | 'VOIDED';
+export type ReceivableSourceType = 'SALES_INVOICE' | 'OPENING_RECEIVABLE';
 export type SalesDocumentMarginBasis = 'BEFORE_TAX' | 'AFTER_TAX';
 export type PurchaseDocumentType =
   | 'PURCHASE_REQUEST'
@@ -123,6 +124,7 @@ export type PurchaseDocumentType =
 export type PurchaseDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type PurchaseInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 export type PurchaseInvoicePaymentRecordStatus = 'ACTIVE' | 'VOIDED';
+export type PayableSourceType = 'PURCHASE_INVOICE' | 'OPENING_PAYABLE';
 export type PurchaseCostStatus =
   | 'FINAL'
   | 'ESTIMATED'
@@ -813,6 +815,9 @@ export interface SalesDocument {
 export interface SalesInvoicePayment {
   id: string;
   sales_document_id: string;
+  source_type?: ReceivableSourceType;
+  opening_balance_line_id?: string;
+  opening_balance_batch_id?: string;
   document_number: string;
   contact_id?: string;
   customer_name: string;
@@ -848,6 +853,10 @@ export interface SalesInvoicePayment {
 
 export interface AccountsReceivableRow {
   sales_document_id: string;
+  source_type?: ReceivableSourceType;
+  opening_balance_line_id?: string;
+  opening_balance_batch_id?: string;
+  is_opening_balance?: boolean;
   document_number: string;
   contact_id?: string;
   customer_name: string;
@@ -1020,6 +1029,9 @@ export interface PurchaseDocument {
 export interface PurchaseInvoicePayment {
   id: string;
   purchase_document_id: string;
+  source_type?: PayableSourceType;
+  opening_balance_line_id?: string;
+  opening_balance_batch_id?: string;
   document_number: string;
   contact_id?: string;
   supplier_name: string;
@@ -1055,6 +1067,10 @@ export interface PurchaseInvoicePayment {
 
 export interface AccountsPayableRow {
   purchase_document_id: string;
+  source_type?: PayableSourceType;
+  opening_balance_line_id?: string;
+  opening_balance_batch_id?: string;
+  is_opening_balance?: boolean;
   document_number: string;
   contact_id?: string;
   supplier_name: string;
@@ -2162,6 +2178,45 @@ export type OpeningBalanceBatchStatus =
   | 'SKIPPED'
   | 'VOIDED';
 
+export type OpeningBalanceLineSettlementStatus =
+  | 'OPEN'
+  | 'PARTIAL'
+  | 'PAID'
+  | 'VOIDED';
+
+export type OpeningAdvanceBalanceModule =
+  | 'ADVANCE_RECEIVED'
+  | 'ADVANCE_PAID';
+
+export interface OpeningAdvanceBalanceRow {
+  opening_balance_line_id: string;
+  opening_balance_batch_id: string;
+  module: OpeningAdvanceBalanceModule;
+  direction: 'IN' | 'OUT';
+  contact_id?: string;
+  party_name: string;
+  document_number?: string;
+  document_date: string;
+  due_date?: string;
+  currency_code?: string;
+  currency_name?: string;
+  currency_symbol?: string;
+  base_currency_code?: string;
+  exchange_rate?: number;
+  amount: number;
+  base_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  settlement_status: OpeningBalanceLineSettlementStatus;
+  account_id?: string;
+  account_code?: string;
+  account_name?: string;
+  counter_account_id?: string;
+  counter_account_code?: string;
+  counter_account_name?: string;
+  notes?: string;
+}
+
 export type JournalSourceType =
   | 'POS_TRANSACTION'
   | 'STOCK_PURCHASE'
@@ -2372,9 +2427,16 @@ export interface OpeningBalanceLine {
   document_date?: string;
   due_date?: string;
   currency_code?: string;
+  currency_name?: string;
+  currency_symbol?: string;
+  base_currency_code?: string;
   fx_rate?: number;
   amount?: number;
   base_amount: number;
+  paid_amount?: number;
+  remaining_amount?: number;
+  settlement_status?: OpeningBalanceLineSettlementStatus;
+  last_paid_at?: string;
   account_id?: string;
   account_code?: string;
   account_name?: string;

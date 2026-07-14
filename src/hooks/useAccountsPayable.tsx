@@ -6,12 +6,14 @@ import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import {
   getIssuedPurchaseReturnCreditByInvoiceId,
+  recordOpeningPayablePayment,
   recordPurchaseInvoicePayment,
   voidPurchaseInvoicePayment,
   type AccountsPayableFilters,
   type RecordPurchaseInvoicePaymentInput,
 } from '@/services/accountsPayableService';
 import type { AccountsPayableRow, PurchaseInvoicePayment } from '@/types';
+import { buildOpeningPayableRows } from '@/utils/accountsPayable/buildOpeningPayableRows';
 import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
 
 export interface AccountsPayableSummary {
@@ -72,35 +74,71 @@ const filterPayableRows = (
   });
 };
 
+interface RecordPayablePaymentMutationInput {
+  invoiceId?: string;
+  row?: AccountsPayableRow;
+  input: RecordPurchaseInvoicePaymentInput;
+}
+
 export const useAccountsPayable = (filters: AccountsPayableFilters = {}) => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
   const { t } = useI18n();
   const payableData = useLiveQuery(async () => {
-    const documents = await db.purchaseDocuments
-      .where('type')
-      .equals('PURCHASE_INVOICE')
-      .toArray();
+    const [documents, payableBatches] = await Promise.all([
+      db.purchaseDocuments
+        .where('type')
+        .equals('PURCHASE_INVOICE')
+        .toArray(),
+      db.openingBalanceBatches
+        .where('module')
+        .equals('PAYABLE')
+        .filter((batch) => batch.status === 'POSTED')
+        .toArray(),
+    ]);
     const invoiceIds = documents.map((document) => document.id);
     const payments = invoiceIds.length > 0
       ? await db.purchaseInvoicePayments.where('purchase_document_id').anyOf(invoiceIds).toArray()
       : [];
+    const openingBatchIds = payableBatches.map((batch) => batch.id);
+    const openingPayableLines = openingBatchIds.length > 0
+      ? await db.openingBalanceLines.where('batch_id').anyOf(openingBatchIds).toArray()
+      : [];
+    const openingLineIds = openingPayableLines.map((line) => line.id);
+    const openingPayments = openingLineIds.length > 0
+      ? await db.purchaseInvoicePayments.where('purchase_document_id').anyOf(openingLineIds).toArray()
+      : [];
 
     return {
       documents,
-      payments,
+      payments: [...payments, ...openingPayments],
+      invoicePayments: payments,
+      openingPayableLines,
+      openingPayments,
       returnCreditByInvoiceId: await getIssuedPurchaseReturnCreditByInvoiceId(),
     };
   }, [], {
     documents: [],
     payments: [],
+    invoicePayments: [],
+    openingPayableLines: [],
+    openingPayments: [],
     returnCreditByInvoiceId: {},
   });
 
-  const allRows = useMemo(() => buildPayableRows({
-    ...payableData,
-    asOfDate: filters.asOfDate,
-  }), [filters.asOfDate, payableData]);
+  const allRows = useMemo(() => [
+    ...buildPayableRows({
+      documents: payableData.documents,
+      payments: payableData.invoicePayments,
+      returnCreditByInvoiceId: payableData.returnCreditByInvoiceId,
+      asOfDate: filters.asOfDate,
+    }),
+    ...buildOpeningPayableRows({
+      lines: payableData.openingPayableLines,
+      payments: payableData.openingPayments,
+      asOfDate: filters.asOfDate,
+    }),
+  ], [filters.asOfDate, payableData]);
   const payableRows = useMemo(() => filterPayableRows(allRows, filters), [allRows, filters]);
   const summary = useMemo<AccountsPayableSummary>(() => {
     const paidInPeriod = payableData.payments
@@ -139,9 +177,12 @@ export const useAccountsPayable = (filters: AccountsPayableFilters = {}) => {
   };
 
   const recordPaymentMutation = useMutation({
-    mutationFn: ({ invoiceId, input }: { invoiceId: string; input: RecordPurchaseInvoicePaymentInput }) => (
-      recordPurchaseInvoicePayment(invoiceId, input)
-    ),
+    mutationFn: ({ invoiceId, row, input }: RecordPayablePaymentMutationInput) => {
+      if (row?.source_type === 'OPENING_PAYABLE') {
+        return recordOpeningPayablePayment(row.opening_balance_line_id ?? row.purchase_document_id, input);
+      }
+      return recordPurchaseInvoicePayment(invoiceId ?? row?.purchase_document_id ?? '', input);
+    },
     onSuccess: () => {
       invalidate();
       message.success(t('accountsPayable.message.paymentSuccess'));

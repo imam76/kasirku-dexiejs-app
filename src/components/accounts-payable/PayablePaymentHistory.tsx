@@ -140,7 +140,10 @@ export function PayablePaymentHistory({
       dataIndex: 'status',
       width: 120,
       render: (value: PurchaseInvoicePayment['status'], record) => (
-        <div>
+        <div className="space-y-1">
+          {record.source_type === 'OPENING_PAYABLE' && (
+            <Tag color="blue">{t('accountsPayable.source.openingBalance')}</Tag>
+          )}
           <Tag color={value === 'ACTIVE' ? 'green' : 'red'}>
             {value === 'ACTIVE' ? t('accountsPayable.paymentRecordStatus.active') : t('accountsPayable.paymentRecordStatus.voided')}
           </Tag>

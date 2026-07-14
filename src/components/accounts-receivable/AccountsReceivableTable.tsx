@@ -75,17 +75,28 @@ export function AccountsReceivableTable({
       dataIndex: 'document_number',
       fixed: 'left',
       width: 170,
-      render: (value: string, record) => (
-        <Link
-          to="/sales/$documentType/$documentId"
-          params={{
-            documentType: getSalesDocumentTypePathSegment('SALES_INVOICE'),
-            documentId: record.sales_document_id,
-          }}
-        >
-          {value}
-        </Link>
-      ),
+      render: (value: string, record) => {
+        if (record.is_opening_balance) {
+          return (
+            <Space size={4} orientation="vertical">
+              <span>{value}</span>
+              <Tag color="blue">{t('accountsReceivable.source.openingBalance')}</Tag>
+            </Space>
+          );
+        }
+
+        return (
+          <Link
+            to="/sales/$documentType/$documentId"
+            params={{
+              documentType: getSalesDocumentTypePathSegment('SALES_INVOICE'),
+              documentId: record.sales_document_id,
+            }}
+          >
+            {value}
+          </Link>
+        );
+      },
     },
     {
       title: t('accountsReceivable.customer'),
@@ -176,15 +187,19 @@ export function AccountsReceivableTable({
           >
             {t('accountsReceivable.recordPayment')}
           </Button>
-          <Link
-            to="/sales/$documentType/$documentId"
-            params={{
-              documentType: getSalesDocumentTypePathSegment('SALES_INVOICE'),
-              documentId: record.sales_document_id,
-            }}
-          >
-            <Button size="small" icon={<Eye size={14} />} />
-          </Link>
+          {record.is_opening_balance ? (
+            <Button size="small" icon={<Eye size={14} />} disabled />
+          ) : (
+            <Link
+              to="/sales/$documentType/$documentId"
+              params={{
+                documentType: getSalesDocumentTypePathSegment('SALES_INVOICE'),
+                documentId: record.sales_document_id,
+              }}
+            >
+              <Button size="small" icon={<Eye size={14} />} />
+            </Link>
+          )}
         </Space>
       ),
     },

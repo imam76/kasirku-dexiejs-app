@@ -40,10 +40,7 @@ pub async fn postgres_list_employee_cash_advance_bundles(
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<EmployeeCashAdvanceBundleDto>> {
     let pool = state.pool()?;
-    Ok(
-        payroll_repository::list_employee_cash_advance_bundles(&pool, updated_after, limit)
-            .await?,
-    )
+    Ok(payroll_repository::list_employee_cash_advance_bundles(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]

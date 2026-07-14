@@ -280,13 +280,11 @@ export async function postOpeningBalance(
 
   await page.goto('/finance/opening-balances/accounts');
   await expect(page.getByText('Saldo Awal Akun').first()).toBeVisible();
+  await expect(page.getByTestId('gl-opening-balance-save-draft-button')).toHaveCount(0);
 
   await gotoOpeningBalancePage(page, 1);
   await fillOpeningBalanceAmount(page, '1010', 'debit', demoOpeningBalance[0].debit);
   await expect(page.getByText('Selisih debit/kredit').first()).toBeVisible();
-  await expect(page.getByTestId('gl-opening-balance-save-draft-button')).toBeEnabled();
-  await page.getByTestId('gl-opening-balance-save-draft-button').click();
-  await expect(page.getByText('Draft', { exact: true })).toBeVisible();
 
   await fillOpeningBalanceAmount(page, equityAccountCode, 'credit', '4000000');
 

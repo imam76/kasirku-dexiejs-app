@@ -2264,4 +2264,27 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       sync_error: undefined,
     });
   });
+
+  this.version(88).stores({}).upgrade(async (tx) => {
+    const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const accounts = await accountTable.toArray();
+    const accountIds = new Set(accounts.map((account) => account.id));
+    const accountCodes = new Set(accounts.map((account) => account.code));
+    const now = new Date().toISOString();
+    const advanceAccountIds = ['advance-paid', 'advance-received'];
+    const accountsToAdd = DEFAULT_CHART_OF_ACCOUNTS
+      .filter((account) => advanceAccountIds.includes(account.id))
+      .filter((account) => !accountIds.has(account.id) && !accountCodes.has(account.code))
+      .map((account) => ({
+        ...account,
+        created_at: now,
+        updated_at: now,
+        sync_status: 'pending' as const,
+        sync_error: undefined,
+      }));
+
+    if (accountsToAdd.length > 0) {
+      await accountTable.bulkPut(accountsToAdd);
+    }
+  });
 }

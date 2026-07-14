@@ -10,7 +10,6 @@ import {
   buildAccountOpeningBalancePreview,
   getManagedAccountOpeningBalanceBlocks,
   postAccountOpeningBalanceBatch,
-  saveAccountOpeningBalanceDraft,
   type AccountOpeningBalancePreviewLine,
 } from '@/services/openingBalanceService';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
@@ -31,7 +30,6 @@ interface OpeningBalanceFormProps {
   batch?: OpeningBalanceBatch;
   lines?: OpeningBalanceLine[];
   onPosted?: () => void;
-  onDraftSaved?: () => void;
 }
 
 interface OpeningBalanceRow {
@@ -62,7 +60,6 @@ export default function OpeningBalanceForm({
   batch,
   lines = EMPTY_OPENING_BALANCE_LINES,
   onPosted,
-  onDraftSaved,
 }: OpeningBalanceFormProps) {
   const { t } = useI18n();
   const { baseCurrencySymbol } = useBaseCurrency();
@@ -73,7 +70,6 @@ export default function OpeningBalanceForm({
   );
   const [amountByAccountId, setAmountByAccountId] = useState<Record<string, { debit: number; credit: number }>>({});
   const [isDirty, setIsDirty] = useState(false);
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const isLocked = batch?.status === 'POSTED' || batch?.status === 'SKIPPED' || (!batch && Boolean(setting?.opening_balance_journal_id));
   const configuredCutoffDate = setting?.cutoff_date ? dayjs(setting.cutoff_date) : null;
@@ -106,6 +102,18 @@ export default function OpeningBalanceForm({
     setAmountByAccountId(nextAmountByAccountId);
     setIsDirty(false);
   }, [batch?.id, linesRevision, lines]);
+
+  useEffect(() => {
+    if (!isDirty || isLocked) return undefined;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty, isLocked]);
 
   const managedBlocks = useLiveQuery(
     async () => {
@@ -260,40 +268,6 @@ export default function OpeningBalanceForm({
       message.error(error instanceof Error ? error.message : t('generalLedger.setup.postFailed'));
     } finally {
       setIsPosting(false);
-    }
-  };
-
-  const handleSaveDraft = async () => {
-    if (!configuredCutoffDate) {
-      message.warning(t('generalLedger.setup.cutoffRequired'));
-      return;
-    }
-
-    if (hasManagedLineValues) {
-      message.warning(t('openingBalances.account.managedBlocked'));
-      return;
-    }
-
-    try {
-      setIsSavingDraft(true);
-      await saveAccountOpeningBalanceDraft({
-        lines: inputRows
-          .filter((row) => row.debit > 0 || row.credit > 0)
-          .map((row) => ({
-            account_id: row.account.id,
-            debit: row.debit,
-            credit: row.credit,
-            notes: t('generalLedger.setup.openingLineDescription'),
-          })),
-        notes: t('openingBalances.account.defaultNotes'),
-      });
-      message.success(t('openingBalances.message.draftSaved'));
-      setIsDirty(false);
-      onDraftSaved?.();
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : t('openingBalances.message.draftSaveFailed'));
-    } finally {
-      setIsSavingDraft(false);
     }
   };
 
@@ -536,14 +510,6 @@ export default function OpeningBalanceForm({
       )}
 
       <div className="mt-3 flex flex-wrap justify-end gap-2">
-        <Button
-          loading={isSavingDraft}
-          disabled={isLocked || !configuredCutoffDate || !isDirty || hasManagedLineValues}
-          data-testid="gl-opening-balance-save-draft-button"
-          onClick={handleSaveDraft}
-        >
-          {t('openingBalances.saveDraft')}
-        </Button>
         <Button
           type="primary"
           loading={isPosting}

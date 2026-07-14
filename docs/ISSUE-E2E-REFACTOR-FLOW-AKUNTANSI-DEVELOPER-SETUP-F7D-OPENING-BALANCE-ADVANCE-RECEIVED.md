@@ -24,8 +24,8 @@ disettle.
 - User bisa input daftar uang muka masuk per pihak.
 - Posting menghasilkan jurnal liability yang benar.
 - Saldo uang muka masuk tampil di hub dan report/summary relevan.
-- Settlement ke invoice/revenue bisa ditambahkan tanpa mengubah source saldo
-  awal.
+- Settlement generic ke akun revenue/piutang/akun lain bisa dicatat tanpa
+  mengubah source saldo awal.
 
 ## Scope
 
@@ -38,17 +38,17 @@ disettle.
   - currency dan rate;
   - nominal sisa uang muka;
   - notes.
-- Tambahkan status source line: `OPEN`, `PARTIAL_SETTLED`, `SETTLED`,
-  `VOIDED`.
+- Tambahkan status source line: `OPEN`, `PARTIAL`, `PAID`, `VOIDED`.
 - Tambahkan read model sederhana untuk daftar saldo uang muka masuk.
 - Tambahkan summary di hub Saldo Awal.
-- Tambahkan placeholder settlement link untuk issue berikutnya.
+- Tambahkan settlement generic dan report summary uang muka masuk/keluar.
 - Tambahkan E2E posting minimal dan journal trace.
 
 ## Non-Scope
 
-- Tidak wajib membuat settlement penuh ke Sales Invoice di issue ini.
-- Tidak otomatis mengakui revenue.
+- Tidak wajib membuat auto-link settlement penuh ke Sales Invoice di issue ini.
+- Tidak otomatis memilih akun revenue; user/service wajib memilih akun
+  settlement.
 - Tidak membuat reset/reversal setelah settlement ada.
 - Tidak mencampur uang muka masuk dengan penerimaan kas periode berjalan.
 
@@ -77,15 +77,39 @@ Dr Ekuitas Saldo Awal / Opening Balance Equity
 
 ## Checklist
 
-- [ ] Tambahkan akun default/template untuk Uang Muka Diterima bila belum ada.
-- [ ] Tambahkan mapping/registry akun `advance_received`.
-- [ ] Tambahkan contact selector dan currency/rate di form.
-- [ ] Tambahkan persist draft lines.
-- [ ] Tambahkan status settlement line.
-- [ ] Tambahkan read service saldo uang muka masuk.
-- [ ] Tambahkan view/list saldo uang muka masuk atau panel di hub.
-- [ ] Tambahkan i18n ID/EN.
-- [ ] Tambahkan E2E `OB-05` bagian uang muka masuk.
+- [x] Tambahkan akun default/template untuk Uang Muka Diterima bila belum ada.
+- [x] Tambahkan mapping/registry akun `advance_received`.
+- [x] Tambahkan contact selector/manual party dan currency/rate di form.
+- [x] Tambahkan persist draft lines.
+- [x] Tambahkan status settlement line.
+- [x] Tambahkan read service saldo uang muka masuk.
+- [x] Tambahkan view/list saldo uang muka masuk atau panel di hub.
+- [x] Tambahkan settlement generic dan report summary uang muka.
+- [x] Tambahkan i18n ID/EN.
+- [x] Tambahkan E2E `OB-05` bagian uang muka masuk.
+
+## Catatan Implementasi
+
+- Akun default/template `2210 Uang Muka Diterima` ditambahkan dan menjadi
+  kandidat utama registry `ADVANCE_RECEIVED`; fallback lama tetap ada untuk
+  database lama.
+- Form detail memakai `openingBalanceLines` generic dengan contact selector
+  customer untuk pihak yang ada di master kontak, plus input nama pihak manual.
+- Status settlement mengikuti pola existing piutang/hutang:
+  `OPEN`, `PARTIAL`, `PAID`, `VOIDED` agar satu vocabulary dengan AR/AP.
+- Read model `listOpeningAdvanceBalanceRows` mengembalikan saldo advance posted
+  untuk `ADVANCE_RECEIVED` dan `ADVANCE_PAID`; baris `ADVANCE_RECEIVED`
+  ditandai `direction: IN`.
+- Settlement lanjutan memakai `recordOpeningAdvanceSettlement`, membuat jurnal
+  `ADVANCE_RECEIVED_OPENING_BALANCE_SETTLED`, mengurangi `remaining_amount`,
+  dan mengubah status menjadi `PARTIAL` atau `PAID`.
+- Summary report tersedia lewat `getOpeningAdvanceBalanceReport`.
+- Bundle opening balance sudah masuk PostgreSQL/Rust/realtime sync lewat
+  `opening_balance_batches` dan `opening_balance_lines`.
+- E2E `OB-05` memvalidasi batch `ADVANCE_RECEIVED`, jurnal
+  `ADVANCE_RECEIVED_OPENING_BALANCE_POSTED`, settlement
+  `ADVANCE_RECEIVED_OPENING_BALANCE_SETTLED`, akun kredit `2210 Uang Muka
+  Diterima`, dan row/report uang muka masuk.
 
 ## Acceptance Criteria
 
@@ -94,7 +118,7 @@ Dr Ekuitas Saldo Awal / Opening Balance Equity
   bila akun khusus tersedia.
 - Hub menampilkan total posted.
 - Journal trace memakai `ADVANCE_RECEIVED_OPENING_BALANCE_POSTED`.
-- Data source tersimpan cukup detail untuk settlement lanjutan.
+- Data source bisa disettle parsial/penuh dan status outstanding terbarui.
 
 ## Test Case
 
@@ -130,6 +154,7 @@ Expected:
 
 - `src/view/finance/opening-balances/OpeningBalancesManagement.tsx`
 - `src/services/openingBalanceService.ts`
+- `src/services/openingAdvanceBalanceService.ts`
 - `src/constants/chartOfAccounts.ts`
 - `src/services/chartOfAccountService.ts`
 - `src/services/generalLedgerService.ts`

@@ -4,8 +4,15 @@ import {
   requireRolePermission,
   writeActivityLog,
 } from '@/auth/authService';
-import { enqueueGeneralLedgerSettingSync } from '@/services/syncQueueService';
+import { enqueueGeneralLedgerSettingSync, enqueueOpeningBalanceBundleSync } from '@/services/syncQueueService';
 import { postOpeningBalanceSourceJournal } from '@/services/generalLedgerService';
+import { getBaseCurrency } from '@/services/baseCurrencyService';
+import { getCurrencyPreset } from '@/constants/currencies';
+import {
+  normalizeCurrencyCode,
+  normalizeExchangeRate,
+  toBaseCurrencyAmount,
+} from '@/utils/documentCurrency';
 import type {
   ChartOfAccount,
   GeneralLedgerSetting,
@@ -33,10 +40,13 @@ interface OpeningBalanceModuleDefinition {
 }
 
 export interface OpeningBalanceSourceLineInput {
+  contact_id?: string;
   party_name?: string;
   document_number?: string;
   document_date?: string;
   due_date?: string;
+  currency_code?: string;
+  fx_rate?: number;
   amount: number;
   notes?: string;
 }
@@ -125,7 +135,7 @@ export const OPENING_BALANCE_MODULE_DEFINITIONS: OpeningBalanceModuleDefinition[
     descriptionKey: 'openingBalances.modules.advanceReceived.description',
     sourceEvent: 'ADVANCE_RECEIVED_OPENING_BALANCE_POSTED',
     debitCandidate: EQUITY_CANDIDATE,
-    creditCandidate: { ids: ['deposit-payable', 'loan-payable', 'accounts-payable'], codes: ['2200', '2010', '2000'] },
+    creditCandidate: { ids: ['advance-received', 'template-advance-received', 'deposit-payable', 'loan-payable', 'accounts-payable'], codes: ['2210', '2200', '2010', '2000'] },
     targetSide: 'CREDIT',
   },
   {
@@ -135,7 +145,7 @@ export const OPENING_BALANCE_MODULE_DEFINITIONS: OpeningBalanceModuleDefinition[
     shortTitleKey: 'openingBalances.modules.advancePaid.short',
     descriptionKey: 'openingBalances.modules.advancePaid.description',
     sourceEvent: 'ADVANCE_PAID_OPENING_BALANCE_POSTED',
-    debitCandidate: { ids: ['prepaid-expense', 'employee-cash-advance-receivable', 'other-receivable'], codes: ['1300', '1130', '1110'] },
+    debitCandidate: { ids: ['advance-paid', 'template-advance-paid', 'prepaid-expense', 'employee-cash-advance-receivable', 'other-receivable'], codes: ['1310', '1300', '1130', '1110'] },
     creditCandidate: EQUITY_CANDIDATE,
     targetSide: 'DEBIT',
   },
@@ -164,12 +174,12 @@ const MANAGED_ACCOUNT_CANDIDATES: Array<{
   },
   {
     module: 'ADVANCE_RECEIVED',
-    candidate: { ids: ['deposit-payable', 'loan-payable', 'accounts-payable'], codes: ['2200', '2010', '2000'] },
+    candidate: { ids: ['advance-received', 'template-advance-received', 'deposit-payable', 'loan-payable', 'accounts-payable'], codes: ['2210', '2200', '2010', '2000'] },
     label: 'Uang Muka Diterima',
   },
   {
     module: 'ADVANCE_PAID',
-    candidate: { ids: ['prepaid-expense', 'employee-cash-advance-receivable', 'other-receivable'], codes: ['1300', '1130', '1110'] },
+    candidate: { ids: ['advance-paid', 'template-advance-paid', 'prepaid-expense', 'employee-cash-advance-receivable', 'other-receivable'], codes: ['1310', '1300', '1130', '1110'] },
     label: 'Uang Muka Dibayar',
   },
 ];
@@ -185,6 +195,14 @@ export const getOpeningBalanceModuleDefinition = (module: OpeningBalanceModule) 
 export const getOpeningBalanceBatchId = (module: OpeningBalanceModule, cutoffDate: string) => (
   `opening-balance-${module.toLowerCase().replace(/_/g, '-')}-${cutoffDate.slice(0, 10)}`
 );
+
+const enqueueOpeningBalanceBatchForSync = async (
+  batch: OpeningBalanceBatch,
+  operation: 'create' | 'update' = 'update',
+) => {
+  const lines = await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray();
+  await enqueueOpeningBalanceBundleSync(batch, lines, operation);
+};
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -282,6 +300,88 @@ const normalizeAccountOpeningLines = (
       };
     })
     .filter((line) => line.debit > 0 || line.credit > 0);
+};
+
+const normalizeDetailOpeningBalanceInputs = async (
+  module: Exclude<OpeningBalanceModule, 'ACCOUNT'>,
+  lines: OpeningBalanceSourceLineInput[],
+) => {
+  const [baseCurrency, currencies] = await Promise.all([
+    getBaseCurrency(),
+    db.currencies.toArray(),
+  ]);
+  const baseCurrencyCode = normalizeCurrencyCode(baseCurrency.code);
+  const currencyByCode = new Map(currencies.map((currency) => [currency.code, currency]));
+  const documentKeys = new Set<string>();
+
+  return lines
+    .map((line) => {
+      const amount = amountOrZero(line.amount);
+      const currencyCode = normalizeCurrencyCode(line.currency_code, baseCurrencyCode);
+      const isBaseCurrency = currencyCode === baseCurrencyCode;
+      const inputFxRate = Number(line.fx_rate || 0);
+      if (!isBaseCurrency && inputFxRate <= 0) {
+        throw new Error('Kurs wajib lebih dari 0 untuk currency non-base.');
+      }
+      const fxRate = isBaseCurrency ? 1 : normalizeExchangeRate(line.fx_rate);
+      const currency = currencyByCode.get(currencyCode);
+      const preset = getCurrencyPreset(currencyCode);
+
+      return {
+        contact_id: line.contact_id,
+        party_name: line.party_name?.trim() || undefined,
+        document_number: line.document_number?.trim() || undefined,
+        document_date: line.document_date,
+        due_date: line.due_date,
+        currency_code: currencyCode,
+        currency_name: currency?.name ?? preset.name,
+        currency_symbol: currency?.symbol ?? preset.symbol,
+        base_currency_code: baseCurrencyCode,
+        fx_rate: fxRate,
+        amount,
+        base_amount: amountOrZero(toBaseCurrencyAmount(amount, {
+          currency_code: currencyCode,
+          base_currency_code: baseCurrencyCode,
+          exchange_rate: fxRate,
+        })),
+        notes: line.notes?.trim() || undefined,
+      };
+    })
+    .filter((line) => line.amount > 0)
+    .map((line) => {
+      if (module === 'RECEIVABLE' || module === 'PAYABLE') {
+        const moduleLabel = module === 'RECEIVABLE' ? 'piutang' : 'hutang';
+        const partyLabel = module === 'RECEIVABLE' ? 'Customer' : 'Supplier';
+        if (!line.contact_id && !line.party_name) {
+          throw new Error(`${partyLabel} atau nama pihak wajib diisi untuk saldo awal ${moduleLabel}.`);
+        }
+        if (!line.document_number) {
+          throw new Error(`Nomor dokumen wajib diisi untuk saldo awal ${moduleLabel}.`);
+        }
+        if (
+          line.document_date &&
+          line.due_date &&
+          line.due_date.slice(0, 10) < line.document_date.slice(0, 10)
+        ) {
+          throw new Error(`Jatuh tempo saldo awal ${moduleLabel} tidak boleh sebelum tanggal dokumen.`);
+        }
+        const partyKey = line.contact_id ?? line.party_name?.toLowerCase() ?? '';
+        const documentKey = `${partyKey}::${line.document_number.toLowerCase()}`;
+        if (documentKeys.has(documentKey)) {
+          throw new Error(`Nomor dokumen ${line.document_number} sudah dipakai untuk ${partyLabel.toLowerCase()} yang sama.`);
+        }
+        documentKeys.add(documentKey);
+      }
+
+      if (module === 'ADVANCE_RECEIVED' || module === 'ADVANCE_PAID') {
+        const moduleLabel = module === 'ADVANCE_RECEIVED' ? 'uang muka masuk' : 'uang muka keluar';
+        if (!line.contact_id && !line.party_name) {
+          throw new Error(`Nama pihak wajib diisi untuk saldo awal ${moduleLabel}.`);
+        }
+      }
+
+      return line;
+    });
 };
 
 const getManagedAccountBlocks = async (
@@ -499,91 +599,7 @@ export const markOpeningBalanceModuleSkipped = async (
   if (updatedGeneralLedger) {
     await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
   }
-
-  return batch;
-};
-
-export const saveAccountOpeningBalanceDraft = async ({
-  lines,
-  notes,
-}: {
-  lines: AccountOpeningBalanceLineInput[];
-  notes?: string;
-}) => {
-  const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
-
-  const { cutoffDate } = await requireCutoff();
-  const batchId = getOpeningBalanceBatchId('ACCOUNT', cutoffDate);
-  const existingBatch = await db.openingBalanceBatches.get(batchId);
-  if (existingBatch?.status === 'POSTED') {
-    throw new Error('Saldo awal akun sudah posted.');
-  }
-  if (existingBatch?.status === 'SKIPPED') {
-    throw new Error('Saldo awal akun sudah ditandai dilewati. Flow reset belum tersedia.');
-  }
-
-  const accounts = await db.chartOfAccounts.toArray();
-  const normalizedLines = normalizeAccountOpeningLines(lines, accounts);
-  await assertAccountOpeningLinesNotManaged(accounts, cutoffDate, normalizedLines);
-
-  const now = new Date().toISOString();
-  const totalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
-  const totalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
-  const batch: OpeningBalanceBatch = {
-    id: batchId,
-    module: 'ACCOUNT',
-    cutoff_date: cutoffDate,
-    status: 'DRAFT',
-    total_debit: totalDebit,
-    total_credit: totalCredit,
-    notes,
-    created_by: existingBatch?.created_by ?? currentUser?.id,
-    created_by_name: existingBatch?.created_by_name ?? currentUser?.name,
-    updated_by: currentUser?.id,
-    updated_by_name: currentUser?.name,
-    created_at: existingBatch?.created_at ?? now,
-    updated_at: now,
-    sync_status: 'pending',
-    sync_error: undefined,
-  };
-  const openingLines: OpeningBalanceLine[] = normalizedLines.map((line, index) => ({
-    id: `${batchId}-line-${line.account.id}`,
-    batch_id: batchId,
-    module: 'ACCOUNT',
-    line_number: index + 1,
-    base_amount: amountOrZero(line.debit || line.credit),
-    account_id: line.account.id,
-    account_code: line.account.code,
-    account_name: line.account.name,
-    debit: line.debit,
-    credit: line.credit,
-    notes: line.notes,
-    created_at: now,
-    updated_at: now,
-    sync_status: 'pending',
-    sync_error: undefined,
-  }));
-
-  await db.transaction('rw', [
-    db.openingBalanceBatches,
-    db.openingBalanceLines,
-    db.activityLogs,
-  ], async () => {
-    await db.openingBalanceBatches.put(batch);
-    await db.openingBalanceLines.where('batch_id').equals(batchId).delete();
-    if (openingLines.length > 0) {
-      await db.openingBalanceLines.bulkPut(openingLines);
-    }
-
-    await writeActivityLog({
-      user: currentUser,
-      action: 'ACCOUNT_OPENING_BALANCE_DRAFT_SAVED',
-      entity: 'openingBalanceBatches',
-      entity_id: batchId,
-      description: `${currentUser?.name ?? 'User'} menyimpan draft saldo awal akun per ${cutoffDate.slice(0, 10)}.`,
-    });
-  });
+  await enqueueOpeningBalanceBatchForSync(batch, existingBatch ? 'update' : 'create');
 
   return batch;
 };
@@ -733,6 +749,111 @@ export const postAccountOpeningBalanceBatch = async ({
   if (!batch) {
     throw new Error('Batch saldo awal akun gagal dibuat.');
   }
+  await enqueueOpeningBalanceBatchForSync(batch, existingBatch ? 'update' : 'create');
+
+  return batch;
+};
+
+export const saveOpeningBalanceDetailDraft = async ({
+  module,
+  lines,
+  notes,
+}: PostOpeningBalanceDetailBatchInput) => {
+  const currentUser = await getCurrentSessionUser();
+  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+
+  const definition = getOpeningBalanceModuleDefinition(module);
+  const { cutoffDate } = await requireCutoff();
+  const batchId = getOpeningBalanceBatchId(module, cutoffDate);
+  const existingBatch = await db.openingBalanceBatches.get(batchId);
+  if (existingBatch?.status === 'POSTED') {
+    throw new Error('Saldo awal sudah posted.');
+  }
+  if (existingBatch?.status === 'SKIPPED') {
+    throw new Error('Saldo awal sudah ditandai dilewati. Flow reset belum tersedia.');
+  }
+
+  const normalizedInputs = await normalizeDetailOpeningBalanceInputs(module, lines);
+  const accounts = await db.chartOfAccounts.toArray();
+  const debitAccount = requirePostableAccount(accounts, definition.debitCandidate, 'debit saldo awal');
+  const creditAccount = requirePostableAccount(accounts, definition.creditCandidate, 'kredit saldo awal');
+  const targetAccount = definition.targetSide === 'CREDIT' ? creditAccount : debitAccount;
+  const counterAccount = definition.targetSide === 'CREDIT' ? debitAccount : creditAccount;
+  const totalAmount = roundCurrency(normalizedInputs.reduce((sum, line) => sum + line.base_amount, 0));
+  const now = new Date().toISOString();
+  const batch: OpeningBalanceBatch = {
+    id: batchId,
+    module,
+    cutoff_date: cutoffDate,
+    status: 'DRAFT',
+    total_debit: totalAmount,
+    total_credit: totalAmount,
+    notes,
+    created_by: existingBatch?.created_by ?? currentUser?.id,
+    created_by_name: existingBatch?.created_by_name ?? currentUser?.name,
+    updated_by: currentUser?.id,
+    updated_by_name: currentUser?.name,
+    created_at: existingBatch?.created_at ?? now,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  };
+  const openingLines: OpeningBalanceLine[] = normalizedInputs.map((line, index) => ({
+    id: `${batchId}-line-${index + 1}`,
+    batch_id: batchId,
+    module,
+    line_number: index + 1,
+    contact_id: line.contact_id,
+    party_name: line.party_name,
+    document_number: line.document_number,
+    document_date: line.document_date || cutoffDate,
+    due_date: line.due_date,
+    currency_code: line.currency_code,
+    currency_name: line.currency_name,
+    currency_symbol: line.currency_symbol,
+    base_currency_code: line.base_currency_code,
+    fx_rate: line.fx_rate,
+    amount: line.amount,
+    base_amount: line.base_amount,
+    paid_amount: 0,
+    remaining_amount: line.base_amount,
+    settlement_status: 'OPEN',
+    account_id: targetAccount.id,
+    account_code: targetAccount.code,
+    account_name: targetAccount.name,
+    counter_account_id: counterAccount.id,
+    counter_account_code: counterAccount.code,
+    counter_account_name: counterAccount.name,
+    debit: definition.targetSide === 'DEBIT' ? line.base_amount : 0,
+    credit: definition.targetSide === 'CREDIT' ? line.base_amount : 0,
+    notes: line.notes,
+    created_at: now,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  }));
+
+  await db.transaction('rw', [
+    db.openingBalanceBatches,
+    db.openingBalanceLines,
+    db.activityLogs,
+  ], async () => {
+    await db.openingBalanceBatches.put(batch);
+    await db.openingBalanceLines.where('batch_id').equals(batchId).delete();
+    if (openingLines.length > 0) {
+      await db.openingBalanceLines.bulkPut(openingLines);
+    }
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'OPENING_BALANCE_DETAIL_DRAFT_SAVED',
+      entity: 'openingBalanceBatches',
+      entity_id: batchId,
+      description: `${currentUser?.name ?? 'User'} menyimpan draft saldo awal ${module} per ${cutoffDate.slice(0, 10)}.`,
+    });
+  });
+
+  await enqueueOpeningBalanceBatchForSync(batch, existingBatch ? 'update' : 'create');
 
   return batch;
 };
@@ -756,12 +877,7 @@ export const postOpeningBalanceDetailBatch = async ({
     throw new Error('Saldo awal sudah ditandai dilewati. Flow reset belum tersedia.');
   }
 
-  const normalizedInputs = lines
-    .map((line) => ({
-      ...line,
-      amount: roundCurrency(Number(line.amount || 0)),
-    }))
-    .filter((line) => line.amount > 0);
+  const normalizedInputs = await normalizeDetailOpeningBalanceInputs(module, lines);
   if (normalizedInputs.length === 0) {
     throw new Error('Minimal satu baris saldo awal dengan nominal lebih dari 0 wajib diisi.');
   }
@@ -771,7 +887,7 @@ export const postOpeningBalanceDetailBatch = async ({
   const creditAccount = requirePostableAccount(accounts, definition.creditCandidate, 'kredit saldo awal');
   const targetAccount = definition.targetSide === 'CREDIT' ? creditAccount : debitAccount;
   const counterAccount = definition.targetSide === 'CREDIT' ? debitAccount : creditAccount;
-  const totalAmount = roundCurrency(normalizedInputs.reduce((sum, line) => sum + line.amount, 0));
+  const totalAmount = roundCurrency(normalizedInputs.reduce((sum, line) => sum + line.base_amount, 0));
   const now = new Date().toISOString();
 
   let batch: OpeningBalanceBatch | undefined;
@@ -814,11 +930,11 @@ export const postOpeningBalanceDetailBatch = async ({
       journal_entry_id: journalEntry.id,
       posted_at: journalEntry.posted_at,
       notes,
-      created_by: currentUser?.id,
-      created_by_name: currentUser?.name,
+      created_by: existingBatch?.created_by ?? currentUser?.id,
+      created_by_name: existingBatch?.created_by_name ?? currentUser?.name,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
-      created_at: now,
+      created_at: existingBatch?.created_at ?? now,
       updated_at: now,
       sync_status: 'pending',
       sync_error: undefined,
@@ -829,23 +945,30 @@ export const postOpeningBalanceDetailBatch = async ({
       batch_id: batchId,
       module,
       line_number: index + 1,
-      party_name: line.party_name?.trim() || undefined,
-      document_number: line.document_number?.trim() || undefined,
+      contact_id: line.contact_id,
+      party_name: line.party_name,
+      document_number: line.document_number,
       document_date: line.document_date || cutoffDate,
       due_date: line.due_date,
-      currency_code: undefined,
-      fx_rate: 1,
+      currency_code: line.currency_code,
+      currency_name: line.currency_name,
+      currency_symbol: line.currency_symbol,
+      base_currency_code: line.base_currency_code,
+      fx_rate: line.fx_rate,
       amount: line.amount,
-      base_amount: line.amount,
+      base_amount: line.base_amount,
+      paid_amount: 0,
+      remaining_amount: line.base_amount,
+      settlement_status: 'OPEN',
       account_id: targetAccount.id,
       account_code: targetAccount.code,
       account_name: targetAccount.name,
       counter_account_id: counterAccount.id,
       counter_account_code: counterAccount.code,
       counter_account_name: counterAccount.name,
-      debit: definition.targetSide === 'DEBIT' ? line.amount : 0,
-      credit: definition.targetSide === 'CREDIT' ? line.amount : 0,
-      notes: line.notes?.trim() || undefined,
+      debit: definition.targetSide === 'DEBIT' ? line.base_amount : 0,
+      credit: definition.targetSide === 'CREDIT' ? line.base_amount : 0,
+      notes: line.notes,
       created_at: now,
       updated_at: now,
       sync_status: 'pending',
@@ -868,6 +991,7 @@ export const postOpeningBalanceDetailBatch = async ({
   if (!batch) {
     throw new Error('Batch saldo awal gagal dibuat.');
   }
+  await enqueueOpeningBalanceBatchForSync(batch, existingBatch ? 'update' : 'create');
 
   return batch;
 };

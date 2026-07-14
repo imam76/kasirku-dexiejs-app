@@ -50,6 +50,8 @@ export const buildReceivableRows = ({
 
       return {
         sales_document_id: document.id,
+        source_type: 'SALES_INVOICE',
+        is_opening_balance: false,
         document_number: document.document_number,
         contact_id: document.contact_id,
         customer_name: document.customer_name,

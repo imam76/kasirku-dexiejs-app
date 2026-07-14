@@ -1,9 +1,7 @@
 use crate::models::closing_run::ClosingRunDto;
 use sqlx::PgPool;
 
-pub async fn list_closing_runs(
-    pool: &PgPool,
-) -> Result<Vec<ClosingRunDto>, sqlx::Error> {
+pub async fn list_closing_runs(pool: &PgPool) -> Result<Vec<ClosingRunDto>, sqlx::Error> {
     sqlx::query_as::<_, ClosingRunDto>(
         r#"
         SELECT

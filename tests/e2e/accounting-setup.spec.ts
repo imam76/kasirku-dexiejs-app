@@ -193,6 +193,630 @@ test.describe.serial('accounting initial setup regression', () => {
     expect(result.cutoffDate).toBe('2026-01-01T00:00:00.000');
   });
 
+  test('OBA-05 - saldo awal akun posted terkunci dan tidak bisa di-post ulang', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await saveInitialAccountingSetupFixture(page);
+
+    await page.evaluate(async () => {
+      const { db } = await import('/src/lib/db.ts');
+      const { postAccountOpeningBalanceBatch } = await import('/src/services/openingBalanceService.ts');
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountIdByCode = new Map(accounts.map((account) => [account.code, account.id]));
+      const requireAccountId = (code: string) => {
+        const accountId = accountIdByCode.get(code);
+        if (!accountId) throw new Error(`Akun ${code} tidak tersedia untuk opening balance.`);
+        return accountId;
+      };
+
+      await postAccountOpeningBalanceBatch({
+        lines: [
+          { account_id: requireAccountId('1010'), debit: 1000000, credit: 0 },
+          { account_id: requireAccountId('3010'), debit: 0, credit: 1000000 },
+        ],
+      });
+    });
+
+    await page.goto('/finance/opening-balances/accounts');
+    await expect(page.getByText('Opening balance sudah posted.')).toBeVisible();
+    await expect(page.getByTestId('gl-opening-balance-debit-1010')).toBeDisabled();
+    await expect(page.getByTestId('gl-opening-balance-save-draft-button')).toHaveCount(0);
+    await expect(page.getByTestId('gl-opening-balance-post-button')).toBeDisabled();
+
+    const result = await page.evaluate(async () => {
+      const { db } = await import('/src/lib/db.ts');
+      const {
+        ACCOUNT_OPENING_BALANCE_SOURCE_EVENT,
+        postAccountOpeningBalanceBatch,
+      } = await import('/src/services/openingBalanceService.ts');
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountIdByCode = new Map(accounts.map((account) => [account.code, account.id]));
+      const requireAccountId = (code: string) => {
+        const accountId = accountIdByCode.get(code);
+        if (!accountId) throw new Error(`Akun ${code} tidak tersedia untuk opening balance.`);
+        return accountId;
+      };
+
+      await postAccountOpeningBalanceBatch({
+        lines: [
+          { account_id: requireAccountId('1010'), debit: 1500000, credit: 0 },
+          { account_id: requireAccountId('3010'), debit: 0, credit: 1500000 },
+        ],
+      });
+
+      const batch = await db.openingBalanceBatches.get('opening-balance-account-2026-01-01');
+      const setting = await db.generalLedgerSetting.get('default');
+      const entries = await db.journalEntries
+        .where('source_type')
+        .equals('OPENING_BALANCE')
+        .filter((entry) => entry.source_id === 'opening-balance-account-2026-01-01')
+        .toArray();
+      const activeEntry = entries.find(
+        (entry) => entry.status === 'POSTED' && entry.source_event === ACCOUNT_OPENING_BALANCE_SOURCE_EVENT,
+      );
+      const lines = batch
+        ? await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray()
+        : [];
+
+      return {
+        batchStatus: batch?.status,
+        batchTotalDebit: batch?.total_debit,
+        batchTotalCredit: batch?.total_credit,
+        batchJournalEntryId: batch?.journal_entry_id,
+        settingJournalEntryId: setting?.opening_balance_journal_id,
+        activeTotalDebit: activeEntry?.total_debit,
+        activeTotalCredit: activeEntry?.total_credit,
+        activePostedEntryCount: entries.filter(
+          (entry) => entry.status === 'POSTED' && entry.source_event === ACCOUNT_OPENING_BALANCE_SOURCE_EVENT,
+        ).length,
+        reversedEntryCount: entries.filter((entry) => entry.status === 'REVERSED').length,
+        reversalEntryCount: entries.filter((entry) => entry.source_event === `${ACCOUNT_OPENING_BALANCE_SOURCE_EVENT}:REVERSAL`).length,
+        cashLineDebit: lines.find((line) => line.account_code === '1010')?.debit,
+        equityAdjustmentCredit: lines.find((line) => line.account_code === '3050')?.credit,
+      };
+    });
+
+    expect(result).toMatchObject({
+      batchStatus: 'POSTED',
+      batchTotalDebit: 1000000,
+      batchTotalCredit: 1000000,
+      activeTotalDebit: 1000000,
+      activeTotalCredit: 1000000,
+      activePostedEntryCount: 1,
+      reversedEntryCount: 0,
+      reversalEntryCount: 0,
+      cashLineDebit: 1000000,
+    });
+    expect(result.batchJournalEntryId).toBe(result.settingJournalEntryId);
+    expect(result.equityAdjustmentCredit ?? 0).toBe(0);
+  });
+
+  test('OB-03 - saldo awal piutang muncul di AR dan bisa dibayar sebagian lalu lunas', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await saveInitialAccountingSetupFixture(page, {
+      enabledModules: [
+        'PRODUCT',
+        'CONTACT',
+        'CURRENCY',
+        'SALES_INVOICE',
+        'RECEIVABLES',
+        'CASH_FLOW',
+        'CHART_OF_ACCOUNTS',
+        'GENERAL_LEDGER',
+        'REPORT_CASH_FLOW',
+      ],
+    });
+
+    const result = await page.evaluate(async () => {
+      const { createContact } = await import('/src/services/contactService.ts');
+      const {
+        postAccountOpeningBalanceBatch,
+        postOpeningBalanceDetailBatch,
+      } = await import('/src/services/openingBalanceService.ts');
+      const {
+        listAccountsReceivableRows,
+        recordOpeningReceivablePayment,
+      } = await import('/src/services/accountsReceivableService.ts');
+      const { db } = await import('/src/lib/db.ts');
+
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountIdByCode = new Map(accounts.map((account) => [account.code, account.id]));
+      const requireAccountId = (code: string) => {
+        const accountId = accountIdByCode.get(code);
+        if (!accountId) throw new Error(`Akun ${code} tidak tersedia.`);
+        return accountId;
+      };
+
+      await postAccountOpeningBalanceBatch({
+        lines: [
+          { account_id: requireAccountId('1010'), debit: 1000000, credit: 0 },
+          { account_id: requireAccountId('3010'), debit: 0, credit: 1000000 },
+        ],
+      });
+
+      const customer = await createContact({
+        name: 'PT Saldo Awal Piutang E2E',
+        contact_type: 'CUSTOMER',
+      });
+
+      const batch = await postOpeningBalanceDetailBatch({
+        module: 'RECEIVABLE',
+        lines: [{
+          contact_id: customer.id,
+          party_name: customer.name,
+          document_number: 'OBR-E2E-001',
+          document_date: '2026-01-01T00:00:00.000',
+          due_date: '2026-01-31T00:00:00.000',
+          currency_code: 'IDR',
+          fx_rate: 1,
+          amount: 1000000,
+          notes: 'E2E saldo awal piutang',
+        }],
+      });
+
+      const afterPostRows = await listAccountsReceivableRows({ search: 'OBR-E2E-001' });
+      const postedRow = afterPostRows[0];
+      if (!postedRow?.opening_balance_line_id) {
+        throw new Error('Row saldo awal piutang tidak muncul di read model AR.');
+      }
+
+      const firstPayment = await recordOpeningReceivablePayment(postedRow.opening_balance_line_id, {
+        amount: 400000,
+        paid_at: '2026-02-01T00:00:00.000',
+        payment_method: 'TUNAI',
+      });
+      const afterPartialRows = await listAccountsReceivableRows({ search: 'OBR-E2E-001' });
+
+      const secondPayment = await recordOpeningReceivablePayment(postedRow.opening_balance_line_id, {
+        amount: 600000,
+        paid_at: '2026-02-02T00:00:00.000',
+        payment_method: 'TUNAI',
+      });
+      const afterPaidRows = await listAccountsReceivableRows({ search: 'OBR-E2E-001' });
+      const line = await db.openingBalanceLines.get(postedRow.opening_balance_line_id);
+      const paymentJournals = await db.journalEntries
+        .where('source_type')
+        .equals('OPENING_BALANCE')
+        .filter((entry) => [firstPayment.id, secondPayment.id].includes(entry.source_id ?? ''))
+        .toArray();
+
+      return {
+        batchStatus: batch.status,
+        batchTotalDebit: batch.total_debit,
+        batchTotalCredit: batch.total_credit,
+        afterPost: afterPostRows[0],
+        afterPartial: afterPartialRows[0],
+        afterPaid: afterPaidRows[0],
+        lineSettlementStatus: line?.settlement_status,
+        linePaidAmount: line?.paid_amount,
+        lineRemainingAmount: line?.remaining_amount,
+        paymentJournalEvents: paymentJournals.map((entry) => entry.source_event).sort(),
+        paymentJournalBalances: paymentJournals
+          .map((entry) => ({
+            debit: entry.total_debit,
+            credit: entry.total_credit,
+          }))
+          .sort((left, right) => left.debit - right.debit),
+      };
+    });
+
+    expect(result.batchStatus).toBe('POSTED');
+    expect(result.batchTotalDebit).toBe(1000000);
+    expect(result.batchTotalCredit).toBe(1000000);
+    expect(result.afterPost).toMatchObject({
+      source_type: 'OPENING_RECEIVABLE',
+      is_opening_balance: true,
+      payment_status: 'UNPAID',
+      balance_due: 1000000,
+    });
+    expect(result.afterPartial).toMatchObject({
+      payment_status: 'PARTIAL',
+      paid_amount: 400000,
+      balance_due: 600000,
+    });
+    expect(result.afterPaid).toMatchObject({
+      payment_status: 'PAID',
+      paid_amount: 1000000,
+      balance_due: 0,
+    });
+    expect(result.lineSettlementStatus).toBe('PAID');
+    expect(result.linePaidAmount).toBe(1000000);
+    expect(result.lineRemainingAmount).toBe(0);
+    expect(result.paymentJournalEvents).toEqual([
+      'OPENING_RECEIVABLE_PAYMENT_POSTED',
+      'OPENING_RECEIVABLE_PAYMENT_POSTED',
+    ]);
+    expect(result.paymentJournalBalances).toEqual([
+      { debit: 400000, credit: 400000 },
+      { debit: 600000, credit: 600000 },
+    ]);
+
+    await page.goto('/finance/receivables');
+    await page.getByPlaceholder('Cari invoice atau customer').fill('OBR-E2E-001');
+    await expect(page.getByText('OBR-E2E-001')).toBeVisible();
+    await expect(page.getByRole('table').getByText('Saldo Awal', { exact: true })).toBeVisible();
+  });
+
+  test('OB-04 - saldo awal hutang muncul di AP dan bisa dibayar sebagian lalu lunas', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await saveInitialAccountingSetupFixture(page, {
+      enabledModules: [
+        'PRODUCT',
+        'CONTACT',
+        'CURRENCY',
+        'PURCHASE_INVOICE',
+        'PAYABLES',
+        'CASH_FLOW',
+        'CHART_OF_ACCOUNTS',
+        'GENERAL_LEDGER',
+        'REPORT_CASH_FLOW',
+      ],
+    });
+
+    const result = await page.evaluate(async () => {
+      const { createContact } = await import('/src/services/contactService.ts');
+      const {
+        postAccountOpeningBalanceBatch,
+        postOpeningBalanceDetailBatch,
+      } = await import('/src/services/openingBalanceService.ts');
+      const {
+        listAccountsPayableRows,
+        recordOpeningPayablePayment,
+      } = await import('/src/services/accountsPayableService.ts');
+      const { db } = await import('/src/lib/db.ts');
+
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountIdByCode = new Map(accounts.map((account) => [account.code, account.id]));
+      const requireAccountId = (code: string) => {
+        const accountId = accountIdByCode.get(code);
+        if (!accountId) throw new Error(`Akun ${code} tidak tersedia.`);
+        return accountId;
+      };
+
+      await postAccountOpeningBalanceBatch({
+        lines: [
+          { account_id: requireAccountId('1010'), debit: 1000000, credit: 0 },
+          { account_id: requireAccountId('3010'), debit: 0, credit: 1000000 },
+        ],
+      });
+
+      const supplier = await createContact({
+        name: 'PT Saldo Awal Hutang E2E',
+        contact_type: 'SUPPLIER',
+      });
+
+      const batch = await postOpeningBalanceDetailBatch({
+        module: 'PAYABLE',
+        lines: [{
+          contact_id: supplier.id,
+          party_name: supplier.name,
+          document_number: 'OBP-E2E-001',
+          document_date: '2026-01-01T00:00:00.000',
+          due_date: '2026-01-31T00:00:00.000',
+          currency_code: 'IDR',
+          fx_rate: 1,
+          amount: 1000000,
+          notes: 'E2E saldo awal hutang',
+        }],
+      });
+
+      const afterPostRows = await listAccountsPayableRows({ search: 'OBP-E2E-001' });
+      const postedRow = afterPostRows[0];
+      if (!postedRow?.opening_balance_line_id) {
+        throw new Error('Row saldo awal hutang tidak muncul di read model AP.');
+      }
+
+      const firstPayment = await recordOpeningPayablePayment(postedRow.opening_balance_line_id, {
+        amount: 400000,
+        paid_at: '2026-02-01T00:00:00.000',
+        payment_method: 'TUNAI',
+      });
+      const afterPartialRows = await listAccountsPayableRows({ search: 'OBP-E2E-001' });
+
+      const secondPayment = await recordOpeningPayablePayment(postedRow.opening_balance_line_id, {
+        amount: 600000,
+        paid_at: '2026-02-02T00:00:00.000',
+        payment_method: 'TUNAI',
+      });
+      const afterPaidRows = await listAccountsPayableRows({ search: 'OBP-E2E-001' });
+      const line = await db.openingBalanceLines.get(postedRow.opening_balance_line_id);
+      const paymentJournals = await db.journalEntries
+        .where('source_type')
+        .equals('OPENING_BALANCE')
+        .filter((entry) => [firstPayment.id, secondPayment.id].includes(entry.source_id ?? ''))
+        .toArray();
+
+      return {
+        batchStatus: batch.status,
+        batchTotalDebit: batch.total_debit,
+        batchTotalCredit: batch.total_credit,
+        afterPost: afterPostRows[0],
+        afterPartial: afterPartialRows[0],
+        afterPaid: afterPaidRows[0],
+        lineSettlementStatus: line?.settlement_status,
+        linePaidAmount: line?.paid_amount,
+        lineRemainingAmount: line?.remaining_amount,
+        paymentJournalEvents: paymentJournals.map((entry) => entry.source_event).sort(),
+        paymentJournalBalances: paymentJournals
+          .map((entry) => ({
+            debit: entry.total_debit,
+            credit: entry.total_credit,
+          }))
+          .sort((left, right) => left.debit - right.debit),
+      };
+    });
+
+    expect(result.batchStatus).toBe('POSTED');
+    expect(result.batchTotalDebit).toBe(1000000);
+    expect(result.batchTotalCredit).toBe(1000000);
+    expect(result.afterPost).toMatchObject({
+      source_type: 'OPENING_PAYABLE',
+      is_opening_balance: true,
+      payment_status: 'UNPAID',
+      balance_due: 1000000,
+    });
+    expect(result.afterPartial).toMatchObject({
+      payment_status: 'PARTIAL',
+      paid_amount: 400000,
+      balance_due: 600000,
+    });
+    expect(result.afterPaid).toMatchObject({
+      payment_status: 'PAID',
+      paid_amount: 1000000,
+      balance_due: 0,
+    });
+    expect(result.lineSettlementStatus).toBe('PAID');
+    expect(result.linePaidAmount).toBe(1000000);
+    expect(result.lineRemainingAmount).toBe(0);
+    expect(result.paymentJournalEvents).toEqual([
+      'OPENING_PAYABLE_PAYMENT_POSTED',
+      'OPENING_PAYABLE_PAYMENT_POSTED',
+    ]);
+    expect(result.paymentJournalBalances).toEqual([
+      { debit: 400000, credit: 400000 },
+      { debit: 600000, credit: 600000 },
+    ]);
+
+    await page.goto('/finance/payables');
+    await page.getByPlaceholder('Cari invoice atau supplier').fill('OBP-E2E-001');
+    await expect(page.getByText('OBP-E2E-001')).toBeVisible();
+    await expect(page.getByRole('table').getByText('Saldo Awal', { exact: true })).toBeVisible();
+  });
+
+  test('OB-05 - saldo awal uang muka masuk dan keluar posted dengan akun khusus dan trace jurnal', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await saveInitialAccountingSetupFixture(page, {
+      enabledModules: [
+        'PRODUCT',
+        'CONTACT',
+        'CURRENCY',
+        'SALES_INVOICE',
+        'PURCHASE_INVOICE',
+        'CASH_FLOW',
+        'CHART_OF_ACCOUNTS',
+        'GENERAL_LEDGER',
+        'REPORT_CASH_FLOW',
+      ],
+    });
+
+    const result = await page.evaluate(async () => {
+      const { createContact } = await import('/src/services/contactService.ts');
+      const {
+        postAccountOpeningBalanceBatch,
+        postOpeningBalanceDetailBatch,
+      } = await import('/src/services/openingBalanceService.ts');
+      const {
+        getOpeningAdvanceBalanceReport,
+        listOpeningAdvanceBalanceRows,
+        recordOpeningAdvanceSettlement,
+      } = await import('/src/services/openingAdvanceBalanceService.ts');
+      const { db } = await import('/src/lib/db.ts');
+
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountIdByCode = new Map(accounts.map((account) => [account.code, account.id]));
+      const requireAccountId = (code: string) => {
+        const accountId = accountIdByCode.get(code);
+        if (!accountId) throw new Error(`Akun ${code} tidak tersedia.`);
+        return accountId;
+      };
+
+      await postAccountOpeningBalanceBatch({
+        lines: [
+          { account_id: requireAccountId('1010'), debit: 1000000, credit: 0 },
+          { account_id: requireAccountId('3010'), debit: 0, credit: 1000000 },
+        ],
+      });
+
+      const customer = await createContact({
+        name: 'PT Uang Muka Masuk E2E',
+        contact_type: 'CUSTOMER',
+      });
+      const supplier = await createContact({
+        name: 'PT Uang Muka Keluar E2E',
+        contact_type: 'SUPPLIER',
+      });
+
+      const receivedBatch = await postOpeningBalanceDetailBatch({
+        module: 'ADVANCE_RECEIVED',
+        lines: [{
+          contact_id: customer.id,
+          party_name: customer.name,
+          document_number: 'OBAR-E2E-001',
+          document_date: '2026-01-01T00:00:00.000',
+          currency_code: 'IDR',
+          fx_rate: 1,
+          amount: 700000,
+          notes: 'E2E saldo awal uang muka masuk',
+        }],
+      });
+      const paidBatch = await postOpeningBalanceDetailBatch({
+        module: 'ADVANCE_PAID',
+        lines: [{
+          contact_id: supplier.id,
+          party_name: supplier.name,
+          document_number: 'OBAP-E2E-001',
+          document_date: '2026-01-01T00:00:00.000',
+          currency_code: 'IDR',
+          fx_rate: 1,
+          amount: 450000,
+          notes: 'E2E saldo awal uang muka keluar',
+        }],
+      });
+
+      const [receivedRows, paidRows, allRows] = await Promise.all([
+        listOpeningAdvanceBalanceRows({ module: 'ADVANCE_RECEIVED', search: 'OBAR-E2E-001' }),
+        listOpeningAdvanceBalanceRows({ module: 'ADVANCE_PAID', search: 'OBAP-E2E-001' }),
+        listOpeningAdvanceBalanceRows({ search: 'E2E' }),
+      ]);
+      const advanceLines = await db.openingBalanceLines
+        .where('batch_id')
+        .anyOf([receivedBatch.id, paidBatch.id])
+        .toArray();
+      const receivedLine = advanceLines.find((line) => line.module === 'ADVANCE_RECEIVED');
+      const paidLine = advanceLines.find((line) => line.module === 'ADVANCE_PAID');
+      if (!receivedLine || !paidLine) {
+        throw new Error('Line saldo awal uang muka tidak lengkap.');
+      }
+
+      const receivedSettlement = await recordOpeningAdvanceSettlement(receivedLine.id, {
+        amount: 250000,
+        settlement_account_id: requireAccountId('4010'),
+        settled_at: '2026-01-15T00:00:00.000',
+        notes: 'Settlement parsial uang muka masuk E2E',
+      });
+      const paidSettlement = await recordOpeningAdvanceSettlement(paidLine.id, {
+        amount: 450000,
+        settlement_account_id: requireAccountId('6900'),
+        settled_at: '2026-01-16T00:00:00.000',
+        notes: 'Settlement penuh uang muka keluar E2E',
+      });
+      const advanceReport = await getOpeningAdvanceBalanceReport({ search: 'E2E' });
+      const settledAdvanceLines = await db.openingBalanceLines
+        .where('batch_id')
+        .anyOf([receivedBatch.id, paidBatch.id])
+        .toArray();
+      const journalEntries = await db.journalEntries
+        .where('source_type')
+        .equals('OPENING_BALANCE')
+        .filter((entry) => [receivedBatch.id, paidBatch.id].includes(entry.source_id ?? ''))
+        .toArray();
+      const settlementJournalEntries = await db.journalEntries
+        .where('source_type')
+        .equals('OPENING_BALANCE')
+        .filter((entry) => entry.source_event?.includes('OPENING_BALANCE_SETTLED') ?? false)
+        .toArray();
+      const syncQueueEntities = (await db.syncQueue.toArray()).map((item) => item.entity);
+
+      return {
+        receivedBatch: {
+          status: receivedBatch.status,
+          totalDebit: receivedBatch.total_debit,
+          totalCredit: receivedBatch.total_credit,
+        },
+        paidBatch: {
+          status: paidBatch.status,
+          totalDebit: paidBatch.total_debit,
+          totalCredit: paidBatch.total_credit,
+        },
+        receivedLine,
+        paidLine,
+        settledReceivedLine: settledAdvanceLines.find((line) => line.module === 'ADVANCE_RECEIVED'),
+        settledPaidLine: settledAdvanceLines.find((line) => line.module === 'ADVANCE_PAID'),
+        receivedRow: receivedRows[0],
+        paidRow: paidRows[0],
+        receivedSettlementRow: receivedSettlement.row,
+        paidSettlementRow: paidSettlement.row,
+        advanceReportSummary: advanceReport.summary,
+        allRowCount: allRows.length,
+        journalEvents: journalEntries.map((entry) => entry.source_event).sort(),
+        settlementJournalEvents: settlementJournalEntries.map((entry) => entry.source_event).sort(),
+        settlementJournalBalances: Object.fromEntries(settlementJournalEntries.map((entry) => [
+          entry.source_event,
+          { debit: entry.total_debit, credit: entry.total_credit },
+        ])),
+        syncQueueEntities,
+      };
+    });
+
+    expect(result.receivedBatch).toMatchObject({
+      status: 'POSTED',
+      totalDebit: 700000,
+      totalCredit: 700000,
+    });
+    expect(result.paidBatch).toMatchObject({
+      status: 'POSTED',
+      totalDebit: 450000,
+      totalCredit: 450000,
+    });
+    expect(result.receivedLine).toMatchObject({
+      account_code: '2210',
+      account_name: 'Uang Muka Diterima',
+      credit: 700000,
+      settlement_status: 'OPEN',
+    });
+    expect(result.paidLine).toMatchObject({
+      account_code: '1310',
+      account_name: 'Uang Muka Dibayar',
+      debit: 450000,
+      settlement_status: 'OPEN',
+    });
+    expect(result.receivedRow).toMatchObject({
+      module: 'ADVANCE_RECEIVED',
+      direction: 'IN',
+      document_number: 'OBAR-E2E-001',
+      remaining_amount: 700000,
+    });
+    expect(result.paidRow).toMatchObject({
+      module: 'ADVANCE_PAID',
+      direction: 'OUT',
+      document_number: 'OBAP-E2E-001',
+      remaining_amount: 450000,
+    });
+    expect(result.receivedSettlementRow).toMatchObject({
+      settlement_status: 'PARTIAL',
+      paid_amount: 250000,
+      remaining_amount: 450000,
+    });
+    expect(result.paidSettlementRow).toMatchObject({
+      settlement_status: 'PAID',
+      paid_amount: 450000,
+      remaining_amount: 0,
+    });
+    expect(result.settledReceivedLine).toMatchObject({
+      settlement_status: 'PARTIAL',
+      paid_amount: 250000,
+      remaining_amount: 450000,
+    });
+    expect(result.settledPaidLine).toMatchObject({
+      settlement_status: 'PAID',
+      paid_amount: 450000,
+      remaining_amount: 0,
+    });
+    expect(result.advanceReportSummary).toMatchObject({
+      total_count: 2,
+      total_base_amount: 1150000,
+      total_settled_amount: 700000,
+      total_remaining_amount: 450000,
+      advance_received_remaining_amount: 450000,
+      advance_paid_remaining_amount: 0,
+      partial_count: 1,
+      paid_count: 1,
+    });
+    expect(result.allRowCount).toBeGreaterThanOrEqual(2);
+    expect(result.journalEvents).toEqual([
+      'ADVANCE_PAID_OPENING_BALANCE_POSTED',
+      'ADVANCE_RECEIVED_OPENING_BALANCE_POSTED',
+    ]);
+    expect(result.settlementJournalEvents).toEqual([
+      'ADVANCE_PAID_OPENING_BALANCE_SETTLED',
+      'ADVANCE_RECEIVED_OPENING_BALANCE_SETTLED',
+    ]);
+    expect(result.settlementJournalBalances).toMatchObject({
+      ADVANCE_RECEIVED_OPENING_BALANCE_SETTLED: { debit: 250000, credit: 250000 },
+      ADVANCE_PAID_OPENING_BALANCE_SETTLED: { debit: 450000, credit: 450000 },
+    });
+    expect(result.syncQueueEntities).toEqual(expect.arrayContaining(['openingBalanceBatches']));
+  });
+
   test('AIS-SETUP-06 - periode berjalan di luar periode fiskal ditolak tanpa write parsial', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
 

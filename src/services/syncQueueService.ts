@@ -37,6 +37,7 @@ import {
 } from '@/services/employeeReadService';
 import { mergeRemoteFinanceTransactionsIntoDexie } from '@/services/financeTransactionReadService';
 import { mergeRemoteJournalEntryBundlesIntoDexie } from '@/services/journalEntryReadService';
+import { mergeRemoteOpeningBalanceBundlesIntoDexie } from '@/services/openingBalanceReadService';
 import {
   mergeRemoteEmployeeCashAdvanceBundlesIntoDexie,
   mergeRemotePayrollRunBundlesIntoDexie,
@@ -81,6 +82,7 @@ import {
   financeTransactionPostgresAdapter,
   isTauriRuntime,
   journalEntryPostgresAdapter,
+  openingBalancePostgresAdapter,
   payrollRunPostgresAdapter,
   postgresAdapter,
   productPostgresAdapter,
@@ -128,6 +130,9 @@ import {
   type RemoteJournalEntryBundleDto,
   type RemoteJournalEntryDto,
   type RemoteJournalEntryLineDto,
+  type RemoteOpeningBalanceBatchDto,
+  type RemoteOpeningBalanceBundleDto,
+  type RemoteOpeningBalanceLineDto,
   type RemotePayrollRunBundleDto,
   type RemotePayrollRunDto,
   type RemotePayrollRunItemDto,
@@ -156,7 +161,7 @@ import {
 import { mergeRemoteCashBankReconciliationsIntoDexie } from '@/services/cashBankReconciliationReadService';
 import { mergeRemoteAccountingPeriodsIntoDexie } from '@/services/accountingPeriodReadService';
 import { mergeRemoteClosingRunsIntoDexie } from '@/services/closingRunReadService';
-import type { AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -193,6 +198,7 @@ const EMPLOYEE_CASH_ADVANCE_ENTITY = 'employeeCashAdvances';
 const EMPLOYEE_COLLECTION_SCHEDULE_ENTITY = 'employeeCollectionSchedules';
 const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
 const JOURNAL_ENTRY_ENTITY = 'journalEntries';
+const OPENING_BALANCE_ENTITY = 'openingBalanceBatches';
 const PAYROLL_RUN_ENTITY = 'payrollRuns';
 const PRODUCT_ENTITY = 'products';
 const PRODUCTION_ORDER_ENTITY = 'productionOrders';
@@ -1246,6 +1252,73 @@ const mapJournalEntryBundleToRemoteDto = (
 ): RemoteJournalEntryBundleDto => ({
   entry: mapJournalEntryToRemoteDto(entry),
   lines: lines.map(mapJournalEntryLineToRemoteDto),
+});
+
+const mapOpeningBalanceBatchToRemoteDto = (
+  batch: OpeningBalanceBatch,
+): RemoteOpeningBalanceBatchDto => ({
+  id: batch.id,
+  module: batch.module,
+  cutoff_date: batch.cutoff_date,
+  status: batch.status,
+  total_debit: normalizeRemoteNumber(batch.total_debit),
+  total_credit: normalizeRemoteNumber(batch.total_credit),
+  journal_entry_id: batch.journal_entry_id ?? null,
+  posted_at: batch.posted_at ?? null,
+  skipped_at: batch.skipped_at ?? null,
+  notes: batch.notes ?? null,
+  version: batch.version ?? 1,
+  created_by: batch.created_by ?? null,
+  created_by_name: batch.created_by_name ?? null,
+  updated_by: batch.updated_by ?? null,
+  updated_by_name: batch.updated_by_name ?? null,
+  created_at: batch.created_at,
+  updated_at: batch.updated_at,
+  deleted_at: batch.deleted_at ?? null,
+});
+
+const mapOpeningBalanceLineToRemoteDto = (
+  line: OpeningBalanceLine,
+): RemoteOpeningBalanceLineDto => ({
+  id: line.id,
+  batch_id: line.batch_id,
+  module: line.module,
+  line_number: Math.trunc(normalizeRemoteNumber(line.line_number)),
+  contact_id: line.contact_id ?? null,
+  party_name: line.party_name ?? null,
+  document_number: line.document_number ?? null,
+  document_date: line.document_date ?? null,
+  due_date: line.due_date ?? null,
+  currency_code: line.currency_code ?? null,
+  currency_name: line.currency_name ?? null,
+  currency_symbol: line.currency_symbol ?? null,
+  base_currency_code: line.base_currency_code ?? null,
+  fx_rate: line.fx_rate ?? null,
+  amount: line.amount ?? null,
+  base_amount: normalizeRemoteNumber(line.base_amount),
+  paid_amount: line.paid_amount ?? null,
+  remaining_amount: line.remaining_amount ?? null,
+  settlement_status: line.settlement_status ?? null,
+  last_paid_at: line.last_paid_at ?? null,
+  account_id: line.account_id ?? null,
+  account_code: line.account_code ?? null,
+  account_name: line.account_name ?? null,
+  counter_account_id: line.counter_account_id ?? null,
+  counter_account_code: line.counter_account_code ?? null,
+  counter_account_name: line.counter_account_name ?? null,
+  debit: normalizeRemoteNumber(line.debit),
+  credit: normalizeRemoteNumber(line.credit),
+  notes: line.notes ?? null,
+  created_at: line.created_at,
+  updated_at: line.updated_at,
+});
+
+const mapOpeningBalanceBundleToRemoteDto = (
+  batch: OpeningBalanceBatch,
+  lines: OpeningBalanceLine[],
+): RemoteOpeningBalanceBundleDto => ({
+  batch: mapOpeningBalanceBatchToRemoteDto(batch),
+  lines: lines.map(mapOpeningBalanceLineToRemoteDto),
 });
 
 const mapSalesDocumentToRemoteDto = (document: SalesDocument): RemoteSalesDocumentDto => ({
@@ -2410,6 +2483,53 @@ const isRemoteJournalEntryBundleDto = (
   );
 };
 
+const isRemoteOpeningBalanceBatchDto = (payload: unknown): payload is RemoteOpeningBalanceBatchDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteOpeningBalanceBatchDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.module === 'string' &&
+    typeof candidate.cutoff_date === 'string' &&
+    typeof candidate.status === 'string' &&
+    typeof candidate.total_debit === 'number' &&
+    typeof candidate.total_credit === 'number' &&
+    typeof candidate.version === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteOpeningBalanceLineDto = (payload: unknown): payload is RemoteOpeningBalanceLineDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteOpeningBalanceLineDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.batch_id === 'string' &&
+    typeof candidate.module === 'string' &&
+    typeof candidate.line_number === 'number' &&
+    typeof candidate.base_amount === 'number' &&
+    typeof candidate.debit === 'number' &&
+    typeof candidate.credit === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteOpeningBalanceBundleDto = (
+  payload: unknown,
+): payload is RemoteOpeningBalanceBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteOpeningBalanceBundleDto>;
+  return (
+    isRemoteOpeningBalanceBatchDto(candidate.batch) &&
+    Array.isArray(candidate.lines) &&
+    candidate.lines.every(isRemoteOpeningBalanceLineDto)
+  );
+};
+
 const isRemoteSalesDocumentDto = (payload: unknown): payload is RemoteSalesDocumentDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -2882,6 +3002,28 @@ const updateJournalEntrySyncMetadata = async (
   await db.journalEntries.update(entryId, syncMetadata);
 };
 
+const updateOpeningBalanceBundleSyncMetadata = async (
+  batchId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<OpeningBalanceBatch, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentBatch = await db.openingBalanceBatches.get(batchId);
+  if (!currentBatch || currentBatch.updated_at !== sourceUpdatedAt) return;
+
+  await db.transaction('rw', db.openingBalanceBatches, db.openingBalanceLines, async () => {
+    await db.openingBalanceBatches.update(batchId, syncMetadata);
+    await db.openingBalanceLines
+      .where('batch_id')
+      .equals(batchId)
+      .modify((line) => {
+        line.sync_status = syncMetadata.sync_status;
+        line.sync_error = syncMetadata.sync_error;
+        line.last_synced_at = syncMetadata.last_synced_at;
+        line.remote_updated_at = syncMetadata.remote_updated_at;
+      });
+  });
+};
+
 const updateProjectSyncMetadata = async (
   projectId: string,
   sourceUpdatedAt: string,
@@ -3277,6 +3419,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === JOURNAL_ENTRY_ENTITY && isRemoteJournalEntryBundleDto(queueItem.payload)) {
     await updateJournalEntrySyncMetadata(queueItem.entity_id, queueItem.payload.entry.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === OPENING_BALANCE_ENTITY && isRemoteOpeningBalanceBundleDto(queueItem.payload)) {
+    await updateOpeningBalanceBundleSyncMetadata(queueItem.entity_id, queueItem.payload.batch.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -3701,6 +3850,18 @@ const processJournalEntryQueueItem = async (queueItem: SyncQueueItem) => {
   return journalEntryPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processOpeningBalanceQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Opening balance sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteOpeningBalanceBundleDto(queueItem.payload)) {
+    throw new Error('Payload opening balance sync queue tidak valid.');
+  }
+
+  return openingBalancePostgresAdapter.upsert(queueItem.payload);
+};
+
 const processProjectQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     return projectPostgresAdapter.delete(queueItem.entity_id);
@@ -3898,6 +4059,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteAccountingPeriod: RemoteAccountingPeriodDto | null = null;
     let remoteClosingRun: RemoteClosingRunDto | null = null;
     let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
+    let remoteOpeningBalanceBundle: RemoteOpeningBalanceBundleDto | null = null;
     let remotePayrollRunBundle: RemotePayrollRunBundleDto | null = null;
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProductionOrderBundle: RemoteProductionOrderBundleDto | null = null;
@@ -3971,6 +4133,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteClosingRun = await processClosingRunQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === JOURNAL_ENTRY_ENTITY) {
       remoteJournalEntryBundle = await processJournalEntryQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === OPENING_BALANCE_ENTITY) {
+      remoteOpeningBalanceBundle = await processOpeningBalanceQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PAYROLL_RUN_ENTITY) {
       remotePayrollRunBundle = await processPayrollRunQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PRODUCT_ENTITY) {
@@ -4555,6 +4719,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteJournalEntryBundle.entry.updated_at,
       });
       await mergeRemoteJournalEntryBundlesIntoDexie([remoteJournalEntryBundle], syncedAt);
+      return;
+    }
+
+    if (remoteOpeningBalanceBundle && isRemoteOpeningBalanceBundleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateOpeningBalanceBundleSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.batch.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteOpeningBalanceBundle.batch.updated_at,
+      });
+      await mergeRemoteOpeningBalanceBundlesIntoDexie([remoteOpeningBalanceBundle], syncedAt);
       return;
     }
 
@@ -6123,6 +6299,30 @@ export const enqueueJournalEntryBundleSync = async (
   return queueItem;
 };
 
+export const enqueueOpeningBalanceBundleSync = async (
+  batch: OpeningBalanceBatch,
+  lines: OpeningBalanceLine[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: OPENING_BALANCE_ENTITY,
+    entity_id: batch.id,
+    operation,
+    payload: mapOpeningBalanceBundleToRemoteDto(batch, lines),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueuePendingJournalEntriesForSync = async () => {
   const journalEntries = (await db.journalEntries.toArray())
     .filter((entry) => entry.sync_status === 'pending' || entry.sync_status === 'failed');
@@ -6144,6 +6344,31 @@ export const enqueuePendingJournalEntriesForSync = async () => {
     if (!existingQueueItem) {
       const lines = await db.journalEntryLines.where('journal_entry_id').equals(entry.id).toArray();
       await enqueueJournalEntryBundleSync(entry, lines, 'update');
+    }
+  }
+};
+
+export const enqueuePendingOpeningBalancesForSync = async () => {
+  const batches = (await db.openingBalanceBatches.toArray())
+    .filter((batch) => batch.sync_status === 'pending' || batch.sync_status === 'failed');
+
+  const openingBalanceQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(OPENING_BALANCE_ENTITY)
+    .toArray();
+
+  for (const batch of batches) {
+    const existingQueueItem = openingBalanceQueueItems.find((queueItem) => (
+      queueItem.entity_id === batch.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteOpeningBalanceBundleDto(queueItem.payload) &&
+      queueItem.payload.batch.updated_at === batch.updated_at &&
+      queueItem.payload.batch.version === (batch.version ?? 1)
+    ));
+
+    if (!existingQueueItem) {
+      const lines = await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray();
+      await enqueueOpeningBalanceBundleSync(batch, lines, 'update');
     }
   }
 };

@@ -49,11 +49,13 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('employee-cash-advance-receivable', '1130', 'Piutang Kasbon Karyawan', 'ASSET'),
   createAccountSeed('inventory', '1200', 'Persediaan Barang', 'ASSET'),
   createAccountSeed('input-tax', '1305', 'PPN Masukan', 'ASSET'),
+  createAccountSeed('advance-paid', '1310', 'Uang Muka Dibayar', 'ASSET'),
   createAccountSeed('accounts-payable', '2000', 'Hutang Usaha', 'LIABILITY'),
   createAccountSeed('output-tax', '2100', 'PPN Keluaran', 'LIABILITY'),
   createAccountSeed('luxury-sales-tax-payable', '2110', 'PPnBM Terutang', 'LIABILITY'),
   createAccountSeed('pph23-payable', '2120', 'PPh 23 Terutang', 'LIABILITY'),
   createAccountSeed('final-income-tax-payable', '2130', 'PPh Final Terutang', 'LIABILITY'),
+  createAccountSeed('advance-received', '2210', 'Uang Muka Diterima', 'LIABILITY'),
   createAccountSeed('cooperative-member-savings', '2300', 'Simpanan Anggota', 'LIABILITY'),
   createAccountSeed('owner-capital', '3000', 'Modal Pemilik', 'EQUITY'),
   createAccountSeed('opening-balance-equity', '3050', 'Ekuitas Saldo Awal', 'EQUITY', {
@@ -383,6 +385,7 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createEtapTemplateLine('inventory', '1200', 'Persediaan Barang', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createEtapTemplateLine('prepaid-expense', '1300', 'Biaya Dibayar Dimuka', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createEtapTemplateLine('input-tax', '1305', 'PPN Masukan', 'ASSET', { parent_template_account_id: 'asset-current' }),
+  createEtapTemplateLine('advance-paid', '1310', 'Uang Muka Dibayar', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createEtapTemplateLine('fixed-asset', '1500', 'Aset Tetap', 'ASSET', { is_postable: false }),
   createEtapTemplateLine('equipment', '1510', 'Peralatan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
   createEtapTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
@@ -398,6 +401,7 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createEtapTemplateLine('pph23-payable', '2120', 'PPh 23 Terutang', 'LIABILITY', { parent_template_account_id: 'liability' }),
   createEtapTemplateLine('final-income-tax-payable', '2130', 'PPh Final Terutang', 'LIABILITY', { parent_template_account_id: 'liability' }),
   createEtapTemplateLine('deposit-payable', '2200', 'Dana Titipan', 'LIABILITY', { parent_template_account_id: 'liability' }),
+  createEtapTemplateLine('advance-received', '2210', 'Uang Muka Diterima', 'LIABILITY', { parent_template_account_id: 'liability' }),
   createEtapTemplateLine('member-savings', '2300', 'Simpanan Anggota', 'LIABILITY', {
     parent_template_account_id: 'liability',
     is_postable: false,
@@ -567,6 +571,7 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('inventory', '1200', 'Persediaan Barang', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createTemplateLine('prepaid-expense', '1300', 'Biaya Dibayar Dimuka', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createTemplateLine('input-tax', '1305', 'PPN Masukan', 'ASSET', { parent_template_account_id: 'asset-current' }),
+  createTemplateLine('advance-paid', '1310', 'Uang Muka Dibayar', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createTemplateLine('fixed-asset', '1500', 'Aset Tetap', 'ASSET', { is_postable: false }),
   createTemplateLine('equipment', '1510', 'Peralatan Toko', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
   createTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
@@ -581,6 +586,9 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('loan-payable', '2200', 'Pinjaman', 'LIABILITY', {
     parent_template_account_id: 'liability',
     mapping_keys: [FINANCE_CATEGORIES.LOAN],
+  }),
+  createTemplateLine('advance-received', '2210', 'Uang Muka Diterima', 'LIABILITY', {
+    parent_template_account_id: 'liability',
   }),
   createTemplateLine('equity', '3000', 'Ekuitas', 'EQUITY', { is_postable: false }),
   createTemplateLine('owner-capital', '3010', 'Modal Pemilik', 'EQUITY', {
@@ -688,6 +696,9 @@ export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES: ChartOfAccountTemplateLine
   createServiceTemplateLine('prepaid-expense', '1300', 'Biaya Dibayar Dimuka', 'ASSET', {
     parent_template_account_id: 'asset-current',
   }),
+  createServiceTemplateLine('advance-paid', '1310', 'Uang Muka Dibayar', 'ASSET', {
+    parent_template_account_id: 'asset-current',
+  }),
   createServiceTemplateLine('fixed-asset', '1500', 'Aset Tetap', 'ASSET', { is_postable: false }),
   createServiceTemplateLine('equipment', '1510', 'Peralatan', 'ASSET', {
     parent_template_account_id: 'fixed-asset',
@@ -701,6 +712,9 @@ export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES: ChartOfAccountTemplateLine
     mapping_keys: [FINANCE_CATEGORIES.LOAN],
   }),
   createServiceTemplateLine('tax-payable', '2100', 'Pajak Terutang', 'LIABILITY', {
+    parent_template_account_id: 'liability',
+  }),
+  createServiceTemplateLine('advance-received', '2210', 'Uang Muka Diterima', 'LIABILITY', {
     parent_template_account_id: 'liability',
   }),
   createServiceTemplateLine('equity', '3000', 'Ekuitas', 'EQUITY', { is_postable: false }),

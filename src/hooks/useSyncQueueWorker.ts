@@ -90,6 +90,8 @@ const FINANCE_REALTIME_TABLES = new Set([
   'general_ledger_setting',
   'journal_entries',
   'journal_entry_lines',
+  'opening_balance_batches',
+  'opening_balance_lines',
 ]);
 
 const FINANCE_QUERY_KEYS = [
@@ -102,6 +104,7 @@ const FINANCE_QUERY_KEYS = [
   'closingRuns',
   'closingPreview',
   'journalEntries',
+  'openingBalances',
   'trialBalance',
   'incomeStatement',
   'balanceSheet',

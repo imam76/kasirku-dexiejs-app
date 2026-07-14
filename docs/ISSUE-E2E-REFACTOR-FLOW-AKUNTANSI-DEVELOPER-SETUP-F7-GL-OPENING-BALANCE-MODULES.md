@@ -86,8 +86,8 @@ audit, bukan form setup campur aduk.
 - Service posting saldo awal per submodule.
 - Readiness General Ledger membaca status saldo awal per submodule, bukan hanya
   satu field journal id.
-- Guard posted/locked untuk mencegah perubahan cutoff atau saldo awal tanpa flow
-  reversal/reset eksplisit.
+- Guard posted/locked untuk mencegah perubahan cutoff atau saldo awal setelah
+  posted.
 - i18n ID/EN untuk menu, title, CTA, status, validation, dan activity log.
 - E2E regression untuk GL, hub saldo awal, dan posting minimal.
 
@@ -144,7 +144,7 @@ Aturan:
 
 - akun Piutang Usaha, Hutang Usaha, Uang Muka Masuk, dan Uang Muka Keluar harus
   readonly atau diberi warning jika sudah dikelola submodule khusus;
-- draft boleh tidak balance dan bisa diedit bertahap;
+- input sebelum post boleh tidak balance dan bisa diedit di layar;
 - saat posting, jurnal tetap balance. Jika total debit/kredit input tidak sama,
   sistem otomatis menambahkan line `Ekuitas Saldo Awal` /
   `Opening Balance Equity` sebesar selisih;
@@ -270,8 +270,9 @@ Untuk detail, rekomendasi v1:
 - Saldo Awal Piutang dan Hutang punya source row domain sendiri agar AR/AP bisa
   menampilkan dan melunasi saldo awal tanpa membuat sales/purchase document palsu
   yang mengotori report operasional.
-- Uang Muka Masuk/Keluar memakai source row domain sendiri dulu, lalu bisa
-  diintegrasikan ke settlement module berikutnya.
+- Uang Muka Masuk/Keluar memakai source row domain sendiri dan settlement
+  generic berbasis akun settlement pilihan; auto-link ke dokumen spesifik bisa
+  ditambahkan setelah kontrak Sales/Purchase/Payroll siap.
 
 ## Posting dan Readiness
 
@@ -298,36 +299,46 @@ Untuk detail, rekomendasi v1:
 
 ## Checklist
 
-- [ ] Tambahkan type `OpeningBalanceModule`, `OpeningBalanceBatchStatus`, dan
+- [x] Tambahkan type `OpeningBalanceModule`, `OpeningBalanceBatchStatus`, dan
   model batch/line yang dipilih.
-- [ ] Tambahkan Dexie migration dan backup/restore untuk tabel saldo awal.
-- [ ] Tambahkan PostgreSQL migration, Rust model/repository/command, adapter,
+- [x] Tambahkan Dexie migration dan backup/restore untuk tabel saldo awal.
+- [x] Tambahkan PostgreSQL migration, Rust model/repository/command, adapter,
   sync queue, read refresh, dan realtime trigger untuk saldo awal.
-- [ ] Tambahkan route `/finance/opening-balances`.
-- [ ] Tambahkan route submodule:
-  - [ ] `/finance/opening-balances/accounts`;
-  - [ ] `/finance/opening-balances/receivables`;
-  - [ ] `/finance/opening-balances/payables`;
-  - [ ] `/finance/opening-balances/advance-received`;
-  - [ ] `/finance/opening-balances/advance-paid`.
-- [ ] Ubah `/finance/general-ledger/setup` agar redirect/menampilkan Saldo Awal,
+  - Implementasi: `0053_opening_balances.sql`, model/repository/command Rust
+    `opening_balance`, `openingBalancePostgresAdapter`,
+    `openingBalanceReadService`, sync queue bundle, orchestrator refresh, dan
+    realtime table invalidation.
+- [x] Tambahkan route `/finance/opening-balances`.
+- [x] Tambahkan route submodule:
+  - [x] `/finance/opening-balances/accounts`;
+  - [x] `/finance/opening-balances/receivables`;
+  - [x] `/finance/opening-balances/payables`;
+  - [x] `/finance/opening-balances/advance-received`;
+  - [x] `/finance/opening-balances/advance-paid`.
+- [x] Ubah `/finance/general-ledger/setup` agar redirect/menampilkan Saldo Awal,
   bukan alias dashboard General Ledger.
-- [ ] Pindahkan `OpeningBalanceForm` keluar dari `GeneralLedgerManagement`.
-- [ ] Tambahkan hub Saldo Awal dengan status per submodule.
-- [ ] Tambahkan form Saldo Awal Akun.
-- [ ] Tambahkan form Saldo Awal Piutang.
-- [ ] Tambahkan form Saldo Awal Hutang.
-- [ ] Tambahkan form Uang Muka Masuk.
-- [ ] Tambahkan form Uang Muka Keluar.
-- [ ] Tambahkan service posting batch saldo awal dan activity log.
-- [ ] Integrasikan saldo awal piutang ke `listAccountsReceivableRows` dan payment
+- [x] Pindahkan `OpeningBalanceForm` keluar dari `GeneralLedgerManagement`.
+- [x] Tambahkan hub Saldo Awal dengan status per submodule.
+- [x] Tambahkan form Saldo Awal Akun.
+- [x] Tambahkan form Saldo Awal Piutang.
+- [x] Tambahkan form Saldo Awal Hutang.
+- [x] Tambahkan form Uang Muka Masuk.
+- [x] Tambahkan form Uang Muka Keluar.
+- [x] Tambahkan service posting batch saldo awal dan activity log.
+- [x] Integrasikan saldo awal piutang ke `listAccountsReceivableRows` dan payment
   flow.
-- [ ] Integrasikan saldo awal hutang ke `listAccountsPayableRows` dan payment
+- [x] Integrasikan saldo awal hutang ke `listAccountsPayableRows` dan payment
   flow.
-- [ ] Integrasikan saldo awal uang muka ke read model/report yang relevan.
-- [ ] Update `getGeneralLedgerReadiness`.
-- [ ] Update sidebar, finance index, i18n ID/EN, route permission, dan test id.
-- [ ] Update E2E helper yang masih mengisi opening balance lewat
+- [x] Integrasikan saldo awal uang muka ke read model minimal
+  `listOpeningAdvanceBalanceRows`, hub Saldo Awal, dan journal trace.
+- [x] Integrasikan saldo awal uang muka ke report/settlement lanjutan.
+  - Implementasi: `getOpeningAdvanceBalanceReport` dan
+    `recordOpeningAdvanceSettlement` untuk settlement generic berbasis akun
+    settlement pilihan; auto-link ke dokumen Sales/Purchase/Payroll spesifik
+    tetap bisa menjadi enhancement berikutnya.
+- [x] Update `getGeneralLedgerReadiness`.
+- [x] Update sidebar, finance index, i18n ID/EN, route permission, dan test id.
+- [x] Update E2E helper yang masih mengisi opening balance lewat
   `/finance/general-ledger`.
 
 ## Acceptance Criteria

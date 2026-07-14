@@ -106,18 +106,33 @@ Dr Ekuitas Saldo Awal / Opening Balance Equity
 
 ## Checklist
 
-- [ ] Tambahkan supplier selector di form Saldo Awal Hutang.
-- [ ] Tambahkan field currency/rate.
-- [ ] Tambahkan validasi nomor dokumen unik.
-- [ ] Tambahkan persist draft lines.
-- [ ] Tambahkan status outstanding line.
-- [ ] Integrasikan ke `accountsPayableService`.
-- [ ] Integrasikan ke hook/view Hutang Usaha.
-- [ ] Tambahkan branch payment untuk opening payable.
-- [ ] Tambahkan jurnal payment opening payable.
-- [ ] Tambahkan badge `Saldo Awal` di table dan payment history.
-- [ ] Tambahkan i18n ID/EN.
-- [ ] Tambahkan E2E `OB-04`.
+- [x] Tambahkan supplier selector di form Saldo Awal Hutang.
+- [x] Tambahkan field currency/rate.
+- [x] Tambahkan validasi nomor dokumen unik.
+- [x] Tambahkan persist draft lines.
+- [x] Tambahkan status outstanding line.
+- [x] Integrasikan ke `accountsPayableService`.
+- [x] Integrasikan ke hook/view Hutang Usaha.
+- [x] Tambahkan branch payment untuk opening payable.
+- [x] Tambahkan jurnal payment opening payable.
+- [x] Tambahkan badge `Saldo Awal` di table dan payment history.
+- [x] Tambahkan i18n ID/EN.
+- [x] Tambahkan E2E `OB-04`.
+
+## Catatan Implementasi 2026-07-14
+
+- Form detail saldo awal sekarang memakai selector supplier untuk module
+  `PAYABLE`, tetap mendukung party manual, currency, kurs, due date, dan draft.
+- Line saldo awal hutang posted masuk ke read model Hutang Usaha sebagai row
+  `OPENING_PAYABLE` dengan badge `Saldo Awal`, tanpa membuat Purchase Invoice
+  operasional.
+- Payment saldo awal hutang memakai branch service sendiri, mengupdate
+  `paid_amount`, `remaining_amount`, dan `settlement_status` di
+  `openingBalanceLines`, lalu menjurnal Dr Hutang Usaha Cr Kas/Bank dengan
+  source event `OPENING_PAYABLE_PAYMENT_POSTED`.
+- Verifikasi: `bun run build` dan
+  `bunx playwright test tests/e2e/accounting-setup.spec.ts --project=chromium`
+  hijau.
 
 ## Acceptance Criteria
 

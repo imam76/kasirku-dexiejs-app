@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import {
+  recordOpeningReceivablePayment,
   recordSalesInvoicePayment,
   voidSalesInvoicePayment,
   type AccountsReceivableFilters,
@@ -12,6 +13,7 @@ import {
 } from '@/services/accountsReceivableService';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
 import type { AccountsReceivableRow, SalesInvoicePayment } from '@/types';
+import { buildOpeningReceivableRows } from '@/utils/accountsReceivable/buildOpeningReceivableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
 
 export interface AccountsReceivableSummary {
@@ -72,18 +74,39 @@ const filterReceivableRows = (
   });
 };
 
+interface RecordReceivablePaymentMutationInput {
+  invoiceId?: string;
+  row?: AccountsReceivableRow;
+  input: RecordSalesInvoicePaymentInput;
+}
+
 export const useAccountsReceivable = (filters: AccountsReceivableFilters = {}) => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
   const { t } = useI18n();
   const receivableData = useLiveQuery(async () => {
-    const documents = await db.salesDocuments
-      .where('type')
-      .equals('SALES_INVOICE')
-      .toArray();
+    const [documents, receivableBatches] = await Promise.all([
+      db.salesDocuments
+        .where('type')
+        .equals('SALES_INVOICE')
+        .toArray(),
+      db.openingBalanceBatches
+        .where('module')
+        .equals('RECEIVABLE')
+        .filter((batch) => batch.status === 'POSTED')
+        .toArray(),
+    ]);
     const invoiceIds = documents.map((document) => document.id);
     const payments = invoiceIds.length > 0
       ? await db.salesInvoicePayments.where('sales_document_id').anyOf(invoiceIds).toArray()
+      : [];
+    const openingBatchIds = receivableBatches.map((batch) => batch.id);
+    const openingReceivableLines = openingBatchIds.length > 0
+      ? await db.openingBalanceLines.where('batch_id').anyOf(openingBatchIds).toArray()
+      : [];
+    const openingLineIds = openingReceivableLines.map((line) => line.id);
+    const openingPayments = openingLineIds.length > 0
+      ? await db.salesInvoicePayments.where('sales_document_id').anyOf(openingLineIds).toArray()
       : [];
     const returnSummaryEntries = await Promise.all(
       documents.map(async (document) => {
@@ -95,19 +118,34 @@ export const useAccountsReceivable = (filters: AccountsReceivableFilters = {}) =
 
     return {
       documents,
-      payments,
+      payments: [...payments, ...openingPayments],
+      invoicePayments: payments,
+      openingReceivableLines,
+      openingPayments,
       returnSummariesByInvoiceId: Object.fromEntries(returnSummaryEntries),
     };
   }, [], {
     documents: [],
     payments: [],
+    invoicePayments: [],
+    openingReceivableLines: [],
+    openingPayments: [],
     returnSummariesByInvoiceId: {},
   });
 
-  const allRows = useMemo(() => buildReceivableRows({
-    ...receivableData,
-    asOfDate: filters.asOfDate,
-  }), [filters.asOfDate, receivableData]);
+  const allRows = useMemo(() => [
+    ...buildReceivableRows({
+      documents: receivableData.documents,
+      payments: receivableData.invoicePayments,
+      returnSummariesByInvoiceId: receivableData.returnSummariesByInvoiceId,
+      asOfDate: filters.asOfDate,
+    }),
+    ...buildOpeningReceivableRows({
+      lines: receivableData.openingReceivableLines,
+      payments: receivableData.openingPayments,
+      asOfDate: filters.asOfDate,
+    }),
+  ], [filters.asOfDate, receivableData]);
   const receivableRows = useMemo(() => filterReceivableRows(allRows, filters), [allRows, filters]);
   const summary = useMemo<AccountsReceivableSummary>(() => {
     const paidInPeriod = receivableData.payments
@@ -146,9 +184,12 @@ export const useAccountsReceivable = (filters: AccountsReceivableFilters = {}) =
   };
 
   const recordPaymentMutation = useMutation({
-    mutationFn: ({ invoiceId, input }: { invoiceId: string; input: RecordSalesInvoicePaymentInput }) => (
-      recordSalesInvoicePayment(invoiceId, input)
-    ),
+    mutationFn: ({ invoiceId, row, input }: RecordReceivablePaymentMutationInput) => {
+      if (row?.source_type === 'OPENING_RECEIVABLE') {
+        return recordOpeningReceivablePayment(row.opening_balance_line_id ?? row.sales_document_id, input);
+      }
+      return recordSalesInvoicePayment(invoiceId ?? row?.sales_document_id ?? '', input);
+    },
     onSuccess: () => {
       invalidate();
       message.success(t('accountsReceivable.message.paymentSuccess'));

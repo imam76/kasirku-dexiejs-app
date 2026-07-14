@@ -265,7 +265,8 @@ pub async fn list_employee_cash_advance_bundles(
     let repayments =
         list_employee_cash_advance_repayments_for_advances(pool, cash_advance_ids).await?;
 
-    let mut repayments_by_advance_id = HashMap::<String, Vec<EmployeeCashAdvanceRepaymentDto>>::new();
+    let mut repayments_by_advance_id =
+        HashMap::<String, Vec<EmployeeCashAdvanceRepaymentDto>>::new();
     for repayment in repayments {
         repayments_by_advance_id
             .entry(repayment.cash_advance_id.clone())
@@ -526,7 +527,7 @@ async fn upsert_payroll_run(
             updated_by_name,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at
-        "#
+        "#,
     )
     .bind(input.id)
     .bind(input.payroll_number)
@@ -625,7 +626,7 @@ async fn replace_payroll_run_items(
                 net_amount = EXCLUDED.net_amount,
                 notes = EXCLUDED.notes,
                 updated_at = EXCLUDED.updated_at
-            "#
+            "#,
         )
         .bind(item.id)
         .bind(item.payroll_run_id)
@@ -968,7 +969,7 @@ async fn insert_employee_cash_advance_repayments(
                 voided_at = EXCLUDED.voided_at,
                 updated_at = EXCLUDED.updated_at
             WHERE EXCLUDED.updated_at >= employee_cash_advance_repayments.updated_at
-            "#
+            "#,
         )
         .bind(repayment.id)
         .bind(repayment.cash_advance_id)

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { App, Alert, Button, Card, DatePicker, Descriptions, Input, InputNumber, Space, Table, Tag, Typography } from 'antd';
+import { App, Alert, Button, Card, DatePicker, Descriptions, Input, InputNumber, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, CheckCircle2, CircleSlash, FilePlus2, Landmark, Plus, Trash2 } from 'lucide-react';
@@ -16,10 +16,13 @@ import {
   getOpeningBalanceModuleDefinition,
   markOpeningBalanceModuleSkipped,
   postOpeningBalanceDetailBatch,
+  saveOpeningBalanceDetailDraft,
   type OpeningBalanceSourceLineInput,
 } from '@/services/openingBalanceService';
+import { recordOpeningAdvanceSettlement } from '@/services/openingAdvanceBalanceService';
 import { formatCurrency, formatDateOnly } from '@/utils/formatters';
 import type {
+  ContactType,
   GeneralLedgerSetting,
   OpeningBalanceBatch,
   OpeningBalanceBatchStatus,
@@ -33,10 +36,13 @@ type StatusView = OpeningBalanceBatchStatus | 'EMPTY';
 
 interface EditableSourceLine {
   id: string;
+  contact_id?: string;
   party_name?: string;
   document_number?: string;
   document_date?: string;
   due_date?: string;
+  currency_code?: string;
+  fx_rate?: number;
   amount?: number;
   notes?: string;
 }
@@ -57,10 +63,19 @@ const statusKey: Record<StatusView, string> = {
   VOIDED: 'openingBalances.status.voided',
 };
 
-const createEditableLine = (cutoffDate?: string): EditableSourceLine => ({
+const settlementStatusColor: Record<string, string> = {
+  OPEN: 'blue',
+  PARTIAL: 'gold',
+  PAID: 'green',
+  VOIDED: 'red',
+};
+
+const createEditableLine = (cutoffDate?: string, currencyCode = 'IDR'): EditableSourceLine => ({
   id: crypto.randomUUID(),
   document_date: cutoffDate,
   due_date: cutoffDate,
+  currency_code: currencyCode,
+  fx_rate: 1,
   amount: 0,
 });
 
@@ -84,6 +99,14 @@ const StatusTag = ({ status }: { status: StatusView }) => {
 const moneyFactory = (symbol: string) => (value?: number) => (
   `${symbol} ${formatCurrency(Number(value || 0))}`
 );
+
+const getContactTypesForOpeningBalanceModule = (
+  module: Exclude<OpeningBalanceModule, 'ACCOUNT'>,
+): ContactType[] => {
+  if (module === 'PAYABLE') return ['SUPPLIER', 'CUSTOMER_SUPPLIER'];
+  if (module === 'ADVANCE_PAID') return ['SUPPLIER', 'CUSTOMER_SUPPLIER', 'OTHER'];
+  return ['CUSTOMER', 'CUSTOMER_SUPPLIER'];
+};
 
 export default function OpeningBalancesManagement() {
   const { t } = useI18n();
@@ -308,14 +331,26 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
   const { t } = useI18n();
   const navigate = useNavigate();
   const { message } = App.useApp();
-  const { baseCurrencySymbol } = useBaseCurrency();
+  const { baseCurrencyCode, baseCurrencySymbol } = useBaseCurrency();
   const definition = getOpeningBalanceModuleDefinition(module);
   const state = useLiveQuery(
     async () => {
-      const [setup, setting, batches] = await Promise.all([
+      const [setup, setting, batches, contacts, currencies, accounts] = await Promise.all([
         db.accountingInitialSetupSetting.get('default'),
         db.generalLedgerSetting.get('default'),
         db.openingBalanceBatches.toArray(),
+        db.contacts
+          .filter((contact) => (
+            contact.is_active !== false &&
+            getContactTypesForOpeningBalanceModule(module).includes(contact.contact_type)
+          ))
+          .toArray(),
+        db.currencies
+          .filter((currency) => currency.is_active)
+          .toArray(),
+        db.chartOfAccounts
+          .filter((account) => account.is_active && account.is_postable)
+          .toArray(),
       ]);
       const cutoffDate = setup?.cutoff_date ?? setting?.cutoff_date;
       const batch = getBatchForModule(batches, module, cutoffDate);
@@ -323,40 +358,116 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
         ? await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray()
         : [];
 
-      return { cutoffDate, batch, lines };
+      return { cutoffDate, batch, lines, contacts, currencies, accounts };
     },
     [module],
-    { cutoffDate: undefined, batch: undefined, lines: [] },
+    { cutoffDate: undefined, batch: undefined, lines: [], contacts: [], currencies: [], accounts: [] },
   );
-  const [rows, setRows] = useState<EditableSourceLine[]>([createEditableLine()]);
+  const [rows, setRows] = useState<EditableSourceLine[]>([createEditableLine(undefined, baseCurrencyCode)]);
+  const [settlementLine, setSettlementLine] = useState<OpeningBalanceLine>();
+  const [settlementAmount, setSettlementAmount] = useState<number>(0);
+  const [settlementAccountId, setSettlementAccountId] = useState<string>();
+  const [settlementDate, setSettlementDate] = useState<string>();
+  const [settlementNotes, setSettlementNotes] = useState<string>();
+  const [isSettling, setIsSettling] = useState(false);
   const isLocked = state.batch?.status === 'POSTED' || state.batch?.status === 'SKIPPED';
+  const isAdvanceModule = module === 'ADVANCE_RECEIVED' || module === 'ADVANCE_PAID';
   const money = moneyFactory(baseCurrencySymbol);
-  const draftTotal = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const lineBaseAmount = (row: EditableSourceLine) => Number(row.amount || 0) * Number(row.fx_rate || 1);
+  const draftTotal = rows.reduce((sum, row) => sum + lineBaseAmount(row), 0);
   const persistedTotal = state.lines.reduce((sum, row) => sum + Number(row.base_amount || 0), 0);
+  const linesRevision = useMemo(
+    () => state.lines.map((line) => `${line.id}:${line.updated_at}:${line.base_amount}:${line.paid_amount ?? 0}`).join('|'),
+    [state.lines],
+  );
   const displayRows = useMemo(() => rows.map((row) => ({
     ...row,
     document_date: row.document_date ?? state.cutoffDate,
     due_date: row.due_date ?? state.cutoffDate,
-  })), [rows, state.cutoffDate]);
+    currency_code: row.currency_code ?? baseCurrencyCode,
+    fx_rate: row.fx_rate ?? 1,
+  })), [baseCurrencyCode, rows, state.cutoffDate]);
+  const currencyOptions = useMemo(() => {
+    const currencies = state.currencies.some((currency) => currency.code === baseCurrencyCode)
+      ? state.currencies
+      : [{ id: baseCurrencyCode, code: baseCurrencyCode, name: baseCurrencyCode, symbol: baseCurrencySymbol }, ...state.currencies];
+    return currencies.map((currency) => ({
+      value: currency.code,
+      label: `${currency.code} - ${currency.name}`,
+    }));
+  }, [baseCurrencyCode, baseCurrencySymbol, state.currencies]);
+  const contactOptions = useMemo(() => state.contacts.map((contact) => ({
+    value: contact.id,
+    label: contact.name,
+  })), [state.contacts]);
+  const settlementAccountOptions = useMemo(() => state.accounts.map((account) => ({
+    value: account.id,
+    label: `${account.code} - ${account.name}`,
+  })), [state.accounts]);
+  const contactPlaceholderKey = module === 'PAYABLE' || module === 'ADVANCE_PAID'
+    ? 'openingBalances.supplierPlaceholder'
+    : 'openingBalances.customerPlaceholder';
+
+  useEffect(() => {
+    if (isLocked) return;
+    let cancelled = false;
+    const nextRows = state.lines.length > 0
+      ? state.lines.map((line) => ({
+        id: line.id,
+        contact_id: line.contact_id,
+        party_name: line.party_name,
+        document_number: line.document_number,
+        document_date: line.document_date,
+        due_date: line.due_date,
+        currency_code: line.currency_code ?? baseCurrencyCode,
+        fx_rate: line.fx_rate ?? 1,
+        amount: line.amount ?? line.base_amount,
+        notes: line.notes,
+      }))
+      : [createEditableLine(state.cutoffDate, baseCurrencyCode)];
+
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setRows(nextRows);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseCurrencyCode, isLocked, linesRevision, state.cutoffDate, state.lines]);
 
   const updateRow = (rowId: string, patch: Partial<EditableSourceLine>) => {
     setRows((current) => current.map((row) => row.id === rowId ? { ...row, ...patch } : row));
   };
 
+  const buildPayload = (): OpeningBalanceSourceLineInput[] => displayRows.map((row) => ({
+    contact_id: row.contact_id,
+    party_name: row.party_name,
+    document_number: row.document_number,
+    document_date: row.document_date,
+    due_date: row.due_date,
+    currency_code: row.currency_code,
+    fx_rate: Number(row.fx_rate || 1),
+    amount: Number(row.amount || 0),
+    notes: row.notes,
+  }));
+
   const handlePost = async () => {
     try {
-      const payload: OpeningBalanceSourceLineInput[] = displayRows.map((row) => ({
-        party_name: row.party_name,
-        document_number: row.document_number,
-        document_date: row.document_date,
-        due_date: row.due_date,
-        amount: Number(row.amount || 0),
-        notes: row.notes,
-      }));
-      await postOpeningBalanceDetailBatch({ module, lines: payload });
+      await postOpeningBalanceDetailBatch({ module, lines: buildPayload() });
       message.success(t('openingBalances.message.posted'));
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('openingBalances.message.postFailed'));
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      await saveOpeningBalanceDetailDraft({ module, lines: buildPayload() });
+      message.success(t('openingBalances.message.draftSaved'));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('openingBalances.message.draftSaveFailed'));
     }
   };
 
@@ -369,19 +480,73 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
     }
   };
 
+  const openSettlementModal = (line: OpeningBalanceLine) => {
+    setSettlementLine(line);
+    setSettlementAmount(Number(line.remaining_amount ?? line.base_amount ?? 0));
+    setSettlementAccountId(undefined);
+    setSettlementDate(new Date().toISOString());
+    setSettlementNotes(undefined);
+  };
+
+  const closeSettlementModal = () => {
+    if (isSettling) return;
+    setSettlementLine(undefined);
+    setSettlementAmount(0);
+    setSettlementAccountId(undefined);
+    setSettlementDate(undefined);
+    setSettlementNotes(undefined);
+  };
+
+  const handleRecordSettlement = async () => {
+    if (!settlementLine || !settlementAccountId) return;
+
+    try {
+      setIsSettling(true);
+      await recordOpeningAdvanceSettlement(settlementLine.id, {
+        amount: Number(settlementAmount || 0),
+        settlement_account_id: settlementAccountId,
+        settled_at: settlementDate,
+        notes: settlementNotes,
+      });
+      message.success(t('openingBalances.message.settlementRecorded'));
+      closeSettlementModal();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('openingBalances.message.settlementFailed'));
+    } finally {
+      setIsSettling(false);
+    }
+  };
+
   const draftColumns: ColumnsType<EditableSourceLine> = [
     {
       title: t('openingBalances.party'),
       dataIndex: 'party_name',
       key: 'party_name',
       render: (_value, record) => (
-        <Input
-          value={record.party_name}
-          placeholder={t('openingBalances.partyPlaceholder')}
-          onChange={(event) => updateRow(record.id, { party_name: event.target.value })}
-        />
+        <Space direction="vertical" size={4} className="w-full">
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            value={record.contact_id}
+            placeholder={t(contactPlaceholderKey as never)}
+            options={contactOptions}
+            onChange={(value) => {
+              const contact = state.contacts.find((item) => item.id === value);
+              updateRow(record.id, {
+                contact_id: value,
+                party_name: contact?.name ?? record.party_name,
+              });
+            }}
+          />
+          <Input
+            value={record.party_name}
+            placeholder={t('openingBalances.partyPlaceholder')}
+            onChange={(event) => updateRow(record.id, { party_name: event.target.value })}
+          />
+        </Space>
       ),
-      width: 220,
+      width: 260,
     },
     {
       title: t('openingBalances.documentNumber'),
@@ -419,6 +584,39 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
         />
       ),
       width: 170,
+    },
+    {
+      title: t('openingBalances.currency'),
+      dataIndex: 'currency_code',
+      key: 'currency_code',
+      render: (_value, record) => (
+        <Select
+          showSearch
+          optionFilterProp="label"
+          value={record.currency_code ?? baseCurrencyCode}
+          options={currencyOptions}
+          onChange={(value) => updateRow(record.id, {
+            currency_code: value,
+            fx_rate: value === baseCurrencyCode ? 1 : record.fx_rate || 1,
+          })}
+        />
+      ),
+      width: 150,
+    },
+    {
+      title: t('openingBalances.fxRate'),
+      dataIndex: 'fx_rate',
+      key: 'fx_rate',
+      align: 'right',
+      render: (_value, record) => (
+        <InputNumber
+          min={record.currency_code === baseCurrencyCode ? 1 : 0.000001}
+          value={record.fx_rate ?? 1}
+          disabled={(record.currency_code ?? baseCurrencyCode) === baseCurrencyCode}
+          onChange={(value) => updateRow(record.id, { fx_rate: Number(value || 1) })}
+        />
+      ),
+      width: 150,
     },
     {
       title: t('finance.amount'),
@@ -495,6 +693,70 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
       render: (value: number) => money(value),
       width: 180,
     },
+    {
+      title: t('openingBalances.currency'),
+      dataIndex: 'currency_code',
+      key: 'currency_code',
+      render: (value?: string) => value || baseCurrencyCode,
+      width: 120,
+    },
+    {
+      title: t('openingBalances.fxRate'),
+      dataIndex: 'fx_rate',
+      key: 'fx_rate',
+      align: 'right',
+      render: (value?: number) => value ?? 1,
+      width: 120,
+    },
+    {
+      title: t('openingBalances.paidAmount'),
+      dataIndex: 'paid_amount',
+      key: 'paid_amount',
+      align: 'right' as const,
+      render: (value?: number) => money(value || 0),
+      width: 170,
+    }, {
+      title: t('openingBalances.remainingAmount'),
+      dataIndex: 'remaining_amount',
+      key: 'remaining_amount',
+      align: 'right' as const,
+      render: (value: number | undefined, record: OpeningBalanceLine) => money(value ?? record.base_amount),
+      width: 170,
+    }, {
+      title: t('openingBalances.settlementStatus'),
+      dataIndex: 'settlement_status',
+      key: 'settlement_status',
+      render: (value?: string) => {
+        const status = value ?? 'OPEN';
+        return (
+          <Tag color={settlementStatusColor[status] ?? 'default'}>
+            {t(`openingBalances.settlementStatus.${status}` as never)}
+          </Tag>
+        );
+      },
+      width: 150,
+    },
+    ...(isAdvanceModule ? [{
+      title: '',
+      key: 'settle',
+      render: (_value: unknown, record: OpeningBalanceLine) => {
+        const remainingAmount = Number(record.remaining_amount ?? record.base_amount ?? 0);
+        const canSettle = remainingAmount > 0 && (record.settlement_status ?? 'OPEN') !== 'PAID';
+
+        return (
+          <Button
+            size="small"
+            type="link"
+            icon={<CheckCircle2 size={14} />}
+            disabled={!canSettle}
+            onClick={() => openSettlementModal(record)}
+          >
+            {t('openingBalances.settle')}
+          </Button>
+        );
+      },
+      width: 120,
+    }] : []),
   ];
 
   return (
@@ -516,6 +778,9 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
             <Space wrap>
               <Button icon={<CircleSlash size={16} />} onClick={handleSkip}>
                 {t('openingBalances.skip')}
+              </Button>
+              <Button onClick={handleSaveDraft}>
+                {t('openingBalances.saveDraft')}
               </Button>
               <Button
                 type="primary"
@@ -551,7 +816,7 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
           {!isLocked && (
             <Button
               icon={<Plus size={16} />}
-              onClick={() => setRows((current) => [...current, createEditableLine(state.cutoffDate)])}
+              onClick={() => setRows((current) => [...current, createEditableLine(state.cutoffDate, baseCurrencyCode)])}
             >
               {t('openingBalances.addLine')}
             </Button>
@@ -563,7 +828,7 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
             columns={postedColumns}
             rowKey="id"
             pagination={false}
-            scroll={{ x: 1020 }}
+            scroll={{ x: 1540 }}
           />
         ) : (
           <Table<EditableSourceLine>
@@ -571,7 +836,7 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
             columns={draftColumns}
             rowKey="id"
             pagination={false}
-            scroll={{ x: 1020 }}
+            scroll={{ x: 1320 }}
           />
         )}
       </Card>
@@ -584,6 +849,49 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
           message={t('openingBalances.detailJournalHint')}
         />
       )}
+
+      <Modal
+        title={t('openingBalances.settlementTitle')}
+        open={Boolean(settlementLine)}
+        onCancel={closeSettlementModal}
+        onOk={handleRecordSettlement}
+        okText={t('openingBalances.settle')}
+        confirmLoading={isSettling}
+        okButtonProps={{ disabled: !settlementAccountId || settlementAmount <= 0 }}
+      >
+        <Space direction="vertical" className="w-full" size="middle">
+          <Text type="secondary">
+            {settlementLine?.document_number || settlementLine?.party_name || '-'}
+          </Text>
+          <InputNumber
+            className="w-full"
+            min={0}
+            max={Number(settlementLine?.remaining_amount ?? settlementLine?.base_amount ?? 0)}
+            value={settlementAmount}
+            addonBefore={t('openingBalances.settlementAmount')}
+            onChange={(value) => setSettlementAmount(Number(value || 0))}
+          />
+          <Select
+            showSearch
+            optionFilterProp="label"
+            value={settlementAccountId}
+            placeholder={t('openingBalances.settlementAccount')}
+            options={settlementAccountOptions}
+            onChange={setSettlementAccountId}
+          />
+          <DatePicker
+            className="w-full"
+            value={settlementDate ? dayjs(settlementDate) : null}
+            onChange={(value) => setSettlementDate(value?.startOf('day').toISOString())}
+          />
+          <Input.TextArea
+            rows={3}
+            value={settlementNotes}
+            placeholder={t('openingBalances.settlementNotes')}
+            onChange={(event) => setSettlementNotes(event.target.value)}
+          />
+        </Space>
+      </Modal>
     </div>
   );
 }

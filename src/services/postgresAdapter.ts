@@ -29,6 +29,9 @@ import type {
   FinanceTransactionType,
   JournalEntryStatus,
   JournalSourceType,
+  OpeningBalanceBatchStatus,
+  OpeningBalanceLineSettlementStatus,
+  OpeningBalanceModule,
   PaymentMethod,
   PayrollRunStatus,
   Permission,
@@ -1117,6 +1120,66 @@ export interface RemoteJournalEntryBundleDto {
   lines: RemoteJournalEntryLineDto[];
 }
 
+export interface RemoteOpeningBalanceBatchDto {
+  id: string;
+  module: OpeningBalanceModule;
+  cutoff_date: string;
+  status: OpeningBalanceBatchStatus;
+  total_debit: number;
+  total_credit: number;
+  journal_entry_id?: string | null;
+  posted_at?: string | null;
+  skipped_at?: string | null;
+  notes?: string | null;
+  version: number;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  updated_by?: string | null;
+  updated_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteOpeningBalanceLineDto {
+  id: string;
+  batch_id: string;
+  module: OpeningBalanceModule;
+  line_number: number;
+  contact_id?: string | null;
+  party_name?: string | null;
+  document_number?: string | null;
+  document_date?: string | null;
+  due_date?: string | null;
+  currency_code?: string | null;
+  currency_name?: string | null;
+  currency_symbol?: string | null;
+  base_currency_code?: string | null;
+  fx_rate?: number | null;
+  amount?: number | null;
+  base_amount: number;
+  paid_amount?: number | null;
+  remaining_amount?: number | null;
+  settlement_status?: OpeningBalanceLineSettlementStatus | null;
+  last_paid_at?: string | null;
+  account_id?: string | null;
+  account_code?: string | null;
+  account_name?: string | null;
+  counter_account_id?: string | null;
+  counter_account_code?: string | null;
+  counter_account_name?: string | null;
+  debit: number;
+  credit: number;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteOpeningBalanceBundleDto {
+  batch: RemoteOpeningBalanceBatchDto;
+  lines: RemoteOpeningBalanceLineDto[];
+}
+
 export interface RemoteCooperativeMemberDto {
   id: string;
   member_number: string;
@@ -2197,6 +2260,26 @@ export const journalEntryPostgresAdapter = {
   async upsert(input: RemoteJournalEntryBundleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteJournalEntryBundleDto>('postgres_upsert_journal_entry_bundle', { input });
+  },
+};
+
+export const openingBalancePostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteOpeningBalanceBundleDto[]>('postgres_list_opening_balance_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteOpeningBalanceBundleDto | null>('postgres_get_opening_balance_bundle', { id });
+  },
+
+  async upsert(input: RemoteOpeningBalanceBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteOpeningBalanceBundleDto>('postgres_upsert_opening_balance_bundle', { input });
   },
 };
 

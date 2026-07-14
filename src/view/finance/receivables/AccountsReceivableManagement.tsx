@@ -90,7 +90,7 @@ export default function AccountsReceivableManagement() {
         onCancel={() => setSelectedPaymentRow(undefined)}
         onSubmit={async (input) => {
           if (!selectedPaymentRow) return;
-          await recordPayment({ invoiceId: selectedPaymentRow.sales_document_id, input });
+          await recordPayment({ row: selectedPaymentRow, input });
           setSelectedPaymentRow(undefined);
         }}
       />

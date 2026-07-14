@@ -66,6 +66,8 @@ const SOURCE_EVENTS = {
   COOPERATIVE_IPTW_PAID: 'COOPERATIVE_IPTW_PAID',
   PRODUCTION_ORDER_POSTED: 'PRODUCTION_ORDER_POSTED',
   OPENING_BALANCE_POSTED: 'OPENING_BALANCE_POSTED',
+  OPENING_RECEIVABLE_PAYMENT_POSTED: 'OPENING_RECEIVABLE_PAYMENT_POSTED',
+  OPENING_PAYABLE_PAYMENT_POSTED: 'OPENING_PAYABLE_PAYMENT_POSTED',
   MANUAL_JOURNAL_POSTED: 'MANUAL_JOURNAL_POSTED',
   YEAR_END_CLOSING_POSTED: 'YEAR_END_CLOSING_POSTED',
   YEAR_END_CLOSING_REVERSED: 'YEAR_END_CLOSING_REVERSED',
@@ -1321,6 +1323,42 @@ export const postSalesInvoicePaymentRecordJournal = async (
   });
 };
 
+export const postOpeningReceivablePaymentRecordJournal = async (
+  line: OpeningBalanceLine,
+  payment: SalesInvoicePayment,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (line.module !== 'RECEIVABLE' || payment.status !== 'ACTIVE') return undefined;
+  if (!await isGeneralLedgerPostingEnabled(payment.paid_at)) return undefined;
+
+  const amount = amountOrZero(payment.amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cashAccount = await getCashOrBankAccountForPayment(payment.payment_method, payment.cash_account_id);
+  const receivableAccount = line.account_id
+    ? getPostableAccount(
+      accounts,
+      { ids: [line.account_id, ...ACCOUNT_CANDIDATES.accountsReceivable.ids], codes: ACCOUNT_CANDIDATES.accountsReceivable.codes },
+      'Piutang Usaha',
+    )
+    : getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsReceivable, 'Piutang Usaha');
+
+  return postBalancedJournalEntry({
+    source_type: 'OPENING_BALANCE',
+    source_id: payment.id,
+    source_number: payment.document_number,
+    source_event: SOURCE_EVENTS.OPENING_RECEIVABLE_PAYMENT_POSTED,
+    entry_date: payment.paid_at,
+    description: `Pembayaran saldo awal piutang ${payment.document_number}`,
+    lines: [
+      createDebitLine(cashAccount, amount, 'Kas diterima dari pembayaran saldo awal piutang'),
+      createCreditLine(receivableAccount, amount, 'Pelunasan saldo awal piutang usaha'),
+    ].filter((journalLine): journalLine is JournalLineDraft => Boolean(journalLine)),
+    actor,
+  });
+};
+
 export const reverseSalesInvoicePaymentRecordJournal = async (
   payment: SalesInvoicePayment,
   reason: string,
@@ -1482,6 +1520,42 @@ export const postPurchaseInvoicePaymentRecordJournal = async (
       createDebitLine(payableAccount, amount, 'Pelunasan hutang purchase invoice', document.department_id, document.project_id),
       createCreditLine(cashAccount, amount, 'Kas keluar untuk pembayaran purchase invoice', document.department_id, document.project_id),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const postOpeningPayablePaymentRecordJournal = async (
+  line: OpeningBalanceLine,
+  payment: PurchaseInvoicePayment,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (line.module !== 'PAYABLE' || payment.status !== 'ACTIVE') return undefined;
+  if (!await isGeneralLedgerPostingEnabled(payment.paid_at)) return undefined;
+
+  const amount = amountOrZero(payment.amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cashAccount = await getCashOrBankAccountForPayment(payment.payment_method, payment.cash_account_id);
+  const payableAccount = line.account_id
+    ? getPostableAccount(
+      accounts,
+      { ids: [line.account_id, ...ACCOUNT_CANDIDATES.accountsPayable.ids], codes: ACCOUNT_CANDIDATES.accountsPayable.codes },
+      'Hutang Usaha',
+    )
+    : getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsPayable, 'Hutang Usaha');
+
+  return postBalancedJournalEntry({
+    source_type: 'OPENING_BALANCE',
+    source_id: payment.id,
+    source_number: payment.document_number,
+    source_event: SOURCE_EVENTS.OPENING_PAYABLE_PAYMENT_POSTED,
+    entry_date: payment.paid_at,
+    description: `Pembayaran saldo awal hutang ${payment.document_number}`,
+    lines: [
+      createDebitLine(payableAccount, amount, 'Pelunasan saldo awal hutang usaha'),
+      createCreditLine(cashAccount, amount, 'Kas keluar untuk pembayaran saldo awal hutang'),
+    ].filter((journalLine): journalLine is JournalLineDraft => Boolean(journalLine)),
     actor,
   });
 };

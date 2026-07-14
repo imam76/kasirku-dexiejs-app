@@ -109,18 +109,34 @@ Dr Piutang Usaha
 
 ## Checklist
 
-- [ ] Tambahkan contact selector di form Saldo Awal Piutang.
-- [ ] Tambahkan field currency/rate.
-- [ ] Tambahkan validasi nomor dokumen unik.
-- [ ] Tambahkan persist draft lines.
-- [ ] Tambahkan status outstanding line.
-- [ ] Integrasikan ke `accountsReceivableService`.
-- [ ] Integrasikan ke hook/view Piutang Usaha.
-- [ ] Tambahkan branch payment untuk opening receivable.
-- [ ] Tambahkan jurnal payment opening receivable.
-- [ ] Tambahkan badge `Saldo Awal` di table dan payment history.
-- [ ] Tambahkan i18n ID/EN.
-- [ ] Tambahkan E2E `OB-03`.
+- [x] Tambahkan contact selector di form Saldo Awal Piutang.
+- [x] Tambahkan field currency/rate.
+- [x] Tambahkan validasi nomor dokumen unik.
+- [x] Tambahkan persist draft lines.
+- [x] Tambahkan status outstanding line.
+- [x] Integrasikan ke `accountsReceivableService`.
+- [x] Integrasikan ke hook/view Piutang Usaha.
+- [x] Tambahkan branch payment untuk opening receivable.
+- [x] Tambahkan jurnal payment opening receivable.
+- [x] Tambahkan badge `Saldo Awal` di table dan payment history.
+- [x] Tambahkan i18n ID/EN.
+- [x] Tambahkan E2E `OB-03`.
+
+## Catatan Implementasi 2026-07-14
+
+- Form detail saldo awal sekarang mendukung draft `RECEIVABLE`, selector
+  customer, currency, kurs, dan validasi nomor dokumen unik per customer dalam
+  batch.
+- Line saldo awal piutang posted masuk ke read model Piutang Usaha sebagai row
+  `OPENING_RECEIVABLE` dengan badge `Saldo Awal`, tanpa membuat Sales Invoice
+  operasional.
+- Payment saldo awal piutang memakai branch service sendiri, mengupdate
+  `paid_amount`, `remaining_amount`, dan `settlement_status` di
+  `openingBalanceLines`, lalu menjurnal Dr Kas/Bank Cr Piutang Usaha dengan
+  source event `OPENING_RECEIVABLE_PAYMENT_POSTED`.
+- Verifikasi: `bun run build` dan
+  `bunx playwright test tests/e2e/accounting-setup.spec.ts --project=chromium`
+  hijau.
 
 ## Acceptance Criteria
 

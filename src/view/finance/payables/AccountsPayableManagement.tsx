@@ -287,17 +287,28 @@ export default function AccountsPayableManagement() {
       dataIndex: 'document_number',
       fixed: 'left',
       width: 170,
-      render: (value: string, record) => (
-        <Link
-          to="/purchases/$documentType/$documentId"
-          params={{
-            documentType: getPurchaseDocumentTypePathSegment('PURCHASE_INVOICE'),
-            documentId: record.purchase_document_id,
-          }}
-        >
-          {value}
-        </Link>
-      ),
+      render: (value: string, record) => {
+        if (record.is_opening_balance) {
+          return (
+            <Space size={4} orientation="vertical">
+              <span>{value}</span>
+              <Tag color="blue">{t('accountsPayable.source.openingBalance')}</Tag>
+            </Space>
+          );
+        }
+
+        return (
+          <Link
+            to="/purchases/$documentType/$documentId"
+            params={{
+              documentType: getPurchaseDocumentTypePathSegment('PURCHASE_INVOICE'),
+              documentId: record.purchase_document_id,
+            }}
+          >
+            {value}
+          </Link>
+        );
+      },
     },
     { title: t('accountsPayable.supplier'), dataIndex: 'supplier_name', width: 190 },
     {
@@ -386,15 +397,19 @@ export default function AccountsPayableManagement() {
           >
             {t('accountsPayable.recordPayment')}
           </Button>
-          <Link
-            to="/purchases/$documentType/$documentId"
-            params={{
-              documentType: getPurchaseDocumentTypePathSegment('PURCHASE_INVOICE'),
-              documentId: record.purchase_document_id,
-            }}
-          >
-            <Button size="small" icon={<Eye size={14} />} />
-          </Link>
+          {record.is_opening_balance ? (
+            <Button size="small" icon={<Eye size={14} />} disabled />
+          ) : (
+            <Link
+              to="/purchases/$documentType/$documentId"
+              params={{
+                documentType: getPurchaseDocumentTypePathSegment('PURCHASE_INVOICE'),
+                documentId: record.purchase_document_id,
+              }}
+            >
+              <Button size="small" icon={<Eye size={14} />} />
+            </Link>
+          )}
         </Space>
       ),
     },
@@ -439,7 +454,7 @@ export default function AccountsPayableManagement() {
         onCancel={() => setSelectedPaymentRow(undefined)}
         onSubmit={async (input) => {
           if (!selectedPaymentRow) return;
-          await recordPayment({ invoiceId: selectedPaymentRow.purchase_document_id, input });
+          await recordPayment({ row: selectedPaymentRow, input });
           setSelectedPaymentRow(undefined);
         }}
       />
