@@ -119,16 +119,6 @@ impl PostgresState {
     }
 }
 
-impl PostgresHealth {
-    pub fn unreachable(message: impl Into<String>) -> Self {
-        Self {
-            available: false,
-            status: PostgresStatus::Unreachable,
-            message: Some(message.into()),
-        }
-    }
-}
-
 impl From<sqlx::Error> for PostgresCommandError {
     fn from(error: sqlx::Error) -> Self {
         // Surface the underlying cause instead of collapsing every SQL failure into

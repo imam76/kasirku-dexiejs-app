@@ -1,7 +1,7 @@
-import { Spin } from 'antd';
-import { Store, Zap, BarChart3, ShieldCheck } from 'lucide-react';
+import { Alert, Button, Spin, Typography } from 'antd';
+import { Store, Zap, BarChart3, ShieldCheck, DatabaseZap, RefreshCw } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ensureDefaultOwner, hasActiveOwner } from './authService';
 import { useAuth } from './useAuth';
 import { Login } from '@/view/auth/Login';
@@ -17,6 +17,8 @@ interface AuthGateProps {
 }
 
 type RemoteSetupStatus = 'idle' | 'checking' | 'configured' | 'missing' | 'error';
+
+const { Text, Title } = Typography;
 
 const LoadingScreen = () => (
   <div className="flex min-h-[100dvh] items-center justify-center">
@@ -67,6 +69,63 @@ const SetupWelcome = () => (
   </div>
 );
 
+interface HostDatabaseUnavailableProps {
+  health: PostgresHealth | null;
+  isChecking: boolean;
+  errorMessage?: string | null;
+  onReconnect: () => void;
+}
+
+const HostDatabaseUnavailable = ({
+  health,
+  isChecking,
+  errorMessage,
+  onReconnect,
+}: HostDatabaseUnavailableProps) => {
+  const isMigrationFailed = health?.status === 'migration_failed';
+  const statusMessage = errorMessage ?? health?.message ?? 'Koneksi PostgreSQL belum tersedia.';
+
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 p-4">
+      <div className="w-full max-w-xl rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500 text-white">
+            <DatabaseZap size={24} />
+          </div>
+          <div>
+            <Title level={3} className="!mb-0">
+              Host Database Belum Siap
+            </Title>
+            <Text type="secondary">
+              Aplikasi menunggu PostgreSQL yang sudah dikonfigurasi siap kembali.
+            </Text>
+          </div>
+        </div>
+
+        <Alert
+          className="mb-4"
+          type={isMigrationFailed ? 'error' : 'warning'}
+          showIcon
+          message={isMigrationFailed ? 'Migration database gagal' : 'Database belum tersedia'}
+          description={statusMessage}
+        />
+
+        <Button
+          type="primary"
+          size="large"
+          block
+          className="!h-11"
+          loading={isChecking}
+          onClick={onReconnect}
+          icon={<RefreshCw size={16} />}
+        >
+          Refresh / Reconnect
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const AuthGate = ({ children }: AuthGateProps) => {
   const { currentUser, isLoading } = useAuth();
   const isTauri = isTauriRuntime();
@@ -84,6 +143,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   );
   const [remoteSetupError, setRemoteSetupError] = useState<string | null>(null);
   const [setupCheckRevision, setSetupCheckRevision] = useState(0);
+  const isPostgresCheckInFlightRef = useRef(false);
 
   const setupRequired = isTauri && remoteSetupStatus === 'missing';
 
@@ -107,39 +167,42 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  useEffect(() => {
-    if (!isTauri) return;
+  const checkPostgres = useCallback(async () => {
+    if (!isTauri || isPostgresCheckInFlightRef.current) return null;
 
-    let isActive = true;
-
-    const checkPostgres = async () => {
-      setIsCheckingPostgres(true);
-      try {
-        const health = await postgresAdapter.healthCheck();
-        if (isActive) {
-          setPostgresHealth(health);
-        }
-      } catch {
-        if (isActive) {
-          setPostgresHealth({
-            available: false,
-            status: 'unreachable',
-            message: 'PostgreSQL health check failed.',
-          });
-        }
-      } finally {
-        if (isActive) {
-          setIsCheckingPostgres(false);
-        }
-      }
-    };
-
-    checkPostgres();
-
-    return () => {
-      isActive = false;
-    };
+    isPostgresCheckInFlightRef.current = true;
+    setIsCheckingPostgres(true);
+    try {
+      const health = await postgresAdapter.healthCheck();
+      setPostgresHealth(health);
+      return health;
+    } catch {
+      const fallbackHealth: PostgresHealth = {
+        available: false,
+        status: 'unreachable',
+        message: 'PostgreSQL health check failed.',
+      };
+      setPostgresHealth(fallbackHealth);
+      return fallbackHealth;
+    } finally {
+      isPostgresCheckInFlightRef.current = false;
+      setIsCheckingPostgres(false);
+    }
   }, [isTauri]);
+
+  useEffect(() => {
+    void checkPostgres();
+  }, [checkPostgres]);
+
+  useEffect(() => {
+    if (!isTauri || !postgresHealth || postgresHealth.available || postgresHealth.status === 'unconfigured') return;
+
+    const reconnectTimer = window.setInterval(() => {
+      void checkPostgres();
+    }, 10000);
+
+    return () => window.clearInterval(reconnectTimer);
+  }, [checkPostgres, isTauri, postgresHealth]);
 
   useEffect(() => {
     if (!isTauri || !postgresHealth?.available) return;
@@ -187,6 +250,15 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     setSetupCheckRevision((current) => current + 1);
   }, []);
 
+  const handlePostgresReconnect = useCallback(async () => {
+    const health = await checkPostgres();
+    if (!health?.available) return;
+
+    setRemoteSetupStatus('idle');
+    setRemoteSetupError(null);
+    setSetupCheckRevision((current) => current + 1);
+  }, [checkPostgres]);
+
   const handleDrawerClose = useCallback(() => {
     setShowSetupDrawer(false);
     if (isTauri && postgresHealth?.available) {
@@ -201,12 +273,13 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   const isWaitingForRemoteSetup = isTauri &&
     Boolean(postgresHealth?.available) &&
     (remoteSetupStatus === 'idle' || remoteSetupStatus === 'checking');
+  const isInitialPostgresCheck = isTauri && !postgresHealth && isCheckingPostgres;
 
-  if (isLoading || hasOwner === null || (isTauri && isCheckingPostgres) || isWaitingForRemoteSetup) {
+  if (isLoading || hasOwner === null || isInitialPostgresCheck || isWaitingForRemoteSetup) {
     return <LoadingScreen />;
   }
 
-  if (isTauri && (!postgresHealth || !postgresHealth.available)) {
+  if (isTauri && (!postgresHealth || postgresHealth.status === 'unconfigured')) {
     return (
       <HostDatabaseSetup
         health={postgresHealth}
@@ -215,12 +288,23 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     );
   }
 
+  if (isTauri && postgresHealth && !postgresHealth.available) {
+    return (
+      <HostDatabaseUnavailable
+        health={postgresHealth}
+        isChecking={isCheckingPostgres}
+        onReconnect={handlePostgresReconnect}
+      />
+    );
+  }
+
   if (isTauri && remoteSetupStatus === 'error') {
     return (
-      <HostDatabaseSetup
+      <HostDatabaseUnavailable
         health={postgresHealth}
+        isChecking={isCheckingPostgres}
         errorMessage={remoteSetupError}
-        onConfigured={handleDatabaseConfigured}
+        onReconnect={handlePostgresReconnect}
       />
     );
   }
