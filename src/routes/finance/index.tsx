@@ -64,6 +64,13 @@ function Finance() {
       desc: t('finance.index.chartOfAccountsDesc'),
     },
     {
+      to: '/finance/opening-balances',
+      label: t('nav.finance.openingBalances'),
+      icon: FileTextOutlined,
+      color: 'text-teal-700',
+      desc: t('finance.index.openingBalancesDesc'),
+    },
+    {
       to: '/finance/general-ledger',
       label: t('nav.finance.generalLedger'),
       icon: BookOutlined,

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { Alert, Button, Card, DatePicker, Descriptions, Select, Space, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
@@ -6,7 +7,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookOpen, FilePlus2, RefreshCw } from 'lucide-react';
 import { db } from '@/lib/db';
-import OpeningBalanceForm from '@/components/general-ledger/OpeningBalanceForm';
 import ManualJournalForm from '@/components/general-ledger/ManualJournalForm';
 import {
   getBalanceSheetReport,
@@ -50,6 +50,7 @@ interface LedgerRow {
 
 export default function GeneralLedgerManagement() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { baseCurrencySymbol } = useBaseCurrency();
   const { currentUser } = useAuth();
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
@@ -70,6 +71,14 @@ export default function GeneralLedgerManagement() {
     () => db.chartOfAccounts.orderBy('code').toArray(),
     [],
     [],
+  );
+  const openingBalanceBatchRevision = useLiveQuery(
+    async () => {
+      const batches = await db.openingBalanceBatches.toArray();
+      return batches.map((batch) => `${batch.id}:${batch.status}:${batch.updated_at}`).sort().join('|');
+    },
+    [],
+    '',
   );
   const effectiveGeneralLedgerSetting = useMemo<GeneralLedgerSetting | undefined>(() => {
     if (!accountingSetup) return generalLedgerSetting;
@@ -94,6 +103,7 @@ export default function GeneralLedgerManagement() {
       'generalLedgerReadiness',
       generalLedgerSetting?.updated_at,
       accountingSetup?.updated_at,
+      openingBalanceBatchRevision,
       accounts.length,
     ],
     queryFn: getGeneralLedgerReadiness,
@@ -424,16 +434,16 @@ export default function GeneralLedgerManagement() {
                 ))}
               </Space>
             )}
+            action={(
+              <Button
+                type="primary"
+                onClick={() => navigate({ to: '/finance/opening-balances' })}
+              >
+                {t('generalLedger.openOpeningBalances')}
+              </Button>
+            )}
           />
         </Card>
-      )}
-
-      {!isLedgerReady && (
-        <OpeningBalanceForm
-          accounts={accounts}
-          setting={effectiveGeneralLedgerSetting}
-          onPosted={() => void readinessQuery.refetch()}
-        />
       )}
 
       {isLedgerReady && !isModuleEnabled && (

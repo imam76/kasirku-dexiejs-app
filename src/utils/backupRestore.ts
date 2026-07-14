@@ -58,6 +58,8 @@ export const backupDatabase = async () => {
       accountingInitialSetupSetting: await db.accountingInitialSetupSetting.toArray(),
       enabledModules: await db.enabledModules.toArray(),
       generalLedgerSetting: await db.generalLedgerSetting.toArray(),
+      openingBalanceBatches: await db.openingBalanceBatches.toArray(),
+      openingBalanceLines: await db.openingBalanceLines.toArray(),
       journalEntries: await db.journalEntries.toArray(),
       journalEntryLines: await db.journalEntryLines.toArray(),
       cooperativeMembers: await db.cooperativeMembers.toArray(),
@@ -73,7 +75,7 @@ export const backupDatabase = async () => {
       membershipSettings: await db.membershipSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 22,
+      version: 23,
       timestamp: new Date().toISOString(),
     };
 
@@ -98,7 +100,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'enabledModules', 'generalLedgerSetting', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -164,6 +166,8 @@ export const restoreDatabase = async (file: File) => {
           db.accountingInitialSetupSetting,
           db.enabledModules,
           db.generalLedgerSetting,
+          db.openingBalanceBatches,
+          db.openingBalanceLines,
           db.journalEntries,
           db.journalEntryLines,
           db.cooperativeMembers,
@@ -227,6 +231,8 @@ export const restoreDatabase = async (file: File) => {
           await db.accountingInitialSetupSetting.clear();
           await db.enabledModules.clear();
           await db.generalLedgerSetting.clear();
+          await db.openingBalanceBatches.clear();
+          await db.openingBalanceLines.clear();
           await db.journalEntries.clear();
           await db.journalEntryLines.clear();
           await db.cooperativeMembers.clear();
@@ -294,6 +300,8 @@ export const restoreDatabase = async (file: File) => {
           if (data.accountingInitialSetupSetting?.length) await db.accountingInitialSetupSetting.bulkAdd(data.accountingInitialSetupSetting);
           if (data.enabledModules?.length) await db.enabledModules.bulkAdd(data.enabledModules);
           if (data.generalLedgerSetting?.length) await db.generalLedgerSetting.bulkAdd(data.generalLedgerSetting);
+          if (data.openingBalanceBatches?.length) await db.openingBalanceBatches.bulkAdd(data.openingBalanceBatches);
+          if (data.openingBalanceLines?.length) await db.openingBalanceLines.bulkAdd(data.openingBalanceLines);
           if (data.journalEntries?.length) await db.journalEntries.bulkAdd(data.journalEntries);
           if (data.journalEntryLines?.length) await db.journalEntryLines.bulkAdd(data.journalEntryLines);
           if (data.cooperativeMembers?.length) await db.cooperativeMembers.bulkAdd(data.cooperativeMembers);

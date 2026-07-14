@@ -45,6 +45,8 @@ import type {
   AccountingProfileSetting,
   EnabledModule,
   GeneralLedgerSetting,
+  OpeningBalanceBatch,
+  OpeningBalanceLine,
   JournalEntry,
   JournalEntryLine,
   InventoryLot,
@@ -130,6 +132,8 @@ export class KasirkuDB extends Dexie {
   accountingInitialSetupSetting!: Table<AccountingInitialSetupSetting>;
   enabledModules!: Table<EnabledModule>;
   generalLedgerSetting!: Table<GeneralLedgerSetting>;
+  openingBalanceBatches!: Table<OpeningBalanceBatch>;
+  openingBalanceLines!: Table<OpeningBalanceLine>;
   journalEntries!: Table<JournalEntry>;
   journalEntryLines!: Table<JournalEntryLine>;
   accountingPeriods!: Table<AccountingPeriod>;

@@ -165,6 +165,9 @@ const FinanceReceivablesLazyRouteImport = createFileRoute(
 )()
 const FinancePayrollLazyRouteImport = createFileRoute('/finance/payroll')()
 const FinancePayablesLazyRouteImport = createFileRoute('/finance/payables')()
+const FinanceOpeningBalancesLazyRouteImport = createFileRoute(
+  '/finance/opening-balances',
+)()
 const FinanceGeneralLedgerLazyRouteImport = createFileRoute(
   '/finance/general-ledger',
 )()
@@ -194,6 +197,21 @@ const PurchasesDocumentTypeDocumentIdLazyRouteImport = createFileRoute(
 )()
 const FinancePurchasesPendingCostsLazyRouteImport = createFileRoute(
   '/finance/purchases/pending-costs',
+)()
+const FinanceOpeningBalancesReceivablesLazyRouteImport = createFileRoute(
+  '/finance/opening-balances/receivables',
+)()
+const FinanceOpeningBalancesPayablesLazyRouteImport = createFileRoute(
+  '/finance/opening-balances/payables',
+)()
+const FinanceOpeningBalancesAdvanceReceivedLazyRouteImport = createFileRoute(
+  '/finance/opening-balances/advance-received',
+)()
+const FinanceOpeningBalancesAdvancePaidLazyRouteImport = createFileRoute(
+  '/finance/opening-balances/advance-paid',
+)()
+const FinanceOpeningBalancesAccountsLazyRouteImport = createFileRoute(
+  '/finance/opening-balances/accounts',
 )()
 const FinanceGeneralLedgerSetupLazyRouteImport = createFileRoute(
   '/finance/general-ledger/setup',
@@ -718,6 +736,14 @@ const FinancePayablesLazyRoute = FinancePayablesLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/finance/payables.lazy').then((d) => d.Route),
 )
+const FinanceOpeningBalancesLazyRoute =
+  FinanceOpeningBalancesLazyRouteImport.update({
+    id: '/finance/opening-balances',
+    path: '/finance/opening-balances',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/finance/opening-balances.lazy').then((d) => d.Route),
+  )
 const FinanceGeneralLedgerLazyRoute =
   FinanceGeneralLedgerLazyRouteImport.update({
     id: '/finance/general-ledger',
@@ -842,6 +868,56 @@ const FinancePurchasesPendingCostsLazyRoute =
     getParentRoute: () => rootRouteImport,
   } as any).lazy(() =>
     import('./routes/finance/purchases/pending-costs.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const FinanceOpeningBalancesReceivablesLazyRoute =
+  FinanceOpeningBalancesReceivablesLazyRouteImport.update({
+    id: '/receivables',
+    path: '/receivables',
+    getParentRoute: () => FinanceOpeningBalancesLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/finance/opening-balances/receivables.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const FinanceOpeningBalancesPayablesLazyRoute =
+  FinanceOpeningBalancesPayablesLazyRouteImport.update({
+    id: '/payables',
+    path: '/payables',
+    getParentRoute: () => FinanceOpeningBalancesLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/finance/opening-balances/payables.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const FinanceOpeningBalancesAdvanceReceivedLazyRoute =
+  FinanceOpeningBalancesAdvanceReceivedLazyRouteImport.update({
+    id: '/advance-received',
+    path: '/advance-received',
+    getParentRoute: () => FinanceOpeningBalancesLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/finance/opening-balances/advance-received.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const FinanceOpeningBalancesAdvancePaidLazyRoute =
+  FinanceOpeningBalancesAdvancePaidLazyRouteImport.update({
+    id: '/advance-paid',
+    path: '/advance-paid',
+    getParentRoute: () => FinanceOpeningBalancesLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/finance/opening-balances/advance-paid.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const FinanceOpeningBalancesAccountsLazyRoute =
+  FinanceOpeningBalancesAccountsLazyRouteImport.update({
+    id: '/accounts',
+    path: '/accounts',
+    getParentRoute: () => FinanceOpeningBalancesLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/finance/opening-balances/accounts.lazy').then(
       (d) => d.Route,
     ),
   )
@@ -1022,6 +1098,7 @@ export interface FileRoutesByFullPath {
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/closing': typeof FinanceClosingLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
+  '/finance/opening-balances': typeof FinanceOpeningBalancesLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
@@ -1082,6 +1159,11 @@ export interface FileRoutesByFullPath {
   '/report/': typeof ReportIndexRoute
   '/sales/': typeof SalesIndexRoute
   '/finance/general-ledger/setup': typeof FinanceGeneralLedgerSetupLazyRoute
+  '/finance/opening-balances/accounts': typeof FinanceOpeningBalancesAccountsLazyRoute
+  '/finance/opening-balances/advance-paid': typeof FinanceOpeningBalancesAdvancePaidLazyRoute
+  '/finance/opening-balances/advance-received': typeof FinanceOpeningBalancesAdvanceReceivedLazyRoute
+  '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
+  '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
@@ -1126,6 +1208,7 @@ export interface FileRoutesByTo {
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/closing': typeof FinanceClosingLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
+  '/finance/opening-balances': typeof FinanceOpeningBalancesLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
@@ -1186,6 +1269,11 @@ export interface FileRoutesByTo {
   '/report': typeof ReportIndexRoute
   '/sales': typeof SalesIndexRoute
   '/finance/general-ledger/setup': typeof FinanceGeneralLedgerSetupLazyRoute
+  '/finance/opening-balances/accounts': typeof FinanceOpeningBalancesAccountsLazyRoute
+  '/finance/opening-balances/advance-paid': typeof FinanceOpeningBalancesAdvancePaidLazyRoute
+  '/finance/opening-balances/advance-received': typeof FinanceOpeningBalancesAdvanceReceivedLazyRoute
+  '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
+  '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
@@ -1231,6 +1319,7 @@ export interface FileRoutesById {
   '/finance/chart-of-accounts': typeof FinanceChartOfAccountsLazyRoute
   '/finance/closing': typeof FinanceClosingLazyRoute
   '/finance/general-ledger': typeof FinanceGeneralLedgerLazyRouteWithChildren
+  '/finance/opening-balances': typeof FinanceOpeningBalancesLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRoute
@@ -1291,6 +1380,11 @@ export interface FileRoutesById {
   '/report/': typeof ReportIndexRoute
   '/sales/': typeof SalesIndexRoute
   '/finance/general-ledger/setup': typeof FinanceGeneralLedgerSetupLazyRoute
+  '/finance/opening-balances/accounts': typeof FinanceOpeningBalancesAccountsLazyRoute
+  '/finance/opening-balances/advance-paid': typeof FinanceOpeningBalancesAdvancePaidLazyRoute
+  '/finance/opening-balances/advance-received': typeof FinanceOpeningBalancesAdvanceReceivedLazyRoute
+  '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
+  '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
@@ -1337,6 +1431,7 @@ export interface FileRouteTypes {
     | '/finance/chart-of-accounts'
     | '/finance/closing'
     | '/finance/general-ledger'
+    | '/finance/opening-balances'
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
@@ -1397,6 +1492,11 @@ export interface FileRouteTypes {
     | '/report/'
     | '/sales/'
     | '/finance/general-ledger/setup'
+    | '/finance/opening-balances/accounts'
+    | '/finance/opening-balances/advance-paid'
+    | '/finance/opening-balances/advance-received'
+    | '/finance/opening-balances/payables'
+    | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
@@ -1441,6 +1541,7 @@ export interface FileRouteTypes {
     | '/finance/chart-of-accounts'
     | '/finance/closing'
     | '/finance/general-ledger'
+    | '/finance/opening-balances'
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
@@ -1501,6 +1602,11 @@ export interface FileRouteTypes {
     | '/report'
     | '/sales'
     | '/finance/general-ledger/setup'
+    | '/finance/opening-balances/accounts'
+    | '/finance/opening-balances/advance-paid'
+    | '/finance/opening-balances/advance-received'
+    | '/finance/opening-balances/payables'
+    | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
@@ -1545,6 +1651,7 @@ export interface FileRouteTypes {
     | '/finance/chart-of-accounts'
     | '/finance/closing'
     | '/finance/general-ledger'
+    | '/finance/opening-balances'
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
@@ -1605,6 +1712,11 @@ export interface FileRouteTypes {
     | '/report/'
     | '/sales/'
     | '/finance/general-ledger/setup'
+    | '/finance/opening-balances/accounts'
+    | '/finance/opening-balances/advance-paid'
+    | '/finance/opening-balances/advance-received'
+    | '/finance/opening-balances/payables'
+    | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
@@ -1650,6 +1762,7 @@ export interface RootRouteChildren {
   FinanceChartOfAccountsLazyRoute: typeof FinanceChartOfAccountsLazyRoute
   FinanceClosingLazyRoute: typeof FinanceClosingLazyRoute
   FinanceGeneralLedgerLazyRoute: typeof FinanceGeneralLedgerLazyRouteWithChildren
+  FinanceOpeningBalancesLazyRoute: typeof FinanceOpeningBalancesLazyRouteWithChildren
   FinancePayablesLazyRoute: typeof FinancePayablesLazyRoute
   FinancePayrollLazyRoute: typeof FinancePayrollLazyRoute
   FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRoute
@@ -2209,6 +2322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinancePayablesLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/opening-balances': {
+      id: '/finance/opening-balances'
+      path: '/finance/opening-balances'
+      fullPath: '/finance/opening-balances'
+      preLoaderRoute: typeof FinanceOpeningBalancesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/finance/general-ledger': {
       id: '/finance/general-ledger'
       path: '/finance/general-ledger'
@@ -2327,6 +2447,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/finance/purchases/pending-costs'
       preLoaderRoute: typeof FinancePurchasesPendingCostsLazyRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/finance/opening-balances/receivables': {
+      id: '/finance/opening-balances/receivables'
+      path: '/receivables'
+      fullPath: '/finance/opening-balances/receivables'
+      preLoaderRoute: typeof FinanceOpeningBalancesReceivablesLazyRouteImport
+      parentRoute: typeof FinanceOpeningBalancesLazyRoute
+    }
+    '/finance/opening-balances/payables': {
+      id: '/finance/opening-balances/payables'
+      path: '/payables'
+      fullPath: '/finance/opening-balances/payables'
+      preLoaderRoute: typeof FinanceOpeningBalancesPayablesLazyRouteImport
+      parentRoute: typeof FinanceOpeningBalancesLazyRoute
+    }
+    '/finance/opening-balances/advance-received': {
+      id: '/finance/opening-balances/advance-received'
+      path: '/advance-received'
+      fullPath: '/finance/opening-balances/advance-received'
+      preLoaderRoute: typeof FinanceOpeningBalancesAdvanceReceivedLazyRouteImport
+      parentRoute: typeof FinanceOpeningBalancesLazyRoute
+    }
+    '/finance/opening-balances/advance-paid': {
+      id: '/finance/opening-balances/advance-paid'
+      path: '/advance-paid'
+      fullPath: '/finance/opening-balances/advance-paid'
+      preLoaderRoute: typeof FinanceOpeningBalancesAdvancePaidLazyRouteImport
+      parentRoute: typeof FinanceOpeningBalancesLazyRoute
+    }
+    '/finance/opening-balances/accounts': {
+      id: '/finance/opening-balances/accounts'
+      path: '/accounts'
+      fullPath: '/finance/opening-balances/accounts'
+      preLoaderRoute: typeof FinanceOpeningBalancesAccountsLazyRouteImport
+      parentRoute: typeof FinanceOpeningBalancesLazyRoute
     }
     '/finance/general-ledger/setup': {
       id: '/finance/general-ledger/setup'
@@ -2471,6 +2626,33 @@ const FinanceGeneralLedgerLazyRouteWithChildren =
     FinanceGeneralLedgerLazyRouteChildren,
   )
 
+interface FinanceOpeningBalancesLazyRouteChildren {
+  FinanceOpeningBalancesAccountsLazyRoute: typeof FinanceOpeningBalancesAccountsLazyRoute
+  FinanceOpeningBalancesAdvancePaidLazyRoute: typeof FinanceOpeningBalancesAdvancePaidLazyRoute
+  FinanceOpeningBalancesAdvanceReceivedLazyRoute: typeof FinanceOpeningBalancesAdvanceReceivedLazyRoute
+  FinanceOpeningBalancesPayablesLazyRoute: typeof FinanceOpeningBalancesPayablesLazyRoute
+  FinanceOpeningBalancesReceivablesLazyRoute: typeof FinanceOpeningBalancesReceivablesLazyRoute
+}
+
+const FinanceOpeningBalancesLazyRouteChildren: FinanceOpeningBalancesLazyRouteChildren =
+  {
+    FinanceOpeningBalancesAccountsLazyRoute:
+      FinanceOpeningBalancesAccountsLazyRoute,
+    FinanceOpeningBalancesAdvancePaidLazyRoute:
+      FinanceOpeningBalancesAdvancePaidLazyRoute,
+    FinanceOpeningBalancesAdvanceReceivedLazyRoute:
+      FinanceOpeningBalancesAdvanceReceivedLazyRoute,
+    FinanceOpeningBalancesPayablesLazyRoute:
+      FinanceOpeningBalancesPayablesLazyRoute,
+    FinanceOpeningBalancesReceivablesLazyRoute:
+      FinanceOpeningBalancesReceivablesLazyRoute,
+  }
+
+const FinanceOpeningBalancesLazyRouteWithChildren =
+  FinanceOpeningBalancesLazyRoute._addFileChildren(
+    FinanceOpeningBalancesLazyRouteChildren,
+  )
+
 interface PurchasesDocumentTypeDocumentIdLazyRouteChildren {
   PurchasesDocumentTypeDocumentIdReconcileLazyRoute: typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
 }
@@ -2516,6 +2698,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceChartOfAccountsLazyRoute: FinanceChartOfAccountsLazyRoute,
   FinanceClosingLazyRoute: FinanceClosingLazyRoute,
   FinanceGeneralLedgerLazyRoute: FinanceGeneralLedgerLazyRouteWithChildren,
+  FinanceOpeningBalancesLazyRoute: FinanceOpeningBalancesLazyRouteWithChildren,
   FinancePayablesLazyRoute: FinancePayablesLazyRoute,
   FinancePayrollLazyRoute: FinancePayrollLazyRoute,
   FinanceReceivablesLazyRoute: FinanceReceivablesLazyRoute,

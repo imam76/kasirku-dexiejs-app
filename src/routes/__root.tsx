@@ -268,6 +268,7 @@ const RootLayout = () => {
         { to: '/finance/payables', label: t('nav.finance.payables'), icon: CreditCard },
         { to: '/finance/payroll', label: t('nav.finance.payroll'), icon: WalletCards },
         { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
+        { to: '/finance/opening-balances', label: t('nav.finance.openingBalances'), icon: ClipboardList },
         { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
         { to: '/finance/closing', label: t('closing.title'), icon: Lock },
       ],

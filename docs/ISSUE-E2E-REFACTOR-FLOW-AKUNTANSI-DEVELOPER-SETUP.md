@@ -574,6 +574,7 @@ dilacak tanpa membuat issue induk terlalu gemuk:
 - [Fase 4 - Base Currency Dinamis](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F4-BASE-CURRENCY.md)
 - [Fase 5 - Maintenance UI Setelah Setup](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F5-MAINTENANCE-UI.md)
 - [Fase 6 - E2E Test dan Regression](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F6-E2E-REGRESSION.md)
+- [Fase 7 - General Ledger dan Menu Saldo Awal Terpisah](ISSUE-E2E-REFACTOR-FLOW-AKUNTANSI-DEVELOPER-SETUP-F7-GL-OPENING-BALANCE-MODULES.md)
 
 ### Fase 0 - Audit dan Freeze Decision
 
@@ -742,6 +743,31 @@ Test yang perlu dibuat:
   - save setup saat offline membuat row pending;
   - saat online, queue upload;
   - remote merge menandai synced.
+
+### Fase 7 - General Ledger dan Menu Saldo Awal Terpisah
+
+Checklist:
+
+- Pindahkan input opening balance dari General Ledger ke menu Finance tersendiri:
+  `Saldo Awal`.
+- Pecah flow saldo awal menjadi:
+  - Saldo Awal Akun;
+  - Saldo Awal Piutang;
+  - Saldo Awal Hutang;
+  - Uang Muka Masuk;
+  - Uang Muka Keluar.
+- Ubah `/finance/general-ledger/setup` agar mengarah ke flow Saldo Awal, bukan
+  alias dashboard General Ledger.
+- Update readiness GL agar membaca status saldo awal per submodule.
+- Update E2E helper yang masih posting opening balance lewat
+  `/finance/general-ledger`.
+
+Acceptance criteria:
+
+- General Ledger tidak lagi menampilkan form input opening balance langsung.
+- User bisa mengisi atau melewati tiap submodule saldo awal dari menu Saldo Awal.
+- Posting tiap submodule tetap menghasilkan journal entry yang balance,
+  idempotent, dan bisa ditrace dari General Ledger.
 
 ## Acceptance Criteria Utama
 

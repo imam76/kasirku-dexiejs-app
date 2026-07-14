@@ -17,6 +17,8 @@ import type {
   JournalEntry,
   JournalEntryLine,
   JournalSourceType,
+  OpeningBalanceBatch,
+  OpeningBalanceLine,
   PaymentMethod,
   PayrollRun,
   ProductionOrder,
@@ -749,7 +751,7 @@ const getOpeningBalanceJournalDate = async (fallbackDate: string) => {
   return setting.cutoff_date || fallbackDate;
 };
 
-const postOpeningBalanceSourceJournal = async ({
+export const postOpeningBalanceSourceJournal = async ({
   source_id,
   source_number,
   source_event,
@@ -864,6 +866,8 @@ export const postOpeningBalanceJournal = async ({
   await db.transaction('rw', [
     db.chartOfAccounts,
     db.generalLedgerSetting,
+    db.openingBalanceBatches,
+    db.openingBalanceLines,
     db.journalEntries,
     db.journalEntryLines,
     db.activityLogs,
@@ -906,6 +910,52 @@ export const postOpeningBalanceJournal = async ({
       lines: normalizedLines,
       actor: currentUser,
     });
+
+    const batchId = `opening-balance-account-${normalizedCutoffDate.slice(0, 10)}`;
+    const batch: OpeningBalanceBatch = {
+      id: batchId,
+      module: 'ACCOUNT',
+      cutoff_date: normalizedCutoffDate,
+      status: 'POSTED',
+      total_debit: createdEntry.total_debit,
+      total_credit: createdEntry.total_credit,
+      journal_entry_id: createdEntry.id,
+      posted_at: createdEntry.posted_at,
+      notes: 'Saldo awal akun umum.',
+      created_by: currentUser?.id,
+      created_by_name: currentUser?.name,
+      updated_by: currentUser?.id,
+      updated_by_name: currentUser?.name,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    };
+    const openingLines: OpeningBalanceLine[] = normalizedLines.map((line, index) => ({
+      id: `opening-balance-account-line-${line.account_id}`,
+      batch_id: batchId,
+      module: 'ACCOUNT',
+      line_number: index + 1,
+      base_amount: amountOrZero(line.debit || line.credit),
+      account_id: line.account_id,
+      account_code: line.account_code,
+      account_name: line.account_name,
+      debit: line.debit,
+      credit: line.credit,
+      notes: line.description,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
+    }));
+    await db.openingBalanceBatches.put(batch);
+    await db.openingBalanceLines
+      .where('batch_id')
+      .equals(batchId)
+      .delete();
+    if (openingLines.length > 0) {
+      await db.openingBalanceLines.bulkPut(openingLines);
+    }
 
     updatedGeneralLedger = {
       id: 'default',

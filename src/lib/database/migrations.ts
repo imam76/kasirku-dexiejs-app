@@ -37,6 +37,8 @@ import type {
   PurchaseInvoicePayment,
   PayrollRun,
   PayrollRunItem,
+  OpeningBalanceBatch,
+  OpeningBalanceLine,
   Role,
   RolePermission,
   SalesDocument,
@@ -2179,6 +2181,66 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
         sync_status: 'pending' as const,
         sync_error: undefined,
       });
+    }
+  });
+
+  this.version(86).stores({
+    openingBalanceBatches: 'id, module, cutoff_date, status, journal_entry_id, sync_status, updated_at, created_at',
+    openingBalanceLines: 'id, batch_id, module, contact_id, document_number, document_date, due_date, account_id, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const setting = await tx.table<GeneralLedgerSetting, string>('generalLedgerSetting').get('default');
+    const openingEntry = setting?.opening_balance_journal_id
+      ? await tx.table<JournalEntry, string>('journalEntries').get(setting.opening_balance_journal_id)
+      : undefined;
+
+    if (!setting?.cutoff_date || openingEntry?.status !== 'POSTED') return;
+
+    const batchTable = tx.table<OpeningBalanceBatch, string>('openingBalanceBatches');
+    const lineTable = tx.table<OpeningBalanceLine, string>('openingBalanceLines');
+    const batchId = `opening-balance-account-${setting.cutoff_date.slice(0, 10)}`;
+    const existingBatch = await batchTable.get(batchId);
+    if (existingBatch) return;
+
+    const journalLines = await tx.table<JournalEntryLine, string>('journalEntryLines')
+      .where('journal_entry_id')
+      .equals(openingEntry.id)
+      .toArray();
+
+    await batchTable.put({
+      id: batchId,
+      module: 'ACCOUNT',
+      cutoff_date: setting.cutoff_date,
+      status: 'POSTED',
+      total_debit: openingEntry.total_debit,
+      total_credit: openingEntry.total_credit,
+      journal_entry_id: openingEntry.id,
+      posted_at: openingEntry.posted_at ?? openingEntry.entry_date,
+      notes: 'Migrasi dari opening balance General Ledger legacy.',
+      created_at: openingEntry.created_at ?? now,
+      updated_at: openingEntry.updated_at ?? now,
+      sync_status: setting.sync_status ?? 'pending',
+      sync_error: undefined,
+    });
+
+    if (journalLines.length > 0) {
+      await lineTable.bulkPut(journalLines.map((line, index) => ({
+        id: `opening-balance-account-line-${line.id}`,
+        batch_id: batchId,
+        module: 'ACCOUNT' as const,
+        line_number: index + 1,
+        base_amount: Number(line.debit || line.credit || 0),
+        account_id: line.account_id,
+        account_code: line.account_code,
+        account_name: line.account_name,
+        debit: line.debit,
+        credit: line.credit,
+        notes: line.description,
+        created_at: line.created_at ?? now,
+        updated_at: openingEntry.updated_at ?? now,
+        sync_status: setting.sync_status ?? 'pending' as const,
+        sync_error: undefined,
+      })));
     }
   });
 }

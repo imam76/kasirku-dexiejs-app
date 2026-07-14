@@ -413,6 +413,8 @@ export type AccountingProfileSettingSyncStatus = EntitySyncStatus;
 export type AccountingInitialSetupSettingSyncStatus = EntitySyncStatus;
 export type EnabledModuleSyncStatus = EntitySyncStatus;
 export type GeneralLedgerSettingSyncStatus = EntitySyncStatus;
+export type OpeningBalanceBatchSyncStatus = EntitySyncStatus;
+export type OpeningBalanceLineSyncStatus = EntitySyncStatus;
 export type AuthUserSyncStatus = EntitySyncStatus;
 export type CashierSessionSyncStatus = EntitySyncStatus;
 export type ContactSyncStatus = EntitySyncStatus;
@@ -2147,6 +2149,19 @@ export type CashBankReconciliationStatus = 'BALANCED' | 'DIFFERENCE' | 'VOIDED';
 export type JournalEntryStatus = 'DRAFT' | 'POSTED' | 'VOIDED' | 'REVERSED';
 export type InventoryAccountingPolicy = 'CASH_FLOW_ONLY' | 'PERPETUAL_INVENTORY';
 
+export type OpeningBalanceModule =
+  | 'ACCOUNT'
+  | 'RECEIVABLE'
+  | 'PAYABLE'
+  | 'ADVANCE_RECEIVED'
+  | 'ADVANCE_PAID';
+
+export type OpeningBalanceBatchStatus =
+  | 'DRAFT'
+  | 'POSTED'
+  | 'SKIPPED'
+  | 'VOIDED';
+
 export type JournalSourceType =
   | 'POS_TRANSACTION'
   | 'STOCK_PURCHASE'
@@ -2316,6 +2331,62 @@ export interface GeneralLedgerSetting {
   created_at: string;
   updated_at: string;
   sync_status?: GeneralLedgerSettingSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface OpeningBalanceBatch {
+  id: string;
+  module: OpeningBalanceModule;
+  cutoff_date: string;
+  status: OpeningBalanceBatchStatus;
+  total_debit: number;
+  total_credit: number;
+  journal_entry_id?: string;
+  posted_at?: string;
+  skipped_at?: string;
+  notes?: string;
+  version?: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  sync_status?: OpeningBalanceBatchSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface OpeningBalanceLine {
+  id: string;
+  batch_id: string;
+  module: OpeningBalanceModule;
+  line_number: number;
+  contact_id?: string;
+  party_name?: string;
+  document_number?: string;
+  document_date?: string;
+  due_date?: string;
+  currency_code?: string;
+  fx_rate?: number;
+  amount?: number;
+  base_amount: number;
+  account_id?: string;
+  account_code?: string;
+  account_name?: string;
+  counter_account_id?: string;
+  counter_account_code?: string;
+  counter_account_name?: string;
+  debit: number;
+  credit: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: OpeningBalanceLineSyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;

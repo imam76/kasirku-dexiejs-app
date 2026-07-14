@@ -1,5 +1,9 @@
 import { db } from '@/lib/db';
-import type { ChartOfAccount, GeneralLedgerSetting } from '@/types';
+import {
+  OPENING_BALANCE_MODULE_ORDER,
+  getOpeningBalanceBatchId,
+} from '@/services/openingBalanceService';
+import type { ChartOfAccount, GeneralLedgerSetting, OpeningBalanceBatch } from '@/types';
 
 interface RequiredAccountCandidate {
   key: string;
@@ -81,6 +85,43 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
   const openingBalanceJournal = effectiveSetting?.opening_balance_journal_id
     ? await db.journalEntries.get(effectiveSetting.opening_balance_journal_id)
     : undefined;
+  const openingBalanceBatches = await db.openingBalanceBatches.toArray();
+  const getBatch = (module: OpeningBalanceBatch['module']) => {
+    if (!effectiveSetting?.cutoff_date) return undefined;
+    return openingBalanceBatches.find((batch) => (
+      batch.id === getOpeningBalanceBatchId(module, effectiveSetting.cutoff_date as string) &&
+      batch.status !== 'VOIDED'
+    ));
+  };
+  const legacyAccountOpeningPosted =
+    openingBalanceJournal?.status === 'POSTED' &&
+    openingBalanceJournal.source_type === 'OPENING_BALANCE';
+  const openingBalanceStatuses = OPENING_BALANCE_MODULE_ORDER.map((module) => {
+    const batch = getBatch(module);
+    const isLegacyAccountPosted = module === 'ACCOUNT' && !batch && legacyAccountOpeningPosted;
+
+    return {
+      module,
+      batch,
+      isDone: isLegacyAccountPosted || batch?.status === 'POSTED' || batch?.status === 'SKIPPED',
+      label: module
+        .toLowerCase()
+        .replace(/_/g, ' '),
+    };
+  });
+  const incompleteOpeningBalanceModules = openingBalanceStatuses.filter((status) => !status.isDone);
+  const postedOpeningBatches = openingBalanceStatuses
+    .map((status) => status.batch)
+    .filter((batch): batch is OpeningBalanceBatch => Boolean(batch && batch.status === 'POSTED'));
+  const openingTotalDebit = postedOpeningBatches.reduce((sum, batch) => sum + Number(batch.total_debit || 0), 0) +
+    (postedOpeningBatches.some((batch) => batch.module === 'ACCOUNT') || !legacyAccountOpeningPosted
+      ? 0
+      : Number(openingBalanceJournal?.total_debit || 0));
+  const openingTotalCredit = postedOpeningBatches.reduce((sum, batch) => sum + Number(batch.total_credit || 0), 0) +
+    (postedOpeningBatches.some((batch) => batch.module === 'ACCOUNT') || !legacyAccountOpeningPosted
+      ? 0
+      : Number(openingBalanceJournal?.total_credit || 0));
+  const isOpeningTotalBalanced = Math.abs(openingTotalDebit - openingTotalCredit) <= 0.01;
   const checks: GeneralLedgerReadinessCheck[] = [
     {
       key: 'requiredAccounts',
@@ -107,12 +148,20 @@ export const getGeneralLedgerReadiness = async (): Promise<GeneralLedgerReadines
         : 'Cutoff ledger belum diisi.',
     },
     {
-      key: 'openingBalance',
-      label: 'Opening balance',
-      passed: openingBalanceJournal?.status === 'POSTED' && openingBalanceJournal.source_type === 'OPENING_BALANCE',
-      message: openingBalanceJournal?.status === 'POSTED' && openingBalanceJournal.source_type === 'OPENING_BALANCE'
-        ? `Opening balance ${openingBalanceJournal.entry_number} sudah posted.`
-        : 'Opening balance journal belum posted.',
+      key: 'openingBalanceModules',
+      label: 'Module saldo awal',
+      passed: incompleteOpeningBalanceModules.length === 0,
+      message: incompleteOpeningBalanceModules.length === 0
+        ? 'Semua module saldo awal sudah posted atau dilewati.'
+        : `Module saldo awal belum selesai: ${incompleteOpeningBalanceModules.map((item) => item.label).join(', ')}.`,
+    },
+    {
+      key: 'openingBalanceTotals',
+      label: 'Balance saldo awal',
+      passed: isOpeningTotalBalanced,
+      message: isOpeningTotalBalanced
+        ? 'Total debit dan kredit saldo awal posted balance.'
+        : `Total saldo awal belum balance: debit ${openingTotalDebit}, kredit ${openingTotalCredit}.`,
     },
     {
       key: 'inventoryPolicy',

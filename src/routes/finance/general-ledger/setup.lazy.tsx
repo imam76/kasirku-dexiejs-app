@@ -1,6 +1,5 @@
-import { createLazyFileRoute } from '@tanstack/react-router';
-import GeneralLedgerManagement from '@/view/finance/general-ledger/GeneralLedgerManagement';
+import { createLazyFileRoute, Navigate } from '@tanstack/react-router';
 
 export const Route = createLazyFileRoute('/finance/general-ledger/setup')({
-  component: GeneralLedgerManagement,
+  component: () => <Navigate to="/finance/opening-balances/accounts" replace />,
 });

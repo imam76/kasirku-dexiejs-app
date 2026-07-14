@@ -52,6 +52,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/finance/payables': 'FINANCE_ACCESS',
   '/finance/payroll': 'FINANCE_ACCESS',
   '/finance/chart-of-accounts': 'FINANCE_ACCESS',
+  '/finance/opening-balances': 'FINANCE_ACCESS',
   '/finance/general-ledger': 'FINANCE_ACCESS',
   '/finance/closing': 'ACCOUNTING_PERIOD_MANAGE',
   '/koperasi': [
