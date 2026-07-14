@@ -7,11 +7,16 @@ use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn postgres_health_check(
+    app_handle: AppHandle,
     state: State<'_, PostgresState>,
+    realtime_state: State<'_, PostgresRealtimeState>,
 ) -> Result<PostgresHealth, String> {
     let pool = match state.pool() {
         Ok(pool) => pool,
-        Err(_) => return Ok(state.health()),
+        Err(_) => {
+            let health = reconnect_postgres_state(app_handle, &state, &realtime_state).await;
+            return Ok(health);
+        }
     };
 
     let health_result: Result<i32, sqlx::Error> =
@@ -19,10 +24,23 @@ pub async fn postgres_health_check(
 
     let health = match health_result {
         Ok(1) => state.health(),
-        Ok(_) | Err(_) => PostgresHealth::unreachable("PostgreSQL health check failed."),
+        Ok(_) | Err(_) => reconnect_postgres_state(app_handle, &state, &realtime_state).await,
     };
 
     Ok(health)
+}
+
+async fn reconnect_postgres_state(
+    app_handle: AppHandle,
+    state: &State<'_, PostgresState>,
+    realtime_state: &State<'_, PostgresRealtimeState>,
+) -> PostgresHealth {
+    let new_state = db::create_postgres_state().await;
+    let health = new_state.health();
+    state.update_from(new_state);
+    realtime_state.restart(app_handle, health.available);
+
+    health
 }
 
 #[tauri::command]
