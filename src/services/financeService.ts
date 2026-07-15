@@ -14,6 +14,7 @@ import {
   withPendingFinanceTransactionSync,
 } from '@/services/financeTransactionSyncService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
+import { resolveFinanceTransactionAccountSnapshot } from '@/utils/chartOfAccounts/resolveFinanceTransactionAccountSnapshot';
 import { isTransactionActive } from '@/utils/transactions';
 
 interface AddFinanceTransactionInput {
@@ -48,9 +49,13 @@ export const addFinanceTransaction = async ({
   let newBalance = currentAmount;
   let newProfitBalance = currentProfitAmount;
   const affectsProfit = isProfitAffectingFinanceTransaction(normalizedType, category);
-  const accountSnapshot = await getFinanceAccountSnapshotForCategory(category);
   const paymentMethod = payment_method ?? 'TUNAI';
   const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, cash_account_id);
+  const accountSnapshot = resolveFinanceTransactionAccountSnapshot(
+    category,
+    cashAccount,
+    await getFinanceAccountSnapshotForCategory(category),
+  );
 
   if (normalizedType === 'INCOME' || normalizedType === 'OPENING_BALANCE') {
     newBalance += amount;
