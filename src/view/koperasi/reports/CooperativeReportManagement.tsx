@@ -258,6 +258,7 @@ export default function CooperativeReportManagement() {
   const cooperativeEquityChangeReport = data?.cooperativeEquityChangeReport;
   const reconciliation = data?.reconciliation;
   const canShowFinancialStatements = Boolean(financialReadiness?.can_show_financial_statements);
+  const isFinancialStatementFinal = Boolean(financialReadiness?.is_ready);
   const reportTabHash = location.hash.replace(/^#/, '');
   const activeReportTab = cooperativeReportTabKeys.has(reportTabHash) ? reportTabHash : 'summary';
 
@@ -269,11 +270,23 @@ export default function CooperativeReportManagement() {
     <Space direction="vertical" className="w-full" size="middle">
       {canShowFinancialStatements ? (
         <Alert
-          type="info"
+          type={isFinancialStatementFinal ? 'info' : 'warning'}
           showIcon
-          message={t('cooperative.reports.financial.readyMessage', {
-            date: financialReadiness?.cutoff_date?.slice(0, 10) ?? '-',
-          })}
+          message={isFinancialStatementFinal
+            ? t('cooperative.reports.financial.readyMessage', {
+              date: financialReadiness?.cutoff_date?.slice(0, 10) ?? '-',
+            })
+            : t('cooperative.reports.financial.partialTitle')}
+          description={isFinancialStatementFinal ? undefined : (
+            <Space direction="vertical" size={4}>
+              {(financialReadiness?.messages.length
+                ? financialReadiness.messages
+                : [t('cooperative.reports.financial.partialDescription')]
+              ).map((message) => (
+                <Text key={message}>{message}</Text>
+              ))}
+            </Space>
+          )}
         />
       ) : (
         <Alert

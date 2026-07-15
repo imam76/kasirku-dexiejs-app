@@ -59,6 +59,12 @@ import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/c
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { BASE_CURRENCY_CODE, buildBaseCurrency, buildBaseCurrencyRate } from '@/constants/currencies';
 import { buildSystemRolePermissions, buildSystemRoles, resolveLegacyRoleId, resolveLegacyRoleName } from '@/auth/roleSeed';
+import {
+  buildAccountOpeningBalanceFinanceTransaction,
+  calculateFinanceBalanceFromTransactions,
+  hasEquivalentAccountOpeningBalanceFinanceTransaction,
+  isAccountOpeningBalanceCashBankAccount,
+} from '@/utils/finance/accountOpeningBalanceBridge';
 import type { KasirkuDB } from './KasirkuDB';
 import { buildAccountingSeed, buildDefaultCompanyProfileSetting } from './seeds';
 
@@ -2359,5 +2365,103 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
         ...systemPermissions,
       ]);
     }
+  });
+
+  this.version(91).stores({}).upgrade(async (tx) => {
+    const batchTable = tx.table<OpeningBalanceBatch, string>('openingBalanceBatches');
+    const lineTable = tx.table<OpeningBalanceLine, string>('openingBalanceLines');
+    const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const financeTransactionTable = tx.table<FinanceTransaction, string>('financeTransactions');
+    const financeBalanceTable = tx.table('financeBalance');
+    const [batches, lines, accounts, existingTransactions] = await Promise.all([
+      batchTable.toArray(),
+      lineTable.toArray(),
+      accountTable.toArray(),
+      financeTransactionTable.toArray(),
+    ]);
+    const postedAccountBatchIds = new Set(
+      batches
+        .filter((batch) => batch.module === 'ACCOUNT' && batch.status === 'POSTED')
+        .map((batch) => batch.id),
+    );
+    if (postedAccountBatchIds.size === 0) return;
+
+    const now = new Date().toISOString();
+    const batchById = new Map(batches.map((batch) => [batch.id, batch]));
+    const accountById = new Map(accounts.map((account) => [account.id, account]));
+    const createdTransactions: FinanceTransaction[] = [];
+
+    for (const line of lines) {
+      if (!postedAccountBatchIds.has(line.batch_id)) continue;
+      const batch = batchById.get(line.batch_id);
+      const account = line.account_id ? accountById.get(line.account_id) : undefined;
+      if (!batch || !isAccountOpeningBalanceCashBankAccount(account)) continue;
+
+      const financeTransaction = buildAccountOpeningBalanceFinanceTransaction({
+        batch,
+        line,
+        account,
+        actor: {
+          id: batch.updated_by ?? batch.created_by,
+          name: batch.updated_by_name ?? batch.created_by_name,
+        },
+        now,
+      });
+      if (!financeTransaction) continue;
+      if (
+        hasEquivalentAccountOpeningBalanceFinanceTransaction(
+          [...existingTransactions, ...createdTransactions],
+          financeTransaction,
+        )
+      ) {
+        continue;
+      }
+
+      createdTransactions.push(financeTransaction);
+    }
+
+    if (createdTransactions.length === 0) return;
+
+    await financeTransactionTable.bulkAdd(createdTransactions);
+    await financeBalanceTable.put({
+      id: 'current',
+      amount: calculateFinanceBalanceFromTransactions([
+        ...existingTransactions,
+        ...createdTransactions,
+      ]),
+      updated_at: now,
+    });
+  });
+
+  this.version(92).stores({
+    openingBalanceBatches: 'id, module, cutoff_date, status, batch_number, company_id, previous_batch_id, journal_entry_id, posting_idempotency_key, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const batchTable = tx.table<OpeningBalanceBatch, string>('openingBalanceBatches');
+    const setup = await tx.table<AccountingInitialSetupSetting, string>('accountingInitialSetupSetting').get('default');
+    const batches = await batchTable.toArray();
+
+    if (batches.length === 0) return;
+
+    const migratedBatches = batches.map((batch) => {
+      const revisionNumber = batch.revision_number ?? 1;
+      const cutoffKey = batch.cutoff_date.slice(0, 10).replace(/-/g, '');
+      const batchNumber = batch.batch_number ?? `OB-${cutoffKey}-${batch.module}-R${revisionNumber}`;
+
+      return {
+        ...batch,
+        batch_number: batchNumber,
+        company_id: batch.company_id ?? 'default',
+        accounting_start_date: batch.accounting_start_date ?? setup?.current_period_start,
+        revision_number: revisionNumber,
+        posted_by: batch.posted_by ?? batch.updated_by,
+        posted_by_name: batch.posted_by_name ?? batch.updated_by_name,
+        locked_at: batch.locked_at ?? (batch.status === 'POSTED' ? batch.posted_at : undefined),
+        version: batch.version ?? 1,
+        sync_status: batch.sync_status ?? 'pending',
+        sync_error: batch.sync_error,
+      } satisfies OpeningBalanceBatch;
+    });
+
+    await batchTable.bulkPut(migratedBatches);
   });
 }

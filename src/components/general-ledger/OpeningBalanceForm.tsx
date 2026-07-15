@@ -11,8 +11,10 @@ import {
   buildAccountOpeningBalancePreview,
   getDefaultAccountOpeningBalanceAdjustmentDate,
   getManagedAccountOpeningBalanceBlocks,
+  isOpeningBalanceBatchPosted,
   postAccountOpeningBalanceBatch,
   postAccountOpeningBalanceAdjustment,
+  saveAccountOpeningBalanceDraft,
   type AccountOpeningBalancePreviewLine,
 } from '@/services/openingBalanceService';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
@@ -44,7 +46,6 @@ interface OpeningBalanceRow {
   debit: number;
   credit: number;
   managedBy?: string;
-  isAutoEquityAccount?: boolean;
 }
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -77,6 +78,7 @@ export default function OpeningBalanceForm({
   );
   const [amountByAccountId, setAmountByAccountId] = useState<Record<string, { debit: number; credit: number }>>({});
   const [isDirty, setIsDirty] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
   const [isPostingAdjustment, setIsPostingAdjustment] = useState(false);
@@ -85,7 +87,11 @@ export default function OpeningBalanceForm({
   const [adjustmentCreditAccountId, setAdjustmentCreditAccountId] = useState<string>();
   const [adjustmentAmount, setAdjustmentAmount] = useState<number>(0);
   const [adjustmentNotes, setAdjustmentNotes] = useState<string>();
-  const isLocked = batch?.status === 'POSTED' || batch?.status === 'SKIPPED' || (!batch && Boolean(setting?.opening_balance_journal_id));
+  const isLocked = isOpeningBalanceBatchPosted(batch) ||
+    batch?.status === 'SKIPPED' ||
+    batch?.status === 'REVERSED' ||
+    batch?.status === 'VOIDED' ||
+    (!batch && Boolean(setting?.opening_balance_journal_id));
   const configuredCutoffDate = setting?.cutoff_date ? dayjs(setting.cutoff_date) : null;
   const configuredCutoffDateValue = setting?.cutoff_date;
 
@@ -148,7 +154,6 @@ export default function OpeningBalanceForm({
     () => findAccountCandidate(accounts, OWNER_CAPITAL_CANDIDATE),
     [accounts],
   );
-  const isEquityAccountReady = Boolean(equityAccount?.is_active && equityAccount.is_postable);
   const balanceAccountOptions = useMemo(() => accounts
     .filter((account) => (
       account.is_active &&
@@ -167,15 +172,10 @@ export default function OpeningBalanceForm({
         debit: amountByAccountId[account.id]?.debit ?? 0,
         credit: amountByAccountId[account.id]?.credit ?? 0,
         managedBy: managedByAccountId.get(account.id),
-        isAutoEquityAccount: (
-          account.id === 'opening-balance-equity' ||
-          account.id === 'template-opening-balance-equity' ||
-          account.code === '3050'
-        ),
       }));
   }, [accounts, amountByAccountId, managedByAccountId]);
   const inputRows = useMemo(
-    () => rows.filter((row) => !row.isAutoEquityAccount),
+    () => rows,
     [rows],
   );
   const totalDebit = roundCurrency(inputRows.reduce((sum, row) => sum + row.debit, 0));
@@ -184,7 +184,7 @@ export default function OpeningBalanceForm({
   const difference = roundCurrency(totalDebit - totalCredit);
   const hasLines = inputRows.some((row) => row.debit > 0 || row.credit > 0);
   const hasManagedLineValues = inputRows.some((row) => row.managedBy && (row.debit > 0 || row.credit > 0));
-  const canPost = isEquityAccountReady;
+  const canPost = hasLines && isBalanced && !hasManagedLineValues;
   const money = (value: number) => `${baseCurrencySymbol} ${formatCurrency(value || 0)}`;
   const previewLines = useMemo<AccountOpeningBalancePreviewLine[]>(() => (
     isLocked && lines.length > 0
@@ -208,13 +208,10 @@ export default function OpeningBalanceForm({
             credit: row.credit,
             notes: t('generalLedger.setup.openingLineDescription'),
           })),
-        equityAccount: isEquityAccountReady ? equityAccount : undefined,
-        adjustmentNotes: t('openingBalances.account.adjustmentLine'),
       })
-  ), [equityAccount, inputRows, isEquityAccountReady, isLocked, lines, t]);
+  ), [inputRows, isLocked, lines, t]);
   const previewTotalDebit = roundCurrency(previewLines.reduce((sum, line) => sum + line.debit, 0));
   const previewTotalCredit = roundCurrency(previewLines.reduce((sum, line) => sum + line.credit, 0));
-  const hasDebitEquityAdjustment = previewLines.some((line) => line.is_adjustment && line.debit > 0);
   const postedEquityResidual = useMemo(() => {
     if (!equityAccount) return 0;
     const equityLine = lines.find((line) => (
@@ -283,7 +280,7 @@ export default function OpeningBalanceForm({
   };
 
   const openAdjustmentModal = async () => {
-    if (batch?.status !== 'POSTED') return;
+    if (!isOpeningBalanceBatchPosted(batch)) return;
 
     try {
       const defaultDate = await getDefaultAccountOpeningBalanceAdjustmentDate();
@@ -332,8 +329,8 @@ export default function OpeningBalanceForm({
       return;
     }
 
-    if (!canPost) {
-      message.warning(t('openingBalances.account.equityMissing'));
+    if (!isBalanced) {
+      message.warning(t('openingBalances.account.unbalancedPostBlocked'));
       return;
     }
 
@@ -357,6 +354,39 @@ export default function OpeningBalanceForm({
       message.error(error instanceof Error ? error.message : t('generalLedger.setup.postFailed'));
     } finally {
       setIsPosting(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!configuredCutoffDate) {
+      message.warning(t('generalLedger.setup.cutoffRequired'));
+      return;
+    }
+
+    if (hasManagedLineValues) {
+      message.warning(t('openingBalances.account.managedBlocked'));
+      return;
+    }
+
+    try {
+      setIsSavingDraft(true);
+      await saveAccountOpeningBalanceDraft({
+        lines: inputRows
+          .filter((row) => row.debit > 0 || row.credit > 0)
+          .map((row) => ({
+            account_id: row.account.id,
+            debit: row.debit,
+            credit: row.credit,
+            notes: t('generalLedger.setup.openingLineDescription'),
+          })),
+        notes: t('openingBalances.account.defaultNotes'),
+      });
+      message.success(t('openingBalances.message.draftSaved'));
+      setIsDirty(false);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('openingBalances.message.draftSaveFailed'));
+    } finally {
+      setIsSavingDraft(false);
     }
   };
 
@@ -407,11 +437,6 @@ export default function OpeningBalanceForm({
               {t('openingBalances.account.managedBy', { module: record.managedBy })}
             </Text>
           )}
-          {record.isAutoEquityAccount && (
-            <Text type="secondary" className="text-xs">
-              {t('openingBalances.account.autoEquityManaged')}
-            </Text>
-          )}
         </Space>
       ),
     },
@@ -425,7 +450,7 @@ export default function OpeningBalanceForm({
         <InputNumber
           min={0}
           value={record.debit}
-          disabled={isLocked || record.isAutoEquityAccount || Boolean(record.managedBy && record.debit <= 0 && record.credit <= 0)}
+          disabled={isLocked || Boolean(record.managedBy && record.debit <= 0 && record.credit <= 0)}
           data-testid={`gl-opening-balance-debit-${record.account.code}`}
           onChange={(value) => updateAmount(record.account.id, 'debit', value)}
         />
@@ -441,7 +466,7 @@ export default function OpeningBalanceForm({
         <InputNumber
           min={0}
           value={record.credit}
-          disabled={isLocked || record.isAutoEquityAccount || Boolean(record.managedBy && record.debit <= 0 && record.credit <= 0)}
+          disabled={isLocked || Boolean(record.managedBy && record.debit <= 0 && record.credit <= 0)}
           data-testid={`gl-opening-balance-credit-${record.account.code}`}
           onChange={(value) => updateAmount(record.account.id, 'credit', value)}
         />
@@ -520,7 +545,7 @@ export default function OpeningBalanceForm({
           type="success"
           showIcon
           title={batch?.status === 'SKIPPED' ? t('openingBalances.skippedTitle') : t('generalLedger.setup.alreadyPosted')}
-          action={batch?.status === 'POSTED' ? (
+          action={isOpeningBalanceBatchPosted(batch) ? (
             <Button
               size="small"
               data-testid="gl-opening-balance-adjustment-button"
@@ -618,29 +643,12 @@ export default function OpeningBalanceForm({
       {!isBalanced && (
         <Alert
           className="mt-3"
-          type="info"
+          type="warning"
           showIcon
           title={t('openingBalances.account.unbalancedTitle', {
             amount: money(Math.abs(difference)),
           })}
-          description={t(difference > 0
-            ? 'openingBalances.account.autoCreditDescription'
-            : 'openingBalances.account.autoDebitDescription', {
-            account: equityAccount ? `${equityAccount.code} - ${equityAccount.name}` : t('openingBalances.account.equityFallbackName'),
-          })}
-        />
-      )}
-
-      {!isEquityAccountReady && (
-        <Alert className="mt-3" type="error" showIcon title={t('openingBalances.account.equityMissing')} />
-      )}
-
-      {hasDebitEquityAdjustment && (
-        <Alert
-          className="mt-3"
-          type="warning"
-          showIcon
-          title={t('openingBalances.account.debitEquityWarning')}
+          description={t('openingBalances.account.unbalancedDescription')}
         />
       )}
 
@@ -688,9 +696,17 @@ export default function OpeningBalanceForm({
 
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         <Button
+          loading={isSavingDraft}
+          disabled={isLocked || !configuredCutoffDate || hasManagedLineValues}
+          data-testid="gl-opening-balance-save-draft-button"
+          onClick={handleSaveDraft}
+        >
+          {t('openingBalances.saveDraft')}
+        </Button>
+        <Button
           type="primary"
           loading={isPosting}
-          disabled={isLocked || !hasLines || !configuredCutoffDate || hasManagedLineValues || !canPost}
+          disabled={isLocked || !configuredCutoffDate || !canPost}
           data-testid="gl-opening-balance-post-button"
           onClick={handlePost}
         >

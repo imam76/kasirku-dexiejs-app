@@ -57,7 +57,22 @@ export async function saveInitialAccountingSetupFixture(
   };
 
   return page.evaluate(async (fixtureInput) => {
+    const { db } = await import('/src/lib/db.ts');
     const { saveInitialAccountingSetup } = await import('/src/services/accountingInitialSetupService.ts');
+
+    const periods = await db.accountingPeriods.toArray();
+    const hasRequestedCurrentPeriod = periods.some((period) => (
+      !period.deleted_at &&
+      period.start_date.slice(0, 10) === fixtureInput.currentPeriodStart &&
+      period.end_date.slice(0, 10) === fixtureInput.currentPeriodEnd
+    ));
+
+    if (!hasRequestedCurrentPeriod) {
+      await db.transaction('rw', [db.accountingPeriods, db.accountingFiscalYears], async () => {
+        await db.accountingPeriods.clear();
+        await db.accountingFiscalYears.clear();
+      });
+    }
 
     return saveInitialAccountingSetup({
       enabledModules: fixtureInput.enabledModules,

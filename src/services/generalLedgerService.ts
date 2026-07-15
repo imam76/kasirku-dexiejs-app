@@ -832,7 +832,7 @@ export const postOpeningBalanceSourceJournal = async ({
   });
 };
 
-const reverseOpeningBalanceSourceJournal = async ({
+export const reverseOpeningBalanceSourceJournal = async ({
   source_id,
   source_event,
   reason,

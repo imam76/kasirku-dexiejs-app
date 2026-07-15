@@ -2177,7 +2177,10 @@ export type OpeningBalanceModule =
 
 export type OpeningBalanceBatchStatus =
   | 'DRAFT'
+  | 'VALIDATED'
   | 'POSTED'
+  | 'LOCKED'
+  | 'REVERSED'
   | 'SKIPPED'
   | 'VOIDED';
 
@@ -2396,14 +2399,31 @@ export interface GeneralLedgerSetting {
 
 export interface OpeningBalanceBatch {
   id: string;
+  batch_number?: string;
+  company_id?: string;
+  company_name?: string;
   module: OpeningBalanceModule;
   cutoff_date: string;
+  accounting_start_date?: string;
   status: OpeningBalanceBatchStatus;
+  revision_number?: number;
+  previous_batch_id?: string;
   total_debit: number;
   total_credit: number;
   journal_entry_id?: string;
+  posting_idempotency_key?: string;
   posted_at?: string;
+  posted_by?: string;
+  posted_by_name?: string;
+  locked_at?: string;
+  reversed_at?: string;
+  reversed_by?: string;
+  reversed_by_name?: string;
+  reversal_journal_entry_id?: string;
   skipped_at?: string;
+  validated_at?: string;
+  validated_by?: string;
+  validated_by_name?: string;
   notes?: string;
   version?: number;
   created_by?: string;

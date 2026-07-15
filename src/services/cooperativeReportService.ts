@@ -206,6 +206,7 @@ export interface CooperativeCashBankReportRow {
 
 export interface CooperativeFinancialReadiness {
   is_ready: boolean;
+  is_available: boolean;
   is_module_enabled: boolean;
   can_show_financial_statements: boolean;
   cutoff_date?: string;
@@ -469,15 +470,19 @@ const buildFinancialReadiness = (
   generalLedgerModule: { is_enabled?: boolean } | undefined,
 ): CooperativeFinancialReadiness => {
   const isModuleEnabled = Boolean(generalLedgerModule?.is_enabled);
+  const failedReadinessChecks = readiness.isAvailable
+    ? readiness.checks.filter((check) => !check.passed)
+    : readiness.availabilityChecks.filter((check) => !check.passed);
   const messages = [
     ...(!isModuleEnabled ? ['Module General Ledger belum aktif.'] : []),
-    ...readiness.checks.filter((check) => !check.passed).map((check) => check.message),
+    ...failedReadinessChecks.map((check) => check.message),
   ];
 
   return {
     is_ready: readiness.isReady,
+    is_available: readiness.isAvailable,
     is_module_enabled: isModuleEnabled,
-    can_show_financial_statements: readiness.isReady && isModuleEnabled,
+    can_show_financial_statements: readiness.isAvailable && isModuleEnabled,
     cutoff_date: readiness.setting?.cutoff_date,
     messages,
   };

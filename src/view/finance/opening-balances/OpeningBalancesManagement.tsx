@@ -14,6 +14,7 @@ import {
   OPENING_BALANCE_MODULE_DEFINITIONS,
   getOpeningBalanceBatchId,
   getOpeningBalanceModuleDefinition,
+  isOpeningBalanceBatchPosted,
   markOpeningBalanceModuleSkipped,
   postOpeningBalanceDetailBatch,
   saveOpeningBalanceDetailDraft,
@@ -50,7 +51,10 @@ interface EditableSourceLine {
 const statusColor: Record<StatusView, string> = {
   EMPTY: 'default',
   DRAFT: 'blue',
+  VALIDATED: 'cyan',
   POSTED: 'green',
+  LOCKED: 'green',
+  REVERSED: 'orange',
   SKIPPED: 'gold',
   VOIDED: 'red',
 };
@@ -58,7 +62,10 @@ const statusColor: Record<StatusView, string> = {
 const statusKey: Record<StatusView, string> = {
   EMPTY: 'openingBalances.status.empty',
   DRAFT: 'openingBalances.status.draft',
+  VALIDATED: 'openingBalances.status.validated',
   POSTED: 'openingBalances.status.posted',
+  LOCKED: 'openingBalances.status.locked',
+  REVERSED: 'openingBalances.status.reversed',
   SKIPPED: 'openingBalances.status.skipped',
   VOIDED: 'openingBalances.status.voided',
 };
@@ -140,7 +147,7 @@ export default function OpeningBalancesManagement() {
   });
   const postedBatches = rows
     .map((row) => row.batch)
-    .filter((batch): batch is OpeningBalanceBatch => Boolean(batch && batch.status === 'POSTED'));
+    .filter((batch): batch is OpeningBalanceBatch => Boolean(batch && isOpeningBalanceBatchPosted(batch)));
   const totalDebit = postedBatches.reduce((sum, batch) => sum + Number(batch.total_debit || 0), 0);
   const totalCredit = postedBatches.reduce((sum, batch) => sum + Number(batch.total_credit || 0), 0);
 
@@ -165,14 +172,20 @@ export default function OpeningBalancesManagement() {
       title: t('generalLedger.debit'),
       key: 'debit',
       align: 'right',
-      render: (_value, record) => record.batch?.status === 'POSTED' ? money(record.batch.total_debit) : '-',
+      render: (_value, record) => {
+        const batch = record.batch;
+        return batch && isOpeningBalanceBatchPosted(batch) ? money(batch.total_debit) : '-';
+      },
       width: 160,
     },
     {
       title: t('generalLedger.credit'),
       key: 'credit',
       align: 'right',
-      render: (_value, record) => record.batch?.status === 'POSTED' ? money(record.batch.total_credit) : '-',
+      render: (_value, record) => {
+        const batch = record.batch;
+        return batch && isOpeningBalanceBatchPosted(batch) ? money(batch.total_credit) : '-';
+      },
       width: 160,
     },
     {
@@ -279,7 +292,10 @@ export function OpeningBalanceAccountsPage() {
     };
   }, [setup, state.setting]);
   const batch = getBatchForModule(state.batches, 'ACCOUNT', effectiveSetting?.cutoff_date);
-  const isLocked = batch?.status === 'POSTED' || batch?.status === 'SKIPPED';
+  const isLocked = isOpeningBalanceBatchPosted(batch) ||
+    batch?.status === 'SKIPPED' ||
+    batch?.status === 'REVERSED' ||
+    batch?.status === 'VOIDED';
 
   const handleSkip = async () => {
     try {
@@ -370,7 +386,10 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
   const [settlementDate, setSettlementDate] = useState<string>();
   const [settlementNotes, setSettlementNotes] = useState<string>();
   const [isSettling, setIsSettling] = useState(false);
-  const isLocked = state.batch?.status === 'POSTED' || state.batch?.status === 'SKIPPED';
+  const isLocked = isOpeningBalanceBatchPosted(state.batch) ||
+    state.batch?.status === 'SKIPPED' ||
+    state.batch?.status === 'REVERSED' ||
+    state.batch?.status === 'VOIDED';
   const isAdvanceModule = module === 'ADVANCE_RECEIVED' || module === 'ADVANCE_PAID';
   const money = moneyFactory(baseCurrencySymbol);
   const lineBaseAmount = (row: EditableSourceLine) => Number(row.amount || 0) * Number(row.fx_rate || 1);
@@ -799,7 +818,7 @@ export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBa
         <Alert type="success" showIcon title={t('openingBalances.skippedTitle')} />
       )}
 
-      {state.batch?.status === 'POSTED' && (
+      {state.batch && isOpeningBalanceBatchPosted(state.batch) && (
         <Alert
           type="success"
           showIcon

@@ -10,6 +10,7 @@ import {
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { enqueueOpeningBalanceBundleSync } from '@/services/syncQueueService';
+import { isOpeningBalanceBatchPosted } from '@/services/openingBalanceService';
 import type {
   AccountsReceivableRow,
   FinanceTransaction,
@@ -269,7 +270,7 @@ export const listAccountsReceivableRows = async (
     db.openingBalanceBatches
       .where('module')
       .equals('RECEIVABLE')
-      .filter((batch) => batch.status === 'POSTED')
+      .filter(isOpeningBalanceBatchPosted)
       .toArray(),
   ]);
   const invoiceIds = documents.map((document) => document.id);
@@ -441,7 +442,7 @@ export const recordOpeningReceivablePayment = async (
   }
 
   const batch = await db.openingBalanceBatches.get(line.batch_id);
-  if (batch?.status !== 'POSTED') {
+  if (!batch || !isOpeningBalanceBatchPosted(batch)) {
     throw new Error('Saldo awal piutang belum posted.');
   }
 

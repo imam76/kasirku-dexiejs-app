@@ -4,19 +4,57 @@ use crate::models::opening_balance::{
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
 
+const OPENING_BALANCE_BATCH_HARDENING_COLUMNS_SQL: &str = r#"
+ALTER TABLE opening_balance_batches
+    ADD COLUMN IF NOT EXISTS batch_number TEXT,
+    ADD COLUMN IF NOT EXISTS company_id TEXT,
+    ADD COLUMN IF NOT EXISTS company_name TEXT,
+    ADD COLUMN IF NOT EXISTS accounting_start_date TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS revision_number INTEGER,
+    ADD COLUMN IF NOT EXISTS previous_batch_id TEXT,
+    ADD COLUMN IF NOT EXISTS posting_idempotency_key TEXT,
+    ADD COLUMN IF NOT EXISTS posted_by TEXT,
+    ADD COLUMN IF NOT EXISTS posted_by_name TEXT,
+    ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS reversed_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS reversed_by TEXT,
+    ADD COLUMN IF NOT EXISTS reversed_by_name TEXT,
+    ADD COLUMN IF NOT EXISTS reversal_journal_entry_id TEXT,
+    ADD COLUMN IF NOT EXISTS validated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS validated_by TEXT,
+    ADD COLUMN IF NOT EXISTS validated_by_name TEXT
+"#;
+
 macro_rules! opening_balance_batch_select {
     () => {
         r#"
         SELECT
             id,
+            batch_number,
+            company_id,
+            company_name,
             module,
             cutoff_date::TEXT AS cutoff_date,
+            accounting_start_date::TEXT AS accounting_start_date,
             status,
+            revision_number,
+            previous_batch_id,
             total_debit,
             total_credit,
             journal_entry_id,
+            posting_idempotency_key,
             posted_at::TEXT AS posted_at,
+            posted_by,
+            posted_by_name,
+            locked_at::TEXT AS locked_at,
+            reversed_at::TEXT AS reversed_at,
+            reversed_by,
+            reversed_by_name,
+            reversal_journal_entry_id,
             skipped_at::TEXT AS skipped_at,
+            validated_at::TEXT AS validated_at,
+            validated_by,
+            validated_by_name,
             notes,
             version,
             created_by,
@@ -76,6 +114,8 @@ pub async fn list_opening_balance_bundles(
     updated_after: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<OpeningBalanceBundleDto>, sqlx::Error> {
+    ensure_opening_balance_batch_hardening_columns(pool).await?;
+
     let limit = limit.unwrap_or(200).clamp(1, 500);
     let batches = sqlx::query_as::<_, OpeningBalanceBatchDto>(concat!(
         opening_balance_batch_select!(),
@@ -116,6 +156,8 @@ pub async fn get_opening_balance_bundle(
     pool: &PgPool,
     id: String,
 ) -> Result<Option<OpeningBalanceBundleDto>, sqlx::Error> {
+    ensure_opening_balance_batch_hardening_columns(pool).await?;
+
     let batch = sqlx::query_as::<_, OpeningBalanceBatchDto>(concat!(
         opening_balance_batch_select!(),
         " WHERE id = $1"
@@ -137,6 +179,7 @@ pub async fn upsert_opening_balance_bundle(
     input: OpeningBalanceBundleDto,
 ) -> Result<OpeningBalanceBundleDto, sqlx::Error> {
     let mut tx = pool.begin().await?;
+    ensure_opening_balance_batch_hardening_columns_in_tx(&mut tx).await?;
     let batch_id = input.batch.id.clone();
 
     let upserted_batch = upsert_opening_balance_batch(&mut tx, input.batch).await?;
@@ -154,6 +197,24 @@ pub async fn upsert_opening_balance_bundle(
     tx.commit().await?;
 
     Ok(OpeningBalanceBundleDto { batch, lines })
+}
+
+async fn ensure_opening_balance_batch_hardening_columns(pool: &PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query(OPENING_BALANCE_BATCH_HARDENING_COLUMNS_SQL)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+async fn ensure_opening_balance_batch_hardening_columns_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(OPENING_BALANCE_BATCH_HARDENING_COLUMNS_SQL)
+        .execute(&mut **tx)
+        .await?;
+
+    Ok(())
 }
 
 async fn list_opening_balance_lines(
@@ -220,14 +281,31 @@ async fn upsert_opening_balance_batch(
         r#"
         INSERT INTO opening_balance_batches (
             id,
+            batch_number,
+            company_id,
+            company_name,
             module,
             cutoff_date,
+            accounting_start_date,
             status,
+            revision_number,
+            previous_batch_id,
             total_debit,
             total_credit,
             journal_entry_id,
+            posting_idempotency_key,
             posted_at,
+            posted_by,
+            posted_by_name,
+            locked_at,
+            reversed_at,
+            reversed_by,
+            reversed_by_name,
+            reversal_journal_entry_id,
             skipped_at,
+            validated_at,
+            validated_by,
+            validated_by_name,
             notes,
             version,
             created_by,
@@ -241,32 +319,66 @@ async fn upsert_opening_balance_batch(
         VALUES (
             $1,
             $2,
-            $3::TIMESTAMPTZ,
+            $3,
             $4,
             $5,
-            $6,
-            $7,
-            $8::TIMESTAMPTZ,
-            $9::TIMESTAMPTZ,
+            $6::TIMESTAMPTZ,
+            $7::TIMESTAMPTZ,
+            $8,
+            $9,
             $10,
             $11,
             $12,
             $13,
             $14,
-            $15,
-            $16::TIMESTAMPTZ,
-            $17::TIMESTAMPTZ,
-            $18::TIMESTAMPTZ
+            $15::TIMESTAMPTZ,
+            $16,
+            $17,
+            $18::TIMESTAMPTZ,
+            $19::TIMESTAMPTZ,
+            $20,
+            $21,
+            $22,
+            $23::TIMESTAMPTZ,
+            $24::TIMESTAMPTZ,
+            $25,
+            $26,
+            $27,
+            $28,
+            $29,
+            $30,
+            $31,
+            $32,
+            $33::TIMESTAMPTZ,
+            $34::TIMESTAMPTZ,
+            $35::TIMESTAMPTZ
         )
         ON CONFLICT (id) DO UPDATE SET
+            batch_number = EXCLUDED.batch_number,
+            company_id = EXCLUDED.company_id,
+            company_name = EXCLUDED.company_name,
             module = EXCLUDED.module,
             cutoff_date = EXCLUDED.cutoff_date,
+            accounting_start_date = EXCLUDED.accounting_start_date,
             status = EXCLUDED.status,
+            revision_number = EXCLUDED.revision_number,
+            previous_batch_id = EXCLUDED.previous_batch_id,
             total_debit = EXCLUDED.total_debit,
             total_credit = EXCLUDED.total_credit,
             journal_entry_id = EXCLUDED.journal_entry_id,
+            posting_idempotency_key = EXCLUDED.posting_idempotency_key,
             posted_at = EXCLUDED.posted_at,
+            posted_by = EXCLUDED.posted_by,
+            posted_by_name = EXCLUDED.posted_by_name,
+            locked_at = EXCLUDED.locked_at,
+            reversed_at = EXCLUDED.reversed_at,
+            reversed_by = EXCLUDED.reversed_by,
+            reversed_by_name = EXCLUDED.reversed_by_name,
+            reversal_journal_entry_id = EXCLUDED.reversal_journal_entry_id,
             skipped_at = EXCLUDED.skipped_at,
+            validated_at = EXCLUDED.validated_at,
+            validated_by = EXCLUDED.validated_by,
+            validated_by_name = EXCLUDED.validated_by_name,
             notes = EXCLUDED.notes,
             version = EXCLUDED.version,
             created_by = COALESCE(opening_balance_batches.created_by, EXCLUDED.created_by),
@@ -283,14 +395,31 @@ async fn upsert_opening_balance_batch(
             )
         RETURNING
             id,
+            batch_number,
+            company_id,
+            company_name,
             module,
             cutoff_date::TEXT AS cutoff_date,
+            accounting_start_date::TEXT AS accounting_start_date,
             status,
+            revision_number,
+            previous_batch_id,
             total_debit,
             total_credit,
             journal_entry_id,
+            posting_idempotency_key,
             posted_at::TEXT AS posted_at,
+            posted_by,
+            posted_by_name,
+            locked_at::TEXT AS locked_at,
+            reversed_at::TEXT AS reversed_at,
+            reversed_by,
+            reversed_by_name,
+            reversal_journal_entry_id,
             skipped_at::TEXT AS skipped_at,
+            validated_at::TEXT AS validated_at,
+            validated_by,
+            validated_by_name,
             notes,
             version,
             created_by,
@@ -303,14 +432,31 @@ async fn upsert_opening_balance_batch(
         "#,
     )
     .bind(input.id)
+    .bind(input.batch_number)
+    .bind(input.company_id)
+    .bind(input.company_name)
     .bind(input.module)
     .bind(input.cutoff_date)
+    .bind(input.accounting_start_date)
     .bind(input.status)
+    .bind(input.revision_number)
+    .bind(input.previous_batch_id)
     .bind(input.total_debit)
     .bind(input.total_credit)
     .bind(input.journal_entry_id)
+    .bind(input.posting_idempotency_key)
     .bind(input.posted_at)
+    .bind(input.posted_by)
+    .bind(input.posted_by_name)
+    .bind(input.locked_at)
+    .bind(input.reversed_at)
+    .bind(input.reversed_by)
+    .bind(input.reversed_by_name)
+    .bind(input.reversal_journal_entry_id)
     .bind(input.skipped_at)
+    .bind(input.validated_at)
+    .bind(input.validated_by)
+    .bind(input.validated_by_name)
     .bind(input.notes)
     .bind(input.version)
     .bind(input.created_by)

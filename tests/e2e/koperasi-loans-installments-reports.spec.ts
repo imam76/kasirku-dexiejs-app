@@ -5,7 +5,7 @@ import { demoMembers } from './helpers/data';
 import {
   approveLoan,
   createActiveMember,
-  expectCooperativeFinancialReportsGated,
+  expectCooperativeFinancialReportsUnavailable,
   createLoanApplication,
   disburseLoan,
   expectFlexibleInstallmentAllocation,
@@ -17,9 +17,9 @@ import {
 } from './helpers/koperasi';
 
 test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
-  test('REP-02 - laporan keuangan formal digate saat General Ledger belum ready', async ({ page }) => {
+  test('REP-02 - laporan keuangan formal digate saat General Ledger belum available', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
-    await expectCooperativeFinancialReportsGated(page);
+    await expectCooperativeFinancialReportsUnavailable(page);
   });
 
   test('LOAN-01, LOAN-02, LOAN-04, LOAN-05, PAY-01, REP-01, LOAN-07, PAY-07 - alur pinjaman Budi', async ({ page }) => {
@@ -41,7 +41,7 @@ test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
     await payRemainingInstallments(page, demoMembers.budi);
     await page.goto('/koperasi/pinjaman');
     await expect(page.getByTestId(`koperasi-loan-row-${demoMembers.budi.memberNumber}`).first())
-      .toContainText('Paid Off');
+      .toContainText(/Paid Off|Lunas/);
 
     await page.goto('/finance/general-ledger');
     await expect(page.getByText(/IPTW 5% pelunasan tepat waktu/)).toBeVisible();

@@ -1,6 +1,44 @@
 import { expect, type Page } from '@playwright/test';
 import { demoOwner } from './data';
 
+async function normalizeOwnerAccountingBaseline(page: Page) {
+  await page.evaluate(async (ownerFixture) => {
+    const { DEFAULT_SELECTED_MODULES } = await import('/src/constants/setupModules.ts');
+    const { db } = await import('/src/lib/db.ts');
+    const {
+      getSuggestedAccountingBusinessTemplate,
+      saveInitialAccountingSetup,
+    } = await import('/src/services/accountingInitialSetupService.ts');
+    const { getSetupConfig } = await import('/src/services/setupKeyService.ts');
+
+    const setupConfig = getSetupConfig();
+    const enabledModules = setupConfig?.enabledModules ?? DEFAULT_SELECTED_MODULES;
+    const owner = await db.authUsers.where('email').equals(ownerFixture.email).first();
+
+    await db.transaction('rw', [db.accountingPeriods, db.accountingFiscalYears], async () => {
+      await db.accountingPeriods.clear();
+      await db.accountingFiscalYears.clear();
+    });
+
+    await saveInitialAccountingSetup({
+      enabledModules,
+      configuredBy: owner?.id ?? 'e2e-owner-baseline',
+      configuredByName: owner?.name ?? ownerFixture.name,
+      business_template_code: getSuggestedAccountingBusinessTemplate(enabledModules),
+      cutoff_date: '2026-01-01',
+      fiscal_period_start: '2026-01-01',
+      fiscal_period_end: '2026-12-31',
+      current_period_start: '2026-01-01',
+      current_period_end: '2026-12-31',
+      base_currency_code: 'IDR',
+      persistSetupConfig: false,
+    });
+  }, {
+    email: demoOwner.email,
+    name: demoOwner.name,
+  });
+}
+
 export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
   await page.goto('/');
 
@@ -22,6 +60,7 @@ export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
   await page.getByRole('button', { name: 'Simpan Owner' }).click();
 
   await expect(page.getByLabel(/Profil login|Logged-in profile/)).toBeVisible();
+  await normalizeOwnerAccountingBaseline(page);
 }
 
 export async function logout(page: Page) {
