@@ -6,6 +6,7 @@ import {
 } from '@/auth/authService';
 import { postOpeningBalanceSourceJournal } from '@/services/generalLedgerService';
 import { enqueueOpeningBalanceBundleSync } from '@/services/syncQueueService';
+import { isOpeningBalanceBatchPosted } from '@/services/openingBalanceService';
 import type {
   ChartOfAccount,
   JournalEntry,
@@ -151,7 +152,7 @@ export const listOpeningAdvanceBalanceRows = async (
   const batches = await db.openingBalanceBatches
     .where('module')
     .anyOf(modules)
-    .filter((batch) => batch.status === 'POSTED')
+    .filter(isOpeningBalanceBatchPosted)
     .toArray();
   const batchIds = batches.map((batch) => batch.id);
   const lines = batchIds.length > 0
@@ -222,7 +223,7 @@ export const recordOpeningAdvanceSettlement = async (
   }
 
   const batch = await db.openingBalanceBatches.get(line.batch_id);
-  if (!batch || batch.status !== 'POSTED') {
+  if (!batch || !isOpeningBalanceBatchPosted(batch)) {
     throw new Error('Saldo awal uang muka belum posted.');
   }
 

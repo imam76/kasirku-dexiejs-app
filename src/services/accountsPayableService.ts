@@ -9,6 +9,7 @@ import {
 } from '@/services/generalLedgerService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { enqueueOpeningBalanceBundleSync } from '@/services/syncQueueService';
+import { isOpeningBalanceBatchPosted } from '@/services/openingBalanceService';
 import type {
   AccountsPayableRow,
   FinanceTransaction,
@@ -284,7 +285,7 @@ export const listAccountsPayableRows = async (
     db.openingBalanceBatches
       .where('module')
       .equals('PAYABLE')
-      .filter((batch) => batch.status === 'POSTED')
+      .filter(isOpeningBalanceBatchPosted)
       .toArray(),
   ]);
   const invoiceIds = documents.map((document) => document.id);
@@ -448,7 +449,7 @@ export const recordOpeningPayablePayment = async (
   }
 
   const batch = await db.openingBalanceBatches.get(line.batch_id);
-  if (batch?.status !== 'POSTED') {
+  if (!batch || !isOpeningBalanceBatchPosted(batch)) {
     throw new Error('Saldo awal hutang belum posted.');
   }
 

@@ -2432,4 +2432,36 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       updated_at: now,
     });
   });
+
+  this.version(92).stores({
+    openingBalanceBatches: 'id, module, cutoff_date, status, batch_number, company_id, previous_batch_id, journal_entry_id, posting_idempotency_key, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const batchTable = tx.table<OpeningBalanceBatch, string>('openingBalanceBatches');
+    const setup = await tx.table<AccountingInitialSetupSetting, string>('accountingInitialSetupSetting').get('default');
+    const batches = await batchTable.toArray();
+
+    if (batches.length === 0) return;
+
+    const migratedBatches = batches.map((batch) => {
+      const revisionNumber = batch.revision_number ?? 1;
+      const cutoffKey = batch.cutoff_date.slice(0, 10).replace(/-/g, '');
+      const batchNumber = batch.batch_number ?? `OB-${cutoffKey}-${batch.module}-R${revisionNumber}`;
+
+      return {
+        ...batch,
+        batch_number: batchNumber,
+        company_id: batch.company_id ?? 'default',
+        accounting_start_date: batch.accounting_start_date ?? setup?.current_period_start,
+        revision_number: revisionNumber,
+        posted_by: batch.posted_by ?? batch.updated_by,
+        posted_by_name: batch.posted_by_name ?? batch.updated_by_name,
+        locked_at: batch.locked_at ?? (batch.status === 'POSTED' ? batch.posted_at : undefined),
+        version: batch.version ?? 1,
+        sync_status: batch.sync_status ?? 'pending',
+        sync_error: batch.sync_error,
+      } satisfies OpeningBalanceBatch;
+    });
+
+    await batchTable.bulkPut(migratedBatches);
+  });
 }

@@ -1180,14 +1180,31 @@ export interface RemoteJournalEntryBundleDto {
 
 export interface RemoteOpeningBalanceBatchDto {
   id: string;
+  batch_number?: string | null;
+  company_id?: string | null;
+  company_name?: string | null;
   module: OpeningBalanceModule;
   cutoff_date: string;
+  accounting_start_date?: string | null;
   status: OpeningBalanceBatchStatus;
+  revision_number?: number | null;
+  previous_batch_id?: string | null;
   total_debit: number;
   total_credit: number;
   journal_entry_id?: string | null;
+  posting_idempotency_key?: string | null;
   posted_at?: string | null;
+  posted_by?: string | null;
+  posted_by_name?: string | null;
+  locked_at?: string | null;
+  reversed_at?: string | null;
+  reversed_by?: string | null;
+  reversed_by_name?: string | null;
+  reversal_journal_entry_id?: string | null;
   skipped_at?: string | null;
+  validated_at?: string | null;
+  validated_by?: string | null;
+  validated_by_name?: string | null;
   notes?: string | null;
   version: number;
   created_by?: string | null;
