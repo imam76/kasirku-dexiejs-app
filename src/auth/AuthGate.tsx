@@ -149,12 +149,12 @@ export const AuthGate = ({ children }: AuthGateProps) => {
 
   const isLoggedOut = !isLoading && !currentUser;
 
-  // Hidden keyboard shortcut: Ctrl+Shift+? (only when not logged in)
+  // Hidden keyboard shortcut: Ctrl+Shift+? or Cmd+Shift+? (only when not logged in)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!isLoggedOut) return;
-      // Ctrl+Shift+? — the '?' key is Shift+/ on most keyboards
-      if (e.ctrlKey && e.shiftKey && e.key === '?') {
+      // The '?' key is Shift+/ on most keyboards.
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '?') {
         e.preventDefault();
         setShowSetupDrawer((prev) => !prev);
       }
