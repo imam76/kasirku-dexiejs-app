@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "clean:dexie": "node scripts/clean-dexie-dev.mjs",
-    "tauri:dev:fresh": "bun run clean:dexie && bun run tauri dev",
+    "tauri:dev:fresh": "bun scripts/tauri-dev-fresh.mjs",
     "release": "node scripts/release.mjs",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
