@@ -59,7 +59,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('cooperative-member-savings', '2300', 'Simpanan Anggota', 'LIABILITY'),
   createAccountSeed('owner-capital', '3000', 'Modal Pemilik', 'EQUITY'),
   createAccountSeed('opening-balance-equity', '3050', 'Ekuitas Saldo Awal', 'EQUITY', {
-    description: 'Akun penyeimbang otomatis untuk posting saldo awal akun.',
+    description: 'Akun ekuitas otomatis untuk menampung selisih saldo awal dan koreksi pembukaan.',
   }),
   createAccountSeed('sales-pos', '4000', 'Penjualan POS', 'REVENUE'),
   createAccountSeed('sales-invoice-revenue', '4010', 'Pendapatan Sales Invoice', 'REVENUE'),

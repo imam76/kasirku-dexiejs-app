@@ -184,7 +184,8 @@ export default function OpeningBalanceForm({
   const difference = roundCurrency(totalDebit - totalCredit);
   const hasLines = inputRows.some((row) => row.debit > 0 || row.credit > 0);
   const hasManagedLineValues = inputRows.some((row) => row.managedBy && (row.debit > 0 || row.credit > 0));
-  const canPost = hasLines && isBalanced && !hasManagedLineValues;
+  const hasOpeningBalanceEquityAccount = Boolean(equityAccount?.is_active && equityAccount.is_postable);
+  const canPost = hasLines && !hasManagedLineValues && (isBalanced || hasOpeningBalanceEquityAccount);
   const money = (value: number) => `${baseCurrencySymbol} ${formatCurrency(value || 0)}`;
   const previewLines = useMemo<AccountOpeningBalancePreviewLine[]>(() => (
     isLocked && lines.length > 0
@@ -208,8 +209,11 @@ export default function OpeningBalanceForm({
             credit: row.credit,
             notes: t('generalLedger.setup.openingLineDescription'),
           })),
+        equityAccount: hasOpeningBalanceEquityAccount ? equityAccount : undefined,
+        adjustmentNotes: t('openingBalances.account.adjustmentLine'),
+        autoBalanceWithEquity: true,
       })
-  ), [inputRows, isLocked, lines, t]);
+  ), [equityAccount, hasOpeningBalanceEquityAccount, inputRows, isLocked, lines, t]);
   const previewTotalDebit = roundCurrency(previewLines.reduce((sum, line) => sum + line.debit, 0));
   const previewTotalCredit = roundCurrency(previewLines.reduce((sum, line) => sum + line.credit, 0));
   const postedEquityResidual = useMemo(() => {
@@ -329,7 +333,7 @@ export default function OpeningBalanceForm({
       return;
     }
 
-    if (!isBalanced) {
+    if (!isBalanced && !hasOpeningBalanceEquityAccount) {
       message.warning(t('openingBalances.account.unbalancedPostBlocked'));
       return;
     }
@@ -648,7 +652,11 @@ export default function OpeningBalanceForm({
           title={t('openingBalances.account.unbalancedTitle', {
             amount: money(Math.abs(difference)),
           })}
-          description={t('openingBalances.account.unbalancedDescription')}
+          description={hasOpeningBalanceEquityAccount
+            ? t('openingBalances.account.unbalancedDescription', {
+              account: equityAccount ? `${equityAccount.code} - ${equityAccount.name}` : '',
+            })
+            : t('openingBalances.account.equityMissing')}
         />
       )}
 

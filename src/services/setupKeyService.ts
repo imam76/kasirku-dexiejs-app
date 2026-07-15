@@ -5,8 +5,35 @@ import { isTauriRuntime } from '@/utils/export/platform';
 import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
-export const CURRENT_MODULE_CATALOG_VERSION = 9;
+export const CURRENT_MODULE_CATALOG_VERSION = 10;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
+const ACCOUNTING_BASELINE_TRIGGER_MODULES = new Set([
+  'CHART_OF_ACCOUNTS',
+  'GENERAL_LEDGER',
+  'CASH_FLOW',
+  'RECEIVABLES',
+  'PAYABLES',
+  'TAX',
+  'CURRENCY',
+  'REPORT_INCOME',
+  'REPORT_EXPENSE',
+  'REPORT_CASH_FLOW',
+  'REPORT_PAYROLL',
+  'REPORT_AGING',
+  'REPORT_PROFIT',
+  'REPORT_BALANCE_SHEET',
+  'REPORT_PURCHASE',
+  'REPORT_POS_SALES',
+  'REPORT_DEPOSIT',
+  'REPORT_TRANSACTION_DETAIL',
+]);
+
+const requiresAccountingBaselineModule = (moduleCode: string) => (
+  ACCOUNTING_BASELINE_TRIGGER_MODULES.has(moduleCode) ||
+  moduleCode.startsWith('SALES_') ||
+  moduleCode.startsWith('PURCHASE_') ||
+  moduleCode.startsWith('KOPERASI_')
+);
 
 /**
  * The expected hash of the license key (SHA-256, base64-encoded).
@@ -102,11 +129,24 @@ const migrateEnabledModules = (modules: string[]): string[] => {
   return Array.from(enabledModules);
 };
 
+const withAccountingBaselineDependencies = (modules: string[]): string[] => {
+  const enabledModules = new Set(modules);
+
+  if (Array.from(enabledModules).some(requiresAccountingBaselineModule)) {
+    enabledModules.add('CHART_OF_ACCOUNTS');
+    enabledModules.add('GENERAL_LEDGER');
+  }
+
+  return Array.from(enabledModules);
+};
+
 export const normalizeSetupConfig = (config: SetupConfig): SetupConfig => ({
   ...config,
-  enabledModules: (config.moduleCatalogVersion ?? 1) >= CURRENT_MODULE_CATALOG_VERSION
-    ? config.enabledModules
-    : migrateEnabledModules(config.enabledModules),
+  enabledModules: withAccountingBaselineDependencies(
+    (config.moduleCatalogVersion ?? 1) >= CURRENT_MODULE_CATALOG_VERSION
+      ? config.enabledModules
+      : migrateEnabledModules(config.enabledModules),
+  ),
   moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
 });
 

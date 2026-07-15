@@ -145,6 +145,7 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   // Finance essentials
   'CASH_FLOW',
   'CHART_OF_ACCOUNTS',
+  'GENERAL_LEDGER',
   // Reports
   'REPORT_POS_SALES',
   'REPORT_DEPOSIT',
