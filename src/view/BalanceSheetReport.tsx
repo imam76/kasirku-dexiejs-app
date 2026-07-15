@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, App, Button, Card, DatePicker, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { FileExcelOutlined, FilePdfOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -57,6 +57,12 @@ const getSignedAmountClass = (value: number) => (
   value < 0 ? 'text-red-600' : 'text-gray-900'
 );
 
+const mapTreeRow = (row: BalanceSheetTreeRow): ReportTableRow => ({
+  ...row,
+  key: row.id,
+  children: row.children?.map(mapTreeRow),
+});
+
 export default function BalanceSheetReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
@@ -97,9 +103,13 @@ export default function BalanceSheetReport() {
     queryKey: ['generalLedgerReadinessForBalanceSheet', generalLedgerModule?.updated_at, accounts.length],
     queryFn: getGeneralLedgerReadiness,
   });
+  const readiness = readinessQuery.data;
   const isModuleEnabled = Boolean(generalLedgerModule?.is_enabled);
-  const isLedgerReady = Boolean(readinessQuery.data?.isReady);
-  const canShowReport = isModuleEnabled && isLedgerReady;
+  const isLedgerReady = Boolean(readiness?.isReady);
+  const isLedgerAvailable = Boolean(readiness?.isAvailable);
+  const canShowReport = isModuleEnabled && isLedgerAvailable;
+  const failedAvailabilityChecks = readiness?.availabilityChecks.filter((check) => !check.passed) ?? [];
+  const failedProductionChecks = readiness?.checks.filter((check) => !check.passed) ?? [];
   const filters = useMemo<GeneralLedgerReportFilters>(() => ({
     endDate: asOfDate ? dayjs.tz(asOfDate).endOf('day').toISOString() : undefined,
     currencyCode: currencyFilter,
@@ -126,14 +136,9 @@ export default function BalanceSheetReport() {
     LIABILITY: t('report.balanceSheet.liabilities'),
     EQUITY: t('report.balanceSheet.equity'),
   }), [t]);
-  const getRowLabel = (row: BalanceSheetTreeRow) => (
+  const getRowLabel = useCallback((row: BalanceSheetTreeRow) => (
     row.row_type === 'current_income' ? t('report.balanceSheet.currentIncome') : row.account_name
-  );
-  const mapTreeRow = (row: BalanceSheetTreeRow): ReportTableRow => ({
-    ...row,
-    key: row.id,
-    children: row.children?.map(mapTreeRow),
-  });
+  ), [t]);
   const tableRows = useMemo<ReportTableRow[]>(() => (
     report.sections.map((section) => ({
       id: `section-${section.key}`,
@@ -144,7 +149,7 @@ export default function BalanceSheetReport() {
       level: 0,
       children: section.rows.map(mapTreeRow),
     }))
-  ), [report.sections, sectionLabels]);
+  ), [report, sectionLabels]);
   const printableRows = useMemo<PrintableBalanceSheetRow[]>(() => {
     const flattenRows = (rows: ReportTableRow[], level = 0): PrintableBalanceSheetRow[] => rows.flatMap((row) => [
       {
@@ -159,7 +164,7 @@ export default function BalanceSheetReport() {
     ]);
 
     return flattenRows(tableRows);
-  }, [tableRows, t]);
+  }, [getRowLabel, tableRows]);
   const selectedCurrency = currencies.find((currency) => currency.code === currencyFilter);
   const selectedContact = contacts.find((contact) => contact.id === contactFilter);
   const selectedDepartment = departments.find((department) => department.id === departmentFilter);
@@ -474,8 +479,17 @@ export default function BalanceSheetReport() {
         <Alert
           type="warning"
           showIcon
-          message={isModuleEnabled ? t('report.balanceSheet.notReadyTitle') : t('report.balanceSheet.moduleDisabledTitle')}
-          description={isModuleEnabled ? t('report.balanceSheet.notReadyMessage') : t('report.balanceSheet.moduleDisabledMessage')}
+          message={isModuleEnabled ? t('report.financial.notAvailableTitle') : t('report.balanceSheet.moduleDisabledTitle')}
+          description={isModuleEnabled ? (
+            <Space direction="vertical" size={4}>
+              {(failedAvailabilityChecks.length
+                ? failedAvailabilityChecks.map((check) => check.message)
+                : [t('report.financial.notAvailableMessage')]
+              ).map((item) => (
+                <Text key={item}>{item}</Text>
+              ))}
+            </Space>
+          ) : t('report.balanceSheet.moduleDisabledMessage')}
         />
       ) : reportQuery.error ? (
         <Alert
@@ -486,7 +500,23 @@ export default function BalanceSheetReport() {
           })}
         />
       ) : (
-        <Card className="shadow-sm">
+        <Space direction="vertical" size="middle" className="w-full">
+          {!isLedgerReady && readiness ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={t('report.financial.partialBaselineTitle')}
+              description={(
+                <Space direction="vertical" size={4}>
+                  <Text>{t('report.financial.partialBaselineMessage')}</Text>
+                  {failedProductionChecks.map((check) => (
+                    <Text key={check.key} type="secondary">{check.message}</Text>
+                  ))}
+                </Space>
+              )}
+            />
+          ) : null}
+          <Card className="shadow-sm">
           <Space direction="vertical" size="large" className="w-full">
             <div className="flex flex-col gap-1 border-b border-gray-100 pb-4">
               <Text type="secondary">{t('report.balanceSheet.asOfWithColon')} {asOfText}</Text>
@@ -541,7 +571,8 @@ export default function BalanceSheetReport() {
               <Alert type="error" showIcon message={t('generalLedger.balanceNotBalanced')} />
             )}
           </Space>
-        </Card>
+          </Card>
+        </Space>
       )}
     </div>
   );

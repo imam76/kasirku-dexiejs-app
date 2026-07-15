@@ -89,9 +89,13 @@ export default function ProfitLossReport() {
     queryKey: ['generalLedgerReadinessForProfitLoss', generalLedgerModule?.updated_at, accounts.length],
     queryFn: getGeneralLedgerReadiness,
   });
+  const readiness = readinessQuery.data;
   const isModuleEnabled = Boolean(generalLedgerModule?.is_enabled);
-  const isLedgerReady = Boolean(readinessQuery.data?.isReady);
-  const canShowReport = isModuleEnabled && isLedgerReady;
+  const isLedgerReady = Boolean(readiness?.isReady);
+  const isLedgerAvailable = Boolean(readiness?.isAvailable);
+  const canShowReport = isModuleEnabled && isLedgerAvailable;
+  const failedAvailabilityChecks = readiness?.availabilityChecks.filter((check) => !check.passed) ?? [];
+  const failedProductionChecks = readiness?.checks.filter((check) => !check.passed) ?? [];
   const filters = useMemo<GeneralLedgerReportFilters>(() => ({
     startDate: startDate ? dayjs.tz(startDate).startOf('day').toISOString() : undefined,
     endDate: endDate ? dayjs.tz(endDate).endOf('day').toISOString() : undefined,
@@ -427,8 +431,17 @@ export default function ProfitLossReport() {
         <Alert
           type="warning"
           showIcon
-          message={isModuleEnabled ? t('report.profitLoss.notReadyTitle') : t('report.profitLoss.moduleDisabledTitle')}
-          description={isModuleEnabled ? t('report.profitLoss.notReadyMessage') : t('report.profitLoss.moduleDisabledMessage')}
+          message={isModuleEnabled ? t('report.financial.notAvailableTitle') : t('report.profitLoss.moduleDisabledTitle')}
+          description={isModuleEnabled ? (
+            <Space direction="vertical" size={4}>
+              {(failedAvailabilityChecks.length
+                ? failedAvailabilityChecks.map((check) => check.message)
+                : [t('report.financial.notAvailableMessage')]
+              ).map((item) => (
+                <Text key={item}>{item}</Text>
+              ))}
+            </Space>
+          ) : t('report.profitLoss.moduleDisabledMessage')}
         />
       ) : reportQuery.error ? (
         <Alert
@@ -439,7 +452,23 @@ export default function ProfitLossReport() {
           })}
         />
       ) : (
-        <Card className="shadow-sm">
+        <Space direction="vertical" size="middle" className="w-full">
+          {!isLedgerReady && readiness ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={t('report.financial.partialBaselineTitle')}
+              description={(
+                <Space direction="vertical" size={4}>
+                  <Text>{t('report.financial.partialBaselineMessage')}</Text>
+                  {failedProductionChecks.map((check) => (
+                    <Text key={check.key} type="secondary">{check.message}</Text>
+                  ))}
+                </Space>
+              )}
+            />
+          ) : null}
+          <Card className="shadow-sm">
           <Space direction="vertical" size="large" className="w-full">
             <div className="flex flex-col gap-1 border-b border-gray-100 pb-4">
               <Text type="secondary">{t('report.periodWithColon')} {periodText}</Text>
@@ -501,7 +530,8 @@ export default function ProfitLossReport() {
               ))}
             </div>
           </Space>
-        </Card>
+          </Card>
+        </Space>
       )}
     </div>
   );

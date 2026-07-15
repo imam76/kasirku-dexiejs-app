@@ -54,6 +54,7 @@ export default function CooperativeCashFlowTab({
 
   const printDateText = dayjs().tz().format('YYYY-MM-DD HH:mm:ss');
   const canShow = Boolean(financialReadiness?.can_show_financial_statements);
+  const isFinal = Boolean(financialReadiness?.is_ready);
 
   // ─── CSV builder ────────────────────────────────────────────────────
   const buildCsvRows = (): ExportRows => {
@@ -190,11 +191,23 @@ export default function CooperativeCashFlowTab({
   // ─── Financial readiness guard ───────────────────────────────────────
   const readinessAlert = canShow ? (
     <Alert
-      type="info"
+      type={isFinal ? 'info' : 'warning'}
       showIcon
-      message={t('cooperative.reports.financial.readyMessage', {
-        date: financialReadiness?.cutoff_date?.slice(0, 10) ?? '-',
-      })}
+      message={isFinal
+        ? t('cooperative.reports.financial.readyMessage', {
+          date: financialReadiness?.cutoff_date?.slice(0, 10) ?? '-',
+        })
+        : t('cooperative.reports.financial.partialTitle')}
+      description={isFinal ? undefined : (
+        <Space direction="vertical" size={4}>
+          {(financialReadiness?.messages.length
+            ? financialReadiness.messages
+            : [t('cooperative.reports.financial.partialDescription')]
+          ).map((msg) => (
+            <Text key={msg}>{msg}</Text>
+          ))}
+        </Space>
+      )}
     />
   ) : (
     <Alert

@@ -625,16 +625,18 @@ export async function expectCooperativeReportSummary(page: Page) {
   await expect(page.getByTestId('koperasi-cash-flow-operating-net')).toContainText('Rp -2.470.000');
   await expect(page.getByTestId('koperasi-cash-flow-financing-net')).toContainText('Rp 0');
 
-  await clickCooperativeReportTab(page, 'Neraca');
+  await page.goto('/koperasi/laporan#balance-sheet');
+  await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
   await expect(page.getByTestId('koperasi-balance-sheet-report')).toContainText('Rp 15.030.000');
   await expect(page.getByTestId('koperasi-balance-sheet-report')).toContainText('Rp 0');
 
-  await clickCooperativeReportTab(page, 'Perubahan Ekuitas');
+  await page.goto('/koperasi/laporan#equity-change');
+  await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
   await expect(page.getByTestId('koperasi-equity-change-report')).toContainText('SHU Periode');
   await expect(page.getByTestId('koperasi-equity-change-report')).toContainText('Rp 30.000');
 }
 
-export async function expectCooperativeFinancialReportsGated(page: Page) {
+export async function expectCooperativeFinancialReportsUnavailable(page: Page) {
   await page.goto('/koperasi/laporan');
 
   await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();

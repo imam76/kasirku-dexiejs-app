@@ -130,6 +130,14 @@ test.describe.serial('accounting initial setup regression', () => {
       afterIsReady: false,
       moduleEnabled: true,
     });
+
+    await page.goto('/report/profit-loss-report');
+    await expect(page.getByText('Laporan ditampilkan, baseline belum final')).toBeVisible();
+    await expect(page.getByText('Laba/Rugi Bersih').first()).toBeVisible();
+
+    await page.goto('/report/balance-sheet-report');
+    await expect(page.getByText('Laporan ditampilkan, baseline belum final')).toBeVisible();
+    await expect(page.getByText('Total Harta').first()).toBeVisible();
   });
 
   test('AIS-SETUP-02 - setup koperasi menerapkan template dan mapping koperasi', async ({ page }) => {
@@ -171,6 +179,11 @@ test.describe.serial('accounting initial setup regression', () => {
     expect(state.mappingByKey.KSP_PENARIKAN_SIMPANAN).toMatchObject({ account_code: '2330' });
     expect(state.mappingByKey.KSP_ADMIN_PINJAMAN).toMatchObject({ account_code: '4050' });
     expect(state.mappingByKey.KSP_INSENTIF_PEMBAYARAN_TEPAT_WAKTU).toMatchObject({ account_code: '6090' });
+
+    await page.goto('/koperasi/laporan#shu');
+    await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
+    await expect(page.getByText('Laporan ditampilkan, baseline belum final.')).toBeVisible();
+    await expect(page.getByTestId('koperasi-shu-report')).toBeVisible();
   });
 
   test('AIS-SETUP-04 - cutoff ditolak setelah opening balance posted', async ({ page }) => {
@@ -226,7 +239,10 @@ test.describe.serial('accounting initial setup regression', () => {
 
   test('OBA-05 - saldo awal akun posted terkunci dan tidak bisa di-post ulang', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
-    await saveInitialAccountingSetupFixture(page);
+    await saveInitialAccountingSetupFixture(page, {
+      currentPeriodStart: '2026-07-01',
+      currentPeriodEnd: '2026-07-31',
+    });
 
     await page.evaluate(async () => {
       const { db } = await import('/src/lib/db.ts');
@@ -287,6 +303,20 @@ test.describe.serial('accounting initial setup regression', () => {
       const lines = batch
         ? await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray()
         : [];
+      const openingFinanceTransactions = batch
+        ? await db.financeTransactions
+          .where('category')
+          .equals('SALDO_AWAL')
+          .filter((transaction) => (
+            !transaction.deleted_at &&
+            transaction.reference_id?.startsWith(`${batch.id}-line-`) === true
+          ))
+          .toArray()
+        : [];
+      const cashOpeningFinance = openingFinanceTransactions.find((transaction) => (
+        transaction.cash_account_code === '1010'
+      ));
+      const financeBalance = await db.financeBalance.get('current');
 
       return {
         batchStatus: batch?.status,
@@ -303,6 +333,11 @@ test.describe.serial('accounting initial setup regression', () => {
         reversalEntryCount: entries.filter((entry) => entry.source_event === `${ACCOUNT_OPENING_BALANCE_SOURCE_EVENT}:REVERSAL`).length,
         cashLineDebit: lines.find((line) => line.account_code === '1010')?.debit,
         equityAdjustmentCredit: lines.find((line) => line.account_code === '3050')?.credit,
+        openingFinanceTransactionCount: openingFinanceTransactions.length,
+        cashOpeningFinanceAmount: cashOpeningFinance?.amount,
+        cashOpeningFinanceAccountCode: cashOpeningFinance?.account_code,
+        cashOpeningFinanceCashAccountCode: cashOpeningFinance?.cash_account_code,
+        financeBalanceAmount: financeBalance?.amount,
       };
     });
 
@@ -316,6 +351,11 @@ test.describe.serial('accounting initial setup regression', () => {
       reversedEntryCount: 0,
       reversalEntryCount: 0,
       cashLineDebit: 1000000,
+      openingFinanceTransactionCount: 1,
+      cashOpeningFinanceAmount: 1000000,
+      cashOpeningFinanceAccountCode: '1010',
+      cashOpeningFinanceCashAccountCode: '1010',
+      financeBalanceAmount: 1000000,
     });
     expect(result.batchJournalEntryId).toBe(result.settingJournalEntryId);
     expect(result.equityAdjustmentCredit ?? 0).toBe(0);
@@ -959,6 +999,11 @@ test.describe.serial('accounting initial setup regression', () => {
     const errorMessage = await page.evaluate(async () => {
       const { saveInitialAccountingSetup } = await import('/src/services/accountingInitialSetupService.ts');
       const { db } = await import('/src/lib/db.ts');
+      const [setupBefore, periodCountBefore, fiscalYearCountBefore] = await Promise.all([
+        db.accountingInitialSetupSetting.get('default'),
+        db.accountingPeriods.count(),
+        db.accountingFiscalYears.count(),
+      ]);
 
       try {
         await saveInitialAccountingSetup({
@@ -974,8 +1019,18 @@ test.describe.serial('accounting initial setup regression', () => {
         });
         return '';
       } catch (error) {
-        const setup = await db.accountingInitialSetupSetting.get('default');
-        if (setup) return 'unexpected setup snapshot write';
+        const [setupAfter, periodCountAfter, fiscalYearCountAfter] = await Promise.all([
+          db.accountingInitialSetupSetting.get('default'),
+          db.accountingPeriods.count(),
+          db.accountingFiscalYears.count(),
+        ]);
+        if (
+          JSON.stringify(setupAfter) !== JSON.stringify(setupBefore) ||
+          periodCountAfter !== periodCountBefore ||
+          fiscalYearCountAfter !== fiscalYearCountBefore
+        ) {
+          return 'unexpected setup snapshot write';
+        }
         return error instanceof Error ? error.message : String(error);
       }
     });

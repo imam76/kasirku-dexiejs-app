@@ -17,8 +17,16 @@ import {
   normalizeExchangeRate,
   toBaseCurrencyAmount,
 } from '@/utils/documentCurrency';
+import {
+  buildAccountOpeningBalanceFinanceTransaction,
+  calculateFinanceBalanceFromTransactions,
+  hasEquivalentAccountOpeningBalanceFinanceTransaction,
+  isAccountOpeningBalanceCashBankAccount,
+} from '@/utils/finance/accountOpeningBalanceBridge';
+import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import type {
   ChartOfAccount,
+  FinanceTransaction,
   GeneralLedgerSetting,
   JournalEntry,
   InventoryAccountingPolicy,
@@ -585,6 +593,64 @@ export const buildAccountOpeningBalancePreview = ({
   return previewLines;
 };
 
+const ensureAccountOpeningCashBankFinanceTransactions = async ({
+  batch,
+  openingLines,
+  accounts,
+  now,
+  currentUser,
+}: {
+  batch: OpeningBalanceBatch;
+  openingLines: OpeningBalanceLine[];
+  accounts: ChartOfAccount[];
+  now: string;
+  currentUser: Awaited<ReturnType<typeof getCurrentSessionUser>>;
+}) => {
+  if (batch.module !== 'ACCOUNT' || batch.status !== 'POSTED') return [];
+
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const existingTransactions = await db.financeTransactions.toArray();
+  const createdTransactions: FinanceTransaction[] = [];
+
+  for (const line of openingLines) {
+    const account = line.account_id ? accountById.get(line.account_id) : undefined;
+    if (!isAccountOpeningBalanceCashBankAccount(account)) continue;
+
+    const financeTransaction = buildAccountOpeningBalanceFinanceTransaction({
+      batch,
+      line,
+      account,
+      actor: currentUser,
+      now,
+    });
+    if (!financeTransaction) continue;
+    if (
+      hasEquivalentAccountOpeningBalanceFinanceTransaction(
+        [...existingTransactions, ...createdTransactions],
+        financeTransaction,
+      )
+    ) {
+      continue;
+    }
+
+    createdTransactions.push(financeTransaction);
+  }
+
+  if (createdTransactions.length === 0) return [];
+
+  await db.financeTransactions.bulkAdd(createdTransactions);
+  await db.financeBalance.put({
+    id: 'current',
+    amount: calculateFinanceBalanceFromTransactions([
+      ...existingTransactions,
+      ...createdTransactions,
+    ]),
+    updated_at: now,
+  });
+
+  return createdTransactions;
+};
+
 const buildSkippedBatch = ({
   module,
   cutoffDate,
@@ -712,6 +778,32 @@ export const postAccountOpeningBalanceBatch = async ({
   const batchId = getOpeningBalanceBatchId('ACCOUNT', cutoffDate);
   const existingBatch = await db.openingBalanceBatches.get(batchId);
   if (existingBatch?.status === 'POSTED') {
+    let createdFinanceTransactions: FinanceTransaction[] = [];
+    const now = new Date().toISOString();
+
+    await db.transaction('rw', [
+      db.openingBalanceLines,
+      db.chartOfAccounts,
+      db.financeTransactions,
+      db.financeBalance,
+    ], async () => {
+      const [openingLines, accounts] = await Promise.all([
+        db.openingBalanceLines.where('batch_id').equals(existingBatch.id).toArray(),
+        db.chartOfAccounts.toArray(),
+      ]);
+      createdFinanceTransactions = await ensureAccountOpeningCashBankFinanceTransactions({
+        batch: existingBatch,
+        openingLines,
+        accounts,
+        now,
+        currentUser,
+      });
+    });
+
+    if (createdFinanceTransactions.length > 0) {
+      await enqueueFinanceTransactionsSync(createdFinanceTransactions, 'create');
+    }
+
     return existingBatch;
   }
   if (existingBatch?.status === 'SKIPPED') {
@@ -755,11 +847,14 @@ export const postAccountOpeningBalanceBatch = async ({
   const now = new Date().toISOString();
   let batch: OpeningBalanceBatch | undefined;
   let updatedGeneralLedger: GeneralLedgerSetting | undefined;
+  let createdFinanceTransactions: FinanceTransaction[] = [];
 
   await db.transaction('rw', [
     db.generalLedgerSetting,
     db.openingBalanceBatches,
     db.openingBalanceLines,
+    db.financeTransactions,
+    db.financeBalance,
     db.journalEntries,
     db.journalEntryLines,
     db.activityLogs,
@@ -817,6 +912,13 @@ export const postAccountOpeningBalanceBatch = async ({
     await db.openingBalanceBatches.put(batch);
     await db.openingBalanceLines.where('batch_id').equals(batchId).delete();
     await db.openingBalanceLines.bulkPut(openingLines);
+    createdFinanceTransactions = await ensureAccountOpeningCashBankFinanceTransactions({
+      batch,
+      openingLines,
+      accounts,
+      now,
+      currentUser,
+    });
 
     updatedGeneralLedger = buildReadyGeneralLedgerSetting({
       setting,
@@ -838,6 +940,9 @@ export const postAccountOpeningBalanceBatch = async ({
 
   if (updatedGeneralLedger) {
     await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
+  }
+  if (createdFinanceTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(createdFinanceTransactions, 'create');
   }
 
   if (!batch) {

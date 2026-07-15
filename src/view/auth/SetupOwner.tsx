@@ -13,15 +13,15 @@ import {
 } from '@/services/accountingInitialSetupService';
 import { getSetupConfig } from '@/services/setupKeyService';
 import type { AccountingBusinessTemplateCode, AccountingInitialSetupSetting } from '@/types';
+import { OwnerAccountingSetup } from './OwnerAccountingSetup';
 import {
-  OwnerAccountingSetup,
   createDefaultAccountingDraft,
   getFirstValidationError,
   normalizeCurrencyCode,
   validateAccountingDraft,
   type AccountingDraft,
   type AccountingValidationErrors,
-} from './OwnerAccountingSetup';
+} from './ownerAccountingSetupModel';
 
 const { Text } = Typography;
 

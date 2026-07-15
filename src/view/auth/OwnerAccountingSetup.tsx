@@ -1,35 +1,17 @@
-import { Alert, Input, Select, Tag, Typography } from 'antd';
+import { Alert, DatePicker, Form, Select, Tag, Typography } from 'antd';
 import { Building2, CalendarDays, Check, CircleDollarSign } from 'lucide-react';
 import dayjs from 'dayjs';
-import {
-  ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE,
-  ACCOUNTING_BUSINESS_TEMPLATES,
-} from '@/constants/accounting';
+import { ACCOUNTING_BUSINESS_TEMPLATES } from '@/constants/accounting';
 import { BASE_CURRENCY_CODE } from '@/constants/currencies';
 import type { AccountingBusinessTemplateCode, AccountingInitialSetupSetting } from '@/types';
+import {
+  DATE_FORMAT,
+  normalizeCurrencyCode,
+  type AccountingDraft,
+  type AccountingValidationErrors,
+} from './ownerAccountingSetupModel';
 
 const { Text } = Typography;
-
-export type AccountingValidationField =
-  | 'business_template_code'
-  | 'cutoff_date'
-  | 'fiscal_period_start'
-  | 'fiscal_period_end'
-  | 'current_period_start'
-  | 'current_period_end'
-  | 'base_currency_code';
-
-export type AccountingValidationErrors = Partial<Record<AccountingValidationField, string>>;
-
-export interface AccountingDraft {
-  businessTemplateCode: AccountingBusinessTemplateCode;
-  cutoffDate: string;
-  fiscalPeriodStart: string;
-  fiscalPeriodEnd: string;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  baseCurrencyCode: string;
-}
 
 const BASE_CURRENCY_OPTIONS = [
   { value: 'IDR', label: 'IDR - Rupiah Indonesia' },
@@ -40,100 +22,14 @@ const BASE_CURRENCY_OPTIONS = [
   { value: 'JPY', label: 'JPY - Japanese Yen' },
 ];
 
-const DATE_FORMAT = 'YYYY-MM-DD';
+const getDatePickerValue = (value: string) => {
+  if (!value) return null;
 
-export const createDefaultAccountingDraft = (): AccountingDraft => {
-  const today = dayjs();
-  return {
-    businessTemplateCode: 'RETAIL',
-    cutoffDate: today.format(DATE_FORMAT),
-    fiscalPeriodStart: today.startOf('year').format(DATE_FORMAT),
-    fiscalPeriodEnd: today.endOf('year').format(DATE_FORMAT),
-    currentPeriodStart: today.startOf('month').format(DATE_FORMAT),
-    currentPeriodEnd: today.endOf('month').format(DATE_FORMAT),
-    baseCurrencyCode: BASE_CURRENCY_CODE,
-  };
+  const parsedValue = dayjs(value);
+  return parsedValue.isValid() ? parsedValue : null;
 };
 
-export const normalizeCurrencyCode = (value: string) => value.trim().toUpperCase();
-
-export const getFirstValidationError = (errors: AccountingValidationErrors) => (
-  Object.values(errors).find(Boolean)
-);
-
-export const validateAccountingDraft = (
-  draft: AccountingDraft,
-  requiresAccountingBaseline: boolean,
-  hasOperationalSignal: boolean,
-  lockedBaseCurrencyCode?: string,
-): AccountingValidationErrors => {
-  const errors: AccountingValidationErrors = {};
-  const baseCurrencyCode = normalizeCurrencyCode(draft.baseCurrencyCode);
-
-  if (requiresAccountingBaseline) {
-    const template = ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[draft.businessTemplateCode];
-    if (!template || template.status !== 'ENABLED') {
-      errors.business_template_code = 'Pilih jenis bisnis yang sudah aktif untuk wizard v1.';
-    }
-
-    const fiscalStart = dayjs(draft.fiscalPeriodStart);
-    const fiscalEnd = dayjs(draft.fiscalPeriodEnd);
-    const currentStart = dayjs(draft.currentPeriodStart);
-    const currentEnd = dayjs(draft.currentPeriodEnd);
-    const cutoff = dayjs(draft.cutoffDate);
-
-    if (!cutoff.isValid()) {
-      errors.cutoff_date = 'Cutoff wajib diisi dengan tanggal valid.';
-    }
-    if (!fiscalStart.isValid()) {
-      errors.fiscal_period_start = 'Awal periode fiskal wajib diisi.';
-    }
-    if (!fiscalEnd.isValid()) {
-      errors.fiscal_period_end = 'Akhir periode fiskal wajib diisi.';
-    }
-    if (!currentStart.isValid()) {
-      errors.current_period_start = 'Awal periode berjalan wajib diisi.';
-    }
-    if (!currentEnd.isValid()) {
-      errors.current_period_end = 'Akhir periode berjalan wajib diisi.';
-    }
-
-    if (fiscalStart.isValid() && fiscalEnd.isValid() && fiscalEnd.isBefore(fiscalStart, 'day')) {
-      errors.fiscal_period_end = 'Akhir periode fiskal harus sama atau setelah awal periode fiskal.';
-    }
-
-    if (currentStart.isValid() && currentEnd.isValid() && currentEnd.isBefore(currentStart, 'day')) {
-      errors.current_period_end = 'Akhir periode berjalan harus sama atau setelah awal periode berjalan.';
-    }
-
-    if (
-      fiscalStart.isValid() &&
-      fiscalEnd.isValid() &&
-      currentStart.isValid() &&
-      currentEnd.isValid() &&
-      (currentStart.isBefore(fiscalStart, 'day') || currentEnd.isAfter(fiscalEnd, 'day'))
-    ) {
-      errors.current_period_start = 'Periode berjalan harus berada di dalam periode fiskal.';
-      errors.current_period_end = 'Periode berjalan harus berada di dalam periode fiskal.';
-    }
-
-    if (cutoff.isValid() && currentEnd.isValid() && cutoff.isAfter(currentEnd, 'day')) {
-      errors.cutoff_date = 'Cutoff tidak boleh setelah akhir periode berjalan.';
-    }
-  }
-
-  if (!/^[A-Z]{3}$/.test(baseCurrencyCode)) {
-    errors.base_currency_code = 'Kode base currency harus 3 huruf uppercase.';
-  }
-
-  if (hasOperationalSignal && baseCurrencyCode !== (lockedBaseCurrencyCode ?? BASE_CURRENCY_CODE)) {
-    errors.base_currency_code = 'Base currency sudah terkunci setelah transaksi, dokumen, jurnal, payroll, koperasi, atau opening balance pertama.';
-  }
-
-  return errors;
-};
-
-const DateInput = ({
+const DateField = ({
   error,
   label,
   onChange,
@@ -146,19 +42,22 @@ const DateInput = ({
   testId: string;
   value: string;
 }) => (
-  <div>
-    <label className="mb-1.5 block text-xs font-semibold uppercase text-gray-500">
-      {label}
-    </label>
-    <Input
+  <Form.Item
+    className="!mb-0"
+    label={label}
+    validateStatus={error ? 'error' : undefined}
+    help={error}
+  >
+    <DatePicker
+      allowClear={false}
+      className="w-full"
       data-testid={testId}
-      type="date"
-      value={value}
-      status={error ? 'error' : undefined}
-      onChange={(event) => onChange(event.target.value)}
+      format={DATE_FORMAT}
+      size="large"
+      value={getDatePickerValue(value)}
+      onChange={(date) => onChange(date ? date.format(DATE_FORMAT) : '')}
     />
-    {error && <div className="mt-1 text-xs text-red-500">{error}</div>}
-  </div>
+  </Form.Item>
 );
 
 const BusinessTemplatePicker = ({
@@ -243,7 +142,7 @@ const AccountingPeriodFields = ({
     </div>
 
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <DateInput
+      <DateField
         label="Cutoff"
         value={draft.cutoffDate}
         error={errors.cutoff_date}
@@ -251,28 +150,28 @@ const AccountingPeriodFields = ({
         onChange={(cutoffDate) => onChange({ cutoffDate })}
       />
       <div />
-      <DateInput
+      <DateField
         label="Awal Periode Fiskal"
         value={draft.fiscalPeriodStart}
         error={errors.fiscal_period_start}
         testId="owner-accounting-fiscal-period-start"
         onChange={(fiscalPeriodStart) => onChange({ fiscalPeriodStart })}
       />
-      <DateInput
+      <DateField
         label="Akhir Periode Fiskal"
         value={draft.fiscalPeriodEnd}
         error={errors.fiscal_period_end}
         testId="owner-accounting-fiscal-period-end"
         onChange={(fiscalPeriodEnd) => onChange({ fiscalPeriodEnd })}
       />
-      <DateInput
+      <DateField
         label="Awal Periode Berjalan"
         value={draft.currentPeriodStart}
         error={errors.current_period_start}
         testId="owner-accounting-current-period-start"
         onChange={(currentPeriodStart) => onChange({ currentPeriodStart })}
       />
-      <DateInput
+      <DateField
         label="Akhir Periode Berjalan"
         value={draft.currentPeriodEnd}
         error={errors.current_period_end}
@@ -302,19 +201,25 @@ const BaseCurrencyField = ({
       <Text strong>Base Currency</Text>
     </div>
 
-    <Select
-      data-testid="owner-accounting-base-currency"
-      showSearch
-      value={baseCurrencyCode}
-      status={error ? 'error' : undefined}
-      className="w-full"
-      options={BASE_CURRENCY_OPTIONS.map((option) => ({
-        ...option,
-        disabled: hasOperationalSignal && option.value !== (lockedBaseCurrencyCode ?? BASE_CURRENCY_CODE),
-      }))}
-      onChange={(value) => onChange(normalizeCurrencyCode(value))}
-    />
-    {error && <div className="text-xs text-red-500">{error}</div>}
+    <Form.Item
+      className="!mb-0"
+      label="Base Currency"
+      validateStatus={error ? 'error' : undefined}
+      help={error}
+    >
+      <Select
+        data-testid="owner-accounting-base-currency"
+        showSearch
+        value={baseCurrencyCode}
+        className="w-full"
+        size="large"
+        options={BASE_CURRENCY_OPTIONS.map((option) => ({
+          ...option,
+          disabled: hasOperationalSignal && option.value !== (lockedBaseCurrencyCode ?? BASE_CURRENCY_CODE),
+        }))}
+        onChange={(value) => onChange(normalizeCurrencyCode(value))}
+      />
+    </Form.Item>
     <div className="text-xs leading-relaxed text-slate-500">
       Default fresh install tetap IDR. Non-IDR hanya aman sebelum transaksi, dokumen,
       jurnal, atau opening balance pertama.
