@@ -46,9 +46,6 @@ export default function FinanceManagement() {
   const [accountTypeFilter, setAccountTypeFilter] = useState<string>('ALL');
   const isMobile = useIsMobile();
 
-  console.log('transcations => ',transactions);
-  
-
   const summary = useMemo(() => {
     return transactions.reduce((acc, t) => {
       if (isInternalCashMovementFinanceCategory(t.category)) return acc;
@@ -73,9 +70,6 @@ export default function FinanceManagement() {
       return matchesAccount && matchesAccountType;
     });
   }, [accountFilter, accountTypeFilter, transactions]);
-
-  console.log('transactions => ',filteredTransactions);
-  
 
   const accountOptions = useMemo(() => {
     const options = new Map<string, string>();
