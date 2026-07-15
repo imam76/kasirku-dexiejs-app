@@ -344,7 +344,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     <>
       {authContent}
       <SetupKeyDrawer
-        open={showSetupDrawer || setupRequired}
+        open={showSetupDrawer}
         onClose={handleDrawerClose}
         forceMode={setupRequired}
       />
