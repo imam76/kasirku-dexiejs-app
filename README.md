@@ -82,6 +82,9 @@ Atau reset Dexie lalu langsung jalankan Tauri dev:
 bun run tauri:dev:fresh
 ```
 
+Command yang sama dapat digunakan di Linux, Windows (PowerShell/CMD), dan macOS.
+Skrip akan mendeteksi sistem operasi dan memilih lokasi storage yang sesuai.
+
 Catatan: command ini membersihkan storage lokal Tauri/WebView dan origin dev
 `http://localhost:1420`. PostgreSQL lokal tidak ikut di-reset; untuk reset
 PostgreSQL gunakan `docker compose -f postgres-dev/compose.yml down -v`.
