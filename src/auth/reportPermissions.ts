@@ -50,6 +50,10 @@ export const GENERAL_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
     permission: 'REPORT_BALANCE_SHEET_VIEW',
     moduleCode: 'REPORT_BALANCE_SHEET',
   },
+  '/report/buku-besar': {
+    permission: 'REPORT_LEDGER_VIEW',
+    moduleCode: 'GENERAL_LEDGER',
+  },
   '/report/aging-report': {
     permission: 'REPORT_AGING_VIEW',
     moduleCode: 'REPORT_AGING',
@@ -120,10 +124,6 @@ export const COOPERATIVE_REPORT_ACCESS: Record<string, ReportAccessDefinition> =
   '/koperasi/arus-kas': {
     permission: 'COOPERATIVE_CASH_FLOW_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_CASH_FLOW',
-  },
-  '/koperasi/buku-besar': {
-    permission: 'COOPERATIVE_LEDGER_REPORT_VIEW',
-    moduleCode: 'KOPERASI_REPORT_LEDGER',
   },
 };
 

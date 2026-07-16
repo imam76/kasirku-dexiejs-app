@@ -125,7 +125,6 @@ const migrateEnabledModules = (modules: string[]): string[] => {
       'KOPERASI_REPORT_MEMBER_REGISTER',
       'KOPERASI_REPORT_INSTALLMENT_BOOK',
       'KOPERASI_REPORT_CASH_FLOW',
-      'KOPERASI_REPORT_LEDGER',
     ].forEach((moduleCode) => enabledModules.add(moduleCode));
   }
 

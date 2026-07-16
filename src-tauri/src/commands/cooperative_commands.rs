@@ -2,14 +2,14 @@ use crate::{
     db::{PostgresCommandResult, PostgresState},
     models::cooperative::{
         CooperativeAreaDto, CooperativeLoanCollectionEventDto, CooperativeLoanDto,
-        CooperativeLoanInstallmentDto, CooperativeLoanPaymentDto, CooperativeMemberDto,
-        CooperativeMemberSavingBalanceDto, CooperativePaymentApprovalRequestDto,
-        CooperativePaymentInstallmentReconciliationDto, CooperativePostingAccountDto,
-        CooperativeSavingTransactionDto, DecideCooperativePaymentApprovalInput,
-        PostCooperativeLoanPaymentBatchOutcome, PostCooperativeLoanPaymentInput,
-        PostCooperativeLoanPaymentOutcome, RecordCooperativeLoanCollectionEventInput,
-        RecordCooperativeLoanCollectionEventResult, RegisterCooperativePostingAccountsInput,
-        RequestCooperativeLoanPaymentReversalInput,
+        CooperativeLoanInstallmentDto, CooperativeLoanPaymentDto, CooperativeMemberCodeDto,
+        CooperativeMemberDto, CooperativeMemberSavingBalanceDto,
+        CooperativePaymentApprovalRequestDto, CooperativePaymentInstallmentReconciliationDto,
+        CooperativePostingAccountDto, CooperativeSavingTransactionDto,
+        DecideCooperativePaymentApprovalInput, PostCooperativeLoanPaymentBatchOutcome,
+        PostCooperativeLoanPaymentInput, PostCooperativeLoanPaymentOutcome,
+        RecordCooperativeLoanCollectionEventInput, RecordCooperativeLoanCollectionEventResult,
+        RegisterCooperativePostingAccountsInput, RequestCooperativeLoanPaymentReversalInput,
     },
     repositories::{cooperative_payment_repository, cooperative_repository},
 };
@@ -198,6 +198,23 @@ pub async fn postgres_upsert_cooperative_member(
 ) -> PostgresCommandResult<CooperativeMemberDto> {
     let pool = state.pool()?;
     Ok(cooperative_repository::upsert_cooperative_member(&pool, input).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_list_cooperative_member_codes(
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<Vec<CooperativeMemberCodeDto>> {
+    let pool = state.pool()?;
+    Ok(cooperative_repository::list_cooperative_member_codes(&pool).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_upsert_cooperative_member_code(
+    state: State<'_, PostgresState>,
+    input: CooperativeMemberCodeDto,
+) -> PostgresCommandResult<CooperativeMemberCodeDto> {
+    let pool = state.pool()?;
+    Ok(cooperative_repository::upsert_cooperative_member_code(&pool, input).await?)
 }
 
 #[tauri::command]

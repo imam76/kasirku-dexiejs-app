@@ -41,6 +41,14 @@ pub struct CooperativeMemberDto {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CooperativeMemberCodeDto {
+    pub id: String,
+    pub code: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CooperativeSavingTransactionDto {
     pub id: String,
     pub member_id: String,

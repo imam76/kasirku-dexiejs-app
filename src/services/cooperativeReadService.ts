@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import {
+  cooperativeMemberCodePostgresAdapter,
   cooperativeLoanInstallmentPostgresAdapter,
   cooperativeLoanPaymentPostgresAdapter,
   cooperativeLoanPostgresAdapter,
@@ -10,6 +11,7 @@ import {
   type RemoteCooperativeLoanDto,
   type RemoteCooperativeLoanInstallmentDto,
   type RemoteCooperativeLoanPaymentDto,
+  type RemoteCooperativeMemberCodeDto,
   type RemoteCooperativeMemberDto,
   type RemoteCooperativeMemberSavingBalanceDto,
   type RemoteCooperativeSavingTransactionDto,
@@ -19,6 +21,7 @@ import type {
   CooperativeLoanInstallment,
   CooperativeLoanPayment,
   CooperativeMember,
+  CooperativeMemberCode,
   CooperativeMemberSavingBalance,
   CooperativeSavingTransaction,
 } from '@/types';
@@ -33,6 +36,7 @@ export interface CooperativeReadSyncResult {
 
 export interface CooperativeReadSyncSummary {
   members: CooperativeReadSyncResult;
+  memberCodes: CooperativeReadSyncResult;
   savingTransactions: CooperativeReadSyncResult;
   savingBalances: CooperativeReadSyncResult;
   loans: CooperativeReadSyncResult;
@@ -51,8 +55,24 @@ const EMPTY_READ_SYNC_RESULT: CooperativeReadSyncResult = {
 const optionalString = (value: string | null | undefined) => value ?? undefined;
 const optionalNumber = (value: number | null | undefined) => value ?? undefined;
 const optionalPaymentType = (value: RemoteCooperativeLoanPaymentDto['payment_type']) => value ?? undefined;
+const LEGACY_GENERATED_MEMBER_CODE_PATTERN = /^KS[PU]-(\d+)$/i;
+const NUMERIC_MEMBER_CODE_PATTERN = /^\d+$/;
+const MEMBER_CODE_PADDING_LENGTH = 4;
 
 let isRefreshingCooperativeDataFromPostgres = false;
+
+const normalizeMemberCode = (value?: string | null) => {
+  const trimmedValue = value?.trim() ?? '';
+  const legacyMatch = trimmedValue.match(LEGACY_GENERATED_MEMBER_CODE_PATTERN);
+  if (legacyMatch) return String(Number(legacyMatch[1])).padStart(MEMBER_CODE_PADDING_LENGTH, '0');
+  if (NUMERIC_MEMBER_CODE_PATTERN.test(trimmedValue) && trimmedValue.length < MEMBER_CODE_PADDING_LENGTH) {
+    return trimmedValue.padStart(MEMBER_CODE_PADDING_LENGTH, '0');
+  }
+
+  return trimmedValue;
+};
+
+const getMemberCodeId = (value?: string | null) => normalizeMemberCode(value).toUpperCase();
 
 const toTimestamp = (value: string) => {
   const timestamp = Date.parse(value);
@@ -116,6 +136,29 @@ const mapRemoteCooperativeMemberToLocal = (
   last_synced_at: syncedAt,
   remote_updated_at: remoteMember.updated_at,
 });
+
+const mapRemoteCooperativeMemberCodeToLocal = (
+  remoteMemberCode: RemoteCooperativeMemberCodeDto,
+): CooperativeMemberCode => ({
+  id: getMemberCodeId(remoteMemberCode.code),
+  code: normalizeMemberCode(remoteMemberCode.code),
+  created_at: remoteMemberCode.created_at,
+  updated_at: remoteMemberCode.updated_at,
+});
+
+const buildMemberCodeFromMember = (
+  member: Pick<CooperativeMember, 'member_number' | 'created_at' | 'updated_at'>,
+): CooperativeMemberCode | undefined => {
+  const code = normalizeMemberCode(member.member_number);
+  if (!code) return undefined;
+
+  return {
+    id: getMemberCodeId(code),
+    code,
+    created_at: member.created_at,
+    updated_at: member.updated_at,
+  };
+};
 
 const mapRemoteCooperativeSavingTransactionToLocal = (
   remoteTransaction: RemoteCooperativeSavingTransactionDto,
@@ -345,19 +388,54 @@ export const mergeRemoteCooperativeMembersIntoDexie = async (
   const result = { ...EMPTY_READ_SYNC_RESULT, fetched: remoteMembers.length };
   if (remoteMembers.length === 0) return result;
 
-  await db.transaction('rw', db.cooperativeMembers, async () => {
+  await db.transaction('rw', [db.cooperativeMembers, db.cooperativeMemberCodes], async () => {
     const membersToPut: CooperativeMember[] = [];
+    const memberCodesToPut = new Map<string, CooperativeMemberCode>();
     for (const remoteMember of remoteMembers) {
       const localMember = await db.cooperativeMembers.get(remoteMember.id);
       if (!shouldApplyRemoteUpdatedAt(localMember, remoteMember.updated_at)) {
         result.skipped += 1;
         continue;
       }
-      membersToPut.push(mapRemoteCooperativeMemberToLocal(remoteMember, syncedAt));
+      const member = mapRemoteCooperativeMemberToLocal(remoteMember, syncedAt);
+      const memberCode = buildMemberCodeFromMember(member);
+      membersToPut.push(member);
+      if (memberCode) memberCodesToPut.set(memberCode.id, memberCode);
       if (localMember) result.updated += 1;
       else result.inserted += 1;
     }
     if (membersToPut.length > 0) await db.cooperativeMembers.bulkPut(membersToPut);
+    if (memberCodesToPut.size > 0) await db.cooperativeMemberCodes.bulkPut(Array.from(memberCodesToPut.values()));
+  });
+
+  return result;
+};
+
+export const mergeRemoteCooperativeMemberCodesIntoDexie = async (
+  remoteMemberCodes: RemoteCooperativeMemberCodeDto[],
+): Promise<CooperativeReadSyncResult> => {
+  const result = { ...EMPTY_READ_SYNC_RESULT, fetched: remoteMemberCodes.length };
+  if (remoteMemberCodes.length === 0) return result;
+
+  await db.transaction('rw', db.cooperativeMemberCodes, async () => {
+    const codesToPut: CooperativeMemberCode[] = [];
+    for (const remoteMemberCode of remoteMemberCodes) {
+      const memberCode = mapRemoteCooperativeMemberCodeToLocal(remoteMemberCode);
+      if (!memberCode.code) {
+        result.skipped += 1;
+        continue;
+      }
+
+      const localCode = await db.cooperativeMemberCodes.get(memberCode.id);
+      codesToPut.push({
+        ...memberCode,
+        created_at: localCode?.created_at ?? memberCode.created_at,
+      });
+      if (localCode) result.updated += 1;
+      else result.inserted += 1;
+    }
+
+    if (codesToPut.length > 0) await db.cooperativeMemberCodes.bulkPut(codesToPut);
   });
 
   return result;
@@ -569,6 +647,7 @@ export const mergeRemoteCooperativeLoanPaymentsIntoDexie = async (
 export const refreshCooperativeDataFromPostgres = async (): Promise<CooperativeReadSyncSummary> => {
   const emptySummary: CooperativeReadSyncSummary = {
     members: { ...EMPTY_READ_SYNC_RESULT },
+    memberCodes: { ...EMPTY_READ_SYNC_RESULT },
     savingTransactions: { ...EMPTY_READ_SYNC_RESULT },
     savingBalances: { ...EMPTY_READ_SYNC_RESULT },
     loans: { ...EMPTY_READ_SYNC_RESULT },
@@ -592,6 +671,7 @@ export const refreshCooperativeDataFromPostgres = async (): Promise<CooperativeR
 
     return {
       members: await mergeRemoteCooperativeMembersIntoDexie(await cooperativeMemberPostgresAdapter.list()),
+      memberCodes: await mergeRemoteCooperativeMemberCodesIntoDexie(await cooperativeMemberCodePostgresAdapter.list()),
       savingTransactions: await mergeRemoteCooperativeSavingTransactionsIntoDexie(await cooperativeSavingTransactionPostgresAdapter.list()),
       savingBalances: await mergeRemoteCooperativeMemberSavingBalancesIntoDexie(await cooperativeMemberSavingBalancePostgresAdapter.list()),
       loans,

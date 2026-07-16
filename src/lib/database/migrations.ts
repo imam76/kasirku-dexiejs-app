@@ -13,6 +13,7 @@ import type {
   CooperativeLoanPayment,
   CooperativeLoanCollectionEvent,
   CooperativeMember,
+  CooperativeMemberCode,
   CooperativeMemberSavingBalance,
   CooperativeSavingTransaction,
   CooperativeSettings,
@@ -72,34 +73,65 @@ import type { KasirkuDB } from './KasirkuDB';
 import { buildAccountingSeed, buildDefaultCompanyProfileSetting, buildDefaultPaymentMethods } from './seeds';
 import { buildLegacyPosPaymentSnapshot } from '@/utils/posPaymentMethod';
 
-const GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/;
+const COOPERATIVE_MEMBER_NUMBER_PADDING_LENGTH = 4;
+const LEGACY_GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/i;
+const NUMERIC_COOPERATIVE_MEMBER_NUMBER_PATTERN = /^\d+$/;
 
-const normalizeCooperativeMemberNumber = (value?: string | null) => value?.trim().toUpperCase() ?? '';
+const formatGeneratedCooperativeMemberNumber = (sequence: number) => (
+  String(sequence).padStart(COOPERATIVE_MEMBER_NUMBER_PADDING_LENGTH, '0')
+);
+
+const normalizeCooperativeMemberNumber = (value?: string | null) => {
+  const trimmedValue = value?.trim() ?? '';
+  const legacyMatch = trimmedValue.match(LEGACY_GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN);
+  if (legacyMatch) return formatGeneratedCooperativeMemberNumber(Number(legacyMatch[1]));
+  if (
+    NUMERIC_COOPERATIVE_MEMBER_NUMBER_PATTERN.test(trimmedValue) &&
+    trimmedValue.length < COOPERATIVE_MEMBER_NUMBER_PADDING_LENGTH
+  ) {
+    return trimmedValue.padStart(COOPERATIVE_MEMBER_NUMBER_PADDING_LENGTH, '0');
+  }
+
+  return trimmedValue;
+};
+
+const getCooperativeMemberNumberComparisonKey = (value?: string | null) => (
+  normalizeCooperativeMemberNumber(value).toUpperCase()
+);
+
+const buildCooperativeMemberCodeRecord = (
+  value: string | undefined,
+  now: string,
+): CooperativeMemberCode | undefined => {
+  const code = normalizeCooperativeMemberNumber(value);
+  if (!code) return undefined;
+
+  return {
+    id: getCooperativeMemberNumberComparisonKey(code),
+    code,
+    created_at: now,
+    updated_at: now,
+  };
+};
 
 const buildNextCooperativeMemberNumberGenerator = (
   members: Array<Pick<CooperativeMember, 'member_number'>>,
 ) => {
   const usedNumbers = new Set(
     members
-      .map((member) => normalizeCooperativeMemberNumber(member.member_number))
+      .map((member) => getCooperativeMemberNumberComparisonKey(member.member_number))
       .filter(Boolean),
   );
-  const generatedSequences = Array.from(usedNumbers)
-    .map((memberNumber) => {
-      const match = memberNumber.match(GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN);
-      return match ? Number(match[1]) : 0;
-    })
-    .filter((sequence) => sequence > 0);
-  let nextSequence = Math.max(0, ...generatedSequences) + 1;
+  let nextSequence = 1;
 
   return () => {
-    let nextNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
-    while (usedNumbers.has(nextNumber)) {
+    let nextNumber = formatGeneratedCooperativeMemberNumber(nextSequence);
+    while (usedNumbers.has(getCooperativeMemberNumberComparisonKey(nextNumber))) {
       nextSequence += 1;
-      nextNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+      nextNumber = formatGeneratedCooperativeMemberNumber(nextSequence);
     }
 
-    usedNumbers.add(nextNumber);
+    usedNumbers.add(getCooperativeMemberNumberComparisonKey(nextNumber));
     nextSequence += 1;
     return nextNumber;
   };
@@ -122,6 +154,33 @@ const backfillMissingCooperativeMemberNumbers = async (tx: DexieTransaction) => 
 
   if (membersWithoutCode.length > 0) {
     await memberTable.bulkPut(membersWithoutCode);
+  }
+};
+
+const seedCooperativeMemberCodesFromMembers = async (tx: DexieTransaction) => {
+  const now = new Date().toISOString();
+  const memberTable = tx.table<CooperativeMember, string>('cooperativeMembers');
+  const codeTable = tx.table<CooperativeMemberCode, string>('cooperativeMemberCodes');
+  const [members, existingCodes] = await Promise.all([
+    memberTable.toArray(),
+    codeTable.toArray(),
+  ]);
+  const codeById = new Map(existingCodes.map((code) => [code.id, code]));
+
+  members.forEach((member) => {
+    const codeRecord = buildCooperativeMemberCodeRecord(member.member_number, member.created_at ?? now);
+    if (!codeRecord) return;
+
+    const existingCode = codeById.get(codeRecord.id);
+    codeById.set(codeRecord.id, {
+      ...codeRecord,
+      created_at: existingCode?.created_at ?? codeRecord.created_at,
+      updated_at: existingCode?.updated_at ?? member.updated_at ?? now,
+    });
+  });
+
+  if (codeById.size > 0) {
+    await codeTable.bulkPut(Array.from(codeById.values()));
   }
 };
 
@@ -2576,4 +2635,42 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       );
     }
   });
+
+  this.version(97).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const existingPermissions = await rolePermissionTable.toArray();
+    const existingIds = new Set(existingPermissions.map((permission) => permission.id));
+    const legacyPermissionCode: RolePermission['permission_code'] = 'COOPERATIVE_LEDGER_REPORT_VIEW';
+    const ledgerPermissionCode: RolePermission['permission_code'] = 'REPORT_LEDGER_VIEW';
+    const migratedPermissions = existingPermissions
+      .filter((permission) => permission.permission_code === legacyPermissionCode)
+      .flatMap((permission) => {
+        const id = `${permission.role_id}:${ledgerPermissionCode}`;
+        if (existingIds.has(id)) return [];
+        existingIds.add(id);
+
+        return [{
+          id,
+          role_id: permission.role_id,
+          permission_code: ledgerPermissionCode,
+          created_at: now,
+          updated_at: now,
+          sync_status: 'pending' as const,
+        }];
+      });
+    const systemPermissions = buildSystemRolePermissions(now)
+      .filter((permission) => !existingIds.has(permission.id));
+
+    if (migratedPermissions.length > 0 || systemPermissions.length > 0) {
+      await rolePermissionTable.bulkPut([
+        ...migratedPermissions,
+        ...systemPermissions,
+      ]);
+    }
+  });
+
+  this.version(98).stores({
+    cooperativeMemberCodes: 'id, &code, created_at, updated_at',
+  }).upgrade(seedCooperativeMemberCodesFromMembers);
 }

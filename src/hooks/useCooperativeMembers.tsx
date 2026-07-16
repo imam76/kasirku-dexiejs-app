@@ -30,6 +30,11 @@ export const useCooperativeMembers = () => {
     [],
     [],
   );
+  const memberCodes = useLiveQuery(
+    () => db.cooperativeMemberCodes.orderBy('code').toArray(),
+    [],
+    [],
+  );
   const areas = useLiveQuery(
     () => db.cooperativeAreas.orderBy('name').toArray(),
     [],
@@ -114,6 +119,7 @@ export const useCooperativeMembers = () => {
 
   return {
     members,
+    memberCodes,
     areas,
     employees,
     employeeAreaAssignments,

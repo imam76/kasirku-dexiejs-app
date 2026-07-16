@@ -1,4 +1,5 @@
 import {
+  BookOutlined,
   FileExcelOutlined,
   FileSearchOutlined,
   FileTextOutlined,
@@ -29,6 +30,7 @@ function Laporan() {
     { to: '/report/payroll-report', label: t('report.index.payrollShort'), icon: FileExcelOutlined, color: 'text-zinc-700', desc: t('report.index.payrollDesc') },
     { to: '/report/profit-loss-report', label: t('report.index.profitLossShort'), icon: LineChartOutlined, color: 'text-indigo-600', desc: t('report.index.profitLossDesc') },
     { to: '/report/balance-sheet-report', label: t('report.index.balanceSheetShort'), icon: ReconciliationOutlined, color: 'text-cyan-700', desc: t('report.index.balanceSheetDesc') },
+    { to: '/report/buku-besar', label: t('report.index.ledgerShort'), icon: BookOutlined, color: 'text-slate-700', desc: t('report.index.ledgerDesc') },
     { to: '/report/aging-report', label: t('report.index.agingShort'), icon: ReconciliationOutlined, color: 'text-emerald-600', desc: t('report.index.agingDesc') },
     { to: '/report/stock-card', label: 'Kartu Stok', icon: FileSearchOutlined, color: 'text-cyan-700', desc: 'Lihat mutasi dan saldo stok per produk' },
   ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }))

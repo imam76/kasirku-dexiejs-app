@@ -2,7 +2,7 @@ import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import { cooperativeMemberSchema } from '@/lib/validations/cooperativeMember';
 import { enqueueCooperativeMembersSync, withPendingCooperativeSync } from '@/services/cooperativeSyncService';
-import type { CooperativeMember, CooperativeMemberStatus } from '@/types';
+import type { CooperativeMember, CooperativeMemberCode, CooperativeMemberStatus } from '@/types';
 
 export interface CooperativeMemberUpsertInput {
   member_number?: string;
@@ -27,40 +27,114 @@ type SanitizedCooperativeMemberInput =
     member_number: string;
   };
 
-const GENERATED_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/;
+const MEMBER_NUMBER_PADDING_LENGTH = 4;
+const LEGACY_GENERATED_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/i;
+const NUMERIC_MEMBER_NUMBER_PATTERN = /^\d+$/;
 
-const normalizeMemberNumber = (value?: string | null) => value?.trim().toUpperCase() ?? '';
+const formatGeneratedMemberNumber = (sequence: number) => String(sequence).padStart(MEMBER_NUMBER_PADDING_LENGTH, '0');
 
-const getNextCooperativeMemberNumber = (
-  members: Array<Pick<CooperativeMember, 'member_number'>>,
+export const normalizeCooperativeMemberCode = (value?: string | null) => {
+  const trimmedValue = value?.trim() ?? '';
+  const legacyMatch = trimmedValue.match(LEGACY_GENERATED_MEMBER_NUMBER_PATTERN);
+  if (legacyMatch) return formatGeneratedMemberNumber(Number(legacyMatch[1]));
+  if (NUMERIC_MEMBER_NUMBER_PATTERN.test(trimmedValue) && trimmedValue.length < MEMBER_NUMBER_PADDING_LENGTH) {
+    return trimmedValue.padStart(MEMBER_NUMBER_PADDING_LENGTH, '0');
+  }
+
+  return trimmedValue;
+};
+
+const getCooperativeMemberCodeId = (value?: string | null) => normalizeCooperativeMemberCode(value).toUpperCase();
+
+const buildCooperativeMemberCodeRecord = (
+  value: string | undefined,
+  now: string,
+): CooperativeMemberCode | undefined => {
+  const code = normalizeCooperativeMemberCode(value);
+  if (!code) return undefined;
+
+  return {
+    id: getCooperativeMemberCodeId(code),
+    code,
+    created_at: now,
+    updated_at: now,
+  };
+};
+
+const upsertCooperativeMemberCode = async (value: string | undefined, now = new Date().toISOString()) => {
+  const codeRecord = buildCooperativeMemberCodeRecord(value, now);
+  if (!codeRecord) return;
+
+  const existingCode = await db.cooperativeMemberCodes.get(codeRecord.id);
+  await db.cooperativeMemberCodes.put({
+    ...codeRecord,
+    created_at: existingCode?.created_at ?? codeRecord.created_at,
+  });
+};
+
+const getActiveUsedMemberCodeIds = (
+  members: Array<Pick<CooperativeMember, 'id' | 'member_number' | 'status'>>,
+  excludeMemberId?: string,
 ) => {
-  const usedNumbers = new Set(
+  return new Set(
     members
-      .map((member) => normalizeMemberNumber(member.member_number))
+      .filter((member) => member.id !== excludeMemberId && member.status === 'ACTIVE')
+      .map((member) => getCooperativeMemberCodeId(member.member_number))
       .filter(Boolean),
   );
-  const usedGeneratedSequences = Array.from(usedNumbers)
-    .map((memberNumber) => {
-      const match = memberNumber.match(GENERATED_MEMBER_NUMBER_PATTERN);
-      return match ? Number(match[1]) : 0;
-    })
-    .filter((sequence) => sequence > 0);
-  let nextSequence = Math.max(0, ...usedGeneratedSequences) + 1;
-  let nextMemberNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+};
 
-  while (usedNumbers.has(nextMemberNumber)) {
+const getNextCooperativeMemberNumber = (
+  members: Array<Pick<CooperativeMember, 'id' | 'member_number' | 'status'>>,
+  memberCodes: Array<Pick<CooperativeMemberCode, 'code'>>,
+  excludeMemberId?: string,
+) => {
+  const usedCodeIds = getActiveUsedMemberCodeIds(members, excludeMemberId);
+  const reusableCode = memberCodes
+    .filter((memberCode) => !usedCodeIds.has(getCooperativeMemberCodeId(memberCode.code)))
+    .sort((left, right) => left.code.localeCompare(right.code, undefined, { numeric: true }))[0];
+  if (reusableCode) return reusableCode.code;
+
+  const reservedCodeIds = new Set([
+    ...Array.from(usedCodeIds),
+    ...memberCodes.map((memberCode) => getCooperativeMemberCodeId(memberCode.code)).filter(Boolean),
+  ]);
+  let nextSequence = 1;
+  let nextMemberNumber = formatGeneratedMemberNumber(nextSequence);
+
+  while (reservedCodeIds.has(getCooperativeMemberCodeId(nextMemberNumber))) {
     nextSequence += 1;
-    nextMemberNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+    nextMemberNumber = formatGeneratedMemberNumber(nextSequence);
   }
 
   return nextMemberNumber;
 };
 
 export const generateCooperativeMemberNumber = async (excludeMemberId?: string) => {
-  const members = await db.cooperativeMembers.toArray();
-  return getNextCooperativeMemberNumber(
-    members.filter((member) => member.id !== excludeMemberId),
-  );
+  const [members, memberCodes] = await Promise.all([
+    db.cooperativeMembers.toArray(),
+    db.cooperativeMemberCodes.toArray(),
+  ]);
+  return getNextCooperativeMemberNumber(members, memberCodes, excludeMemberId);
+};
+
+export const buildAvailableCooperativeMemberNumberOptions = (
+  memberCodes: Array<Pick<CooperativeMemberCode, 'code'>>,
+  members: Array<Pick<CooperativeMember, 'id' | 'member_number' | 'status'>>,
+  options: { excludeMemberId?: string } = {},
+) => {
+  const usedCodeIds = getActiveUsedMemberCodeIds(members, options.excludeMemberId);
+  const availableCodes = new Map<string, string>();
+
+  memberCodes.forEach((memberCode) => {
+    const code = normalizeCooperativeMemberCode(memberCode.code);
+    const codeId = getCooperativeMemberCodeId(code);
+    if (!code || usedCodeIds.has(codeId)) return;
+    availableCodes.set(codeId, code);
+  });
+
+  return Array.from(availableCodes.values())
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
 };
 
 const sanitizeCooperativeMemberInput = (input: CooperativeMemberUpsertInput): SanitizedCooperativeMemberInput => {
@@ -68,7 +142,7 @@ const sanitizeCooperativeMemberInput = (input: CooperativeMemberUpsertInput): Sa
 
   return {
     ...parsed,
-    member_number: normalizeMemberNumber(parsed.member_number),
+    member_number: normalizeCooperativeMemberCode(parsed.member_number),
     name: parsed.name.trim(),
   };
 };
@@ -79,11 +153,13 @@ const assertActiveMemberNumberAvailable = async (
 ) => {
   if (!memberNumber.trim()) return;
 
-  const existingMember = await db.cooperativeMembers
-    .where('member_number')
-    .equals(memberNumber)
-    .and((member) => member.id !== excludeMemberId && member.status === 'ACTIVE')
-    .first();
+  const memberNumberKey = getCooperativeMemberCodeId(memberNumber);
+  const existingMember = (await db.cooperativeMembers.toArray())
+    .find((member) => (
+      member.id !== excludeMemberId &&
+      member.status === 'ACTIVE' &&
+      getCooperativeMemberCodeId(member.member_number) === memberNumberKey
+    ));
 
   if (existingMember) {
     throw new Error('Nomor anggota sudah dipakai anggota aktif lain.');
@@ -158,11 +234,12 @@ export const createCooperativeMember = async (
     updated_by_name: currentUser?.name,
   });
 
-  await db.transaction('rw', [db.cooperativeMembers, db.activityLogs], async () => {
+  await db.transaction('rw', [db.cooperativeMembers, db.cooperativeMemberCodes, db.activityLogs], async () => {
     if (member.status === 'ACTIVE') {
       await assertActiveMemberNumberAvailable(member.member_number);
     }
 
+    await upsertCooperativeMemberCode(member.member_number, now);
     await db.cooperativeMembers.add(member);
     await writeActivityLog({
       user: currentUser,
@@ -192,7 +269,7 @@ export const updateCooperativeMember = async (
   const updatedAt = new Date().toISOString();
   let updatedMember: CooperativeMember | undefined;
 
-  await db.transaction('rw', [db.cooperativeMembers, db.activityLogs], async () => {
+  await db.transaction('rw', [db.cooperativeMembers, db.cooperativeMemberCodes, db.activityLogs], async () => {
     const existingMember = await db.cooperativeMembers.get(id);
     if (!existingMember) {
       throw new Error('Anggota koperasi tidak ditemukan.');
@@ -215,6 +292,7 @@ export const updateCooperativeMember = async (
       updated_by_name: currentUser?.name,
     });
 
+    await upsertCooperativeMemberCode(updatedMember.member_number, updatedAt);
     await db.cooperativeMembers.put(updatedMember);
     await writeActivityLog({
       user: currentUser,
@@ -284,13 +362,13 @@ export const restoreCooperativeMember = async (id: string): Promise<CooperativeM
   const updatedAt = new Date().toISOString();
   let restoredMember: CooperativeMember | undefined;
 
-  await db.transaction('rw', [db.cooperativeMembers, db.activityLogs], async () => {
+  await db.transaction('rw', [db.cooperativeMembers, db.cooperativeMemberCodes, db.activityLogs], async () => {
     const member = await db.cooperativeMembers.get(id);
     if (!member) {
       throw new Error('Anggota koperasi tidak ditemukan.');
     }
 
-    const memberNumber = normalizeMemberNumber(member.member_number) || await generateCooperativeMemberNumber(id);
+    const memberNumber = normalizeCooperativeMemberCode(member.member_number) || await generateCooperativeMemberNumber(id);
 
     await assertActiveMemberNumberAvailable(memberNumber, id);
 
@@ -304,6 +382,7 @@ export const restoreCooperativeMember = async (id: string): Promise<CooperativeM
     });
     restoredMember = nextRestoredMember;
 
+    await upsertCooperativeMemberCode(memberNumber, updatedAt);
     await db.cooperativeMembers.put(nextRestoredMember);
     await writeActivityLog({
       user: currentUser,

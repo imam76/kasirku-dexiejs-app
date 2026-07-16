@@ -204,6 +204,7 @@ export type Permission =
   | 'REPORT_PAYROLL_VIEW'
   | 'REPORT_PROFIT_LOSS_VIEW'
   | 'REPORT_BALANCE_SHEET_VIEW'
+  | 'REPORT_LEDGER_VIEW'
   | 'REPORT_AGING_VIEW'
   | 'REPORT_STOCK_CARD_VIEW'
   | 'FINANCE_ACCESS'
@@ -1921,6 +1922,13 @@ export interface CooperativeMember {
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
+}
+
+export interface CooperativeMemberCode {
+  id: string;
+  code: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CooperativeSavingTransaction {

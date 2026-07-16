@@ -26,6 +26,8 @@ export default function CooperativeMemberManagement() {
   const [isCreatingArea, setIsCreatingArea] = useState(false);
   const {
     filteredMembers,
+    members,
+    memberCodes,
     areas,
     employees,
     employeeAreaAssignments,
@@ -247,6 +249,9 @@ export default function CooperativeMemberManagement() {
         areas={areas}
         employees={employees}
         employeeAreaAssignments={employeeAreaAssignments}
+        members={members}
+        memberCodes={memberCodes}
+        editingMemberId={editingMember?.id}
         isEditing={Boolean(editingMember)}
         isSubmitting={isSubmitting}
         isCreatingArea={isCreatingArea}

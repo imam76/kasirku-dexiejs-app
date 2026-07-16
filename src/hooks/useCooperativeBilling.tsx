@@ -30,7 +30,7 @@ const COOPERATIVE_BILLING_RELATED_QUERY_KEYS = [
   'cooperativeDailyTargetReport',
   'cooperativeDailyFieldCashReport',
   'cooperativeCashReport',
-  'cooperativeLedgerReport',
+  'ledgerReport',
   'cooperativeIptwReport',
   'cooperativeInstallmentBookReport',
   'cooperativeMemberRegisterReport',

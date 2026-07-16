@@ -280,6 +280,13 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'REPORT_LEDGER_VIEW',
+    label: 'Lihat Buku Besar',
+    group: 'Laporan',
+    moduleCodes: ['GENERAL_LEDGER'],
+    isSensitive: true,
+  },
+  {
     code: 'REPORT_AGING_VIEW',
     label: 'Lihat Laporan Aging',
     group: 'Laporan',
@@ -483,12 +490,6 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     label: 'Lihat Laporan Arus Kas Koperasi',
     group: 'Laporan Koperasi',
     moduleCodes: ['KOPERASI_REPORT_CASH_FLOW'],
-  },
-  {
-    code: 'COOPERATIVE_LEDGER_REPORT_VIEW',
-    label: 'Lihat Buku Besar Koperasi',
-    group: 'Laporan Koperasi',
-    moduleCodes: ['KOPERASI_REPORT_LEDGER'],
   },
   {
     code: 'COOPERATIVE_AREA_ALL',

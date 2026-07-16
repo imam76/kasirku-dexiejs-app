@@ -301,6 +301,15 @@ async fn repair_compatible_migration_mismatch(
         return Ok(());
     }
 
+    // Recover databases that saw the short-lived duplicate 0052 migration.
+    if version == 52 {
+        if is_current_migration_schema_compatible(pool, version).await? {
+            return update_applied_migration_checksum(pool, migrator, version).await;
+        }
+
+        return execute_current_migration_and_replace_row(pool, migrator, version).await;
+    }
+
     if !is_current_migration_schema_compatible(pool, version).await? {
         return Err(MigrateError::VersionMismatch(version));
     }
@@ -655,24 +664,87 @@ async fn is_current_migration_schema_compatible(
             )
             .await
         }
-        54 => {
-            Ok(table_has_columns(
+        52 => {
+            table_has_columns(
                 pool,
-                "accounting_fiscal_years",
+                "accounting_initial_setup_setting",
                 &[
                     "id",
-                    "name",
+                    "business_template_code",
+                    "accounting_profile",
+                    "industry_extension",
+                    "template_id",
+                    "cutoff_date",
+                    "fiscal_period_start",
+                    "fiscal_period_end",
+                    "current_period_start",
+                    "current_period_end",
+                    "current_period_id",
+                    "base_currency_code",
+                    "inventory_policy",
+                    "setup_completed_at",
+                    "setup_completed_by",
+                    "setup_completed_by_name",
+                    "version",
+                    "created_at",
+                    "updated_at",
+                ],
+            )
+            .await
+        }
+        54 => Ok(table_has_columns(
+            pool,
+            "accounting_fiscal_years",
+            &[
+                "id",
+                "name",
+                "start_date",
+                "end_date",
+                "status",
+                "closed_at",
+                "closed_by",
+                "closed_by_name",
+                "closing_journal_entry_id",
+                "reopened_at",
+                "reopened_by",
+                "reopened_by_name",
+                "reopen_reason",
+                "notes",
+                "version",
+                "created_by",
+                "created_by_name",
+                "updated_by",
+                "updated_by_name",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            ],
+        )
+        .await?
+            && table_has_columns(
+                pool,
+                "fiscal_year_closing_runs",
+                &[
+                    "id",
+                    "fiscal_year_id",
+                    "fiscal_year_name",
                     "start_date",
                     "end_date",
                     "status",
-                    "closed_at",
-                    "closed_by",
-                    "closed_by_name",
+                    "retained_earning_account_id",
+                    "retained_earning_account_code",
+                    "retained_earning_account_name",
+                    "net_income_amount",
+                    "total_revenue_amount",
+                    "total_contra_revenue_amount",
+                    "total_expense_amount",
                     "closing_journal_entry_id",
-                    "reopened_at",
-                    "reopened_by",
-                    "reopened_by_name",
-                    "reopen_reason",
+                    "posted_at",
+                    "reversed_at",
+                    "reversed_by",
+                    "reversed_by_name",
+                    "reversal_journal_entry_id",
+                    "reversal_reason",
                     "notes",
                     "version",
                     "created_by",
@@ -684,44 +756,7 @@ async fn is_current_migration_schema_compatible(
                     "deleted_at",
                 ],
             )
-            .await?
-                && table_has_columns(
-                    pool,
-                    "fiscal_year_closing_runs",
-                    &[
-                        "id",
-                        "fiscal_year_id",
-                        "fiscal_year_name",
-                        "start_date",
-                        "end_date",
-                        "status",
-                        "retained_earning_account_id",
-                        "retained_earning_account_code",
-                        "retained_earning_account_name",
-                        "net_income_amount",
-                        "total_revenue_amount",
-                        "total_contra_revenue_amount",
-                        "total_expense_amount",
-                        "closing_journal_entry_id",
-                        "posted_at",
-                        "reversed_at",
-                        "reversed_by",
-                        "reversed_by_name",
-                        "reversal_journal_entry_id",
-                        "reversal_reason",
-                        "notes",
-                        "version",
-                        "created_by",
-                        "created_by_name",
-                        "updated_by",
-                        "updated_by_name",
-                        "created_at",
-                        "updated_at",
-                        "deleted_at",
-                    ],
-                )
-                .await?)
-        }
+            .await?),
         _ => Ok(false),
     }
 }

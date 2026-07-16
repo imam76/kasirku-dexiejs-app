@@ -161,13 +161,6 @@ function Cooperative() {
       color: 'text-teal-700',
       desc: t('cooperative.index.cashFlowDesc'),
     },
-    {
-      to: '/koperasi/buku-besar',
-      label: t('nav.cooperative.ledger'),
-      icon: BookOutlined,
-      color: 'text-slate-700',
-      desc: t('cooperative.index.ledgerDesc'),
-    },
   ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }));
 
   return (

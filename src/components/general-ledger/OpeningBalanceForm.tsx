@@ -50,6 +50,27 @@ interface OpeningBalanceRow {
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const formatCurrencyInput = (symbol: string, value: number | string | undefined) => {
+  if (value === undefined || value === null || value === '') return '';
+
+  const [integerPart, decimalPart] = String(value).split('.');
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  return `${symbol} ${decimalPart === undefined ? formattedInteger : `${formattedInteger},${decimalPart}`}`;
+};
+
+const parseCurrencyInput = (symbol: string, value: string | undefined) => {
+  const normalized = (value ?? '')
+    .replace(new RegExp(`${escapeRegExp(symbol)}\\s?`, 'g'), '')
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+
+  return Number(normalized || 0);
+};
+
 const findAccountCandidate = (
   accounts: ChartOfAccount[],
   candidate: { ids: string[]; codes: string[] },
@@ -77,6 +98,7 @@ export default function OpeningBalanceForm({
     setting?.inventory_policy ?? 'PERPETUAL_INVENTORY',
   );
   const [amountByAccountId, setAmountByAccountId] = useState<Record<string, { debit: number; credit: number }>>({});
+  const [accountSearchText, setAccountSearchText] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
@@ -178,6 +200,15 @@ export default function OpeningBalanceForm({
     () => rows,
     [rows],
   );
+  const filteredRows = useMemo(() => {
+    const keyword = accountSearchText.trim().toLowerCase();
+    if (!keyword) return rows;
+
+    return rows.filter((row) => (
+      row.account.code.toLowerCase().includes(keyword) ||
+      row.account.name.toLowerCase().includes(keyword)
+    ));
+  }, [accountSearchText, rows]);
   const totalDebit = roundCurrency(inputRows.reduce((sum, row) => sum + row.debit, 0));
   const totalCredit = roundCurrency(inputRows.reduce((sum, row) => sum + row.credit, 0));
   const isBalanced = Math.abs(totalDebit - totalCredit) <= 0.01;
@@ -449,12 +480,15 @@ export default function OpeningBalanceForm({
       dataIndex: 'debit',
       key: 'debit',
       align: 'right',
-      width: 190,
+      width: 250,
       render: (_value, record) => (
-        <InputNumber
+        <InputNumber<number>
+          className="w-full"
           min={0}
           value={record.debit}
           disabled={isLocked || Boolean(record.managedBy && record.debit <= 0 && record.credit <= 0)}
+          formatter={(value) => formatCurrencyInput(baseCurrencySymbol, value)}
+          parser={(value) => parseCurrencyInput(baseCurrencySymbol, value)}
           data-testid={`gl-opening-balance-debit-${record.account.code}`}
           onChange={(value) => updateAmount(record.account.id, 'debit', value)}
         />
@@ -465,12 +499,15 @@ export default function OpeningBalanceForm({
       dataIndex: 'credit',
       key: 'credit',
       align: 'right',
-      width: 190,
+      width: 250,
       render: (_value, record) => (
-        <InputNumber
+        <InputNumber<number>
+          className="w-full"
           min={0}
           value={record.credit}
           disabled={isLocked || Boolean(record.managedBy && record.debit <= 0 && record.credit <= 0)}
+          formatter={(value) => formatCurrencyInput(baseCurrencySymbol, value)}
+          parser={(value) => parseCurrencyInput(baseCurrencySymbol, value)}
           data-testid={`gl-opening-balance-credit-${record.account.code}`}
           onChange={(value) => updateAmount(record.account.id, 'credit', value)}
         />
@@ -618,17 +655,25 @@ export default function OpeningBalanceForm({
             },
           ]}
         />
+        <Input.Search
+          allowClear
+          className="min-w-[280px]"
+          value={accountSearchText}
+          placeholder={t('openingBalances.account.searchPlaceholder')}
+          data-testid="gl-opening-balance-account-search"
+          onChange={(event) => setAccountSearchText(event.target.value)}
+        />
       </Space>
 
       <Table
-        dataSource={rows}
+        dataSource={filteredRows}
         columns={columns}
         rowKey={(row) => row.account.id}
         onRow={(row) => ({
           'data-testid': `gl-opening-balance-row-${row.account.code}`,
         } as unknown as HTMLAttributes<HTMLElement>)}
         pagination={{ pageSize: 8 }}
-        scroll={{ x: 720 }}
+        scroll={{ x: 840 }}
         summary={() => (
           <Table.Summary.Row>
             <Table.Summary.Cell index={0}>
@@ -764,10 +809,12 @@ export default function OpeningBalanceForm({
           </div>
           <div>
             <Text type="secondary">{t('openingBalances.account.adjustmentAmount')}</Text>
-            <InputNumber
+            <InputNumber<number>
               className="mt-1 w-full"
               min={0}
               value={adjustmentAmount}
+              formatter={(value) => formatCurrencyInput(baseCurrencySymbol, value)}
+              parser={(value) => parseCurrencyInput(baseCurrencySymbol, value)}
               onChange={(value) => setAdjustmentAmount(Number(value || 0))}
             />
           </div>

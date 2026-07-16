@@ -1,7 +1,7 @@
 use crate::models::cooperative::{
     CooperativeAreaDto, CooperativeLoanDto, CooperativeLoanInstallmentDto,
-    CooperativeLoanPaymentDto, CooperativeMemberDto, CooperativeMemberSavingBalanceDto,
-    CooperativeSavingTransactionDto,
+    CooperativeLoanPaymentDto, CooperativeMemberCodeDto, CooperativeMemberDto,
+    CooperativeMemberSavingBalanceDto, CooperativeSavingTransactionDto,
 };
 use sqlx::PgPool;
 
@@ -48,6 +48,19 @@ macro_rules! cooperative_member_select {
             updated_by,
             updated_by_name
         FROM cooperative_members
+        "#
+    };
+}
+
+macro_rules! cooperative_member_code_select {
+    () => {
+        r#"
+        SELECT
+            id,
+            code,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at
+        FROM cooperative_member_codes
         "#
     };
 }
@@ -267,6 +280,52 @@ macro_rules! cooperative_loan_payment_select {
     };
 }
 
+fn normalize_cooperative_member_code(value: &str) -> String {
+    let trimmed = value.trim();
+    let upper = trimmed.to_ascii_uppercase();
+    let legacy_sequence = upper
+        .strip_prefix("KSU-")
+        .or_else(|| upper.strip_prefix("KSP-"));
+
+    if let Some(sequence) = legacy_sequence {
+        if sequence.chars().all(|character| character.is_ascii_digit()) {
+            if let Ok(number) = sequence.parse::<u64>() {
+                return format!("{:04}", number);
+            }
+        }
+    }
+
+    if trimmed.len() < 4 && trimmed.chars().all(|character| character.is_ascii_digit()) {
+        if let Ok(number) = trimmed.parse::<u64>() {
+            return format!("{:04}", number);
+        }
+    }
+
+    trimmed.to_string()
+}
+
+fn cooperative_member_code_id(value: &str) -> String {
+    normalize_cooperative_member_code(value).to_ascii_uppercase()
+}
+
+fn build_cooperative_member_code(
+    code: &str,
+    created_at: &str,
+    updated_at: &str,
+) -> Option<CooperativeMemberCodeDto> {
+    let normalized_code = normalize_cooperative_member_code(code);
+    if normalized_code.is_empty() {
+        return None;
+    }
+
+    Some(CooperativeMemberCodeDto {
+        id: cooperative_member_code_id(&normalized_code),
+        code: normalized_code,
+        created_at: created_at.to_string(),
+        updated_at: updated_at.to_string(),
+    })
+}
+
 pub async fn list_cooperative_members(
     pool: &PgPool,
 ) -> Result<Vec<CooperativeMemberDto>, sqlx::Error> {
@@ -275,6 +334,51 @@ pub async fn list_cooperative_members(
         " ORDER BY updated_at DESC, created_at DESC"
     ))
     .fetch_all(pool)
+    .await
+}
+
+pub async fn list_cooperative_member_codes(
+    pool: &PgPool,
+) -> Result<Vec<CooperativeMemberCodeDto>, sqlx::Error> {
+    sqlx::query_as::<_, CooperativeMemberCodeDto>(concat!(
+        cooperative_member_code_select!(),
+        " ORDER BY code ASC"
+    ))
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn upsert_cooperative_member_code(
+    pool: &PgPool,
+    input: CooperativeMemberCodeDto,
+) -> Result<CooperativeMemberCodeDto, sqlx::Error> {
+    let code = normalize_cooperative_member_code(&input.code);
+    let id = cooperative_member_code_id(&code);
+
+    sqlx::query_as::<_, CooperativeMemberCodeDto>(
+        r#"
+        INSERT INTO cooperative_member_codes (
+            id,
+            code,
+            created_at,
+            updated_at
+        )
+        VALUES ($1, $2, $3::TIMESTAMPTZ, $4::TIMESTAMPTZ)
+        ON CONFLICT (id) DO UPDATE SET
+            code = EXCLUDED.code,
+            updated_at = GREATEST(cooperative_member_codes.updated_at, EXCLUDED.updated_at)
+        RETURNING
+            id,
+            code,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at
+        "#,
+    )
+    .bind(id)
+    .bind(code)
+    .bind(input.created_at)
+    .bind(input.updated_at)
+    .fetch_one(pool)
     .await
 }
 
@@ -483,13 +587,22 @@ pub async fn upsert_cooperative_member(
     .fetch_optional(pool)
     .await?;
 
-    if let Some(member) = upserted {
-        return Ok(member);
+    let member = match upserted {
+        Some(member) => member,
+        None => get_cooperative_member(pool, id)
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)?,
+    };
+
+    if let Some(member_code) = build_cooperative_member_code(
+        &member.member_number,
+        &member.created_at,
+        &member.updated_at,
+    ) {
+        let _ = upsert_cooperative_member_code(pool, member_code).await?;
     }
 
-    get_cooperative_member(pool, id)
-        .await?
-        .ok_or(sqlx::Error::RowNotFound)
+    Ok(member)
 }
 
 pub async fn list_cooperative_saving_transactions(
