@@ -577,6 +577,26 @@ export async function payFlexibleInstallmentAmount(page: Page, member: DemoMembe
   await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeHidden();
 }
 
+export async function payFirstInstallmentFromBillingShortcut(page: Page, member: DemoMemberInput) {
+  await page.goto('/koperasi/penagihan');
+  await expect(page.getByText('Setoran Penagihan', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Semua Belum Lunas', exact: true }).click();
+
+  const firstInstallmentRow = page.getByTestId(`koperasi-billing-row-${member.memberNumber}-1`);
+  await expect(firstInstallmentRow).toBeVisible();
+  await firstInstallmentRow
+    .locator('[data-testid^="koperasi-billing-quick-payment-input-"] input')
+    .first()
+    .fill('530000');
+  await firstInstallmentRow
+    .locator('[data-testid^="koperasi-billing-quick-payment-submit-"]')
+    .first()
+    .click();
+
+  await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toHaveCount(0);
+  await expect(firstInstallmentRow).toBeHidden();
+}
+
 export async function expectFlexibleInstallmentAllocation(page: Page, member: DemoMemberInput) {
   await page.goto('/koperasi/angsuran');
 

@@ -1,7 +1,7 @@
-import { Button, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { Button, InputNumber, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { CalendarClock, CreditCard, Eye } from 'lucide-react';
-import type { HTMLAttributes } from 'react';
+import { CalendarClock, Check, CreditCard, Eye } from 'lucide-react';
+import { useState, type HTMLAttributes } from 'react';
 import dayjs from '@/lib/dayjs';
 import { useI18n } from '@/hooks/useI18n';
 import type {
@@ -20,6 +20,7 @@ interface CooperativeBillingTableProps {
   installments: CooperativeLoanInstallment[];
   loanById: Map<string, CooperativeLoan>;
   onPay: (installment: CooperativeLoanInstallment) => void;
+  onQuickPay: (installment: CooperativeLoanInstallment, amount: number) => Promise<boolean>;
   onCollect: (installment: CooperativeLoanInstallment) => void;
   onView: (installment: CooperativeLoanInstallment) => void;
   canPay?: boolean;
@@ -31,6 +32,7 @@ export default function CooperativeBillingTable({
   installments,
   loanById,
   onPay,
+  onQuickPay,
   onCollect,
   onView,
   canPay = true,
@@ -38,6 +40,7 @@ export default function CooperativeBillingTable({
   loading,
 }: CooperativeBillingTableProps) {
   const { t } = useI18n();
+  const [quickPaymentAmounts, setQuickPaymentAmounts] = useState<Record<string, number | null>>({});
   const statusLabels = cooperativeLoanInstallmentStatusOptions.reduce<Record<CooperativeLoanInstallmentStatus, string>>((acc, option) => {
     acc[option.value] = t(option.labelKey);
     return acc;
@@ -54,6 +57,48 @@ export default function CooperativeBillingTable({
     UNABLE_TO_PAY: 'volcano',
     FOLLOW_UP: 'gold',
   };
+  const getBillAmount = (installment: CooperativeLoanInstallment) => (
+    installment.principal_amount + installment.interest_amount + installment.penalty_amount
+  );
+  const getRemainingAmount = (installment: CooperativeLoanInstallment) => (
+    getInstallmentRemainingAmounts(installment).total_amount
+  );
+  const getLoanRemainingAmount = (loan: CooperativeLoan | undefined, fallbackAmount: number) => {
+    if (!loan) return fallbackAmount;
+
+    return Math.max(
+      0,
+      Number(loan.outstanding_principal_amount || 0) +
+        Number(loan.outstanding_interest_amount || 0) +
+        Number(loan.outstanding_penalty_amount || 0),
+    );
+  };
+  const getOverdueDays = (installment: CooperativeLoanInstallment) => {
+    if (installment.status === 'PAID') return 0;
+    return Math.max(0, dayjs().startOf('day').diff(dayjs(installment.due_date).startOf('day'), 'day'));
+  };
+  const setQuickPaymentAmount = (installmentId: string, amount: number | null) => {
+    setQuickPaymentAmounts((current) => ({
+      ...current,
+      [installmentId]: amount,
+    }));
+  };
+  const clearQuickPaymentAmount = (installmentId: string) => {
+    setQuickPaymentAmounts((current) => {
+      const next = { ...current };
+      delete next[installmentId];
+      return next;
+    });
+  };
+  const handleQuickPay = async (installment: CooperativeLoanInstallment) => {
+    const amount = Number(quickPaymentAmounts[installment.id] || 0);
+    if (amount <= 0) return;
+
+    const isSaved = await onQuickPay(installment, amount);
+    if (isSaved) {
+      clearQuickPaymentAmount(installment.id);
+    }
+  };
 
   const columns: ColumnsType<CooperativeLoanInstallment> = [
     {
@@ -62,6 +107,8 @@ export default function CooperativeBillingTable({
       key: 'due_date',
       fixed: 'left',
       width: 150,
+      sorter: (first, second) => dayjs(first.due_date).valueOf() - dayjs(second.due_date).valueOf(),
+      defaultSortOrder: 'ascend',
       render: (value: string) => {
         const isOverdue = dayjs(value).isBefore(dayjs().startOf('day'));
         return <Text type={isOverdue ? 'danger' : undefined}>{formatDate(value)}</Text>;
@@ -72,6 +119,10 @@ export default function CooperativeBillingTable({
       key: 'member',
       fixed: 'left',
       width: 220,
+      sorter: (first, second) => (
+        first.member_number.localeCompare(second.member_number) ||
+        first.member_name.localeCompare(second.member_name)
+      ),
       render: (_value: unknown, installment) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{installment.member_name}</Text>
@@ -84,6 +135,7 @@ export default function CooperativeBillingTable({
       dataIndex: 'loan_number',
       key: 'loan_number',
       width: 140,
+      sorter: (first, second) => first.loan_number.localeCompare(second.loan_number),
     },
     {
       title: t('cooperative.billing.table.installmentNo'),
@@ -91,14 +143,16 @@ export default function CooperativeBillingTable({
       key: 'installment_number',
       align: 'right',
       width: 100,
+      sorter: (first, second) => first.installment_number - second.installment_number,
     },
     {
       title: t('cooperative.billing.table.bill'),
       key: 'bill',
       align: 'right',
       width: 140,
+      sorter: (first, second) => getBillAmount(first) - getBillAmount(second),
       render: (_value: unknown, installment) => (
-        `Rp ${formatCurrency(installment.principal_amount + installment.interest_amount + installment.penalty_amount)}`
+        `Rp ${formatCurrency(getBillAmount(installment))}`
       ),
     },
     {
@@ -106,9 +160,9 @@ export default function CooperativeBillingTable({
       key: 'remaining',
       align: 'right',
       width: 140,
+      sorter: (first, second) => getRemainingAmount(first) - getRemainingAmount(second),
       render: (_value: unknown, installment) => {
-        const remaining = getInstallmentRemainingAmounts(installment);
-        return <Text strong>Rp {formatCurrency(remaining.total_amount)}</Text>;
+        return <Text strong>Rp {formatCurrency(getRemainingAmount(installment))}</Text>;
       },
     },
     {
@@ -116,8 +170,9 @@ export default function CooperativeBillingTable({
       key: 'overdueDays',
       align: 'right',
       width: 120,
+      sorter: (first, second) => getOverdueDays(first) - getOverdueDays(second),
       render: (_value: unknown, installment) => {
-        const diff = dayjs().startOf('day').diff(dayjs(installment.due_date).startOf('day'), 'day');
+        const diff = getOverdueDays(installment);
         if (diff > 0 && installment.status !== 'PAID') {
           return <Text type="danger">{diff} Hari</Text>;
         }
@@ -129,6 +184,7 @@ export default function CooperativeBillingTable({
       dataIndex: 'status',
       key: 'status',
       width: 140,
+      sorter: (first, second) => statusLabels[first.status].localeCompare(statusLabels[second.status]),
       render: (status: CooperativeLoanInstallmentStatus) => {
         const option = cooperativeLoanInstallmentStatusOptions.find((item) => item.value === status);
         return <Tag color={option?.color}>{statusLabels[status]}</Tag>;
@@ -138,6 +194,12 @@ export default function CooperativeBillingTable({
       title: t('cooperative.billing.table.collection'),
       key: 'collection',
       width: 170,
+      sorter: (first, second) => {
+        const firstStatus = first.collection_status ?? 'NONE';
+        const secondStatus = second.collection_status ?? 'NONE';
+        return collectionStatusLabels[firstStatus].localeCompare(collectionStatusLabels[secondStatus]) ||
+          (first.follow_up_date ?? '').localeCompare(second.follow_up_date ?? '');
+      },
       render: (_value: unknown, installment) => {
         const collectionStatus = installment.collection_status ?? 'NONE';
         return (
@@ -147,6 +209,52 @@ export default function CooperativeBillingTable({
               <Text type="secondary">{formatDate(installment.follow_up_date)}</Text>
             )}
           </Space>
+        );
+      },
+    },
+    {
+      title: t('cooperative.billing.table.quickPayment'),
+      key: 'quickPayment',
+      align: 'right',
+      width: 230,
+      render: (_value: unknown, installment) => {
+        const loan = loanById.get(installment.loan_id);
+        const remainingAmount = getRemainingAmount(installment);
+        const loanRemainingAmount = getLoanRemainingAmount(loan, remainingAmount);
+        const amount = quickPaymentAmounts[installment.id] ?? null;
+        const numericAmount = Number(amount || 0);
+        const isPaymentDisabled = !canPay || installment.status === 'PAID' || loan?.status !== 'DISBURSED';
+        const canSubmit = !isPaymentDisabled &&
+          !loading &&
+          numericAmount > 0 &&
+          numericAmount - loanRemainingAmount <= 0.01;
+
+        return (
+          <Space.Compact className="w-full">
+            <InputNumber<number>
+              min={1}
+              max={loanRemainingAmount}
+              value={amount}
+              disabled={isPaymentDisabled || loading}
+              controls={false}
+              className="w-full"
+              formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
+              placeholder="0"
+              data-testid={`koperasi-billing-quick-payment-input-${installment.id}`}
+              onChange={(value) => setQuickPaymentAmount(installment.id, value)}
+              onPressEnter={() => void handleQuickPay(installment)}
+            />
+            <Tooltip title={t('cooperative.billing.quickPay.submit')}>
+              <Button
+                icon={<Check size={16} />}
+                disabled={!canSubmit}
+                loading={loading && numericAmount > 0}
+                data-testid={`koperasi-billing-quick-payment-submit-${installment.id}`}
+                onClick={() => void handleQuickPay(installment)}
+              />
+            </Tooltip>
+          </Space.Compact>
         );
       },
     },
@@ -203,7 +311,7 @@ export default function CooperativeBillingTable({
         } as unknown as HTMLAttributes<HTMLElement>;
       }}
       pagination={{ pageSize: 8 }}
-      scroll={{ x: 1650 }}
+      scroll={{ x: 1880 }}
       locale={{ emptyText: t('cooperative.billing.empty') }}
     />
   );
