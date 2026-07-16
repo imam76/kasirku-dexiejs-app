@@ -333,7 +333,7 @@ export async function createLoanApplication(page: Page, member: DemoMemberInput)
   await expect(row).toContainText('Rp 3.180.000');
 
   const rowText = await row.innerText();
-  const loanNumber = rowText.match(/KSP-PJ-\d{8}-\d{4}/)?.[0];
+  const loanNumber = rowText.match(/KSU-PJ-\d{8}-\d{4}/)?.[0];
   if (!loanNumber) {
     throw new Error(`Nomor pinjaman tidak ditemukan di row ${member.memberNumber}.`);
   }
@@ -461,7 +461,7 @@ export async function migrateLoan(page: Page, member: Pick<DemoMemberInput, 'mem
   await expect(row).toContainText(input.expectedOutstanding);
 
   const rowText = await row.innerText();
-  const loanNumber = rowText.match(/KSP-PJ-\d{8}-\d{4}/)?.[0];
+  const loanNumber = rowText.match(/KSU-PJ-\d{8}-\d{4}/)?.[0];
   if (!loanNumber) {
     throw new Error(`Nomor pinjaman migrasi tidak ditemukan di row ${member.memberNumber}.`);
   }
@@ -498,7 +498,7 @@ export async function migrateLoanByRemainingTotal(
   await expect(row).toContainText(input.expectedOutstanding);
 
   const rowText = await row.innerText();
-  const loanNumber = rowText.match(/KSP-PJ-\d{8}-\d{4}/)?.[0];
+  const loanNumber = rowText.match(/KSU-PJ-\d{8}-\d{4}/)?.[0];
   if (!loanNumber) {
     throw new Error(`Nomor pinjaman migrasi tidak ditemukan di row ${member.memberNumber}.`);
   }
@@ -556,7 +556,7 @@ export async function payFirstInstallment(page: Page, member: DemoMemberInput) {
   await expect(page.getByRole('columnheader', { name: 'No. Pembayaran' })).toBeVisible();
   const paymentRow = page
     .locator('tr:visible')
-    .filter({ hasText: 'KSP-ANG' })
+    .filter({ hasText: 'KSU-ANG' })
     .filter({ hasText: member.name })
     .filter({ hasText: 'Rp 530.000' })
     .first();
@@ -577,6 +577,26 @@ export async function payFlexibleInstallmentAmount(page: Page, member: DemoMembe
   await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeHidden();
 }
 
+export async function payFirstInstallmentFromBillingShortcut(page: Page, member: DemoMemberInput) {
+  await page.goto('/koperasi/penagihan');
+  await expect(page.getByText('Setoran Penagihan', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Semua Belum Lunas', exact: true }).click();
+
+  const firstInstallmentRow = page.getByTestId(`koperasi-billing-row-${member.memberNumber}-1`);
+  await expect(firstInstallmentRow).toBeVisible();
+  await firstInstallmentRow
+    .locator('[data-testid^="koperasi-billing-quick-payment-input-"] input')
+    .first()
+    .fill('530000');
+  await firstInstallmentRow
+    .locator('[data-testid^="koperasi-billing-quick-payment-submit-"]')
+    .first()
+    .click();
+
+  await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toHaveCount(0);
+  await expect(firstInstallmentRow).toBeHidden();
+}
+
 export async function expectFlexibleInstallmentAllocation(page: Page, member: DemoMemberInput) {
   await page.goto('/koperasi/angsuran');
 
@@ -588,9 +608,9 @@ export async function expectFlexibleInstallmentAllocation(page: Page, member: De
   await page.getByRole('tab', { name: 'Riwayat Pembayaran', exact: true }).click();
   await expect(page.getByRole('columnheader', { name: 'No. Pembayaran' })).toBeVisible();
   await expect(page.locator('tr:visible').filter({ hasText: member.name }).filter({ hasText: 'Rp 530.000' }).first())
-    .toContainText('KSP-ANG-GRP');
+    .toContainText('KSU-ANG-GRP');
   await expect(page.locator('tr:visible').filter({ hasText: member.name }).filter({ hasText: 'Rp 265.000' }).first())
-    .toContainText('KSP-ANG-GRP');
+    .toContainText('KSU-ANG-GRP');
 }
 
 export async function payRemainingInstallments(page: Page, member: DemoMemberInput) {

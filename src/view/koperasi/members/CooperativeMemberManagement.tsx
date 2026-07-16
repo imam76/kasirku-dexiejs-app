@@ -10,6 +10,7 @@ import {
 } from '@/hooks/useCooperativeMembers';
 import { useI18n } from '@/hooks/useI18n';
 import { createCooperativeAreaWithGeneratedCode } from '@/services/cooperativeAreaService';
+import { generateCooperativeMemberNumber } from '@/services/cooperativeMemberService';
 import type { CooperativeMember } from '@/types';
 import CooperativeMemberDetailDrawer from './CooperativeMemberDetailDrawer';
 import CooperativeMemberFormModal, { type CooperativeMemberFormValues } from './CooperativeMemberFormModal';
@@ -56,6 +57,11 @@ export default function CooperativeMemberManagement() {
     resetForm();
     form.resetFields();
     form.setFieldsValue({ status: 'ACTIVE', join_date: dayjs() });
+    void generateCooperativeMemberNumber().then((memberNumber) => {
+      if (!form.getFieldValue('member_number')) {
+        form.setFieldsValue({ member_number: memberNumber });
+      }
+    });
     setIsModalOpen(true);
   };
 
@@ -123,6 +129,28 @@ export default function CooperativeMemberManagement() {
     }
   };
 
+  const confirmClearMemberNumber = (member: CooperativeMember) => (
+    new Promise<boolean>((resolve) => {
+      const clearText = t('cooperative.members.clearMemberNumber');
+      const keepText = t('cooperative.members.keepMemberNumber');
+
+      modal.confirm({
+        title: t('cooperative.members.clearMemberNumberConfirmTitle'),
+        content: t('cooperative.members.clearMemberNumberConfirmContent', {
+          code: member.member_number || '-',
+          clear: clearText,
+          keep: keepText,
+          name: member.name,
+        }),
+        okText: clearText,
+        okType: 'danger',
+        cancelText: keepText,
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    })
+  );
+
   const handleArchive = (member: CooperativeMember) => {
     modal.confirm({
       title: t('cooperative.members.archiveConfirmTitle'),
@@ -132,8 +160,13 @@ export default function CooperativeMemberManagement() {
       cancelText: t('common.cancel'),
       onOk: async () => {
         try {
-          await archiveMember(member.id);
-          message.success(t('cooperative.members.archiveSuccess'));
+          const clearMemberNumber = await confirmClearMemberNumber(member);
+          await archiveMember(member.id, { clearMemberNumber });
+          message.success(
+            clearMemberNumber
+              ? t('cooperative.members.archiveSuccessWithClearedCode')
+              : t('cooperative.members.archiveSuccess'),
+          );
         } catch (error) {
           message.error(error instanceof Error ? error.message : t('cooperative.members.archiveFailed'));
         }

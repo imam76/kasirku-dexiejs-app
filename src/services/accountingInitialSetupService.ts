@@ -129,6 +129,17 @@ export const requiresAccountingBaselineForModules = (enabledModules: string[]) =
   ))
 );
 
+export const withAutomaticAccountingBaselineModules = (enabledModules: string[]) => {
+  const modules = new Set(enabledModules);
+
+  if (requiresAccountingBaselineForModules(enabledModules)) {
+    modules.add('CHART_OF_ACCOUNTS');
+    modules.add('GENERAL_LEDGER');
+  }
+
+  return Array.from(modules);
+};
+
 export const getSuggestedAccountingBusinessTemplate = (
   enabledModules: string[],
 ): AccountingBusinessTemplateCode => (
@@ -730,6 +741,7 @@ export const saveInitialAccountingSetup = async (
   }
 
   const requiresAccountingBaseline = requiresAccountingBaselineForModules(input.enabledModules);
+  const effectiveEnabledModules = withAutomaticAccountingBaselineModules(input.enabledModules);
   const templateDefinition = validateBusinessTemplate(input.business_template_code, requiresAccountingBaseline);
   const dates = validateDateInput(input, requiresAccountingBaseline);
   const baseCurrencyCode = normalizeCurrencyCode(input.base_currency_code);
@@ -801,7 +813,7 @@ export const saveInitialAccountingSetup = async (
       const bundle = resolveTemplateBundle(templateDefinition.template_id);
       result.createdAccounts = await mergeTemplateAccounts(bundle.lines, now);
       result.updatedMappings = await updateTemplateMappings(bundle.lines, now);
-      result.updatedModules = await updateAccountingModules(templateDefinition, input.enabledModules, now);
+      result.updatedModules = await updateAccountingModules(templateDefinition, effectiveEnabledModules, now);
 
       const updatedProfile = await upsertAccountingProfileSetting(templateDefinition, now);
       if (updatedProfile) {
@@ -815,7 +827,7 @@ export const saveInitialAccountingSetup = async (
       const updatedLedger = await upsertGeneralLedgerSetting({
         cutoffDate: dates.cutoffDate,
         inventoryPolicy: templateDefinition.default_inventory_policy,
-        selectedSetupModules: input.enabledModules,
+        selectedSetupModules: effectiveEnabledModules,
         now,
       });
       if (updatedLedger) {
@@ -928,7 +940,7 @@ export const saveInitialAccountingSetup = async (
 
   if (input.persistSetupConfig !== false) {
     const setupConfig = {
-      enabledModules: input.enabledModules,
+      enabledModules: effectiveEnabledModules,
       configuredAt: now,
       configuredBy: input.configuredBy,
     };

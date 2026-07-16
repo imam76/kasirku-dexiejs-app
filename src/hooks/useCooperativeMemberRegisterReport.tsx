@@ -13,6 +13,7 @@ export const useCooperativeMemberRegisterReport = (
       filters.startDate,
       filters.endDate,
       filters.officerId,
+      filters.memberFilter,
     ],
     queryFn: () => getCooperativeMemberRegisterReportData(filters),
   })

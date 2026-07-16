@@ -55,6 +55,7 @@ import type {
   UnitDefinition,
   Warehouse,
 } from '@/types';
+import type { Transaction as DexieTransaction } from 'dexie';
 import dayjs from '@/lib/dayjs';
 import { createUnitDefinition, DEFAULT_UNITS } from '@/constants/units';
 import { DEFAULT_CHART_OF_ACCOUNTS, DEFAULT_FINANCE_ACCOUNT_MAPPINGS } from '@/constants/chartOfAccounts';
@@ -70,6 +71,59 @@ import {
 import type { KasirkuDB } from './KasirkuDB';
 import { buildAccountingSeed, buildDefaultCompanyProfileSetting, buildDefaultPaymentMethods } from './seeds';
 import { buildLegacyPosPaymentSnapshot } from '@/utils/posPaymentMethod';
+
+const GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/;
+
+const normalizeCooperativeMemberNumber = (value?: string | null) => value?.trim().toUpperCase() ?? '';
+
+const buildNextCooperativeMemberNumberGenerator = (
+  members: Array<Pick<CooperativeMember, 'member_number'>>,
+) => {
+  const usedNumbers = new Set(
+    members
+      .map((member) => normalizeCooperativeMemberNumber(member.member_number))
+      .filter(Boolean),
+  );
+  const generatedSequences = Array.from(usedNumbers)
+    .map((memberNumber) => {
+      const match = memberNumber.match(GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN);
+      return match ? Number(match[1]) : 0;
+    })
+    .filter((sequence) => sequence > 0);
+  let nextSequence = Math.max(0, ...generatedSequences) + 1;
+
+  return () => {
+    let nextNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+    while (usedNumbers.has(nextNumber)) {
+      nextSequence += 1;
+      nextNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+    }
+
+    usedNumbers.add(nextNumber);
+    nextSequence += 1;
+    return nextNumber;
+  };
+};
+
+const backfillMissingCooperativeMemberNumbers = async (tx: DexieTransaction) => {
+  const now = new Date().toISOString();
+  const memberTable = tx.table<CooperativeMember, string>('cooperativeMembers');
+  const members = await memberTable.toArray();
+  const nextMemberNumber = buildNextCooperativeMemberNumberGenerator(members);
+  const membersWithoutCode = members
+    .filter((member) => !normalizeCooperativeMemberNumber(member.member_number))
+    .map((member) => ({
+      ...member,
+      member_number: nextMemberNumber(),
+      updated_at: now,
+      sync_status: 'pending' as const,
+      sync_error: undefined,
+    }));
+
+  if (membersWithoutCode.length > 0) {
+    await memberTable.bulkPut(membersWithoutCode);
+  }
+};
 
 export function registerDatabaseMigrations(this: KasirkuDB) {
   this.version(1).stores({
@@ -2180,7 +2234,9 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     syncQueue: 'id, entity, entity_id, operation, status, created_at, updated_at',
   });
 
-  this.version(85).stores({
+  this.version(85).stores({}).upgrade(backfillMissingCooperativeMemberNumbers);
+
+  this.version(86).stores({
     accountingInitialSetupSetting: 'id, business_template_code, accounting_profile, industry_extension, template_id, base_currency_code, current_period_id, sync_status, updated_at, created_at',
   }).upgrade(async (tx) => {
     const setupTable = tx.table<AccountingInitialSetupSetting, string>('accountingInitialSetupSetting');
@@ -2195,7 +2251,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     }
   });
 
-  this.version(86).stores({
+  this.version(87).stores({
     openingBalanceBatches: 'id, module, cutoff_date, status, journal_entry_id, sync_status, updated_at, created_at',
     openingBalanceLines: 'id, batch_id, module, contact_id, document_number, document_date, due_date, account_id, sync_status, updated_at, created_at',
   }).upgrade(async (tx) => {
@@ -2255,7 +2311,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     }
   });
 
-  this.version(87).stores({}).upgrade(async (tx) => {
+  this.version(88).stores({}).upgrade(async (tx) => {
     const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
     const accounts = await accountTable.toArray();
     const hasOpeningBalanceEquity = accounts.some((account) => (
@@ -2276,7 +2332,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     });
   });
 
-  this.version(88).stores({}).upgrade(async (tx) => {
+  this.version(89).stores({}).upgrade(async (tx) => {
     const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
     const accounts = await accountTable.toArray();
     const accountIds = new Set(accounts.map((account) => account.id));
@@ -2299,7 +2355,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     }
   });
 
-  this.version(89).stores({
+  this.version(90).stores({
     accountingFiscalYears: 'id, name, start_date, end_date, status, closing_journal_entry_id, sync_status, updated_at, created_at',
     fiscalYearClosingRuns: 'id, fiscal_year_id, status, closing_journal_entry_id, posted_at, sync_status, updated_at, created_at',
   }).upgrade(async (tx) => {
@@ -2337,7 +2393,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     await fiscalYearTable.put(fiscalYear);
   });
 
-  this.version(90).stores({}).upgrade(async (tx) => {
+  this.version(91).stores({}).upgrade(async (tx) => {
     const now = new Date().toISOString();
     const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
     const existingPermissions = await rolePermissionTable.toArray();
@@ -2370,7 +2426,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     }
   });
 
-  this.version(91).stores({}).upgrade(async (tx) => {
+  this.version(92).stores({}).upgrade(async (tx) => {
     const batchTable = tx.table<OpeningBalanceBatch, string>('openingBalanceBatches');
     const lineTable = tx.table<OpeningBalanceLine, string>('openingBalanceLines');
     const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
@@ -2436,7 +2492,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     });
   });
 
-  this.version(92).stores({
+  this.version(93).stores({
     openingBalanceBatches: 'id, module, cutoff_date, status, batch_number, company_id, previous_batch_id, journal_entry_id, posting_idempotency_key, sync_status, updated_at, created_at',
   }).upgrade(async (tx) => {
     const batchTable = tx.table<OpeningBalanceBatch, string>('openingBalanceBatches');
@@ -2468,7 +2524,9 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     await batchTable.bulkPut(migratedBatches);
   });
 
-  this.version(93).stores({
+  this.version(94).stores({}).upgrade(backfillMissingCooperativeMemberNumbers);
+
+  this.version(95).stores({
     paymentMethods: 'id, &code, name, category, posting_account_id, is_system, is_active, sort_order, sync_status, updated_at, created_at',
   }).upgrade(async (tx) => {
     const now = new Date().toISOString();
@@ -2498,7 +2556,7 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     }
   });
 
-  this.version(94).stores({
+  this.version(96).stores({
     transactions: 'id, transaction_number, payment_method, payment_method_id, payment_method_code, cashier_session_id, cashier_user_id, member_contact_id, member_number, created_at',
   }).upgrade(async (tx) => {
     const transactionTable = tx.table<Transaction, string>('transactions');

@@ -13,6 +13,7 @@ import { useI18n } from '@/hooks/useI18n';
 import dayjs from '@/lib/dayjs';
 import {
   COOPERATIVE_MEMBER_REGISTER_UNASSIGNED_OFFICER,
+  type CooperativeMemberRegisterMemberFilter,
   type CooperativeMemberRegisterOfficerOption,
 } from '@/services/cooperativeMemberRegisterReportService';
 import { exportCsv, exportHtmlPdf, saveExportFile, type ExportRows, type ExportTarget } from '@/utils/export';
@@ -40,6 +41,8 @@ const getOfficerLabel = (officer: CooperativeMemberRegisterOfficerOption) => (
 
 const getDefaultFilters = (): CooperativeMemberRegisterReportFilters => ({});
 
+type MemberFilterOptionValue = CooperativeMemberRegisterMemberFilter;
+
 export default function CooperativeMemberRegisterReportManagement() {
   const { message } = App.useApp();
   const { t, locale } = useI18n();
@@ -61,6 +64,15 @@ export default function CooperativeMemberRegisterReportManagement() {
     const selectedOfficer = data?.officerOptions.find((officer) => officer.id === filters.officerId);
     return selectedOfficer ? getOfficerLabel(selectedOfficer) : filters.officerId;
   })();
+  const memberFilterOptions = useMemo<Array<{ value: MemberFilterOptionValue; label: string }>>(() => [
+    { value: 'ALL', label: t('cooperative.memberRegister.memberFilter.all') },
+    { value: 'ACTIVE', label: t('cooperative.memberRegister.memberFilter.active') },
+    { value: 'INACTIVE', label: t('cooperative.memberRegister.memberFilter.inactive') },
+    { value: 'WITHOUT_CODE', label: t('cooperative.memberRegister.memberFilter.withoutCode') },
+  ], [t]);
+  const selectedMemberFilterLabel = memberFilterOptions.find((option) => (
+    option.value === (filters.memberFilter ?? 'ALL')
+  ))?.label ?? t('cooperative.memberRegister.memberFilter.all');
   const dateRange = useMemo<[Dayjs, Dayjs] | null>(() => {
     if (!filters.startDate || !filters.endDate) return null;
     return [dayjs(filters.startDate).tz(), dayjs(filters.endDate).tz()];
@@ -85,6 +97,7 @@ export default function CooperativeMemberRegisterReportManagement() {
       [t('cooperative.memberRegister.title'), printDateText],
       [t('cooperative.ledger.period'), periodText],
       [t('cooperative.memberRegister.employeeName'), selectedOfficerLabel],
+      [t('cooperative.memberRegister.memberFilter'), selectedMemberFilterLabel],
       [t('cooperative.memberRegister.totalMembers'), data.total_member_count],
     ];
 
@@ -104,7 +117,7 @@ export default function CooperativeMemberRegisterReportManagement() {
       group.rows.forEach((row) => {
         rows.push([
           dayjs(row.join_date).tz().format('YYYY-MM-DD'),
-          row.code,
+          row.code || '-',
           row.name,
           row.address ?? '',
         ]);
@@ -239,7 +252,7 @@ export default function CooperativeMemberRegisterReportManagement() {
         />
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,360px)_minmax(220px,320px)]">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,340px)_minmax(220px,320px)_minmax(220px,280px)]">
         <div>
           <Text strong>{t('cooperative.memberRegister.dateRange')}</Text>
           <DatePicker.RangePicker
@@ -277,6 +290,18 @@ export default function CooperativeMemberRegisterReportManagement() {
             }))}
           />
         </div>
+        <div>
+          <Text strong>{t('cooperative.memberRegister.memberFilter')}</Text>
+          <Select<MemberFilterOptionValue>
+            className="mt-2 w-full"
+            value={filters.memberFilter ?? 'ALL'}
+            options={memberFilterOptions}
+            onChange={(value) => setFilters((current) => ({
+              ...current,
+              memberFilter: value === 'ALL' ? undefined : value,
+            }))}
+          />
+        </div>
       </div>
 
       {!isLoading && !hasRows ? (
@@ -291,6 +316,7 @@ export default function CooperativeMemberRegisterReportManagement() {
           logoDataUrl={profile?.logo_data_url}
           periodText={periodText}
           printDateText={printDateText}
+          memberFilterText={selectedMemberFilterLabel}
         />
       </div>
     </div>

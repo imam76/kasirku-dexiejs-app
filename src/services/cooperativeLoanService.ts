@@ -302,15 +302,24 @@ const assertActiveMember = (member: CooperativeMember | undefined) => {
 };
 
 const createCooperativeLoanNumber = async (date: string | Date = new Date()) => {
-  const prefix = 'KSP-PJ';
+  const prefix = 'KSU-PJ';
   const datePart = dayjs(date).tz().format('YYYYMMDD');
   const numberPrefix = `${prefix}-${datePart}-`;
-  const existingNumbers = await db.cooperativeLoans
-    .where('loan_number')
-    .startsWith(numberPrefix)
-    .toArray();
+  const legacyNumberPrefix = `KSP-PJ-${datePart}-`;
+  const numberPrefixes = [numberPrefix, legacyNumberPrefix];
+  const existingNumbers = (await Promise.all(
+    numberPrefixes.map((prefixCandidate) => db.cooperativeLoans
+      .where('loan_number')
+      .startsWith(prefixCandidate)
+      .toArray()),
+  )).flat();
   const nextSequence = existingNumbers.reduce((highestSequence, loan) => {
-    const sequence = Number(loan.loan_number.slice(numberPrefix.length));
+    const matchedPrefix = numberPrefixes.find((prefixCandidate) => (
+      loan.loan_number.startsWith(prefixCandidate)
+    ));
+    if (!matchedPrefix) return highestSequence;
+
+    const sequence = Number(loan.loan_number.slice(matchedPrefix.length));
     return Number.isInteger(sequence) ? Math.max(highestSequence, sequence) : highestSequence;
   }, 0) + 1;
 
@@ -318,8 +327,9 @@ const createCooperativeLoanNumber = async (date: string | Date = new Date()) => 
 };
 
 const createCooperativeLoanPaymentNumber = async (date = new Date(), sequenceOffset = 0) => {
-  const prefix = 'KSP-ANG';
+  const prefix = 'KSU-ANG';
   const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const paymentNumberPrefixes = [`${prefix}-${datePart}`, `KSP-ANG-${datePart}`];
   const dayStart = new Date(date);
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(date);
@@ -328,7 +338,9 @@ const createCooperativeLoanPaymentNumber = async (date = new Date(), sequenceOff
   const count = await db.cooperativeLoanPayments
     .where('created_at')
     .between(dayStart.toISOString(), dayEnd.toISOString(), true, true)
-    .and((payment) => payment.payment_number.startsWith(`${prefix}-${datePart}`))
+    .and((payment) => paymentNumberPrefixes.some((prefixCandidate) => (
+      payment.payment_number.startsWith(prefixCandidate)
+    )))
     .count();
 
   return `${prefix}-${datePart}-${String(count + 1 + sequenceOffset).padStart(4, '0')}`;
@@ -336,7 +348,7 @@ const createCooperativeLoanPaymentNumber = async (date = new Date(), sequenceOff
 
 const createCooperativeLoanPaymentGroupNumber = (date: Date, paymentGroupId: string) => {
   const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
-  return `KSP-ANG-GRP-${datePart}-${paymentGroupId.slice(0, 8).toUpperCase()}`;
+  return `KSU-ANG-GRP-${datePart}-${paymentGroupId.slice(0, 8).toUpperCase()}`;
 };
 
 const getMandatorySavingBalanceId = (memberId: string) => `${memberId}:WAJIB`;

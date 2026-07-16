@@ -140,6 +140,65 @@ test.describe.serial('accounting initial setup regression', () => {
     await expect(page.getByText('Total Harta').first()).toBeVisible();
   });
 
+  test('AIS-SETUP-01B - setup COA otomatis mengaktifkan ledger tanpa apply manual', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await saveInitialAccountingSetupFixture(page, {
+      enabledModules: ['CASH_FLOW', 'CHART_OF_ACCOUNTS'],
+    });
+
+    const state = await readAccountingSetupRegressionState(page);
+    expect(state.setupConfig?.enabledModules).toEqual(expect.arrayContaining([
+      'CASH_FLOW',
+      'CHART_OF_ACCOUNTS',
+      'GENERAL_LEDGER',
+    ]));
+    expect(state.ledger).toMatchObject({
+      is_ready: true,
+      cutoff_date: '2026-01-01T00:00:00.000',
+      inventory_policy: 'PERPETUAL_INVENTORY',
+    });
+
+    const result = await page.evaluate(async () => {
+      const { FINANCE_CATEGORIES } = await import('/src/constants/finance.ts');
+      const { db } = await import('/src/lib/db.ts');
+      const { updateFinanceAccountMapping } = await import('/src/services/chartOfAccountService.ts');
+      const { getGeneralLedgerReadiness } = await import('/src/utils/accounting/getGeneralLedgerReadiness.ts');
+
+      const revenueAccount = await db.chartOfAccounts.where('code').equals('4010').first();
+      if (!revenueAccount) throw new Error('Akun 4010 tidak tersedia untuk remapping.');
+
+      await updateFinanceAccountMapping(FINANCE_CATEGORIES.SALES, revenueAccount.id);
+
+      const [module, mapping, readiness] = await Promise.all([
+        db.enabledModules.get('GENERAL_LEDGER'),
+        db.financeAccountMappings.get(FINANCE_CATEGORIES.SALES),
+        getGeneralLedgerReadiness(),
+      ]);
+
+      return {
+        moduleEnabled: module?.is_enabled,
+        moduleSource: module?.source,
+        mappingAccountCode: mapping?.account_code,
+        isLedgerAvailable: readiness.isAvailable,
+        isLedgerReady: readiness.isReady,
+      };
+    });
+
+    expect(result).toMatchObject({
+      moduleEnabled: true,
+      moduleSource: 'PROFILE',
+      mappingAccountCode: '4010',
+      isLedgerAvailable: true,
+      isLedgerReady: false,
+    });
+
+    await page.goto('/finance/general-ledger');
+    await expect(page.getByText('General Ledger').first()).toBeVisible();
+    await expect(page.getByText('Bisa Dibuka', { exact: true })).toBeVisible();
+    await expect(page.getByText('Saldo awal belum lengkap', { exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Jurnal' })).toBeVisible();
+  });
+
   test('AIS-SETUP-02 - setup koperasi menerapkan template dan mapping koperasi', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
     await saveInitialAccountingSetupFixture(page, {

@@ -633,6 +633,57 @@ const resolveOpeningBalanceEquityAccount = (accounts: ChartOfAccount[]) => (
   requirePostableAccount(accounts, OPENING_BALANCE_EQUITY_CANDIDATE, 'Ekuitas Saldo Awal')
 );
 
+type NormalizedAccountOpeningLine = ReturnType<typeof normalizeAccountOpeningLines>[number] & {
+  is_adjustment?: boolean;
+};
+
+const withAccountOpeningBalanceEquityAutoBalance = (
+  lines: ReturnType<typeof normalizeAccountOpeningLines>,
+  equityAccount: ChartOfAccount,
+  adjustmentNotes = 'Ekuitas Saldo Awal',
+): NormalizedAccountOpeningLine[] => {
+  const totalDebit = roundCurrency(lines.reduce((sum, line) => sum + line.debit, 0));
+  const totalCredit = roundCurrency(lines.reduce((sum, line) => sum + line.credit, 0));
+  const difference = roundCurrency(totalDebit - totalCredit);
+
+  if (Math.abs(difference) <= 0.01) {
+    return lines;
+  }
+
+  const equityLineIndex = lines.findIndex((line) => (
+    line.account.id === equityAccount.id ||
+    line.account.code === equityAccount.code
+  ));
+
+  if (equityLineIndex >= 0) {
+    return lines
+      .map((line, index) => {
+        if (index !== equityLineIndex) return line;
+
+        const nextCreditMinusDebit = roundCurrency(line.credit - line.debit + difference);
+        return {
+          ...line,
+          debit: nextCreditMinusDebit < 0 ? Math.abs(nextCreditMinusDebit) : 0,
+          credit: nextCreditMinusDebit > 0 ? nextCreditMinusDebit : 0,
+          notes: line.notes ?? adjustmentNotes,
+          is_adjustment: true,
+        };
+      })
+      .filter((line) => line.debit > 0 || line.credit > 0);
+  }
+
+  return [
+    ...lines,
+    {
+      account: equityAccount,
+      debit: difference < 0 ? Math.abs(difference) : 0,
+      credit: difference > 0 ? difference : 0,
+      notes: adjustmentNotes,
+      is_adjustment: true,
+    },
+  ];
+};
+
 export const getOpeningBalanceEquityAccount = async () => {
   const accounts = await db.chartOfAccounts.toArray();
   return resolveOpeningBalanceEquityAccount(accounts);
@@ -662,29 +713,19 @@ export const buildAccountOpeningBalancePreview = ({
       notes: line.notes,
     }))
     .filter((line) => line.debit > 0 || line.credit > 0);
-  const totalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
-  const totalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
-  const difference = roundCurrency(totalDebit - totalCredit);
-  const previewLines: AccountOpeningBalancePreviewLine[] = normalizedLines.map((line) => ({
+  const previewSourceLines: NormalizedAccountOpeningLine[] = autoBalanceWithEquity && equityAccount
+    ? withAccountOpeningBalanceEquityAutoBalance(normalizedLines, equityAccount, adjustmentNotes)
+    : normalizedLines;
+
+  const previewLines: AccountOpeningBalancePreviewLine[] = previewSourceLines.map((line) => ({
     account_id: line.account.id,
     account_code: line.account.code,
     account_name: line.account.name,
     debit: line.debit,
     credit: line.credit,
     notes: line.notes,
+    is_adjustment: line.is_adjustment,
   }));
-
-  if (autoBalanceWithEquity && Math.abs(difference) > 0.01 && equityAccount) {
-    previewLines.push({
-      account_id: equityAccount.id,
-      account_code: equityAccount.code,
-      account_name: equityAccount.name,
-      debit: difference < 0 ? Math.abs(difference) : 0,
-      credit: difference > 0 ? difference : 0,
-      notes: adjustmentNotes,
-      is_adjustment: true,
-    });
-  }
 
   return previewLines;
 };
@@ -1021,16 +1062,27 @@ export const postAccountOpeningBalanceBatch = async ({
       notes: line.notes,
     }))
     .filter((line) => line.account_id);
-  const normalizedLines = normalizeAccountOpeningLines(inputLines, accounts);
+  let normalizedLines = normalizeAccountOpeningLines(inputLines, accounts);
   if (normalizedLines.length === 0) {
     throw new Error('Minimal satu baris saldo awal dengan nominal lebih dari 0 wajib diisi.');
   }
   await assertAccountOpeningLinesNotManaged(accounts, cutoffDate, normalizedLines);
 
-  const totalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
-  const totalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
-    throw new Error(`Saldo awal akun tidak balance. Debit ${totalDebit}, kredit ${totalCredit}.`);
+  const inputTotalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
+  const inputTotalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
+  if (Math.abs(inputTotalDebit - inputTotalCredit) > 0.01) {
+    const equityAccount = resolveOpeningBalanceEquityAccount(accounts);
+    normalizedLines = withAccountOpeningBalanceEquityAutoBalance(
+      normalizedLines,
+      equityAccount,
+      'Ekuitas Saldo Awal',
+    );
+  }
+
+  const postingTotalDebit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
+  const postingTotalCredit = roundCurrency(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
+  if (Math.abs(postingTotalDebit - postingTotalCredit) > 0.01) {
+    throw new Error(`Saldo awal akun gagal diseimbangkan. Debit ${postingTotalDebit}, kredit ${postingTotalCredit}.`);
   }
 
   const journalLines = normalizedLines.map((line) => ({
