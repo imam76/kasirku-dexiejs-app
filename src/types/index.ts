@@ -1427,6 +1427,14 @@ export interface Transaction {
   payment_amount: number;
   change_amount: number;
   payment_method: PaymentMethod;
+  payment_method_id?: string;
+  payment_method_code?: string;
+  payment_method_name?: string;
+  payment_method_category?: PaymentMethodCategory;
+  payment_reference?: string;
+  payment_posting_account_id?: string;
+  payment_posting_account_code?: string;
+  payment_posting_account_name?: string;
   status?: TransactionStatus;
   voided_at?: string;
   void_reason?: string;
@@ -1780,7 +1788,9 @@ export interface ReceiptPayload {
   transactionNumber: string;
   merchantName: string;
   createdAt: string;
-  paymentMethod: PaymentMethod;
+  paymentMethod: string;
+  paymentMethodCode?: string;
+  paymentReference?: string;
   memberName?: string;
   memberNumber?: string;
   items: ReceiptLineItem[];

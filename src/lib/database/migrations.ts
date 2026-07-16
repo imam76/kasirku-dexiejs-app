@@ -49,6 +49,7 @@ import type {
   SalesInvoicePayment,
   SyncQueueItem,
   Tax,
+  Transaction,
   TransactionItem,
   UnitConversion,
   UnitDefinition,
@@ -68,6 +69,7 @@ import {
 } from '@/utils/finance/accountOpeningBalanceBridge';
 import type { KasirkuDB } from './KasirkuDB';
 import { buildAccountingSeed, buildDefaultCompanyProfileSetting, buildDefaultPaymentMethods } from './seeds';
+import { buildLegacyPosPaymentSnapshot } from '@/utils/posPaymentMethod';
 
 export function registerDatabaseMigrations(this: KasirkuDB) {
   this.version(1).stores({
@@ -2493,6 +2495,25 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
       .filter((permission) => !existingPermissionIds.has(permission.id));
     if (permissionsToAdd.length > 0) {
       await rolePermissionTable.bulkPut(permissionsToAdd);
+    }
+  });
+
+  this.version(94).stores({
+    transactions: 'id, transaction_number, payment_method, payment_method_id, payment_method_code, cashier_session_id, cashier_user_id, member_contact_id, member_number, created_at',
+  }).upgrade(async (tx) => {
+    const transactionTable = tx.table<Transaction, string>('transactions');
+    const paymentMethodTable = tx.table<PaymentMethodMaster, string>('paymentMethods');
+    const [transactions, methods] = await Promise.all([
+      transactionTable.toArray(),
+      paymentMethodTable.toArray(),
+    ]);
+    const missing = transactions.filter((transaction) => (
+      !transaction.payment_method_id && !transaction.payment_method_code
+    ));
+    if (missing.length > 0) {
+      await transactionTable.bulkPut(
+        missing.map((transaction) => buildLegacyPosPaymentSnapshot(transaction, methods)),
+      );
     }
   });
 }

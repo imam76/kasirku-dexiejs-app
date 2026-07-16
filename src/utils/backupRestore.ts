@@ -7,6 +7,7 @@ import { ensureCompanyProfileSetting } from '@/services/companyProfileSettingSer
 import { ensureBaseCurrency } from '@/services/currencyService';
 import { ensureMembershipSetting } from '@/services/membershipService';
 import { ensureDefaultPaymentMethods } from '@/services/paymentMethodService';
+import { backfillLegacyPosPaymentSnapshots } from '@/services/posPaymentMethodService';
 import type { AuthUser } from '@/types';
 
 const hasActiveOwner = (users: AuthUser[]) => {
@@ -81,7 +82,7 @@ export const backupDatabase = async () => {
       membershipSettings: await db.membershipSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 25,
+      version: 26,
       timestamp: new Date().toISOString(),
     };
 
@@ -353,6 +354,7 @@ export const restoreDatabase = async (file: File) => {
         await ensureCompanyProfileSetting();
         await ensureMembershipSetting();
         await ensureDefaultPaymentMethods();
+        await backfillLegacyPosPaymentSnapshots();
 
         await clearAuthSessionState();
 

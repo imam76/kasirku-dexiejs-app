@@ -10,6 +10,7 @@ import { getCartItemPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { checkout } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
+import { usePosPaymentMethods } from '@/hooks/usePosPaymentMethods';
 import { evaluatePromos, getActivePromos } from '@/services/promoService';
 import {
   DEFAULT_MEMBERSHIP_SETTING,
@@ -40,7 +41,8 @@ export const useTransaction = () => {
     cart,
     searchTerm,
     paymentAmount,
-    paymentMethod,
+    paymentMethodId,
+    paymentReference,
     voucherCode,
     memberContactId,
     redeemPoints,
@@ -48,7 +50,8 @@ export const useTransaction = () => {
     setProducts,
     setSearchTerm: setStoreSearchTerm,
     setPaymentAmount,
-    setPaymentMethod,
+    setPaymentMethodId,
+    setPaymentReference,
     setVoucherCode,
     setMemberContactId,
     setRedeemPoints,
@@ -59,7 +62,16 @@ export const useTransaction = () => {
     reset,
   } = useTransactionStore();
   const [productPage, setProductPage] = useState(1);
+  const { options: paymentMethods, validMethods } = usePosPaymentMethods();
+  const selectedPaymentMethod = validMethods.find((method) => method.id === paymentMethodId);
   const productSearchTerm = searchTerm.trim().toLowerCase();
+
+  useEffect(() => {
+    if (selectedPaymentMethod || validMethods.length === 0) return;
+    const defaultMethod = validMethods.find((method) => method.code.toUpperCase() === 'TUNAI')
+      ?? validMethods[0];
+    setPaymentMethodId(defaultMethod?.id);
+  }, [selectedPaymentMethod, setPaymentMethodId, validMethods]);
 
   const setSearchTerm = useCallback((value: string) => {
     setProductPage(1);
@@ -233,7 +245,21 @@ export const useTransaction = () => {
 
   const handleCheckout = async () => {
     const total = membershipPreview.total_after_redeem;
-    const payment = paymentMethod === 'NON_TUNAI' ? total : parseFloat(paymentAmount);
+    if (!selectedPaymentMethod) {
+      modal.error({
+        title: t('payment.invalidTitle'),
+        content: t('payment.noMethodAvailable'),
+      });
+      return;
+    }
+    if (selectedPaymentMethod.requires_reference && !paymentReference.trim()) {
+      modal.error({
+        title: t('payment.invalidTitle'),
+        content: t('payment.referenceRequired'),
+      });
+      return;
+    }
+    const payment = selectedPaymentMethod.category === 'CASH' ? parseFloat(paymentAmount) : total;
 
     if (isNaN(payment) || payment < total) {
       modal.error({
@@ -247,7 +273,8 @@ export const useTransaction = () => {
       const checkoutResult = await checkout({
         cart,
         payment,
-        paymentMethod,
+        paymentMethodId: selectedPaymentMethod.id,
+        paymentReference,
         voucherCode,
         memberContactId,
         redeemPoints: Number(redeemPoints || 0),
@@ -262,8 +289,13 @@ export const useTransaction = () => {
               <span className="font-semibold"> {t('checkout.transactionNumber')}: </span> {transaction.transaction_number}
             </p>
             <p className="text-gray-700">
-              <span className="font-semibold"> {t('checkout.method')}: </span> {paymentMethod === 'TUNAI' ? t('payment.cash') : t('payment.nonCash')}
+              <span className="font-semibold"> {t('checkout.method')}: </span> {transaction.payment_method_name ?? selectedPaymentMethod.name}
             </p>
+            {transaction.payment_reference && (
+              <p className="text-gray-700">
+                <span className="font-semibold">{t('checkout.paymentReference')}:</span> {transaction.payment_reference}
+              </p>
+            )}
             < p className="text-gray-700" >
               <span className="font-semibold"> {t('cart.total')}:</span> Rp {formatCurrency(transaction.total_amount)}
             </p>
@@ -348,7 +380,9 @@ export const useTransaction = () => {
     cart,
     searchTerm,
     paymentAmount,
-    paymentMethod,
+    paymentMethods,
+    paymentMethodId,
+    paymentReference,
     voucherCode,
     memberContactId,
     redeemPoints,
@@ -373,7 +407,8 @@ export const useTransaction = () => {
     clearCart: reset,
     setSearchTerm,
     setPaymentAmount,
-    setPaymentMethod,
+    setPaymentMethodId,
+    setPaymentReference,
     setVoucherCode,
     setMemberContactId,
     setRedeemPoints,

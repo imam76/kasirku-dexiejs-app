@@ -1,9 +1,10 @@
-import { Contact, MembershipSetting, PaymentMethod } from '@/types';
+import { Contact, MembershipSetting } from '@/types';
+import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import { formatCurrency } from '@/utils/formatters';
-import { Switch } from 'antd';
-import { Delete, DollarSign, Wallet } from 'lucide-react';
+import { Alert, Input, Switch } from 'antd';
+import { CreditCard, Delete, DollarSign, Landmark, QrCode, ShoppingBag } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import MembershipCheckoutPanel from './MembershipCheckoutPanel';
@@ -14,7 +15,9 @@ interface CartSummaryProps {
   total: number;
   showPayment: boolean;
   paymentAmount: string;
-  paymentMethod: PaymentMethod;
+  paymentMethods: PosPaymentMethodOption[];
+  paymentMethodId?: string;
+  paymentReference: string;
   voucherCode: string;
   memberContactId?: string;
   redeemPoints: string;
@@ -25,7 +28,8 @@ interface CartSummaryProps {
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
   setPaymentAmount: (amount: string) => void;
-  setPaymentMethod: (method: PaymentMethod) => void;
+  setPaymentMethodId: (id?: string) => void;
+  setPaymentReference: (reference: string) => void;
   setVoucherCode: (voucherCode: string) => void;
   setMemberContactId: (memberContactId?: string) => void;
   setRedeemPoints: (points: string) => void;
@@ -39,7 +43,9 @@ export default function CartSummary({
   total,
   showPayment,
   paymentAmount,
-  paymentMethod,
+  paymentMethods,
+  paymentMethodId,
+  paymentReference,
   voucherCode,
   memberContactId,
   redeemPoints,
@@ -50,7 +56,8 @@ export default function CartSummary({
   membershipSetting,
   setShowPayment,
   setPaymentAmount,
-  setPaymentMethod,
+  setPaymentMethodId,
+  setPaymentReference,
   setVoucherCode,
   setMemberContactId,
   setRedeemPoints,
@@ -68,7 +75,9 @@ export default function CartSummary({
     const savedValue = localStorage.getItem(PAYMENT_SHORTCUTS_STORAGE_KEY);
     return savedValue ? savedValue === 'true' : true;
   });
-  const isNonCash = paymentMethod === 'NON_TUNAI';
+  const selectedOption = paymentMethods.find((option) => option.method.id === paymentMethodId);
+  const selectedMethod = selectedOption?.method;
+  const isCash = selectedMethod?.category === 'CASH';
   const payment = parseFloat(paymentAmount);
   const change = payment >= total ? payment - total : 0;
   const quickAmounts = [5000, 10000, 20000, 50000, 100000];
@@ -78,19 +87,20 @@ export default function CartSummary({
     setPaymentAmount(String(currentAmount + amount));
   };
 
-  const handlePaymentMethodChange = (method: PaymentMethod) => {
-    setPaymentMethod(method);
-
-    if (method === 'NON_TUNAI') {
+  const handlePaymentMethodChange = (option: PosPaymentMethodOption) => {
+    if (!option.isValid) return;
+    setPaymentMethodId(option.method.id);
+    if (!option.method.requires_reference) setPaymentReference('');
+    if (option.method.category !== 'CASH') {
       setPaymentAmount(String(total));
     }
   };
 
   useEffect(() => {
-    if (isNonCash && paymentAmount !== String(total)) {
+    if (selectedMethod && !isCash && paymentAmount !== String(total)) {
       setPaymentAmount(String(total));
     }
-  }, [isNonCash, paymentAmount, setPaymentAmount, total]);
+  }, [isCash, paymentAmount, selectedMethod, setPaymentAmount, total]);
 
   useEffect(() => {
     localStorage.setItem(PAYMENT_SHORTCUTS_STORAGE_KEY, String(showPaymentShortcuts));
@@ -119,7 +129,7 @@ export default function CartSummary({
           <span>{t('cart.total')}:</span>
           <span>Rp {formatCurrency(total)}</span>
         </div>
-         {!isNonCash && paymentAmount && payment >= total && (
+         {isCash && paymentAmount && payment >= total && (
               <p className="text-sm text-gray-700 flex justify-between mt-1">
                 {t('payment.change')}: <span className="font-bold">Rp {formatCurrency(change)}</span>
               </p>
@@ -136,28 +146,61 @@ export default function CartSummary({
         </button>
       ) : (
         <div className="space-y-4 pb-6">
-          <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
-            <button
-              onClick={() => handlePaymentMethodChange('TUNAI')}
-              className={`flex-1 py-2 px-3 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${paymentMethod === 'TUNAI'
-                  ? 'bg-white text-green-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <DollarSign size={16} />
-              {t('payment.cash')}
-            </button>
-            <button
-              onClick={() => handlePaymentMethodChange('NON_TUNAI')}
-              className={`flex-1 py-2 px-3 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${paymentMethod === 'NON_TUNAI'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <Wallet size={16} />
-              {t('payment.nonCash')}
-            </button>
-          </div>
+          {paymentMethods.length === 0 ? (
+            <Alert type="error" showIcon message={t('payment.noMethodAvailable')} />
+          ) : (
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
+              {paymentMethods.map((option) => {
+                const Icon = option.method.category === 'CASH'
+                  ? DollarSign
+                  : option.method.category === 'QRIS'
+                    ? QrCode
+                    : option.method.category === 'BANK_TRANSFER'
+                      ? Landmark
+                      : option.method.category === 'MARKETPLACE'
+                        ? ShoppingBag
+                        : CreditCard;
+                const selected = option.method.id === paymentMethodId;
+                return (
+                  <button
+                    key={option.method.id}
+                    type="button"
+                    disabled={!option.isValid}
+                    title={option.disabledReason}
+                    onClick={() => handlePaymentMethodChange(option)}
+                    className={`flex min-h-14 items-center justify-center gap-2 rounded-md px-2 py-2 text-sm font-semibold transition-all ${selected
+                      ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200'
+                      : option.isValid
+                        ? 'text-gray-600 hover:bg-white/70 hover:text-gray-800'
+                        : 'cursor-not-allowed text-gray-400 opacity-60'
+                    }`}
+                  >
+                    <Icon size={16} className="shrink-0" />
+                    <span className="min-w-0 text-left">
+                      <span className="block truncate">{option.method.name}</span>
+                      {option.method.code !== option.method.name.toUpperCase() && (
+                        <span className="block truncate text-[10px] font-normal opacity-70">{option.method.code}</span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {selectedMethod?.requires_reference && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                {t('payment.reference')} <span className="text-red-500">*</span>
+              </label>
+              <Input
+                value={paymentReference}
+                maxLength={100}
+                placeholder={t('payment.referencePlaceholder')}
+                onChange={(event) => setPaymentReference(event.target.value)}
+              />
+            </div>
+          )}
 
           <div className="space-y-3 pb-6">
             <input
@@ -165,12 +208,12 @@ export default function CartSummary({
               placeholder={t('payment.amountPlaceholder')}
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
-              disabled={isNonCash}
-              className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${isNonCash ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+              disabled={!isCash}
+              className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${!isCash ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
                 }`}
-              autoFocus={!isNonCash}
+              autoFocus={isCash}
             />
-            {!isNonCash && (
+            {isCash && (
               <div className="flex items-center justify-between gap-3 rounded-lg py-2 text-sm font-medium text-gray-700">
                 <span>{t('payment.shortcuts')}</span>
                 <Switch
@@ -180,7 +223,7 @@ export default function CartSummary({
                 />
               </div>
             )}
-            {!isNonCash && showPaymentShortcuts && (
+            {isCash && showPaymentShortcuts && (
               <div className="grid grid-cols-2 gap-2 py-2 md:grid-cols-3">
                 {quickAmounts.map((amount) => (
                   <button
@@ -202,7 +245,7 @@ export default function CartSummary({
                 </button>
               </div>
             )}
-            {!isNonCash && (
+            {isCash && (
               <div className="flex">
                 <button
                   type="button"
@@ -229,7 +272,8 @@ export default function CartSummary({
             </button>
             <button
               onClick={handleCheckout}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition-colors"
+              disabled={!selectedOption?.isValid || Boolean(selectedMethod?.requires_reference && !paymentReference.trim())}
+              className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-2 rounded-lg font-semibold transition-colors"
             >
               {t('payment.confirm')}
             </button>
