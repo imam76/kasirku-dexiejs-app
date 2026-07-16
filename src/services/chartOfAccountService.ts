@@ -278,7 +278,7 @@ const sanitizeChartOfAccountInput = async (
   const code = normalizeCode(parsed.code);
   const parent = parsed.parent_id ? await db.chartOfAccounts.get(parsed.parent_id) : undefined;
 
-  if (parsed.parent_id === accountId) {
+  if (parsed.parent_id && accountId && parsed.parent_id === accountId) {
     throw new Error('Parent akun tidak boleh akun yang sama.');
   }
 

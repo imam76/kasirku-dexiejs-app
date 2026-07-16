@@ -114,7 +114,11 @@ export default function ChartOfAccountFormModal({
               }))}
             />
           </Form.Item>
-          <Form.Item name="parent_id" label={t('coa.form.parent')}>
+          <Form.Item
+            name="parent_id"
+            label={t('coa.form.parent')}
+            extra={t('coa.form.parentHint')}
+          >
             <Select
               allowClear
               showSearch

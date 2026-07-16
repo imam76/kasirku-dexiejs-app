@@ -14,7 +14,7 @@ export const accountTypeValues = [
 const optionalTrimmedString = z
   .string()
   .trim()
-  .optional()
+  .nullish()
   .or(z.literal(''))
   .transform((value) => value || undefined);
 
@@ -41,4 +41,3 @@ export const chartOfAccountSchema = z.object({
 }));
 
 export type ChartOfAccountFormData = z.infer<typeof chartOfAccountSchema>;
-
