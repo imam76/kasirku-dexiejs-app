@@ -13,6 +13,7 @@ type CooperativeMemberRegisterReportProps = {
   logoDataUrl?: string;
   periodText: string;
   printDateText: string;
+  memberFilterText: string;
 };
 
 const REPORT_MIN_WIDTH = 980;
@@ -68,7 +69,7 @@ const reportTitleStyle: CSSProperties = {
 const summaryStyle: CSSProperties = {
   border: '1px solid #d1d5db',
   display: 'grid',
-  gridTemplateColumns: '1fr 180px',
+  gridTemplateColumns: '1fr 220px 180px',
   marginBottom: 18,
 };
 
@@ -139,6 +140,7 @@ const CooperativeMemberRegisterReport = forwardRef<HTMLDivElement, CooperativeMe
     logoDataUrl,
     periodText,
     printDateText,
+    memberFilterText,
   }, ref) {
     const { t } = useI18n();
     const groups = data?.groups ?? [];
@@ -183,6 +185,9 @@ const CooperativeMemberRegisterReport = forwardRef<HTMLDivElement, CooperativeMe
         <div style={summaryStyle}>
           <div style={summaryCellStyle}>
             <strong>{t('cooperative.memberRegister.dateRange')}:</strong> {periodText}
+          </div>
+          <div style={summaryCellStyle}>
+            <strong>{t('cooperative.memberRegister.memberFilter')}:</strong> {memberFilterText}
           </div>
           <div style={{ ...summaryCellStyle, borderRight: 0, textAlign: 'right' }}>
             <strong>{t('cooperative.memberRegister.totalMembers')}:</strong> {data?.total_member_count ?? 0}
@@ -235,7 +240,7 @@ const CooperativeMemberRegisterReport = forwardRef<HTMLDivElement, CooperativeMe
                   {group.rows.map((row) => (
                     <tr key={row.id}>
                       <td style={tdStyle}>{formatDate(row.join_date)}</td>
-                      <td style={tdStyle}>{row.code}</td>
+                      <td style={tdStyle}>{row.code || '-'}</td>
                       <td style={tdStyle}>{row.name}</td>
                       <td style={tdStyle}>{row.address || '-'}</td>
                     </tr>

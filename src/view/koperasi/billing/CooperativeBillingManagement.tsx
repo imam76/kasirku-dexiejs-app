@@ -69,6 +69,19 @@ export default function CooperativeBillingManagement() {
   } = useCooperativeBilling();
   const canRecordPayment = can('COOPERATIVE_PAYMENT_CREATE');
 
+  const getPaymentDefaultFields = (installment: CooperativeLoanInstallment) => {
+    const fieldCashStatus = getFieldCashPaymentStatusForInstallment(installment);
+
+    return {
+      fields: {
+        collector_id: getDefaultCollectorIdForInstallment(installment),
+        ...getRememberedCashAccountFields(paymentAccounts),
+        ...(fieldCashStatus ? { cash_account_id: fieldCashStatus.cash_account_id } : {}),
+      },
+      fieldCashBadge: fieldCashStatus?.badge,
+    };
+  };
+
   const closePaymentModal = () => {
     setIsPaymentModalOpen(false);
     setPayingInstallment(null);
@@ -84,8 +97,7 @@ export default function CooperativeBillingManagement() {
 
     form.resetFields();
     const remaining = getInstallmentRemainingAmounts(installment);
-    const fieldCashStatus = getFieldCashPaymentStatusForInstallment(installment);
-    const rememberedFields = getRememberedCashAccountFields(paymentAccounts);
+    const paymentDefaults = getPaymentDefaultFields(installment);
     form.setFieldsValue({
       idempotency_key: crypto.randomUUID(),
       installment_id: installment.id,
@@ -93,11 +105,9 @@ export default function CooperativeBillingManagement() {
       payment_date: dayjs(),
       payment_method: 'TUNAI',
       remember_cash_account: true,
-      collector_id: getDefaultCollectorIdForInstallment(installment),
-      ...rememberedFields,
-      ...(fieldCashStatus ? { cash_account_id: fieldCashStatus.cash_account_id } : {}),
+      ...paymentDefaults.fields,
     });
-    setFieldCashPaymentBadge(fieldCashStatus?.badge);
+    setFieldCashPaymentBadge(paymentDefaults.fieldCashBadge);
     setPayingInstallment(installment);
     setIsPaymentModalOpen(true);
   };
@@ -154,6 +164,39 @@ export default function CooperativeBillingManagement() {
       closePaymentModal();
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('cooperative.billing.payFailed'));
+    }
+  };
+
+  const handleQuickPayment = async (installment: CooperativeLoanInstallment, amount: number) => {
+    if (!canRecordPayment) {
+      message.error('Anda tidak memiliki akses untuk aksi ini.');
+      return false;
+    }
+
+    try {
+      const paymentDefaults = getPaymentDefaultFields(installment);
+      const result = await recordPayment({
+        idempotency_key: crypto.randomUUID(),
+        installment_id: installment.id,
+        amount: Number(amount || 0),
+        payment_date: dayjs().tz().format(),
+        payment_method: 'TUNAI',
+        cash_account_id: paymentDefaults.fields.cash_account_id,
+        collector_id: paymentDefaults.fields.collector_id,
+      });
+      if (result.status === 'PENDING_APPROVAL') {
+        message.success(t('cooperative.installments.backdateApprovalRequested'));
+        return true;
+      }
+
+      rememberCashAccount({
+        cash_account_id: result.payment.cash_account_id ?? paymentDefaults.fields.cash_account_id,
+      });
+      message.success(t('cooperative.billing.paySuccess'));
+      return true;
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('cooperative.billing.payFailed'));
+      return false;
     }
   };
 
@@ -230,6 +273,7 @@ export default function CooperativeBillingManagement() {
                 installments={overdueInstallments}
                 loanById={loanById}
                 onPay={openPaymentModal}
+                onQuickPay={handleQuickPayment}
                 onCollect={openCollectionModal}
                 onView={setSelectedInstallment}
                 canPay={canRecordPayment}
@@ -246,6 +290,7 @@ export default function CooperativeBillingManagement() {
                 installments={dueTodayInstallments}
                 loanById={loanById}
                 onPay={openPaymentModal}
+                onQuickPay={handleQuickPayment}
                 onCollect={openCollectionModal}
                 onView={setSelectedInstallment}
                 canPay={canRecordPayment}
@@ -262,6 +307,7 @@ export default function CooperativeBillingManagement() {
                 installments={dueThisWeekInstallments}
                 loanById={loanById}
                 onPay={openPaymentModal}
+                onQuickPay={handleQuickPayment}
                 onCollect={openCollectionModal}
                 onView={setSelectedInstallment}
                 canPay={canRecordPayment}
@@ -278,6 +324,7 @@ export default function CooperativeBillingManagement() {
                 installments={allUnpaidInstallments}
                 loanById={loanById}
                 onPay={openPaymentModal}
+                onQuickPay={handleQuickPayment}
                 onCollect={openCollectionModal}
                 onView={setSelectedInstallment}
                 canPay={canRecordPayment}

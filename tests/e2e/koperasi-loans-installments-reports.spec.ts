@@ -13,6 +13,7 @@ import {
   expectInstallmentSchedule,
   payRemainingInstallments,
   payFirstInstallment,
+  payFirstInstallmentFromBillingShortcut,
   payFlexibleInstallmentAmount,
 } from './helpers/koperasi';
 
@@ -57,5 +58,19 @@ test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
     await disburseLoan(page, demoMembers.rani);
     await payFlexibleInstallmentAmount(page, demoMembers.rani, 795000);
     await expectFlexibleInstallmentAllocation(page, demoMembers.rani);
+  });
+
+  test('PAY-09 - shortcut pembayaran setoran penagihan mencatat angsuran tanpa modal', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await createActiveMember(page, demoMembers.siti);
+
+    await createLoanApplication(page, demoMembers.siti);
+    await approveLoan(page, demoMembers.siti);
+    await disburseLoan(page, demoMembers.siti);
+    await payFirstInstallmentFromBillingShortcut(page, demoMembers.siti);
+
+    await page.goto('/koperasi/angsuran');
+    await expect(page.getByTestId(`koperasi-installment-row-${demoMembers.siti.memberNumber}-1`)).toBeHidden();
+    await expect(page.getByTestId(`koperasi-installment-row-${demoMembers.siti.memberNumber}-2`)).toBeVisible();
   });
 });

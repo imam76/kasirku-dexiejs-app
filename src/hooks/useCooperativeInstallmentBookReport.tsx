@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import {
   getCooperativeInstallmentBookReport,
   type CooperativeInstallmentBookReportFilters,
+  type CooperativeInstallmentBookSortBy,
+  type CooperativeInstallmentBookSortDirection,
 } from '@/services/cooperativeInstallmentBookReportService';
 
 export const useCooperativeInstallmentBookReport = (
@@ -13,8 +15,14 @@ export const useCooperativeInstallmentBookReport = (
     filters.collectionWeekday,
     filters.employeeId,
     filters.visibleAreaIds,
+    filters.sortBy,
+    filters.sortDirection,
   ],
   queryFn: () => getCooperativeInstallmentBookReport(filters),
 });
 
-export type { CooperativeInstallmentBookReportFilters };
+export type {
+  CooperativeInstallmentBookReportFilters,
+  CooperativeInstallmentBookSortBy,
+  CooperativeInstallmentBookSortDirection,
+};

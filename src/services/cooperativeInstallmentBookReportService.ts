@@ -22,11 +22,33 @@ export type CooperativeInstallmentBookAgingCategory =
   | 'WATCHLIST'
   | 'DELINQUENT';
 
+export type CooperativeInstallmentBookSortBy =
+  | 'actualDisbursementDate'
+  | 'scheduledDisbursementDate'
+  | 'memberNumber'
+  | 'memberCategory'
+  | 'memberName'
+  | 'principalAmount'
+  | 'openingBalance'
+  | 'collectionDayPayment'
+  | 'installmentAmount'
+  | 'endingBalance';
+
+export type CooperativeInstallmentBookSortDirection = 'asc' | 'desc';
+
+export const DEFAULT_COOPERATIVE_INSTALLMENT_BOOK_SORT_BY:
+  CooperativeInstallmentBookSortBy = 'scheduledDisbursementDate';
+
+export const DEFAULT_COOPERATIVE_INSTALLMENT_BOOK_SORT_DIRECTION:
+  CooperativeInstallmentBookSortDirection = 'asc';
+
 export interface CooperativeInstallmentBookReportFilters {
   monthDate?: string;
   employeeId?: string;
   visibleAreaIds?: string[];
   collectionWeekday?: CooperativeCollectionWeekday;
+  sortBy?: CooperativeInstallmentBookSortBy;
+  sortDirection?: CooperativeInstallmentBookSortDirection;
 }
 
 export interface CooperativeInstallmentBookReportSummary {
@@ -121,6 +143,88 @@ const summarizeRows = (
   installment_amount: roundCurrency(summary.installment_amount + row.installment_amount),
   ending_balance: roundCurrency(summary.ending_balance + row.ending_balance),
 }), createEmptySummary());
+
+const compareText = (left?: string, right?: string) => (
+  (left ?? '').localeCompare(right ?? '', undefined, { numeric: true })
+);
+
+const compareDate = (left?: string, right?: string) => (
+  dayjs(left ?? 0).valueOf() - dayjs(right ?? 0).valueOf()
+);
+
+const compareNumber = (left: number, right: number) => left - right;
+
+const getCollectionDayPaymentTotal = (
+  row: CooperativeInstallmentBookReportRow,
+  collectionDates: number[],
+) => roundCurrency(collectionDates.reduce(
+  (total, day) => total + (row.payment_by_collection_date[day] ?? 0),
+  0,
+));
+
+const compareRowsBySort = ({
+  left,
+  right,
+  sortBy,
+  sortDirection,
+  collectionDates,
+}: {
+  left: CooperativeInstallmentBookReportRow;
+  right: CooperativeInstallmentBookReportRow;
+  sortBy: CooperativeInstallmentBookSortBy;
+  sortDirection: CooperativeInstallmentBookSortDirection;
+  collectionDates: number[];
+}) => {
+  let result = 0;
+
+  switch (sortBy) {
+    case 'actualDisbursementDate':
+      result = compareDate(left.actual_disbursement_date, right.actual_disbursement_date);
+      break;
+    case 'scheduledDisbursementDate':
+      result = compareDate(left.scheduled_disbursement_date, right.scheduled_disbursement_date);
+      break;
+    case 'memberNumber':
+      result = compareText(left.member_number, right.member_number);
+      break;
+    case 'memberCategory':
+      result = compareText(left.member_category, right.member_category);
+      break;
+    case 'memberName':
+      result = compareText(left.member_name, right.member_name);
+      break;
+    case 'principalAmount':
+      result = compareNumber(left.principal_amount, right.principal_amount);
+      break;
+    case 'openingBalance':
+      result = compareNumber(left.opening_balance, right.opening_balance);
+      break;
+    case 'collectionDayPayment':
+      result = compareNumber(
+        getCollectionDayPaymentTotal(left, collectionDates),
+        getCollectionDayPaymentTotal(right, collectionDates),
+      );
+      break;
+    case 'installmentAmount':
+      result = compareNumber(left.installment_amount, right.installment_amount);
+      break;
+    case 'endingBalance':
+      result = compareNumber(left.ending_balance, right.ending_balance);
+      break;
+    default:
+      result = 0;
+  }
+
+  if (result !== 0) return sortDirection === 'desc' ? -result : result;
+
+  const scheduledDateCompare = compareDate(left.scheduled_disbursement_date, right.scheduled_disbursement_date);
+  if (scheduledDateCompare !== 0) return scheduledDateCompare;
+
+  const memberNumberCompare = compareText(left.member_number, right.member_number);
+  if (memberNumberCompare !== 0) return memberNumberCompare;
+
+  return compareText(left.loan_number, right.loan_number);
+};
 
 const getLoanDate = (loan: CooperativeLoan) => (
   loan.scheduled_disbursement_date ?? loan.disbursed_at ?? loan.application_date
@@ -380,14 +484,20 @@ export const getCooperativeInstallmentBookReport = async (
   const reportMonth = (filters.monthDate ? dayjs(filters.monthDate).tz() : dayjs().tz())
     .startOf('month');
   const collectionWeekday = filters.collectionWeekday ?? getIsoWeekday(dayjs().tz());
+  const sortBy = filters.sortBy ?? DEFAULT_COOPERATIVE_INSTALLMENT_BOOK_SORT_BY;
+  const sortDirection =
+    filters.sortDirection ?? DEFAULT_COOPERATIVE_INSTALLMENT_BOOK_SORT_DIRECTION;
   const effectiveFilters: CooperativeInstallmentBookReportFilters = {
     ...filters,
     collectionWeekday,
+    sortBy,
+    sortDirection,
   };
   const monthStart = reportMonth.startOf('month');
   const monthEnd = reportMonth.endOf('month');
   const startDateKey = monthStart.format('YYYY-MM-DD');
   const endDateKey = monthEnd.format('YYYY-MM-DD');
+  const collectionDates = getCollectionDatesInMonth(reportMonth, [collectionWeekday]);
   const [loans, payments, installments, employees] = await Promise.all([
     db.cooperativeLoans.orderBy('loan_number').toArray(),
     db.cooperativeLoanPayments.orderBy('payment_date').toArray(),
@@ -431,9 +541,13 @@ export const getCooperativeInstallmentBookReport = async (
         CATEGORY_ORDER.indexOf(left.aging_category) -
         CATEGORY_ORDER.indexOf(right.aging_category);
       if (categoryCompare !== 0) return categoryCompare;
-      const dateCompare = left.loan_date.localeCompare(right.loan_date);
-      if (dateCompare !== 0) return dateCompare;
-      return left.member_number.localeCompare(right.member_number, undefined, { numeric: true });
+      return compareRowsBySort({
+        left,
+        right,
+        sortBy,
+        sortDirection,
+        collectionDates,
+      });
     });
   const rowsByEmployee = new Map<string, CooperativeInstallmentBookReportRow[]>();
 
@@ -467,7 +581,7 @@ export const getCooperativeInstallmentBookReport = async (
         officer_position: firstRow?.officer_position,
         area_names: areaNames,
         collection_weekdays: [collectionWeekday],
-        collection_dates: getCollectionDatesInMonth(reportMonth, [collectionWeekday]),
+        collection_dates: collectionDates,
         sections,
         summary: summarizeRows(employeeRows),
       };

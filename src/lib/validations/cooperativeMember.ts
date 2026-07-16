@@ -11,7 +11,7 @@ const optionalTrimmedString = z
   .transform((value) => value || undefined);
 
 export const cooperativeMemberSchema = z.object({
-  member_number: z.string().trim().min(1, 'Nomor anggota wajib diisi.').max(40, 'Nomor anggota maksimal 40 karakter.'),
+  member_number: z.string().trim().max(40, 'Nomor anggota maksimal 40 karakter.').optional().or(z.literal('')),
   name: z.string().trim().min(1, 'Nama anggota wajib diisi.'),
   identity_number: optionalTrimmedString,
   phone: optionalTrimmedString,

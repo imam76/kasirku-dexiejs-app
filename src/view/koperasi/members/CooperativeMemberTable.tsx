@@ -38,7 +38,7 @@ export default function CooperativeMemberTable({
       render: (name: string, member) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{name}</Text>
-          <Text type="secondary">{member.member_number}</Text>
+          <Text type="secondary">{member.member_number || '-'}</Text>
         </Space>
       ),
     },
@@ -95,41 +95,45 @@ export default function CooperativeMemberTable({
     {
       title: t('cooperative.members.table.action'),
       key: 'action',
-      render: (_value: unknown, member) => (
-        <Space wrap>
-          <Button type="text" icon={<Eye size={16} />} onClick={() => onView(member)}>
-            {t('cooperative.members.view')}
-          </Button>
-          <Button
-            type="text"
-            icon={<Edit2 size={16} />}
-            data-testid={`koperasi-member-edit-${member.member_number}`}
-            onClick={() => onEdit(member)}
-          >
-            {t('cooperative.members.edit')}
-          </Button>
-          {member.status === 'ACTIVE' ? (
-            <Button
-              danger
-              type="text"
-              icon={<Archive size={16} />}
-              data-testid={`koperasi-member-archive-${member.member_number}`}
-              onClick={() => onArchive(member)}
-            >
-              {t('cooperative.members.archive')}
+      render: (_value: unknown, member) => {
+        const memberTestKey = member.member_number || member.id;
+
+        return (
+          <Space wrap>
+            <Button type="text" icon={<Eye size={16} />} onClick={() => onView(member)}>
+              {t('cooperative.members.view')}
             </Button>
-          ) : (
             <Button
               type="text"
-              icon={<RotateCcw size={16} />}
-              data-testid={`koperasi-member-restore-${member.member_number}`}
-              onClick={() => onRestore(member)}
+              icon={<Edit2 size={16} />}
+              data-testid={`koperasi-member-edit-${memberTestKey}`}
+              onClick={() => onEdit(member)}
             >
-              {t('cooperative.members.restore')}
+              {t('cooperative.members.edit')}
             </Button>
-          )}
-        </Space>
-      ),
+            {member.status === 'ACTIVE' ? (
+              <Button
+                danger
+                type="text"
+                icon={<Archive size={16} />}
+                data-testid={`koperasi-member-archive-${memberTestKey}`}
+                onClick={() => onArchive(member)}
+              >
+                {t('cooperative.members.archive')}
+              </Button>
+            ) : (
+              <Button
+                type="text"
+                icon={<RotateCcw size={16} />}
+                data-testid={`koperasi-member-restore-${memberTestKey}`}
+                onClick={() => onRestore(member)}
+              >
+                {t('cooperative.members.restore')}
+              </Button>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -139,7 +143,7 @@ export default function CooperativeMemberTable({
       columns={columns}
       rowKey="id"
       onRow={(member) => ({
-        'data-testid': `koperasi-member-row-${member.member_number}`,
+        'data-testid': `koperasi-member-row-${member.member_number || member.id}`,
       } as unknown as HTMLAttributes<HTMLElement>)}
       pagination={{ pageSize: 8 }}
       scroll={{ x: true }}

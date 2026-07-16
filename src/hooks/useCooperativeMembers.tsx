@@ -8,6 +8,7 @@ import {
   createCooperativeMember,
   restoreCooperativeMember,
   updateCooperativeMember,
+  type CooperativeMemberArchiveOptions,
   type CooperativeMemberUpsertInput,
 } from '@/services/cooperativeMemberService';
 import type { CooperativeMember, CooperativeMemberStatus, Employee, EmployeeArea } from '@/types';
@@ -90,7 +91,9 @@ export const useCooperativeMembers = () => {
     onSuccess: invalidateMembers,
   });
   const archiveMutation = useMutation({
-    mutationFn: archiveCooperativeMember,
+    mutationFn: ({ id, options }: { id: string; options?: CooperativeMemberArchiveOptions }) => (
+      archiveCooperativeMember(id, options)
+    ),
     onSuccess: invalidateMembers,
   });
   const restoreMutation = useMutation({
@@ -129,7 +132,9 @@ export const useCooperativeMembers = () => {
     handleSelect,
     resetForm,
     submitForm,
-    archiveMember: archiveMutation.mutateAsync,
+    archiveMember: (id: string, options?: CooperativeMemberArchiveOptions) => (
+      archiveMutation.mutateAsync({ id, options })
+    ),
     restoreMember: restoreMutation.mutateAsync,
     isSubmitting: createMutation.isPending || updateMutation.isPending,
     isArchiving: archiveMutation.isPending,

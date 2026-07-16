@@ -1,14 +1,20 @@
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import type { CooperativeMember, Employee } from '@/types';
+import type { CooperativeMember, CooperativeMemberStatus, Employee } from '@/types';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
 export const COOPERATIVE_MEMBER_REGISTER_UNASSIGNED_OFFICER = '__UNASSIGNED__';
+
+export type CooperativeMemberRegisterMemberFilter =
+  | 'ALL'
+  | Extract<CooperativeMemberStatus, 'ACTIVE' | 'INACTIVE'>
+  | 'WITHOUT_CODE';
 
 export interface CooperativeMemberRegisterReportFilters {
   startDate?: string;
   endDate?: string;
   officerId?: string;
+  memberFilter?: CooperativeMemberRegisterMemberFilter;
 }
 
 export interface CooperativeMemberRegisterReportRow {
@@ -61,12 +67,24 @@ const compareRows = (
   const dateCompare = getDateKey(left.join_date).localeCompare(getDateKey(right.join_date));
   if (dateCompare !== 0) return dateCompare;
 
-  return compareText(left.code, right.code);
+  return compareText(left.code || left.name, right.code || right.name);
 };
 
 const getOfficerKey = (member: CooperativeMember) => (
   member.officer_id || COOPERATIVE_MEMBER_REGISTER_UNASSIGNED_OFFICER
 );
+
+const hasMemberCode = (member: CooperativeMember) => Boolean(member.member_number.trim());
+
+const matchesMemberFilter = (
+  member: CooperativeMember,
+  filter: CooperativeMemberRegisterMemberFilter = 'ALL',
+) => {
+  if (filter === 'WITHOUT_CODE') return !hasMemberCode(member);
+  if (filter === 'ACTIVE' || filter === 'INACTIVE') return member.status === filter;
+
+  return true;
+};
 
 const getOfficerOptionLabel = (option: CooperativeMemberRegisterOfficerOption) => (
   option.position ? `${option.name} - ${option.position}` : option.name
@@ -112,6 +130,7 @@ export const getCooperativeMemberRegisterReportData = async (
 
   const filteredMembers = members
     .filter((member) => isDateKeyInRange(member.join_date, filters.startDate, filters.endDate))
+    .filter((member) => matchesMemberFilter(member, filters.memberFilter))
     .filter((member) => {
       if (!filters.officerId) return true;
       if (filters.officerId === COOPERATIVE_MEMBER_REGISTER_UNASSIGNED_OFFICER) {

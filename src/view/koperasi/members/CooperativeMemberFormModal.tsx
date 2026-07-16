@@ -162,9 +162,18 @@ export default function CooperativeMemberFormModal({
           <Form.Item
             name="member_number"
             label={t('cooperative.members.form.memberNumber')}
+            dependencies={['status']}
             rules={[
-              { required: true, whitespace: true, message: t('cooperative.members.validation.memberNumberRequired') },
               { max: 40, message: t('cooperative.members.validation.memberNumberMax') },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (getFieldValue('status') === 'ACTIVE' && !String(value ?? '').trim()) {
+                    return Promise.reject(new Error(t('cooperative.members.validation.memberNumberRequired')));
+                  }
+
+                  return Promise.resolve();
+                },
+              }),
             ]}
           >
             <Input

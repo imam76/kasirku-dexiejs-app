@@ -5,7 +5,7 @@ import { enqueueCooperativeMembersSync, withPendingCooperativeSync } from '@/ser
 import type { CooperativeMember, CooperativeMemberStatus } from '@/types';
 
 export interface CooperativeMemberUpsertInput {
-  member_number: string;
+  member_number?: string;
   name: string;
   identity_number?: string;
   phone?: string;
@@ -17,16 +17,58 @@ export interface CooperativeMemberUpsertInput {
   notes?: string;
 }
 
+export interface CooperativeMemberArchiveOptions {
+  clearMemberNumber?: boolean;
+}
+
 type SanitizedCooperativeMemberInput =
-  Required<Pick<CooperativeMemberUpsertInput, 'member_number' | 'name' | 'join_date' | 'status'>> &
-  Omit<CooperativeMemberUpsertInput, 'member_number' | 'name' | 'join_date' | 'status'>;
+  Required<Pick<CooperativeMemberUpsertInput, 'name' | 'join_date' | 'status' | 'area_id'>> &
+  Omit<CooperativeMemberUpsertInput, 'member_number' | 'name' | 'join_date' | 'status' | 'area_id'> & {
+    member_number: string;
+  };
+
+const GENERATED_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/;
+
+const normalizeMemberNumber = (value?: string | null) => value?.trim().toUpperCase() ?? '';
+
+const getNextCooperativeMemberNumber = (
+  members: Array<Pick<CooperativeMember, 'member_number'>>,
+) => {
+  const usedNumbers = new Set(
+    members
+      .map((member) => normalizeMemberNumber(member.member_number))
+      .filter(Boolean),
+  );
+  const usedGeneratedSequences = Array.from(usedNumbers)
+    .map((memberNumber) => {
+      const match = memberNumber.match(GENERATED_MEMBER_NUMBER_PATTERN);
+      return match ? Number(match[1]) : 0;
+    })
+    .filter((sequence) => sequence > 0);
+  let nextSequence = Math.max(0, ...usedGeneratedSequences) + 1;
+  let nextMemberNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+
+  while (usedNumbers.has(nextMemberNumber)) {
+    nextSequence += 1;
+    nextMemberNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+  }
+
+  return nextMemberNumber;
+};
+
+export const generateCooperativeMemberNumber = async (excludeMemberId?: string) => {
+  const members = await db.cooperativeMembers.toArray();
+  return getNextCooperativeMemberNumber(
+    members.filter((member) => member.id !== excludeMemberId),
+  );
+};
 
 const sanitizeCooperativeMemberInput = (input: CooperativeMemberUpsertInput): SanitizedCooperativeMemberInput => {
   const parsed = cooperativeMemberSchema.parse(input);
 
   return {
     ...parsed,
-    member_number: parsed.member_number.trim().toUpperCase(),
+    member_number: normalizeMemberNumber(parsed.member_number),
     name: parsed.name.trim(),
   };
 };
@@ -35,6 +77,8 @@ const assertActiveMemberNumberAvailable = async (
   memberNumber: string,
   excludeMemberId?: string,
 ) => {
+  if (!memberNumber.trim()) return;
+
   const existingMember = await db.cooperativeMembers
     .where('member_number')
     .equals(memberNumber)
@@ -92,12 +136,16 @@ export const createCooperativeMember = async (
 ): Promise<CooperativeMember> => {
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
+  const memberNumber = sanitizedInput.member_number || (
+    sanitizedInput.status === 'ACTIVE' ? await generateCooperativeMemberNumber() : ''
+  );
   const area = await resolveActiveArea(sanitizedInput.area_id);
   const officer = await resolveOfficer(sanitizedInput.officer_id, sanitizedInput.area_id);
   const now = new Date().toISOString();
   const member: CooperativeMember = withPendingCooperativeSync({
     id: crypto.randomUUID(),
     ...sanitizedInput,
+    member_number: memberNumber,
     area_name: area.name,
     area_code: area.code,
     officer_name: officer?.name,
@@ -121,7 +169,7 @@ export const createCooperativeMember = async (
       action: 'COOPERATIVE_MEMBER_CREATED',
       entity: 'cooperativeMembers',
       entity_id: member.id,
-      description: `${currentUser?.name ?? 'User'} membuat anggota koperasi ${member.member_number} - ${member.name}.`,
+      description: `${currentUser?.name ?? 'User'} membuat anggota koperasi ${member.member_number || '-'} - ${member.name}.`,
     });
   });
 
@@ -136,6 +184,9 @@ export const updateCooperativeMember = async (
 ): Promise<CooperativeMember> => {
   const currentUser = await requireCooperativeActor();
   const sanitizedInput = sanitizeCooperativeMemberInput(input);
+  const memberNumber = sanitizedInput.member_number || (
+    sanitizedInput.status === 'ACTIVE' ? await generateCooperativeMemberNumber(id) : ''
+  );
   const area = await resolveActiveArea(sanitizedInput.area_id);
   const officer = await resolveOfficer(sanitizedInput.officer_id, sanitizedInput.area_id);
   const updatedAt = new Date().toISOString();
@@ -148,12 +199,13 @@ export const updateCooperativeMember = async (
     }
 
     if (sanitizedInput.status === 'ACTIVE') {
-      await assertActiveMemberNumberAvailable(sanitizedInput.member_number, id);
+      await assertActiveMemberNumberAvailable(memberNumber, id);
     }
 
     updatedMember = withPendingCooperativeSync({
       ...existingMember,
       ...sanitizedInput,
+      member_number: memberNumber,
       area_name: area.name,
       area_code: area.code,
       officer_name: officer?.name,
@@ -169,7 +221,7 @@ export const updateCooperativeMember = async (
       action: 'COOPERATIVE_MEMBER_UPDATED',
       entity: 'cooperativeMembers',
       entity_id: id,
-      description: `${currentUser?.name ?? 'User'} memperbarui anggota koperasi ${updatedMember.member_number} - ${updatedMember.name}.`,
+      description: `${currentUser?.name ?? 'User'} memperbarui anggota koperasi ${updatedMember.member_number || '-'} - ${updatedMember.name}.`,
     });
   });
 
@@ -182,7 +234,10 @@ export const updateCooperativeMember = async (
   return updatedMember;
 };
 
-export const archiveCooperativeMember = async (id: string): Promise<CooperativeMember> => {
+export const archiveCooperativeMember = async (
+  id: string,
+  options: CooperativeMemberArchiveOptions = {},
+): Promise<CooperativeMember> => {
   const currentUser = await requireCooperativeActor();
   const updatedAt = new Date().toISOString();
   let archivedMember: CooperativeMember | undefined;
@@ -195,6 +250,7 @@ export const archiveCooperativeMember = async (id: string): Promise<CooperativeM
 
     const nextArchivedMember: CooperativeMember = withPendingCooperativeSync({
       ...member,
+      member_number: options.clearMemberNumber ? '' : member.member_number,
       status: 'INACTIVE' as const,
       updated_at: updatedAt,
       updated_by: currentUser?.id,
@@ -208,7 +264,9 @@ export const archiveCooperativeMember = async (id: string): Promise<CooperativeM
       action: 'COOPERATIVE_MEMBER_ARCHIVED',
       entity: 'cooperativeMembers',
       entity_id: id,
-      description: `${currentUser?.name ?? 'User'} mengarsipkan anggota koperasi ${member.member_number} - ${member.name}.`,
+      description: `${currentUser?.name ?? 'User'} mengarsipkan anggota koperasi ${member.member_number || '-'} - ${member.name}${
+        options.clearMemberNumber ? ' dan mengosongkan nomor anggota.' : ''
+      }.`,
     });
   });
 
@@ -232,10 +290,13 @@ export const restoreCooperativeMember = async (id: string): Promise<CooperativeM
       throw new Error('Anggota koperasi tidak ditemukan.');
     }
 
-    await assertActiveMemberNumberAvailable(member.member_number, id);
+    const memberNumber = normalizeMemberNumber(member.member_number) || await generateCooperativeMemberNumber(id);
+
+    await assertActiveMemberNumberAvailable(memberNumber, id);
 
     const nextRestoredMember: CooperativeMember = withPendingCooperativeSync({
       ...member,
+      member_number: memberNumber,
       status: 'ACTIVE' as const,
       updated_at: updatedAt,
       updated_by: currentUser?.id,
@@ -249,7 +310,7 @@ export const restoreCooperativeMember = async (id: string): Promise<CooperativeM
       action: 'COOPERATIVE_MEMBER_RESTORED',
       entity: 'cooperativeMembers',
       entity_id: id,
-      description: `${currentUser?.name ?? 'User'} memulihkan anggota koperasi ${member.member_number} - ${member.name}.`,
+      description: `${currentUser?.name ?? 'User'} memulihkan anggota koperasi ${memberNumber} - ${member.name}.`,
     });
   });
 
