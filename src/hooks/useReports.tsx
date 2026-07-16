@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem } from '@/types';
+import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem, PaymentMethodCategory } from '@/types';
 import { isExpenseReportFinanceTransaction, isIncomeReportFinanceTransaction } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
@@ -25,6 +25,11 @@ import type {
 } from '@/types';
 import type { SoldItemSummary } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
+import {
+  getTransactionPaymentMethodCode,
+  getTransactionPaymentSnapshot,
+  normalizePaymentMethodCode,
+} from '@/utils/posPaymentMethod';
 
 interface PosSalesReportData {
   transactions: Transaction[];
@@ -246,6 +251,11 @@ export interface TransactionDetailReportRow {
   transaction_number: string;
   transaction_created_at: string;
   payment_method: Transaction['payment_method'];
+  payment_method_id?: string;
+  payment_method_code: string;
+  payment_method_name: string;
+  payment_method_category: PaymentMethodCategory;
+  payment_reference?: string;
   transaction_total: number;
   transaction_profit: number;
   transaction_margin: number;
@@ -283,11 +293,11 @@ interface TransactionDetailReportData {
 export const usePosSalesReport = (
   startDate?: string,
   endDate?: string,
-  paymentMethod?: string,
+  paymentMethodCode?: string,
   categories?: string[]
 ) => {
   return useQuery({
-    queryKey: ['posSalesReport', startDate, endDate, paymentMethod, categories],
+    queryKey: ['posSalesReport', startDate, endDate, paymentMethodCode, categories],
     queryFn: async (): Promise<PosSalesReportData> => {
       await requireUserPermission(await getCurrentSessionUser(), 'REPORT_POS_SALES_VIEW');
       let collection = db.transactions.orderBy('created_at').reverse();
@@ -316,8 +326,11 @@ export const usePosSalesReport = (
       let transactions = filterActiveTransactions(await collection.toArray());
 
       // Filter by payment method if provided
-      if (paymentMethod && paymentMethod !== 'SEMUA') {
-        transactions = transactions.filter((t) => (t.payment_method || 'TUNAI') === paymentMethod);
+      const normalizedPaymentMethodCode = normalizePaymentMethodCode(paymentMethodCode);
+      if (normalizedPaymentMethodCode && normalizedPaymentMethodCode !== 'SEMUA') {
+        transactions = transactions.filter((transaction) => (
+          getTransactionPaymentMethodCode(transaction) === normalizedPaymentMethodCode
+        ));
       }
 
       const totalRevenue = transactions.reduce((sum, t) => sum + t.total_amount, 0);
@@ -510,12 +523,12 @@ export const useAccountsAgingReport = (filters: AccountsAgingReportFilters = {})
 export const useTransactionDetailReport = (
   startDate?: string,
   endDate?: string,
-  paymentMethod?: string,
+  paymentMethodCode?: string,
   categories?: string[],
   search?: string
 ) => {
   return useQuery({
-    queryKey: ['transactionDetailReport', startDate, endDate, paymentMethod, categories, search],
+    queryKey: ['transactionDetailReport', startDate, endDate, paymentMethodCode, categories, search],
     queryFn: async (): Promise<TransactionDetailReportData> => {
       await requireUserPermission(await getCurrentSessionUser(), 'REPORT_TRANSACTION_DETAIL_VIEW');
       let collection = db.transactions.orderBy('created_at').reverse();
@@ -543,8 +556,11 @@ export const useTransactionDetailReport = (
 
       let transactions = filterActiveTransactions(await collection.toArray());
 
-      if (paymentMethod && paymentMethod !== 'SEMUA') {
-        transactions = transactions.filter((transaction) => transaction.payment_method === paymentMethod);
+      const normalizedPaymentMethodCode = normalizePaymentMethodCode(paymentMethodCode);
+      if (normalizedPaymentMethodCode && normalizedPaymentMethodCode !== 'SEMUA') {
+        transactions = transactions.filter((transaction) => (
+          getTransactionPaymentMethodCode(transaction) === normalizedPaymentMethodCode
+        ));
       }
 
       const transactionIds = transactions.map((transaction) => transaction.id);
@@ -568,6 +584,9 @@ export const useTransactionDetailReport = (
       ]);
 
       const transactionMap = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+      const paymentSnapshotMap = new Map(transactions.map((transaction) => (
+        [transaction.id, getTransactionPaymentSnapshot(transaction)]
+      )));
       const productMap = new Map(products.map((product) => [product.id, product]));
       const transactionProfitMap = items.reduce((acc, item) => {
         acc[item.transaction_id] = (acc[item.transaction_id] || 0) + (item.profit || 0);
@@ -586,13 +605,20 @@ export const useTransactionDetailReport = (
           const costTotal = (item.purchase_price || 0) * item.quantity;
           const profit = item.profit || 0;
           const transactionProfit = transactionProfitMap[item.transaction_id] || 0;
+          const paymentSnapshot = paymentSnapshotMap.get(transaction.id);
+          if (!paymentSnapshot) return null;
 
           return {
             key: item.id,
             transaction_id: transaction.id,
             transaction_number: transaction.transaction_number,
             transaction_created_at: transaction.created_at,
-            payment_method: transaction.payment_method || 'TUNAI',
+            payment_method: transaction.payment_method,
+            payment_method_id: paymentSnapshot.id,
+            payment_method_code: paymentSnapshot.code,
+            payment_method_name: paymentSnapshot.name,
+            payment_method_category: paymentSnapshot.category,
+            payment_reference: paymentSnapshot.reference,
             transaction_total: transaction.total_amount,
             transaction_profit: transactionProfit,
             transaction_margin: transaction.total_amount > 0 ? (transactionProfit / transaction.total_amount) * 100 : 0,

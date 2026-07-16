@@ -5,24 +5,69 @@ import type {
   Transaction,
 } from '@/types';
 
+export interface TransactionPaymentSnapshot {
+  id?: string;
+  code: string;
+  name: string;
+  category: PaymentMethodCategory;
+  reference?: string;
+  postingAccountId?: string;
+  postingAccountCode?: string;
+  postingAccountName?: string;
+  isCash: boolean;
+  isLegacyFallback: boolean;
+}
+
+export const normalizePaymentMethodCode = (value?: string) => (
+  value?.trim().toUpperCase() || undefined
+);
+
 export const toLegacyPaymentMethod = (category: PaymentMethodCategory): PaymentMethod => (
   category === 'CASH' ? 'TUNAI' : 'NON_TUNAI'
 );
 
+export const getTransactionPaymentSnapshot = (
+  transaction: Transaction,
+): TransactionPaymentSnapshot => {
+  const legacyCode = transaction.payment_method === 'NON_TUNAI' ? 'NON_TUNAI' : 'TUNAI';
+  const snapshotCode = normalizePaymentMethodCode(transaction.payment_method_code);
+  const code = snapshotCode ?? legacyCode;
+  const legacyName = legacyCode === 'TUNAI' ? 'Tunai' : 'Non Tunai';
+  const snapshotName = transaction.payment_method_name?.trim();
+  const category = transaction.payment_method_category
+    ?? (legacyCode === 'TUNAI' ? 'CASH' : 'OTHER');
+
+  return {
+    id: transaction.payment_method_id,
+    code,
+    name: snapshotName || (snapshotCode && snapshotCode !== legacyCode ? snapshotCode : legacyName),
+    category,
+    reference: transaction.payment_reference?.trim() || undefined,
+    postingAccountId: transaction.payment_posting_account_id,
+    postingAccountCode: transaction.payment_posting_account_code,
+    postingAccountName: transaction.payment_posting_account_name,
+    isCash: category === 'CASH',
+    isLegacyFallback: !transaction.payment_method_id
+      && !transaction.payment_method_code
+      && !transaction.payment_method_name
+      && !transaction.payment_method_category,
+  };
+};
+
 export const getTransactionPaymentMethodCode = (transaction: Transaction) => (
-  transaction.payment_method_code ?? transaction.payment_method ?? 'TUNAI'
+  getTransactionPaymentSnapshot(transaction).code
 );
 
 export const getTransactionPaymentMethodName = (transaction: Transaction) => (
-  transaction.payment_method_name ?? (
-    transaction.payment_method === 'NON_TUNAI' ? 'Non Tunai' : 'Tunai'
-  )
+  getTransactionPaymentSnapshot(transaction).name
+);
+
+export const getTransactionPaymentMethodCategory = (transaction: Transaction) => (
+  getTransactionPaymentSnapshot(transaction).category
 );
 
 export const isTransactionCashPayment = (transaction: Transaction) => (
-  transaction.payment_method_category
-    ? transaction.payment_method_category === 'CASH'
-    : transaction.payment_method === 'TUNAI'
+  getTransactionPaymentSnapshot(transaction).isCash
 );
 
 export const buildLegacyPosPaymentSnapshot = (

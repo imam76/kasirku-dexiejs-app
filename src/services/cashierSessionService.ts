@@ -1,8 +1,9 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { enqueueCashierSessionSync } from '@/services/syncQueueService';
-import type { CashierSession, CashierSessionBalanceStatus, Transaction } from '@/types';
+import type { CashierSession, CashierSessionBalanceStatus, PaymentMethodCategory, Transaction } from '@/types';
 import { isTransactionActive, isTransactionVoided } from '@/utils/transactions';
+import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 
 export interface OpenCashierSessionInput {
   opening_cash_amount: number;
@@ -27,6 +28,15 @@ export interface CashierSessionReconciliation {
   closing_cash_amount: number;
   cash_difference_amount: number;
   balance_status: CashierSessionBalanceStatus;
+  payment_method_breakdown: CashierSessionPaymentBreakdown[];
+}
+
+export interface CashierSessionPaymentBreakdown {
+  code: string;
+  name: string;
+  category: PaymentMethodCategory;
+  amount: number;
+  transaction_count: number;
 }
 
 const normalizeAmount = (value: number, fieldName: string) => {
@@ -104,14 +114,28 @@ export const openCashierSession = async (input: OpenCashierSessionInput): Promis
   return session;
 };
 
-const summarizeSessionTransactions = (transactions: Transaction[]) => {
+export const summarizeSessionTransactions = (transactions: Transaction[]) => {
   const activeTransactions = transactions.filter(isTransactionActive);
   const voidedTransactions = transactions.filter(isTransactionVoided);
+  const paymentBreakdownMap = new Map<string, CashierSessionPaymentBreakdown>();
+  activeTransactions.forEach((transaction) => {
+    const payment = getTransactionPaymentSnapshot(transaction);
+    const existing = paymentBreakdownMap.get(payment.code) ?? {
+      code: payment.code,
+      name: payment.name,
+      category: payment.category,
+      amount: 0,
+      transaction_count: 0,
+    };
+    existing.amount += Number(transaction.total_amount || 0);
+    existing.transaction_count += 1;
+    paymentBreakdownMap.set(payment.code, existing);
+  });
   const cashSalesAmount = activeTransactions
-    .filter((transaction) => transaction.payment_method === 'TUNAI')
+    .filter((transaction) => getTransactionPaymentSnapshot(transaction).isCash)
     .reduce((sum, transaction) => sum + Number(transaction.total_amount || 0), 0);
   const nonCashSalesAmount = activeTransactions
-    .filter((transaction) => transaction.payment_method === 'NON_TUNAI')
+    .filter((transaction) => !getTransactionPaymentSnapshot(transaction).isCash)
     .reduce((sum, transaction) => sum + Number(transaction.total_amount || 0), 0);
   const voidedSalesAmount = voidedTransactions
     .reduce((sum, transaction) => sum + Number(transaction.total_amount || 0), 0);
@@ -123,6 +147,10 @@ const summarizeSessionTransactions = (transactions: Transaction[]) => {
     voidedSalesAmount,
     transactionCount: activeTransactions.length,
     voidedTransactionCount: voidedTransactions.length,
+    paymentMethodBreakdown: [...paymentBreakdownMap.values()].sort((left, right) => (
+      Number(right.category === 'CASH') - Number(left.category === 'CASH')
+      || left.name.localeCompare(right.name)
+    )),
   };
 };
 
@@ -156,6 +184,7 @@ export const calculateCashierSessionReconciliation = async (
     closing_cash_amount: normalizedClosingCashAmount,
     cash_difference_amount: cashDifferenceAmount,
     balance_status: cashDifferenceAmount === 0 ? 'BALANCED' : 'NON_BALANCED',
+    payment_method_breakdown: summary.paymentMethodBreakdown,
   };
 };
 

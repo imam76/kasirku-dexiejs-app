@@ -54,6 +54,8 @@ class ReceiptPayloadArg {
   var merchantName: String = ""
   var createdAt: String = ""
   var paymentMethod: String = ""
+  var paymentMethodCode: String = ""
+  var paymentReference: String = ""
   var memberName: String = ""
   var memberNumber: String = ""
   var items: List<ReceiptLineItemArg> = emptyList()
@@ -373,7 +375,18 @@ object EscPosReceiptRenderer {
     output.writeLine(separator())
     output.writeLine(twoColumns("No", receipt.transactionNumber))
     output.writeLine(twoColumns("Tanggal", formatIsoReceiptDate(receipt.createdAt)))
-    output.writeLine(twoColumns("Metode", receipt.paymentMethod))
+    val paymentMethodLabel = if (
+      receipt.paymentMethodCode.isNotBlank() &&
+      !receipt.paymentMethodCode.equals(receipt.paymentMethod, ignoreCase = true)
+    ) {
+      "${receipt.paymentMethod} [${receipt.paymentMethodCode}]"
+    } else {
+      receipt.paymentMethod
+    }
+    output.writeLine(twoColumns("Metode", paymentMethodLabel))
+    if (receipt.paymentReference.isNotBlank()) {
+      output.writeLine(twoColumns("Referensi", receipt.paymentReference))
+    }
     if (receipt.memberName.isNotBlank()) {
       output.writeLine(twoColumns("Member", receipt.memberNumber.ifBlank { receipt.memberName }))
       if (receipt.memberNumber.isNotBlank()) {

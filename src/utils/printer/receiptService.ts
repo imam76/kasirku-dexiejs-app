@@ -15,6 +15,7 @@ import {
   getStoredUsbPrinter,
   printReceiptUsb,
 } from '@/utils/printer/usbSerialPrinter';
+import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 
 const DEFAULT_MERCHANT_NAME = 'Frayukti';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
@@ -35,36 +36,41 @@ const updateReceiptStatus = async (
   }
 };
 
-export const buildReceiptPayload = (transaction: TransactionReceiptInput): ReceiptPayload => ({
-  transactionId: transaction.id,
-  transactionNumber: transaction.transaction_number,
-  merchantName: DEFAULT_MERCHANT_NAME,
-  createdAt: transaction.created_at,
-  paymentMethod: transaction.payment_method,
-  memberName: transaction.member_name,
-  memberNumber: transaction.member_number,
-  items: transaction.items.map((item) => ({
-    name: item.product_name,
-    quantity: item.quantity,
-    unit: item.unit,
-    price: item.price,
-    priceBeforeDiscount: item.price_before_discount,
-    subtotalBeforeDiscount: item.subtotal_before_discount,
-    discountAmount: item.discount_amount,
-    subtotal: item.subtotal,
-  })),
-  subtotalAmount: transaction.subtotal_amount,
-  discountAmount: transaction.discount_amount,
-  discountBreakdown: transaction.discount_breakdown,
-  membershipPointsEarned: transaction.membership_points_earned,
-  membershipPointsRedeemed: transaction.membership_points_redeemed,
-  membershipPointDiscountAmount: transaction.membership_point_discount_amount,
-  membershipPointsBalanceAfter: transaction.membership_points_balance_after,
-  totalAmount: transaction.total_amount,
-  paymentAmount: transaction.payment_amount,
-  changeAmount: transaction.change_amount,
-  footer: DEFAULT_RECEIPT_FOOTER,
-});
+export const buildReceiptPayload = (transaction: TransactionReceiptInput): ReceiptPayload => {
+  const payment = getTransactionPaymentSnapshot(transaction);
+  return {
+    transactionId: transaction.id,
+    transactionNumber: transaction.transaction_number,
+    merchantName: DEFAULT_MERCHANT_NAME,
+    createdAt: transaction.created_at,
+    paymentMethod: payment.name,
+    paymentMethodCode: payment.code,
+    paymentReference: payment.reference,
+    memberName: transaction.member_name,
+    memberNumber: transaction.member_number,
+    items: transaction.items.map((item) => ({
+      name: item.product_name,
+      quantity: item.quantity,
+      unit: item.unit,
+      price: item.price,
+      priceBeforeDiscount: item.price_before_discount,
+      subtotalBeforeDiscount: item.subtotal_before_discount,
+      discountAmount: item.discount_amount,
+      subtotal: item.subtotal,
+    })),
+    subtotalAmount: transaction.subtotal_amount,
+    discountAmount: transaction.discount_amount,
+    discountBreakdown: transaction.discount_breakdown,
+    membershipPointsEarned: transaction.membership_points_earned,
+    membershipPointsRedeemed: transaction.membership_points_redeemed,
+    membershipPointDiscountAmount: transaction.membership_point_discount_amount,
+    membershipPointsBalanceAfter: transaction.membership_points_balance_after,
+    totalAmount: transaction.total_amount,
+    paymentAmount: transaction.payment_amount,
+    changeAmount: transaction.change_amount,
+    footer: DEFAULT_RECEIPT_FOOTER,
+  };
+};
 
 export const printReceiptAfterTransaction = async (
   transaction: TransactionReceiptInput

@@ -18,6 +18,8 @@ import { App, Button, Card, DatePicker, Empty, Input, Select, Space, Statistic, 
 import type { ColumnsType } from 'antd/es/table';
 import autoTable from 'jspdf-autotable';
 import { useMemo, useState } from 'react';
+import PaymentMethodBadge from '@/components/PaymentMethodBadge';
+import { usePosPaymentMethodFilterOptions } from '@/hooks/usePosPaymentMethodFilterOptions';
 
 const { Text, Title } = Typography;
 
@@ -49,6 +51,7 @@ export default function TransactionDetailReport() {
   const [paymentMethod, setPaymentMethod] = useState('SEMUA');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [search, setSearch] = useState('');
+  const { options: paymentMethodOptions, isLoading: isLoadingPaymentMethods } = usePosPaymentMethodFilterOptions();
 
   const { data, isLoading, error, refetch } = useTransactionDetailReport(
     startDate,
@@ -84,9 +87,16 @@ export default function TransactionDetailReport() {
         render: (value: string, row) => (
           <div>
             <div className="font-semibold text-gray-900">{value}</div>
-            <Tag color={row.payment_method === 'NON_TUNAI' ? 'blue' : 'green'} className="mt-1">
-              {row.payment_method === 'NON_TUNAI' ? t('payment.nonCash') : t('payment.cash')}
-            </Tag>
+            <PaymentMethodBadge
+              name={row.payment_method_name}
+              category={row.payment_method_category}
+              className="mt-1"
+            />
+            {row.payment_reference && (
+              <div className="mt-1 max-w-40 truncate font-mono text-[10px] text-gray-400" title={row.payment_reference}>
+                {row.payment_reference}
+              </div>
+            )}
           </div>
         ),
       },
@@ -256,6 +266,8 @@ export default function TransactionDetailReport() {
         t('report.transactionNo'),
         t('report.date'),
         t('report.method'),
+        'Kode Metode',
+        t('checkout.paymentReference'),
         t('report.product'),
         'SKU',
         t('report.category'),
@@ -287,7 +299,9 @@ export default function TransactionDetailReport() {
           ...data.rows.map((row) => [
             row.transaction_number,
             dayjs(row.transaction_created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
-            row.payment_method,
+            row.payment_method_name,
+            row.payment_method_code,
+            row.payment_reference ?? '',
             row.product_name,
             row.sku || '',
             getProductCategoryLabel(row.category, t),
@@ -347,11 +361,14 @@ export default function TransactionDetailReport() {
           );
 
           const tableHead = canViewProfit
-            ? [t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.discount'), t('report.subtotal'), t('report.cost'), 'Status HPP', t('report.margin'), 'Status Profit', '%']
-            : [t('report.date'), t('report.transaction'), t('report.item'), t('report.qty'), t('report.discount'), t('report.subtotal')];
+            ? [t('report.date'), t('report.transaction'), t('report.paymentMethod'), t('report.item'), t('report.qty'), t('report.discount'), t('report.subtotal'), t('report.cost'), 'Status HPP', t('report.margin'), 'Status Profit', '%']
+            : [t('report.date'), t('report.transaction'), t('report.paymentMethod'), t('report.item'), t('report.qty'), t('report.discount'), t('report.subtotal')];
           const tableBody = data.rows.map((row) => [
             dayjs(row.transaction_created_at).tz().format('DD/MM/YY'),
             row.transaction_number,
+            row.payment_reference
+              ? `${row.payment_method_name} [${row.payment_method_code}]\n${row.payment_reference}`
+              : `${row.payment_method_name} [${row.payment_method_code}]`,
             row.product_name,
             `${row.quantity.toLocaleString('id-ID')} ${row.unit}`,
             formatCurrency(row.discount_amount),
@@ -368,6 +385,7 @@ export default function TransactionDetailReport() {
             ? [
               '',
               '',
+              '',
               t('common.total'),
               data.totalItems.toLocaleString('id-ID'),
               formatCurrency(data.totalDiscount),
@@ -379,6 +397,7 @@ export default function TransactionDetailReport() {
               data.averageMargin.toFixed(2),
             ]
             : [
+              '',
               '',
               '',
               t('common.total'),
@@ -397,16 +416,16 @@ export default function TransactionDetailReport() {
             headStyles: { fillColor: [219, 234, 254], textColor: 30 },
             footStyles: { fillColor: [240, 253, 244], textColor: 20, fontStyle: 'bold' },
             columnStyles: canViewProfit ? {
-              3: { halign: 'right' },
               4: { halign: 'right' },
               5: { halign: 'right' },
               6: { halign: 'right' },
               7: { halign: 'right' },
               8: { halign: 'right' },
+              9: { halign: 'right' },
             } : {
-              3: { halign: 'right' },
               4: { halign: 'right' },
               5: { halign: 'right' },
+              6: { halign: 'right' },
             },
             margin: { left: 8, right: 8 },
           });
@@ -499,13 +518,14 @@ export default function TransactionDetailReport() {
           <div className="flex flex-col gap-1.5">
             <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.paymentMethod')}</span>
             <Select
+              data-testid="transaction-detail-payment-method-filter"
               value={paymentMethod}
               onChange={setPaymentMethod}
               size="large"
+              loading={isLoadingPaymentMethods}
               options={[
                 { value: 'SEMUA', label: t('report.allMethods') },
-                { value: 'TUNAI', label: t('payment.cash') },
-                { value: 'NON_TUNAI', label: t('payment.nonCash') },
+                ...paymentMethodOptions.map((option) => ({ value: option.value, label: option.label })),
               ]}
             />
           </div>
