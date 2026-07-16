@@ -525,6 +525,97 @@ test.describe.serial('accounting initial setup regression', () => {
     expect(result.adjustmentSourceNumber).toBe('opening-balance-account-2026-01-01');
   });
 
+  test('OBA-06B - koreksi saldo awal kas memperbarui saldo finance tanpa mengubah batch posted', async ({ page }) => {
+    await loginAsBootstrappedOwner(page);
+    await saveInitialAccountingSetupFixture(page);
+
+    const result = await page.evaluate(async () => {
+      const { db } = await import('/src/lib/db.ts');
+      const { FINANCE_CATEGORIES } = await import('/src/constants/finance.ts');
+      const {
+        postAccountOpeningBalanceAdjustment,
+        postAccountOpeningBalanceBatch,
+      } = await import('/src/services/openingBalanceService.ts');
+      const { getTrialBalanceReport } = await import('/src/services/generalLedgerService.ts');
+      const accounts = await db.chartOfAccounts.toArray();
+      const accountIdByCode = new Map(accounts.map((account) => [account.code, account.id]));
+      const requireAccountId = (code: string) => {
+        const accountId = accountIdByCode.get(code);
+        if (!accountId) throw new Error(`Akun ${code} tidak tersedia untuk opening balance.`);
+        return accountId;
+      };
+
+      const batch = await postAccountOpeningBalanceBatch({
+        lines: [
+          { account_id: requireAccountId('1010'), debit: 1000000, credit: 0 },
+        ],
+      });
+      const financeBalanceBefore = await db.financeBalance.get('current');
+
+      const adjustmentEntry = await postAccountOpeningBalanceAdjustment({
+        lines: [
+          { account_id: requireAccountId('3050'), debit: 250000, credit: 0, notes: 'Koreksi kas saldo awal E2E' },
+          { account_id: requireAccountId('1010'), debit: 0, credit: 250000, notes: 'Koreksi kas saldo awal E2E' },
+        ],
+        notes: 'Koreksi kas saldo awal E2E',
+      });
+
+      const batchAfter = await db.openingBalanceBatches.get(batch.id);
+      const openingLinesAfter = await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray();
+      const adjustmentLines = await db.journalEntryLines
+        .where('journal_entry_id')
+        .equals(adjustmentEntry.id)
+        .toArray();
+      const adjustmentCashLine = adjustmentLines.find((line) => line.account_code === '1010');
+      const financeTransactions = await db.financeTransactions
+        .where('category')
+        .equals(FINANCE_CATEGORIES.OPENING_BALANCE)
+        .filter((transaction) => !transaction.deleted_at && transaction.cash_account_code === '1010')
+        .toArray();
+      const cashAdjustmentFinance = financeTransactions.find((transaction) => (
+        transaction.reference_id === adjustmentCashLine?.id
+      ));
+      const financeBalanceAfter = await db.financeBalance.get('current');
+      const trialBalance = await getTrialBalanceReport();
+      const cashTrialRow = trialBalance.rows.find((row) => row.account_code === '1010');
+
+      return {
+        batchStatus: batchAfter?.status,
+        batchTotalDebit: batchAfter?.total_debit,
+        batchTotalCredit: batchAfter?.total_credit,
+        openingLineCashDebit: openingLinesAfter.find((line) => line.account_code === '1010')?.debit,
+        financeBalanceBefore: financeBalanceBefore?.amount,
+        financeBalanceAfter: financeBalanceAfter?.amount,
+        cashFinanceTransactionCount: financeTransactions.length,
+        cashOpeningFinanceAmount: financeTransactions.find((transaction) => (
+          transaction.reference_id?.startsWith(`${batch.id}-line-`) === true
+        ))?.amount,
+        cashAdjustmentFinanceAmount: cashAdjustmentFinance?.amount,
+        cashAdjustmentFinanceType: cashAdjustmentFinance?.type,
+        cashAdjustmentFinanceReferenceId: cashAdjustmentFinance?.reference_id,
+        cashAdjustmentLineId: adjustmentCashLine?.id,
+        cashTrialDebitBalance: cashTrialRow?.debit_balance,
+        cashTrialCreditBalance: cashTrialRow?.credit_balance,
+      };
+    });
+
+    expect(result).toMatchObject({
+      batchStatus: 'POSTED',
+      batchTotalDebit: 1000000,
+      batchTotalCredit: 1000000,
+      openingLineCashDebit: 1000000,
+      financeBalanceBefore: 1000000,
+      financeBalanceAfter: 750000,
+      cashFinanceTransactionCount: 2,
+      cashOpeningFinanceAmount: 1000000,
+      cashAdjustmentFinanceAmount: -250000,
+      cashAdjustmentFinanceType: 'OPENING_BALANCE',
+      cashTrialDebitBalance: 750000,
+      cashTrialCreditBalance: 0,
+    });
+    expect(result.cashAdjustmentFinanceReferenceId).toBe(result.cashAdjustmentLineId);
+  });
+
   test('OB-03 - saldo awal piutang muncul di AR dan bisa dibayar sebagian lalu lunas', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
     await saveInitialAccountingSetupFixture(page, {
