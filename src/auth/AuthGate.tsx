@@ -1,22 +1,46 @@
-import { Alert, Button, Spin, Typography } from 'antd';
-import { Store, Zap, BarChart3, ShieldCheck, DatabaseZap, RefreshCw } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ensureDefaultOwner, hasActiveOwner } from './authService';
-import { useAuth } from './useAuth';
-import { Login } from '@/view/auth/Login';
-import { SetupOwner } from '@/view/auth/SetupOwner';
-import { SetupKeyDrawer } from '@/view/auth/SetupKeyDrawer';
-import { HostDatabaseSetup } from '@/view/auth/HostDatabaseSetup';
-import { isTauriRuntime } from '@/utils/export/platform';
-import { isSetupConfigured, syncSetupConfigFromRemote } from '@/services/setupKeyService';
-import { postgresAdapter, type PostgresHealth } from '@/services/postgresAdapter';
+import {
+  postgresAdapter,
+  type PostgresHealth,
+} from "@/services/postgresAdapter";
+import {
+  isSetupConfigured,
+  syncSetupConfigFromRemote,
+} from "@/services/setupKeyService";
+import { isTauriRuntime } from "@/utils/export/platform";
+import { HostDatabaseSetup } from "@/view/auth/HostDatabaseSetup";
+import { Login } from "@/view/auth/Login";
+import { SetupKeyDrawer } from "@/view/auth/SetupKeyDrawer";
+import { SetupOwner } from "@/view/auth/SetupOwner";
+import { Alert, Button, Spin, Typography } from "antd";
+import { useLiveQuery } from "dexie-react-hooks";
+import {
+  BarChart3,
+  DatabaseZap,
+  RefreshCw,
+  ShieldCheck,
+  Store,
+  Zap,
+} from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { ensureDefaultOwner, hasActiveOwner } from "./authService";
+import { useAuth } from "./useAuth";
 
 interface AuthGateProps {
   children: ReactNode;
 }
 
-type RemoteSetupStatus = 'idle' | 'checking' | 'configured' | 'missing' | 'error';
+type RemoteSetupStatus =
+  | "idle"
+  | "checking"
+  | "configured"
+  | "missing"
+  | "error";
 
 const { Text, Title } = Typography;
 
@@ -32,7 +56,9 @@ const SetupWelcome = () => (
       <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg">
         <Store size={32} />
       </div>
-      <h1 className="mb-2 text-3xl font-bold text-gray-900">Selamat Datang di Frayukti</h1>
+      <h1 className="mb-2 text-3xl font-bold text-gray-900">
+        Selamat Datang di Frayukti
+      </h1>
       <p className="mb-8 text-lg text-gray-600">
         Solusi cerdas untuk manajemen bisnis dan operasional kasir Anda.
       </p>
@@ -42,8 +68,13 @@ const SetupWelcome = () => (
             <Zap size={20} />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Manajemen Cepat & Efisien</h3>
-            <p className="text-sm text-gray-500">Kelola produk dan transaksi dengan mudah, dirancang untuk kecepatan operasional.</p>
+            <h3 className="font-semibold text-gray-900">
+              Manajemen Cepat & Efisien
+            </h3>
+            <p className="text-sm text-gray-500">
+              Kelola produk dan transaksi dengan mudah, dirancang untuk
+              kecepatan operasional.
+            </p>
           </div>
         </div>
         <div className="flex items-start gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
@@ -52,7 +83,10 @@ const SetupWelcome = () => (
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Laporan Real-time</h3>
-            <p className="text-sm text-gray-500">Pantau perkembangan dan performa bisnis Anda kapan saja dan di mana saja.</p>
+            <p className="text-sm text-gray-500">
+              Pantau perkembangan dan performa bisnis Anda kapan saja dan di
+              mana saja.
+            </p>
           </div>
         </div>
         <div className="flex items-start gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
@@ -61,7 +95,10 @@ const SetupWelcome = () => (
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Keamanan Terjamin</h3>
-            <p className="text-sm text-gray-500">Sistem yang aman dengan perlindungan data dan sinkronisasi yang handal.</p>
+            <p className="text-sm text-gray-500">
+              Sistem yang aman dengan perlindungan data dan sinkronisasi yang
+              handal.
+            </p>
           </div>
         </div>
       </div>
@@ -82,8 +119,9 @@ const HostDatabaseUnavailable = ({
   errorMessage,
   onReconnect,
 }: HostDatabaseUnavailableProps) => {
-  const isMigrationFailed = health?.status === 'migration_failed';
-  const statusMessage = errorMessage ?? health?.message ?? 'Koneksi PostgreSQL belum tersedia.';
+  const isMigrationFailed = health?.status === "migration_failed";
+  const statusMessage =
+    errorMessage ?? health?.message ?? "Koneksi PostgreSQL belum tersedia.";
 
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 p-4">
@@ -97,16 +135,21 @@ const HostDatabaseUnavailable = ({
               Host Database Belum Siap
             </Title>
             <Text type="secondary">
-              Aplikasi menunggu PostgreSQL yang sudah dikonfigurasi siap kembali.
+              Aplikasi menunggu PostgreSQL yang sudah dikonfigurasi siap
+              kembali.
             </Text>
           </div>
         </div>
 
         <Alert
           className="mb-4"
-          type={isMigrationFailed ? 'error' : 'warning'}
+          type={isMigrationFailed ? "error" : "warning"}
           showIcon
-          message={isMigrationFailed ? 'Migration database gagal' : 'Database belum tersedia'}
+          message={
+            isMigrationFailed
+              ? "Migration database gagal"
+              : "Database belum tersedia"
+          }
           description={statusMessage}
         />
 
@@ -130,31 +173,40 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   const { currentUser, isLoading } = useAuth();
   const isTauri = isTauriRuntime();
   const [ownerCheckRevision, setOwnerCheckRevision] = useState(0);
-  const hasOwner = useLiveQuery(() => hasActiveOwner(), [ownerCheckRevision], null);
+  const hasOwner = useLiveQuery(
+    () => hasActiveOwner(),
+    [ownerCheckRevision],
+    null,
+  );
   // Default ke 'register': saat database kosong (belum ada owner), tampilkan
   // halaman daftar Owner dulu, bukan login. Saat sudah ada owner, branch
   // hasOwner di bawah selalu merender <Login /> sehingga nilai ini diabaikan.
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
+  const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [showSetupDrawer, setShowSetupDrawer] = useState(false);
-  const [postgresHealth, setPostgresHealth] = useState<PostgresHealth | null>(null);
+  const [postgresHealth, setPostgresHealth] = useState<PostgresHealth | null>(
+    null,
+  );
   const [isCheckingPostgres, setIsCheckingPostgres] = useState(isTauri);
   const [remoteSetupStatus, setRemoteSetupStatus] = useState<RemoteSetupStatus>(
-    isTauri ? 'idle' : isSetupConfigured() ? 'configured' : 'missing',
+    isTauri ? "idle" : isSetupConfigured() ? "configured" : "missing",
   );
   const [remoteSetupError, setRemoteSetupError] = useState<string | null>(null);
   const [setupCheckRevision, setSetupCheckRevision] = useState(0);
   const isPostgresCheckInFlightRef = useRef(false);
 
-  const setupRequired = isTauri && remoteSetupStatus === 'missing';
+  const setupRequired = isTauri && remoteSetupStatus === "missing";
 
   const isLoggedOut = !isLoading && !currentUser;
 
-  // Hidden keyboard shortcut: Ctrl+Shift+? (only when not logged in)
+  // Hidden keyboard shortcut: Ctrl+Shift+? or Cmd+Shift+? (only when not logged in)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!isLoggedOut) return;
-      // Ctrl+Shift+? — the '?' key is Shift+/ on most keyboards
-      if (e.ctrlKey && e.shiftKey && e.key === '?') {
+      // The '?' key is Shift+/ on most keyboards.
+      if (
+        (e.ctrlKey && e.shiftKey && e.key === "?") ||
+        (e.metaKey && e.shiftKey && e.key === "o")
+      ) {
         e.preventDefault();
         setShowSetupDrawer((prev) => !prev);
       }
@@ -163,8 +215,8 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   );
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
   const checkPostgres = useCallback(async () => {
@@ -179,8 +231,8 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     } catch {
       const fallbackHealth: PostgresHealth = {
         available: false,
-        status: 'unreachable',
-        message: 'PostgreSQL health check failed.',
+        status: "unreachable",
+        message: "PostgreSQL health check failed.",
       };
       setPostgresHealth(fallbackHealth);
       return fallbackHealth;
@@ -195,7 +247,13 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   }, [checkPostgres]);
 
   useEffect(() => {
-    if (!isTauri || !postgresHealth || postgresHealth.available || postgresHealth.status === 'unconfigured') return;
+    if (
+      !isTauri ||
+      !postgresHealth ||
+      postgresHealth.available ||
+      postgresHealth.status === "unconfigured"
+    )
+      return;
 
     const reconnectTimer = window.setInterval(() => {
       void checkPostgres();
@@ -210,14 +268,14 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     let isActive = true;
 
     const checkRemoteSetup = async () => {
-      setRemoteSetupStatus('checking');
+      setRemoteSetupStatus("checking");
       setRemoteSetupError(null);
       try {
         const remoteConfig = await syncSetupConfigFromRemote();
         if (!isActive) return;
 
         if (remoteConfig) {
-          setRemoteSetupStatus('configured');
+          setRemoteSetupStatus("configured");
           await ensureDefaultOwner();
           if (isActive) {
             setOwnerCheckRevision((current) => current + 1);
@@ -225,13 +283,15 @@ export const AuthGate = ({ children }: AuthGateProps) => {
           return;
         }
 
-        setRemoteSetupStatus('missing');
+        setRemoteSetupStatus("missing");
         setOwnerCheckRevision((current) => current + 1);
       } catch (error) {
         if (!isActive) return;
-        setRemoteSetupStatus('error');
+        setRemoteSetupStatus("error");
         setRemoteSetupError(
-          error instanceof Error ? error.message : 'Gagal membaca konfigurasi setup dari database.',
+          error instanceof Error
+            ? error.message
+            : "Gagal membaca konfigurasi setup dari database.",
         );
       }
     };
@@ -245,7 +305,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
 
   const handleDatabaseConfigured = useCallback((health: PostgresHealth) => {
     setPostgresHealth(health);
-    setRemoteSetupStatus('idle');
+    setRemoteSetupStatus("idle");
     setRemoteSetupError(null);
     setSetupCheckRevision((current) => current + 1);
   }, []);
@@ -254,7 +314,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     const health = await checkPostgres();
     if (!health?.available) return;
 
-    setRemoteSetupStatus('idle');
+    setRemoteSetupStatus("idle");
     setRemoteSetupError(null);
     setSetupCheckRevision((current) => current + 1);
   }, [checkPostgres]);
@@ -262,7 +322,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   const handleDrawerClose = useCallback(() => {
     setShowSetupDrawer(false);
     if (isTauri && postgresHealth?.available) {
-      setRemoteSetupStatus('idle');
+      setRemoteSetupStatus("idle");
       setSetupCheckRevision((current) => current + 1);
       return;
     }
@@ -270,16 +330,26 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     setOwnerCheckRevision((current) => current + 1);
   }, [isTauri, postgresHealth?.available]);
 
-  const isWaitingForRemoteSetup = isTauri &&
+  const isWaitingForRemoteSetup =
+    isTauri &&
     Boolean(postgresHealth?.available) &&
-    (remoteSetupStatus === 'idle' || remoteSetupStatus === 'checking');
-  const isInitialPostgresCheck = isTauri && !postgresHealth && isCheckingPostgres;
+    (remoteSetupStatus === "idle" || remoteSetupStatus === "checking");
+  const isInitialPostgresCheck =
+    isTauri && !postgresHealth && isCheckingPostgres;
 
-  if (isLoading || hasOwner === null || isInitialPostgresCheck || isWaitingForRemoteSetup) {
+  if (
+    isLoading ||
+    hasOwner === null ||
+    isInitialPostgresCheck ||
+    isWaitingForRemoteSetup
+  ) {
     return <LoadingScreen />;
   }
 
-  if (isTauri && (!postgresHealth || postgresHealth.status === 'unconfigured')) {
+  if (
+    isTauri &&
+    (!postgresHealth || postgresHealth.status === "unconfigured")
+  ) {
     return (
       <HostDatabaseSetup
         health={postgresHealth}
@@ -298,7 +368,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     );
   }
 
-  if (isTauri && remoteSetupStatus === 'error') {
+  if (isTauri && remoteSetupStatus === "error") {
     return (
       <HostDatabaseUnavailable
         health={postgresHealth}
@@ -320,11 +390,11 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     }
 
     if (!hasOwner) {
-      if (authMode === 'register') {
+      if (authMode === "register") {
         return (
           <SetupOwner
-            onBackToLogin={() => setAuthMode('login')}
-            onComplete={() => setAuthMode('login')}
+            onBackToLogin={() => setAuthMode("login")}
+            onComplete={() => setAuthMode("login")}
           />
         );
       }
@@ -332,7 +402,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
       return (
         <Login
           registrationAvailable
-          onRegister={() => setAuthMode('register')}
+          onRegister={() => setAuthMode("register")}
         />
       );
     }

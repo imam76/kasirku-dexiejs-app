@@ -1,12 +1,17 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, Contact, FinanceTransaction, PaymentMethod, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
+import type { CartItem, Contact, FinanceTransaction, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
-import { getCashOrBankAccountForPayment, postPosSaleJournal } from '@/services/generalLedgerService';
+import { postPosSaleJournal } from '@/services/generalLedgerService';
+import {
+  buildPosPaymentSnapshot,
+  resolvePosPaymentMethod,
+  type ResolvedPosPaymentMethod,
+} from '@/services/posPaymentMethodService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
@@ -22,7 +27,8 @@ import { enqueueContactSync } from '@/services/syncQueueService';
 interface CheckoutInput {
   cart: CartItem[];
   payment: number;
-  paymentMethod: PaymentMethod;
+  paymentMethodId: string;
+  paymentReference?: string;
   voucherCode?: string;
   memberContactId?: string;
   redeemPoints?: number;
@@ -182,11 +188,12 @@ const recordProfit = async (
 const recordFinanceIncome = async (
   transaction: Transaction,
   createdAt: string,
+  resolvedPayment: ResolvedPosPaymentMethod,
   actor?: AuthUser | null,
 ) => {
   const currentFinanceBalance = await db.financeBalance.get('current');
   const newFinanceBalance = (currentFinanceBalance?.amount || 0) + transaction.total_amount;
-  const cashAccount = await getCashOrBankAccountForPayment(transaction.payment_method);
+  const cashAccount = resolvedPayment.postingAccount;
 
   await db.financeBalance.put({
     id: 'current',
@@ -203,6 +210,7 @@ const recordFinanceIncome = async (
     created_at: createdAt,
     reference_id: transaction.id,
     payment_method: transaction.payment_method,
+    payment_channel: resolvedPayment.master.code,
     cash_account_id: cashAccount.id,
     cash_account_code: cashAccount.code,
     cash_account_name: cashAccount.name,
@@ -260,7 +268,8 @@ const reduceProductStock = async (
 export const checkout = async ({
   cart,
   payment,
-  paymentMethod,
+  paymentMethodId,
+  paymentReference,
   voucherCode,
   memberContactId,
   redeemPoints,
@@ -293,9 +302,11 @@ export const checkout = async ({
       db.financeTransactions,
       db.financeBalance,
       db.chartOfAccounts,
+      db.paymentMethods,
       db.financeAccountMappings,
       db.enabledModules,
       db.generalLedgerSetting,
+      db.accountingPeriods,
       db.journalEntries,
       db.journalEntryLines,
       db.inventoryLots,
@@ -306,6 +317,10 @@ export const checkout = async ({
       db.membershipSettings,
     ],
     async () => {
+      const resolvedPayment = await resolvePosPaymentMethod({
+        paymentMethodId,
+        paymentReference,
+      });
       const member = memberContactId ? await db.contacts.get(memberContactId) : undefined;
       if (memberContactId && !isActiveRetailMember(member)) {
         throw new Error('Member tidak ditemukan atau tidak aktif.');
@@ -326,8 +341,9 @@ export const checkout = async ({
         setting: membershipSetting,
       });
       const finalTotal = membershipEvaluation.total_after_redeem;
-      const finalPayment = paymentMethod === 'NON_TUNAI' ? finalTotal : payment;
-      const change = paymentMethod === 'NON_TUNAI' ? 0 : finalPayment - finalTotal;
+      const isCashPayment = resolvedPayment.master.category === 'CASH';
+      const finalPayment = isCashPayment ? payment : finalTotal;
+      const change = isCashPayment ? finalPayment - finalTotal : 0;
       const memberStartingBalance = membershipEvaluation.member
         ? Math.max(0, Math.floor(Number(membershipEvaluation.member.membership_points_balance || 0)))
         : 0;
@@ -361,7 +377,7 @@ export const checkout = async ({
         total_amount: finalTotal,
         payment_amount: finalPayment,
         change_amount: change,
-        payment_method: paymentMethod,
+        ...buildPosPaymentSnapshot(resolvedPayment),
         status: 'COMPLETED',
         receipt_status: 'pending',
         created_at: createdAt,
@@ -425,8 +441,8 @@ export const checkout = async ({
       }
 
       await recordProfit(transaction, items, createdAt);
-      financeTransaction = await recordFinanceIncome(transaction, createdAt, currentUser);
-      await postPosSaleJournal(transaction, items, currentUser);
+      financeTransaction = await recordFinanceIncome(transaction, createdAt, resolvedPayment, currentUser);
+      await postPosSaleJournal(transaction, items, currentUser, resolvedPayment.postingAccount);
       stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
 
       return { transaction, items, warnings };

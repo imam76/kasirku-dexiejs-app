@@ -246,6 +246,7 @@ const RootLayout = () => {
         { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
         { to: '/master-data/contacts', label: t('nav.contacts'), icon: Users },
         { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: Warehouse },
+        { to: '/master-data/payment-methods', label: t('nav.paymentMethods'), icon: CreditCard },
         { to: '/master-data/currencies', label: t('nav.currencies'), icon: Coins },
         { to: '/master-data/areas', label: t('nav.areas'), icon: MapPinned },
         { to: '/master-data/employees', label: t('nav.employees'), icon: UserRoundCog },

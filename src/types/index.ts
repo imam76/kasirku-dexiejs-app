@@ -71,6 +71,7 @@ export interface Product {
 }
 
 export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
+export type PaymentMethodCategory = 'CASH' | 'QRIS' | 'BANK_TRANSFER' | 'MARKETPLACE' | 'OTHER';
 export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 export type TransactionStatus = 'COMPLETED' | 'VOIDED';
 export type CashierSessionStatus = 'OPEN' | 'CLOSED';
@@ -174,6 +175,7 @@ export type Permission =
   | 'PROMO_MANAGE'
   | 'CONTACT_MANAGE'
   | 'WAREHOUSE_MANAGE'
+  | 'PAYMENT_METHOD_MANAGE'
   | 'CURRENCY_MANAGE'
   | 'AREA_MANAGE'
   | 'EMPLOYEE_MANAGE'
@@ -410,6 +412,28 @@ export interface Warehouse {
 }
 
 export type EntitySyncStatus = 'pending' | 'synced' | 'failed';
+
+export interface PaymentMethodMaster {
+  id: string;
+  code: string;
+  name: string;
+  category: PaymentMethodCategory;
+  posting_account_id?: string;
+  posting_account_code?: string;
+  posting_account_name?: string;
+  requires_reference: boolean;
+  is_system: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  sync_status?: PaymentMethodMasterSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type PaymentMethodMasterSyncStatus = EntitySyncStatus;
 export type ChartOfAccountSyncStatus = EntitySyncStatus;
 export type FinanceAccountMappingSyncStatus = EntitySyncStatus;
 export type AccountingProfileSettingSyncStatus = EntitySyncStatus;
@@ -1403,6 +1427,14 @@ export interface Transaction {
   payment_amount: number;
   change_amount: number;
   payment_method: PaymentMethod;
+  payment_method_id?: string;
+  payment_method_code?: string;
+  payment_method_name?: string;
+  payment_method_category?: PaymentMethodCategory;
+  payment_reference?: string;
+  payment_posting_account_id?: string;
+  payment_posting_account_code?: string;
+  payment_posting_account_name?: string;
   status?: TransactionStatus;
   voided_at?: string;
   void_reason?: string;
@@ -1756,7 +1788,9 @@ export interface ReceiptPayload {
   transactionNumber: string;
   merchantName: string;
   createdAt: string;
-  paymentMethod: PaymentMethod;
+  paymentMethod: string;
+  paymentMethodCode?: string;
+  paymentReference?: string;
   memberName?: string;
   memberNumber?: string;
   items: ReceiptLineItem[];

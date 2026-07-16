@@ -14,6 +14,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/master-data/stock-opname': ['STOCK_OPNAME'],
   '/master-data/contacts': ['CONTACT'],
   '/master-data/warehouses': ['WAREHOUSE'],
+  '/master-data/payment-methods': ['PAYMENT_METHOD'],
   '/master-data/areas': ['AREA'],
   '/master-data/employees': ['EMPLOYEE'],
   '/master-data/departments': ['DEPARTMENT'],

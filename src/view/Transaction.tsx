@@ -104,7 +104,9 @@ export default function Transaction() {
     cart,
     searchTerm,
     paymentAmount,
-    paymentMethod,
+    paymentMethods,
+    paymentMethodId,
+    paymentReference,
     voucherCode,
     memberContactId,
     redeemPoints,
@@ -128,7 +130,8 @@ export default function Transaction() {
     clearCart,
     setSearchTerm,
     setPaymentAmount,
-    setPaymentMethod,
+    setPaymentMethodId,
+    setPaymentReference,
     setVoucherCode,
     setMemberContactId,
     setRedeemPoints,
@@ -383,7 +386,9 @@ export default function Transaction() {
           total={total}
           showPayment={showPayment}
           paymentAmount={paymentAmount}
-          paymentMethod={paymentMethod}
+          paymentMethods={paymentMethods}
+          paymentMethodId={paymentMethodId}
+          paymentReference={paymentReference}
           voucherCode={voucherCode}
           memberContactId={memberContactId}
           redeemPoints={redeemPoints}
@@ -394,7 +399,8 @@ export default function Transaction() {
           membershipSetting={membershipSetting}
           setShowPayment={setShowPayment}
           setPaymentAmount={setPaymentAmount}
-          setPaymentMethod={setPaymentMethod}
+          setPaymentMethodId={setPaymentMethodId}
+          setPaymentReference={setPaymentReference}
           setVoucherCode={setVoucherCode}
           setMemberContactId={setMemberContactId}
           setRedeemPoints={setRedeemPoints}
@@ -434,7 +440,9 @@ export default function Transaction() {
         total={total}
         showPayment={showPayment}
         paymentAmount={paymentAmount}
-        paymentMethod={paymentMethod}
+        paymentMethods={paymentMethods}
+        paymentMethodId={paymentMethodId}
+        paymentReference={paymentReference}
         voucherCode={voucherCode}
         memberContactId={memberContactId}
         redeemPoints={redeemPoints}
@@ -445,7 +453,8 @@ export default function Transaction() {
         membershipSetting={membershipSetting}
         setShowPayment={setShowPayment}
         setPaymentAmount={setPaymentAmount}
-        setPaymentMethod={setPaymentMethod}
+        setPaymentMethodId={setPaymentMethodId}
+        setPaymentReference={setPaymentReference}
         setVoucherCode={setVoucherCode}
         setMemberContactId={setMemberContactId}
         setRedeemPoints={setRedeemPoints}

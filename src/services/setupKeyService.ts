@@ -89,6 +89,9 @@ const migrateEnabledModules = (modules: string[]): string[] => {
     enabledModules.add('PRODUCTION');
     enabledModules.add('STOCK_OPNAME');
   }
+  if (enabledModules.has('POS_TRANSACTION')) {
+    enabledModules.add('PAYMENT_METHOD');
+  }
   if (LEGACY_SETTINGS_MODULES.some((moduleCode) => enabledModules.has(moduleCode))) {
     enabledModules.add('AREA');
     enabledModules.add('EMPLOYEE');

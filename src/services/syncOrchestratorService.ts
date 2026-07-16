@@ -25,6 +25,7 @@ import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
 import { refreshOpeningBalancesFromPostgres } from '@/services/openingBalanceReadService';
+import { refreshPaymentMethodsFromPostgres } from '@/services/paymentMethodReadService';
 import { refreshEmployeeCashAdvancesFromPostgres, refreshPayrollRunsFromPostgres } from '@/services/payrollReadService';
 import { postgresAdapter } from '@/services/postgresAdapter';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
@@ -50,6 +51,7 @@ import {
   enqueuePendingFinanceTransactionsForSync,
   enqueuePendingJournalEntriesForSync,
   enqueuePendingOpeningBalancesForSync,
+  enqueuePendingPaymentMethodsForSync,
   enqueuePendingPayrollDataForSync,
   enqueuePendingProductionOrdersForSync,
   enqueuePendingPurchaseDocumentsForSync,
@@ -78,6 +80,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingChartOfAccountsForSync();
   await enqueuePendingAccountingSettingsForSync();
   await enqueuePendingTaxesForSync();
+  await enqueuePendingPaymentMethodsForSync();
   await enqueuePendingContactsForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingEmployeesForSync();
@@ -123,6 +126,7 @@ export const refreshAllDataFromPostgres = async () => {
     generalLedgerSetting: await refreshGeneralLedgerSettingFromPostgres(),
     projects: await refreshProjectsFromPostgres(),
     taxes: await refreshTaxesFromPostgres(),
+    paymentMethods: await refreshPaymentMethodsFromPostgres(),
     contacts: await refreshContactsFromPostgres(),
     warehouses: await refreshWarehousesFromPostgres(),
     cooperativeAreas: await refreshCooperativeAreasFromPostgres(),

@@ -40,6 +40,7 @@ import type {
   PayrollRunItem,
   OpeningBalanceBatch,
   OpeningBalanceLine,
+  PaymentMethodMaster,
   AccountingPeriod,
   Role,
   RolePermission,
@@ -48,6 +49,7 @@ import type {
   SalesInvoicePayment,
   SyncQueueItem,
   Tax,
+  Transaction,
   TransactionItem,
   UnitConversion,
   UnitDefinition,
@@ -67,7 +69,8 @@ import {
   isAccountOpeningBalanceCashBankAccount,
 } from '@/utils/finance/accountOpeningBalanceBridge';
 import type { KasirkuDB } from './KasirkuDB';
-import { buildAccountingSeed, buildDefaultCompanyProfileSetting } from './seeds';
+import { buildAccountingSeed, buildDefaultCompanyProfileSetting, buildDefaultPaymentMethods } from './seeds';
+import { buildLegacyPosPaymentSnapshot } from '@/utils/posPaymentMethod';
 
 const GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/;
 
@@ -2522,4 +2525,55 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
   });
 
   this.version(94).stores({}).upgrade(backfillMissingCooperativeMemberNumbers);
+
+  this.version(95).stores({
+    paymentMethods: 'id, &code, name, category, posting_account_id, is_system, is_active, sort_order, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const paymentMethodTable = tx.table<PaymentMethodMaster, string>('paymentMethods');
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const [accounts, existingMethods, existingPermissions] = await Promise.all([
+      accountTable.toArray(),
+      paymentMethodTable.toArray(),
+      rolePermissionTable.toArray(),
+    ]);
+    const existingIds = new Set(existingMethods.map((method) => method.id));
+    const existingCodes = new Set(existingMethods.map((method) => method.code.trim().toUpperCase()));
+    const methodsToAdd = buildDefaultPaymentMethods(accounts, now).filter((method) => (
+      !existingIds.has(method.id) && !existingCodes.has(method.code)
+    ));
+
+    if (methodsToAdd.length > 0) {
+      await paymentMethodTable.bulkPut(methodsToAdd);
+    }
+
+    const existingPermissionIds = new Set(existingPermissions.map((permission) => permission.id));
+    const permissionsToAdd = buildSystemRolePermissions(now)
+      .filter((permission) => !existingPermissionIds.has(permission.id));
+    if (permissionsToAdd.length > 0) {
+      await rolePermissionTable.bulkPut(permissionsToAdd);
+    }
+
+    await backfillMissingCooperativeMemberNumbers(tx);
+  });
+
+  this.version(96).stores({
+    transactions: 'id, transaction_number, payment_method, payment_method_id, payment_method_code, cashier_session_id, cashier_user_id, member_contact_id, member_number, created_at',
+  }).upgrade(async (tx) => {
+    const transactionTable = tx.table<Transaction, string>('transactions');
+    const paymentMethodTable = tx.table<PaymentMethodMaster, string>('paymentMethods');
+    const [transactions, methods] = await Promise.all([
+      transactionTable.toArray(),
+      paymentMethodTable.toArray(),
+    ]);
+    const missing = transactions.filter((transaction) => (
+      !transaction.payment_method_id && !transaction.payment_method_code
+    ));
+    if (missing.length > 0) {
+      await transactionTable.bulkPut(
+        missing.map((transaction) => buildLegacyPosPaymentSnapshot(transaction, methods)),
+      );
+    }
+  });
 }

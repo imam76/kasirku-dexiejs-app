@@ -1086,16 +1086,24 @@ export const postPosSaleJournal = async (
   transaction: Transaction,
   items: TransactionItem[] = [],
   actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  resolvedPostingAccount?: ChartOfAccount,
 ) => {
   if (transaction.status === 'VOIDED') return undefined;
   if (!await isGeneralLedgerPostingEnabled(transaction.created_at)) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
-  const cashAccount = getPostableAccount(accounts, getCashAccountCandidate(transaction.payment_method), 'Kas/Bank');
+  const snapshottedPostingAccount = transaction.payment_posting_account_id
+    ? accounts.find((account) => account.id === transaction.payment_posting_account_id)
+    : undefined;
+  const configuredPostingAccount = [resolvedPostingAccount, snapshottedPostingAccount].find((account) => (
+    account?.type === 'ASSET' && account.is_active && account.is_postable
+  ));
+  const cashAccount = configuredPostingAccount
+    ?? getPostableAccount(accounts, getCashAccountCandidate(transaction.payment_method), 'Kas/Bank');
   const salesAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.salesPos, 'Penjualan POS');
   const amount = amountOrZero(transaction.total_amount);
   const lines: JournalLineDraft[] = [
-    createDebitLine(cashAccount, amount, 'Penerimaan kas/bank dari POS'),
+    createDebitLine(cashAccount, amount, `Penerimaan ${transaction.payment_method_name ?? 'kas/bank'} dari POS`),
     createCreditLine(salesAccount, amount, 'Pendapatan penjualan POS'),
   ].filter((line): line is JournalLineDraft => Boolean(line));
 

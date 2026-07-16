@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Product, CartItem, PaymentMethod } from '@/types';
+import { Product, CartItem } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { getProductSellableUnits } from '@/utils/productUnits';
 
@@ -13,7 +13,8 @@ interface TransactionState {
   cart: CartItem[];
   searchTerm: string;
   paymentAmount: string;
-  paymentMethod: PaymentMethod;
+  paymentMethodId?: string;
+  paymentReference: string;
   voucherCode: string;
   memberContactId?: string;
   redeemPoints: string;
@@ -24,7 +25,8 @@ interface TransactionState {
   setCart: (cart: CartItem[] | ((prev: CartItem[]) => CartItem[])) => void;
   setSearchTerm: (term: string) => void;
   setPaymentAmount: (amount: string) => void;
-  setPaymentMethod: (method: PaymentMethod) => void;
+  setPaymentMethodId: (id?: string) => void;
+  setPaymentReference: (reference: string) => void;
   setVoucherCode: (voucherCode: string) => void;
   setMemberContactId: (memberContactId?: string) => void;
   setRedeemPoints: (points: string) => void;
@@ -43,7 +45,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   cart: [],
   searchTerm: '',
   paymentAmount: '',
-  paymentMethod: 'TUNAI',
+  paymentMethodId: undefined,
+  paymentReference: '',
   voucherCode: '',
   memberContactId: undefined,
   redeemPoints: '',
@@ -55,7 +58,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   })),
   setSearchTerm: (searchTerm) => set({ searchTerm }),
   setPaymentAmount: (paymentAmount) => set({ paymentAmount }),
-  setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+  setPaymentMethodId: (paymentMethodId) => set({ paymentMethodId }),
+  setPaymentReference: (paymentReference) => set({ paymentReference }),
   setVoucherCode: (voucherCode) => set({ voucherCode }),
   setMemberContactId: (memberContactId) => set({ memberContactId, redeemPoints: memberContactId ? get().redeemPoints : '' }),
   setRedeemPoints: (redeemPoints) => set({ redeemPoints }),
@@ -182,7 +186,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({
       cart: [],
       paymentAmount: '',
-      paymentMethod: 'TUNAI',
+      paymentMethodId: undefined,
+      paymentReference: '',
       voucherCode: '',
       memberContactId: undefined,
       redeemPoints: '',

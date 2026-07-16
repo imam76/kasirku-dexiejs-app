@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
-import { CartItem as CartItemType, Contact, MembershipSetting, PaymentMethod } from '@/types';
+import { CartItem as CartItemType, Contact, MembershipSetting } from '@/types';
+import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import CartItem from './CartItem';
@@ -15,7 +16,9 @@ interface CartSidebarProps {
   total: number;
   showPayment: boolean;
   paymentAmount: string;
-  paymentMethod: PaymentMethod;
+  paymentMethods: PosPaymentMethodOption[];
+  paymentMethodId?: string;
+  paymentReference: string;
   voucherCode: string;
   memberContactId?: string;
   redeemPoints: string;
@@ -26,7 +29,8 @@ interface CartSidebarProps {
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
   setPaymentAmount: (amount: string) => void;
-  setPaymentMethod: (method: PaymentMethod) => void;
+  setPaymentMethodId: (id?: string) => void;
+  setPaymentReference: (reference: string) => void;
   setVoucherCode: (voucherCode: string) => void;
   setMemberContactId: (memberContactId?: string) => void;
   setRedeemPoints: (points: string) => void;
@@ -44,7 +48,9 @@ export default function CartSidebar({
   total,
   showPayment,
   paymentAmount,
-  paymentMethod,
+  paymentMethods,
+  paymentMethodId,
+  paymentReference,
   voucherCode,
   memberContactId,
   redeemPoints,
@@ -55,7 +61,8 @@ export default function CartSidebar({
   membershipSetting,
   setShowPayment,
   setPaymentAmount,
-  setPaymentMethod,
+  setPaymentMethodId,
+  setPaymentReference,
   setVoucherCode,
   setMemberContactId,
   setRedeemPoints,
@@ -107,7 +114,9 @@ export default function CartSidebar({
             total={total}
             showPayment={showPayment}
             paymentAmount={paymentAmount}
-            paymentMethod={paymentMethod}
+            paymentMethods={paymentMethods}
+            paymentMethodId={paymentMethodId}
+            paymentReference={paymentReference}
             voucherCode={voucherCode}
             memberContactId={memberContactId}
             redeemPoints={redeemPoints}
@@ -118,7 +127,8 @@ export default function CartSidebar({
             membershipSetting={membershipSetting}
             setShowPayment={setShowPayment}
             setPaymentAmount={setPaymentAmount}
-            setPaymentMethod={setPaymentMethod}
+            setPaymentMethodId={setPaymentMethodId}
+            setPaymentReference={setPaymentReference}
             setVoucherCode={setVoucherCode}
             setMemberContactId={setMemberContactId}
             setRedeemPoints={setRedeemPoints}

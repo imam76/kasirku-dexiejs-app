@@ -6,6 +6,8 @@ import { ensureAccountingDefaults } from '@/services/chartOfAccountService';
 import { ensureCompanyProfileSetting } from '@/services/companyProfileSettingService';
 import { ensureBaseCurrency } from '@/services/currencyService';
 import { ensureMembershipSetting } from '@/services/membershipService';
+import { ensureDefaultPaymentMethods } from '@/services/paymentMethodService';
+import { backfillLegacyPosPaymentSnapshots } from '@/services/posPaymentMethodService';
 import type { AuthUser } from '@/types';
 
 const hasActiveOwner = (users: AuthUser[]) => {
@@ -38,6 +40,7 @@ export const backupDatabase = async () => {
       projects: await db.projects.toArray(),
       taxes: await db.taxes.toArray(),
       warehouses: await db.warehouses.toArray(),
+      paymentMethods: await db.paymentMethods.toArray(),
       currencies: await db.currencies.toArray(),
       currencyRates: await db.currencyRates.toArray(),
       salesDocuments: await db.salesDocuments.toArray(),
@@ -79,7 +82,7 @@ export const backupDatabase = async () => {
       membershipSettings: await db.membershipSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 24,
+      version: 26,
       timestamp: new Date().toISOString(),
     };
 
@@ -104,7 +107,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'accountingPeriods', 'accountingFiscalYears', 'closingRuns', 'fiscalYearClosingRuns', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'paymentMethods', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'accountingPeriods', 'accountingFiscalYears', 'closingRuns', 'fiscalYearClosingRuns', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -150,6 +153,7 @@ export const restoreDatabase = async (file: File) => {
           db.projects,
           db.taxes,
           db.warehouses,
+          db.paymentMethods,
           db.currencies,
           db.currencyRates,
           db.salesDocuments,
@@ -219,6 +223,7 @@ export const restoreDatabase = async (file: File) => {
           await db.projects.clear();
           await db.taxes.clear();
           await db.warehouses.clear();
+          await db.paymentMethods.clear();
           await db.currencies.clear();
           await db.currencyRates.clear();
           await db.salesDocuments.clear();
@@ -292,6 +297,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.projects?.length) await db.projects.bulkAdd(data.projects);
           if (data.taxes?.length) await db.taxes.bulkAdd(data.taxes);
           if (data.warehouses?.length) await db.warehouses.bulkAdd(data.warehouses);
+          if (data.paymentMethods?.length) await db.paymentMethods.bulkAdd(data.paymentMethods);
           if (data.currencies?.length) await db.currencies.bulkAdd(data.currencies);
           if (data.currencyRates?.length) await db.currencyRates.bulkAdd(data.currencyRates);
           if (data.salesDocuments?.length) await db.salesDocuments.bulkAdd(data.salesDocuments);
@@ -347,6 +353,8 @@ export const restoreDatabase = async (file: File) => {
         await ensureBaseCurrency();
         await ensureCompanyProfileSetting();
         await ensureMembershipSetting();
+        await ensureDefaultPaymentMethods();
+        await backfillLegacyPosPaymentSnapshots();
 
         await clearAuthSessionState();
 

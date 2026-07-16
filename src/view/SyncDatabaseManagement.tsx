@@ -67,6 +67,7 @@ const entityLabelByName: Record<string, string> = {
   stockMutations: 'Mutasi Stok',
   taxes: 'Tax',
   warehouses: 'Gudang',
+  paymentMethods: 'Metode Pembayaran',
 };
 
 const formatDateTime = (value?: string) => (

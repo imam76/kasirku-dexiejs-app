@@ -17,6 +17,7 @@ pub mod finance_transaction_commands;
 pub mod fiscal_year_closing_run_commands;
 pub mod journal_entry_commands;
 pub mod opening_balance_commands;
+pub mod payment_method_commands;
 pub mod payroll_commands;
 pub mod postgres_health;
 pub mod product_commands;
