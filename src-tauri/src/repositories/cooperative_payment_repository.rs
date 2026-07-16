@@ -1368,7 +1368,7 @@ async fn post_loan_payment_batch_internal(
     };
     let payment_group_number = payment_group_id.as_ref().map(|group_id| {
         format!(
-            "KSP-ANG-GRP-{}-{}",
+            "KSU-ANG-GRP-{}-{}",
             payment_date.format("%Y%m%d"),
             &group_id[..8].to_uppercase()
         )
@@ -1438,7 +1438,7 @@ async fn post_loan_payment_batch_internal(
         let finance_transaction_id = Uuid::new_v4().to_string();
         let journal_entry_id = Uuid::new_v4().to_string();
         let payment_number = format!(
-            "KSP-ANG-{}-{}",
+            "KSU-ANG-{}-{}",
             payment_date.format("%Y%m%d"),
             &payment_id[..8]
         );
@@ -2177,7 +2177,7 @@ async fn post_loan_payment_internal(
     let finance_transaction_id = Uuid::new_v4().to_string();
     let journal_entry_id = Uuid::new_v4().to_string();
     let payment_number = format!(
-        "KSP-ANG-{}-{}",
+        "KSU-ANG-{}-{}",
         payment_date.format("%Y%m%d"),
         &payment_id[..8]
     );
@@ -3027,7 +3027,7 @@ async fn execute_approved_payment_reversal(
     let reversal_finance_id = Uuid::new_v4().to_string();
     let reversal_journal_id = Uuid::new_v4().to_string();
     let reversal_payment_number = format!(
-        "KSP-ANG-{}-{}",
+        "KSU-ANG-{}-{}",
         now.format("%Y%m%d"),
         &reversal_payment_id[..8]
     );

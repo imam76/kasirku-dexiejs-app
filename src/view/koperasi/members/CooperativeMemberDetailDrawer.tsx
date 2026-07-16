@@ -29,7 +29,7 @@ export default function CooperativeMemberDetailDrawer({
 
   return (
     <Drawer
-      title={member ? `${member.member_number} - ${member.name}` : t('cooperative.members.detailTitle')}
+      title={member ? `${member.member_number || '-'} - ${member.name}` : t('cooperative.members.detailTitle')}
       open={open}
       onClose={onClose}
       width={520}
@@ -42,7 +42,7 @@ export default function CooperativeMemberDetailDrawer({
               <Tag color={statusOption?.color}>{statusLabelMap[member.status]}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.members.form.memberNumber')}>
-              {member.member_number}
+              {member.member_number || '-'}
             </Descriptions.Item>
             <Descriptions.Item label={t('cooperative.members.form.name')}>
               {member.name}

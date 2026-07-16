@@ -150,8 +150,9 @@ const assertEmployeeFieldCashAccount = async (
 };
 
 const createFieldCashSessionNumber = async (date = new Date()) => {
-  const prefix = 'KSP-KP';
+  const prefix = 'KSU-KP';
   const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const sessionNumberPrefixes = [`${prefix}-${datePart}`, `KSP-KP-${datePart}`];
   const dayStart = new Date(date);
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(date);
@@ -160,7 +161,9 @@ const createFieldCashSessionNumber = async (date = new Date()) => {
   const count = await db.cooperativeFieldCashSessions
     .where('opened_at')
     .between(dayStart.toISOString(), dayEnd.toISOString(), true, true)
-    .and((session) => session.session_number.startsWith(`${prefix}-${datePart}`))
+    .and((session) => sessionNumberPrefixes.some((prefixCandidate) => (
+      session.session_number.startsWith(prefixCandidate)
+    )))
     .count();
 
   return `${prefix}-${datePart}-${String(count + 1).padStart(4, '0')}`;

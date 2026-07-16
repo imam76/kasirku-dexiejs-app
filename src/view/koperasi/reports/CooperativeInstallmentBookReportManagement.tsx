@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FileExcelOutlined,
   FilePdfOutlined,
@@ -13,10 +13,14 @@ import { useCooperativeAreaScope } from '@/hooks/useCooperativeAreaScope';
 import {
   useCooperativeInstallmentBookReport,
   type CooperativeInstallmentBookReportFilters,
+  type CooperativeInstallmentBookSortBy,
+  type CooperativeInstallmentBookSortDirection,
 } from '@/hooks/useCooperativeInstallmentBookReport';
 import { useI18n } from '@/hooks/useI18n';
 import dayjs from '@/lib/dayjs';
 import {
+  DEFAULT_COOPERATIVE_INSTALLMENT_BOOK_SORT_BY,
+  DEFAULT_COOPERATIVE_INSTALLMENT_BOOK_SORT_DIRECTION,
   COOPERATIVE_INSTALLMENT_BOOK_UNASSIGNED_EMPLOYEE,
   type CooperativeInstallmentBookAgingCategory,
   type CooperativeInstallmentBookReportGroup,
@@ -39,6 +43,64 @@ import CooperativeInstallmentBookReport from './CooperativeInstallmentBookReport
 
 const { Text, Title } = Typography;
 const ALL_VALUE = '__ALL__';
+const SORT_PREFERENCE_STORAGE_KEY = 'koperasi-installment-book-report-sort-preference';
+const SORT_BY_VALUES: CooperativeInstallmentBookSortBy[] = [
+  'actualDisbursementDate',
+  'scheduledDisbursementDate',
+  'memberNumber',
+  'memberCategory',
+  'memberName',
+  'principalAmount',
+  'openingBalance',
+  'collectionDayPayment',
+  'installmentAmount',
+  'endingBalance',
+];
+const SORT_DIRECTION_VALUES: CooperativeInstallmentBookSortDirection[] = ['asc', 'desc'];
+
+type CooperativeInstallmentBookSortPreference = {
+  sortBy: CooperativeInstallmentBookSortBy;
+  sortDirection: CooperativeInstallmentBookSortDirection;
+};
+
+const defaultSortPreference: CooperativeInstallmentBookSortPreference = {
+  sortBy: DEFAULT_COOPERATIVE_INSTALLMENT_BOOK_SORT_BY,
+  sortDirection: DEFAULT_COOPERATIVE_INSTALLMENT_BOOK_SORT_DIRECTION,
+};
+
+const isSortBy = (value: unknown): value is CooperativeInstallmentBookSortBy => (
+  typeof value === 'string' &&
+  SORT_BY_VALUES.includes(value as CooperativeInstallmentBookSortBy)
+);
+
+const isSortDirection = (
+  value: unknown,
+): value is CooperativeInstallmentBookSortDirection => (
+  typeof value === 'string' &&
+  SORT_DIRECTION_VALUES.includes(value as CooperativeInstallmentBookSortDirection)
+);
+
+const readSortPreference = (): CooperativeInstallmentBookSortPreference => {
+  if (typeof window === 'undefined') return defaultSortPreference;
+
+  try {
+    const rawPreference = window.localStorage.getItem(SORT_PREFERENCE_STORAGE_KEY);
+    if (!rawPreference) return defaultSortPreference;
+
+    const parsedPreference = JSON.parse(rawPreference) as Partial<CooperativeInstallmentBookSortPreference>;
+
+    return {
+      sortBy: isSortBy(parsedPreference.sortBy)
+        ? parsedPreference.sortBy
+        : defaultSortPreference.sortBy,
+      sortDirection: isSortDirection(parsedPreference.sortDirection)
+        ? parsedPreference.sortDirection
+        : defaultSortPreference.sortDirection,
+    };
+  } catch {
+    return defaultSortPreference;
+  }
+};
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => {
@@ -77,12 +139,37 @@ export default function CooperativeInstallmentBookReportManagement() {
     () => getIsoWeekday(dayjs().tz()),
   );
   const [employeeId, setEmployeeId] = useState<string>();
+  const [sortPreference, setSortPreference] = useState(readSortPreference);
+  const sortBy = sortPreference.sortBy;
+  const sortDirection = sortPreference.sortDirection;
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        SORT_PREFERENCE_STORAGE_KEY,
+        JSON.stringify(sortPreference),
+      );
+    } catch {
+      // Preference persistence is best-effort; reporting must keep working.
+    }
+  }, [sortPreference]);
+
   const filters = useMemo<CooperativeInstallmentBookReportFilters>(() => ({
     monthDate: month.toISOString(),
     collectionWeekday,
     employeeId,
+    sortBy,
+    sortDirection,
     visibleAreaIds: areaScope.isScoped ? areaScope.areaIds : undefined,
-  }), [areaScope.areaIds, areaScope.isScoped, collectionWeekday, employeeId, month]);
+  }), [
+    areaScope.areaIds,
+    areaScope.isScoped,
+    collectionWeekday,
+    employeeId,
+    month,
+    sortBy,
+    sortDirection,
+  ]);
   const reportQuery = useCooperativeInstallmentBookReport(filters);
   const report = reportQuery.data;
   const isLoading = reportQuery.isLoading || reportQuery.isFetching;
@@ -131,6 +218,25 @@ export default function CooperativeInstallmentBookReportManagement() {
     value: weekday,
     label: getCollectionWeekdayLabel(weekday),
   }));
+  const sortByOptions: Array<{ value: CooperativeInstallmentBookSortBy; label: string }> = [
+    { value: 'actualDisbursementDate', label: labels.date },
+    { value: 'scheduledDisbursementDate', label: labels.scheduledDate },
+    { value: 'memberNumber', label: labels.memberNumber },
+    { value: 'memberCategory', label: 'L/B' },
+    { value: 'memberName', label: labels.name },
+    { value: 'principalAmount', label: labels.principal },
+    { value: 'openingBalance', label: labels.openingBalance },
+    { value: 'collectionDayPayment', label: labels.collectionDay },
+    { value: 'installmentAmount', label: labels.installment },
+    { value: 'endingBalance', label: labels.endingBalance },
+  ];
+  const sortDirectionOptions: Array<{
+    value: CooperativeInstallmentBookSortDirection;
+    label: string;
+  }> = [
+    { value: 'asc', label: 'ASC' },
+    { value: 'desc', label: 'DESC' },
+  ];
 
   const buildGroupRows = (
     group: CooperativeInstallmentBookReportGroup,
@@ -364,7 +470,7 @@ export default function CooperativeInstallmentBookReportManagement() {
         />
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <div>
           <Text strong>{t('cooperative.installmentBook.month')}</Text>
           <DatePicker
@@ -395,6 +501,30 @@ export default function CooperativeInstallmentBookReportManagement() {
             value={employeeId ?? ALL_VALUE}
             options={employeeOptions}
             onChange={(value: string) => setEmployeeId(value === ALL_VALUE ? undefined : value)}
+          />
+        </div>
+        <div>
+          <Text strong>{t('cooperative.installmentBook.sortBy')}</Text>
+          <Select
+            className="mt-2 w-full"
+            value={sortBy}
+            options={sortByOptions}
+            onChange={(value: CooperativeInstallmentBookSortBy) => setSortPreference((current) => ({
+              ...current,
+              sortBy: value,
+            }))}
+          />
+        </div>
+        <div>
+          <Text strong>{t('cooperative.installmentBook.sortDirection')}</Text>
+          <Select
+            className="mt-2 w-full"
+            value={sortDirection}
+            options={sortDirectionOptions}
+            onChange={(value: CooperativeInstallmentBookSortDirection) => setSortPreference((current) => ({
+              ...current,
+              sortDirection: value,
+            }))}
           />
         </div>
       </div>

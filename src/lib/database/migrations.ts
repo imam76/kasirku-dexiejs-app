@@ -57,6 +57,39 @@ import { buildSystemRolePermissions, buildSystemRoles, resolveLegacyRoleId, reso
 import type { KasirkuDB } from './KasirkuDB';
 import { buildAccountingSeed, buildDefaultCompanyProfileSetting } from './seeds';
 
+const GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/;
+
+const normalizeCooperativeMemberNumber = (value?: string | null) => value?.trim().toUpperCase() ?? '';
+
+const buildNextCooperativeMemberNumberGenerator = (
+  members: Array<Pick<CooperativeMember, 'member_number'>>,
+) => {
+  const usedNumbers = new Set(
+    members
+      .map((member) => normalizeCooperativeMemberNumber(member.member_number))
+      .filter(Boolean),
+  );
+  const generatedSequences = Array.from(usedNumbers)
+    .map((memberNumber) => {
+      const match = memberNumber.match(GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN);
+      return match ? Number(match[1]) : 0;
+    })
+    .filter((sequence) => sequence > 0);
+  let nextSequence = Math.max(0, ...generatedSequences) + 1;
+
+  return () => {
+    let nextNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+    while (usedNumbers.has(nextNumber)) {
+      nextSequence += 1;
+      nextNumber = `KSU-${String(nextSequence).padStart(4, '0')}`;
+    }
+
+    usedNumbers.add(nextNumber);
+    nextSequence += 1;
+    return nextNumber;
+  };
+};
+
 export function registerDatabaseMigrations(this: KasirkuDB) {
   this.version(1).stores({
     products: 'id, name, sku, created_at',
@@ -2164,5 +2197,25 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     membershipPointTransactions: 'id, contact_id, membership_number, transaction_id, transaction_number, type, created_at',
     membershipSettings: 'id, updated_at',
     syncQueue: 'id, entity, entity_id, operation, status, created_at, updated_at',
+  });
+
+  this.version(85).stores({}).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const memberTable = tx.table<CooperativeMember, string>('cooperativeMembers');
+    const members = await memberTable.toArray();
+    const nextMemberNumber = buildNextCooperativeMemberNumberGenerator(members);
+    const membersWithoutCode = members
+      .filter((member) => !normalizeCooperativeMemberNumber(member.member_number))
+      .map((member) => ({
+        ...member,
+        member_number: nextMemberNumber(),
+        updated_at: now,
+        sync_status: 'pending' as const,
+        sync_error: undefined,
+      }));
+
+    if (membersWithoutCode.length > 0) {
+      await memberTable.bulkPut(membersWithoutCode);
+    }
   });
 }

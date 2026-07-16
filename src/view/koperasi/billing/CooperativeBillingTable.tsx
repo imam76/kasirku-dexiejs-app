@@ -60,6 +60,9 @@ export default function CooperativeBillingTable({
   const getBillAmount = (installment: CooperativeLoanInstallment) => (
     installment.principal_amount + installment.interest_amount + installment.penalty_amount
   );
+  const getLoanPrincipalAmount = (installment: CooperativeLoanInstallment) => (
+    Number(loanById.get(installment.loan_id)?.principal_amount || 0)
+  );
   const getRemainingAmount = (installment: CooperativeLoanInstallment) => (
     getInstallmentRemainingAmounts(installment).total_amount
   );
@@ -136,6 +139,16 @@ export default function CooperativeBillingTable({
       key: 'loan_number',
       width: 140,
       sorter: (first, second) => first.loan_number.localeCompare(second.loan_number),
+    },
+    {
+      title: t('cooperative.billing.table.loanPrincipal'),
+      key: 'loanPrincipal',
+      align: 'right',
+      width: 150,
+      sorter: (first, second) => getLoanPrincipalAmount(first) - getLoanPrincipalAmount(second),
+      render: (_value: unknown, installment) => (
+        `Rp ${formatCurrency(getLoanPrincipalAmount(installment))}`
+      ),
     },
     {
       title: t('cooperative.billing.table.installmentNo'),
@@ -311,7 +324,7 @@ export default function CooperativeBillingTable({
         } as unknown as HTMLAttributes<HTMLElement>;
       }}
       pagination={{ pageSize: 8 }}
-      scroll={{ x: 1880 }}
+      scroll={{ x: 2030 }}
       locale={{ emptyText: t('cooperative.billing.empty') }}
     />
   );
