@@ -2,7 +2,7 @@ import { buildSystemRolePermissions, buildSystemRoles } from '@/auth/roleSeed';
 import { DEFAULT_CONVERSIONS, DEFAULT_UNITS } from '@/constants/units';
 import { buildBaseCurrency, buildBaseCurrencyRate } from '@/constants/currencies';
 import type { KasirkuDB } from './KasirkuDB';
-import { buildAccountingSeed, buildDefaultCompanyProfileSetting } from './seeds';
+import { buildAccountingSeed, buildDefaultCompanyProfileSetting, buildDefaultPaymentMethods } from './seeds';
 
 export function registerDatabasePopulate(this: KasirkuDB) {
   this.on('populate', async () => {
@@ -13,6 +13,7 @@ export function registerDatabasePopulate(this: KasirkuDB) {
     await this.currencyRates.put(buildBaseCurrencyRate(now));
     const seed = buildAccountingSeed(now);
     await this.chartOfAccounts.bulkPut(seed.accounts);
+    await this.paymentMethods.bulkPut(buildDefaultPaymentMethods(seed.accounts, now));
     await this.financeAccountMappings.bulkPut(seed.mappings);
     await this.accountingProfileSetting.put(seed.profileSetting);
     await this.enabledModules.bulkPut(seed.enabledModules);

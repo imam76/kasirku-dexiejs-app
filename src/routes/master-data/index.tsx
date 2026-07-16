@@ -1,6 +1,7 @@
 import {
   ApartmentOutlined,
   ContactsOutlined,
+  CreditCardOutlined,
   DollarOutlined,
   EnvironmentOutlined,
   PercentageOutlined,
@@ -43,6 +44,7 @@ function MasterData() {
     { to: '/master-data/promos', label: t('nav.promos'), icon: DollarOutlined, color: 'text-rose-600', desc: t('home.promosDesc') },
     { to: '/master-data/contacts', label: t('nav.contacts'), icon: ContactsOutlined, color: 'text-amber-600', desc: t('home.contactsDesc') },
     { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: ShopOutlined, color: 'text-teal-600', desc: t('home.warehousesDesc') },
+    { to: '/master-data/payment-methods', label: t('nav.paymentMethods'), icon: CreditCardOutlined, color: 'text-blue-600', desc: t('home.paymentMethodsDesc') },
     { to: '/master-data/currencies', label: t('nav.currencies'), icon: MoneyCollectOutlined, color: 'text-emerald-600', desc: t('home.currenciesDesc') },
     { to: '/master-data/areas', label: t('nav.areas'), icon: EnvironmentOutlined, color: 'text-lime-600', desc: t('home.areasDesc') },
     { to: '/master-data/employees', label: t('nav.employees'), icon: TeamOutlined, color: 'text-blue-600', desc: t('home.employeesDesc') },

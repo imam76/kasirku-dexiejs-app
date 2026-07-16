@@ -50,6 +50,7 @@ import { mergeRemoteSalesDocumentBundlesIntoDexie } from '@/services/salesDocume
 import { mergeRemoteStockOpnameBundlesIntoDexie } from '@/services/stockOpnameReadService';
 import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
 import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
+import { mergeRemotePaymentMethodsIntoDexie } from '@/services/paymentMethodReadService';
 import {
   activityLogPostgresAdapter,
   accountingFiscalYearPostgresAdapter,
@@ -85,6 +86,7 @@ import {
   isTauriRuntime,
   journalEntryPostgresAdapter,
   openingBalancePostgresAdapter,
+  paymentMethodPostgresAdapter,
   payrollRunPostgresAdapter,
   postgresAdapter,
   productPostgresAdapter,
@@ -137,6 +139,7 @@ import {
   type RemoteOpeningBalanceBatchDto,
   type RemoteOpeningBalanceBundleDto,
   type RemoteOpeningBalanceLineDto,
+  type RemotePaymentMethodDto,
   type RemotePayrollRunBundleDto,
   type RemotePayrollRunDto,
   type RemotePayrollRunItemDto,
@@ -169,7 +172,7 @@ import {
   mergeRemoteAccountingFiscalYearsIntoDexie,
   mergeRemoteFiscalYearClosingRunsIntoDexie,
 } from '@/services/fiscalYearReadService';
-import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -221,6 +224,7 @@ const STOCK_OPNAME_ENTITY = 'stockOpnames';
 const STOCK_MUTATION_ENTITY = 'stockMutations';
 const TAX_ENTITY = 'taxes';
 const WAREHOUSE_ENTITY = 'warehouses';
+const PAYMENT_METHOD_ENTITY = 'paymentMethods';
 
 let isProcessingSyncQueue = false;
 
@@ -1734,6 +1738,23 @@ const mapWarehouseToRemoteDto = (warehouse: Warehouse): RemoteWarehouseDto => ({
   updated_at: warehouse.updated_at,
 });
 
+const mapPaymentMethodToRemoteDto = (method: PaymentMethodMaster): RemotePaymentMethodDto => ({
+  id: method.id,
+  code: method.code,
+  name: method.name,
+  category: method.category,
+  posting_account_id: method.posting_account_id,
+  posting_account_code: method.posting_account_code,
+  posting_account_name: method.posting_account_name,
+  requires_reference: method.requires_reference,
+  is_system: method.is_system,
+  is_active: method.is_active,
+  sort_order: method.sort_order,
+  created_at: method.created_at,
+  updated_at: method.updated_at,
+  deleted_at: null,
+});
+
 const mapCurrencyToRemoteDto = (currency: Currency): RemoteCurrencyDto => ({
   id: currency.id,
   code: currency.code,
@@ -2773,6 +2794,24 @@ const isRemoteWarehouseDto = (payload: unknown): payload is RemoteWarehouseDto =
   );
 };
 
+const isRemotePaymentMethodDto = (payload: unknown): payload is RemotePaymentMethodDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePaymentMethodDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.code === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.category === 'string' &&
+    typeof candidate.requires_reference === 'boolean' &&
+    typeof candidate.is_system === 'boolean' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.sort_order === 'number' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteCurrencyDto = (payload: unknown): payload is RemoteCurrencyDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3257,6 +3296,17 @@ const updateWarehouseSyncMetadata = async (
   await db.warehouses.update(warehouseId, syncMetadata);
 };
 
+const updatePaymentMethodSyncMetadata = async (
+  paymentMethodId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<PaymentMethodMaster, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentMethod = await db.paymentMethods.get(paymentMethodId);
+  if (!currentMethod || currentMethod.updated_at !== sourceUpdatedAt) return;
+
+  await db.paymentMethods.update(paymentMethodId, syncMetadata);
+};
+
 const updateCurrencySyncMetadata = async (
   currencyId: string,
   sourceUpdatedAt: string,
@@ -3647,6 +3697,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === WAREHOUSE_ENTITY && isRemoteWarehouseDto(queueItem.payload)) {
     await updateWarehouseSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === PAYMENT_METHOD_ENTITY && isRemotePaymentMethodDto(queueItem.payload)) {
+    await updatePaymentMethodSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -4159,6 +4216,18 @@ const processWarehouseQueueItem = async (queueItem: SyncQueueItem) => {
   return warehousePostgresAdapter.upsert(queueItem.payload);
 };
 
+const processPaymentMethodQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return paymentMethodPostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemotePaymentMethodDto(queueItem.payload)) {
+    throw new Error('Payload metode pembayaran sync queue tidak valid.');
+  }
+
+  return paymentMethodPostgresAdapter.upsert(queueItem.payload);
+};
+
 export const recoverStaleProcessingSyncQueueItems = async () => {
   if (!isTauriRuntime()) {
     return {
@@ -4263,6 +4332,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteStockMutation: RemoteStockMutationDto | null = null;
     let remoteTax: RemoteTaxDto | null = null;
     let remoteWarehouse: RemoteWarehouseDto | null = null;
+    let remotePaymentMethod: RemotePaymentMethodDto | null = null;
 
     if (currentQueueItem.entity === ACTIVITY_LOG_ENTITY) {
       remoteActivityLog = await processActivityLogQueueItem(currentQueueItem);
@@ -4354,6 +4424,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteTax = await processTaxQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === WAREHOUSE_ENTITY) {
       remoteWarehouse = await processWarehouseQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === PAYMENT_METHOD_ENTITY) {
+      remotePaymentMethod = await processPaymentMethodQueueItem(currentQueueItem);
     } else {
       throw new Error(`Entity sync queue tidak didukung: ${currentQueueItem.entity}`);
     }
@@ -4510,6 +4582,22 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       const syncedAt = new Date().toISOString();
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateWarehouseSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+      });
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === PAYMENT_METHOD_ENTITY &&
+      !remotePaymentMethod &&
+      currentQueueItem.operation === 'delete' &&
+      isRemotePaymentMethodDto(currentQueueItem.payload)
+    ) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updatePaymentMethodSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
         sync_status: 'synced',
         sync_error: undefined,
         last_synced_at: syncedAt,
@@ -5075,6 +5163,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteWarehouse.updated_at,
       });
       await mergeRemoteWarehousesIntoDexie([remoteWarehouse], syncedAt);
+      return;
+    }
+
+    if (remotePaymentMethod && isRemotePaymentMethodDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updatePaymentMethodSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remotePaymentMethod.updated_at,
+      });
+      await mergeRemotePaymentMethodsIntoDexie([remotePaymentMethod], syncedAt);
       return;
     }
 
@@ -7023,6 +7123,45 @@ export const enqueueWarehouseSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueuePaymentMethodSync = async (
+  paymentMethod: PaymentMethodMaster,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: PAYMENT_METHOD_ENTITY,
+    entity_id: paymentMethod.id,
+    operation,
+    payload: mapPaymentMethodToRemoteDto(paymentMethod),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingPaymentMethodsForSync = async () => {
+  const methods = (await db.paymentMethods.toArray())
+    .filter((method) => method.sync_status === 'pending' || method.sync_status === 'failed');
+  const queueItems = await db.syncQueue.where('entity').equals(PAYMENT_METHOD_ENTITY).toArray();
+
+  for (const method of methods) {
+    const existingQueueItem = queueItems.find((queueItem) => (
+      queueItem.entity_id === method.id &&
+      queueItem.status !== 'synced' &&
+      isRemotePaymentMethodDto(queueItem.payload) &&
+      queueItem.payload.updated_at === method.updated_at
+    ));
+    if (!existingQueueItem) await enqueuePaymentMethodSync(method, 'update');
+  }
 };
 
 export const retryFailedSyncQueueItems = async () => {

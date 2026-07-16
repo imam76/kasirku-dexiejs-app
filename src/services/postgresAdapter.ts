@@ -34,6 +34,7 @@ import type {
   OpeningBalanceLineSettlementStatus,
   OpeningBalanceModule,
   PaymentMethod,
+  PaymentMethodCategory,
   PayrollRunStatus,
   Permission,
   ProductUnit,
@@ -472,6 +473,23 @@ export interface RemoteWarehouseDto {
   phone?: string | null;
   notes?: string | null;
   is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemotePaymentMethodDto {
+  id: string;
+  code: string;
+  name: string;
+  category: PaymentMethodCategory;
+  posting_account_id?: string | null;
+  posting_account_code?: string | null;
+  posting_account_name?: string | null;
+  requires_reference: boolean;
+  is_system: boolean;
+  is_active: boolean;
+  sort_order: number;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
@@ -2078,6 +2096,28 @@ export const warehousePostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteWarehouseDto | null>('postgres_delete_warehouse', { id });
+  },
+};
+
+export const paymentMethodPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemotePaymentMethodDto[]>('postgres_list_payment_methods');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePaymentMethodDto | null>('postgres_get_payment_method', { id });
+  },
+
+  async upsert(input: RemotePaymentMethodDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePaymentMethodDto>('postgres_upsert_payment_method', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePaymentMethodDto | null>('postgres_delete_payment_method', { id });
   },
 };
 

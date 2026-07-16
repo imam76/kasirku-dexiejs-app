@@ -15,6 +15,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'STOCK_OPNAME', label: 'Stock Opname', description: 'Perhitungan dan penyesuaian stok fisik' },
       { code: 'CONTACT', label: 'Contact', description: 'Pelanggan & supplier' },
       { code: 'WAREHOUSE', label: 'Warehouse', description: 'Gudang & lokasi stok' },
+      { code: 'PAYMENT_METHOD', label: 'Metode Pembayaran', description: 'Master metode pembayaran dan mapping akun penerimaan' },
       { code: 'AREA', label: 'Area', description: 'Wilayah operasional dan penagihan' },
       { code: 'EMPLOYEE', label: 'Karyawan', description: 'Data karyawan dan penugasan' },
       { code: 'DEPARTMENT', label: 'Department', description: 'Departemen organisasi' },
@@ -131,6 +132,7 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   'AREA',
   'EMPLOYEE',
   'ROLE_PERMISSION',
+  'PAYMENT_METHOD',
   // POS
   'POS_TRANSACTION',
   // Sales core flow

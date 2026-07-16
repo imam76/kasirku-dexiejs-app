@@ -92,6 +92,12 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['WAREHOUSE'],
   },
   {
+    code: 'PAYMENT_METHOD_MANAGE',
+    label: 'Kelola Metode Pembayaran',
+    group: 'Data Master',
+    moduleCodes: ['PAYMENT_METHOD'],
+  },
+  {
     code: 'CURRENCY_MANAGE',
     label: 'Kelola Mata Uang',
     group: 'Data Master',

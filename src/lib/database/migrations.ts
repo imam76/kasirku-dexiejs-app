@@ -40,6 +40,7 @@ import type {
   PayrollRunItem,
   OpeningBalanceBatch,
   OpeningBalanceLine,
+  PaymentMethodMaster,
   AccountingPeriod,
   Role,
   RolePermission,
@@ -66,7 +67,7 @@ import {
   isAccountOpeningBalanceCashBankAccount,
 } from '@/utils/finance/accountOpeningBalanceBridge';
 import type { KasirkuDB } from './KasirkuDB';
-import { buildAccountingSeed, buildDefaultCompanyProfileSetting } from './seeds';
+import { buildAccountingSeed, buildDefaultCompanyProfileSetting, buildDefaultPaymentMethods } from './seeds';
 
 export function registerDatabaseMigrations(this: KasirkuDB) {
   this.version(1).stores({
@@ -2463,5 +2464,35 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
     });
 
     await batchTable.bulkPut(migratedBatches);
+  });
+
+  this.version(93).stores({
+    paymentMethods: 'id, &code, name, category, posting_account_id, is_system, is_active, sort_order, sync_status, updated_at, created_at',
+  }).upgrade(async (tx) => {
+    const now = new Date().toISOString();
+    const accountTable = tx.table<ChartOfAccount, string>('chartOfAccounts');
+    const paymentMethodTable = tx.table<PaymentMethodMaster, string>('paymentMethods');
+    const rolePermissionTable = tx.table<RolePermission, string>('rolePermissions');
+    const [accounts, existingMethods, existingPermissions] = await Promise.all([
+      accountTable.toArray(),
+      paymentMethodTable.toArray(),
+      rolePermissionTable.toArray(),
+    ]);
+    const existingIds = new Set(existingMethods.map((method) => method.id));
+    const existingCodes = new Set(existingMethods.map((method) => method.code.trim().toUpperCase()));
+    const methodsToAdd = buildDefaultPaymentMethods(accounts, now).filter((method) => (
+      !existingIds.has(method.id) && !existingCodes.has(method.code)
+    ));
+
+    if (methodsToAdd.length > 0) {
+      await paymentMethodTable.bulkPut(methodsToAdd);
+    }
+
+    const existingPermissionIds = new Set(existingPermissions.map((permission) => permission.id));
+    const permissionsToAdd = buildSystemRolePermissions(now)
+      .filter((permission) => !existingPermissionIds.has(permission.id));
+    if (permissionsToAdd.length > 0) {
+      await rolePermissionTable.bulkPut(permissionsToAdd);
+    }
   });
 }

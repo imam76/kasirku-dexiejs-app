@@ -5,7 +5,7 @@ import { isTauriRuntime } from '@/utils/export/platform';
 import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
-export const CURRENT_MODULE_CATALOG_VERSION = 9;
+export const CURRENT_MODULE_CATALOG_VERSION = 10;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 
 /**
@@ -61,6 +61,9 @@ const migrateEnabledModules = (modules: string[]): string[] => {
   if (enabledModules.has('PRODUCT')) {
     enabledModules.add('PRODUCTION');
     enabledModules.add('STOCK_OPNAME');
+  }
+  if (enabledModules.has('POS_TRANSACTION')) {
+    enabledModules.add('PAYMENT_METHOD');
   }
   if (LEGACY_SETTINGS_MODULES.some((moduleCode) => enabledModules.has(moduleCode))) {
     enabledModules.add('AREA');
