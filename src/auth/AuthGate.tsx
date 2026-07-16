@@ -17,6 +17,7 @@ import {
   BarChart3,
   DatabaseZap,
   RefreshCw,
+  ServerCog,
   ShieldCheck,
   Store,
   Zap,
@@ -111,6 +112,7 @@ interface HostDatabaseUnavailableProps {
   isChecking: boolean;
   errorMessage?: string | null;
   onReconnect: () => void;
+  onConfigureHost: () => void;
 }
 
 const HostDatabaseUnavailable = ({
@@ -118,6 +120,7 @@ const HostDatabaseUnavailable = ({
   isChecking,
   errorMessage,
   onReconnect,
+  onConfigureHost,
 }: HostDatabaseUnavailableProps) => {
   const isMigrationFailed = health?.status === "migration_failed";
   const statusMessage =
@@ -164,6 +167,15 @@ const HostDatabaseUnavailable = ({
         >
           Refresh / Reconnect
         </Button>
+        <Button
+          size="large"
+          block
+          className="!mt-3 !h-11"
+          onClick={onConfigureHost}
+          icon={<ServerCog size={16} />}
+        >
+          Ganti Host Database
+        </Button>
       </div>
     </div>
   );
@@ -192,6 +204,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   );
   const [remoteSetupError, setRemoteSetupError] = useState<string | null>(null);
   const [setupCheckRevision, setSetupCheckRevision] = useState(0);
+  const [isEditingDatabaseHost, setIsEditingDatabaseHost] = useState(false);
   const isPostgresCheckInFlightRef = useRef(false);
 
   const setupRequired = isTauri && remoteSetupStatus === "missing";
@@ -304,6 +317,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   }, [isTauri, postgresHealth?.available, setupCheckRevision]);
 
   const handleDatabaseConfigured = useCallback((health: PostgresHealth) => {
+    setIsEditingDatabaseHost(false);
     setPostgresHealth(health);
     setRemoteSetupStatus("idle");
     setRemoteSetupError(null);
@@ -348,7 +362,9 @@ export const AuthGate = ({ children }: AuthGateProps) => {
 
   if (
     isTauri &&
-    (!postgresHealth || postgresHealth.status === "unconfigured")
+    (isEditingDatabaseHost ||
+      !postgresHealth ||
+      postgresHealth.status === "unconfigured")
   ) {
     return (
       <HostDatabaseSetup
@@ -364,6 +380,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
         health={postgresHealth}
         isChecking={isCheckingPostgres}
         onReconnect={handlePostgresReconnect}
+        onConfigureHost={() => setIsEditingDatabaseHost(true)}
       />
     );
   }
@@ -375,6 +392,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
         isChecking={isCheckingPostgres}
         errorMessage={remoteSetupError}
         onReconnect={handlePostgresReconnect}
+        onConfigureHost={() => setIsEditingDatabaseHost(true)}
       />
     );
   }
