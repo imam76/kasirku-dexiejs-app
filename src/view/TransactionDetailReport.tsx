@@ -17,7 +17,7 @@ import {
 import { App, Button, Card, DatePicker, Empty, Input, Select, Space, Statistic, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import autoTable from 'jspdf-autotable';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
 import { usePosPaymentMethodFilterOptions } from '@/hooks/usePosPaymentMethodFilterOptions';
 
@@ -51,6 +51,7 @@ export default function TransactionDetailReport() {
   const [paymentMethod, setPaymentMethod] = useState('SEMUA');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const { options: paymentMethodOptions, isLoading: isLoadingPaymentMethods } = usePosPaymentMethodFilterOptions();
 
   const { data, isLoading, error, refetch } = useTransactionDetailReport(
@@ -58,7 +59,7 @@ export default function TransactionDetailReport() {
     endDate,
     paymentMethod,
     selectedCategories,
-    search
+    debouncedSearch
   );
   const categoryOptions = getProductCategoryOptions(t);
   const helperOptions = [
@@ -69,6 +70,14 @@ export default function TransactionDetailReport() {
     { key: 'last-month', label: t('report.lastMonth') },
     { key: 'custom', label: t('report.custom') },
   ];
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [search]);
 
   const columns = useMemo<ColumnsType<TransactionDetailReportRow>>(
     () => [
@@ -256,6 +265,7 @@ export default function TransactionDetailReport() {
     setPaymentMethod('SEMUA');
     setSelectedCategories([]);
     setSearch('');
+    setDebouncedSearch('');
   };
 
   const handleExportCsv = async (target: ExportTarget = 'auto') => {
