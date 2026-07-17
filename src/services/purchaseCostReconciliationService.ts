@@ -1,5 +1,6 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
+import { postPurchaseCostReconciliationJournal } from '@/services/generalLedgerService';
 import { enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
 import type {
   InventoryLot,
@@ -225,6 +226,12 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
       db.products,
       db.profitLogs,
       db.profitBalance,
+      db.chartOfAccounts,
+      db.enabledModules,
+      db.generalLedgerSetting,
+      db.accountingPeriods,
+      db.journalEntries,
+      db.journalEntryLines,
       db.activityLogs,
     ],
     async () => {
@@ -475,6 +482,7 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
       if (reconciliationItems.length > 0) {
         await db.purchaseCostReconciliationItems.bulkAdd(reconciliationItems);
       }
+      await postPurchaseCostReconciliationJournal(reconciliation, currentUser);
 
       await writeActivityLog({
         user: currentUser,

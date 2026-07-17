@@ -2307,7 +2307,9 @@ export type JournalSourceType =
   | 'ACCOUNTS_PAYABLE'
   | 'PURCHASE_INVOICE'
   | 'PURCHASE_INVOICE_PAYMENT'
+  | 'PURCHASE_COST_RECONCILIATION'
   | 'CASH_BANK_TRANSFER'
+  | 'CASH_BANK_RECONCILIATION'
   | 'PAYROLL_RUN'
   | 'EMPLOYEE_CASH_ADVANCE'
   | 'COOPERATIVE_SAVING'
@@ -2567,6 +2569,11 @@ export interface CashBankReconciliation {
   selected_transaction_count: number;
   selected_transaction_ids: string[];
   difference_amount: number;
+  adjustment_account_id?: string;
+  adjustment_account_code?: string;
+  adjustment_account_name?: string;
+  adjustment_account_type?: AccountType;
+  adjustment_transaction_id?: string;
   status: CashBankReconciliationStatus;
   notes?: string;
   voided_at?: string;

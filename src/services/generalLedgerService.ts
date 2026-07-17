@@ -6,6 +6,7 @@ import type {
   AccountNormalBalance,
   AccountType,
   AuthUser,
+  CashBankReconciliation,
   ChartOfAccount,
   CooperativeLoan,
   CooperativeLoanPayment,
@@ -25,6 +26,7 @@ import type {
   ProductionOrder,
   ProductionOrderCost,
   ProductionOrderItem,
+  PurchaseCostReconciliation,
   PurchaseDocument,
   PurchaseInvoicePayment,
   SalesDocument,
@@ -55,6 +57,8 @@ const SOURCE_EVENTS = {
   PURCHASE_RETURN_ISSUED: 'PURCHASE_RETURN_ISSUED',
   PURCHASE_INVOICE_PAYMENT_POSTED: 'PURCHASE_INVOICE_PAYMENT_POSTED',
   CASH_BANK_TRANSFER_POSTED: 'CASH_BANK_TRANSFER_POSTED',
+  CASH_BANK_RECONCILIATION_ADJUSTMENT_POSTED: 'CASH_BANK_RECONCILIATION_ADJUSTMENT_POSTED',
+  PURCHASE_COST_RECONCILIATION_POSTED: 'PURCHASE_COST_RECONCILIATION_POSTED',
   PAYROLL_RUN_PAID: 'PAYROLL_RUN_PAID',
   EMPLOYEE_CASH_ADVANCE_DISBURSED: 'EMPLOYEE_CASH_ADVANCE_DISBURSED',
   COOPERATIVE_SAVING_DEPOSIT_POSTED: 'COOPERATIVE_SAVING_DEPOSIT_POSTED',
@@ -274,6 +278,7 @@ const ACCOUNT_CANDIDATES = {
     ids: ['cooperative-saving-interest-expense', 'template-cooperative-saving-interest-expense'],
     codes: ['6095'],
   },
+  otherIncome: { ids: ['other-income', 'other-service-income'], codes: ['4900', '4090', '4060'] },
   employeeCashAdvanceReceivable: { ids: ['employee-cash-advance-receivable'], codes: ['1130'] },
   salaryExpense: { ids: ['salary-expense', 'template-salary-expense'], codes: ['6110', '6010'] },
   otherExpense: { ids: ['other-expense', 'template-other-expense'], codes: ['6900'] },
@@ -526,6 +531,20 @@ const createCreditLine = (
     department_id: departmentId,
     project_id: projectId,
   };
+};
+
+const createSignedLine = (
+  account: ChartOfAccount,
+  signedAmount: number,
+  debitDescription: string,
+  creditDescription: string,
+): JournalLineDraft | undefined => {
+  const amount = amountOrZero(Math.abs(signedAmount));
+  if (amount <= 0) return undefined;
+
+  return signedAmount > 0
+    ? createDebitLine(account, amount, debitDescription)
+    : createCreditLine(account, amount, creditDescription);
 };
 
 const normalizeLines = (lines: JournalLineDraft[]): NormalizedJournalLine[] => lines
@@ -1032,6 +1051,9 @@ export const postManualJournal = async ({
   requireRolePermission(currentUser?.role, 'JOURNAL_MANAGE');
 
   await assertAccountingPeriodOpen(entry_date);
+  if (!await isGeneralLedgerPostingEnabled(entry_date)) {
+    throw new Error('General Ledger belum aktif/siap untuk tanggal jurnal ini. Selesaikan setup akuntansi awal dan pastikan tanggal tidak sebelum cutoff.');
+  }
 
   const accounts = await db.chartOfAccounts.toArray();
   const accountById = new Map(accounts.map((account) => [account.id, account]));
@@ -1658,6 +1680,114 @@ export const postCashBankTransferJournal = async (input: {
       createCreditLine(input.fromAccount, amount, 'Kas/bank berkurang karena transfer internal'),
     ].filter((line): line is JournalLineDraft => Boolean(line)),
     actor: input.actor,
+  });
+};
+
+export const postCashBankReconciliationAdjustmentJournal = async (input: {
+  reconciliationId: string;
+  reconciliationNumber: string;
+  statementDate: string;
+  cashAccount: ChartOfAccount;
+  adjustmentAccount: ChartOfAccount;
+  differenceAmount: number;
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
+}) => {
+  if (!await isGeneralLedgerPostingEnabled(input.statementDate)) return undefined;
+
+  const amount = amountOrZero(Math.abs(input.differenceAmount));
+  if (amount <= 0) return undefined;
+  if (input.cashAccount.id === input.adjustmentAccount.id) {
+    throw new Error('Akun penyesuaian rekonsiliasi tidak boleh sama dengan akun kas/bank.');
+  }
+  if (!input.adjustmentAccount.is_active || !input.adjustmentAccount.is_postable) {
+    throw new Error(`Akun ${input.adjustmentAccount.code} - ${input.adjustmentAccount.name} harus aktif dan postable untuk jurnal rekonsiliasi.`);
+  }
+
+  const lines = input.differenceAmount > 0
+    ? [
+        createDebitLine(input.cashAccount, amount, 'Kas/bank bertambah dari selisih rekonsiliasi'),
+        createCreditLine(input.adjustmentAccount, amount, 'Pendapatan/penyesuaian selisih rekonsiliasi'),
+      ]
+    : [
+        createDebitLine(input.adjustmentAccount, amount, 'Beban/penyesuaian selisih rekonsiliasi'),
+        createCreditLine(input.cashAccount, amount, 'Kas/bank berkurang dari selisih rekonsiliasi'),
+      ];
+
+  return postBalancedJournalEntry({
+    source_type: 'CASH_BANK_RECONCILIATION',
+    source_id: input.reconciliationId,
+    source_number: input.reconciliationNumber,
+    source_event: SOURCE_EVENTS.CASH_BANK_RECONCILIATION_ADJUSTMENT_POSTED,
+    entry_date: input.statementDate,
+    description: `Penyesuaian rekonsiliasi kas/bank ${input.reconciliationNumber}`,
+    lines: lines.filter((line): line is JournalLineDraft => Boolean(line)),
+    actor: input.actor,
+  });
+};
+
+export const reverseCashBankReconciliationAdjustmentJournal = async (
+  reconciliation: CashBankReconciliation,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  entryDate?: string,
+) => reverseJournalEntriesForSource({
+  source_type: 'CASH_BANK_RECONCILIATION',
+  source_id: reconciliation.id,
+  source_event: SOURCE_EVENTS.CASH_BANK_RECONCILIATION_ADJUSTMENT_POSTED,
+  reason,
+  entry_date: entryDate,
+  actor,
+});
+
+export const postPurchaseCostReconciliationJournal = async (
+  reconciliation: PurchaseCostReconciliation,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  const entryDate = reconciliation.supplier_invoice_date || reconciliation.created_at;
+  if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
+
+  const soldVariance = amountOrZero(reconciliation.sold_cost_variance_amount);
+  const remainingVariance = amountOrZero(reconciliation.remaining_stock_variance_amount);
+  const payableVariance = roundCurrency(soldVariance + remainingVariance);
+  if (Math.abs(soldVariance) + Math.abs(remainingVariance) <= JOURNAL_TOLERANCE) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const cogsAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cogs, 'HPP');
+  const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+  const payableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsPayable, 'Hutang Usaha');
+
+  const lines = [
+    createSignedLine(
+      cogsAccount,
+      soldVariance,
+      'Koreksi HPP barang terjual dari rekonsiliasi biaya pembelian',
+      'Pembalikan HPP barang terjual dari rekonsiliasi biaya pembelian',
+    ),
+    createSignedLine(
+      inventoryAccount,
+      remainingVariance,
+      'Koreksi nilai persediaan tersisa dari rekonsiliasi biaya pembelian',
+      'Pembalikan nilai persediaan tersisa dari rekonsiliasi biaya pembelian',
+    ),
+    Math.abs(payableVariance) > JOURNAL_TOLERANCE
+      ? createSignedLine(
+          payableAccount,
+          -payableVariance,
+          'Hutang usaha berkurang dari rekonsiliasi biaya pembelian',
+          'Hutang usaha bertambah dari rekonsiliasi biaya pembelian',
+        )
+      : undefined,
+  ].filter((line): line is JournalLineDraft => Boolean(line));
+
+  return postBalancedJournalEntry({
+    source_type: 'PURCHASE_COST_RECONCILIATION',
+    source_id: reconciliation.id,
+    source_number: reconciliation.purchase_document_number,
+    source_event: SOURCE_EVENTS.PURCHASE_COST_RECONCILIATION_POSTED,
+    entry_date: entryDate,
+    description: `Rekonsiliasi HPP ${reconciliation.purchase_document_number}`,
+    lines,
+    actor,
   });
 };
 

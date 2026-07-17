@@ -73,12 +73,13 @@ test('rekonsiliasi cash & bank menyimpan status balanced dan melindungi kandidat
   ).toBe(balancedReconciliation.id);
 });
 
-test('rekonsiliasi cash & bank menyimpan selisih tanpa membuat adjustment', async ({ page }) => {
+test('rekonsiliasi cash & bank menyimpan selisih dengan adjustment dan jurnal COA', async ({ page }) => {
   const initialState = await openSeededReconciliationPage(page);
 
   await fillStatementEndingBalance(page, 950_000);
   await selectCashBankReconciliationCandidate(page, cashBankReconciliationFixtureIds.income);
   await expect(page.getByTestId('cash-bank-reconciliation-difference')).toContainText('Rp -50.000');
+  await expect(page.getByTestId('cash-bank-reconciliation-adjustment-account')).toBeVisible();
   await page.getByTestId('cash-bank-reconciliation-save-button').click();
 
   const differenceReconciliation = await waitForReconciliationStatus(page, 'DIFFERENCE');
@@ -86,8 +87,37 @@ test('rekonsiliasi cash & bank menyimpan selisih tanpa membuat adjustment', asyn
 
   const state = await getCashBankReconciliationFixtureState(page);
   expect(differenceReconciliation.difference_amount).toBe(-50_000);
-  expect(state.financeTransactions).toHaveLength(initialState.financeTransactions.length);
-  expect(state.journalEntries).toHaveLength(initialState.journalEntries.length);
+  expect(state.financeTransactions).toHaveLength(initialState.financeTransactions.length + 1);
+  const adjustment = state.financeTransactions.find((record) => (
+    record.reference_id === differenceReconciliation.id &&
+    record.category === 'SELISIH_KURANG_REKONSILIASI_KAS_BANK'
+  ));
+  expect(adjustment).toMatchObject({
+    type: 'EXPENSE',
+    amount: 50_000,
+    cash_bank_reconciliation_id: differenceReconciliation.id,
+  });
+  expect(adjustment?.account_id).toBeTruthy();
+
+  const adjustmentJournal = state.journalEntries.find((record) => record.source_id === differenceReconciliation.id);
+  expect(adjustmentJournal).toMatchObject({
+    source_type: 'CASH_BANK_RECONCILIATION',
+    source_event: 'CASH_BANK_RECONCILIATION_ADJUSTMENT_POSTED',
+    total_debit: 50_000,
+    total_credit: 50_000,
+  });
+  expect(state.journalEntryLines).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      journal_entry_id: adjustmentJournal?.id,
+      account_id: cashBankReconciliationFixtureIds.account,
+      credit: 50_000,
+    }),
+    expect.objectContaining({
+      journal_entry_id: adjustmentJournal?.id,
+      account_id: adjustment?.account_id,
+      debit: 50_000,
+    }),
+  ]));
 });
 
 test('void rekonsiliasi cash & bank membuka kembali transaksi kandidat', async ({ page }) => {

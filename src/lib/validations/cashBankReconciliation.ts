@@ -13,6 +13,7 @@ export const cashBankReconciliationSchema = z.object({
   statement_reference: optionalTrimmedString,
   statement_ending_balance: z.number({ message: 'Saldo akhir statement wajib diisi.' }),
   selected_transaction_ids: z.array(z.string()).min(1, 'Minimal pilih 1 transaksi untuk direkonsiliasi.'),
+  adjustment_account_id: optionalTrimmedString,
   notes: optionalTrimmedString,
 });
 
