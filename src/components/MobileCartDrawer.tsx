@@ -7,6 +7,8 @@ import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/ser
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
 import { useI18n } from '@/hooks/useI18n';
+import type { PosPaymentDraft } from '@/store/transactionStore';
+import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
 
 interface MobileCartDrawerProps {
   isOpen: boolean;
@@ -18,10 +20,9 @@ interface MobileCartDrawerProps {
   clearCart: () => void;
   total: number;
   showPayment: boolean;
-  paymentAmount: string;
+  paymentDrafts: PosPaymentDraft[];
+  paymentPreview: PosPaymentAllocationResult;
   paymentMethods: PosPaymentMethodOption[];
-  paymentMethodId?: string;
-  paymentReference: string;
   voucherCode: string;
   memberContactId?: string;
   redeemPoints: string;
@@ -31,15 +32,15 @@ interface MobileCartDrawerProps {
   selectedMember: Contact | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
-  setPaymentAmount: (amount: string) => void;
-  setPaymentMethodId: (id?: string) => void;
-  setPaymentReference: (reference: string) => void;
+  updatePaymentDraft: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
+  removePaymentDraft: (clientId: string) => void;
+  handleAddPayment: () => void;
   setVoucherCode: (voucherCode: string) => void;
   setMemberContactId: (memberContactId?: string) => void;
   setRedeemPoints: (points: string) => void;
   createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
   isCreatingMember: boolean;
-  handleCheckout: () => void;
+  handleCheckout: () => Promise<boolean>;
 }
 
 export default function MobileCartDrawer({
@@ -52,10 +53,9 @@ export default function MobileCartDrawer({
   clearCart,
   total,
   showPayment,
-  paymentAmount,
+  paymentDrafts,
+  paymentPreview,
   paymentMethods,
-  paymentMethodId,
-  paymentReference,
   voucherCode,
   memberContactId,
   redeemPoints,
@@ -65,9 +65,9 @@ export default function MobileCartDrawer({
   selectedMember,
   membershipSetting,
   setShowPayment,
-  setPaymentAmount,
-  setPaymentMethodId,
-  setPaymentReference,
+  updatePaymentDraft,
+  removePaymentDraft,
+  handleAddPayment,
   setVoucherCode,
   setMemberContactId,
   setRedeemPoints,
@@ -79,7 +79,7 @@ export default function MobileCartDrawer({
 
   return (
     <Drawer
-      title={t('cart.title')}
+      title={showPayment ? t('payment.pay') : t('cart.title')}
       placement="bottom"
       open={isOpen}
       onClose={onClose}
@@ -87,7 +87,7 @@ export default function MobileCartDrawer({
       rootClassName="mobile-bottom-drawer"
       className="lg:hidden"
       extra={
-        cart.length > 0 ? (
+        cart.length > 0 && !showPayment ? (
           <Button
             danger
             size="small"
@@ -106,7 +106,7 @@ export default function MobileCartDrawer({
       }}
     >
       <div className="flex h-full flex-col">
-        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-3">
+        <div className={`${showPayment ? 'hidden' : 'flex-1'} space-y-3 overflow-y-auto px-5 py-3`}>
           {cart.length === 0 ? (
             <p className="py-8 text-center text-gray-500">{t('cart.empty')}</p>
           ) : null}
@@ -123,14 +123,13 @@ export default function MobileCartDrawer({
         </div>
 
         {cart.length > 0 && (
-          <div className="border-t border-gray-100 px-5 pb-8 pt-4">
+          <div className={`${showPayment ? 'min-h-0 flex-1 overflow-y-auto' : ''} border-t border-gray-100 px-5 pb-8 pt-4`}>
             <CartSummary
               total={total}
               showPayment={showPayment}
-              paymentAmount={paymentAmount}
+              paymentDrafts={paymentDrafts}
+              paymentPreview={paymentPreview}
               paymentMethods={paymentMethods}
-              paymentMethodId={paymentMethodId}
-              paymentReference={paymentReference}
               voucherCode={voucherCode}
               memberContactId={memberContactId}
               redeemPoints={redeemPoints}
@@ -140,17 +139,18 @@ export default function MobileCartDrawer({
               selectedMember={selectedMember}
               membershipSetting={membershipSetting}
               setShowPayment={setShowPayment}
-              setPaymentAmount={setPaymentAmount}
-              setPaymentMethodId={setPaymentMethodId}
-              setPaymentReference={setPaymentReference}
+              updatePaymentDraft={updatePaymentDraft}
+              removePaymentDraft={removePaymentDraft}
+              handleAddPayment={handleAddPayment}
               setVoucherCode={setVoucherCode}
               setMemberContactId={setMemberContactId}
               setRedeemPoints={setRedeemPoints}
               createMember={createMember}
               isCreatingMember={isCreatingMember}
-              handleCheckout={() => {
-                handleCheckout();
-                onClose();
+              handleCheckout={async () => {
+                const success = await handleCheckout();
+                if (success) onClose();
+                return success;
               }}
               onCancel={() => setShowPayment(false)}
             />

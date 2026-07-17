@@ -11,6 +11,7 @@ import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { checkout } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
 import { usePosPaymentMethods } from '@/hooks/usePosPaymentMethods';
+import { allocatePosPayments } from '@/utils/posSplitPayment';
 import { evaluatePromos, getActivePromos } from '@/services/promoService';
 import {
   DEFAULT_MEMBERSHIP_SETTING,
@@ -40,18 +41,17 @@ export const useTransaction = () => {
     products,
     cart,
     searchTerm,
-    paymentAmount,
-    paymentMethodId,
-    paymentReference,
+    paymentDrafts,
     voucherCode,
     memberContactId,
     redeemPoints,
     showPayment,
     setProducts,
     setSearchTerm: setStoreSearchTerm,
-    setPaymentAmount,
-    setPaymentMethodId,
-    setPaymentReference,
+    setPaymentDrafts,
+    addPaymentDraft,
+    updatePaymentDraft,
+    removePaymentDraft,
     setVoucherCode,
     setMemberContactId,
     setRedeemPoints,
@@ -63,15 +63,20 @@ export const useTransaction = () => {
   } = useTransactionStore();
   const [productPage, setProductPage] = useState(1);
   const { options: paymentMethods, validMethods } = usePosPaymentMethods();
-  const selectedPaymentMethod = validMethods.find((method) => method.id === paymentMethodId);
   const productSearchTerm = searchTerm.trim().toLowerCase();
 
   useEffect(() => {
-    if (selectedPaymentMethod || validMethods.length === 0) return;
+    if (paymentDrafts.length > 0 || validMethods.length === 0) return;
     const defaultMethod = validMethods.find((method) => method.code.toUpperCase() === 'TUNAI')
       ?? validMethods[0];
-    setPaymentMethodId(defaultMethod?.id);
-  }, [selectedPaymentMethod, setPaymentMethodId, validMethods]);
+    setPaymentDrafts([{
+      clientId: crypto.randomUUID(),
+      paymentMethodId: defaultMethod?.id,
+      amount: '',
+      reference: '',
+      isAmountAutoFilled: false,
+    }]);
+  }, [paymentDrafts.length, setPaymentDrafts, validMethods]);
 
   const setSearchTerm = useCallback((value: string) => {
     setProductPage(1);
@@ -184,6 +189,48 @@ export const useTransaction = () => {
     return membershipPreview.total_after_redeem;
   }, [membershipPreview.total_after_redeem]);
 
+  const paymentPreview = useMemo(() => allocatePosPayments(
+    membershipPreview.total_after_redeem,
+    paymentDrafts.map((draft) => ({
+      key: draft.clientId,
+      paymentMethodId: draft.paymentMethodId,
+      category: validMethods.find((method) => method.id === draft.paymentMethodId)?.category,
+      tenderedAmount: Number(draft.amount),
+    })),
+    { allowIncomplete: true },
+  ), [membershipPreview.total_after_redeem, paymentDrafts, validMethods]);
+
+  useEffect(() => {
+    const last = paymentDrafts[paymentDrafts.length - 1];
+    if (!last?.isAmountAutoFilled) return;
+    const preceding = paymentDrafts.slice(0, -1);
+    const precedingPreview = allocatePosPayments(
+      membershipPreview.total_after_redeem,
+      preceding.map((draft) => ({
+        key: draft.clientId,
+        paymentMethodId: draft.paymentMethodId,
+        category: validMethods.find((method) => method.id === draft.paymentMethodId)?.category,
+        tenderedAmount: Number(draft.amount),
+      })),
+      { allowIncomplete: true },
+    );
+    if (precedingPreview.errors.length > 0) return;
+    const nextAmount = String(precedingPreview.remainingAmount);
+    if (last.amount !== nextAmount) updatePaymentDraft(last.clientId, { amount: nextAmount });
+  }, [membershipPreview.total_after_redeem, paymentDrafts, updatePaymentDraft, validMethods]);
+
+  const handleAddPayment = useCallback(() => {
+    if (paymentPreview.errors.length > 0 || paymentPreview.remainingAmount <= 0) return;
+    if (paymentDrafts.length >= validMethods.length) return;
+    addPaymentDraft({
+      clientId: crypto.randomUUID(),
+      paymentMethodId: undefined,
+      amount: String(paymentPreview.remainingAmount),
+      reference: '',
+      isAmountAutoFilled: true,
+    });
+  }, [addPaymentDraft, paymentDrafts.length, paymentPreview, validMethods.length]);
+
   const getTransactionErrorContent = (error: TransactionError) => {
     if (error.code === 'OUT_OF_STOCK') {
       return {
@@ -244,42 +291,27 @@ export const useTransaction = () => {
   }, []);
 
   const handleCheckout = async () => {
-    const total = membershipPreview.total_after_redeem;
-    if (!selectedPaymentMethod) {
+    if (paymentPreview.errors.length > 0 || !paymentPreview.isComplete) {
       modal.error({
         title: t('payment.invalidTitle'),
-        content: t('payment.noMethodAvailable'),
+        content: paymentPreview.errors[0] ?? t('payment.invalidContent'),
       });
-      return;
-    }
-    if (selectedPaymentMethod.requires_reference && !paymentReference.trim()) {
-      modal.error({
-        title: t('payment.invalidTitle'),
-        content: t('payment.referenceRequired'),
-      });
-      return;
-    }
-    const payment = selectedPaymentMethod.category === 'CASH' ? parseFloat(paymentAmount) : total;
-
-    if (isNaN(payment) || payment < total) {
-      modal.error({
-        title: t('payment.invalidTitle'),
-        content: t('payment.invalidContent'),
-      });
-      return;
+      return false;
     }
 
     try {
       const checkoutResult = await checkout({
         cart,
-        payment,
-        paymentMethodId: selectedPaymentMethod.id,
-        paymentReference,
+        payments: paymentDrafts.map((draft) => ({
+          paymentMethodId: draft.paymentMethodId ?? '',
+          tenderedAmount: Number(draft.amount),
+          paymentReference: draft.reference,
+        })),
         voucherCode,
         memberContactId,
         redeemPoints: Number(redeemPoints || 0),
       });
-      const { transaction, items, warnings } = checkoutResult;
+      const { transaction, items, payments, warnings } = checkoutResult;
 
       modal.success({
         title: t('checkout.successTitle'),
@@ -288,14 +320,13 @@ export const useTransaction = () => {
             <p className="text-gray-700">
               <span className="font-semibold"> {t('checkout.transactionNumber')}: </span> {transaction.transaction_number}
             </p>
-            <p className="text-gray-700">
-              <span className="font-semibold"> {t('checkout.method')}: </span> {transaction.payment_method_name ?? selectedPaymentMethod.name}
-            </p>
-            {transaction.payment_reference && (
-              <p className="text-gray-700">
-                <span className="font-semibold">{t('checkout.paymentReference')}:</span> {transaction.payment_reference}
+            {payments.map((payment) => (
+              <p key={payment.id} className="text-gray-700">
+                <span className="font-semibold">{payment.payment_method_name}:</span>{' '}
+                Rp {formatCurrency(payment.tendered_amount)}
+                {payment.payment_reference ? ` (${payment.payment_reference})` : ''}
               </p>
-            )}
+            ))}
             < p className="text-gray-700" >
               <span className="font-semibold"> {t('cart.total')}:</span> Rp {formatCurrency(transaction.total_amount)}
             </p>
@@ -342,7 +373,7 @@ export const useTransaction = () => {
       queryClient.invalidateQueries({ queryKey: ['membershipSetting'] });
       reset();
 
-      void printReceiptAfterTransaction({ ...transaction, items })
+      void printReceiptAfterTransaction({ ...transaction, items, payments })
         .then((result) => {
           queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
 
@@ -360,6 +391,7 @@ export const useTransaction = () => {
       
       // Trigger feedback check
       window.dispatchEvent(new Event('check-feedback'));
+      return true;
     } catch (error) {
       console.error('Checkout failed:', error);
       if (error instanceof Error && error.name === 'NotFoundError') {
@@ -372,6 +404,7 @@ export const useTransaction = () => {
         title: t('checkout.failedTitle'),
         content: error instanceof Error ? error.message : t('checkout.failedContent'),
       });
+      return false;
     }
   };
 
@@ -379,10 +412,9 @@ export const useTransaction = () => {
     products,
     cart,
     searchTerm,
-    paymentAmount,
+    paymentDrafts,
+    paymentPreview,
     paymentMethods,
-    paymentMethodId,
-    paymentReference,
     voucherCode,
     memberContactId,
     redeemPoints,
@@ -404,11 +436,11 @@ export const useTransaction = () => {
     calculateSubtotal,
     calculateTotal,
     handleCheckout,
+    handleAddPayment,
     clearCart: reset,
     setSearchTerm,
-    setPaymentAmount,
-    setPaymentMethodId,
-    setPaymentReference,
+    updatePaymentDraft,
+    removePaymentDraft,
     setVoucherCode,
     setMemberContactId,
     setRedeemPoints,

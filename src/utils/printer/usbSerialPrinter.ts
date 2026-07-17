@@ -136,13 +136,19 @@ const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
   }
 
   push(BOLD_ON, text(padLine('TOTAL', `Rp ${currencyFormat(receipt.totalAmount)}`)), BOLD_OFF);
-  const paymentMethodLabel = receipt.paymentMethodCode
-    && receipt.paymentMethodCode.toUpperCase() !== receipt.paymentMethod.toUpperCase()
-    ? `${receipt.paymentMethod} [${receipt.paymentMethodCode}]`
-    : receipt.paymentMethod;
-  push(text(padLine('Metode', paymentMethodLabel)));
-  if (receipt.paymentReference) {
-    push(text(padLine('Referensi', receipt.paymentReference)));
+  if (receipt.payments && receipt.payments.length > 0) {
+    push(BOLD_ON, text('PEMBAYARAN'), BOLD_OFF);
+    receipt.payments.forEach((payment) => {
+      push(text(padLine(payment.methodName, `Rp ${currencyFormat(payment.tenderedAmount)}`)));
+      if (payment.reference) push(text(`  Ref: ${payment.reference}`));
+    });
+  } else {
+    const paymentMethodLabel = receipt.paymentMethodCode
+      && receipt.paymentMethodCode.toUpperCase() !== receipt.paymentMethod.toUpperCase()
+      ? `${receipt.paymentMethod} [${receipt.paymentMethodCode}]`
+      : receipt.paymentMethod;
+    push(text(padLine('Metode', paymentMethodLabel)));
+    if (receipt.paymentReference) push(text(padLine('Referensi', receipt.paymentReference)));
   }
   push(text(padLine('Bayar', `Rp ${currencyFormat(receipt.paymentAmount)}`)));
   push(text(padLine('Kembali', `Rp ${currencyFormat(receipt.changeAmount)}`)));

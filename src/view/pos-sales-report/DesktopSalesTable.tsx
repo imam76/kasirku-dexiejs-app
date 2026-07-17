@@ -1,12 +1,13 @@
 import dayjs from '@/lib/dayjs';
-import { Transaction } from '@/types';
+import type { PosTransactionWithPayments } from '@/hooks/useReports';
 import { formatCurrency } from '@/utils/formatters';
 import { useI18n } from '@/hooks/useI18n';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
+import { formatPosPaymentSummary } from '@/utils/posSplitPayment';
 
 interface DesktopSalesTableProps {
-  transactions: Transaction[];
+  transactions: PosTransactionWithPayments[];
   totalRevenue: number;
   totalDiscount: number;
 }
@@ -34,6 +35,7 @@ export default function DesktopSalesTable({ transactions, totalRevenue, totalDis
             <>
               {transactions.map((transaction) => {
                 const payment = getTransactionPaymentSnapshot(transaction);
+                const paymentName = transaction.payments.length > 1 ? formatPosPaymentSummary(transaction.payments) : payment.name;
                 return (
                 <tr key={transaction.id} className="hover:bg-gray-50/80 transition-colors group">
                   <td className="py-4 px-4 text-gray-800 font-medium">
@@ -52,7 +54,7 @@ export default function DesktopSalesTable({ transactions, totalRevenue, totalDis
                   </td>
                   <td className="py-4 px-4">
                     <PaymentMethodBadge
-                      name={payment.name}
+                      name={paymentName}
                       category={payment.category}
                       className="rounded-full"
                     />

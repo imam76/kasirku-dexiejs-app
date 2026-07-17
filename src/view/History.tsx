@@ -9,12 +9,14 @@ import { formatDate, formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
-import { Transaction, TransactionItem, TransactionReceiptInput } from '@/types';
+import { PosTransactionPayment, Transaction, TransactionItem, TransactionReceiptInput } from '@/types';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
+import { getTransactionPaymentsOrLegacyFallback } from '@/utils/posSplitPayment';
 
 interface TransactionWithItems extends Transaction {
   items?: TransactionItem[];
+  payments?: PosTransactionPayment[];
 }
 
 export default function History() {
@@ -210,6 +212,7 @@ export default function History() {
                 const isVoided = isTransactionVoided(transaction);
                 const transactionDiscount = transaction.discount_amount ?? 0;
                 const paymentSnapshot = getTransactionPaymentSnapshot(transaction);
+                const transactionPayments = getTransactionPaymentsOrLegacyFallback(transaction, transaction.payments);
 
                 return (
                   <div
@@ -367,32 +370,17 @@ export default function History() {
                               </div>
                             </div>
                           )}
-                          <div className="mb-3 rounded-lg border border-gray-200 bg-white p-3 text-sm">
-                            <div className="flex justify-between gap-3 text-gray-700">
-                              <span>{t('report.paymentMethod')}</span>
-                              <span className="font-semibold text-right">
-                                {paymentSnapshot.name}
-                                {paymentSnapshot.code.toUpperCase() !== paymentSnapshot.name.toUpperCase()
-                                  ? ` (${paymentSnapshot.code})`
-                                  : ''}
-                              </span>
-                            </div>
-                            {paymentSnapshot.reference && (
-                              <div className="mt-1 flex justify-between gap-3 text-gray-700">
-                                <span>{t('checkout.paymentReference')}</span>
-                                <span className="font-mono text-right">{paymentSnapshot.reference}</span>
+                          <div className="mb-3 space-y-2 rounded-lg border border-gray-200 bg-white p-3 text-sm">
+                            {transactionPayments.map((payment) => (
+                              <div key={payment.id} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                <div className="flex justify-between gap-3"><b>{payment.payment_method_name}</b><b>Rp {formatCurrency(payment.tendered_amount)}</b></div>
+                                {payment.payment_reference && <div className="text-xs text-gray-600">{t('checkout.paymentReference')}: {payment.payment_reference}</div>}
+                                {(payment.payment_posting_account_code || payment.payment_posting_account_name) && (
+                                  <div className="text-xs text-gray-600">{t('finance.cashAccount')}: {[payment.payment_posting_account_code, payment.payment_posting_account_name].filter(Boolean).join(' - ')}</div>
+                                )}
+                                {payment.change_amount > 0 && <div className="text-xs text-green-700">{t('payment.change')}: Rp {formatCurrency(payment.change_amount)}</div>}
                               </div>
-                            )}
-                            {(paymentSnapshot.postingAccountCode || paymentSnapshot.postingAccountName) && (
-                              <div className="mt-1 flex justify-between gap-3 text-gray-700">
-                                <span>{t('finance.cashAccount')}</span>
-                                <span className="text-right">
-                                  {[paymentSnapshot.postingAccountCode, paymentSnapshot.postingAccountName]
-                                    .filter(Boolean)
-                                    .join(' - ')}
-                                </span>
-                              </div>
-                            )}
+                            ))}
                           </div>
                           <div className="space-y-2">
                             {transaction.items.map((item) => {

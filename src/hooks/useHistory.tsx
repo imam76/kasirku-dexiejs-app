@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
-import { Transaction, TransactionItem } from '../types';
+import { PosTransactionPayment, Transaction, TransactionItem } from '../types';
+import { groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
 import { voidTransaction as voidTransactionService } from '@/services/transactionVoidService';
 
 interface TransactionWithItems extends Transaction {
   items?: TransactionItem[];
+  payments?: PosTransactionPayment[];
 }
 
 const PAGE_SIZE = 10;
@@ -37,15 +39,19 @@ export const useHistory = () => {
 
       const count = await db.transactions.count();
 
-      const data = await Promise.all(
-        transactions.map(async (t) => {
-          const items = await db.transactionItems
-            .where('transaction_id')
-            .equals(t.id)
-            .toArray();
-          return { ...t, items } as TransactionWithItems;
-        })
-      );
+      const ids = transactions.map((transaction) => transaction.id);
+      const [items, payments] = ids.length > 0 ? await Promise.all([
+        db.transactionItems.where('transaction_id').anyOf(ids).toArray(),
+        db.posTransactionPayments.where('transaction_id').anyOf(ids).toArray(),
+      ]) : [[], []];
+      const itemsByTransaction = new Map<string, TransactionItem[]>();
+      items.forEach((item) => itemsByTransaction.set(item.transaction_id, [...(itemsByTransaction.get(item.transaction_id) ?? []), item]));
+      const paymentsByTransaction = groupPosPaymentsByTransaction(payments);
+      const data = transactions.map((transaction) => ({
+        ...transaction,
+        items: itemsByTransaction.get(transaction.id) ?? [],
+        payments: paymentsByTransaction.get(transaction.id) ?? [],
+      } as TransactionWithItems));
 
       return {
         data,

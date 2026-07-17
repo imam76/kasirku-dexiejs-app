@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem, PaymentMethodCategory } from '@/types';
+import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem, PaymentMethodCategory, PosTransactionPayment } from '@/types';
 import { isExpenseReportFinanceTransaction, isIncomeReportFinanceTransaction } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
@@ -26,13 +26,17 @@ import type {
 import type { SoldItemSummary } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 import {
-  getTransactionPaymentMethodCode,
   getTransactionPaymentSnapshot,
   normalizePaymentMethodCode,
 } from '@/utils/posPaymentMethod';
+import { formatPosPaymentSummary, getTransactionPaymentsOrLegacyFallback, groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
+
+export interface PosTransactionWithPayments extends Transaction {
+  payments: PosTransactionPayment[];
+}
 
 interface PosSalesReportData {
-  transactions: Transaction[];
+  transactions: PosTransactionWithPayments[];
   totalRevenue: number;
   totalDiscount: number;
   totalProfit: number;
@@ -323,14 +327,23 @@ export const usePosSalesReport = (
           .reverse();
       }
 
-      let transactions = filterActiveTransactions(await collection.toArray());
+      const baseTransactions = filterActiveTransactions(await collection.toArray());
+      const candidateIds = baseTransactions.map((transaction) => transaction.id);
+      const allPayments = candidateIds.length > 0
+        ? await db.posTransactionPayments.where('transaction_id').anyOf(candidateIds).toArray()
+        : [];
+      const paymentsByTransaction = groupPosPaymentsByTransaction(allPayments);
+      let transactions: PosTransactionWithPayments[] = baseTransactions.map((transaction) => ({
+        ...transaction,
+        payments: getTransactionPaymentsOrLegacyFallback(transaction, paymentsByTransaction.get(transaction.id)),
+      }));
 
       // Filter by payment method if provided
       const normalizedPaymentMethodCode = normalizePaymentMethodCode(paymentMethodCode);
       if (normalizedPaymentMethodCode && normalizedPaymentMethodCode !== 'SEMUA') {
-        transactions = transactions.filter((transaction) => (
-          getTransactionPaymentMethodCode(transaction) === normalizedPaymentMethodCode
-        ));
+        transactions = transactions.filter((transaction) => transaction.payments.some((payment) => (
+          normalizePaymentMethodCode(payment.payment_method_code) === normalizedPaymentMethodCode
+        )));
       }
 
       const totalRevenue = transactions.reduce((sum, t) => sum + t.total_amount, 0);
@@ -554,13 +567,22 @@ export const useTransactionDetailReport = (
           .reverse();
       }
 
-      let transactions = filterActiveTransactions(await collection.toArray());
+      const baseTransactions = filterActiveTransactions(await collection.toArray());
+      const candidateIds = baseTransactions.map((transaction) => transaction.id);
+      const allPayments = candidateIds.length > 0
+        ? await db.posTransactionPayments.where('transaction_id').anyOf(candidateIds).toArray()
+        : [];
+      const paymentsByTransaction = groupPosPaymentsByTransaction(allPayments);
+      let transactions = baseTransactions.map((transaction) => ({
+        ...transaction,
+        payments: getTransactionPaymentsOrLegacyFallback(transaction, paymentsByTransaction.get(transaction.id)),
+      }));
 
       const normalizedPaymentMethodCode = normalizePaymentMethodCode(paymentMethodCode);
       if (normalizedPaymentMethodCode && normalizedPaymentMethodCode !== 'SEMUA') {
-        transactions = transactions.filter((transaction) => (
-          getTransactionPaymentMethodCode(transaction) === normalizedPaymentMethodCode
-        ));
+        transactions = transactions.filter((transaction) => transaction.payments.some((payment) => (
+          normalizePaymentMethodCode(payment.payment_method_code) === normalizedPaymentMethodCode
+        )));
       }
 
       const transactionIds = transactions.map((transaction) => transaction.id);
@@ -584,9 +606,16 @@ export const useTransactionDetailReport = (
       ]);
 
       const transactionMap = new Map(transactions.map((transaction) => [transaction.id, transaction]));
-      const paymentSnapshotMap = new Map(transactions.map((transaction) => (
-        [transaction.id, getTransactionPaymentSnapshot(transaction)]
-      )));
+      const paymentSnapshotMap = new Map(transactions.map((transaction) => {
+        const snapshot = getTransactionPaymentSnapshot(transaction);
+        return [transaction.id, transaction.payments.length > 1 ? {
+          ...snapshot,
+          code: 'SPLIT',
+          name: formatPosPaymentSummary(transaction.payments),
+          category: 'OTHER' as const,
+          reference: transaction.payments.map((payment) => payment.payment_reference).filter(Boolean).join(', ') || undefined,
+        } : snapshot];
+      }));
       const productMap = new Map(products.map((product) => [product.id, product]));
       const transactionProfitMap = items.reduce((acc, item) => {
         acc[item.transaction_id] = (acc[item.transaction_id] || 0) + (item.profit || 0);

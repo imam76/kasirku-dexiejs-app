@@ -19,6 +19,7 @@ import MobileSalesList from './pos-sales-report/MobileSalesList';
 import TopProductsTable from './pos-sales-report/TopProductsTable';
 import { usePosPaymentMethodFilterOptions } from '@/hooks/usePosPaymentMethodFilterOptions';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
+import { formatPosPaymentSummary } from '@/utils/posSplitPayment';
 
 const { Title, Text } = Typography;
 
@@ -71,7 +72,9 @@ export default function PosSalesReport() {
             const discount = t.discount_amount ?? 0;
             const subtotal = t.subtotal_amount ?? t.total_amount + discount;
             const payment = getTransactionPaymentSnapshot(t);
-            const paymentLabel = payment.code.toUpperCase() === payment.name.toUpperCase()
+            const paymentLabel = t.payments.length > 1
+              ? formatPosPaymentSummary(t.payments)
+              : payment.code.toUpperCase() === payment.name.toUpperCase()
               ? payment.name
               : `${payment.name} [${payment.code}]`;
 
@@ -172,12 +175,14 @@ export default function PosSalesReport() {
         [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), 'Kode Metode', t('checkout.paymentReference'), 'Member', t('cart.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.change'), 'Poin Didapat', 'Poin Dipakai'],
         ...data.transactions.map((transaction) => {
           const payment = getTransactionPaymentSnapshot(transaction);
+          const paymentName = transaction.payments.length > 1 ? formatPosPaymentSummary(transaction.payments) : payment.name;
+          const paymentReferences = transaction.payments.map((item) => item.payment_reference).filter(Boolean).join(', ');
           return [
             transaction.transaction_number,
             dayjs(transaction.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
-            payment.name,
-            payment.code,
-            payment.reference ?? '',
+            paymentName,
+            transaction.payments.length > 1 ? 'SPLIT' : payment.code,
+            paymentReferences || payment.reference || '',
             transaction.member_name ? `${transaction.member_number ? `${transaction.member_number} - ` : ''}${transaction.member_name}` : '',
             transaction.subtotal_amount ?? transaction.total_amount + (transaction.discount_amount ?? 0),
             transaction.discount_amount ?? 0,
@@ -213,6 +218,20 @@ export default function PosSalesReport() {
             ] : []),
           ];
         }),
+        [],
+        ['SECTION 3: PAYMENT ALLOCATIONS'],
+        [t('report.transactionNo'), 'Urutan', t('report.paymentMethod'), 'Kode Metode', t('checkout.paymentReference'), 'Nominal Diterima', 'Nominal Dialokasikan', t('report.change'), t('finance.cashAccount')],
+        ...data.transactions.flatMap((transaction) => transaction.payments.map((payment) => [
+          transaction.transaction_number,
+          payment.sequence + 1,
+          payment.payment_method_name,
+          payment.payment_method_code,
+          payment.payment_reference ?? '',
+          payment.tendered_amount,
+          payment.applied_amount,
+          payment.change_amount,
+          [payment.payment_posting_account_code, payment.payment_posting_account_name].filter(Boolean).join(' - '),
+        ])),
         [],
         [t('report.summary')],
         ...summaryRows,

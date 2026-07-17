@@ -1,12 +1,13 @@
 import dayjs from '@/lib/dayjs';
-import { Transaction } from '@/types';
+import type { PosTransactionWithPayments } from '@/hooks/useReports';
 import { formatCurrency } from '@/utils/formatters';
 import { useI18n } from '@/hooks/useI18n';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
+import { formatPosPaymentSummary } from '@/utils/posSplitPayment';
 
 interface MobileSalesListProps {
-  transactions: Transaction[];
+  transactions: PosTransactionWithPayments[];
   totalRevenue: number;
   totalDiscount: number;
 }
@@ -42,6 +43,7 @@ export default function MobileSalesList({ transactions, totalRevenue, totalDisco
       <div className="grid grid-cols-1 gap-4">
         {transactions.map((transaction) => {
           const payment = getTransactionPaymentSnapshot(transaction);
+          const paymentName = transaction.payments.length > 1 ? formatPosPaymentSummary(transaction.payments) : payment.name;
           return (
           <div
             key={transaction.id}
@@ -61,7 +63,7 @@ export default function MobileSalesList({ transactions, totalRevenue, totalDisco
                   </span>
                 )}
                 <PaymentMethodBadge
-                  name={payment.name}
+                  name={paymentName}
                   category={payment.category}
                   className="w-fit uppercase"
                 />

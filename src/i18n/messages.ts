@@ -1842,6 +1842,11 @@ export const messages = {
     'payment.reference': 'Nomor Referensi',
     'payment.referencePlaceholder': 'Masukkan nomor referensi pembayaran',
     'payment.referenceRequired': 'Nomor referensi pembayaran wajib diisi.',
+    'payment.add': 'Tambah Pembayaran',
+    'payment.remove': 'Hapus Pembayaran',
+    'payment.line': 'Pembayaran {number}',
+    'payment.totalPaid': 'Total Dibayar',
+    'payment.remaining': 'Sisa Tagihan',
 
     'promo.voucherPlaceholder': 'Kode voucher (opsional)',
     'promo.noVoucherDiscount': 'Belum ada diskon yang cocok untuk voucher ini.',
@@ -3730,6 +3735,11 @@ export const messages = {
     'payment.reference': 'Reference Number',
     'payment.referencePlaceholder': 'Enter the payment reference number',
     'payment.referenceRequired': 'Payment reference number is required.',
+    'payment.add': 'Add Payment',
+    'payment.remove': 'Remove Payment',
+    'payment.line': 'Payment {number}',
+    'payment.totalPaid': 'Total Paid',
+    'payment.remaining': 'Remaining',
 
     'promo.voucherPlaceholder': 'Voucher code (optional)',
     'promo.noVoucherDiscount': 'No matching discount for this voucher yet.',

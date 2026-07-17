@@ -48,6 +48,16 @@ class ReceiptLineItemArg {
 }
 
 @InvokeArg
+class ReceiptPaymentLineArg {
+  var methodName: String = ""
+  var methodCode: String = ""
+  var reference: String = ""
+  var tenderedAmount: Double = 0.0
+  var appliedAmount: Double = 0.0
+  var changeAmount: Double = 0.0
+}
+
+@InvokeArg
 class ReceiptPayloadArg {
   var transactionId: String = ""
   var transactionNumber: String = ""
@@ -56,6 +66,7 @@ class ReceiptPayloadArg {
   var paymentMethod: String = ""
   var paymentMethodCode: String = ""
   var paymentReference: String = ""
+  var payments: List<ReceiptPaymentLineArg> = emptyList()
   var memberName: String = ""
   var memberNumber: String = ""
   var items: List<ReceiptLineItemArg> = emptyList()
@@ -383,9 +394,9 @@ object EscPosReceiptRenderer {
     } else {
       receipt.paymentMethod
     }
-    output.writeLine(twoColumns("Metode", paymentMethodLabel))
-    if (receipt.paymentReference.isNotBlank()) {
-      output.writeLine(twoColumns("Referensi", receipt.paymentReference))
+    if (receipt.payments.isEmpty()) {
+      output.writeLine(twoColumns("Metode", paymentMethodLabel))
+      if (receipt.paymentReference.isNotBlank()) output.writeLine(twoColumns("Referensi", receipt.paymentReference))
     }
     if (receipt.memberName.isNotBlank()) {
       output.writeLine(twoColumns("Member", receipt.memberNumber.ifBlank { receipt.memberName }))
@@ -410,6 +421,13 @@ object EscPosReceiptRenderer {
     output.writeCommand(0x1B, 0x45, 0x01)
     output.writeLine(twoColumns("TOTAL", formatCurrency(receipt.totalAmount)))
     output.writeCommand(0x1B, 0x45, 0x00)
+    if (receipt.payments.isNotEmpty()) {
+      output.writeLine("PEMBAYARAN")
+      receipt.payments.forEach { payment ->
+        output.writeLine(twoColumns(payment.methodName, formatCurrency(payment.tenderedAmount)))
+        if (payment.reference.isNotBlank()) output.writeLine("  Ref: ${payment.reference}".fit(PAPER_WIDTH))
+      }
+    }
     output.writeLine(twoColumns("BAYAR", formatCurrency(receipt.paymentAmount)))
     output.writeLine(twoColumns("KEMBALI", formatCurrency(receipt.changeAmount)))
     if (receipt.membershipPointsEarned > 0.0 || receipt.membershipPointsRedeemed > 0.0) {

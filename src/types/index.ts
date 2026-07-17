@@ -72,6 +72,7 @@ export interface Product {
 
 export type PaymentMethod = 'TUNAI' | 'NON_TUNAI';
 export type PaymentMethodCategory = 'CASH' | 'QRIS' | 'BANK_TRANSFER' | 'MARKETPLACE' | 'OTHER';
+export type PosPaymentMode = 'SINGLE' | 'SPLIT';
 export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 export type TransactionStatus = 'COMPLETED' | 'VOIDED';
 export type CashierSessionStatus = 'OPEN' | 'CLOSED';
@@ -1427,6 +1428,7 @@ export interface Transaction {
   total_amount: number;
   payment_amount: number;
   change_amount: number;
+  payment_mode?: PosPaymentMode;
   payment_method: PaymentMethod;
   payment_method_id?: string;
   payment_method_code?: string;
@@ -1442,6 +1444,26 @@ export interface Transaction {
   receipt_status?: ReceiptPrintStatus;
   receipt_printed_at?: string;
   receipt_print_error?: string;
+  created_at: string;
+}
+
+export interface PosTransactionPayment {
+  id: string;
+  transaction_id: string;
+  sequence: number;
+  tendered_amount: number;
+  applied_amount: number;
+  change_amount: number;
+  payment_method: PaymentMethod;
+  payment_method_id?: string;
+  payment_method_code: string;
+  payment_method_name: string;
+  payment_method_category: PaymentMethodCategory;
+  payment_reference?: string;
+  payment_posting_account_id?: string;
+  payment_posting_account_code?: string;
+  payment_posting_account_name?: string;
+  finance_transaction_id?: string;
   created_at: string;
 }
 
@@ -1792,6 +1814,7 @@ export interface ReceiptPayload {
   paymentMethod: string;
   paymentMethodCode?: string;
   paymentReference?: string;
+  payments?: ReceiptPaymentLine[];
   memberName?: string;
   memberNumber?: string;
   items: ReceiptLineItem[];
@@ -1808,6 +1831,15 @@ export interface ReceiptPayload {
   footer?: string;
 }
 
+export interface ReceiptPaymentLine {
+  methodName: string;
+  methodCode?: string;
+  reference?: string;
+  tenderedAmount: number;
+  appliedAmount: number;
+  changeAmount: number;
+}
+
 export interface ReceiptPrintResult {
   success: boolean;
   status: ReceiptPrintStatus;
@@ -1816,6 +1848,7 @@ export interface ReceiptPrintResult {
 
 export interface TransactionReceiptInput extends Transaction {
   items: TransactionItem[];
+  payments?: PosTransactionPayment[];
 }
 
 export type PrinterErrorCode =
