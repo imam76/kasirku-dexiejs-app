@@ -78,6 +78,19 @@ pub struct ReceiptLineItem {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ReceiptPaymentLine {
+    method_name: String,
+    #[serde(default)]
+    method_code: Option<String>,
+    #[serde(default)]
+    reference: Option<String>,
+    tendered_amount: f64,
+    applied_amount: f64,
+    change_amount: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReceiptPayload {
     transaction_id: String,
     transaction_number: String,
@@ -88,6 +101,8 @@ pub struct ReceiptPayload {
     payment_method_code: Option<String>,
     #[serde(default)]
     payment_reference: Option<String>,
+    #[serde(default)]
+    payments: Vec<ReceiptPaymentLine>,
     member_name: Option<String>,
     member_number: Option<String>,
     items: Vec<ReceiptLineItem>,

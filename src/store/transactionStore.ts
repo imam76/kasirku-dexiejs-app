@@ -12,9 +12,7 @@ interface TransactionState {
   products: Product[];
   cart: CartItem[];
   searchTerm: string;
-  paymentAmount: string;
-  paymentMethodId?: string;
-  paymentReference: string;
+  paymentDrafts: PosPaymentDraft[];
   voucherCode: string;
   memberContactId?: string;
   redeemPoints: string;
@@ -24,9 +22,10 @@ interface TransactionState {
   setProducts: (products: Product[]) => void;
   setCart: (cart: CartItem[] | ((prev: CartItem[]) => CartItem[])) => void;
   setSearchTerm: (term: string) => void;
-  setPaymentAmount: (amount: string) => void;
-  setPaymentMethodId: (id?: string) => void;
-  setPaymentReference: (reference: string) => void;
+  setPaymentDrafts: (drafts: PosPaymentDraft[]) => void;
+  addPaymentDraft: (draft: PosPaymentDraft) => void;
+  updatePaymentDraft: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
+  removePaymentDraft: (clientId: string) => void;
   setVoucherCode: (voucherCode: string) => void;
   setMemberContactId: (memberContactId?: string) => void;
   setRedeemPoints: (points: string) => void;
@@ -40,13 +39,19 @@ interface TransactionState {
   reset: () => void;
 }
 
+export interface PosPaymentDraft {
+  clientId: string;
+  paymentMethodId?: string;
+  amount: string;
+  reference: string;
+  isAmountAutoFilled: boolean;
+}
+
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   products: [],
   cart: [],
   searchTerm: '',
-  paymentAmount: '',
-  paymentMethodId: undefined,
-  paymentReference: '',
+  paymentDrafts: [],
   voucherCode: '',
   memberContactId: undefined,
   redeemPoints: '',
@@ -57,9 +62,14 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     cart: typeof cart === 'function' ? cart(state.cart) : cart
   })),
   setSearchTerm: (searchTerm) => set({ searchTerm }),
-  setPaymentAmount: (paymentAmount) => set({ paymentAmount }),
-  setPaymentMethodId: (paymentMethodId) => set({ paymentMethodId }),
-  setPaymentReference: (paymentReference) => set({ paymentReference }),
+  setPaymentDrafts: (paymentDrafts) => set({ paymentDrafts }),
+  addPaymentDraft: (draft) => set((state) => ({ paymentDrafts: [...state.paymentDrafts, draft] })),
+  updatePaymentDraft: (clientId, patch) => set((state) => ({
+    paymentDrafts: state.paymentDrafts.map((draft) => draft.clientId === clientId ? { ...draft, ...patch } : draft),
+  })),
+  removePaymentDraft: (clientId) => set((state) => ({
+    paymentDrafts: state.paymentDrafts.filter((draft) => draft.clientId !== clientId),
+  })),
   setVoucherCode: (voucherCode) => set({ voucherCode }),
   setMemberContactId: (memberContactId) => set({ memberContactId, redeemPoints: memberContactId ? get().redeemPoints : '' }),
   setRedeemPoints: (redeemPoints) => set({ redeemPoints }),
@@ -185,9 +195,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   reset: () => {
     set({
       cart: [],
-      paymentAmount: '',
-      paymentMethodId: undefined,
-      paymentReference: '',
+      paymentDrafts: [],
       voucherCode: '',
       memberContactId: undefined,
       redeemPoints: '',

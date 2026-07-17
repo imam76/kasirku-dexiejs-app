@@ -16,6 +16,7 @@ import {
   printReceiptUsb,
 } from '@/utils/printer/usbSerialPrinter';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
+import { getTransactionPaymentsOrLegacyFallback } from '@/utils/posSplitPayment';
 
 const DEFAULT_MERCHANT_NAME = 'Frayukti';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
@@ -38,14 +39,23 @@ const updateReceiptStatus = async (
 
 export const buildReceiptPayload = (transaction: TransactionReceiptInput): ReceiptPayload => {
   const payment = getTransactionPaymentSnapshot(transaction);
+  const payments = getTransactionPaymentsOrLegacyFallback(transaction, transaction.payments);
   return {
     transactionId: transaction.id,
     transactionNumber: transaction.transaction_number,
     merchantName: DEFAULT_MERCHANT_NAME,
     createdAt: transaction.created_at,
-    paymentMethod: payment.name,
-    paymentMethodCode: payment.code,
-    paymentReference: payment.reference,
+    paymentMethod: payments.length > 1 ? 'Split Payment' : payment.name,
+    paymentMethodCode: payments.length > 1 ? 'SPLIT' : payment.code,
+    paymentReference: payments.length > 1 ? undefined : payment.reference,
+    payments: payments.map((item) => ({
+      methodName: item.payment_method_name,
+      methodCode: item.payment_method_code,
+      reference: item.payment_reference,
+      tenderedAmount: item.tendered_amount,
+      appliedAmount: item.applied_amount,
+      changeAmount: item.change_amount,
+    })),
     memberName: transaction.member_name,
     memberNumber: transaction.member_number,
     items: transaction.items.map((item) => ({

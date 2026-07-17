@@ -41,6 +41,7 @@ import type {
   OpeningBalanceBatch,
   OpeningBalanceLine,
   PaymentMethodMaster,
+  PosTransactionPayment,
   AccountingPeriod,
   Role,
   RolePermission,
@@ -71,6 +72,7 @@ import {
 import type { KasirkuDB } from './KasirkuDB';
 import { buildAccountingSeed, buildDefaultCompanyProfileSetting, buildDefaultPaymentMethods } from './seeds';
 import { buildLegacyPosPaymentSnapshot } from '@/utils/posPaymentMethod';
+import { buildLegacyPosTransactionPayment } from '@/utils/posSplitPayment';
 
 const GENERATED_COOPERATIVE_MEMBER_NUMBER_PATTERN = /^KS[PU]-(\d+)$/;
 
@@ -2573,5 +2575,20 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
         missing.map((transaction) => buildLegacyPosPaymentSnapshot(transaction, methods)),
       );
     }
+  });
+
+  this.version(97).stores({
+    posTransactionPayments: 'id, transaction_id, [transaction_id+sequence], payment_method_id, payment_method_code, created_at',
+  }).upgrade(async (tx) => {
+    const transactionTable = tx.table<Transaction, string>('transactions');
+    const paymentTable = tx.table<PosTransactionPayment, string>('posTransactionPayments');
+    const transactions = await transactionTable.toArray();
+    if (transactions.length === 0) return;
+
+    await paymentTable.bulkPut(transactions.map(buildLegacyPosTransactionPayment));
+    await transactionTable.bulkPut(transactions.map((transaction) => ({
+      ...transaction,
+      payment_mode: 'SINGLE' as const,
+    })));
   });
 }

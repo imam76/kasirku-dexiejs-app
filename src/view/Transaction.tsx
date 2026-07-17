@@ -108,10 +108,9 @@ export default function Transaction() {
   const {
     cart,
     searchTerm,
-    paymentAmount,
+    paymentDrafts,
+    paymentPreview,
     paymentMethods,
-    paymentMethodId,
-    paymentReference,
     voucherCode,
     memberContactId,
     redeemPoints,
@@ -132,11 +131,11 @@ export default function Transaction() {
     removeFromCart,
     calculateTotal,
     handleCheckout,
+    handleAddPayment,
     clearCart,
     setSearchTerm,
-    setPaymentAmount,
-    setPaymentMethodId,
-    setPaymentReference,
+    updatePaymentDraft,
+    removePaymentDraft,
     setVoucherCode,
     setMemberContactId,
     setRedeemPoints,
@@ -390,10 +389,9 @@ export default function Transaction() {
           clearCart={clearCart}
           total={total}
           showPayment={showPayment}
-          paymentAmount={paymentAmount}
+          paymentDrafts={paymentDrafts}
+          paymentPreview={paymentPreview}
           paymentMethods={paymentMethods}
-          paymentMethodId={paymentMethodId}
-          paymentReference={paymentReference}
           voucherCode={voucherCode}
           memberContactId={memberContactId}
           redeemPoints={redeemPoints}
@@ -403,9 +401,9 @@ export default function Transaction() {
           selectedMember={selectedMember}
           membershipSetting={membershipSetting}
           setShowPayment={setShowPayment}
-          setPaymentAmount={setPaymentAmount}
-          setPaymentMethodId={setPaymentMethodId}
-          setPaymentReference={setPaymentReference}
+          updatePaymentDraft={updatePaymentDraft}
+          removePaymentDraft={removePaymentDraft}
+          handleAddPayment={handleAddPayment}
           setVoucherCode={setVoucherCode}
           setMemberContactId={setMemberContactId}
           setRedeemPoints={setRedeemPoints}
@@ -444,10 +442,9 @@ export default function Transaction() {
         clearCart={clearCart}
         total={total}
         showPayment={showPayment}
-        paymentAmount={paymentAmount}
+        paymentDrafts={paymentDrafts}
+        paymentPreview={paymentPreview}
         paymentMethods={paymentMethods}
-        paymentMethodId={paymentMethodId}
-        paymentReference={paymentReference}
         voucherCode={voucherCode}
         memberContactId={memberContactId}
         redeemPoints={redeemPoints}
@@ -457,9 +454,9 @@ export default function Transaction() {
         selectedMember={selectedMember}
         membershipSetting={membershipSetting}
         setShowPayment={setShowPayment}
-        setPaymentAmount={setPaymentAmount}
-        setPaymentMethodId={setPaymentMethodId}
-        setPaymentReference={setPaymentReference}
+        updatePaymentDraft={updatePaymentDraft}
+        removePaymentDraft={removePaymentDraft}
+        handleAddPayment={handleAddPayment}
         setVoucherCode={setVoucherCode}
         setMemberContactId={setMemberContactId}
         setRedeemPoints={setRedeemPoints}

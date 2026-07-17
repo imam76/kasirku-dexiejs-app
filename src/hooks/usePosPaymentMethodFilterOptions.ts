@@ -6,14 +6,16 @@ import { buildPosPaymentMethodFilterOptions } from '@/utils/posPaymentMethodFilt
 export const usePosPaymentMethodFilterOptions = () => {
   const methods = useLiveQuery(() => db.paymentMethods.toArray());
   const transactions = useLiveQuery(() => db.transactions.toArray());
+  const payments = useLiveQuery(() => db.posTransactionPayments.toArray());
 
   const options = useMemo(() => buildPosPaymentMethodFilterOptions(
     methods ?? [],
     transactions ?? [],
-  ), [methods, transactions]);
+    payments ?? [],
+  ), [methods, payments, transactions]);
 
   return {
     options,
-    isLoading: methods === undefined || transactions === undefined,
+    isLoading: methods === undefined || transactions === undefined || payments === undefined,
   };
 };

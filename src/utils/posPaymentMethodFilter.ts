@@ -1,4 +1,4 @@
-import type { PaymentMethodCategory, PaymentMethodMaster, Transaction } from '@/types';
+import type { PaymentMethodCategory, PaymentMethodMaster, PosTransactionPayment, Transaction } from '@/types';
 import { getTransactionPaymentSnapshot, normalizePaymentMethodCode } from '@/utils/posPaymentMethod';
 
 export interface PaymentMethodFilterOption {
@@ -17,6 +17,7 @@ interface SortablePaymentMethodFilterOption extends PaymentMethodFilterOption {
 export const buildPosPaymentMethodFilterOptions = (
   methods: PaymentMethodMaster[],
   transactions: Transaction[],
+  payments: PosTransactionPayment[] = [],
 ): PaymentMethodFilterOption[] => {
   const optionByCode = new Map<string, SortablePaymentMethodFilterOption>();
 
@@ -48,6 +49,20 @@ export const buildPosPaymentMethodFilterOptions = (
       is_historical_only: true,
       sortOrder: Number.MAX_SAFE_INTEGER,
       sourceOrder: methods.length + index,
+    });
+  });
+
+  payments.forEach((payment, index) => {
+    const value = normalizePaymentMethodCode(payment.payment_method_code);
+    if (!value || optionByCode.has(value)) return;
+    optionByCode.set(value, {
+      value,
+      label: payment.payment_method_name,
+      category: payment.payment_method_category,
+      is_active: false,
+      is_historical_only: true,
+      sortOrder: Number.MAX_SAFE_INTEGER,
+      sourceOrder: methods.length + transactions.length + index,
     });
   });
 

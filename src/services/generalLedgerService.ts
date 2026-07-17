@@ -20,6 +20,7 @@ import type {
   OpeningBalanceBatch,
   OpeningBalanceLine,
   PaymentMethod,
+  PosTransactionPayment,
   PayrollRun,
   ProductionOrder,
   ProductionOrderCost,
@@ -1086,24 +1087,44 @@ export const postPosSaleJournal = async (
   transaction: Transaction,
   items: TransactionItem[] = [],
   actor?: Pick<AuthUser, 'id' | 'name'> | null,
-  resolvedPostingAccount?: ChartOfAccount,
+  payments: PosTransactionPayment[] = [],
 ) => {
   if (transaction.status === 'VOIDED') return undefined;
   if (!await isGeneralLedgerPostingEnabled(transaction.created_at)) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
-  const snapshottedPostingAccount = transaction.payment_posting_account_id
-    ? accounts.find((account) => account.id === transaction.payment_posting_account_id)
-    : undefined;
-  const configuredPostingAccount = [resolvedPostingAccount, snapshottedPostingAccount].find((account) => (
-    account?.type === 'ASSET' && account.is_active && account.is_postable
-  ));
-  const cashAccount = configuredPostingAccount
-    ?? getPostableAccount(accounts, getCashAccountCandidate(transaction.payment_method), 'Kas/Bank');
   const salesAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.salesPos, 'Penjualan POS');
   const amount = amountOrZero(transaction.total_amount);
+  const debitByAccount = new Map<string, { account: ChartOfAccount; amount: number; methods: string[] }>();
+  payments.forEach((payment) => {
+    const account = accounts.find((candidate) => candidate.id === payment.payment_posting_account_id);
+    if (!account || account.type !== 'ASSET' || !account.is_active || !account.is_postable) {
+      throw new Error(`Akun penerimaan ${payment.payment_method_name} tidak valid untuk jurnal.`);
+    }
+    const current = debitByAccount.get(account.id) ?? { account, amount: 0, methods: [] };
+    current.amount += amountOrZero(payment.applied_amount);
+    current.methods.push(payment.payment_method_name);
+    debitByAccount.set(account.id, current);
+  });
+
+  if (debitByAccount.size === 0) {
+    const snapshotted = transaction.payment_posting_account_id
+      ? accounts.find((account) => account.id === transaction.payment_posting_account_id)
+      : undefined;
+    const fallback = snapshotted ?? getPostableAccount(accounts, getCashAccountCandidate(transaction.payment_method), 'Kas/Bank');
+    debitByAccount.set(fallback.id, { account: fallback, amount, methods: [transaction.payment_method_name ?? 'kas/bank'] });
+  }
+
+  const debitTotal = roundCurrency([...debitByAccount.values()].reduce((sum, value) => sum + value.amount, 0));
+  if (Math.abs(debitTotal - amount) > JOURNAL_TOLERANCE) {
+    throw new Error('Total alokasi pembayaran tidak sama dengan total jurnal penjualan.');
+  }
   const lines: JournalLineDraft[] = [
-    createDebitLine(cashAccount, amount, `Penerimaan ${transaction.payment_method_name ?? 'kas/bank'} dari POS`),
+    ...[...debitByAccount.values()].map((value) => createDebitLine(
+      value.account,
+      value.amount,
+      `Penerimaan ${[...new Set(value.methods)].join(', ')} dari POS`,
+    )),
     createCreditLine(salesAccount, amount, 'Pendapatan penjualan POS'),
   ].filter((line): line is JournalLineDraft => Boolean(line));
 

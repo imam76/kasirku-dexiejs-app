@@ -8,6 +8,7 @@ import { ensureBaseCurrency } from '@/services/currencyService';
 import { ensureMembershipSetting } from '@/services/membershipService';
 import { ensureDefaultPaymentMethods } from '@/services/paymentMethodService';
 import { backfillLegacyPosPaymentSnapshots } from '@/services/posPaymentMethodService';
+import { backfillMissingPosTransactionPayments } from '@/services/posTransactionPaymentService';
 import type { AuthUser } from '@/types';
 
 const hasActiveOwner = (users: AuthUser[]) => {
@@ -20,6 +21,7 @@ export const backupDatabase = async () => {
       products: await db.products.toArray(),
       transactions: await db.transactions.toArray(),
       transactionItems: await db.transactionItems.toArray(),
+      posTransactionPayments: await db.posTransactionPayments.toArray(),
       cashierSessions: await db.cashierSessions.toArray(),
       cooperativeFieldCashSessions: await db.cooperativeFieldCashSessions.toArray(),
       stockPurchases: await db.stockPurchases.toArray(),
@@ -82,7 +84,7 @@ export const backupDatabase = async () => {
       membershipSettings: await db.membershipSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 26,
+      version: 27,
       timestamp: new Date().toISOString(),
     };
 
@@ -108,6 +110,7 @@ export const restoreDatabase = async (file: File) => {
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
         const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'paymentMethods', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'accountingPeriods', 'accountingFiscalYears', 'closingRuns', 'fiscalYearClosingRuns', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
+        expectedKeys.push('posTransactionPayments');
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -133,6 +136,7 @@ export const restoreDatabase = async (file: File) => {
           db.products,
           db.transactions,
           db.transactionItems,
+          db.posTransactionPayments,
           db.cashierSessions,
           db.cooperativeFieldCashSessions,
           db.stockPurchases,
@@ -203,6 +207,7 @@ export const restoreDatabase = async (file: File) => {
           await db.products.clear();
           await db.transactions.clear();
           await db.transactionItems.clear();
+          await db.posTransactionPayments.clear();
           await db.cashierSessions.clear();
           await db.cooperativeFieldCashSessions.clear();
           await db.stockPurchases.clear();
@@ -277,6 +282,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.products?.length) await db.products.bulkAdd(data.products);
           if (data.transactions?.length) await db.transactions.bulkAdd(data.transactions);
           if (data.transactionItems?.length) await db.transactionItems.bulkAdd(data.transactionItems);
+          if (data.posTransactionPayments?.length) await db.posTransactionPayments.bulkAdd(data.posTransactionPayments);
           if (data.cashierSessions?.length) await db.cashierSessions.bulkAdd(data.cashierSessions);
           if (data.cooperativeFieldCashSessions?.length) await db.cooperativeFieldCashSessions.bulkAdd(data.cooperativeFieldCashSessions);
           if (data.stockPurchases?.length) await db.stockPurchases.bulkAdd(data.stockPurchases);
@@ -355,6 +361,7 @@ export const restoreDatabase = async (file: File) => {
         await ensureMembershipSetting();
         await ensureDefaultPaymentMethods();
         await backfillLegacyPosPaymentSnapshots();
+        await backfillMissingPosTransactionPayments();
 
         await clearAuthSessionState();
 

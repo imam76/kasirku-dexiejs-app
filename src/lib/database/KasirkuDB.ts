@@ -81,6 +81,7 @@ import type {
   EmployeeCashAdvance,
   EmployeeCashAdvanceRepayment,
   PaymentMethodMaster,
+  PosTransactionPayment,
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
@@ -167,6 +168,7 @@ export class KasirkuDB extends Dexie {
   membershipPointTransactions!: Table<MembershipPointTransaction>;
   membershipSettings!: Table<MembershipSetting>;
   paymentMethods!: Table<PaymentMethodMaster>;
+  posTransactionPayments!: Table<PosTransactionPayment>;
 
   constructor() {
     super('KasirkuDB');

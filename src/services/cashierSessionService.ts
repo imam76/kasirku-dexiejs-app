@@ -1,9 +1,9 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { enqueueCashierSessionSync } from '@/services/syncQueueService';
-import type { CashierSession, CashierSessionBalanceStatus, PaymentMethodCategory, Transaction } from '@/types';
+import type { CashierSession, CashierSessionBalanceStatus, PaymentMethodCategory, PosTransactionPayment, Transaction } from '@/types';
 import { isTransactionActive, isTransactionVoided } from '@/utils/transactions';
-import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
+import { getTransactionPaymentsOrLegacyFallback, groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
 
 export interface OpenCashierSessionInput {
   opening_cash_amount: number;
@@ -114,29 +114,33 @@ export const openCashierSession = async (input: OpenCashierSessionInput): Promis
   return session;
 };
 
-export const summarizeSessionTransactions = (transactions: Transaction[]) => {
+export const summarizeSessionTransactions = (transactions: Transaction[], payments: PosTransactionPayment[] = []) => {
   const activeTransactions = transactions.filter(isTransactionActive);
   const voidedTransactions = transactions.filter(isTransactionVoided);
+  const paymentsByTransaction = groupPosPaymentsByTransaction(payments);
   const paymentBreakdownMap = new Map<string, CashierSessionPaymentBreakdown>();
   activeTransactions.forEach((transaction) => {
-    const payment = getTransactionPaymentSnapshot(transaction);
-    const existing = paymentBreakdownMap.get(payment.code) ?? {
-      code: payment.code,
-      name: payment.name,
-      category: payment.category,
-      amount: 0,
-      transaction_count: 0,
-    };
-    existing.amount += Number(transaction.total_amount || 0);
-    existing.transaction_count += 1;
-    paymentBreakdownMap.set(payment.code, existing);
+    getTransactionPaymentsOrLegacyFallback(transaction, paymentsByTransaction.get(transaction.id)).forEach((payment) => {
+      const existing = paymentBreakdownMap.get(payment.payment_method_code) ?? {
+        code: payment.payment_method_code,
+        name: payment.payment_method_name,
+        category: payment.payment_method_category,
+        amount: 0,
+        transaction_count: 0,
+      };
+      existing.amount += Number(payment.applied_amount || 0);
+      existing.transaction_count += 1;
+      paymentBreakdownMap.set(payment.payment_method_code, existing);
+    });
   });
   const cashSalesAmount = activeTransactions
-    .filter((transaction) => getTransactionPaymentSnapshot(transaction).isCash)
-    .reduce((sum, transaction) => sum + Number(transaction.total_amount || 0), 0);
+    .flatMap((transaction) => getTransactionPaymentsOrLegacyFallback(transaction, paymentsByTransaction.get(transaction.id)))
+    .filter((payment) => payment.payment_method_category === 'CASH')
+    .reduce((sum, payment) => sum + Number(payment.applied_amount || 0), 0);
   const nonCashSalesAmount = activeTransactions
-    .filter((transaction) => !getTransactionPaymentSnapshot(transaction).isCash)
-    .reduce((sum, transaction) => sum + Number(transaction.total_amount || 0), 0);
+    .flatMap((transaction) => getTransactionPaymentsOrLegacyFallback(transaction, paymentsByTransaction.get(transaction.id)))
+    .filter((payment) => payment.payment_method_category !== 'CASH')
+    .reduce((sum, payment) => sum + Number(payment.applied_amount || 0), 0);
   const voidedSalesAmount = voidedTransactions
     .reduce((sum, transaction) => sum + Number(transaction.total_amount || 0), 0);
 
@@ -168,7 +172,11 @@ export const calculateCashierSessionReconciliation = async (
     .where('cashier_session_id')
     .equals(session.id)
     .toArray();
-  const summary = summarizeSessionTransactions(transactions);
+  const transactionIds = transactions.map((transaction) => transaction.id);
+  const payments = transactionIds.length > 0
+    ? await db.posTransactionPayments.where('transaction_id').anyOf(transactionIds).toArray()
+    : [];
+  const summary = summarizeSessionTransactions(transactions, payments);
   const expectedCashAmount = Number(session.opening_cash_amount || 0) + summary.cashSalesAmount;
   const cashDifferenceAmount = normalizedClosingCashAmount - expectedCashAmount;
 

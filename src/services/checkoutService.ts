@@ -1,6 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, Contact, FinanceTransaction, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
+import type { CartItem, Contact, FinanceTransaction, PosTransactionPayment, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
@@ -9,9 +9,12 @@ import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/s
 import { postPosSaleJournal } from '@/services/generalLedgerService';
 import {
   buildPosPaymentSnapshot,
-  resolvePosPaymentMethod,
-  type ResolvedPosPaymentMethod,
 } from '@/services/posPaymentMethodService';
+import {
+  buildPosTransactionPaymentRecords,
+  resolveCheckoutPayments,
+  type CheckoutPaymentInput,
+} from '@/services/posTransactionPaymentService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
@@ -26,9 +29,7 @@ import { enqueueContactSync } from '@/services/syncQueueService';
 
 interface CheckoutInput {
   cart: CartItem[];
-  payment: number;
-  paymentMethodId: string;
-  paymentReference?: string;
+  payments: CheckoutPaymentInput[];
   voucherCode?: string;
   memberContactId?: string;
   redeemPoints?: number;
@@ -37,6 +38,7 @@ interface CheckoutInput {
 export interface CheckoutResult {
   transaction: Transaction;
   items: TransactionItem[];
+  payments: PosTransactionPayment[];
   warnings?: string[];
 }
 
@@ -188,12 +190,11 @@ const recordProfit = async (
 const recordFinanceIncome = async (
   transaction: Transaction,
   createdAt: string,
-  resolvedPayment: ResolvedPosPaymentMethod,
+  payments: PosTransactionPayment[],
   actor?: AuthUser | null,
 ) => {
   const currentFinanceBalance = await db.financeBalance.get('current');
   const newFinanceBalance = (currentFinanceBalance?.amount || 0) + transaction.total_amount;
-  const cashAccount = resolvedPayment.postingAccount;
 
   await db.financeBalance.put({
     id: 'current',
@@ -201,24 +202,28 @@ const recordFinanceIncome = async (
     updated_at: createdAt,
   });
 
-  const financeTransaction = withPendingFinanceTransactionSync({
-    id: crypto.randomUUID(),
-    type: 'INCOME',
-    category: FINANCE_CATEGORIES.SALES,
-    amount: transaction.total_amount,
-    description: `Penjualan dari transaksi ${transaction.transaction_number}`,
-    created_at: createdAt,
-    reference_id: transaction.id,
-    payment_method: transaction.payment_method,
-    payment_channel: resolvedPayment.master.code,
-    cash_account_id: cashAccount.id,
-    cash_account_code: cashAccount.code,
-    cash_account_name: cashAccount.name,
-    ...await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES),
-  }, actor, createdAt);
-  await db.financeTransactions.add(financeTransaction);
-
-  return financeTransaction;
+  const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES);
+  const financeTransactions = payments.map((payment) => {
+    const financeTransaction = withPendingFinanceTransactionSync({
+      id: crypto.randomUUID(),
+      type: 'INCOME' as const,
+      category: FINANCE_CATEGORIES.SALES,
+      amount: payment.applied_amount,
+      description: `Penjualan ${transaction.transaction_number} - ${payment.payment_method_name}`,
+      created_at: createdAt,
+      reference_id: transaction.id,
+      payment_method: payment.payment_method,
+      payment_channel: payment.payment_method_code,
+      cash_account_id: payment.payment_posting_account_id,
+      cash_account_code: payment.payment_posting_account_code,
+      cash_account_name: payment.payment_posting_account_name,
+      ...accountSnapshot,
+    }, actor, createdAt);
+    payment.finance_transaction_id = financeTransaction.id;
+    return financeTransaction;
+  });
+  await db.financeTransactions.bulkAdd(financeTransactions);
+  return financeTransactions;
 };
 
 const reduceProductStock = async (
@@ -267,9 +272,7 @@ const reduceProductStock = async (
 
 export const checkout = async ({
   cart,
-  payment,
-  paymentMethodId,
-  paymentReference,
+  payments: paymentInputs,
   voucherCode,
   memberContactId,
   redeemPoints,
@@ -288,7 +291,7 @@ export const checkout = async ({
   const createdAt = now.toISOString();
   const activePromos = await getActivePromos(now);
   let stockMutations: StockMutation[] = [];
-  let financeTransaction: FinanceTransaction | undefined;
+  let financeTransactions: FinanceTransaction[] = [];
   let updatedMemberForSync: Contact | undefined;
 
   const result = await db.transaction(
@@ -296,6 +299,7 @@ export const checkout = async ({
     [
       db.transactions,
       db.transactionItems,
+      db.posTransactionPayments,
       db.products,
       db.profitLogs,
       db.profitBalance,
@@ -317,10 +321,6 @@ export const checkout = async ({
       db.membershipSettings,
     ],
     async () => {
-      const resolvedPayment = await resolvePosPaymentMethod({
-        paymentMethodId,
-        paymentReference,
-      });
       const member = memberContactId ? await db.contacts.get(memberContactId) : undefined;
       if (memberContactId && !isActiveRetailMember(member)) {
         throw new Error('Member tidak ditemukan atau tidak aktif.');
@@ -341,9 +341,10 @@ export const checkout = async ({
         setting: membershipSetting,
       });
       const finalTotal = membershipEvaluation.total_after_redeem;
-      const isCashPayment = resolvedPayment.master.category === 'CASH';
-      const finalPayment = isCashPayment ? payment : finalTotal;
-      const change = isCashPayment ? finalPayment - finalTotal : 0;
+      const resolvedPayments = await resolveCheckoutPayments(paymentInputs, finalTotal);
+      const paymentRecords = buildPosTransactionPaymentRecords(transactionId, createdAt, resolvedPayments);
+      const finalPayment = paymentRecords.reduce((sum, payment) => sum + payment.tendered_amount, 0);
+      const change = paymentRecords.reduce((sum, payment) => sum + payment.change_amount, 0);
       const memberStartingBalance = membershipEvaluation.member
         ? Math.max(0, Math.floor(Number(membershipEvaluation.member.membership_points_balance || 0)))
         : 0;
@@ -351,9 +352,21 @@ export const checkout = async ({
         ? memberStartingBalance - membershipEvaluation.redeem_points + membershipEvaluation.earned_points
         : undefined;
 
-      if (!Number.isFinite(finalPayment) || finalPayment < finalTotal) {
-        throw new Error('Jumlah pembayaran tidak valid atau kurang.');
-      }
+      const isSplit = paymentRecords.length > 1;
+      const allCash = paymentRecords.every((payment) => payment.payment_method_category === 'CASH');
+      const headerPaymentSnapshot = isSplit
+        ? {
+            payment_method: allCash ? 'TUNAI' as const : 'NON_TUNAI' as const,
+            payment_method_id: undefined,
+            payment_method_code: 'SPLIT',
+            payment_method_name: 'Split Payment',
+            payment_method_category: 'OTHER' as const,
+            payment_reference: undefined,
+            payment_posting_account_id: undefined,
+            payment_posting_account_code: undefined,
+            payment_posting_account_name: undefined,
+          }
+        : buildPosPaymentSnapshot(resolvedPayments[0]!.resolved);
 
       const transaction: Transaction = {
         id: transactionId,
@@ -377,7 +390,8 @@ export const checkout = async ({
         total_amount: finalTotal,
         payment_amount: finalPayment,
         change_amount: change,
-        ...buildPosPaymentSnapshot(resolvedPayment),
+        payment_mode: isSplit ? 'SPLIT' : 'SINGLE',
+        ...headerPaymentSnapshot,
         status: 'COMPLETED',
         receipt_status: 'pending',
         created_at: createdAt,
@@ -441,17 +455,18 @@ export const checkout = async ({
       }
 
       await recordProfit(transaction, items, createdAt);
-      financeTransaction = await recordFinanceIncome(transaction, createdAt, resolvedPayment, currentUser);
-      await postPosSaleJournal(transaction, items, currentUser, resolvedPayment.postingAccount);
+      financeTransactions = await recordFinanceIncome(transaction, createdAt, paymentRecords, currentUser);
+      await db.posTransactionPayments.bulkAdd(paymentRecords);
+      await postPosSaleJournal(transaction, items, currentUser, paymentRecords);
       stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
 
-      return { transaction, items, warnings };
+      return { transaction, items, payments: paymentRecords, warnings };
     },
   );
 
   await enqueueStockMutations(stockMutations);
-  if (financeTransaction) {
-    await enqueueFinanceTransactionsSync([financeTransaction], 'create');
+  if (financeTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(financeTransactions, 'create');
   }
   if (updatedMemberForSync) {
     await enqueueContactSync(updatedMemberForSync, 'update');

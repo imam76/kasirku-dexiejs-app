@@ -7,6 +7,8 @@ import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/ser
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
 import { useI18n } from '@/hooks/useI18n';
+import type { PosPaymentDraft } from '@/store/transactionStore';
+import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
 
 interface MobileCartDrawerProps {
   isOpen: boolean;
@@ -18,10 +20,9 @@ interface MobileCartDrawerProps {
   clearCart: () => void;
   total: number;
   showPayment: boolean;
-  paymentAmount: string;
+  paymentDrafts: PosPaymentDraft[];
+  paymentPreview: PosPaymentAllocationResult;
   paymentMethods: PosPaymentMethodOption[];
-  paymentMethodId?: string;
-  paymentReference: string;
   voucherCode: string;
   memberContactId?: string;
   redeemPoints: string;
@@ -31,15 +32,15 @@ interface MobileCartDrawerProps {
   selectedMember: Contact | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
-  setPaymentAmount: (amount: string) => void;
-  setPaymentMethodId: (id?: string) => void;
-  setPaymentReference: (reference: string) => void;
+  updatePaymentDraft: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
+  removePaymentDraft: (clientId: string) => void;
+  handleAddPayment: () => void;
   setVoucherCode: (voucherCode: string) => void;
   setMemberContactId: (memberContactId?: string) => void;
   setRedeemPoints: (points: string) => void;
   createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
   isCreatingMember: boolean;
-  handleCheckout: () => void;
+  handleCheckout: () => Promise<boolean>;
 }
 
 export default function MobileCartDrawer({
@@ -52,10 +53,9 @@ export default function MobileCartDrawer({
   clearCart,
   total,
   showPayment,
-  paymentAmount,
+  paymentDrafts,
+  paymentPreview,
   paymentMethods,
-  paymentMethodId,
-  paymentReference,
   voucherCode,
   memberContactId,
   redeemPoints,
@@ -65,9 +65,9 @@ export default function MobileCartDrawer({
   selectedMember,
   membershipSetting,
   setShowPayment,
-  setPaymentAmount,
-  setPaymentMethodId,
-  setPaymentReference,
+  updatePaymentDraft,
+  removePaymentDraft,
+  handleAddPayment,
   setVoucherCode,
   setMemberContactId,
   setRedeemPoints,
@@ -127,10 +127,9 @@ export default function MobileCartDrawer({
             <CartSummary
               total={total}
               showPayment={showPayment}
-              paymentAmount={paymentAmount}
+              paymentDrafts={paymentDrafts}
+              paymentPreview={paymentPreview}
               paymentMethods={paymentMethods}
-              paymentMethodId={paymentMethodId}
-              paymentReference={paymentReference}
               voucherCode={voucherCode}
               memberContactId={memberContactId}
               redeemPoints={redeemPoints}
@@ -140,17 +139,18 @@ export default function MobileCartDrawer({
               selectedMember={selectedMember}
               membershipSetting={membershipSetting}
               setShowPayment={setShowPayment}
-              setPaymentAmount={setPaymentAmount}
-              setPaymentMethodId={setPaymentMethodId}
-              setPaymentReference={setPaymentReference}
+              updatePaymentDraft={updatePaymentDraft}
+              removePaymentDraft={removePaymentDraft}
+              handleAddPayment={handleAddPayment}
               setVoucherCode={setVoucherCode}
               setMemberContactId={setMemberContactId}
               setRedeemPoints={setRedeemPoints}
               createMember={createMember}
               isCreatingMember={isCreatingMember}
-              handleCheckout={() => {
-                handleCheckout();
-                onClose();
+              handleCheckout={async () => {
+                const success = await handleCheckout();
+                if (success) onClose();
+                return success;
               }}
               onCancel={() => setShowPayment(false)}
             />
