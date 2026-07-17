@@ -17,6 +17,8 @@ import { Loading } from '../components/Loading';
 import DesktopSalesTable from './pos-sales-report/DesktopSalesTable';
 import MobileSalesList from './pos-sales-report/MobileSalesList';
 import TopProductsTable from './pos-sales-report/TopProductsTable';
+import { usePosPaymentMethodFilterOptions } from '@/hooks/usePosPaymentMethodFilterOptions';
+import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 
 const { Title, Text } = Typography;
 
@@ -38,6 +40,7 @@ export default function PosSalesReport() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | undefined>('SEMUA');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const categoryOptions = getProductCategoryOptions(t);
+  const { options: paymentMethodOptions, isLoading: isLoadingPaymentMethods } = usePosPaymentMethodFilterOptions();
 
   const { data, isLoading, error, refetch } = usePosSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
 
@@ -67,11 +70,16 @@ export default function PosSalesReport() {
             const balance = Math.max(t.total_amount - (t.payment_amount || 0), 0);
             const discount = t.discount_amount ?? 0;
             const subtotal = t.subtotal_amount ?? t.total_amount + discount;
+            const payment = getTransactionPaymentSnapshot(t);
+            const paymentLabel = payment.code.toUpperCase() === payment.name.toUpperCase()
+              ? payment.name
+              : `${payment.name} [${payment.code}]`;
 
             return [
               dayjs(t.created_at).tz().format('DD/MM/YYYY'),
               t.transaction_number || String(index + 1),
               t.member_name ? `${t.member_number ? `${t.member_number} - ` : ''}${t.member_name}` : '-',
+              payment.reference ? `${paymentLabel}\n${payment.reference}` : paymentLabel,
               formatCurrency(subtotal),
               formatCurrency(discount),
               formatCurrency(t.total_amount),
@@ -82,9 +90,10 @@ export default function PosSalesReport() {
 
           autoTable(doc, {
             startY: 58,
-            head: [[t('report.date'), t('report.orderNo'), t('report.buyer'), t('report.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.balance')]],
+            head: [[t('report.date'), t('report.orderNo'), t('report.buyer'), t('report.paymentMethod'), t('report.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.balance')]],
             body: tableData,
             foot: [[
+              '',
               '',
               '',
               t('common.total'),
@@ -100,13 +109,14 @@ export default function PosSalesReport() {
             footStyles: { fillColor: [241, 245, 249], textColor: 15, fontStyle: 'bold' },
             columnStyles: {
               0: { cellWidth: 18 },
-              1: { cellWidth: 24 },
-              2: { cellWidth: 24 },
-              3: { halign: 'right', cellWidth: 24 },
-              4: { halign: 'right', cellWidth: 20 },
-              5: { halign: 'right', cellWidth: 28 },
-              6: { halign: 'right', cellWidth: 26 },
-              7: { halign: 'right', cellWidth: 20 },
+              1: { cellWidth: 22 },
+              2: { cellWidth: 20 },
+              3: { cellWidth: 27 },
+              4: { halign: 'right', cellWidth: 22 },
+              5: { halign: 'right', cellWidth: 18 },
+              6: { halign: 'right', cellWidth: 24 },
+              7: { halign: 'right', cellWidth: 22 },
+              8: { halign: 'right', cellWidth: 18 },
             },
             margin: { left: 8, right: 8 },
           });
@@ -159,20 +169,25 @@ export default function PosSalesReport() {
       ];
       const csvRows = [
         ['SECTION 1: TRANSACTION SUMMARY'],
-        [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), 'Member', t('cart.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.change'), 'Poin Didapat', 'Poin Dipakai'],
-        ...data.transactions.map((t) => [
-          t.transaction_number,
-          dayjs(t.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
-          t.payment_method || 'TUNAI',
-          t.member_name ? `${t.member_number ? `${t.member_number} - ` : ''}${t.member_name}` : '',
-          t.subtotal_amount ?? t.total_amount + (t.discount_amount ?? 0),
-          t.discount_amount ?? 0,
-          t.total_amount,
-          t.payment_amount,
-          t.change_amount,
-          t.membership_points_earned ?? 0,
-          t.membership_points_redeemed ?? 0,
-        ]),
+        [t('report.transactionNo'), t('report.date'), t('report.paymentMethod'), 'Kode Metode', t('checkout.paymentReference'), 'Member', t('cart.subtotal'), t('report.discount'), t('report.salesTotal'), t('report.payment'), t('report.change'), 'Poin Didapat', 'Poin Dipakai'],
+        ...data.transactions.map((transaction) => {
+          const payment = getTransactionPaymentSnapshot(transaction);
+          return [
+            transaction.transaction_number,
+            dayjs(transaction.created_at).tz().format('YYYY-MM-DD HH:mm:ss'),
+            payment.name,
+            payment.code,
+            payment.reference ?? '',
+            transaction.member_name ? `${transaction.member_number ? `${transaction.member_number} - ` : ''}${transaction.member_name}` : '',
+            transaction.subtotal_amount ?? transaction.total_amount + (transaction.discount_amount ?? 0),
+            transaction.discount_amount ?? 0,
+            transaction.total_amount,
+            transaction.payment_amount,
+            transaction.change_amount,
+            transaction.membership_points_earned ?? 0,
+            transaction.membership_points_redeemed ?? 0,
+          ];
+        }),
         [],
         ['SECTION 2: TRANSACTION ITEM DETAILS'],
         itemDetailHeader,
@@ -350,14 +365,15 @@ export default function PosSalesReport() {
             <div className="flex flex-col gap-1.5">
               <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.paymentMethod')}</span>
               <Select
+                data-testid="pos-sales-payment-method-filter"
                 placeholder={t('report.allMethods')}
                 className="w-full"
                 value={selectedPaymentMethod}
                 onChange={setSelectedPaymentMethod}
+                loading={isLoadingPaymentMethods}
                 options={[
                   { value: 'SEMUA', label: t('report.allMethods') },
-                  { value: 'TUNAI', label: t('payment.cash') },
-                  { value: 'NON_TUNAI', label: t('payment.nonCash') },
+                  ...paymentMethodOptions.map((option) => ({ value: option.value, label: option.label })),
                 ]}
                 size="large"
               />

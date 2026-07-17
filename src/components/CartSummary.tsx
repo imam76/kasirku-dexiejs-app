@@ -3,8 +3,8 @@ import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import { formatCurrency } from '@/utils/formatters';
-import { Alert, Input, Switch } from 'antd';
-import { CreditCard, Delete, DollarSign, Landmark, QrCode, ShoppingBag } from 'lucide-react';
+import { Alert, Input, Select, Switch } from 'antd';
+import { Delete, DollarSign } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import MembershipCheckoutPanel from './MembershipCheckoutPanel';
@@ -149,42 +149,26 @@ export default function CartSummary({
           {paymentMethods.length === 0 ? (
             <Alert type="error" showIcon message={t('payment.noMethodAvailable')} />
           ) : (
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
-              {paymentMethods.map((option) => {
-                const Icon = option.method.category === 'CASH'
-                  ? DollarSign
-                  : option.method.category === 'QRIS'
-                    ? QrCode
-                    : option.method.category === 'BANK_TRANSFER'
-                      ? Landmark
-                      : option.method.category === 'MARKETPLACE'
-                        ? ShoppingBag
-                        : CreditCard;
-                const selected = option.method.id === paymentMethodId;
-                return (
-                  <button
-                    key={option.method.id}
-                    type="button"
-                    disabled={!option.isValid}
-                    title={option.disabledReason}
-                    onClick={() => handlePaymentMethodChange(option)}
-                    className={`flex min-h-14 items-center justify-center gap-2 rounded-md px-2 py-2 text-sm font-semibold transition-all ${selected
-                      ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-200'
-                      : option.isValid
-                        ? 'text-gray-600 hover:bg-white/70 hover:text-gray-800'
-                        : 'cursor-not-allowed text-gray-400 opacity-60'
-                    }`}
-                  >
-                    <Icon size={16} className="shrink-0" />
-                    <span className="min-w-0 text-left">
-                      <span className="block truncate">{option.method.name}</span>
-                      {option.method.code !== option.method.name.toUpperCase() && (
-                        <span className="block truncate text-[10px] font-normal opacity-70">{option.method.code}</span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-gray-700">
+                {t('report.paymentMethod')}
+              </label>
+              <Select
+                className="w-full"
+                size="large"
+                value={paymentMethodId}
+                placeholder={t('report.paymentMethod')}
+                onChange={(methodId) => {
+                  const option = paymentMethods.find((item) => item.method.id === methodId);
+                  if (option) handlePaymentMethodChange(option);
+                }}
+                options={paymentMethods.map((option) => ({
+                  value: option.method.id,
+                  label: option.method.name,
+                  disabled: !option.isValid,
+                  title: option.disabledReason,
+                }))}
+              />
             </div>
           )}
 

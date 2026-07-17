@@ -71,6 +71,11 @@ const ReconciliationSummary = ({ reconciliation }: { reconciliation: CashierSess
       <Descriptions.Item label={t('cashierSession.nonCashSales')}>
         Rp {formatCurrency(reconciliation.non_cash_sales_amount)}
       </Descriptions.Item>
+      {reconciliation.payment_method_breakdown.map((payment) => (
+        <Descriptions.Item key={payment.code} label={`${payment.name} (${payment.transaction_count} trx)`}>
+          Rp {formatCurrency(payment.amount)}
+        </Descriptions.Item>
+      ))}
       <Descriptions.Item label={t('cashierSession.expectedCash')}>
         Rp {formatCurrency(reconciliation.expected_cash_amount)}
       </Descriptions.Item>

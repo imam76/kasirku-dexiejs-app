@@ -84,6 +84,10 @@ pub struct ReceiptPayload {
     merchant_name: String,
     created_at: String,
     payment_method: String,
+    #[serde(default)]
+    payment_method_code: Option<String>,
+    #[serde(default)]
+    payment_reference: Option<String>,
     member_name: Option<String>,
     member_number: Option<String>,
     items: Vec<ReceiptLineItem>,

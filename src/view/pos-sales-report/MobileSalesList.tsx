@@ -2,6 +2,8 @@ import dayjs from '@/lib/dayjs';
 import { Transaction } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { useI18n } from '@/hooks/useI18n';
+import PaymentMethodBadge from '@/components/PaymentMethodBadge';
+import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 
 interface MobileSalesListProps {
   transactions: Transaction[];
@@ -38,7 +40,9 @@ export default function MobileSalesList({ transactions, totalRevenue, totalDisco
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4">
-        {transactions.map((transaction) => (
+        {transactions.map((transaction) => {
+          const payment = getTransactionPaymentSnapshot(transaction);
+          return (
           <div
             key={transaction.id}
             className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm active:bg-gray-50 transition-colors"
@@ -56,13 +60,16 @@ export default function MobileSalesList({ transactions, totalRevenue, totalDisco
                     {transaction.member_number ? `${transaction.member_number} - ` : ''}{transaction.member_name}
                   </span>
                 )}
-                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold w-fit uppercase tracking-tight ${
-                  transaction.payment_method === 'NON_TUNAI'
-                    ? 'bg-[#EBF5FF] text-[#2563EB]'
-                    : 'bg-[#ECFDF5] text-[#059669]'
-                }`}>
-                  {transaction.payment_method === 'NON_TUNAI' ? t('payment.nonCash') : t('payment.cash')}
-                </span>
+                <PaymentMethodBadge
+                  name={payment.name}
+                  category={payment.category}
+                  className="w-fit uppercase"
+                />
+                {payment.reference && (
+                  <span className="max-w-56 truncate font-mono text-[10px] text-gray-400" title={payment.reference}>
+                    {payment.reference}
+                  </span>
+                )}
               </div>
               <div className="text-right">
                 <div className="text-sm font-bold text-gray-900">
@@ -79,7 +86,8 @@ export default function MobileSalesList({ transactions, totalRevenue, totalDisco
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

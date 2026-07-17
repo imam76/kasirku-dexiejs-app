@@ -34,6 +34,14 @@ const getMovementTime = (movement: Pick<StockCardMovement, 'date'>) => {
 
 const getMovementDelta = (movement: Pick<StockCardMovement, 'qtyIn' | 'qtyOut'>) => movement.qtyIn - movement.qtyOut;
 
+const isDefined = <T,>(value: T | null | undefined): value is T => value !== null && value !== undefined;
+
+const uniqueIds = (ids: string[]) => Array.from(new Set(ids));
+
+const toEntityMap = <T extends { id: string }>(records: Array<T | undefined>) => (
+  new Map(records.filter(isDefined).map((record) => [record.id, record]))
+);
+
 const stockImpactPurchaseStatuses = new Set(['ISSUED', 'CONVERTED', 'VOIDED']);
 
 const isPurchaseInvoiceBackedByReceipt = (document: { type: string; source_document_type?: string }) => (
@@ -98,8 +106,9 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
 
   // 3. POS Transactions
   const transactionItems = await db.transactionItems.where('product_id').equals(productId).toArray();
+  const transactionMap = toEntityMap(await db.transactions.bulkGet(uniqueIds(transactionItems.map((item) => item.transaction_id))));
   for (const item of transactionItems) {
-    const transaction = await db.transactions.get(item.transaction_id);
+    const transaction = transactionMap.get(item.transaction_id);
     if (!transaction) continue;
 
     // Hitung qty dalam base unit
@@ -139,8 +148,9 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
 
   // 4. Purchase Documents
   const purchaseItems = await db.purchaseDocumentItems.where('product_id').equals(productId).toArray();
+  const purchaseDocumentMap = toEntityMap(await db.purchaseDocuments.bulkGet(uniqueIds(purchaseItems.map((item) => item.document_id))));
   for (const item of purchaseItems) {
-    const doc = await db.purchaseDocuments.get(item.document_id);
+    const doc = purchaseDocumentMap.get(item.document_id);
     if (!doc || !stockImpactPurchaseStatuses.has(doc.status)) continue;
 
     const quantity = isPurchaseStockInDocument(doc) ? (item.received_quantity ?? item.quantity) : item.quantity;
@@ -201,8 +211,9 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
 
   // 5. Sales Documents
   const salesItems = await db.salesDocumentItems.where('product_id').equals(productId).toArray();
+  const salesDocumentMap = toEntityMap(await db.salesDocuments.bulkGet(uniqueIds(salesItems.map((item) => item.document_id))));
   for (const item of salesItems) {
-    const doc = await db.salesDocuments.get(item.document_id);
+    const doc = salesDocumentMap.get(item.document_id);
     if (!doc || (doc.status !== 'ISSUED' && doc.status !== 'VOIDED')) continue;
 
     const quantity = doc.type === 'SALES_DELIVERY' ? (item.delivered_quantity ?? item.quantity) : item.quantity;
@@ -239,8 +250,9 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
   // 6. Sales Returns
   if (db.salesReturnItems && db.salesReturns) {
     const returnItems = await db.salesReturnItems.where('product_id').equals(productId).toArray();
+    const returnMap = toEntityMap(await db.salesReturns.bulkGet(uniqueIds(returnItems.map((item) => item.return_id))));
     for (const item of returnItems) {
-      const doc = await db.salesReturns.get(item.return_id);
+      const doc = returnMap.get(item.return_id);
       if (!doc || (doc.status !== 'ISSUED' && doc.status !== 'VOIDED')) continue;
   
       const quantity = item.restock_quantity || 0;
@@ -276,8 +288,9 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
 
   // 7. Stock Opnames
   const stockOpnameItems = await db.stockOpnameItems.where('product_id').equals(productId).toArray();
+  const stockOpnameMap = toEntityMap(await db.stockOpnames.bulkGet(uniqueIds(stockOpnameItems.map((item) => item.opname_id))));
   for (const item of stockOpnameItems) {
-    const opname = await db.stockOpnames.get(item.opname_id);
+    const opname = stockOpnameMap.get(item.opname_id);
     if (!opname || opname.status !== 'POSTED') continue;
 
     const quantityDelta = toFiniteNumber(item.quantity_delta);
@@ -297,8 +310,9 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
   // 8. Production orders
   if (db.productionOrderItems && db.productionOrders) {
     const productionItems = await db.productionOrderItems.where('material_product_id').equals(productId).toArray();
+    const productionOrderMap = toEntityMap(await db.productionOrders.bulkGet(uniqueIds(productionItems.map((item) => item.production_order_id))));
     for (const item of productionItems) {
-      const order = await db.productionOrders.get(item.production_order_id);
+      const order = productionOrderMap.get(item.production_order_id);
       if (!order || (order.status !== 'POSTED' && order.status !== 'VOIDED') || !order.posted_at) continue;
 
       const quantity = toFiniteNumber(item.stock_quantity_used);

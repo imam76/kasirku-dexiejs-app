@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useLayoutEffect } from 'react';
 import { App, Input } from 'antd';
-import { Receipt, ChevronDown, ChevronUp, Wallet, DollarSign, Printer, AlertCircle, CheckCircle2, Ban } from 'lucide-react';
+import { Receipt, ChevronDown, ChevronUp, Printer, AlertCircle, CheckCircle2, Ban } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
 import { useI18n } from '@/hooks/useI18n';
@@ -10,6 +10,8 @@ import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
 import { Transaction, TransactionItem, TransactionReceiptInput } from '@/types';
+import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
+import PaymentMethodBadge from '@/components/PaymentMethodBadge';
 
 interface TransactionWithItems extends Transaction {
   items?: TransactionItem[];
@@ -207,6 +209,7 @@ export default function History() {
                 if (!transaction) return null;
                 const isVoided = isTransactionVoided(transaction);
                 const transactionDiscount = transaction.discount_amount ?? 0;
+                const paymentSnapshot = getTransactionPaymentSnapshot(transaction);
 
                 return (
                   <div
@@ -225,6 +228,7 @@ export default function History() {
                     >
                       <div
                         onClick={() => toggleExpand(transaction.id)}
+                        data-testid={`history-transaction-${transaction.id}`}
                         className={`p-4 cursor-pointer transition-colors ${
                           isVoided ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-gray-50'
                         }`}
@@ -242,23 +246,11 @@ export default function History() {
                                   {t('history.voidedBadge')}
                                 </span>
                               )}
-                              <span className={`text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold ${
-                                transaction.payment_method === 'NON_TUNAI'
-                                  ? 'bg-indigo-100 text-indigo-700'
-                                  : 'bg-green-100 text-green-700'
-                              }`}>
-                                {transaction.payment_method === 'NON_TUNAI' ? (
-                                  <>
-                                    <Wallet size={12} />
-                                    {t('payment.nonCash').toUpperCase()}
-                                  </>
-                                ) : (
-                                  <>
-                                    <DollarSign size={12} />
-                                    {t('payment.cash').toUpperCase()}
-                                  </>
-                                )}
-                              </span>
+                              <PaymentMethodBadge
+                                name={paymentSnapshot.name}
+                                category={paymentSnapshot.category}
+                                className="uppercase"
+                              />
                               {transaction.receipt_status === 'printed' && (
                                 <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-emerald-100 text-emerald-700">
                                   <CheckCircle2 size={12} />
@@ -375,6 +367,33 @@ export default function History() {
                               </div>
                             </div>
                           )}
+                          <div className="mb-3 rounded-lg border border-gray-200 bg-white p-3 text-sm">
+                            <div className="flex justify-between gap-3 text-gray-700">
+                              <span>{t('report.paymentMethod')}</span>
+                              <span className="font-semibold text-right">
+                                {paymentSnapshot.name}
+                                {paymentSnapshot.code.toUpperCase() !== paymentSnapshot.name.toUpperCase()
+                                  ? ` (${paymentSnapshot.code})`
+                                  : ''}
+                              </span>
+                            </div>
+                            {paymentSnapshot.reference && (
+                              <div className="mt-1 flex justify-between gap-3 text-gray-700">
+                                <span>{t('checkout.paymentReference')}</span>
+                                <span className="font-mono text-right">{paymentSnapshot.reference}</span>
+                              </div>
+                            )}
+                            {(paymentSnapshot.postingAccountCode || paymentSnapshot.postingAccountName) && (
+                              <div className="mt-1 flex justify-between gap-3 text-gray-700">
+                                <span>{t('finance.cashAccount')}</span>
+                                <span className="text-right">
+                                  {[paymentSnapshot.postingAccountCode, paymentSnapshot.postingAccountName]
+                                    .filter(Boolean)
+                                    .join(' - ')}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                           <div className="space-y-2">
                             {transaction.items.map((item) => {
                               const lineDiscount = item.discount_amount ?? 0;
