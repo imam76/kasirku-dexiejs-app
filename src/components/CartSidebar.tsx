@@ -108,8 +108,11 @@ export default function CartSidebar({
       </div>
 
       {cart.length > 0 && (
-        <div className="sticky top-6 h-fit rounded-lg border border-gray-200 bg-white p-4 shadow-md">
-          <h3 className="mb-4 text-lg font-semibold text-gray-800">{t('payment.pay')}</h3>
+        <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-md">
+          <div className="mb-4 flex items-center justify-between border-b border-gray-100 pb-3">
+            <h3 className="text-lg font-bold text-gray-900">{t('payment.pay')}</h3>
+            <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">POS</span>
+          </div>
           <CartSummary
             total={total}
             showPayment={showPayment}

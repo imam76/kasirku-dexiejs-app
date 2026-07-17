@@ -79,7 +79,7 @@ export default function MobileCartDrawer({
 
   return (
     <Drawer
-      title={t('cart.title')}
+      title={showPayment ? t('payment.pay') : t('cart.title')}
       placement="bottom"
       open={isOpen}
       onClose={onClose}
@@ -87,7 +87,7 @@ export default function MobileCartDrawer({
       rootClassName="mobile-bottom-drawer"
       className="lg:hidden"
       extra={
-        cart.length > 0 ? (
+        cart.length > 0 && !showPayment ? (
           <Button
             danger
             size="small"
@@ -106,7 +106,7 @@ export default function MobileCartDrawer({
       }}
     >
       <div className="flex h-full flex-col">
-        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-3">
+        <div className={`${showPayment ? 'hidden' : 'flex-1'} space-y-3 overflow-y-auto px-5 py-3`}>
           {cart.length === 0 ? (
             <p className="py-8 text-center text-gray-500">{t('cart.empty')}</p>
           ) : null}
@@ -123,7 +123,7 @@ export default function MobileCartDrawer({
         </div>
 
         {cart.length > 0 && (
-          <div className="border-t border-gray-100 px-5 pb-8 pt-4">
+          <div className={`${showPayment ? 'min-h-0 flex-1 overflow-y-auto' : ''} border-t border-gray-100 px-5 pb-8 pt-4`}>
             <CartSummary
               total={total}
               showPayment={showPayment}

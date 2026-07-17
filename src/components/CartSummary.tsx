@@ -40,31 +40,37 @@ export interface CartSummaryProps {
 export default function CartSummary(props: CartSummaryProps) {
   const { t } = useI18n();
   return (
-    <>
-      <div className="mb-4 border-t pt-4">
-        <MembershipCheckoutPanel
-          members={props.activeMembers}
-          selectedMember={props.selectedMember}
-          memberContactId={props.memberContactId}
-          voucherCode={props.voucherCode}
-          redeemPoints={props.redeemPoints}
-          membershipSetting={props.membershipSetting}
-          promoPreview={props.promoPreview}
-          membershipPreview={props.membershipPreview}
-          onMemberChange={props.setMemberContactId}
-          onVoucherCodeChange={props.setVoucherCode}
-          onRedeemPointsChange={props.setRedeemPoints}
-          onCreateMember={props.createMember}
-          isCreatingMember={props.isCreatingMember}
-        />
-        <div className="flex justify-between text-xl font-bold text-gray-800">
-          <span>{t('cart.total')}:</span><span>Rp {formatCurrency(props.total)}</span>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <MembershipCheckoutPanel
+        members={props.activeMembers}
+        selectedMember={props.selectedMember}
+        memberContactId={props.memberContactId}
+        voucherCode={props.voucherCode}
+        redeemPoints={props.redeemPoints}
+        membershipSetting={props.membershipSetting}
+        promoPreview={props.promoPreview}
+        membershipPreview={props.membershipPreview}
+        onMemberChange={props.setMemberContactId}
+        onVoucherCodeChange={props.setVoucherCode}
+        onRedeemPointsChange={props.setRedeemPoints}
+        onCreateMember={props.createMember}
+        isCreatingMember={props.isCreatingMember}
+      />
       {!props.showPayment ? (
-        <button onClick={() => props.setShowPayment(true)} className="mb-6 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 py-3 font-semibold text-white">
-          <DollarSign size={20} /> {t('payment.pay')}
-        </button>
+        <div className="space-y-3">
+          <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{t('cart.total')}</div>
+            <div className="mt-1 text-right text-3xl font-bold tabular-nums text-gray-950">
+              Rp {formatCurrency(props.total)}
+            </div>
+          </div>
+          <button
+            onClick={() => props.setShowPayment(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-3.5 text-base font-bold text-white shadow-md transition-colors hover:bg-green-700"
+          >
+            <DollarSign size={20} /> {t('payment.pay')}
+          </button>
+        </div>
       ) : (
         <PosSplitPaymentEditor
           total={props.total}
@@ -78,6 +84,6 @@ export default function CartSummary(props: CartSummaryProps) {
           onCancel={() => { props.setShowPayment(false); props.onCancel?.(); }}
         />
       )}
-    </>
+    </div>
   );
 }

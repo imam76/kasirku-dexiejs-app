@@ -58,7 +58,37 @@ export default function PosSplitPaymentEditor({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <div
+        data-testid="pos-payment-summary"
+        className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm"
+      >
+        <div className="space-y-2 border-b border-slate-200 pb-3 text-sm">
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t('cart.total')}</span>
+            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(total)}</strong>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t('payment.totalPaid')}</span>
+            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(preview.totalTendered)}</strong>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">{t('payment.remaining')}</div>
+            <div data-testid="pos-payment-remaining" className="mt-1 break-words text-base font-bold tabular-nums text-amber-950">
+              Rp {formatCurrency(preview.remainingAmount)}
+            </div>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{t('payment.change')}</div>
+            <div data-testid="pos-payment-change" className="mt-1 break-words text-base font-bold tabular-nums text-emerald-950">
+              Rp {formatCurrency(preview.totalChange)}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {drafts.map((draft, index) => {
         const option = methods.find((item) => item.method.id === draft.paymentMethodId);
         const method = option?.method;
@@ -191,23 +221,14 @@ export default function PosSplitPaymentEditor({
         </button>
       )}
 
-      {drafts.length > 1 && (
-        <div className="space-y-1 rounded-lg bg-gray-100 p-3 text-sm">
-          <div className="flex justify-between"><span>{t('cart.total')}</span><b>Rp {formatCurrency(total)}</b></div>
-          <div className="flex justify-between"><span>{t('payment.totalPaid')}</span><b>Rp {formatCurrency(preview.totalTendered)}</b></div>
-          <div data-testid="pos-payment-remaining" className="flex justify-between"><span>{t('payment.remaining')}</span><b>Rp {formatCurrency(preview.remainingAmount)}</b></div>
-          <div data-testid="pos-payment-change" className="flex justify-between text-green-700"><span>{t('payment.change')}</span><b>Rp {formatCurrency(preview.totalChange)}</b></div>
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <button type="button" onClick={onCancel} className="flex-1 rounded-lg bg-gray-500 py-2 font-semibold text-white">{t('payment.cancel')}</button>
+      <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-2 border-t border-gray-200 bg-white/95 pb-1 pt-3 backdrop-blur">
+        <button type="button" onClick={onCancel} className="rounded-lg border border-gray-300 bg-white py-2.5 font-semibold text-gray-700 hover:bg-gray-50">{t('payment.cancel')}</button>
         <button
           type="button"
           data-testid="pos-confirm-payment"
           disabled={!canConfirm}
           onClick={onConfirm}
-          className="flex-1 rounded-lg bg-green-600 py-2 font-semibold text-white disabled:bg-gray-300"
+          className="rounded-lg bg-green-600 py-2.5 font-bold text-white shadow-sm hover:bg-green-700 disabled:bg-gray-300 disabled:shadow-none"
         >
           {t('payment.confirm')}
         </button>
