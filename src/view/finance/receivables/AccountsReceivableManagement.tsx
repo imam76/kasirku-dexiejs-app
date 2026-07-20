@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, Input, Typography } from 'antd';
-import { useNavigate } from '@tanstack/react-router';
+import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import {
   AccountsReceivableFilterModal,
@@ -30,7 +30,7 @@ const countActiveFilters = (filters: AccountsReceivableFilterValues) => {
   ].filter(Boolean).length;
 };
 
-export default function AccountsReceivableManagement() {
+function AccountsReceivablePage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
@@ -128,4 +128,15 @@ export default function AccountsReceivableManagement() {
       />
     </div>
   );
+}
+
+export default function AccountsReceivableManagement() {
+  const location = useLocation();
+  const normalizedPath = location.pathname.replace(/\/$/, '');
+
+  if (normalizedPath !== '/finance/receivables') {
+    return <Outlet />;
+  }
+
+  return <AccountsReceivablePage />;
 }
