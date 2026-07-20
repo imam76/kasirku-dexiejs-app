@@ -19,7 +19,7 @@ import { setConversionRegistry } from '@/utils/pricing'
 import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { App, Button, Layout, Menu, Result, notification } from 'antd'
+import { App, Button, Drawer, Layout, Menu, Result, notification } from 'antd'
 import type { MenuProps } from 'antd'
 import {
   BadgePercent,
@@ -69,7 +69,6 @@ const { Content, Sider } = Layout
 
 const NAVBAR_HEIGHT = 64
 const SIDEBAR_WIDTH = 250
-const TRIGGER_WIDTH = 36
 
 type FeedbackValues = Record<string, unknown>
 type NavLeaf = { to: string; label: string; icon: LucideIcon; key?: string; hash?: string }
@@ -109,9 +108,18 @@ const RootLayout = () => {
   const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole })
   const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
   const isMobile = useIsMobile()
+
+  useEffect(() => {
+    if (!isMobile) setMobileNavOpen(false)
+  }, [isMobile])
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [location.pathname, location.hash])
   useEffect(() => {
     // Increment session on mount
     incrementSessionCount()
@@ -433,6 +441,26 @@ const RootLayout = () => {
         >
           <div className="h-full px-4 flex justify-between items-center">
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="sidebar-toggle"
+                aria-label={isMobile
+                  ? (mobileNavOpen ? t('root.closeSidebar') : t('root.openSidebar'))
+                  : (collapsed ? t('root.openSidebar') : t('root.closeSidebar'))}
+                title={isMobile
+                  ? (mobileNavOpen ? t('root.closeSidebar') : t('root.openSidebar'))
+                  : (collapsed ? t('root.openSidebar') : t('root.closeSidebar'))}
+                aria-expanded={isMobile ? mobileNavOpen : !collapsed}
+                onClick={() => {
+                  if (isMobile) setMobileNavOpen((current) => !current)
+                  else setCollapsed((current) => !current)
+                }}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:scale-95 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300"
+              >
+                {(isMobile ? mobileNavOpen : !collapsed)
+                  ? <PanelLeftClose size={22} />
+                  : <PanelLeftOpen size={22} />}
+              </button>
               {/* Logo */}
               <img
                 src="/frayukti-f.svg"
@@ -523,16 +551,6 @@ const RootLayout = () => {
                   : undefined
               }
             >
-              {!isMobile && (
-                <button
-                  type="button"
-                  aria-label={collapsed ? t('root.openSidebar') : t('root.closeSidebar')}
-                  onClick={() => setCollapsed(!collapsed)}
-                  className="absolute -right-9 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-r-md border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
-                >
-                  {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-                </button>
-              )}
               <Menu
                 mode="inline"
                 selectedKeys={[selectedKey]}
@@ -549,7 +567,7 @@ const RootLayout = () => {
           <Layout
             style={{
               height: contentHeight,
-              marginLeft: isMobile ? 0 : collapsed ? TRIGGER_WIDTH : SIDEBAR_WIDTH + TRIGGER_WIDTH,
+              marginLeft: isMobile ? 0 : collapsed ? 0 : SIDEBAR_WIDTH,
               overflow: 'hidden',
               transition: 'margin-left 0.2s',
             }}
@@ -585,6 +603,36 @@ const RootLayout = () => {
             </Content>
           </Layout>
         </Layout>
+
+          <Drawer
+            title={(
+              <div className="flex items-center gap-2">
+                <img src="/frayukti-f.svg" alt="" className="h-7 w-auto" />
+                <span>{t('root.navigation')}</span>
+              </div>
+            )}
+            placement="left"
+            width={320}
+            open={isMobile && mobileNavOpen}
+            onClose={() => setMobileNavOpen(false)}
+            destroyOnHidden
+            rootClassName="tablet-navigation-drawer"
+            styles={{
+              body: { padding: 0, overflow: 'hidden' },
+              header: { padding: '14px 16px' },
+            }}
+          >
+            <Menu
+              mode="inline"
+              selectedKeys={[selectedKey]}
+              openKeys={openMenuKeys}
+              onOpenChange={setOpenMenuKeys}
+              onClick={() => setMobileNavOpen(false)}
+              items={menuItems}
+              theme={isDark ? 'dark' : 'light'}
+              style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto', paddingTop: 8 }}
+            />
+          </Drawer>
 
           <TanStackRouterDevtools />
           <FeedbackModal

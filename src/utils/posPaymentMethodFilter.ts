@@ -1,5 +1,17 @@
-import type { PaymentMethodCategory, PaymentMethodMaster, PosTransactionPayment, Transaction } from '@/types';
+import type {
+  PaymentMethodCategory,
+  PaymentMethodMaster,
+  PosPaymentMode,
+  PosTransactionPayment,
+  Transaction,
+} from '@/types';
 import { getTransactionPaymentSnapshot, normalizePaymentMethodCode } from '@/utils/posPaymentMethod';
+
+export type PosPaymentModeFilter = PosPaymentMode | 'SEMUA';
+
+interface PosPaymentFilterTransaction extends Transaction {
+  payments: PosTransactionPayment[];
+}
 
 export interface PaymentMethodFilterOption {
   value: string;
@@ -14,6 +26,32 @@ interface SortablePaymentMethodFilterOption extends PaymentMethodFilterOption {
   sourceOrder: number;
 }
 
+const isReservedPaymentModeCode = (value?: string) => value === 'SPLIT';
+
+export const isSplitPosPayment = (transaction: PosPaymentFilterTransaction) => (
+  transaction.payment_mode === 'SPLIT'
+  || transaction.payments.length > 1
+  || normalizePaymentMethodCode(transaction.payment_method_code) === 'SPLIT'
+);
+
+export const matchesPosPaymentFilters = (
+  transaction: PosPaymentFilterTransaction,
+  paymentMethodCode?: string,
+  paymentMode: PosPaymentModeFilter = 'SEMUA',
+) => {
+  const normalizedPaymentMethodCode = normalizePaymentMethodCode(paymentMethodCode);
+  const matchesPaymentMethod = !normalizedPaymentMethodCode
+    || normalizedPaymentMethodCode === 'SEMUA'
+    || transaction.payments.some((payment) => (
+      normalizePaymentMethodCode(payment.payment_method_code) === normalizedPaymentMethodCode
+    ));
+
+  if (!matchesPaymentMethod || paymentMode === 'SEMUA') return matchesPaymentMethod;
+
+  const isSplit = isSplitPosPayment(transaction);
+  return paymentMode === 'SPLIT' ? isSplit : !isSplit;
+};
+
 export const buildPosPaymentMethodFilterOptions = (
   methods: PaymentMethodMaster[],
   transactions: Transaction[],
@@ -25,7 +63,7 @@ export const buildPosPaymentMethodFilterOptions = (
     .sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name))
     .forEach((method, index) => {
       const value = normalizePaymentMethodCode(method.code);
-      if (!value || optionByCode.has(value)) return;
+      if (!value || isReservedPaymentModeCode(value) || optionByCode.has(value)) return;
       optionByCode.set(value, {
         value,
         label: method.is_active ? method.name : `${method.name} (Tidak Aktif)`,
@@ -40,7 +78,7 @@ export const buildPosPaymentMethodFilterOptions = (
   transactions.forEach((transaction, index) => {
     const snapshot = getTransactionPaymentSnapshot(transaction);
     const value = normalizePaymentMethodCode(snapshot.code);
-    if (!value || optionByCode.has(value)) return;
+    if (!value || isReservedPaymentModeCode(value) || optionByCode.has(value)) return;
     optionByCode.set(value, {
       value,
       label: snapshot.name,
@@ -54,7 +92,7 @@ export const buildPosPaymentMethodFilterOptions = (
 
   payments.forEach((payment, index) => {
     const value = normalizePaymentMethodCode(payment.payment_method_code);
-    if (!value || optionByCode.has(value)) return;
+    if (!value || isReservedPaymentModeCode(value) || optionByCode.has(value)) return;
     optionByCode.set(value, {
       value,
       label: payment.payment_method_name,

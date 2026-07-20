@@ -20,6 +20,7 @@ import autoTable from 'jspdf-autotable';
 import { useMemo, useState } from 'react';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
 import { usePosPaymentMethodFilterOptions } from '@/hooks/usePosPaymentMethodFilterOptions';
+import type { PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
 
 const { Text, Title } = Typography;
 
@@ -49,6 +50,7 @@ export default function TransactionDetailReport() {
   const [startDate, setStartDate] = useState<string | undefined>(dayjs.tz().startOf('month').format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState<string | undefined>(dayjs.tz().endOf('day').format('YYYY-MM-DD'));
   const [paymentMethod, setPaymentMethod] = useState('SEMUA');
+  const [paymentMode, setPaymentMode] = useState<PosPaymentModeFilter>('SEMUA');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const { options: paymentMethodOptions, isLoading: isLoadingPaymentMethods } = usePosPaymentMethodFilterOptions();
@@ -57,6 +59,7 @@ export default function TransactionDetailReport() {
     startDate,
     endDate,
     paymentMethod,
+    paymentMode,
     selectedCategories,
     search
   );
@@ -254,6 +257,7 @@ export default function TransactionDetailReport() {
     setEndDate(monthRange[1].format('YYYY-MM-DD'));
     setSelectedHelper('this-month');
     setPaymentMethod('SEMUA');
+    setPaymentMode('SEMUA');
     setSelectedCategories([]);
     setSearch('');
   };
@@ -474,7 +478,7 @@ export default function TransactionDetailReport() {
 
       <div className="mb-8 rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('report.parameterTitle')}</div>
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_240px_220px_260px]">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-[minmax(300px,1fr)_180px_360px_220px]">
           <div className="flex flex-col gap-2.5">
             <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.dateRange')}</span>
             <div className="flex flex-wrap gap-2">
@@ -515,19 +519,36 @@ export default function TransactionDetailReport() {
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.paymentMethod')}</span>
-            <Select
-              data-testid="transaction-detail-payment-method-filter"
-              value={paymentMethod}
-              onChange={setPaymentMethod}
-              size="large"
-              loading={isLoadingPaymentMethods}
-              options={[
-                { value: 'SEMUA', label: t('report.allMethods') },
-                ...paymentMethodOptions.map((option) => ({ value: option.value, label: option.label })),
-              ]}
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.paymentMethod')}</span>
+              <Select
+                data-testid="transaction-detail-payment-method-filter"
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                size="large"
+                loading={isLoadingPaymentMethods}
+                options={[
+                  { value: 'SEMUA', label: t('report.allMethods') },
+                  ...paymentMethodOptions.map((option) => ({ value: option.value, label: option.label })),
+                ]}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.paymentMode')}</span>
+              <Select<PosPaymentModeFilter>
+                data-testid="transaction-detail-payment-mode-filter"
+                value={paymentMode}
+                onChange={setPaymentMode}
+                size="large"
+                options={[
+                  { value: 'SEMUA', label: t('report.allPaymentModes') },
+                  { value: 'SINGLE', label: t('report.singlePayment') },
+                  { value: 'SPLIT', label: t('report.splitPayment') },
+                ]}
+              />
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -541,7 +562,7 @@ export default function TransactionDetailReport() {
                 placeholder={t('report.searchPlaceholder')}
                 prefix={<SearchOutlined className="text-gray-400" />}
               />
-              {(selectedHelper !== 'this-month' || paymentMethod !== 'SEMUA' || selectedCategories.length > 0 || search) && (
+              {(selectedHelper !== 'this-month' || paymentMethod !== 'SEMUA' || paymentMode !== 'SEMUA' || selectedCategories.length > 0 || search) && (
                 <Button size="large" onClick={handleReset}>
                   {t('common.reset')}
                 </Button>

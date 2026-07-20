@@ -2,6 +2,7 @@ export const appMessages = {
   id: {
     'root.openSidebar': 'Buka sidebar',
     'root.closeSidebar': 'Tutup sidebar',
+    'root.navigation': 'Navigasi',
     'root.openSettings': 'Buka pengaturan',
     'root.logout': 'Logout',
     'root.logoutConfirmTitle': 'Logout dari Frayukti?',
@@ -252,6 +253,7 @@ export const appMessages = {
   en: {
     'root.openSidebar': 'Open sidebar',
     'root.closeSidebar': 'Close sidebar',
+    'root.navigation': 'Navigation',
     'root.openSettings': 'Open settings',
     'root.logout': 'Log out',
     'root.logoutConfirmTitle': 'Log out of Frayukti?',
