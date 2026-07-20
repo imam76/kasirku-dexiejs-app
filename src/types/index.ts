@@ -319,6 +319,38 @@ export interface ActivityLog {
   created_at: string;
 }
 
+export type DashboardWidgetId =
+  | 'net-income'
+  | 'revenue'
+  | 'expense'
+  | 'sales-chart'
+  | 'top-products';
+
+export type DashboardBreakpoint = 'lg' | 'md' | 'sm' | 'xs' | 'xxs';
+
+export interface DashboardWidgetLayout {
+  i: DashboardWidgetId;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
+}
+
+export type DashboardLayouts = Partial<Record<DashboardBreakpoint, DashboardWidgetLayout[]>>;
+
+export interface DashboardPreference {
+  id: string;
+  user_id: string;
+  visible_widget_ids: DashboardWidgetId[];
+  layouts: DashboardLayouts;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SyncQueueItem {
   id: string;
   entity: string;

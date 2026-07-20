@@ -80,6 +80,7 @@ export default defineConfig(async () => {
 
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
+      'process.env.DRAGGABLE_DEBUG': 'false',
     },
 
     // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
@@ -111,5 +112,10 @@ export default defineConfig(async () => {
   },
   optimizeDeps: {
     include: ['lucide-react'],
+    esbuildOptions: {
+      define: {
+        'process.env.DRAGGABLE_DEBUG': 'false',
+      },
+    },
   },
 }});

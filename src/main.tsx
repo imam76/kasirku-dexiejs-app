@@ -1,6 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import AppShell from '@/AppShell';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
 import '@/index.css';
 import { ThemeProvider } from '@/ThemeProvider';
 import { QueryProvider } from '@/providers/QueryProvider';

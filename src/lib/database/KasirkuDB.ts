@@ -16,6 +16,7 @@ import type {
   AuthUser,
   AuthSession,
   ActivityLog,
+  DashboardPreference,
   SyncQueueItem,
   Promo,
   Contact,
@@ -109,6 +110,7 @@ export class KasirkuDB extends Dexie {
   authUsers!: Table<AuthUser>;
   authSessions!: Table<AuthSession>;
   activityLogs!: Table<ActivityLog>;
+  dashboardPreferences!: Table<DashboardPreference>;
   roles!: Table<Role>;
   rolePermissions!: Table<RolePermission>;
   syncQueue!: Table<SyncQueueItem>;

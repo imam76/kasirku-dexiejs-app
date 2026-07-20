@@ -90,6 +90,102 @@
     top: 18px;
     transform: translateY(24px);
   }
+
+  .dashboard-edit-panel {
+    background: #ffffff;
+    border: 1px solid rgb(229 231 235);
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+    padding: 14px;
+  }
+
+  .dashboard-grid-wrap .react-grid-item {
+    transition: transform 160ms ease, width 160ms ease, height 160ms ease;
+  }
+
+  .dashboard-grid-wrap--editing .react-grid-item {
+    z-index: 1;
+  }
+
+  .dashboard-grid-wrap .react-grid-item.react-grid-placeholder {
+    z-index: 2;
+    transition-duration: 100ms;
+  }
+
+  .dashboard-grid-wrap .react-grid-item.react-draggable-dragging,
+  .dashboard-grid-wrap .react-grid-item.resizing {
+    transition: none;
+    z-index: 3;
+    will-change: transform, width, height;
+  }
+
+  .dashboard-widget {
+    background: #ffffff;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .dashboard-widget--editing {
+    border-color: rgb(125 211 252);
+    box-shadow: 0 8px 22px rgb(14 165 233 / 0.12);
+  }
+
+  .dashboard-widget__header {
+    align-items: center;
+    border-bottom: 1px solid rgb(241 245 249);
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 10px 12px;
+  }
+
+  .dashboard-widget__icon {
+    align-items: center;
+    background: rgb(248 250 252);
+    border: 1px solid rgb(226 232 240);
+    border-radius: 8px;
+    color: rgb(2 132 199);
+    display: inline-flex;
+    height: 30px;
+    justify-content: center;
+    width: 30px;
+  }
+
+  .dashboard-widget--editing .dashboard-widget-drag-handle {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .dashboard-widget--editing .dashboard-widget-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .dashboard-widget__body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 12px;
+  }
+
+  .dashboard-grid-wrap .react-resizable-handle {
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  .dashboard-grid-wrap--editing .react-resizable-handle {
+    opacity: 0.8;
+  }
+
+  .dashboard-grid-wrap:not(.dashboard-grid-wrap--editing) .react-resizable-handle {
+    display: none;
+  }
 }
 
 @media (min-width: 640px) {
@@ -120,6 +216,14 @@
 
   .app-menu-card__title {
     font-size: 14px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .dashboard-grid-wrap .react-grid-layout,
+  .dashboard-grid-wrap .react-grid-item,
+  .dashboard-grid-wrap .react-grid-item.react-grid-placeholder {
+    transition: none;
   }
 }
 
