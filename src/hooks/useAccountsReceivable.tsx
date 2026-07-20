@@ -15,6 +15,7 @@ import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadServi
 import type { AccountsReceivableRow, SalesInvoicePayment } from '@/types';
 import { buildOpeningReceivableRows } from '@/utils/accountsReceivable/buildOpeningReceivableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
+import { getSalesInvoicePaymentAllocatedAmount } from '@/utils/accountsReceivable/paymentAmounts';
 
 export interface AccountsReceivableSummary {
   invoice_count: number;
@@ -151,7 +152,7 @@ export const useAccountsReceivable = (filters: AccountsReceivableFilters = {}) =
     const paidInPeriod = receivableData.payments
       .filter((payment) => payment.status === 'ACTIVE')
       .filter((payment) => isDateInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
-      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      .reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0);
 
     return receivableRows.reduce<AccountsReceivableSummary>((acc, row) => {
       acc.invoice_count += 1;

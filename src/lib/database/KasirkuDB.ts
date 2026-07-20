@@ -30,6 +30,8 @@ import type {
   SalesDocument,
   SalesDocumentItem,
   SalesInvoicePayment,
+  SalesOverpaymentSettlement,
+  SalesOverpaymentSettlementAllocation,
   SalesReturn,
   SalesReturnItem,
   PurchaseDocument,
@@ -121,6 +123,8 @@ export class KasirkuDB extends Dexie {
   salesDocuments!: Table<SalesDocument>;
   salesDocumentItems!: Table<SalesDocumentItem>;
   salesInvoicePayments!: Table<SalesInvoicePayment>;
+  salesOverpaymentSettlements!: Table<SalesOverpaymentSettlement>;
+  salesOverpaymentSettlementAllocations!: Table<SalesOverpaymentSettlementAllocation>;
   salesReturns!: Table<SalesReturn>;
   salesReturnItems!: Table<SalesReturnItem>;
   purchaseDocuments!: Table<PurchaseDocument>;

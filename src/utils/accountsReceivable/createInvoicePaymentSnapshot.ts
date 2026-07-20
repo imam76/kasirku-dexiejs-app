@@ -3,9 +3,14 @@ import { snapshotFromDocumentInput } from '@/utils/documentCurrency';
 
 export interface CreateInvoicePaymentSnapshotInput {
   id: string;
+  paymentNumber?: string;
   document: SalesDocument;
   amount: number;
   foreignAmount: number;
+  allocatedAmount?: number;
+  foreignAllocatedAmount?: number;
+  overpaymentAmount?: number;
+  foreignOverpaymentAmount?: number;
   paidAt: string;
   paymentMethod: PaymentMethod;
   paymentChannel?: string;
@@ -19,9 +24,14 @@ export interface CreateInvoicePaymentSnapshotInput {
 
 export const createInvoicePaymentSnapshot = ({
   id,
+  paymentNumber,
   document,
   amount,
   foreignAmount,
+  allocatedAmount,
+  foreignAllocatedAmount,
+  overpaymentAmount,
+  foreignOverpaymentAmount,
   paidAt,
   paymentMethod,
   paymentChannel,
@@ -37,11 +47,22 @@ export const createInvoicePaymentSnapshot = ({
   return {
     id,
     sales_document_id: document.id,
+    source_type: 'SALES_INVOICE',
+    payment_number: paymentNumber,
     document_number: document.document_number,
     contact_id: document.contact_id,
     customer_name: document.customer_name,
     amount,
     foreign_amount: foreignAmount,
+    allocated_amount: allocatedAmount ?? amount,
+    foreign_allocated_amount: foreignAllocatedAmount ?? foreignAmount,
+    overpayment_amount: overpaymentAmount ?? 0,
+    foreign_overpayment_amount: foreignOverpaymentAmount ?? 0,
+    overpayment_used_amount: 0,
+    foreign_overpayment_used_amount: 0,
+    overpayment_remaining_amount: overpaymentAmount ?? 0,
+    foreign_overpayment_remaining_amount: foreignOverpaymentAmount ?? 0,
+    overpayment_status: (overpaymentAmount ?? 0) > 0 ? 'OPEN' : undefined,
     ...currencySnapshot,
     paid_at: paidAt,
     payment_method: paymentMethod,

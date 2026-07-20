@@ -34,6 +34,10 @@ import {
 } from '@/utils/documentCurrency';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { calculateReceivableBalance } from '@/utils/accountsReceivable/calculateReceivableBalance';
+import {
+  getSalesInvoicePaymentAllocatedAmount,
+  getSalesInvoicePaymentForeignAllocatedAmount,
+} from '@/utils/accountsReceivable/paymentAmounts';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 
 const { Title, Text } = Typography;
@@ -154,12 +158,12 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const invoicePayments = document.type === 'SALES_INVOICE' ? getInvoicePayments(document.id) : [];
   const activePaymentAmount = invoicePayments
     .filter((payment) => payment.status === 'ACTIVE')
-    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    .reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0);
   const documentCurrencySnapshot = snapshotFromDocumentInput(document, undefined, document.document_date);
   const activeForeignPaymentAmount = invoicePayments
     .filter((payment) => payment.status === 'ACTIVE')
     .reduce((sum, payment) => (
-      sum + Number(payment.foreign_amount ?? toDocumentCurrencyAmount(payment.amount, documentCurrencySnapshot) ?? 0)
+      sum + Number(payment.foreign_allocated_amount ?? getSalesInvoicePaymentForeignAllocatedAmount(payment) ?? toDocumentCurrencyAmount(payment.amount, documentCurrencySnapshot) ?? 0)
     ), 0);
   const issuedCreditAmount = Number(returnSummary?.credit_amount || 0);
   const receivableCalculation = calculateReceivableBalance({

@@ -75,31 +75,21 @@ function MasterData() {
         </div>
 
         {menuItems.length > 0 ? (
-          <div className="grid grid-cols-3 gap-[10px] sm:grid-cols-3 sm:gap-[14px] lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]">
+          <div className="app-menu-grid">
             {menuItems.map((item) => (
               <Link
                 key={`${item.to}${item.hash ?? ''}`}
                 to={item.to}
                 hash={item.hash}
                 data-tour={item.tour}
-                className="
-                  app-menu-card flex flex-col items-center justify-center
-                  bg-white border border-gray-100 rounded-[10px]
-                  transition-all duration-200 ease-out
-                  aspect-square p-2
-                  sm:aspect-auto sm:rounded-[12px] sm:p-[18px]
-                  lg:aspect-auto lg:w-[192px] lg:h-[192px] lg:rounded-[14px] lg:p-[24px]
-                  hover:border-gray-200
-                  hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
-                  hover:-translate-y-[1px]
-                "
+                className="app-menu-card"
               >
                 <div className="app-menu-card__body flex flex-col items-center justify-center">
-                  <div className="mb-[6px] sm:mb-[10px] lg:mb-[12px]">
-                    <item.icon className={`${item.color} text-[24px] sm:text-[30px] lg:text-[34px]`} />
+                  <div className="app-menu-card__icon bg-gray-50">
+                    <item.icon className={`app-menu-card__icon-svg ${item.color}`} />
                   </div>
 
-                  <h2 className="text-center text-[12px] font-medium leading-[1.3] text-gray-800 sm:mb-[6px] sm:text-[14px] lg:mb-[6px] lg:text-[15px]">
+                  <h2 className="app-menu-card__title">
                     {item.label}
                   </h2>
 

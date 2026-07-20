@@ -9,6 +9,10 @@ import {
   snapshotFromDocumentInput,
   toDocumentCurrencyAmount,
 } from '@/utils/documentCurrency';
+import {
+  getSalesInvoicePaymentAllocatedAmount,
+  getSalesInvoicePaymentForeignAllocatedAmount,
+} from './paymentAmounts';
 
 export interface BuildReceivableRowsInput {
   documents: SalesDocument[];
@@ -25,13 +29,13 @@ export const buildReceivableRows = ({
 }: BuildReceivableRowsInput): AccountsReceivableRow[] => {
   const activePaymentsByInvoiceId = payments.reduce<Record<string, number>>((acc, payment) => {
     if (payment.status !== 'ACTIVE') return acc;
-    acc[payment.sales_document_id] = (acc[payment.sales_document_id] || 0) + Number(payment.amount || 0);
+    acc[payment.sales_document_id] = (acc[payment.sales_document_id] || 0) + getSalesInvoicePaymentAllocatedAmount(payment);
     return acc;
   }, {});
   const activeForeignPaymentsByInvoiceId = payments.reduce<Record<string, number>>((acc, payment) => {
     if (payment.status !== 'ACTIVE') return acc;
-    if (payment.foreign_amount === undefined) return acc;
-    acc[payment.sales_document_id] = (acc[payment.sales_document_id] || 0) + Number(payment.foreign_amount || 0);
+    if (payment.foreign_amount === undefined && payment.foreign_allocated_amount === undefined) return acc;
+    acc[payment.sales_document_id] = (acc[payment.sales_document_id] || 0) + getSalesInvoicePaymentForeignAllocatedAmount(payment);
     return acc;
   }, {});
 

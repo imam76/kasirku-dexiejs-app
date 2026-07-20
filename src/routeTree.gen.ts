@@ -199,6 +199,9 @@ const PurchasesDocumentTypeNewLazyRouteImport = createFileRoute(
 const PurchasesDocumentTypeDocumentIdLazyRouteImport = createFileRoute(
   '/purchases/$documentType/$documentId',
 )()
+const FinanceReceivablesOverpaymentsLazyRouteImport = createFileRoute(
+  '/finance/receivables/overpayments',
+)()
 const FinancePurchasesPendingCostsLazyRouteImport = createFileRoute(
   '/finance/purchases/pending-costs',
 )()
@@ -881,6 +884,16 @@ const PurchasesDocumentTypeDocumentIdLazyRoute =
       (d) => d.Route,
     ),
   )
+const FinanceReceivablesOverpaymentsLazyRoute =
+  FinanceReceivablesOverpaymentsLazyRouteImport.update({
+    id: '/overpayments',
+    path: '/overpayments',
+    getParentRoute: () => FinanceReceivablesLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/finance/receivables/overpayments.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const FinancePurchasesPendingCostsLazyRoute =
   FinancePurchasesPendingCostsLazyRouteImport.update({
     id: '/finance/purchases/pending-costs',
@@ -1121,7 +1134,7 @@ export interface FileRoutesByFullPath {
   '/finance/opening-balances': typeof FinanceOpeningBalancesLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
-  '/finance/receivables': typeof FinanceReceivablesLazyRoute
+  '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/arus-kas': typeof KoperasiArusKasLazyRoute
@@ -1187,6 +1200,7 @@ export interface FileRoutesByFullPath {
   '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
+  '/finance/receivables/overpayments': typeof FinanceReceivablesOverpaymentsLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
@@ -1233,7 +1247,7 @@ export interface FileRoutesByTo {
   '/finance/opening-balances': typeof FinanceOpeningBalancesLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
-  '/finance/receivables': typeof FinanceReceivablesLazyRoute
+  '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/arus-kas': typeof KoperasiArusKasLazyRoute
@@ -1299,6 +1313,7 @@ export interface FileRoutesByTo {
   '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
+  '/finance/receivables/overpayments': typeof FinanceReceivablesOverpaymentsLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
@@ -1346,7 +1361,7 @@ export interface FileRoutesById {
   '/finance/opening-balances': typeof FinanceOpeningBalancesLazyRouteWithChildren
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
-  '/finance/receivables': typeof FinanceReceivablesLazyRoute
+  '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/arus-kas': typeof KoperasiArusKasLazyRoute
@@ -1412,6 +1427,7 @@ export interface FileRoutesById {
   '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
+  '/finance/receivables/overpayments': typeof FinanceReceivablesOverpaymentsLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
@@ -1526,6 +1542,7 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/payables'
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
+    | '/finance/receivables/overpayments'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
     | '/sales/$documentType/$documentId'
@@ -1638,6 +1655,7 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/payables'
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
+    | '/finance/receivables/overpayments'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
     | '/sales/$documentType/$documentId'
@@ -1750,6 +1768,7 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/payables'
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
+    | '/finance/receivables/overpayments'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
     | '/sales/$documentType/$documentId'
@@ -1797,7 +1816,7 @@ export interface RootRouteChildren {
   FinanceOpeningBalancesLazyRoute: typeof FinanceOpeningBalancesLazyRouteWithChildren
   FinancePayablesLazyRoute: typeof FinancePayablesLazyRoute
   FinancePayrollLazyRoute: typeof FinancePayrollLazyRoute
-  FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRoute
+  FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRouteWithChildren
   KoperasiAnggotaLazyRoute: typeof KoperasiAnggotaLazyRoute
   KoperasiAngsuranLazyRoute: typeof KoperasiAngsuranLazyRoute
   KoperasiArusKasLazyRoute: typeof KoperasiArusKasLazyRoute
@@ -2489,6 +2508,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PurchasesDocumentTypeDocumentIdLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance/receivables/overpayments': {
+      id: '/finance/receivables/overpayments'
+      path: '/overpayments'
+      fullPath: '/finance/receivables/overpayments'
+      preLoaderRoute: typeof FinanceReceivablesOverpaymentsLazyRouteImport
+      parentRoute: typeof FinanceReceivablesLazyRoute
+    }
     '/finance/purchases/pending-costs': {
       id: '/finance/purchases/pending-costs'
       path: '/finance/purchases/pending-costs'
@@ -2701,6 +2727,21 @@ const FinanceOpeningBalancesLazyRouteWithChildren =
     FinanceOpeningBalancesLazyRouteChildren,
   )
 
+interface FinanceReceivablesLazyRouteChildren {
+  FinanceReceivablesOverpaymentsLazyRoute: typeof FinanceReceivablesOverpaymentsLazyRoute
+}
+
+const FinanceReceivablesLazyRouteChildren: FinanceReceivablesLazyRouteChildren =
+  {
+    FinanceReceivablesOverpaymentsLazyRoute:
+      FinanceReceivablesOverpaymentsLazyRoute,
+  }
+
+const FinanceReceivablesLazyRouteWithChildren =
+  FinanceReceivablesLazyRoute._addFileChildren(
+    FinanceReceivablesLazyRouteChildren,
+  )
+
 interface PurchasesDocumentTypeDocumentIdLazyRouteChildren {
   PurchasesDocumentTypeDocumentIdReconcileLazyRoute: typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
 }
@@ -2749,7 +2790,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceOpeningBalancesLazyRoute: FinanceOpeningBalancesLazyRouteWithChildren,
   FinancePayablesLazyRoute: FinancePayablesLazyRoute,
   FinancePayrollLazyRoute: FinancePayrollLazyRoute,
-  FinanceReceivablesLazyRoute: FinanceReceivablesLazyRoute,
+  FinanceReceivablesLazyRoute: FinanceReceivablesLazyRouteWithChildren,
   KoperasiAnggotaLazyRoute: KoperasiAnggotaLazyRoute,
   KoperasiAngsuranLazyRoute: KoperasiAngsuranLazyRoute,
   KoperasiArusKasLazyRoute: KoperasiArusKasLazyRoute,

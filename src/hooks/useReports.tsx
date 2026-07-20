@@ -8,6 +8,7 @@ import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPay
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
 import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
+import { getSalesInvoicePaymentAllocatedAmount } from '@/utils/accountsReceivable/paymentAmounts';
 import {
   aggregateSoldItems,
   createEmptySoldItemSummary,
@@ -509,7 +510,7 @@ export const useAccountsAgingReport = (filters: AccountsAgingReportFilters = {})
       const receivablePaidInPeriod = filteredSalesPayments
         .filter((payment) => payment.status === 'ACTIVE')
         .filter((payment) => isDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
-        .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+        .reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0);
       const payablePaidInPeriod = filteredPurchasePayments
         .filter((payment) => payment.status === 'ACTIVE')
         .filter((payment) => isDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))

@@ -3,13 +3,12 @@ import type { SalesDocument } from '@/types';
 export interface ValidateInvoicePaymentInput {
   document?: SalesDocument;
   amount: number;
-  balanceDue: number;
+  balanceDue?: number;
 }
 
 export const validateInvoicePayment = ({
   document,
   amount,
-  balanceDue,
 }: ValidateInvoicePaymentInput) => {
   if (!document) {
     throw new Error('Invoice tidak ditemukan.');
@@ -25,9 +24,5 @@ export const validateInvoicePayment = ({
 
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('Jumlah pembayaran harus lebih dari 0.');
-  }
-
-  if (amount > balanceDue + 0.01) {
-    throw new Error(`Pembayaran melebihi sisa piutang. Maksimal pembayaran Rp ${balanceDue}.`);
   }
 };

@@ -1,5 +1,6 @@
 import {
   BookOutlined,
+  DollarOutlined,
   FileExcelOutlined,
   FileSearchOutlined,
   FileTextOutlined,
@@ -33,6 +34,7 @@ function Laporan() {
     { to: '/report/buku-besar', label: t('report.index.ledgerShort'), icon: BookOutlined, color: 'text-slate-700', desc: t('report.index.ledgerDesc') },
     { to: '/report/aging-report', label: t('report.index.agingShort'), icon: ReconciliationOutlined, color: 'text-emerald-600', desc: t('report.index.agingDesc') },
     { to: '/report/stock-card', label: 'Kartu Stok', icon: FileSearchOutlined, color: 'text-cyan-700', desc: 'Lihat mutasi dan saldo stok per produk' },
+    { to: '/profit', label: t('nav.report.profit'), icon: DollarOutlined, color: 'text-emerald-600', desc: t('home.profitDesc') },
   ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }))
 
   return (
@@ -70,62 +72,24 @@ function Laporan() {
 
         {/* Grid */}
         {menuItems.length > 0 ? (
-          <div
-            className="
-      grid grid-cols-3 gap-[10px]
-      sm:grid-cols-3 sm:gap-[14px]
-      lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]
-    "
-          >
+          <div className="app-menu-grid">
             {menuItems.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
-                className="
-            app-menu-card flex flex-col items-center justify-center
-            bg-white border border-gray-100 rounded-[10px]
-            transition-all duration-200 ease-out
-
-            aspect-square p-2
-            sm:aspect-auto sm:rounded-[12px] sm:p-[18px]
-            lg:aspect-auto lg:w-[192px] lg:h-[192px] lg:rounded-[14px] lg:p-[24px]
-
-            hover:border-gray-200
-            hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
-            hover:-translate-y-[1px]
-          "
+                className="app-menu-card"
               >
                 <div className="app-menu-card__body flex flex-col items-center justify-center">
-                  {/* Icon */}
-                  <div
-                    className="
-            mb-[6px]
-            sm:mb-[10px]
-            lg:mb-[12px]
-          "
-                  >
+                  <div className="app-menu-card__icon bg-gray-50">
                     <item.icon
-                      className={`
-                ${item.color}
-                text-[24px]
-                sm:text-[30px]
-                lg:text-[34px]
-              `}
+                      className={`app-menu-card__icon-svg ${item.color}`}
                     />
                   </div>
 
-                  {/* Label */}
-                  <h2
-                    className="
-            text-[12px] font-medium text-gray-800 text-center leading-[1.3]
-            sm:text-[14px] sm:mb-[6px]
-            lg:text-[15px] lg:mb-[6px]
-          "
-                  >
+                  <h2 className="app-menu-card__title">
                     {item.label}
                   </h2>
 
-                  {/* Desc */}
                   <p
                     className="
             app-menu-card__brief

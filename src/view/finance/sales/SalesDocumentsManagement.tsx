@@ -129,31 +129,24 @@ function SalesDocumentMenuGrid() {
   const canAccessReturns = canAccess('/sales/returns');
 
   return (
-    <div className="grid grid-cols-2 gap-[10px] sm:gap-[14px] lg:flex lg:flex-wrap lg:justify-center lg:gap-[22px]">
+    <div className="app-menu-grid">
       {visibleMenuItems.map((item) => (
         <Link
           key={item.type}
           to="/sales/$documentType"
           params={{ documentType: getSalesDocumentTypePathSegment(item.type) }}
-          className="
-            app-menu-card relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
-            rounded-[10px] border border-gray-100 bg-white p-3 text-center
-            transition-all duration-200 ease-out
-            hover:-translate-y-[1px] hover:border-gray-200 hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
-            sm:min-h-[188px] sm:rounded-[12px] sm:p-[18px]
-            lg:h-[192px] lg:w-[192px] lg:rounded-[14px] lg:p-[24px]
-          "
+          className="app-menu-card"
         >
           <div className="app-menu-card__body flex flex-col items-center justify-center">
-            <div className={`mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] ${item.iconBackground} sm:h-11 sm:w-11 lg:h-12 lg:w-12`}>
-              <item.icon className={`${item.color} h-5 w-5 sm:h-6 sm:w-6`} />
+            <div className={`app-menu-card__icon ${item.iconBackground}`}>
+              <item.icon className={`app-menu-card__icon-svg ${item.color}`} />
             </div>
 
-            <div className={`text-[28px] font-semibold leading-none ${item.color} sm:text-[34px] lg:text-[38px]`}>
+            <div className={`app-menu-card__code ${item.color}`}>
               {item.code}
             </div>
 
-            <h2 className="mt-2 text-[12px] font-medium leading-[1.3] text-gray-800 sm:text-[14px] lg:text-[15px]">
+            <h2 className="app-menu-card__title">
               {t(item.labelKey)}
             </h2>
 
@@ -181,23 +174,16 @@ function SalesDocumentMenuGrid() {
       {canAccessReturns && (
         <Link
           to="/sales/returns"
-          className="
-            app-menu-card relative flex min-h-[168px] flex-col items-center justify-center overflow-hidden
-            rounded-[10px] border border-gray-100 bg-white p-3 text-center
-            transition-all duration-200 ease-out
-            hover:-translate-y-[1px] hover:border-gray-200 hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)]
-            sm:min-h-[188px] sm:rounded-[12px] sm:p-[18px]
-            lg:h-[192px] lg:w-[192px] lg:rounded-[14px] lg:p-[24px]
-          "
+          className="app-menu-card"
         >
           <div className="app-menu-card__body flex flex-col items-center justify-center">
-            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-[10px] bg-rose-50 sm:h-11 sm:w-11 lg:h-12 lg:w-12">
-              <RotateCcw className="h-5 w-5 text-rose-600 sm:h-6 sm:w-6" />
+            <div className="app-menu-card__icon bg-rose-50">
+              <RotateCcw className="app-menu-card__icon-svg text-rose-600" />
             </div>
-            <div className="text-[28px] font-semibold leading-none text-rose-600 sm:text-[34px] lg:text-[38px]">
+            <div className="app-menu-card__code text-rose-600">
               SR
             </div>
-            <h2 className="mt-2 text-[12px] font-medium leading-[1.3] text-gray-800 sm:text-[14px] lg:text-[15px]">
+            <h2 className="app-menu-card__title">
               {t('salesReturns.menu.title')}
             </h2>
             <p className="app-menu-card__brief mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400 sm:text-[11px] sm:leading-[1.55] lg:hidden">

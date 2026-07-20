@@ -31,6 +31,8 @@ import type {
   PurchaseInvoicePayment,
   SalesDocument,
   SalesInvoicePayment,
+  SalesOverpaymentSettlement,
+  SalesOverpaymentSettlementAllocation,
   SalesReturn,
   SalesReturnItem,
   StockPurchase,
@@ -43,6 +45,10 @@ import {
   withUpdatedJournalEntrySync,
 } from '@/services/journalEntrySyncService';
 import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
+import {
+  getSalesInvoicePaymentAllocatedAmount,
+  getSalesInvoicePaymentOverpaymentAmount,
+} from '@/utils/accountsReceivable/paymentAmounts';
 
 const JOURNAL_TOLERANCE = 0.01;
 
@@ -52,6 +58,8 @@ const SOURCE_EVENTS = {
   SALES_INVOICE_ISSUED: 'SALES_INVOICE_ISSUED',
   SALES_INVOICE_PAYMENT_POSTED: 'SALES_INVOICE_PAYMENT_POSTED',
   SALES_INVOICE_PAYMENT_VOIDED: 'SALES_INVOICE_PAYMENT_VOIDED',
+  SALES_OVERPAYMENT_ALLOCATED: 'SALES_OVERPAYMENT_ALLOCATED',
+  SALES_OVERPAYMENT_REFUNDED: 'SALES_OVERPAYMENT_REFUNDED',
   SALES_RETURN_ISSUED: 'SALES_RETURN_ISSUED',
   PURCHASE_INVOICE_ISSUED: 'PURCHASE_INVOICE_ISSUED',
   PURCHASE_RETURN_ISSUED: 'PURCHASE_RETURN_ISSUED',
@@ -249,6 +257,7 @@ const ACCOUNT_CANDIDATES = {
   cash: { ids: ['cash'], codes: ['1010'] },
   bank: { ids: ['bank'], codes: ['1020'] },
   accountsReceivable: { ids: ['accounts-receivable', 'template-accounts-receivable'], codes: ['1100'] },
+  customerCredit: { ids: ['customer-credit', 'advance-received', 'template-advance-received'], codes: ['2220', '2210'] },
   accountsPayable: { ids: ['accounts-payable', 'template-accounts-payable'], codes: ['2000', '2010'] },
   inventory: { ids: ['inventory', 'template-inventory'], codes: ['1200'] },
   salesPos: { ids: ['sales-pos', 'template-sales-pos'], codes: ['4000', '4010'] },
@@ -1382,11 +1391,16 @@ export const postSalesInvoicePaymentRecordJournal = async (
   if (!await isGeneralLedgerPostingEnabled(payment.paid_at)) return undefined;
 
   const amount = amountOrZero(payment.amount);
+  const allocatedAmount = amountOrZero(getSalesInvoicePaymentAllocatedAmount(payment));
+  const overpaymentAmount = amountOrZero(getSalesInvoicePaymentOverpaymentAmount(payment));
   if (amount <= 0) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
   const cashAccount = await getCashOrBankAccountForPayment(payment.payment_method, payment.cash_account_id);
   const receivableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsReceivable, 'Piutang Usaha');
+  const customerCreditAccount = overpaymentAmount > 0
+    ? getPostableAccount(accounts, ACCOUNT_CANDIDATES.customerCredit, 'Kredit Pelanggan')
+    : undefined;
 
   return postBalancedJournalEntry({
     source_type: 'SALES_INVOICE_PAYMENT',
@@ -1397,7 +1411,10 @@ export const postSalesInvoicePaymentRecordJournal = async (
     description: `Pembayaran invoice ${payment.document_number}`,
     lines: [
       createDebitLine(cashAccount, amount, 'Kas diterima dari pembayaran invoice', document.department_id, document.project_id),
-      createCreditLine(receivableAccount, amount, 'Pelunasan piutang sales invoice', document.department_id, document.project_id),
+      createCreditLine(receivableAccount, allocatedAmount, 'Pelunasan piutang sales invoice', document.department_id, document.project_id),
+      customerCreditAccount
+        ? createCreditLine(customerCreditAccount, overpaymentAmount, 'Kredit pelanggan dari lebih bayar invoice', document.department_id, document.project_id)
+        : undefined,
     ].filter((line): line is JournalLineDraft => Boolean(line)),
     actor,
   });
@@ -1412,6 +1429,8 @@ export const postOpeningReceivablePaymentRecordJournal = async (
   if (!await isGeneralLedgerPostingEnabled(payment.paid_at)) return undefined;
 
   const amount = amountOrZero(payment.amount);
+  const allocatedAmount = amountOrZero(getSalesInvoicePaymentAllocatedAmount(payment));
+  const overpaymentAmount = amountOrZero(getSalesInvoicePaymentOverpaymentAmount(payment));
   if (amount <= 0) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
@@ -1423,6 +1442,9 @@ export const postOpeningReceivablePaymentRecordJournal = async (
       'Piutang Usaha',
     )
     : getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsReceivable, 'Piutang Usaha');
+  const customerCreditAccount = overpaymentAmount > 0
+    ? getPostableAccount(accounts, ACCOUNT_CANDIDATES.customerCredit, 'Kredit Pelanggan')
+    : undefined;
 
   return postBalancedJournalEntry({
     source_type: 'OPENING_BALANCE',
@@ -1433,7 +1455,10 @@ export const postOpeningReceivablePaymentRecordJournal = async (
     description: `Pembayaran saldo awal piutang ${payment.document_number}`,
     lines: [
       createDebitLine(cashAccount, amount, 'Kas diterima dari pembayaran saldo awal piutang'),
-      createCreditLine(receivableAccount, amount, 'Pelunasan saldo awal piutang usaha'),
+      createCreditLine(receivableAccount, allocatedAmount, 'Pelunasan saldo awal piutang usaha'),
+      customerCreditAccount
+        ? createCreditLine(customerCreditAccount, overpaymentAmount, 'Kredit pelanggan dari lebih bayar saldo awal piutang')
+        : undefined,
     ].filter((journalLine): journalLine is JournalLineDraft => Boolean(journalLine)),
     actor,
   });
@@ -1448,6 +1473,88 @@ export const reverseSalesInvoicePaymentRecordJournal = async (
     source_type: 'SALES_INVOICE_PAYMENT',
     source_id: payment.id,
     source_event: SOURCE_EVENTS.SALES_INVOICE_PAYMENT_POSTED,
+    reason,
+    actor,
+  });
+};
+
+export const postSalesOverpaymentInvoiceAllocationJournal = async (
+  settlement: SalesOverpaymentSettlement,
+  allocations: SalesOverpaymentSettlementAllocation[],
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (settlement.method !== 'INVOICE_ALLOCATION' || settlement.status !== 'POSTED') return undefined;
+  if (!await isGeneralLedgerPostingEnabled(settlement.settlement_date)) return undefined;
+
+  const amount = amountOrZero(settlement.total_amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const customerCreditAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.customerCredit, 'Kredit Pelanggan');
+  const receivableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsReceivable, 'Piutang Usaha');
+  const allocationLabel = allocations.length > 1
+    ? `${allocations.length} invoice`
+    : allocations[0]?.target_document_number ?? 'invoice target';
+
+  return postBalancedJournalEntry({
+    source_type: 'SALES_OVERPAYMENT_SETTLEMENT',
+    source_id: settlement.id,
+    source_number: settlement.settlement_number,
+    source_event: SOURCE_EVENTS.SALES_OVERPAYMENT_ALLOCATED,
+    entry_date: settlement.settlement_date,
+    description: `Alokasi lebih bayar ${settlement.source_payment_number ?? settlement.source_document_number} ke ${allocationLabel}`,
+    lines: [
+      createDebitLine(customerCreditAccount, amount, 'Kredit pelanggan digunakan untuk membayar invoice', settlement.department_id, settlement.project_id),
+      createCreditLine(receivableAccount, amount, 'Piutang sales invoice berkurang dari alokasi customer credit', settlement.department_id, settlement.project_id),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const postSalesOverpaymentCashRefundJournal = async (
+  settlement: SalesOverpaymentSettlement,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (settlement.method !== 'CASH_REFUND' || settlement.status !== 'POSTED') return undefined;
+  if (!await isGeneralLedgerPostingEnabled(settlement.settlement_date)) return undefined;
+
+  const amount = amountOrZero(settlement.total_amount);
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const customerCreditAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.customerCredit, 'Kredit Pelanggan');
+  const cashAccount = settlement.cash_account_id
+    ? getPostableAccount(accounts, { ids: [settlement.cash_account_id], codes: [] }, 'Kas/Bank')
+    : await getCashOrBankAccountForPayment('TUNAI');
+
+  return postBalancedJournalEntry({
+    source_type: 'SALES_OVERPAYMENT_SETTLEMENT',
+    source_id: settlement.id,
+    source_number: settlement.settlement_number,
+    source_event: SOURCE_EVENTS.SALES_OVERPAYMENT_REFUNDED,
+    entry_date: settlement.settlement_date,
+    description: `Pengembalian lebih bayar ${settlement.source_payment_number ?? settlement.source_document_number}`,
+    lines: [
+      createDebitLine(customerCreditAccount, amount, 'Kredit pelanggan dikembalikan', settlement.department_id, settlement.project_id),
+      createCreditLine(cashAccount, amount, 'Kas/bank keluar untuk pengembalian lebih bayar pelanggan', settlement.department_id, settlement.project_id),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const reverseSalesOverpaymentSettlementJournal = async (
+  settlement: SalesOverpaymentSettlement,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  const sourceEvent = settlement.method === 'CASH_REFUND'
+    ? SOURCE_EVENTS.SALES_OVERPAYMENT_REFUNDED
+    : SOURCE_EVENTS.SALES_OVERPAYMENT_ALLOCATED;
+
+  return reverseJournalEntriesForSource({
+    source_type: 'SALES_OVERPAYMENT_SETTLEMENT',
+    source_id: settlement.id,
+    source_event: sourceEvent,
     reason,
     actor,
   });
@@ -2487,6 +2594,7 @@ const getEntrySourceMetadataMap = async (
     transactions,
     salesDocuments,
     salesInvoicePayments,
+    salesOverpaymentSettlements,
     salesReturns,
     purchaseDocuments,
     purchaseInvoicePayments,
@@ -2501,6 +2609,7 @@ const getEntrySourceMetadataMap = async (
       ...getIds('SALES_INVOICE_PAYMENT'),
       ...getIds('OPENING_BALANCE'),
     ]),
+    db.salesOverpaymentSettlements.bulkGet(getIds('SALES_OVERPAYMENT_SETTLEMENT')),
     db.salesReturns.bulkGet(getIds('SALES_RETURN')),
     db.purchaseDocuments.bulkGet([
       ...getIds('PURCHASE_INVOICE'),
@@ -2515,6 +2624,7 @@ const getEntrySourceMetadataMap = async (
   const transactionById = new Map(transactions.filter(Boolean).map((item) => [item!.id, item!]));
   const salesDocumentById = new Map(salesDocuments.filter(Boolean).map((item) => [item!.id, item!]));
   const salesPaymentById = new Map(salesInvoicePayments.filter(Boolean).map((item) => [item!.id, item!]));
+  const salesOverpaymentSettlementById = new Map(salesOverpaymentSettlements.filter(Boolean).map((item) => [item!.id, item!]));
   const salesReturnById = new Map(salesReturns.filter(Boolean).map((item) => [item!.id, item!]));
   const purchaseDocumentById = new Map(purchaseDocuments.filter(Boolean).map((item) => [item!.id, item!]));
   const purchasePaymentById = new Map(purchaseInvoicePayments.filter(Boolean).map((item) => [item!.id, item!]));
@@ -2541,6 +2651,10 @@ const getEntrySourceMetadataMap = async (
       const payment = salesPaymentById.get(sourceId);
       addMetadata(metadata, payment);
       addMetadata(metadata, payment ? salesDocumentById.get(payment.sales_document_id) : salesDocumentById.get(sourceId));
+    } else if (entry.source_type === 'SALES_OVERPAYMENT_SETTLEMENT') {
+      const settlement = salesOverpaymentSettlementById.get(sourceId);
+      addMetadata(metadata, settlement);
+      addMetadata(metadata, settlement ? salesPaymentById.get(settlement.source_payment_id) : undefined);
     } else if (entry.source_type === 'SALES_RETURN') {
       const salesReturn = salesReturnById.get(sourceId);
       addMetadata(metadata, salesReturn);

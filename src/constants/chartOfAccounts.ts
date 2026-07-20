@@ -56,6 +56,9 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('pph23-payable', '2120', 'PPh 23 Terutang', 'LIABILITY'),
   createAccountSeed('final-income-tax-payable', '2130', 'PPh Final Terutang', 'LIABILITY'),
   createAccountSeed('advance-received', '2210', 'Uang Muka Diterima', 'LIABILITY'),
+  createAccountSeed('customer-credit', '2220', 'Kredit Pelanggan', 'LIABILITY', {
+    description: 'Saldo lebih bayar/customer credit yang masih menjadi kewajiban kepada pelanggan.',
+  }),
   createAccountSeed('cooperative-member-savings', '2300', 'Simpanan Anggota', 'LIABILITY'),
   createAccountSeed('owner-capital', '3000', 'Modal Pemilik', 'EQUITY'),
   createAccountSeed('opening-balance-equity', '3050', 'Ekuitas Saldo Awal', 'EQUITY', {
