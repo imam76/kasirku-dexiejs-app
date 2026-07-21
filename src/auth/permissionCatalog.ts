@@ -499,6 +499,21 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'MARKETPLACE_VIEW',
+    label: 'Lihat Marketplace',
+    description: 'Melihat koneksi toko dan pesanan Marketplace.',
+    group: 'Marketplace',
+    moduleCodes: ['MARKETPLACE'],
+  },
+  {
+    code: 'MARKETPLACE_MANAGE',
+    label: 'Kelola Marketplace',
+    description: 'Menghubungkan toko dan menjalankan sinkronisasi pesanan.',
+    group: 'Marketplace',
+    moduleCodes: ['MARKETPLACE'],
+    isSensitive: true,
+  },
+  {
     code: 'SETTINGS_ACCESS',
     label: 'Akses Pengaturan',
     group: 'Administrasi',

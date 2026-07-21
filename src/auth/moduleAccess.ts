@@ -75,6 +75,9 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'REPORT_STOCK_CARD',
   ],
   '/profit': ['REPORT_PROFIT'],
+  // Marketplace
+  '/marketplace': ['MARKETPLACE'],
+  '/marketplace/shopee': ['MARKETPLACE'],
   // Koperasi
   '/koperasi/anggota': ['KOPERASI_ANGGOTA'],
   '/koperasi/simpanan': ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],

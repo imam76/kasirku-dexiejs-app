@@ -2,6 +2,7 @@
 mod bluetooth_printer;
 mod commands;
 mod db;
+mod marketplace;
 mod models;
 mod postgres_realtime;
 mod repositories;
@@ -36,6 +37,7 @@ pub fn run() {
             realtime_state.restart(app.handle().clone(), state.health().available);
             app.manage(state);
             app.manage(realtime_state);
+            app.manage(marketplace::state::MarketplaceRuntimeState::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -198,6 +200,13 @@ pub fn run() {
             commands::app_setup_config_commands::postgres_upsert_app_setup_config,
             commands::company_profile_setting_commands::postgres_get_company_profile_setting,
             commands::company_profile_setting_commands::postgres_upsert_company_profile_setting,
+            commands::marketplace_commands::marketplace_list_accounts,
+            commands::marketplace_commands::shopee_start_authorization,
+            commands::marketplace_commands::shopee_get_authorization_status,
+            commands::marketplace_commands::marketplace_sync_orders,
+            commands::marketplace_commands::marketplace_list_orders,
+            commands::marketplace_commands::marketplace_get_order,
+            commands::marketplace_commands::marketplace_list_integration_logs,
             commands::postgres_health::postgres_health_check,
             commands::postgres_health::set_postgres_database_url,
             bluetooth_printer::list_bluetooth_printers,

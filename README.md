@@ -41,6 +41,9 @@ DATABASE_URL=postgresql://appuser:apppassword@localhost:5432/appdb
 
 Migration database akan dijalankan otomatis saat aplikasi Tauri start.
 
+Konfigurasi dan flow integrasi Shopee desktop tersedia di
+[`docs/SHOPEE-MVP.md`](docs/SHOPEE-MVP.md).
+
 ## Menjalankan Project
 
 Untuk menjalankan frontend Vite saja:

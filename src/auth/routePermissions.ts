@@ -74,6 +74,8 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/koperasi/angsuran': 'COOPERATIVE_INSTALLMENT_VIEW',
   '/koperasi/penagihan': 'COOPERATIVE_BILLING_ACCESS',
   '/koperasi/kas-petugas': 'COOPERATIVE_FIELD_CASH_VIEW',
+  '/marketplace': 'MARKETPLACE_VIEW',
+  '/marketplace/shopee': 'MARKETPLACE_VIEW',
   '/sync-db': 'SETTINGS_ACCESS',
   '/settings': 'SETTINGS_ACCESS',
   '/profit': 'PROFIT_VIEW',

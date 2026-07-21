@@ -32,6 +32,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   ShoppingCart,
+  Store,
   Unlock,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -61,6 +62,7 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
   Banknote,
   BarChart3,
   Landmark,
+  Store,
 };
 
 const WIZARD_BODY_HEIGHT = 'calc(100vh - 182px)';

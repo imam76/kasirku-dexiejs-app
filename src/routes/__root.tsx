@@ -38,6 +38,7 @@ import {
   SettingsIcon,
   ShoppingBag,
   ShoppingCart,
+  Store,
   Sun,
   type LucideIcon
 } from 'lucide-react'
@@ -217,6 +218,14 @@ const RootLayout = () => {
     { to: '/history', label: t('nav.history'), icon: History },
     { to: '/finance', label: t('nav.finance'), icon: Banknote },
     { to: '/koperasi', label: t('nav.cooperative'), icon: Building2 },
+    {
+      key: 'marketplace',
+      label: t('nav.marketplace'),
+      icon: Store,
+      children: [
+        { to: '/marketplace/shopee', label: t('nav.marketplace.shopee'), icon: ShoppingBag },
+      ],
+    },
     { to: '/report', label: t('nav.reports'), icon: FileText },
     { to: '/sync-db', label: t('nav.syncDb'), icon: RefreshCw },
     { to: '/settings', label: t('nav.settings'), icon: Settings },

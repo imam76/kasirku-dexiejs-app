@@ -16,6 +16,7 @@ pub mod employee;
 pub mod finance_transaction;
 pub mod fiscal_year_closing_run;
 pub mod journal_entry;
+pub mod marketplace;
 pub mod opening_balance;
 pub mod payment_method;
 pub mod payroll;

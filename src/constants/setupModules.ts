@@ -92,6 +92,14 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
     ],
   },
   {
+    key: 'marketplace',
+    label: 'Marketplace',
+    iconName: 'Store',
+    modules: [
+      { code: 'MARKETPLACE', label: 'Marketplace', description: 'Koneksi toko dan sinkronisasi pesanan marketplace' },
+    ],
+  },
+  {
     key: 'koperasi',
     label: 'Koperasi',
     iconName: 'Landmark',
@@ -147,6 +155,8 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   'CASH_FLOW',
   'CHART_OF_ACCOUNTS',
   'GENERAL_LEDGER',
+  // Marketplace
+  'MARKETPLACE',
   // Reports
   'REPORT_POS_SALES',
   'REPORT_DEPOSIT',

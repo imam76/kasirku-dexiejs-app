@@ -110,6 +110,9 @@ const MasterDataContactsLazyRouteImport = createFileRoute(
   '/master-data/contacts',
 )()
 const MasterDataAreasLazyRouteImport = createFileRoute('/master-data/areas')()
+const MarketplaceShopeeLazyRouteImport = createFileRoute(
+  '/marketplace/shopee',
+)()
 const KoperasiSimpananLazyRouteImport = createFileRoute('/koperasi/simpanan')()
 const KoperasiPinjamanLazyRouteImport = createFileRoute('/koperasi/pinjaman')()
 const KoperasiPenagihanLazyRouteImport = createFileRoute(
@@ -234,6 +237,9 @@ const PurchasesDocumentTypeDocumentIdEditLazyRouteImport = createFileRoute(
 )()
 const PurchasesDocumentTypeDocumentIdReconcileLazyRouteImport = createFileRoute(
   '/purchases/$documentType/$documentId/reconcile',
+)()
+const MarketplaceShopeeOrdersOrderIdLazyRouteImport = createFileRoute(
+  '/marketplace/shopee/orders/$orderId',
 )()
 const FinanceSalesReturnsNewLazyRouteImport = createFileRoute(
   '/finance/sales/returns/new',
@@ -558,6 +564,13 @@ const MasterDataAreasLazyRoute = MasterDataAreasLazyRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
   import('./routes/master-data/areas.lazy').then((d) => d.Route),
+)
+const MarketplaceShopeeLazyRoute = MarketplaceShopeeLazyRouteImport.update({
+  id: '/marketplace/shopee',
+  path: '/marketplace/shopee',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/marketplace/shopee.lazy').then((d) => d.Route),
 )
 const KoperasiSimpananLazyRoute = KoperasiSimpananLazyRouteImport.update({
   id: '/koperasi/simpanan',
@@ -1018,6 +1031,16 @@ const PurchasesDocumentTypeDocumentIdReconcileLazyRoute =
       (d) => d.Route,
     ),
   )
+const MarketplaceShopeeOrdersOrderIdLazyRoute =
+  MarketplaceShopeeOrdersOrderIdLazyRouteImport.update({
+    id: '/orders/$orderId',
+    path: '/orders/$orderId',
+    getParentRoute: () => MarketplaceShopeeLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/marketplace/shopee/orders/$orderId.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const FinanceSalesReturnsNewLazyRoute =
   FinanceSalesReturnsNewLazyRouteImport.update({
     id: '/finance/sales/returns/new',
@@ -1157,6 +1180,7 @@ export interface FileRoutesByFullPath {
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
+  '/marketplace/shopee': typeof MarketplaceShopeeLazyRouteWithChildren
   '/master-data/areas': typeof MasterDataAreasLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
@@ -1218,6 +1242,7 @@ export interface FileRoutesByFullPath {
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
+  '/marketplace/shopee/orders/$orderId': typeof MarketplaceShopeeOrdersOrderIdLazyRoute
   '/purchases/$documentType/$documentId/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
   '/purchases/$documentType/$documentId/edit': typeof PurchasesDocumentTypeDocumentIdEditLazyRoute
   '/sales/$documentType/$documentId/edit': typeof SalesDocumentTypeDocumentIdEditLazyRoute
@@ -1270,6 +1295,7 @@ export interface FileRoutesByTo {
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
+  '/marketplace/shopee': typeof MarketplaceShopeeLazyRouteWithChildren
   '/master-data/areas': typeof MasterDataAreasLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
@@ -1331,6 +1357,7 @@ export interface FileRoutesByTo {
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
+  '/marketplace/shopee/orders/$orderId': typeof MarketplaceShopeeOrdersOrderIdLazyRoute
   '/purchases/$documentType/$documentId/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
   '/purchases/$documentType/$documentId/edit': typeof PurchasesDocumentTypeDocumentIdEditLazyRoute
   '/sales/$documentType/$documentId/edit': typeof SalesDocumentTypeDocumentIdEditLazyRoute
@@ -1384,6 +1411,7 @@ export interface FileRoutesById {
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
+  '/marketplace/shopee': typeof MarketplaceShopeeLazyRouteWithChildren
   '/master-data/areas': typeof MasterDataAreasLazyRoute
   '/master-data/contacts': typeof MasterDataContactsLazyRoute
   '/master-data/currencies': typeof MasterDataCurrenciesLazyRoute
@@ -1445,6 +1473,7 @@ export interface FileRoutesById {
   '/finance/sales/$documentType/new': typeof FinanceSalesDocumentTypeNewLazyRoute
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
+  '/marketplace/shopee/orders/$orderId': typeof MarketplaceShopeeOrdersOrderIdLazyRoute
   '/purchases/$documentType/$documentId/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
   '/purchases/$documentType/$documentId_/edit': typeof PurchasesDocumentTypeDocumentIdEditLazyRoute
   '/sales/$documentType/$documentId_/edit': typeof SalesDocumentTypeDocumentIdEditLazyRoute
@@ -1499,6 +1528,7 @@ export interface FileRouteTypes {
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
+    | '/marketplace/shopee'
     | '/master-data/areas'
     | '/master-data/contacts'
     | '/master-data/currencies'
@@ -1560,6 +1590,7 @@ export interface FileRouteTypes {
     | '/finance/sales/$documentType/new'
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
+    | '/marketplace/shopee/orders/$orderId'
     | '/purchases/$documentType/$documentId/reconcile'
     | '/purchases/$documentType/$documentId/edit'
     | '/sales/$documentType/$documentId/edit'
@@ -1612,6 +1643,7 @@ export interface FileRouteTypes {
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
+    | '/marketplace/shopee'
     | '/master-data/areas'
     | '/master-data/contacts'
     | '/master-data/currencies'
@@ -1673,6 +1705,7 @@ export interface FileRouteTypes {
     | '/finance/sales/$documentType/new'
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
+    | '/marketplace/shopee/orders/$orderId'
     | '/purchases/$documentType/$documentId/reconcile'
     | '/purchases/$documentType/$documentId/edit'
     | '/sales/$documentType/$documentId/edit'
@@ -1725,6 +1758,7 @@ export interface FileRouteTypes {
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
+    | '/marketplace/shopee'
     | '/master-data/areas'
     | '/master-data/contacts'
     | '/master-data/currencies'
@@ -1786,6 +1820,7 @@ export interface FileRouteTypes {
     | '/finance/sales/$documentType/new'
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
+    | '/marketplace/shopee/orders/$orderId'
     | '/purchases/$documentType/$documentId/reconcile'
     | '/purchases/$documentType/$documentId_/edit'
     | '/sales/$documentType/$documentId_/edit'
@@ -1839,6 +1874,7 @@ export interface RootRouteChildren {
   KoperasiPenagihanLazyRoute: typeof KoperasiPenagihanLazyRoute
   KoperasiPinjamanLazyRoute: typeof KoperasiPinjamanLazyRoute
   KoperasiSimpananLazyRoute: typeof KoperasiSimpananLazyRoute
+  MarketplaceShopeeLazyRoute: typeof MarketplaceShopeeLazyRouteWithChildren
   MasterDataAreasLazyRoute: typeof MasterDataAreasLazyRoute
   MasterDataContactsLazyRoute: typeof MasterDataContactsLazyRoute
   MasterDataCurrenciesLazyRoute: typeof MasterDataCurrenciesLazyRoute
@@ -2212,6 +2248,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data/areas'
       fullPath: '/master-data/areas'
       preLoaderRoute: typeof MasterDataAreasLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketplace/shopee': {
+      id: '/marketplace/shopee'
+      path: '/marketplace/shopee'
+      fullPath: '/marketplace/shopee'
+      preLoaderRoute: typeof MarketplaceShopeeLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/koperasi/simpanan': {
@@ -2613,6 +2656,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PurchasesDocumentTypeDocumentIdReconcileLazyRouteImport
       parentRoute: typeof PurchasesDocumentTypeDocumentIdLazyRoute
     }
+    '/marketplace/shopee/orders/$orderId': {
+      id: '/marketplace/shopee/orders/$orderId'
+      path: '/orders/$orderId'
+      fullPath: '/marketplace/shopee/orders/$orderId'
+      preLoaderRoute: typeof MarketplaceShopeeOrdersOrderIdLazyRouteImport
+      parentRoute: typeof MarketplaceShopeeLazyRoute
+    }
     '/finance/sales/returns/new': {
       id: '/finance/sales/returns/new'
       path: '/finance/sales/returns/new'
@@ -2742,6 +2792,20 @@ const FinanceReceivablesLazyRouteWithChildren =
     FinanceReceivablesLazyRouteChildren,
   )
 
+interface MarketplaceShopeeLazyRouteChildren {
+  MarketplaceShopeeOrdersOrderIdLazyRoute: typeof MarketplaceShopeeOrdersOrderIdLazyRoute
+}
+
+const MarketplaceShopeeLazyRouteChildren: MarketplaceShopeeLazyRouteChildren = {
+  MarketplaceShopeeOrdersOrderIdLazyRoute:
+    MarketplaceShopeeOrdersOrderIdLazyRoute,
+}
+
+const MarketplaceShopeeLazyRouteWithChildren =
+  MarketplaceShopeeLazyRoute._addFileChildren(
+    MarketplaceShopeeLazyRouteChildren,
+  )
+
 interface PurchasesDocumentTypeDocumentIdLazyRouteChildren {
   PurchasesDocumentTypeDocumentIdReconcileLazyRoute: typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
 }
@@ -2817,6 +2881,7 @@ const rootRouteChildren: RootRouteChildren = {
   KoperasiPenagihanLazyRoute: KoperasiPenagihanLazyRoute,
   KoperasiPinjamanLazyRoute: KoperasiPinjamanLazyRoute,
   KoperasiSimpananLazyRoute: KoperasiSimpananLazyRoute,
+  MarketplaceShopeeLazyRoute: MarketplaceShopeeLazyRouteWithChildren,
   MasterDataAreasLazyRoute: MasterDataAreasLazyRoute,
   MasterDataContactsLazyRoute: MasterDataContactsLazyRoute,
   MasterDataCurrenciesLazyRoute: MasterDataCurrenciesLazyRoute,
