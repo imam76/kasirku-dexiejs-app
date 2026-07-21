@@ -10,6 +10,10 @@ import {
   toDocumentCurrencyAmount,
 } from '@/utils/documentCurrency';
 import { calculateReceivableBalance } from './calculateReceivableBalance';
+import {
+  getSalesInvoicePaymentAllocatedAmount,
+  getSalesInvoicePaymentForeignAllocatedAmount,
+} from './paymentAmounts';
 
 export interface BuildOpeningReceivableRowsInput {
   lines: OpeningBalanceLine[];
@@ -24,8 +28,13 @@ const sumActivePaymentsByLineId = (
   if (payment.status !== 'ACTIVE') return acc;
   const lineId = payment.opening_balance_line_id ?? payment.sales_document_id;
   if (!lineId) return acc;
-  if (amountKey === 'foreign_amount' && payment.foreign_amount === undefined) return acc;
-  acc[lineId] = (acc[lineId] || 0) + Number(payment[amountKey] || 0);
+  if (amountKey === 'foreign_amount') {
+    if (payment.foreign_amount === undefined && payment.foreign_allocated_amount === undefined) return acc;
+    acc[lineId] = (acc[lineId] || 0) + getSalesInvoicePaymentForeignAllocatedAmount(payment);
+    return acc;
+  }
+
+  acc[lineId] = (acc[lineId] || 0) + getSalesInvoicePaymentAllocatedAmount(payment);
   return acc;
 }, {});
 

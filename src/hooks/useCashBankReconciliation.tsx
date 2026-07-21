@@ -39,6 +39,18 @@ export const useCashBankReconciliation = ({
     },
   });
 
+  const adjustmentAccountsQuery = useQuery({
+    queryKey: ['cashBankReconciliationAdjustmentAccounts', cashAccountId],
+    queryFn: async () => db.chartOfAccounts
+      .orderBy('code')
+      .filter((account) => (
+        account.is_active &&
+        account.is_postable &&
+        account.id !== cashAccountId
+      ))
+      .toArray(),
+  });
+
   const candidatesQuery = useQuery({
     queryKey: ['cashBankReconciliationCandidates', cashAccountId, statementDate],
     queryFn: () => listCashBankReconciliationCandidates({ cashAccountId, statementDate }),
@@ -55,6 +67,13 @@ export const useCashBankReconciliation = ({
     queryClient.invalidateQueries({ queryKey: ['cashBankReconciliationCandidates'] });
     queryClient.invalidateQueries({ queryKey: ['cashBankReconciliations'] });
     queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
+    queryClient.invalidateQueries({ queryKey: ['financeBalance'] });
+    queryClient.invalidateQueries({ queryKey: ['profitBalance'] });
+    queryClient.invalidateQueries({ queryKey: ['profitLogs'] });
+    queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+    queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
+    queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
+    queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
   };
 
   const createMutation = useMutation({
@@ -90,6 +109,8 @@ export const useCashBankReconciliation = ({
   return {
     cashBankAccounts: cashBankAccountsQuery.data ?? [],
     isLoadingCashBankAccounts: cashBankAccountsQuery.isLoading,
+    adjustmentAccounts: adjustmentAccountsQuery.data ?? [],
+    isLoadingAdjustmentAccounts: adjustmentAccountsQuery.isLoading,
     candidates: candidatesQuery.data,
     isLoadingCandidates: candidatesQuery.isLoading,
     reconciliations: reconciliationsQuery.data ?? [],

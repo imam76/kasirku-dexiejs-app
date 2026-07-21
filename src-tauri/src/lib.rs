@@ -152,6 +152,8 @@ pub fn run() {
             commands::cooperative_commands::postgres_list_cooperative_members,
             commands::cooperative_commands::postgres_get_cooperative_member,
             commands::cooperative_commands::postgres_upsert_cooperative_member,
+            commands::cooperative_commands::postgres_list_cooperative_member_codes,
+            commands::cooperative_commands::postgres_upsert_cooperative_member_code,
             commands::cooperative_commands::postgres_list_cooperative_saving_transactions,
             commands::cooperative_commands::postgres_get_cooperative_saving_transaction,
             commands::cooperative_commands::postgres_upsert_cooperative_saving_transaction,

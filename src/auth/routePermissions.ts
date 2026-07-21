@@ -47,10 +47,11 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/projects': 'PROJECT_MANAGE',
   '/master-data/taxes': 'TAX_MANAGE',
   '/shopping-note': 'PURCHASE_RECEIPT_MANAGE',
-  '/finance': 'FINANCE_ACCESS',
+  '/finance': ['FINANCE_ACCESS', 'ACCOUNTING_PERIOD_MANAGE'],
   '/finance/cash-flow': 'FINANCE_ACCESS',
   '/finance/cash-bank-reconciliation': 'FINANCE_ACCESS',
   '/finance/receivables': 'FINANCE_ACCESS',
+  '/finance/receivables/overpayments': 'FINANCE_ACCESS',
   '/finance/payables': 'FINANCE_ACCESS',
   '/finance/payroll': 'FINANCE_ACCESS',
   '/finance/chart-of-accounts': 'FINANCE_ACCESS',
@@ -61,6 +62,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
     'COOPERATIVE_MEMBER_VIEW',
     'COOPERATIVE_SAVING_VIEW',
     'COOPERATIVE_LOAN_VIEW',
+    'COOPERATIVE_LOAN_DISBURSE',
     'COOPERATIVE_INSTALLMENT_VIEW',
     'COOPERATIVE_BILLING_ACCESS',
     'COOPERATIVE_FIELD_CASH_VIEW',
@@ -75,7 +77,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/sync-db': 'SETTINGS_ACCESS',
   '/settings': 'SETTINGS_ACCESS',
   '/profit': 'PROFIT_VIEW',
-  '/report': GENERAL_REPORT_PERMISSION_LIST,
+  '/report': [...GENERAL_REPORT_PERMISSION_LIST, 'PROFIT_VIEW'],
 };
 
 const routeEntries = Object.entries(ROUTE_PERMISSIONS)

@@ -9,6 +9,23 @@ import { getReportAccessForPath } from './reportPermissions';
  */
 export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   // Data Master
+  '/master-data': [
+    'PRODUCT',
+    'PRODUCTION',
+    'STOCK_OPNAME',
+    'CONTACT',
+    'WAREHOUSE',
+    'PAYMENT_METHOD',
+    'AREA',
+    'EMPLOYEE',
+    'DEPARTMENT',
+    'PROJECT',
+    'TAX',
+    'PROMO',
+    'UNIT',
+    'CURRENCY',
+    'ROLE_PERMISSION',
+  ],
   '/master-data/products': ['PRODUCT'],
   '/master-data/production': ['PRODUCTION'],
   '/master-data/stock-opname': ['STOCK_OPNAME'],
@@ -30,14 +47,33 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   // Legacy stock shopping route redirects to Purchase Receipt.
   '/shopping-note': ['PURCHASE_RECEIPT'],
   // Finance
+  '/finance': ['CASH_FLOW', 'RECEIVABLES', 'PAYABLES', 'CHART_OF_ACCOUNTS', 'GENERAL_LEDGER'],
   '/finance/cash-flow': ['CASH_FLOW'],
+  '/finance/cash-bank-reconciliation': ['CASH_FLOW'],
   '/finance/receivables': ['RECEIVABLES'],
+  '/finance/receivables/overpayments': ['RECEIVABLES'],
   '/finance/payables': ['PAYABLES'],
   '/finance/payroll': ['CASH_FLOW'],
   '/finance/chart-of-accounts': ['CHART_OF_ACCOUNTS'],
   '/finance/opening-balances': ['GENERAL_LEDGER', 'CHART_OF_ACCOUNTS'],
   '/finance/general-ledger': ['GENERAL_LEDGER'],
+  '/finance/closing': ['GENERAL_LEDGER'],
   // Reports
+  '/report': [
+    'REPORT_POS_SALES',
+    'REPORT_DEPOSIT',
+    'REPORT_TRANSACTION_DETAIL',
+    'REPORT_PURCHASE',
+    'REPORT_INCOME',
+    'REPORT_EXPENSE',
+    'REPORT_CASH_FLOW',
+    'REPORT_PAYROLL',
+    'REPORT_PROFIT',
+    'REPORT_BALANCE_SHEET',
+    'GENERAL_LEDGER',
+    'REPORT_AGING',
+    'REPORT_STOCK_CARD',
+  ],
   '/profit': ['REPORT_PROFIT'],
   // Koperasi
   '/koperasi/anggota': ['KOPERASI_ANGGOTA'],
@@ -66,8 +102,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'KOPERASI_REPORT_IPTW',
     'KOPERASI_REPORT_MEMBER_REGISTER',
     'KOPERASI_REPORT_INSTALLMENT_BOOK',
-    'KOPERASI_REPORT_CASH_FLOW',
-    'KOPERASI_REPORT_LEDGER'
+    'KOPERASI_REPORT_CASH_FLOW'
   ],
 };
 

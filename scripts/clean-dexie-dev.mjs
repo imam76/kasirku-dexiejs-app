@@ -1,4 +1,4 @@
-import { cp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import path from 'node:path';
@@ -64,6 +64,14 @@ const platformCandidates = {
 
 const candidates = [...new Set(platformCandidates[currentPlatform] || [])];
 
+const appConfigDir = currentPlatform === 'darwin'
+  ? path.join(macApplicationSupport, 'frayukti')
+  : currentPlatform === 'win32'
+    ? path.join(windowsRoamingAppData, 'frayukti')
+    : path.join(linuxConfigHome, 'frayukti');
+
+const databaseUrlPath = path.join(appConfigDir, 'database_url.txt');
+
 if (candidates.length === 0) {
   throw new Error(`Unsupported operating system: ${currentPlatform}`);
 }
@@ -75,6 +83,25 @@ const sanitizePathForBackup = (targetPath) => targetPath
 
 const cleaned = [];
 const missing = [];
+
+const redactDatabaseUrl = (value) => {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password) {
+      url.username = '***';
+      url.password = '***';
+    }
+    return url.toString();
+  } catch {
+    return value.replace(/(postgres(?:ql)?:\/\/)([^@\s]+)@/i, '$1***:***@');
+  }
+};
+
+const readConfiguredDatabaseUrl = async () => {
+  if (!existsSync(databaseUrlPath)) return null;
+  const value = (await readFile(databaseUrlPath, 'utf-8')).trim();
+  return value || null;
+};
 
 await mkdir(backupDir, { recursive: true });
 
@@ -113,12 +140,17 @@ await writeFile(
 if (cleaned.length === 0) {
   console.log('No Dexie/WebView dev storage found to clean.');
   console.log(`Backup manifest: ${backupDir}`);
-  process.exit(0);
-}
-
-for (const item of cleaned) {
-  console.log(`cleaned ${item.path}`);
-  console.log(`backup  ${item.backup}`);
+} else {
+  for (const item of cleaned) {
+    console.log(`cleaned ${item.path}`);
+    console.log(`backup  ${item.backup}`);
+  }
 }
 
 console.log(`backup manifest: ${path.join(backupDir, 'manifest.json')}`);
+
+const configuredDatabaseUrl = await readConfiguredDatabaseUrl();
+if (configuredDatabaseUrl) {
+  console.log(`preserved host database config: ${redactDatabaseUrl(configuredDatabaseUrl)}`);
+  console.log(`host database config path: ${databaseUrlPath}`);
+}

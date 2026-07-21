@@ -1,18 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem, PaymentMethodCategory, PosTransactionPayment } from '@/types';
+import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem, PaymentMethodCategory } from '@/types';
 import { isExpenseReportFinanceTransaction, isIncomeReportFinanceTransaction } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
+import type { PosSalesReportData } from '@/services/posSalesReportAggregator';
+import { getPosSalesReportData } from '@/services/posSalesReportService';
 import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
-import {
-  aggregateSoldItems,
-  createEmptySoldItemSummary,
-  resolveTransactionItemUnit,
-} from '@/utils/salesUnits';
+import { getSalesInvoicePaymentAllocatedAmount } from '@/utils/accountsReceivable/paymentAmounts';
+import { resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { filterActiveTransactions } from '@/utils/transactions';
 import type {
   AccountsPayableRow,
@@ -23,7 +22,6 @@ import type {
   SalesInvoicePayment,
   SalesInvoicePaymentStatus,
 } from '@/types';
-import type { SoldItemSummary } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 import {
   getTransactionPaymentSnapshot,
@@ -305,6 +303,12 @@ export const usePosSalesReport = (
     queryKey: ['posSalesReport', startDate, endDate, paymentMethodCode, paymentMode, categories],
     queryFn: async (): Promise<PosSalesReportData> => {
       await requireUserPermission(await getCurrentSessionUser(), 'REPORT_POS_SALES_VIEW');
+      return getPosSalesReportData({
+        startDate,
+        endDate,
+        paymentMethodCode,
+        categories,
+      });
       let collection = db.transactions.orderBy('created_at').reverse();
 
       if (startDate && endDate) {
@@ -506,7 +510,7 @@ export const useAccountsAgingReport = (filters: AccountsAgingReportFilters = {})
       const receivablePaidInPeriod = filteredSalesPayments
         .filter((payment) => payment.status === 'ACTIVE')
         .filter((payment) => isDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
-        .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+        .reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0);
       const payablePaidInPeriod = filteredPurchasePayments
         .filter((payment) => payment.status === 'ACTIVE')
         .filter((payment) => isDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))

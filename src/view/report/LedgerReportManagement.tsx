@@ -7,14 +7,14 @@ import { FileTextOutlined } from '@ant-design/icons';
 import { BookOpen, Building2, Filter, RefreshCw } from 'lucide-react';
 import ExportActions from '@/components/ExportActions';
 import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
-import { useCooperativeLedgerReport } from '@/hooks/useCooperativeLedgerReport';
+import { useLedgerReport } from '@/hooks/useLedgerReport';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import dayjs from '@/lib/dayjs';
 import type {
-  CooperativeLedgerReportFilters,
-  CooperativeLedgerReportRowType,
-} from '@/services/cooperativeLedgerReportService';
+  LedgerReportFilters,
+  LedgerReportRowType,
+} from '@/services/ledgerReportService';
 import type { ExportRows, ExportTarget } from '@/utils/export';
 import { exportCsv, saveExportFile } from '@/utils/export';
 import { formatCurrency, formatDate } from '@/utils/formatters';
@@ -23,10 +23,10 @@ const { Text, Title } = Typography;
 
 const ALL_VALUE = '__ALL__';
 
-const rowTypeLabelKey: Record<CooperativeLedgerReportRowType, TranslationKey> = {
-  OPENING: 'cooperative.ledger.rowType.opening',
-  MOVEMENT: 'cooperative.ledger.rowType.movement',
-  ENDING: 'cooperative.ledger.rowType.ending',
+const rowTypeLabelKey: Record<LedgerReportRowType, TranslationKey> = {
+  OPENING: 'report.ledger.rowType.opening',
+  MOVEMENT: 'report.ledger.rowType.movement',
+  ENDING: 'report.ledger.rowType.ending',
 };
 
 const REPORT_TABLE_MIN_WIDTH = 1320;
@@ -157,26 +157,26 @@ const toSelectOptions = (items: Array<{ id: string; code?: string; name: string 
     })),
 ];
 
-const getFilterCount = (filters: CooperativeLedgerReportFilters) => (
+const getFilterCount = (filters: LedgerReportFilters) => (
   (filters.startDate || filters.endDate ? 1 : 0) +
   (filters.fromAccountId || filters.toAccountId ? 1 : 0) +
   (filters.hideZeroBalance ? 1 : 0)
 );
 
-const getDefaultFilters = (): CooperativeLedgerReportFilters => ({
+const getDefaultFilters = (): LedgerReportFilters => ({
   startDate: dayjs.tz().startOf('month').toISOString(),
   endDate: dayjs.tz().endOf('month').toISOString(),
 });
 
-export default function CooperativeLedgerReportManagement() {
+export default function LedgerReportManagement() {
   const { message } = App.useApp();
   const { t } = useI18n();
   const { profile } = useCompanyProfileSetting();
   const reportRef = useRef<HTMLDivElement | null>(null);
-  const [filters, setFilters] = useState<CooperativeLedgerReportFilters>(() => getDefaultFilters());
-  const [draftFilters, setDraftFilters] = useState<CooperativeLedgerReportFilters>(() => getDefaultFilters());
+  const [filters, setFilters] = useState<LedgerReportFilters>(() => getDefaultFilters());
+  const [draftFilters, setDraftFilters] = useState<LedgerReportFilters>(() => getDefaultFilters());
   const [filterOpen, setFilterOpen] = useState(false);
-  const reportQuery = useCooperativeLedgerReport(filters);
+  const reportQuery = useLedgerReport(filters);
   const data = reportQuery.data;
   const isLoading = reportQuery.isLoading || reportQuery.isFetching;
   const filterCount = getFilterCount(filters);
@@ -188,20 +188,20 @@ export default function CooperativeLedgerReportManagement() {
 
   const periodText = `${filters.startDate ? dayjs(filters.startDate).tz().format('YYYY-MM-DD') : t('common.all')} - ${filters.endDate ? dayjs(filters.endDate).tz().format('YYYY-MM-DD') : t('common.all')}`;
   const reportRows = data?.exportRows ?? [];
-  const companyName = profile?.company_name || t('cooperative.ledger.companyFallback');
+  const companyName = profile?.company_name || t('report.ledger.companyFallback');
 
-  const getRowTypeLabel = (rowType?: CooperativeLedgerReportRowType) => (
+  const getRowTypeLabel = (rowType?: LedgerReportRowType) => (
     rowType ? t(rowTypeLabelKey[rowType]) : '-'
   );
 
   const buildCsvRows = (): ExportRows => {
     const rows: ExportRows = [
-      [t('cooperative.ledger.title'), dayjs().tz().format('YYYY-MM-DD HH:mm:ss')],
-      [t('cooperative.ledger.period'), periodText],
+      [t('report.ledger.title'), dayjs().tz().format('YYYY-MM-DD HH:mm:ss')],
+      [t('report.ledger.period'), periodText],
       [],
       [
         t('generalLedger.account'),
-        t('cooperative.reports.table.rowType'),
+        t('report.ledger.rowType'),
         t('generalLedger.journal.date'),
         t('generalLedger.journal.number'),
         t('generalLedger.journal.source'),
@@ -217,11 +217,11 @@ export default function CooperativeLedgerReportManagement() {
         rows.push([]);
         rows.push([
           `${row.account_code} - ${row.account_name}`,
-          t('cooperative.ledger.accountSummary'),
+          t('report.ledger.accountSummary'),
           '',
           '',
           '',
-          `${t('cooperative.ledger.openingBalance')}: ${row.opening_balance ?? 0}; ${t('cooperative.ledger.endingBalance')}: ${row.ending_balance ?? 0}`,
+          `${t('report.ledger.openingBalance')}: ${row.opening_balance ?? 0}; ${t('report.ledger.endingBalance')}: ${row.ending_balance ?? 0}`,
           row.debit ?? 0,
           row.credit ?? 0,
           row.ending_balance ?? 0,
@@ -268,15 +268,15 @@ export default function CooperativeLedgerReportManagement() {
 
     try {
       const exported = await exportCsv({
-        filename: `buku-besar-koperasi-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
+        filename: `buku-besar-${dayjs().tz().format('YYYY-MM-DD')}.csv`,
         rows: buildCsvRows(),
         target,
       });
       if (!exported) return;
-      message.success(t('cooperative.ledger.exportCsvSuccess'));
+      message.success(t('report.ledger.exportCsvSuccess'));
     } catch (error) {
-      console.error('Failed to export cooperative ledger CSV:', error);
-      message.error(t('cooperative.ledger.exportCsvFailed'));
+      console.error('Failed to export ledger CSV:', error);
+      message.error(t('report.ledger.exportCsvFailed'));
     }
   };
 
@@ -319,16 +319,16 @@ export default function CooperativeLedgerReportManagement() {
       }
 
       const exported = await saveExportFile({
-        filename: `buku-besar-koperasi-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
+        filename: `buku-besar-${dayjs().tz().format('YYYY-MM-DD')}.pdf`,
         mimeType: 'application/pdf',
         content: doc.output('arraybuffer'),
         target,
       });
       if (!exported) return;
-      message.success(t('cooperative.ledger.exportPdfSuccess'));
+      message.success(t('report.ledger.exportPdfSuccess'));
     } catch (error) {
-      console.error('Failed to export cooperative ledger PDF:', error);
-      message.error(t('cooperative.ledger.exportPdfFailed'));
+      console.error('Failed to export ledger PDF:', error);
+      message.error(t('report.ledger.exportPdfFailed'));
     }
   };
 
@@ -338,13 +338,13 @@ export default function CooperativeLedgerReportManagement() {
         <div>
           <Title level={2} className="!mb-1 flex items-center gap-2">
             <BookOpen size={24} />
-            {t('nav.cooperative.ledger')}
+            {t('nav.report.ledger')}
           </Title>
-          <Text type="secondary">{t('cooperative.ledger.subtitle')}</Text>
+          <Text type="secondary">{t('report.ledger.subtitle')}</Text>
         </div>
         <Space wrap>
           <Button icon={<Filter size={16} />} onClick={handleOpenFilter}>
-            {filterCount > 0 ? t('cooperative.ledger.filterWithCount', { count: filterCount }) : t('cooperative.ledger.filter')}
+            {filterCount > 0 ? t('report.ledger.filterWithCount', { count: filterCount }) : t('report.ledger.filter')}
           </Button>
           <Button icon={<RefreshCw size={16} />} onClick={() => void reportQuery.refetch()} loading={isLoading}>
             {t('common.refresh')}
@@ -378,12 +378,12 @@ export default function CooperativeLedgerReportManagement() {
       ) : null}
 
       {data && data.groups.length === 0 ? (
-        <Empty description={t('cooperative.ledger.empty')} />
+        <Empty description={t('report.ledger.empty')} />
       ) : null}
 
       {data && data.groups.length > 0 ? (
         <div style={{ overflowX: 'auto' }}>
-          <div ref={reportRef} style={reportWrapperStyle} data-testid="koperasi-ledger-report">
+          <div ref={reportRef} style={reportWrapperStyle} data-testid="ledger-report">
             <div style={reportHeaderStyle}>
               <div style={reportIdentityStyle}>
                 <div style={reportLogoStyle}>
@@ -400,12 +400,12 @@ export default function CooperativeLedgerReportManagement() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 700 }}>{companyName}</div>
                   <div style={{ color: '#4b5563', fontSize: 13, marginTop: 2 }}>
-                    {t('cooperative.ledger.subtitle')}
+                    {t('report.ledger.subtitle')}
                   </div>
                 </div>
               </div>
               <div style={reportMetaStyle}>
-                <div>{t('cooperative.ledger.period')}: {periodText}</div>
+                <div>{t('report.ledger.period')}: {periodText}</div>
                 <div>{t('report.printDate')} {dayjs().tz().format('YYYY-MM-DD HH:mm:ss')}</div>
               </div>
             </div>
@@ -422,7 +422,7 @@ export default function CooperativeLedgerReportManagement() {
                     </div>
                   </div>
                   <div style={accountSummaryCellStyle}>
-                    <div style={{ fontSize: 12 }}>{t('cooperative.ledger.openingBalance')}</div>
+                    <div style={{ fontSize: 12 }}>{t('report.ledger.openingBalance')}</div>
                     <div style={getSignedStyle(group.opening_balance)}>{money(group.opening_balance)}</div>
                   </div>
                   <div style={accountSummaryCellStyle}>
@@ -434,7 +434,7 @@ export default function CooperativeLedgerReportManagement() {
                     <div style={{ fontWeight: 600 }}>{money(group.total_credit)}</div>
                   </div>
                   <div style={accountSummaryCellStyle}>
-                    <div style={{ fontSize: 12 }}>{t('cooperative.ledger.endingBalance')}</div>
+                    <div style={{ fontSize: 12 }}>{t('report.ledger.endingBalance')}</div>
                     <div style={getSignedStyle(group.ending_balance)}>{money(group.ending_balance)}</div>
                   </div>
                 </div>
@@ -448,7 +448,7 @@ export default function CooperativeLedgerReportManagement() {
                     <tr>
                       <th style={thStyle}>{t('generalLedger.journal.date')}</th>
                       <th style={thStyle}>{t('generalLedger.journal.number')}</th>
-                      <th style={thStyle}>{t('cooperative.reports.table.rowType')}</th>
+                      <th style={thStyle}>{t('report.ledger.rowType')}</th>
                       <th style={thStyle}>{t('generalLedger.journal.source')}</th>
                       <th style={thStyle}>{t('generalLedger.journal.description')}</th>
                       <th style={{ ...thStyle, textAlign: 'right' }}>{t('generalLedger.debit')}</th>
@@ -484,11 +484,11 @@ export default function CooperativeLedgerReportManagement() {
       ) : null}
 
       <Modal
-        title={t('cooperative.ledger.filterTitle')}
+        title={t('report.ledger.filterTitle')}
         open={filterOpen}
         onCancel={() => setFilterOpen(false)}
         onOk={handleApplyFilter}
-        okText={t('cooperative.ledger.applyFilter')}
+        okText={t('report.ledger.applyFilter')}
         footer={[
           <Button key="reset" onClick={handleResetFilter}>
             {t('common.reset')}
@@ -497,13 +497,13 @@ export default function CooperativeLedgerReportManagement() {
             {t('common.cancel')}
           </Button>,
           <Button key="apply" type="primary" onClick={handleApplyFilter}>
-            {t('cooperative.ledger.applyFilter')}
+            {t('report.ledger.applyFilter')}
           </Button>,
         ]}
       >
         <Space direction="vertical" className="w-full" size="middle">
           <div>
-            <Text strong>{t('cooperative.ledger.dateRange')}</Text>
+            <Text strong>{t('report.ledger.dateRange')}</Text>
             <DatePicker.RangePicker
               className="mt-2 w-full"
               value={dateRange}
@@ -527,7 +527,7 @@ export default function CooperativeLedgerReportManagement() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <Text strong>{t('cooperative.ledger.fromAccount')}</Text>
+              <Text strong>{t('report.ledger.fromAccount')}</Text>
               <Select
                 showSearch
                 optionFilterProp="label"
@@ -541,7 +541,7 @@ export default function CooperativeLedgerReportManagement() {
               />
             </div>
             <div>
-              <Text strong>{t('cooperative.ledger.toAccount')}</Text>
+              <Text strong>{t('report.ledger.toAccount')}</Text>
               <Select
                 showSearch
                 optionFilterProp="label"
@@ -563,7 +563,7 @@ export default function CooperativeLedgerReportManagement() {
               hideZeroBalance: event.target.checked ? true : undefined,
             }))}
           >
-            {t('cooperative.ledger.hideZeroBalance')}
+            {t('report.ledger.hideZeroBalance')}
           </Checkbox>
         </Space>
       </Modal>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button, Card, Input, Typography } from 'antd';
+import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import {
   AccountsReceivableFilterModal,
@@ -9,6 +10,7 @@ import { AccountsReceivableSummary } from '@/components/accounts-receivable/Acco
 import { AccountsReceivableTable } from '@/components/accounts-receivable/AccountsReceivableTable';
 import { ReceivablePaymentModal } from '@/components/accounts-receivable/ReceivablePaymentModal';
 import { useAccountsReceivable } from '@/hooks/useAccountsReceivable';
+import { useSalesOverpayments } from '@/hooks/useSalesOverpayments';
 import { useI18n } from '@/hooks/useI18n';
 import type { AccountsReceivableRow } from '@/types';
 
@@ -28,8 +30,9 @@ const countActiveFilters = (filters: AccountsReceivableFilterValues) => {
   ].filter(Boolean).length;
 };
 
-export default function AccountsReceivableManagement() {
+function AccountsReceivablePage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
   const [advancedFilters, setAdvancedFilters] = useState<AccountsReceivableFilterValues>(DEFAULT_FILTERS);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -39,7 +42,12 @@ export default function AccountsReceivableManagement() {
     ...advancedFilters,
   }), [advancedFilters, searchText]);
   const { receivableRows, summary, recordPayment, isMutating } = useAccountsReceivable(filters);
+  const { overpaymentRows } = useSalesOverpayments();
   const activeFilterCount = useMemo(() => countActiveFilters(advancedFilters), [advancedFilters]);
+  const hasProcessableOverpayments = useMemo(
+    () => overpaymentRows.some((row) => row.remaining_amount > 0.01),
+    [overpaymentRows],
+  );
 
   const resetFilters = () => {
     setSearchText('');
@@ -48,9 +56,19 @@ export default function AccountsReceivableManagement() {
 
   return (
     <div className="space-y-4 p-3 sm:p-4 md:p-6">
-      <div>
-        <Title level={2} style={{ margin: 0 }}>{t('accountsReceivable.title')}</Title>
-        <Text type="secondary">{t('accountsReceivable.subtitle')}</Text>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <Title level={2} style={{ margin: 0 }}>{t('accountsReceivable.title')}</Title>
+          <Text type="secondary">{t('accountsReceivable.subtitle')}</Text>
+        </div>
+        {hasProcessableOverpayments && (
+          <Button
+            type="primary"
+            onClick={() => navigate({ to: '/finance/receivables/overpayments' })}
+          >
+            {t('salesOverpayments.title')}
+          </Button>
+        )}
       </div>
 
       <AccountsReceivableSummary summary={summary} />
@@ -110,4 +128,15 @@ export default function AccountsReceivableManagement() {
       />
     </div>
   );
+}
+
+export default function AccountsReceivableManagement() {
+  const location = useLocation();
+  const normalizedPath = location.pathname.replace(/\/$/, '');
+
+  if (normalizedPath !== '/finance/receivables') {
+    return <Outlet />;
+  }
+
+  return <AccountsReceivablePage />;
 }

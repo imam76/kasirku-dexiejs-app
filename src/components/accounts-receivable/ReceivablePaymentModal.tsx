@@ -43,6 +43,7 @@ export function ReceivablePaymentModal({
 }: ReceivablePaymentModalProps) {
   const { t } = useI18n();
   const [form] = Form.useForm<PaymentFormValues>();
+  const watchedAmount = Form.useWatch('amount', form);
   const paymentAccounts = useLiveQuery(
     () => db.chartOfAccounts
       .where('type')
@@ -95,6 +96,9 @@ export function ReceivablePaymentModal({
     });
     form.resetFields();
   };
+  const overpaymentPreview = row
+    ? Math.max(0, Number(watchedAmount || 0) - Number(row.foreign_balance_due ?? row.balance_due ?? 0))
+    : 0;
 
   return (
     <Modal
@@ -149,20 +153,22 @@ export function ReceivablePaymentModal({
               validator: async (_, value) => {
                 const amount = Number(value || 0);
                 if (amount <= 0) throw new Error(t('finance.amountMin'));
-                if (row && amount > (row.foreign_balance_due ?? row.balance_due) + 0.01) {
-                  throw new Error(t('accountsReceivable.error.amountExceedsBalance'));
-                }
               },
             },
           ]}
         >
           <InputNumber
             min={1}
-            max={row?.foreign_balance_due ?? row?.balance_due}
             style={{ width: '100%' }}
             placeholder="0"
           />
         </Form.Item>
+
+        {row && overpaymentPreview > 0.01 && (
+          <div className="mb-4 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {t('salesOverpayments.initialOverpayment')}: {formatDocumentCurrencyAmount(overpaymentPreview, row)}
+          </div>
+        )}
 
         <Form.Item
           name="paid_at"

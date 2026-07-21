@@ -65,7 +65,7 @@ const COOPERATIVE_QUERY_KEYS = [
   'cooperativeDailyTargetReport',
   'cooperativeDailyFieldCashReport',
   'cooperativeCashReport',
-  'cooperativeLedgerReport',
+  'ledgerReport',
   'cooperativeIptwReport',
   'cooperativeInstallmentBookReport',
   'cooperativeMemberRegisterReport',
@@ -119,7 +119,7 @@ const FINANCE_QUERY_KEYS = [
   'cooperativeReports',
   'cooperativeDailyFieldCashReport',
   'cooperativeCashReport',
-  'cooperativeLedgerReport',
+  'ledgerReport',
 ];
 
 const PAYROLL_REALTIME_TABLES = new Set([

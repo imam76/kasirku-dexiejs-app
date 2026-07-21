@@ -115,6 +115,12 @@ export type SalesDocumentStatus = 'DRAFT' | 'ISSUED' | 'CONVERTED' | 'VOIDED';
 export type SalesInvoicePaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
 export type SalesInvoicePaymentRecordStatus = 'ACTIVE' | 'VOIDED';
 export type ReceivableSourceType = 'SALES_INVOICE' | 'OPENING_RECEIVABLE';
+export type SalesInvoicePaymentSourceType =
+  | ReceivableSourceType
+  | 'CUSTOMER_CREDIT_ALLOCATION';
+export type SalesOverpaymentStatus = 'OPEN' | 'PARTIALLY_USED' | 'SETTLED' | 'CANCELLED';
+export type SalesOverpaymentSettlementMethod = 'INVOICE_ALLOCATION' | 'CASH_REFUND';
+export type SalesOverpaymentSettlementStatus = 'POSTED' | 'REVERSED';
 export type SalesDocumentMarginBasis = 'BEFORE_TAX' | 'AFTER_TAX';
 export type PurchaseDocumentType =
   | 'PURCHASE_REQUEST'
@@ -205,6 +211,7 @@ export type Permission =
   | 'REPORT_PAYROLL_VIEW'
   | 'REPORT_PROFIT_LOSS_VIEW'
   | 'REPORT_BALANCE_SHEET_VIEW'
+  | 'REPORT_LEDGER_VIEW'
   | 'REPORT_AGING_VIEW'
   | 'REPORT_STOCK_CARD_VIEW'
   | 'FINANCE_ACCESS'
@@ -310,6 +317,38 @@ export interface ActivityLog {
   entity_id?: string;
   description: string;
   created_at: string;
+}
+
+export type DashboardWidgetId =
+  | 'net-income'
+  | 'revenue'
+  | 'expense'
+  | 'sales-chart'
+  | 'top-products';
+
+export type DashboardBreakpoint = 'lg' | 'md' | 'sm' | 'xs' | 'xxs';
+
+export interface DashboardWidgetLayout {
+  i: DashboardWidgetId;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
+}
+
+export type DashboardLayouts = Partial<Record<DashboardBreakpoint, DashboardWidgetLayout[]>>;
+
+export interface DashboardPreference {
+  id: string;
+  user_id: string;
+  visible_widget_ids: DashboardWidgetId[];
+  layouts: DashboardLayouts;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SyncQueueItem {
@@ -843,14 +882,26 @@ export interface SalesDocument {
 export interface SalesInvoicePayment {
   id: string;
   sales_document_id: string;
-  source_type?: ReceivableSourceType;
+  source_type?: SalesInvoicePaymentSourceType;
   opening_balance_line_id?: string;
   opening_balance_batch_id?: string;
+  payment_number?: string;
   document_number: string;
   contact_id?: string;
   customer_name: string;
   amount: number;
   foreign_amount?: number;
+  allocated_amount?: number;
+  foreign_allocated_amount?: number;
+  overpayment_amount?: number;
+  foreign_overpayment_amount?: number;
+  overpayment_used_amount?: number;
+  foreign_overpayment_used_amount?: number;
+  overpayment_remaining_amount?: number;
+  foreign_overpayment_remaining_amount?: number;
+  overpayment_status?: SalesOverpaymentStatus;
+  overpayment_settled_at?: string;
+  overpayment_settlement_id?: string;
   currency_code?: string;
   currency_name?: string;
   currency_symbol?: string;
@@ -877,6 +928,91 @@ export interface SalesInvoicePayment {
   created_by_name?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface SalesOverpaymentSettlement {
+  id: string;
+  settlement_number: string;
+  settlement_date: string;
+  method: SalesOverpaymentSettlementMethod;
+  source_payment_id: string;
+  source_payment_number?: string;
+  source_sales_document_id: string;
+  source_document_number: string;
+  source_type?: ReceivableSourceType;
+  opening_balance_line_id?: string;
+  opening_balance_batch_id?: string;
+  contact_id?: string;
+  customer_name: string;
+  total_amount: number;
+  foreign_total_amount?: number;
+  description?: string;
+  department_id?: string;
+  department_code?: string;
+  department_name?: string;
+  project_id?: string;
+  project_code?: string;
+  project_name?: string;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  finance_transaction_id?: string;
+  reversal_finance_transaction_id?: string;
+  journal_entry_id?: string;
+  reversal_journal_entry_id?: string;
+  status: SalesOverpaymentSettlementStatus;
+  notes?: string;
+  posted_at?: string;
+  reversed_at?: string;
+  reversal_reason?: string;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalesOverpaymentSettlementAllocation {
+  id: string;
+  settlement_id: string;
+  target_sales_document_id: string;
+  target_document_number: string;
+  target_payment_id?: string;
+  invoice_date: string;
+  due_date?: string;
+  invoice_total_amount: number;
+  receivable_before_amount: number;
+  allocation_amount: number;
+  receivable_after_amount: number;
+  created_at: string;
+}
+
+export interface SalesOverpaymentRow {
+  payment_id: string;
+  payment_number: string;
+  paid_at: string;
+  source_type?: SalesInvoicePayment['source_type'];
+  sales_document_id: string;
+  opening_balance_line_id?: string;
+  opening_balance_batch_id?: string;
+  document_number: string;
+  contact_id?: string;
+  customer_name: string;
+  total_payment_amount: number;
+  allocated_payment_amount: number;
+  overpayment_amount: number;
+  used_amount: number;
+  remaining_amount: number;
+  status: SalesOverpaymentStatus;
+  cash_account_id?: string;
+  cash_account_code?: string;
+  cash_account_name?: string;
+  currency_code?: string;
+  currency_name?: string;
+  currency_symbol?: string;
+  base_currency_code?: string;
+  exchange_rate?: number;
 }
 
 export interface AccountsReceivableRow {
@@ -1956,6 +2092,13 @@ export interface CooperativeMember {
   remote_updated_at?: string;
 }
 
+export interface CooperativeMemberCode {
+  id: string;
+  code: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CooperativeSavingTransaction {
   id: string;
   member_id: string;
@@ -2295,11 +2438,14 @@ export type JournalSourceType =
   | 'STOCK_PURCHASE'
   | 'SALES_INVOICE'
   | 'SALES_INVOICE_PAYMENT'
+  | 'SALES_OVERPAYMENT_SETTLEMENT'
   | 'SALES_RETURN'
   | 'ACCOUNTS_PAYABLE'
   | 'PURCHASE_INVOICE'
   | 'PURCHASE_INVOICE_PAYMENT'
+  | 'PURCHASE_COST_RECONCILIATION'
   | 'CASH_BANK_TRANSFER'
+  | 'CASH_BANK_RECONCILIATION'
   | 'PAYROLL_RUN'
   | 'EMPLOYEE_CASH_ADVANCE'
   | 'COOPERATIVE_SAVING'
@@ -2559,6 +2705,11 @@ export interface CashBankReconciliation {
   selected_transaction_count: number;
   selected_transaction_ids: string[];
   difference_amount: number;
+  adjustment_account_id?: string;
+  adjustment_account_code?: string;
+  adjustment_account_name?: string;
+  adjustment_account_type?: AccountType;
+  adjustment_transaction_id?: string;
   status: CashBankReconciliationStatus;
   notes?: string;
   voided_at?: string;

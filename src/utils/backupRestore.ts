@@ -48,6 +48,8 @@ export const backupDatabase = async () => {
       salesDocuments: await db.salesDocuments.toArray(),
       salesDocumentItems: await db.salesDocumentItems.toArray(),
       salesInvoicePayments: await db.salesInvoicePayments.toArray(),
+      salesOverpaymentSettlements: await db.salesOverpaymentSettlements.toArray(),
+      salesOverpaymentSettlementAllocations: await db.salesOverpaymentSettlementAllocations.toArray(),
       salesReturns: await db.salesReturns.toArray(),
       salesReturnItems: await db.salesReturnItems.toArray(),
       purchaseDocuments: await db.purchaseDocuments.toArray(),
@@ -109,7 +111,7 @@ export const restoreDatabase = async (file: File) => {
         const data = JSON.parse(content);
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
-        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'paymentMethods', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'accountingPeriods', 'accountingFiscalYears', 'closingRuns', 'fiscalYearClosingRuns', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
+        const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'paymentMethods', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesOverpaymentSettlements', 'salesOverpaymentSettlementAllocations', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'accountingPeriods', 'accountingFiscalYears', 'closingRuns', 'fiscalYearClosingRuns', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
         expectedKeys.push('posTransactionPayments');
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
@@ -163,6 +165,8 @@ export const restoreDatabase = async (file: File) => {
           db.salesDocuments,
           db.salesDocumentItems,
           db.salesInvoicePayments,
+          db.salesOverpaymentSettlements,
+          db.salesOverpaymentSettlementAllocations,
           db.salesReturns,
           db.salesReturnItems,
           db.purchaseDocuments,
@@ -234,6 +238,8 @@ export const restoreDatabase = async (file: File) => {
           await db.salesDocuments.clear();
           await db.salesDocumentItems.clear();
           await db.salesInvoicePayments.clear();
+          await db.salesOverpaymentSettlements.clear();
+          await db.salesOverpaymentSettlementAllocations.clear();
           await db.salesReturns.clear();
           await db.salesReturnItems.clear();
           await db.purchaseDocuments.clear();
@@ -309,6 +315,8 @@ export const restoreDatabase = async (file: File) => {
           if (data.salesDocuments?.length) await db.salesDocuments.bulkAdd(data.salesDocuments);
           if (data.salesDocumentItems?.length) await db.salesDocumentItems.bulkAdd(data.salesDocumentItems);
           if (data.salesInvoicePayments?.length) await db.salesInvoicePayments.bulkAdd(data.salesInvoicePayments);
+          if (data.salesOverpaymentSettlements?.length) await db.salesOverpaymentSettlements.bulkAdd(data.salesOverpaymentSettlements);
+          if (data.salesOverpaymentSettlementAllocations?.length) await db.salesOverpaymentSettlementAllocations.bulkAdd(data.salesOverpaymentSettlementAllocations);
           if (data.salesReturns?.length) await db.salesReturns.bulkAdd(data.salesReturns);
           if (data.salesReturnItems?.length) await db.salesReturnItems.bulkAdd(data.salesReturnItems);
           if (data.purchaseDocuments?.length) await db.purchaseDocuments.bulkAdd(data.purchaseDocuments);

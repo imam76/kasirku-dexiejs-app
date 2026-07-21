@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Alert, App, Button, Card, DatePicker, Empty, Form, Input, InputNumber, Modal, Select, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -15,7 +15,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import { getFinanceTransactionBusinessType } from '@/constants/finance';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import type { CashBankReconciliation, FinanceTransaction } from '@/types';
+import type { CashBankReconciliation, ChartOfAccount, FinanceTransaction } from '@/types';
 
 const { Title, Text } = Typography;
 
@@ -32,6 +32,7 @@ export default function CashBankReconciliationManagement() {
   const { t } = useI18n();
   const [voidTarget, setVoidTarget] = useState<CashBankReconciliation | null>(null);
   const [voidReason, setVoidReason] = useState('');
+  const autoSelectedAdjustmentAccountId = useRef<string | null>(null);
   const {
     control,
     handleSubmit,
@@ -46,12 +47,14 @@ export default function CashBankReconciliationManagement() {
       statement_reference: '',
       statement_ending_balance: 0,
       selected_transaction_ids: [],
+      adjustment_account_id: '',
       notes: '',
     },
   });
   const cashAccountId = useWatch({ control, name: 'cash_account_id' });
   const statementDate = useWatch({ control, name: 'statement_date' });
   const statementEndingBalance = Number(useWatch({ control, name: 'statement_ending_balance' }) || 0);
+  const adjustmentAccountId = useWatch({ control, name: 'adjustment_account_id' });
   const watchedSelectedTransactionIds = useWatch({ control, name: 'selected_transaction_ids' });
   const selectedTransactionIds = useMemo(
     () => watchedSelectedTransactionIds ?? [],
@@ -60,6 +63,8 @@ export default function CashBankReconciliationManagement() {
   const {
     cashBankAccounts,
     isLoadingCashBankAccounts,
+    adjustmentAccounts,
+    isLoadingAdjustmentAccounts,
     candidates,
     isLoadingCandidates,
     reconciliations,
@@ -74,6 +79,10 @@ export default function CashBankReconciliationManagement() {
     value: account.id,
     label: `${account.code} - ${account.name}`,
   })), [cashBankAccounts]);
+  const adjustmentAccountOptions = useMemo(() => adjustmentAccounts.map((account) => ({
+    value: account.id,
+    label: `${account.code} - ${account.name}`,
+  })), [adjustmentAccounts]);
 
   useEffect(() => {
     if (!cashAccountId && cashBankAccounts[0]) {
@@ -97,6 +106,48 @@ export default function CashBankReconciliationManagement() {
   }, [candidates?.rows, selectedTransactionIds]);
   const clearedBalance = (candidates?.existing_cleared_balance_amount ?? 0) + selectedTotal;
   const differenceAmount = statementEndingBalance - clearedBalance;
+  const requiresAdjustmentAccount = Math.abs(differenceAmount) > 0.01;
+  const preferredAdjustmentAccountTypes = useMemo<Array<ChartOfAccount['type']>>(() => (
+    differenceAmount > 0 ? ['REVENUE', 'CONTRA_REVENUE'] : ['EXPENSE']
+  ), [differenceAmount]);
+  const selectedAdjustmentAccount = useMemo(
+    () => adjustmentAccounts.find((account) => account.id === adjustmentAccountId),
+    [adjustmentAccountId, adjustmentAccounts],
+  );
+  const suggestedAdjustmentAccount = useMemo(() => {
+    if (!requiresAdjustmentAccount) return undefined;
+
+    return adjustmentAccounts.find((account) => preferredAdjustmentAccountTypes.includes(account.type))
+      ?? adjustmentAccounts[0];
+  }, [adjustmentAccounts, preferredAdjustmentAccountTypes, requiresAdjustmentAccount]);
+
+  useEffect(() => {
+    if (!requiresAdjustmentAccount) {
+      if (adjustmentAccountId) {
+        setValue('adjustment_account_id', '', { shouldValidate: true });
+      }
+      autoSelectedAdjustmentAccountId.current = null;
+      return;
+    }
+
+    if (!suggestedAdjustmentAccount) return;
+
+    const selectedWasAuto = autoSelectedAdjustmentAccountId.current === adjustmentAccountId;
+    const selectedIsPreferred = selectedAdjustmentAccount
+      ? preferredAdjustmentAccountTypes.includes(selectedAdjustmentAccount.type)
+      : false;
+    if (!adjustmentAccountId || (selectedWasAuto && !selectedIsPreferred)) {
+      autoSelectedAdjustmentAccountId.current = suggestedAdjustmentAccount.id;
+      setValue('adjustment_account_id', suggestedAdjustmentAccount.id, { shouldValidate: true });
+    }
+  }, [
+    adjustmentAccountId,
+    preferredAdjustmentAccountTypes,
+    requiresAdjustmentAccount,
+    selectedAdjustmentAccount,
+    setValue,
+    suggestedAdjustmentAccount,
+  ]);
 
   const handleFormSubmit = async (values: CashBankReconciliationFormData) => {
     await createReconciliation(values);
@@ -105,6 +156,7 @@ export default function CashBankReconciliationManagement() {
       statement_reference: '',
       statement_ending_balance: 0,
       selected_transaction_ids: [],
+      adjustment_account_id: '',
       notes: '',
     });
   };
@@ -216,9 +268,11 @@ export default function CashBankReconciliationManagement() {
       align: 'right',
       width: 140,
       render: (value: number) => (
-        <span className={Math.abs(value) <= 0.01 ? 'text-green-600' : 'text-orange-600'}>
-          {money(value)}
-        </span>
+        <div className="text-right">
+          <div className={Math.abs(value) <= 0.01 ? 'text-green-600' : 'text-orange-600'}>
+            {money(value)}
+          </div>
+        </div>
       ),
     },
     {
@@ -359,6 +413,31 @@ export default function CashBankReconciliationManagement() {
                   )}
                 />
               </Form.Item>
+
+              {requiresAdjustmentAccount && (
+                <Form.Item
+                  label="Akun penyesuaian selisih"
+                  required
+                  validateStatus={!adjustmentAccountId ? 'error' : undefined}
+                  help={!adjustmentAccountId ? 'Pilih akun COA untuk jurnal penyesuaian selisih.' : undefined}
+                >
+                  <Controller
+                    control={control}
+                    name="adjustment_account_id"
+                    render={({ field }) => (
+                      <Select
+                        {...field}
+                        data-testid="cash-bank-reconciliation-adjustment-account"
+                        showSearch
+                        loading={isLoadingAdjustmentAccounts}
+                        optionFilterProp="label"
+                        placeholder="Pilih akun penyesuaian"
+                        options={adjustmentAccountOptions}
+                      />
+                    )}
+                  />
+                </Form.Item>
+              )}
             </div>
 
             <Form.Item
@@ -459,7 +538,7 @@ export default function CashBankReconciliationManagement() {
                 htmlType="submit"
                 icon={<Save size={16} />}
                 loading={isCreatingReconciliation}
-                disabled={!cashAccountId}
+                disabled={!cashAccountId || (requiresAdjustmentAccount && !adjustmentAccountId)}
               >
                 Simpan Rekonsiliasi
               </Button>

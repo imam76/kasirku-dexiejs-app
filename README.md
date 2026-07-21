@@ -88,6 +88,9 @@ Skrip akan mendeteksi sistem operasi dan memilih lokasi storage yang sesuai.
 Catatan: command ini membersihkan storage lokal Tauri/WebView dan origin dev
 `http://localhost:1420`. PostgreSQL lokal tidak ikut di-reset; untuk reset
 PostgreSQL gunakan `docker compose -f postgres-dev/compose.yml down -v`.
+Konfigurasi Host Database yang tersimpan di aplikasi juga tidak ikut dihapus;
+jika host/IP berubah, gunakan tombol **Ganti Host Database** di layar
+PostgreSQL belum siap.
 
 ## Script Penting
 

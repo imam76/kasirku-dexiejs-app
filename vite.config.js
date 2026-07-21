@@ -104,6 +104,7 @@ export default defineConfig(function () { return __awaiter(void 0, void 0, void 
                 plugins: [feedbackApiDevPlugin(), tanstackRouter(), react()],
                 define: {
                     __APP_VERSION__: JSON.stringify(appVersion),
+                    'process.env.DRAGGABLE_DEBUG': 'false',
                 },
                 // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
                 //
@@ -133,6 +134,11 @@ export default defineConfig(function () { return __awaiter(void 0, void 0, void 
                 },
                 optimizeDeps: {
                     include: ['lucide-react'],
+                    esbuildOptions: {
+                        define: {
+                            'process.env.DRAGGABLE_DEBUG': 'false',
+                        },
+                    },
                 },
             }];
     });

@@ -6,6 +6,8 @@ import type {
   AuthUser,
   ChartOfAccount,
   FinanceTransaction,
+  JournalEntry,
+  JournalEntryLine,
   OpeningBalanceBatch,
   OpeningBalanceLine,
   PaymentMethod,
@@ -42,6 +44,10 @@ const hasCashBankLabel = (value?: string) => {
 
 export const getAccountOpeningBalanceFinanceTransactionId = (openingBalanceLineId: string) => (
   `opening-balance-finance-${openingBalanceLineId}`
+);
+
+export const getAccountOpeningBalanceAdjustmentFinanceTransactionId = (journalEntryLineId: string) => (
+  `opening-balance-adjustment-finance-${journalEntryLineId}`
 );
 
 export const isAccountOpeningBalanceCashBankAccount = (
@@ -93,6 +99,49 @@ export const buildAccountOpeningBalanceFinanceTransaction = ({
     amount,
     description: line.notes?.trim() || `Saldo awal ${account.code} - ${account.name} per ${toDateOnly(openingDate)}`,
     created_at: openingDate,
+    reference_id: line.id,
+    account_id: account.id,
+    account_code: account.code,
+    account_name: account.name,
+    account_type: account.type,
+    payment_method: inferAccountOpeningBalancePaymentMethod(account),
+    cash_account_id: account.id,
+    cash_account_code: account.code,
+    cash_account_name: account.name,
+    version: 1,
+    created_by: actor?.id,
+    created_by_name: actor?.name,
+    updated_by: actor?.id,
+    updated_by_name: actor?.name,
+    updated_at: now,
+    sync_status: 'pending',
+    sync_error: undefined,
+  };
+};
+
+export const buildAccountOpeningBalanceAdjustmentFinanceTransaction = ({
+  journalEntry,
+  line,
+  account,
+  actor,
+  now,
+}: {
+  journalEntry: JournalEntry;
+  line: JournalEntryLine;
+  account: ChartOfAccount;
+  actor?: BridgeActor;
+  now: string;
+}): FinanceTransaction | undefined => {
+  const amount = roundCurrency(Number(line.debit || 0) - Number(line.credit || 0));
+  if (Math.abs(amount) <= ROUNDING_TOLERANCE) return undefined;
+
+  return {
+    id: getAccountOpeningBalanceAdjustmentFinanceTransactionId(line.id),
+    type: 'OPENING_BALANCE',
+    category: FINANCE_CATEGORIES.OPENING_BALANCE,
+    amount,
+    description: line.description?.trim() || journalEntry.description,
+    created_at: normalizeStartOfDay(journalEntry.entry_date),
     reference_id: line.id,
     account_id: account.id,
     account_code: account.code,

@@ -10,17 +10,11 @@ import type {
   JournalEntryLine,
   JournalSourceType,
 } from '@/types';
-import { roundCurrency } from '@/utils/koperasi/loanSchedule';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 
-const COOPERATIVE_JOURNAL_SOURCE_TYPES: JournalSourceType[] = [
-  'COOPERATIVE_SAVING',
-  'COOPERATIVE_LOAN',
-];
+export type LedgerReportRowType = 'OPENING' | 'MOVEMENT' | 'ENDING';
 
-export type CooperativeLedgerReportRowType = 'OPENING' | 'MOVEMENT' | 'ENDING';
-
-export interface CooperativeLedgerReportFilters {
+export interface LedgerReportFilters {
   startDate?: string;
   endDate?: string;
   fromAccountId?: string;
@@ -28,9 +22,9 @@ export interface CooperativeLedgerReportFilters {
   hideZeroBalance?: boolean;
 }
 
-export interface CooperativeLedgerReportMovementRow {
+export interface LedgerReportMovementRow {
   id: string;
-  row_type: CooperativeLedgerReportRowType;
+  row_type: LedgerReportRowType;
   account_id: string;
   entry_id?: string;
   entry_date?: string;
@@ -44,7 +38,7 @@ export interface CooperativeLedgerReportMovementRow {
   running_balance: number;
 }
 
-export interface CooperativeLedgerReportAccountGroup {
+export interface LedgerReportAccountGroup {
   account_id: string;
   account_code: string;
   account_name: string;
@@ -53,22 +47,22 @@ export interface CooperativeLedgerReportAccountGroup {
   total_debit: number;
   total_credit: number;
   ending_balance: number;
-  rows: CooperativeLedgerReportMovementRow[];
+  rows: LedgerReportMovementRow[];
 }
 
-export interface CooperativeLedgerReportOption {
+export interface LedgerReportOption {
   id: string;
   code?: string;
   name: string;
 }
 
-export type CooperativeLedgerExportRowKind = 'ACCOUNT' | 'HEADER' | 'ROW';
+export type LedgerExportRowKind = 'ACCOUNT' | 'HEADER' | 'ROW';
 
-export interface CooperativeLedgerExportRow {
-  kind: CooperativeLedgerExportRowKind;
+export interface LedgerExportRow {
+  kind: LedgerExportRowKind;
   account_code?: string;
   account_name?: string;
-  row_type?: CooperativeLedgerReportRowType;
+  row_type?: LedgerReportRowType;
   date?: string;
   entry_number?: string;
   source_number?: string;
@@ -80,10 +74,10 @@ export interface CooperativeLedgerExportRow {
   ending_balance?: number;
 }
 
-export interface CooperativeLedgerReportData {
+export interface LedgerReportData {
   accounts: ChartOfAccount[];
-  groups: CooperativeLedgerReportAccountGroup[];
-  exportRows: CooperativeLedgerExportRow[];
+  groups: LedgerReportAccountGroup[];
+  exportRows: LedgerExportRow[];
 }
 
 type MasterLike = {
@@ -98,6 +92,8 @@ type JournalLinePair = {
 };
 
 const MONEY_TOLERANCE = 0.01;
+
+const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 const getDateKey = (value: string) => dayjs(value).tz().format('YYYY-MM-DD');
 
@@ -154,24 +150,24 @@ const getAccountMovement = (
 
 const isZeroAmount = (value: number) => Math.abs(value) <= MONEY_TOLERANCE;
 
-const isZeroAccountGroup = (group: CooperativeLedgerReportAccountGroup) => (
+const isZeroAccountGroup = (group: LedgerReportAccountGroup) => (
   isZeroAmount(group.opening_balance) &&
   isZeroAmount(group.total_debit) &&
   isZeroAmount(group.total_credit) &&
   isZeroAmount(group.ending_balance)
 );
 
-const getPostedLinePairs = (journalEntries: JournalEntryWithLines[]) => (
+const getPostedOrReversedLinePairs = (journalEntries: JournalEntryWithLines[]) => (
   journalEntries
-    .filter((entry) => entry.status === 'POSTED')
+    .filter((entry) => entry.status === 'POSTED' || entry.status === 'REVERSED')
     .flatMap((entry) => entry.lines.map((line) => ({ entry, line })))
 );
 
 const buildAccountGroup = (
   account: ChartOfAccount,
   pairs: JournalLinePair[],
-  filters: CooperativeLedgerReportFilters,
-): CooperativeLedgerReportAccountGroup => {
+  filters: LedgerReportFilters,
+): LedgerReportAccountGroup => {
   const sortedPairs = pairs
     .filter(({ line }) => line.account_id === account.id)
     .sort((left, right) => {
@@ -191,7 +187,7 @@ const buildAccountGroup = (
     .filter(({ entry }) => isDateKeyInRange(entry.entry_date, filters.startDate, filters.endDate));
 
   let runningBalance = openingBalance;
-  const rows: CooperativeLedgerReportMovementRow[] = [{
+  const rows: LedgerReportMovementRow[] = [{
     id: `${account.id}:opening`,
     row_type: 'OPENING',
     account_id: account.id,
@@ -255,9 +251,9 @@ const buildAccountGroup = (
   };
 };
 
-export const buildCooperativeLedgerExportRows = (
-  groups: CooperativeLedgerReportAccountGroup[],
-): CooperativeLedgerExportRow[] => groups.flatMap((group) => [
+export const buildLedgerExportRows = (
+  groups: LedgerReportAccountGroup[],
+): LedgerExportRow[] => groups.flatMap((group) => [
   {
     kind: 'ACCOUNT',
     account_code: group.account_code,
@@ -287,15 +283,14 @@ export const buildCooperativeLedgerExportRows = (
   })),
 ]);
 
-export const getCooperativeLedgerReportData = async (
-  filters: CooperativeLedgerReportFilters = {},
-): Promise<CooperativeLedgerReportData> => {
-  await requireUserPermission(await getCurrentSessionUser(), 'COOPERATIVE_LEDGER_REPORT_VIEW');
+export const getLedgerReportData = async (
+  filters: LedgerReportFilters = {},
+): Promise<LedgerReportData> => {
+  await requireUserPermission(await getCurrentSessionUser(), 'REPORT_LEDGER_VIEW');
   const [accounts, journalEntries] = await Promise.all([
     db.chartOfAccounts.orderBy('code').toArray(),
     getJournalEntriesWithLines({
       endDate: filters.endDate,
-      sourceTypes: COOPERATIVE_JOURNAL_SOURCE_TYPES,
     }),
   ]);
 
@@ -303,7 +298,7 @@ export const getCooperativeLedgerReportData = async (
   const selectedAccounts = accounts
     .filter((account) => !selectedAccountIds || selectedAccountIds.has(account.id))
     .sort(compareByCode);
-  const filteredPairs = getPostedLinePairs(journalEntries);
+  const filteredPairs = getPostedOrReversedLinePairs(journalEntries);
   const groups = selectedAccounts
     .map((account) => buildAccountGroup(account, filteredPairs, filters))
     .filter((group) => !filters.hideZeroBalance || !isZeroAccountGroup(group));
@@ -311,6 +306,6 @@ export const getCooperativeLedgerReportData = async (
   return {
     accounts,
     groups,
-    exportRows: buildCooperativeLedgerExportRows(groups),
+    exportRows: buildLedgerExportRows(groups),
   };
 };

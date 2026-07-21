@@ -19,6 +19,7 @@ import {
   toBaseCurrencyAmount,
 } from '@/utils/documentCurrency';
 import {
+  buildAccountOpeningBalanceAdjustmentFinanceTransaction,
   buildAccountOpeningBalanceFinanceTransaction,
   calculateFinanceBalanceFromTransactions,
   hasEquivalentAccountOpeningBalanceFinanceTransaction,
@@ -30,6 +31,7 @@ import type {
   FinanceTransaction,
   GeneralLedgerSetting,
   JournalEntry,
+  JournalEntryLine,
   InventoryAccountingPolicy,
   OpeningBalanceBatch,
   OpeningBalanceLine,
@@ -788,6 +790,72 @@ const ensureAccountOpeningCashBankFinanceTransactions = async ({
   return createdTransactions;
 };
 
+const hasExistingFinanceTransactionReference = (
+  transactions: FinanceTransaction[],
+  candidate: FinanceTransaction,
+) => transactions.some((transaction) => (
+  !transaction.deleted_at &&
+  (transaction.id === candidate.id || transaction.reference_id === candidate.reference_id)
+));
+
+const ensureAccountOpeningAdjustmentCashBankFinanceTransactions = async ({
+  journalEntry,
+  adjustmentLines,
+  accounts,
+  now,
+  currentUser,
+}: {
+  journalEntry: JournalEntry;
+  adjustmentLines: JournalEntryLine[];
+  accounts: ChartOfAccount[];
+  now: string;
+  currentUser: Awaited<ReturnType<typeof getCurrentSessionUser>>;
+}) => {
+  if (journalEntry.source_event !== ACCOUNT_OPENING_BALANCE_ADJUSTMENT_SOURCE_EVENT) return [];
+
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+  const existingTransactions = await db.financeTransactions.toArray();
+  const createdTransactions: FinanceTransaction[] = [];
+
+  for (const line of adjustmentLines) {
+    const account = accountById.get(line.account_id);
+    if (!isAccountOpeningBalanceCashBankAccount(account)) continue;
+
+    const financeTransaction = buildAccountOpeningBalanceAdjustmentFinanceTransaction({
+      journalEntry,
+      line,
+      account,
+      actor: currentUser,
+      now,
+    });
+    if (!financeTransaction) continue;
+    if (
+      hasExistingFinanceTransactionReference(
+        [...existingTransactions, ...createdTransactions],
+        financeTransaction,
+      )
+    ) {
+      continue;
+    }
+
+    createdTransactions.push(financeTransaction);
+  }
+
+  if (createdTransactions.length === 0) return [];
+
+  await db.financeTransactions.bulkAdd(createdTransactions);
+  await db.financeBalance.put({
+    id: 'current',
+    amount: calculateFinanceBalanceFromTransactions([
+      ...existingTransactions,
+      ...createdTransactions,
+    ]),
+    updated_at: now,
+  });
+
+  return createdTransactions;
+};
+
 const buildSkippedBatch = async ({
   existingBatch,
   module,
@@ -1218,11 +1286,15 @@ export const postAccountOpeningBalanceAdjustment = async ({
   const normalizedLines = normalizeAccountOpeningAdjustmentLines(lines, accounts);
   const sourceId = `${batchId}:adjustment:${crypto.randomUUID()}`;
   const description = notes?.trim() || `Koreksi saldo awal akun per ${toDateOnly(cutoffDate)}`;
+  const now = new Date().toISOString();
   let journalEntry: JournalEntry | undefined;
+  let createdFinanceTransactions: FinanceTransaction[] = [];
 
   await db.transaction('rw', [
     db.journalEntries,
     db.journalEntryLines,
+    db.financeTransactions,
+    db.financeBalance,
     db.activityLogs,
   ], async () => {
     journalEntry = await postOpeningBalanceSourceJournal({
@@ -1239,6 +1311,17 @@ export const postAccountOpeningBalanceAdjustment = async ({
       })),
       actor: currentUser,
     });
+    const adjustmentLines = await db.journalEntryLines
+      .where('journal_entry_id')
+      .equals(journalEntry.id)
+      .toArray();
+    createdFinanceTransactions = await ensureAccountOpeningAdjustmentCashBankFinanceTransactions({
+      journalEntry,
+      adjustmentLines,
+      accounts,
+      now,
+      currentUser,
+    });
 
     await writeActivityLog({
       user: currentUser,
@@ -1251,6 +1334,9 @@ export const postAccountOpeningBalanceAdjustment = async ({
 
   if (!journalEntry) {
     throw new Error('Jurnal koreksi saldo awal gagal dibuat.');
+  }
+  if (createdFinanceTransactions.length > 0) {
+    await enqueueFinanceTransactionsSync(createdFinanceTransactions, 'create');
   }
 
   return journalEntry;

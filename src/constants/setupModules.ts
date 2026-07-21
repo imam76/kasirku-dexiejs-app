@@ -115,7 +115,6 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'KOPERASI_REPORT_MEMBER_REGISTER', label: 'Induk Anggota', description: 'Laporan register induk anggota' },
       { code: 'KOPERASI_REPORT_INSTALLMENT_BOOK', label: 'Buku Angsuran', description: 'Laporan buku angsuran anggota' },
       { code: 'KOPERASI_REPORT_CASH_FLOW', label: 'Arus Kas Koperasi', description: 'Laporan arus kas koperasi' },
-      { code: 'KOPERASI_REPORT_LEDGER', label: 'Buku Besar Koperasi', description: 'Laporan buku besar koperasi' },
     ],
   },
 ];

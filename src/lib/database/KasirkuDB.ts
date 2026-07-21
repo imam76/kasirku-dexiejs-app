@@ -16,6 +16,7 @@ import type {
   AuthUser,
   AuthSession,
   ActivityLog,
+  DashboardPreference,
   SyncQueueItem,
   Promo,
   Contact,
@@ -30,6 +31,8 @@ import type {
   SalesDocument,
   SalesDocumentItem,
   SalesInvoicePayment,
+  SalesOverpaymentSettlement,
+  SalesOverpaymentSettlementAllocation,
   SalesReturn,
   SalesReturnItem,
   PurchaseDocument,
@@ -60,6 +63,7 @@ import type {
   CooperativeLoanInstallment,
   CooperativeLoanPayment,
   CooperativeLoanCollectionEvent,
+  CooperativeMemberCode,
   CooperativeSettings,
   CompanyProfileSetting,
   CooperativeArea,
@@ -106,6 +110,7 @@ export class KasirkuDB extends Dexie {
   authUsers!: Table<AuthUser>;
   authSessions!: Table<AuthSession>;
   activityLogs!: Table<ActivityLog>;
+  dashboardPreferences!: Table<DashboardPreference>;
   roles!: Table<Role>;
   rolePermissions!: Table<RolePermission>;
   syncQueue!: Table<SyncQueueItem>;
@@ -120,6 +125,8 @@ export class KasirkuDB extends Dexie {
   salesDocuments!: Table<SalesDocument>;
   salesDocumentItems!: Table<SalesDocumentItem>;
   salesInvoicePayments!: Table<SalesInvoicePayment>;
+  salesOverpaymentSettlements!: Table<SalesOverpaymentSettlement>;
+  salesOverpaymentSettlementAllocations!: Table<SalesOverpaymentSettlementAllocation>;
   salesReturns!: Table<SalesReturn>;
   salesReturnItems!: Table<SalesReturnItem>;
   purchaseDocuments!: Table<PurchaseDocument>;
@@ -151,6 +158,7 @@ export class KasirkuDB extends Dexie {
   cooperativeLoanInstallments!: Table<CooperativeLoanInstallment>;
   cooperativeLoanPayments!: Table<CooperativeLoanPayment>;
   cooperativeLoanCollectionEvents!: Table<CooperativeLoanCollectionEvent>;
+  cooperativeMemberCodes!: Table<CooperativeMemberCode>;
   cooperativeSettings!: Table<CooperativeSettings>;
   companyProfileSetting!: Table<CompanyProfileSetting>;
   inventoryLots!: Table<InventoryLot>;

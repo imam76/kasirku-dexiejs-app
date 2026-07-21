@@ -10,6 +10,11 @@ import {
   toDocumentCurrencyAmount,
 } from '@/utils/documentCurrency';
 import { formatDate } from '@/utils/formatters';
+import {
+  getSalesInvoicePaymentAllocatedAmount,
+  getSalesInvoicePaymentOverpaymentAmount,
+  getSalesInvoicePaymentRemainingOverpaymentAmount,
+} from '@/utils/accountsReceivable/paymentAmounts';
 
 const { Text } = Typography;
 
@@ -96,12 +101,36 @@ export function ReceivablePaymentHistory({
       render: (_value: number, record) => renderPaymentAmount(record),
     },
     {
+      title: t('salesOverpayments.allocatedPayment'),
+      key: 'allocated_amount',
+      align: 'right',
+      width: 150,
+      render: (_, record) => `Rp ${getSalesInvoicePaymentAllocatedAmount(record).toLocaleString('id-ID')}`,
+    },
+    {
+      title: t('salesOverpayments.remainingOverpayment'),
+      key: 'overpayment_remaining_amount',
+      align: 'right',
+      width: 170,
+      render: (_, record) => {
+        const overpaymentAmount = getSalesInvoicePaymentOverpaymentAmount(record);
+        if (overpaymentAmount <= 0) return '-';
+        return `Rp ${getSalesInvoicePaymentRemainingOverpaymentAmount(record).toLocaleString('id-ID')}`;
+      },
+    },
+    {
       title: t('checkout.method'),
       dataIndex: 'payment_method',
       width: 130,
       render: (value: SalesInvoicePayment['payment_method'], record) => (
         <div>
-          <div>{value === 'NON_TUNAI' ? t('payment.nonCash') : t('payment.cash')}</div>
+          <div>
+            {record.source_type === 'CUSTOMER_CREDIT_ALLOCATION'
+              ? t('salesOverpayments.method.invoiceAllocation')
+              : value === 'NON_TUNAI'
+                ? t('payment.nonCash')
+                : t('payment.cash')}
+          </div>
           {record.payment_channel && (
             <div className="text-xs text-gray-500">{record.payment_channel}</div>
           )}
@@ -144,6 +173,9 @@ export function ReceivablePaymentHistory({
           {record.source_type === 'OPENING_RECEIVABLE' && (
             <Tag color="blue">{t('accountsReceivable.source.openingBalance')}</Tag>
           )}
+          {record.source_type === 'CUSTOMER_CREDIT_ALLOCATION' && (
+            <Tag color="cyan">{t('salesOverpayments.method.invoiceAllocation')}</Tag>
+          )}
           <Tag color={value === 'ACTIVE' ? 'green' : 'red'}>
             {value === 'ACTIVE' ? t('accountsReceivable.paymentRecordStatus.active') : t('accountsReceivable.paymentRecordStatus.voided')}
           </Tag>
@@ -163,7 +195,7 @@ export function ReceivablePaymentHistory({
           size="small"
           danger
           icon={<Ban size={14} />}
-          disabled={record.status !== 'ACTIVE'}
+          disabled={record.status !== 'ACTIVE' || record.source_type === 'CUSTOMER_CREDIT_ALLOCATION'}
           onClick={() => handleVoid(record)}
         >
           {t('accountsReceivable.voidPayment')}

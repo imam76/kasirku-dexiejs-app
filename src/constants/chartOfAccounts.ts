@@ -56,6 +56,9 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('pph23-payable', '2120', 'PPh 23 Terutang', 'LIABILITY'),
   createAccountSeed('final-income-tax-payable', '2130', 'PPh Final Terutang', 'LIABILITY'),
   createAccountSeed('advance-received', '2210', 'Uang Muka Diterima', 'LIABILITY'),
+  createAccountSeed('customer-credit', '2220', 'Kredit Pelanggan', 'LIABILITY', {
+    description: 'Saldo lebih bayar/customer credit yang masih menjadi kewajiban kepada pelanggan.',
+  }),
   createAccountSeed('cooperative-member-savings', '2300', 'Simpanan Anggota', 'LIABILITY'),
   createAccountSeed('owner-capital', '3000', 'Modal Pemilik', 'EQUITY'),
   createAccountSeed('opening-balance-equity', '3050', 'Ekuitas Saldo Awal', 'EQUITY', {
@@ -68,6 +71,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('cooperative-loan-interest-income', '4040', 'Pendapatan Bunga Pinjaman Anggota', 'REVENUE'),
   createAccountSeed('cooperative-loan-penalty-income', '4050', 'Pendapatan Denda Pinjaman Anggota', 'REVENUE'),
   createAccountSeed('cooperative-loan-admin-income', '4060', 'Pendapatan Administrasi Pinjaman', 'REVENUE'),
+  createAccountSeed('other-income', '4900', 'Pendapatan Lainnya', 'REVENUE'),
   createAccountSeed('cogs', '5000', 'HPP', 'EXPENSE'),
   createAccountSeed('stock-purchase', '5100', 'Pembelian Stok', 'EXPENSE'),
   createAccountSeed('purchase-discount', '5110', 'Diskon Pembelian', 'EXPENSE'),
@@ -157,6 +161,24 @@ export const DEFAULT_FINANCE_ACCOUNT_MAPPINGS: DefaultMappingSeed[] = [
   {
     key: FINANCE_CATEGORIES.OTHER,
     category: FINANCE_CATEGORIES.OTHER,
+    account_id: 'other-expense',
+    account_code: '6900',
+    account_name: 'Beban Lainnya',
+    account_type: 'EXPENSE',
+    is_system: true,
+  },
+  {
+    key: FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_GAIN,
+    category: FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_GAIN,
+    account_id: 'other-income',
+    account_code: '4900',
+    account_name: 'Pendapatan Lainnya',
+    account_type: 'REVENUE',
+    is_system: true,
+  },
+  {
+    key: FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_LOSS,
+    category: FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_LOSS,
     account_id: 'other-expense',
     account_code: '6900',
     account_name: 'Beban Lainnya',
@@ -280,7 +302,7 @@ export const SAK_EMKM_RETAIL_TEMPLATE: ChartOfAccountTemplate = {
   accounting_profile: 'SAK_EMKM',
   industry_extension: 'RETAIL',
   description: 'Template akun ringan untuk toko retail dengan POS, stok, piutang, hutang, dan beban sederhana.',
-  account_count_hint: 31,
+  account_count_hint: 32,
   is_system: true,
   is_active: true,
   created_at: '',
@@ -472,7 +494,11 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   }),
   createEtapTemplateLine('other-service-income', '4060', 'Pendapatan Jasa Lainnya', 'REVENUE', {
     parent_template_account_id: 'revenue',
-    mapping_keys: [FINANCE_CATEGORIES.SERVICE, FINANCE_CATEGORIES.BONUS_GRANT],
+    mapping_keys: [
+      FINANCE_CATEGORIES.SERVICE,
+      FINANCE_CATEGORIES.BONUS_GRANT,
+      FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_GAIN,
+    ],
   }),
   createEtapTemplateLine('sales-return', '4100', 'Retur Penjualan', 'CONTRA_REVENUE', {
     mapping_keys: [FINANCE_CATEGORIES.SALES_REFUND],
@@ -523,7 +549,11 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     description: 'Jasa simpanan pokok dan sukarela sebesar 0,2% per bulan penuh',
   }),
   createEtapTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
-    mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
+    mapping_keys: [
+      FINANCE_CATEGORIES.OTHER,
+      FINANCE_CATEGORIES.OPERATIONAL,
+      FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_LOSS,
+    ],
   }),
 ];
 
@@ -607,6 +637,10 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
     mapping_keys: [FINANCE_CATEGORIES.SALES],
   }),
   createTemplateLine('sales-invoice-revenue', '4020', 'Pendapatan Sales Invoice', 'REVENUE', { parent_template_account_id: 'revenue' }),
+  createTemplateLine('other-income', '4090', 'Pendapatan Lainnya', 'REVENUE', {
+    parent_template_account_id: 'revenue',
+    mapping_keys: [FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_GAIN],
+  }),
   createTemplateLine('sales-return', '4100', 'Retur Penjualan', 'CONTRA_REVENUE', {
     mapping_keys: [FINANCE_CATEGORIES.SALES_REFUND],
   }),
@@ -632,7 +666,11 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('supplies-expense', '6050', 'Beban Perlengkapan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
 
   createTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
-    mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
+    mapping_keys: [
+      FINANCE_CATEGORIES.OTHER,
+      FINANCE_CATEGORIES.OPERATIONAL,
+      FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_LOSS,
+    ],
   }),
 ];
 
@@ -739,7 +777,10 @@ export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES: ChartOfAccountTemplateLine
   }),
   createServiceTemplateLine('other-income', '4090', 'Pendapatan Lainnya', 'REVENUE', {
     parent_template_account_id: 'revenue',
-    mapping_keys: [FINANCE_CATEGORIES.BONUS_GRANT],
+    mapping_keys: [
+      FINANCE_CATEGORIES.BONUS_GRANT,
+      FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_GAIN,
+    ],
   }),
   createServiceTemplateLine('sales-return', '4100', 'Retur Pendapatan', 'CONTRA_REVENUE', {
     mapping_keys: [FINANCE_CATEGORIES.SALES_REFUND],
@@ -760,7 +801,11 @@ export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES: ChartOfAccountTemplateLine
     parent_template_account_id: 'operational-expense',
   }),
   createServiceTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
-    mapping_keys: [FINANCE_CATEGORIES.OTHER, FINANCE_CATEGORIES.OPERATIONAL],
+    mapping_keys: [
+      FINANCE_CATEGORIES.OTHER,
+      FINANCE_CATEGORIES.OPERATIONAL,
+      FINANCE_CATEGORIES.CASH_BANK_RECONCILIATION_LOSS,
+    ],
   }),
 ];
 

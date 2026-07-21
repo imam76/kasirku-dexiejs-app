@@ -1,10 +1,18 @@
-import { Button, DatePicker, Form, Input, Modal, Select } from 'antd';
+import { AutoComplete, Button, DatePicker, Form, Input, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { CooperativeArea, CooperativeMemberStatus, Employee, EmployeeArea } from '@/types';
+import { buildAvailableCooperativeMemberNumberOptions } from '@/services/cooperativeMemberService';
+import type {
+  CooperativeArea,
+  CooperativeMember,
+  CooperativeMemberCode,
+  CooperativeMemberStatus,
+  Employee,
+  EmployeeArea,
+} from '@/types';
 import { cooperativeMemberStatusOptions } from './memberOptions';
 
 const { TextArea } = Input;
@@ -28,6 +36,9 @@ interface CooperativeMemberFormModalProps {
   areas: CooperativeArea[];
   employees: Employee[];
   employeeAreaAssignments: EmployeeArea[];
+  members: CooperativeMember[];
+  memberCodes: CooperativeMemberCode[];
+  editingMemberId?: string;
   isEditing: boolean;
   isSubmitting: boolean;
   isCreatingArea: boolean;
@@ -42,6 +53,9 @@ export default function CooperativeMemberFormModal({
   areas,
   employees,
   employeeAreaAssignments,
+  members,
+  memberCodes,
+  editingMemberId,
   isEditing,
   isSubmitting,
   isCreatingArea,
@@ -53,6 +67,10 @@ export default function CooperativeMemberFormModal({
   const [areaSearchText, setAreaSearchText] = useState('');
   const selectedOfficerId = Form.useWatch('officer_id', form);
   const selectedAreaId = Form.useWatch('area_id', form);
+  const memberNumberOptions = useMemo(() => (
+    buildAvailableCooperativeMemberNumberOptions(memberCodes, members, { excludeMemberId: editingMemberId })
+      .map((memberNumber) => ({ value: memberNumber, label: memberNumber }))
+  ), [editingMemberId, memberCodes, members]);
   const assignedAreaIdsByEmployee = useMemo(() => {
     const result = new Map<string, Set<string>>();
     employeeAreaAssignments.forEach((assignment) => {
@@ -176,9 +194,14 @@ export default function CooperativeMemberFormModal({
               }),
             ]}
           >
-            <Input
+            <AutoComplete
+              allowClear
+              options={memberNumberOptions}
               placeholder={t('cooperative.members.form.memberNumberPlaceholder')}
               data-testid="koperasi-member-number-input"
+              filterOption={(inputValue, option) => (
+                String(option?.value ?? '').toLowerCase().includes(inputValue.toLowerCase())
+              )}
             />
           </Form.Item>
           <Form.Item

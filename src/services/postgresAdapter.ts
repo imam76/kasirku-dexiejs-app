@@ -1297,6 +1297,13 @@ export interface RemoteCooperativeMemberDto {
   updated_by_name?: string | null;
 }
 
+export interface RemoteCooperativeMemberCodeDto {
+  id: string;
+  code: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RemoteCooperativeAreaDto {
   id: string;
   name: string;
@@ -2446,6 +2453,18 @@ export const cooperativeMemberPostgresAdapter = {
   async upsert(input: RemoteCooperativeMemberDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteCooperativeMemberDto>('postgres_upsert_cooperative_member', { input });
+  },
+};
+
+export const cooperativeMemberCodePostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteCooperativeMemberCodeDto[]>('postgres_list_cooperative_member_codes');
+  },
+
+  async upsert(input: RemoteCooperativeMemberCodeDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteCooperativeMemberCodeDto>('postgres_upsert_cooperative_member_code', { input });
   },
 };
 

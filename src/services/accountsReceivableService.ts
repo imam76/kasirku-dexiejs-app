@@ -25,7 +25,16 @@ import { buildOpeningReceivableRows } from '@/utils/accountsReceivable/buildOpen
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
 import { calculateReceivableBalance } from '@/utils/accountsReceivable/calculateReceivableBalance';
 import { createInvoicePaymentSnapshot } from '@/utils/accountsReceivable/createInvoicePaymentSnapshot';
+import { createSalesInvoicePaymentNumber } from '@/utils/accountsReceivable/createSalesInvoicePaymentNumber';
 import { validateInvoicePayment } from '@/utils/accountsReceivable/validateInvoicePayment';
+import {
+  calculateSalesInvoicePaymentAllocation,
+  getSalesInvoicePaymentAllocatedAmount,
+  getSalesInvoicePaymentOverpaymentAmount,
+  getSalesInvoicePaymentRemainingOverpaymentAmount,
+  roundCurrency,
+  toForeignBalanceDue,
+} from '@/utils/accountsReceivable/paymentAmounts';
 import {
   normalizeCurrencyCode,
   normalizeExchangeRate,
@@ -65,6 +74,8 @@ const accountsReceivableTables = [
   db.salesDocuments,
   db.salesDocumentItems,
   db.salesInvoicePayments,
+  db.salesOverpaymentSettlements,
+  db.salesOverpaymentSettlementAllocations,
   db.salesReturns,
   db.salesReturnItems,
   db.openingBalanceBatches,
@@ -79,8 +90,6 @@ const accountsReceivableTables = [
   db.journalEntryLines,
   db.activityLogs,
 ];
-
-const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 const sortPaymentsByPaidAtDesc = (payments: SalesInvoicePayment[]) => (
   [...payments].sort((left, right) => right.paid_at.localeCompare(left.paid_at))
@@ -141,7 +150,7 @@ const buildOpeningReceivableAggregatePatch = (
   updatedAt: string,
 ) => {
   const activePaymentAmount = roundCurrency(
-    activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+    activePayments.reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0),
   );
   const calculation = calculateReceivableBalance({
     invoiceTotal: Number(line.base_amount || 0),
@@ -169,7 +178,7 @@ const buildSalesInvoiceAggregatePatch = async (
 ) => {
   const returnSummary = await getIssuedReturnSummaryForSource('SALES_INVOICE', document.id);
   const activePaymentAmount = roundCurrency(
-    activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+    activePayments.reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0),
   );
   const calculation = calculateReceivableBalance({
     invoiceTotal: Number(document.total_amount || 0),
@@ -231,12 +240,12 @@ export const getSalesInvoicePaymentSummary = async (invoiceId: string): Promise<
     .toArray();
   const activePayments = payments.filter((payment) => payment.status === 'ACTIVE');
   const activePaymentAmount = roundCurrency(
-    activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+    activePayments.reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0),
   );
   const voidedPaymentAmount = roundCurrency(
     payments
       .filter((payment) => payment.status === 'VOIDED')
-      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+      .reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0),
   );
 
   return {
@@ -320,7 +329,7 @@ export const recordSalesInvoicePayment = async (
   const returnSummary = document
     ? await getIssuedReturnSummaryForSource('SALES_INVOICE', document.id)
     : undefined;
-  const activePaymentAmount = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const activePaymentAmount = activePayments.reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0);
   const documentCurrencySnapshot = document
     ? snapshotFromDocumentInput(document, undefined, document.document_date)
     : undefined;
@@ -335,6 +344,14 @@ export const recordSalesInvoicePayment = async (
     foreignAmount,
     documentCurrencySnapshot as DocumentCurrencySnapshot | undefined,
   ));
+  const allocation = calculateSalesInvoicePaymentAllocation({
+    paymentAmount: amount,
+    foreignPaymentAmount: foreignAmount,
+    balanceDue: currentBalance.balance_due,
+    foreignBalanceDue: documentCurrencySnapshot
+      ? toForeignBalanceDue(currentBalance.balance_due, documentCurrencySnapshot)
+      : currentBalance.balance_due,
+  });
 
   validateInvoicePayment({
     document,
@@ -348,11 +365,17 @@ export const recordSalesInvoicePayment = async (
   const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, input.cash_account_id);
   const paymentId = crypto.randomUUID();
   const financeTransactionId = crypto.randomUUID();
+  const paymentNumber = await createSalesInvoicePaymentNumber(new Date(paidAt));
   const payment = createInvoicePaymentSnapshot({
     id: paymentId,
+    paymentNumber,
     document: document as SalesDocument,
-    amount,
-    foreignAmount,
+    amount: allocation.amount,
+    foreignAmount: allocation.foreign_amount ?? foreignAmount,
+    allocatedAmount: allocation.allocated_amount,
+    foreignAllocatedAmount: allocation.foreign_allocated_amount,
+    overpaymentAmount: allocation.overpayment_amount,
+    foreignOverpaymentAmount: allocation.foreign_overpayment_amount,
     paidAt,
     paymentMethod,
     paymentChannel: input.payment_channel,
@@ -447,7 +470,7 @@ export const recordOpeningReceivablePayment = async (
   }
 
   const activePayments = await getActiveOpeningReceivablePayments(line.id);
-  const activePaymentAmount = activePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const activePaymentAmount = activePayments.reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0);
   const currentBalance = calculateReceivableBalance({
     invoiceTotal: Number(line.base_amount || 0),
     activePaymentAmount,
@@ -461,9 +484,12 @@ export const recordOpeningReceivablePayment = async (
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('Jumlah pembayaran harus lebih dari 0.');
   }
-  if (amount > currentBalance.balance_due + 0.01) {
-    throw new Error(`Pembayaran melebihi sisa piutang. Maksimal pembayaran Rp ${currentBalance.balance_due}.`);
-  }
+  const allocation = calculateSalesInvoicePaymentAllocation({
+    paymentAmount: amount,
+    foreignPaymentAmount: foreignAmount,
+    balanceDue: currentBalance.balance_due,
+    foreignBalanceDue: toForeignBalanceDue(currentBalance.balance_due, documentCurrencySnapshot),
+  });
 
   const now = new Date().toISOString();
   const paidAt = input.paid_at || now;
@@ -471,17 +497,28 @@ export const recordOpeningReceivablePayment = async (
   const cashAccount = await getCashOrBankAccountForPayment(paymentMethod, input.cash_account_id);
   const paymentId = crypto.randomUUID();
   const financeTransactionId = crypto.randomUUID();
+  const paymentNumber = await createSalesInvoicePaymentNumber(new Date(paidAt));
   const payment: SalesInvoicePayment = {
     id: paymentId,
     sales_document_id: line.id,
     source_type: 'OPENING_RECEIVABLE',
     opening_balance_line_id: line.id,
     opening_balance_batch_id: line.batch_id,
+    payment_number: paymentNumber,
     document_number: line.document_number || `OBR-${line.line_number}`,
     contact_id: line.contact_id,
     customer_name: line.party_name || '-',
-    amount,
-    foreign_amount: foreignAmount,
+    amount: allocation.amount,
+    foreign_amount: allocation.foreign_amount ?? foreignAmount,
+    allocated_amount: allocation.allocated_amount,
+    foreign_allocated_amount: allocation.foreign_allocated_amount,
+    overpayment_amount: allocation.overpayment_amount,
+    foreign_overpayment_amount: allocation.foreign_overpayment_amount,
+    overpayment_used_amount: 0,
+    foreign_overpayment_used_amount: 0,
+    overpayment_remaining_amount: allocation.overpayment_amount,
+    foreign_overpayment_remaining_amount: allocation.foreign_overpayment_amount ?? 0,
+    overpayment_status: allocation.overpayment_amount > 0 ? 'OPEN' : undefined,
     ...documentCurrencySnapshot,
     paid_at: paidAt,
     payment_method: paymentMethod,
@@ -588,6 +625,12 @@ export const voidSalesInvoicePayment = async (paymentId: string, reason: string)
   const payment = await db.salesInvoicePayments.get(paymentId);
   if (!payment) throw new Error('Payment invoice tidak ditemukan.');
   if (payment.status !== 'ACTIVE') throw new Error('Payment invoice sudah void.');
+  if (payment.source_type === 'CUSTOMER_CREDIT_ALLOCATION' || payment.overpayment_settlement_id) {
+    throw new Error('Payment hasil alokasi lebih bayar harus dibatalkan melalui reversal transaksi pengembalian lebih bayar.');
+  }
+  if (getSalesInvoicePaymentOverpaymentAmount(payment) > 0 && getSalesInvoicePaymentRemainingOverpaymentAmount(payment) < getSalesInvoicePaymentOverpaymentAmount(payment) - 0.01) {
+    throw new Error('Payment ini memiliki saldo lebih bayar yang sudah digunakan. Reverse settlement lebih bayar terlebih dahulu.');
+  }
 
   const normalizedReason = reason.trim();
   if (!normalizedReason) {
@@ -641,6 +684,9 @@ export const voidSalesInvoicePayment = async (paymentId: string, reason: string)
 
     await db.salesInvoicePayments.update(payment.id, {
       status: 'VOIDED',
+      overpayment_status: getSalesInvoicePaymentOverpaymentAmount(payment) > 0 ? 'CANCELLED' : payment.overpayment_status,
+      overpayment_remaining_amount: 0,
+      foreign_overpayment_remaining_amount: 0,
       voided_at: now,
       void_reason: normalizedReason,
       reversal_finance_transaction_id: reversalFinanceTransactionId,

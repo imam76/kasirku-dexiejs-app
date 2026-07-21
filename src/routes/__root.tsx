@@ -22,45 +22,23 @@ import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { App, Button, Drawer, Layout, Menu, Result, notification } from 'antd'
 import type { MenuProps } from 'antd'
 import {
-  BadgePercent,
   Banknote,
-  Bell,
-  BookOpen,
-  Box,
   Building2,
-  ClipboardCheck,
-  ClipboardList,
-  Coins,
-  CreditCard,
   Database,
-  DatabaseBackup,
-  DollarSign,
   FileText,
-  FolderKanban,
   History,
   // HelpCircle,
   Home,
   Languages,
-  ListTree,
-  Lock,
-  MapPinned,
   Moon,
-  Package,
   PanelLeftClose,
   PanelLeftOpen,
-  Percent,
-  ReceiptText,
   RefreshCw,
-  Scale,
   Settings,
   SettingsIcon,
   ShoppingBag,
   ShoppingCart,
   Sun,
-  Users,
-  UserRoundCog,
-  Warehouse,
-  WalletCards,
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -243,108 +221,11 @@ const RootLayout = () => {
     { to: '/transaction', label: t('nav.transaction'), icon: ShoppingCart },
     { to: '/sales', label: t('nav.sales'), icon: FileText },
     { to: '/purchases', label: t('nav.purchases'), icon: ShoppingBag },
-    {
-      label: t('nav.masterData'),
-      icon: Database,
-      key: 'master-data-group',
-      children: [
-        { to: '/master-data/products', label: t('nav.product'), icon: Box },
-        { to: '/master-data/production', label: t('nav.production'), icon: Package },
-        { to: '/master-data/stock-opname', label: t('nav.stockOpname'), icon: ClipboardCheck },
-        { to: '/master-data/promos', label: t('nav.promos'), icon: BadgePercent },
-        { to: '/master-data/contacts', label: t('nav.contacts'), icon: Users },
-        { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: Warehouse },
-        { to: '/master-data/payment-methods', label: t('nav.paymentMethods'), icon: CreditCard },
-        { to: '/master-data/currencies', label: t('nav.currencies'), icon: Coins },
-        { to: '/master-data/areas', label: t('nav.areas'), icon: MapPinned },
-        { to: '/master-data/employees', label: t('nav.employees'), icon: UserRoundCog },
-        { to: '/master-data/roles', label: t('nav.roles'), icon: Users },
-        { to: '/master-data/departments', label: t('nav.departments'), icon: Building2 },
-        { to: '/master-data/projects', label: t('nav.projects'), icon: FolderKanban },
-        { to: '/master-data/taxes', label: t('nav.taxes'), icon: Percent },
-        { to: '/master-data/units', label: t('nav.units'), icon: Scale, key: '/master-data/units#conversions', hash: 'conversions' },
-        { to: '/master-data/units', label: t('nav.unit'), icon: Scale, key: '/master-data/units#units', hash: 'units' },
-      ],
-    },
+    { to: '/master-data', label: t('nav.masterData'), icon: Database },
     { to: '/history', label: t('nav.history'), icon: History },
-    {
-      label: t('nav.finance'),
-      icon: Banknote,
-      key: 'finance-group',
-      children: [
-        { to: '/finance/cash-flow', label: t('nav.finance.cashFlow'), icon: Banknote },
-        { to: '/finance/receivables', label: t('nav.finance.receivables'), icon: ReceiptText },
-        { to: '/finance/payables', label: t('nav.finance.payables'), icon: CreditCard },
-        { to: '/finance/payroll', label: t('nav.finance.payroll'), icon: WalletCards },
-        { to: '/finance/chart-of-accounts', label: t('nav.finance.chartOfAccounts'), icon: ListTree },
-        { to: '/finance/opening-balances', label: t('nav.finance.openingBalances'), icon: ClipboardList },
-        { to: '/finance/general-ledger', label: t('nav.finance.generalLedger'), icon: BookOpen },
-        { to: '/finance/closing', label: t('closing.title'), icon: Lock },
-      ],
-    },
-    {
-      label: t('nav.cooperative'),
-      icon: Building2,
-      key: 'cooperative-group',
-      children: [
-        { to: '/koperasi', label: t('nav.cooperative.overview'), icon: Home },
-        { to: '/koperasi/anggota', label: t('nav.cooperative.members'), icon: Users },
-        { to: '/koperasi/simpanan', label: t('nav.cooperative.savings'), icon: WalletCards },
-        { to: '/koperasi/pinjaman', label: t('nav.cooperative.loans'), icon: Banknote },
-        { to: '/koperasi/migrasi-pinjaman', label: t('nav.cooperative.loanMigration'), icon: DatabaseBackup },
-        { to: '/koperasi/angsuran', label: t('nav.cooperative.installments'), icon: ReceiptText },
-        { to: '/koperasi/penagihan', label: t('cooperative.billing.title'), icon: Bell },
-        { to: '/koperasi/kas-petugas', label: t('nav.cooperative.fieldCash'), icon: WalletCards },
-        {
-          label: t('nav.cooperative.reports'),
-          icon: FileText,
-          key: 'cooperative-reports-group',
-          children: [
-            { to: '/koperasi/laporan', label: t('nav.cooperative.reportsOverview'), icon: FileText },
-            { to: '/koperasi/laporan-simpanan-sukarela', label: t('nav.cooperative.voluntarySavingsReport'), icon: WalletCards },
-            { to: '/koperasi/laporan-tabungan-masuk', label: t('nav.cooperative.savingInReport'), icon: WalletCards },
-            { to: '/koperasi/laporan-tabungan-keluar', label: t('nav.cooperative.savingOutReport'), icon: WalletCards },
-            { to: '/koperasi/laporan-tunai', label: t('nav.cooperative.cashReport'), icon: Banknote },
-            { to: '/koperasi/laporan-target-harian', label: t('nav.cooperative.dailyTarget'), icon: FileText },
-            { to: '/koperasi/laporan-storting-harian', label: t('nav.cooperative.dailyStorting'), icon: FileText },
-            { to: '/koperasi/laporan-kas-harian-pdl', label: t('cooperative.reports.dailyFieldCash.title'), icon: FileText },
-
-            { to: '/koperasi/laporan-drop-harian', label: t('nav.cooperative.dailyDrop'), icon: FileText },
-            { to: '/koperasi/laporan-drop-mingguan', label: t('nav.cooperative.weeklyDrop'), icon: FileText },
-            { to: '/koperasi/laporan-perkembangan-resort', label: t('nav.cooperative.resortDevelopment'), icon: FileText },
-            { to: '/koperasi/laporan-iptw', label: t('nav.cooperative.iptwReport'), icon: FileText },
-            { to: '/koperasi/laporan-induk-anggota', label: t('nav.cooperative.memberRegister'), icon: FileText },
-            { to: '/koperasi/buku-angsuran', label: t('nav.cooperative.installmentBook'), icon: BookOpen },
-            {
-              to: '/koperasi/arus-kas',
-              label: t('cooperative.reports.tabs.cashFlowStatement'),
-              icon: Banknote,
-            },
-            { to: '/koperasi/buku-besar', label: t('nav.cooperative.ledger'), icon: BookOpen },
-          ],
-        },
-      ],
-    },
-    {
-      label: t('nav.reports'),
-      icon: FileText,
-      key: 'reports-group',
-      children: [
-        { to: '/report/pos-sales-report', label: t('nav.report.posSales'), icon: FileText },
-        { to: '/report/deposit-report', label: t('nav.report.deposit'), icon: FileText },
-        { to: '/report/transaction-detail-report', label: t('nav.report.transactionDetail'), icon: FileText },
-        { to: '/report/purchase-report', label: t('nav.report.purchase'), icon: FileText },
-        { to: '/report/income-report', label: t('nav.report.income'), icon: FileText },
-        { to: '/report/expense-report', label: t('nav.report.expense'), icon: FileText },
-        { to: '/report/cash-flow-report', label: t('nav.report.cashFlow'), icon: Banknote },
-        { to: '/report/payroll-report', label: t('nav.report.payroll'), icon: FileText },
-        { to: '/report/profit-loss-report', label: t('report.index.profitLossShort'), icon: DollarSign },
-        { to: '/report/balance-sheet-report', label: t('nav.report.balanceSheet'), icon: Scale },
-        { to: '/report/aging-report', label: t('nav.report.aging'), icon: FileText },
-        { to: '/report/stock-card', label: 'Kartu Stok', icon: ClipboardList },
-        { to: '/profit', label: t('nav.report.profit'), icon: DollarSign },
-      ],
-    },
+    { to: '/finance', label: t('nav.finance'), icon: Banknote },
+    { to: '/koperasi', label: t('nav.cooperative'), icon: Building2 },
+    { to: '/report', label: t('nav.reports'), icon: FileText },
     { to: '/sync-db', label: t('nav.syncDb'), icon: RefreshCw },
     { to: '/settings', label: t('nav.settings'), icon: Settings },
   ]
@@ -404,12 +285,7 @@ const RootLayout = () => {
 
         return true
       })
-  const selectedKey = (() => {
-    if (location.pathname === '/master-data') return 'master-data-group'
-    if (location.pathname === '/finance') return 'finance-group'
-
-    return selectedLink ? getNavLeafKey(selectedLink) : '/'
-  })()
+  const selectedKey = selectedLink ? getNavLeafKey(selectedLink) : '/'
 
   const openKeys = getOpenKeysForSelected(filteredNavLinks, selectedKey)
   const openKeySignature = openKeys.join('|')

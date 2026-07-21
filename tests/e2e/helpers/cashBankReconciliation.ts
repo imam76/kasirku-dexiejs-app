@@ -4,6 +4,7 @@ import type {
   ChartOfAccount,
   FinanceTransaction,
   JournalEntry,
+  JournalEntryLine,
 } from '../../../src/types';
 
 export const cashBankReconciliationFixtureIds = {
@@ -11,12 +12,15 @@ export const cashBankReconciliationFixtureIds = {
   income: 'e2e-cash-bank-reconciliation-income',
   expense: 'e2e-cash-bank-reconciliation-expense',
   difference: 'e2e-cash-bank-reconciliation-difference',
+  gainAccount: 'e2e-cash-bank-reconciliation-gain-account',
+  lossAccount: 'e2e-cash-bank-reconciliation-loss-account',
 } as const;
 
 export interface CashBankReconciliationFixtureState {
   reconciliations: CashBankReconciliation[];
   financeTransactions: FinanceTransaction[];
   journalEntries: JournalEntry[];
+  journalEntryLines: JournalEntryLine[];
 }
 
 const createTransaction = ({
@@ -61,6 +65,32 @@ export async function seedCashBankReconciliationFixture(page: Page) {
     updated_at: createdAt,
     sync_status: 'pending',
   };
+  const gainAccount: ChartOfAccount = {
+    id: cashBankReconciliationFixtureIds.gainAccount,
+    code: '4900-E2E',
+    name: 'Pendapatan Selisih Rekonsiliasi E2E',
+    type: 'REVENUE',
+    normal_balance: 'CREDIT',
+    is_postable: true,
+    is_system: false,
+    is_active: true,
+    created_at: createdAt,
+    updated_at: createdAt,
+    sync_status: 'pending',
+  };
+  const lossAccount: ChartOfAccount = {
+    id: cashBankReconciliationFixtureIds.lossAccount,
+    code: '6900-E2E',
+    name: 'Beban Selisih Rekonsiliasi E2E',
+    type: 'EXPENSE',
+    normal_balance: 'DEBIT',
+    is_postable: true,
+    is_system: false,
+    is_active: true,
+    created_at: createdAt,
+    updated_at: createdAt,
+    sync_status: 'pending',
+  };
   const financeTransactions: FinanceTransaction[] = [
     createTransaction({
       id: cashBankReconciliationFixtureIds.income,
@@ -91,7 +121,12 @@ export async function seedCashBankReconciliationFixture(page: Page) {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const database = request.result;
-        const transaction = database.transaction(['chartOfAccounts', 'financeTransactions'], 'readwrite');
+        const transaction = database.transaction([
+          'chartOfAccounts',
+          'financeTransactions',
+          'enabledModules',
+          'generalLedgerSetting',
+        ], 'readwrite');
         transaction.onerror = () => reject(transaction.error);
         transaction.onabort = () => reject(transaction.error);
         transaction.oncomplete = () => {
@@ -100,12 +135,33 @@ export async function seedCashBankReconciliationFixture(page: Page) {
         };
 
         transaction.objectStore('chartOfAccounts').put(fixture.account);
+        transaction.objectStore('chartOfAccounts').put(fixture.gainAccount);
+        transaction.objectStore('chartOfAccounts').put(fixture.lossAccount);
         fixture.financeTransactions.forEach((record) => {
           transaction.objectStore('financeTransactions').put(record);
         });
+        transaction.objectStore('enabledModules').put({
+          id: 'GENERAL_LEDGER',
+          code: 'GENERAL_LEDGER',
+          is_enabled: true,
+          source: 'SYSTEM',
+          created_at: fixture.createdAt,
+          updated_at: fixture.createdAt,
+          sync_status: 'pending',
+        });
+        transaction.objectStore('generalLedgerSetting').put({
+          id: 'default',
+          is_ready: true,
+          cutoff_date: '2026-01-01',
+          inventory_policy: 'PERPETUAL_INVENTORY',
+          activated_at: fixture.createdAt,
+          created_at: fixture.createdAt,
+          updated_at: fixture.createdAt,
+          sync_status: 'pending',
+        });
       };
     });
-  }, { account, financeTransactions });
+  }, { account, gainAccount, lossAccount, financeTransactions, createdAt });
 }
 
 export async function selectCashBankReconciliationCandidate(page: Page, transactionId: string) {
@@ -134,6 +190,7 @@ export async function getCashBankReconciliationFixtureState(
         'cashBankReconciliations',
         'financeTransactions',
         'journalEntries',
+        'journalEntryLines',
       ], 'readonly');
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
@@ -141,19 +198,26 @@ export async function getCashBankReconciliationFixtureState(
       const reconciliationRequest = transaction.objectStore('cashBankReconciliations').getAll();
       const financeTransactionRequest = transaction.objectStore('financeTransactions').getAll();
       const journalEntryRequest = transaction.objectStore('journalEntries').getAll();
+      const journalEntryLineRequest = transaction.objectStore('journalEntryLines').getAll();
 
       transaction.oncomplete = () => {
-        const fixtureTransactionIds = new Set(Object.values(fixtureIds));
         const fixtureReconciliations = (reconciliationRequest.result as CashBankReconciliation[])
           .filter((record) => record.cash_account_id === fixtureIds.account);
         const fixtureTransactions = (financeTransactionRequest.result as FinanceTransaction[])
-          .filter((record) => fixtureTransactionIds.has(record.id));
+          .filter((record) => record.cash_account_id === fixtureIds.account);
+        const fixtureReconciliationIds = new Set(fixtureReconciliations.map((record) => record.id));
+        const fixtureJournalEntries = (journalEntryRequest.result as JournalEntry[])
+          .filter((record) => record.source_id && fixtureReconciliationIds.has(record.source_id));
+        const fixtureJournalEntryIds = new Set(fixtureJournalEntries.map((record) => record.id));
+        const fixtureJournalEntryLines = (journalEntryLineRequest.result as JournalEntryLine[])
+          .filter((record) => fixtureJournalEntryIds.has(record.journal_entry_id));
 
         database.close();
         resolve({
           reconciliations: fixtureReconciliations,
           financeTransactions: fixtureTransactions,
-          journalEntries: journalEntryRequest.result as JournalEntry[],
+          journalEntries: fixtureJournalEntries,
+          journalEntryLines: fixtureJournalEntryLines,
         });
       };
     };

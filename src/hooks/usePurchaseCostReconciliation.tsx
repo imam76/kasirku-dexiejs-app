@@ -17,6 +17,10 @@ export const usePurchaseCostReconciliation = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
       queryClient.invalidateQueries({ queryKey: ['profitBalance'] });
       queryClient.invalidateQueries({ queryKey: ['profitLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
+      queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
       message.success('Rekonsiliasi HPP berhasil disimpan.');
     },
     onError: (error: Error) => {
