@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select, Space, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { CreditCard, Plus } from 'lucide-react';
+import { useAuth } from '@/auth/useAuth';
 import dayjs from '@/lib/dayjs';
 import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
 import {
   useCooperativeInstallments,
+  type CooperativeInstallmentLoanStatusFilter,
+  type CooperativeInstallmentLoanSummary,
   type CooperativeInstallmentMemberFilter,
-  type CooperativeInstallmentStatusFilter,
   type CooperativeLoanPaymentStatusFilter,
 } from '@/hooks/useCooperativeInstallments';
 import { useI18n } from '@/hooks/useI18n';
@@ -16,28 +18,43 @@ import type {
   CooperativeLoanPayment,
   CooperativePaymentApprovalRequest,
 } from '@/types';
+import { formatCurrency } from '@/utils/formatters';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
+import CooperativeInstallmentLoanDrawer from './CooperativeInstallmentLoanDrawer';
 import CooperativeInstallmentTable from './CooperativeInstallmentTable';
 import CooperativeLoanPaymentDetailDrawer from './CooperativeLoanPaymentDetailDrawer';
 import CooperativeLoanPaymentFormModal, { type CooperativeLoanPaymentFormValues } from './CooperativeLoanPaymentFormModal';
 import CooperativeLoanPaymentTable from './CooperativeLoanPaymentTable';
-import { cooperativeLoanInstallmentStatusOptions } from '../loans/loanOptions';
+
+function StatCard({ label, count, amount }: { label: string; count?: number; amount?: number }) {
+  return (
+    <div className="rounded-lg border border-gray-100 p-3 shadow-sm">
+      <p className="text-xs text-gray-500">{label}</p>
+      {count !== undefined && <p className="text-xl font-semibold text-gray-800">{count}</p>}
+      {amount !== undefined && <p className="text-lg font-semibold text-gray-800">Rp {formatCurrency(amount)}</p>}
+    </div>
+  );
+}
 
 export default function CooperativeInstallmentManagement() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
+  const { can } = useAuth();
   const [form] = Form.useForm<CooperativeLoanPaymentFormValues>();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [fieldCashPaymentBadge, setFieldCashPaymentBadge] = useState<string | undefined>();
+  const [activeTab, setActiveTab] = useState('balances');
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
   const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanPayment');
   const {
-    filteredInstallments,
+    loanSummaries,
+    filteredLoanSummaries,
     payableInstallments,
+    payments,
     filteredPayments,
     memberFilterOptions,
     activeCollectors,
     paymentAccounts,
-    loanById,
     payingInstallment,
     setPayingInstallment,
     selectedPayment,
@@ -46,8 +63,8 @@ export default function CooperativeInstallmentManagement() {
     setSearchText,
     memberFilter,
     setMemberFilter,
-    installmentStatusFilter,
-    setInstallmentStatusFilter,
+    loanStatusFilter,
+    setLoanStatusFilter,
     paymentStatusFilter,
     setPaymentStatusFilter,
     approvalRequests,
@@ -60,6 +77,15 @@ export default function CooperativeInstallmentManagement() {
     getDefaultCollectorIdForInstallment,
     isMutating,
   } = useCooperativeInstallments();
+  const canRecordPayment = can('COOPERATIVE_PAYMENT_CREATE');
+  const selectedLoanSummary = selectedLoanId
+    ? loanSummaries.find((summary) => summary.loan.id === selectedLoanId) ?? null
+    : null;
+  const activeLoanSummaries = loanSummaries.filter((summary) => (
+    summary.loan.status === 'DISBURSED' && summary.remainingAmount > 0.01
+  ));
+  const activeTotalPaid = activeLoanSummaries.reduce((sum, summary) => sum + summary.totalPaidAmount, 0);
+  const activeTotalRemaining = activeLoanSummaries.reduce((sum, summary) => sum + summary.remainingAmount, 0);
   const approvalColumns: ColumnsType<CooperativePaymentApprovalRequest> = [
     {
       title: t('cooperative.installments.approval.requestedAt'),
@@ -194,6 +220,11 @@ export default function CooperativeInstallmentManagement() {
   };
 
   const openPaymentModal = (installment?: CooperativeLoanInstallment) => {
+    if (!canRecordPayment) {
+      message.error(t('cooperative.installments.noPermission'));
+      return;
+    }
+
     form.resetFields();
     const remaining = installment ? getInstallmentRemainingAmounts(installment) : undefined;
     const paymentDefaults = getPaymentDefaultFields(installment);
@@ -209,6 +240,11 @@ export default function CooperativeInstallmentManagement() {
     setFieldCashPaymentBadge(paymentDefaults.fieldCashBadge);
     setPayingInstallment(installment ?? null);
     setIsPaymentModalOpen(true);
+  };
+
+  const openLoanPaymentModal = (summary: CooperativeInstallmentLoanSummary) => {
+    if (!summary.nextInstallment) return;
+    openPaymentModal(summary.nextInstallment);
   };
 
   const handleInstallmentChange = (installment?: CooperativeLoanInstallment) => {
@@ -249,6 +285,40 @@ export default function CooperativeInstallmentManagement() {
       closePaymentModal();
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('cooperative.installments.paymentFailed'));
+    }
+  };
+
+  const handleQuickPayment = async (summary: CooperativeInstallmentLoanSummary, amount: number) => {
+    if (!canRecordPayment) {
+      message.error(t('cooperative.installments.noPermission'));
+      return false;
+    }
+    if (!summary.nextInstallment) return false;
+
+    try {
+      const paymentDefaults = getPaymentDefaultFields(summary.nextInstallment);
+      const result = await recordPayment({
+        idempotency_key: crypto.randomUUID(),
+        installment_id: summary.nextInstallment.id,
+        amount: Number(amount || 0),
+        payment_date: dayjs().tz().format(),
+        payment_method: 'TUNAI',
+        cash_account_id: paymentDefaults.fields.cash_account_id,
+        collector_id: paymentDefaults.fields.collector_id,
+      });
+      if (result.status === 'PENDING_APPROVAL') {
+        message.success(t('cooperative.installments.backdateApprovalRequested'));
+        return true;
+      }
+
+      rememberCashAccount({
+        cash_account_id: result.payment.cash_account_id ?? paymentDefaults.fields.cash_account_id,
+      });
+      message.success(t('cooperative.installments.paymentSuccess'));
+      return true;
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('cooperative.installments.paymentFailed'));
+      return false;
     }
   };
 
@@ -307,58 +377,82 @@ export default function CooperativeInstallmentManagement() {
         </div>
       )}
       extra={(
-        <Button type="primary" icon={<Plus size={16} />} onClick={() => openPaymentModal()}>
+        <Button
+          type="primary"
+          icon={<Plus size={16} />}
+          disabled={!canRecordPayment}
+          onClick={() => openPaymentModal()}
+        >
           {t('cooperative.installments.addPayment')}
         </Button>
       )}
     >
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)_170px_170px]">
-        <Input.Search
-          allowClear
-          value={searchText}
-          placeholder={t('cooperative.installments.searchPlaceholder')}
-          onChange={(event) => setSearchText(event.target.value)}
-        />
-        <Select<CooperativeInstallmentMemberFilter>
-          showSearch
-          value={memberFilter}
-          onChange={setMemberFilter}
-          optionFilterProp="label"
-          options={[
-            { value: 'ALL', label: t('cooperative.installments.filter.allMembers') },
-            ...memberFilterOptions,
-          ]}
-        />
-        <Select<CooperativeInstallmentStatusFilter>
-          value={installmentStatusFilter}
-          onChange={setInstallmentStatusFilter}
-          options={[
-            { value: 'DUE', label: t('cooperative.installments.filter.due') },
-            { value: 'ALL', label: t('cooperative.installments.filter.allInstallments') },
-            ...cooperativeLoanInstallmentStatusOptions.map((option) => ({ value: option.value, label: t(option.labelKey) })),
-          ]}
-        />
-        <Select<CooperativeLoanPaymentStatusFilter>
-          value={paymentStatusFilter}
-          onChange={setPaymentStatusFilter}
-          options={[
-            { value: 'POSTED', label: t('cooperative.installments.paymentStatus.posted') },
-            { value: 'REVERSED', label: t('cooperative.installments.paymentStatus.reversed') },
-            { value: 'ALL', label: t('cooperative.installments.filter.allPayments') },
-          ]}
-        />
+      <Typography.Paragraph type="secondary" className="mb-4">
+        {t('cooperative.installments.subtitle')}
+      </Typography.Paragraph>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <StatCard label={t('cooperative.installments.summary.activeLoans')} count={activeLoanSummaries.length} />
+        <StatCard label={t('cooperative.installments.summary.totalPaid')} amount={activeTotalPaid} />
+        <StatCard label={t('cooperative.installments.summary.totalRemaining')} amount={activeTotalRemaining} />
       </div>
 
+      {activeTab !== 'approvals' && (
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)_minmax(180px,220px)]">
+          <Input.Search
+            allowClear
+            value={searchText}
+            placeholder={t('cooperative.installments.searchPlaceholder')}
+            onChange={(event) => setSearchText(event.target.value)}
+          />
+          <Select<CooperativeInstallmentMemberFilter>
+            showSearch
+            value={memberFilter}
+            onChange={setMemberFilter}
+            optionFilterProp="label"
+            options={[
+              { value: 'ALL', label: t('cooperative.installments.filter.allMembers') },
+              ...memberFilterOptions,
+            ]}
+          />
+          {activeTab === 'balances' ? (
+            <Select<CooperativeInstallmentLoanStatusFilter>
+              value={loanStatusFilter}
+              onChange={setLoanStatusFilter}
+              options={[
+                { value: 'ACTIVE', label: t('cooperative.installments.filter.activeLoans') },
+                { value: 'PAID_OFF', label: t('cooperative.installments.filter.paidOffLoans') },
+                { value: 'ALL', label: t('cooperative.installments.filter.allLoans') },
+              ]}
+            />
+          ) : (
+            <Select<CooperativeLoanPaymentStatusFilter>
+              value={paymentStatusFilter}
+              onChange={setPaymentStatusFilter}
+              options={[
+                { value: 'POSTED', label: t('cooperative.installments.paymentStatus.posted') },
+                { value: 'REVERSED', label: t('cooperative.installments.paymentStatus.reversed') },
+                { value: 'ALL', label: t('cooperative.installments.filter.allPayments') },
+              ]}
+            />
+          )}
+        </div>
+      )}
+
       <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={[
           {
-            key: 'installments',
-            label: t('cooperative.installments.tab.installments'),
+            key: 'balances',
+            label: t('cooperative.installments.tab.balances'),
             children: (
               <CooperativeInstallmentTable
-                installments={filteredInstallments}
-                loanById={loanById}
-                onPay={openPaymentModal}
+                summaries={filteredLoanSummaries}
+                onPay={openLoanPaymentModal}
+                onQuickPay={handleQuickPayment}
+                onView={(summary) => setSelectedLoanId(summary.loan.id)}
+                canPay={canRecordPayment}
                 loading={isMutating}
               />
             ),
@@ -397,13 +491,29 @@ export default function CooperativeInstallmentManagement() {
         form={form}
         open={isPaymentModalOpen}
         isSubmitting={isMutating}
-        payableInstallments={payingInstallment ? [payingInstallment, ...payableInstallments.filter((item) => item.id !== payingInstallment.id)] : payableInstallments}
+        payableInstallments={payingInstallment
+          ? [
+              payingInstallment,
+              ...payableInstallments.filter((item) => (
+                item.loan_id === payingInstallment.loan_id && item.id !== payingInstallment.id
+              )),
+            ]
+          : payableInstallments}
         paymentAccounts={paymentAccounts}
         activeCollectors={activeCollectors}
         fieldCashBadge={fieldCashPaymentBadge}
         onInstallmentChange={handleInstallmentChange}
         onCancel={closePaymentModal}
         onSubmit={handleSubmit}
+      />
+      <CooperativeInstallmentLoanDrawer
+        summary={selectedLoanSummary}
+        payments={payments}
+        open={Boolean(selectedLoanSummary)}
+        canPay={canRecordPayment}
+        loading={isMutating}
+        onClose={() => setSelectedLoanId(null)}
+        onPay={openLoanPaymentModal}
       />
       <CooperativeLoanPaymentDetailDrawer
         payment={selectedPayment}

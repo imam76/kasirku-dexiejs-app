@@ -16,16 +16,21 @@ import type {
   ChartOfAccount,
   CooperativeLoan,
   CooperativeLoanInstallment,
-  CooperativeLoanInstallmentStatus,
   CooperativeLoanPayment,
   CooperativeLoanPaymentStatus,
   CooperativeMember,
   Employee,
 } from '@/types';
+import {
+  buildCooperativeInstallmentLoanSummaries,
+  type CooperativeInstallmentLoanSummary,
+} from '@/utils/koperasi/installmentLoanSummary';
 
-export type CooperativeInstallmentStatusFilter = CooperativeLoanInstallmentStatus | 'DUE' | 'ALL';
+export type CooperativeInstallmentLoanStatusFilter = 'ACTIVE' | 'PAID_OFF' | 'ALL';
 export type CooperativeLoanPaymentStatusFilter = CooperativeLoanPaymentStatus | 'ALL';
 export type CooperativeInstallmentMemberFilter = string;
+
+export type { CooperativeInstallmentLoanSummary } from '@/utils/koperasi/installmentLoanSummary';
 
 interface CooperativeInstallmentMemberOption {
   value: string;
@@ -67,7 +72,7 @@ export const useCooperativeInstallments = () => {
   const [selectedPayment, setSelectedPayment] = useState<CooperativeLoanPayment | null>(null);
   const [searchText, setSearchText] = useState('');
   const [memberFilter, setMemberFilter] = useState<CooperativeInstallmentMemberFilter>('ALL');
-  const [installmentStatusFilter, setInstallmentStatusFilter] = useState<CooperativeInstallmentStatusFilter>('DUE');
+  const [loanStatusFilter, setLoanStatusFilter] = useState<CooperativeInstallmentLoanStatusFilter>('ACTIVE');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<CooperativeLoanPaymentStatusFilter>('POSTED');
 
   const loans = useLiveQuery(
@@ -145,25 +150,32 @@ export const useCooperativeInstallments = () => {
     })
   ), [installments, loanById]);
 
-  const filteredInstallments = useMemo(() => {
+  const loanSummaries = useMemo<CooperativeInstallmentLoanSummary[]>(() => {
+    return buildCooperativeInstallmentLoanSummaries(loans as CooperativeLoan[], installments);
+  }, [installments, loans]);
+
+  const filteredLoanSummaries = useMemo(() => {
     const query = searchText.trim().toLowerCase();
 
-    return installments.filter((installment) => {
-      const loan = loanById.get(installment.loan_id);
+    return loanSummaries.filter((summary) => {
+      const { loan } = summary;
       const matchesSearch = !query || [
-        installment.loan_number,
-        installment.member_number,
-        installment.member_name,
-      ].some((value) => value.toLowerCase().includes(query));
-      const matchesStatus = installmentStatusFilter === 'ALL' ||
-        (installmentStatusFilter === 'DUE'
-          ? installment.status !== 'PAID'
-          : installment.status === installmentStatusFilter);
-      const matchesMember = memberFilter === 'ALL' || installment.member_id === memberFilter;
+        loan.loan_number,
+        loan.member_number,
+        loan.member_name,
+        loan.area_code,
+        loan.area_name,
+        loan.officer_name,
+      ].some((value) => value?.toLowerCase().includes(query));
+      const matchesStatus = loanStatusFilter === 'ALL' ||
+        (loanStatusFilter === 'ACTIVE'
+          ? loan.status === 'DISBURSED' && summary.remainingAmount > 0.01
+          : loan.status === 'PAID_OFF' || summary.remainingAmount <= 0.01);
+      const matchesMember = memberFilter === 'ALL' || loan.member_id === memberFilter;
 
-      return matchesSearch && matchesStatus && matchesMember && (!loan || loan.status !== 'REVERSED');
+      return matchesSearch && matchesStatus && matchesMember;
     });
-  }, [installmentStatusFilter, installments, loanById, memberFilter, searchText]);
+  }, [loanStatusFilter, loanSummaries, memberFilter, searchText]);
 
   const filteredPayments = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -245,7 +257,8 @@ export const useCooperativeInstallments = () => {
   return {
     loans: loans as CooperativeLoan[],
     installments,
-    filteredInstallments,
+    loanSummaries,
+    filteredLoanSummaries,
     payableInstallments,
     payments,
     filteredPayments,
@@ -261,8 +274,8 @@ export const useCooperativeInstallments = () => {
     setSearchText,
     memberFilter,
     setMemberFilter,
-    installmentStatusFilter,
-    setInstallmentStatusFilter,
+    loanStatusFilter,
+    setLoanStatusFilter,
     paymentStatusFilter,
     setPaymentStatusFilter,
     approvalRequests: approvalRequestsQuery.data ?? [],

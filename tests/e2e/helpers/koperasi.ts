@@ -532,21 +532,31 @@ export async function expectMigrationRejectedForInvalidSettledInstallment(
   await expect(migrationLoanRow(page, member.memberNumber)).toBeHidden();
 }
 
+function installmentLoanRow(page: Page, memberNumber: string) {
+  return page.locator(`[data-testid^="koperasi-installment-loan-row-${memberNumber}-"]`).first();
+}
+
 export async function expectInstallmentSchedule(page: Page, member: DemoMemberInput) {
   await page.goto('/koperasi/angsuran');
   await expect(page.getByText('Pembayaran Angsuran', { exact: true })).toBeVisible();
 
+  const loanRow = installmentLoanRow(page, member.memberNumber);
+  await expect(loanRow).toContainText(member.name);
+  await expect(loanRow).toContainText('Ke-1 dari 6');
+  await loanRow.getByRole('button', { name: 'Detail' }).click();
+
   for (const installmentNumber of [1, 2, 3, 4, 5, 6]) {
-    const row = page.getByTestId(`koperasi-installment-row-${member.memberNumber}-${installmentNumber}`);
-    await expect(row).toContainText(member.name);
+    const row = page.getByTestId(`koperasi-installment-detail-row-${member.memberNumber}-${installmentNumber}`);
     await expect(row).toContainText('Rp 530.000');
   }
+
+  await closeTopDialog(page);
 }
 
 export async function payFirstInstallment(page: Page, member: DemoMemberInput) {
   await page.goto('/koperasi/angsuran');
-  const firstInstallmentRow = page.getByTestId(`koperasi-installment-row-${member.memberNumber}-1`);
-  await firstInstallmentRow.getByRole('button', { name: 'Bayar' }).click();
+  const loanRow = installmentLoanRow(page, member.memberNumber);
+  await loanRow.getByRole('button', { name: 'Bayar' }).click();
 
   await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeVisible();
   await page.getByTestId('koperasi-installment-payment-submit-button').click();
@@ -565,8 +575,8 @@ export async function payFirstInstallment(page: Page, member: DemoMemberInput) {
 
 export async function payFlexibleInstallmentAmount(page: Page, member: DemoMemberInput, amount: number) {
   await page.goto('/koperasi/angsuran');
-  const firstInstallmentRow = page.getByTestId(`koperasi-installment-row-${member.memberNumber}-1`);
-  await firstInstallmentRow.getByRole('button', { name: 'Bayar' }).click();
+  const loanRow = installmentLoanRow(page, member.memberNumber);
+  await loanRow.getByRole('button', { name: 'Bayar' }).click();
 
   await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeVisible();
   await fillControlByTestId(page, 'koperasi-installment-payment-amount-input', String(amount));
@@ -597,13 +607,34 @@ export async function payFirstInstallmentFromBillingShortcut(page: Page, member:
   await expect(firstInstallmentRow).toBeHidden();
 }
 
+export async function payNextInstallmentFromBalanceShortcut(page: Page, member: DemoMemberInput) {
+  await page.goto('/koperasi/angsuran');
+  const loanRow = installmentLoanRow(page, member.memberNumber);
+  await expect(loanRow).toContainText('Ke-2 dari 6');
+  await loanRow
+    .locator('[data-testid^="koperasi-installment-quick-payment-input-"] input')
+    .fill('530000');
+  await loanRow
+    .locator('[data-testid^="koperasi-installment-quick-payment-submit-"]')
+    .click();
+
+  await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toHaveCount(0);
+  await expect(loanRow).toContainText('Ke-3 dari 6');
+  await expect(loanRow).toContainText('Rp 1.060.000');
+}
+
 export async function expectFlexibleInstallmentAllocation(page: Page, member: DemoMemberInput) {
   await page.goto('/koperasi/angsuran');
 
-  await expect(page.getByTestId(`koperasi-installment-row-${member.memberNumber}-1`)).toBeHidden();
-  const secondInstallmentRow = page.getByTestId(`koperasi-installment-row-${member.memberNumber}-2`);
+  const loanRow = installmentLoanRow(page, member.memberNumber);
+  await expect(loanRow).toContainText('Ke-2 dari 6');
+  await expect(loanRow).toContainText('Partial');
+  await loanRow.getByRole('button', { name: 'Detail' }).click();
+  await expect(page.getByTestId(`koperasi-installment-detail-row-${member.memberNumber}-1`)).toContainText('Lunas');
+  const secondInstallmentRow = page.getByTestId(`koperasi-installment-detail-row-${member.memberNumber}-2`);
   await expect(secondInstallmentRow).toContainText('Partial');
   await expect(secondInstallmentRow).toContainText('Rp 265.000');
+  await closeTopDialog(page);
 
   await page.getByRole('tab', { name: 'Riwayat Pembayaran', exact: true }).click();
   await expect(page.getByRole('columnheader', { name: 'No. Pembayaran' })).toBeVisible();
@@ -617,10 +648,9 @@ export async function payRemainingInstallments(page: Page, member: DemoMemberInp
   await page.goto('/koperasi/angsuran');
 
   for (const installmentNumber of [2, 3, 4, 5, 6]) {
-    const installmentRow = page.getByTestId(
-      `koperasi-installment-row-${member.memberNumber}-${installmentNumber}`,
-    );
-    await installmentRow.getByRole('button', { name: 'Bayar' }).click();
+    const loanRow = installmentLoanRow(page, member.memberNumber);
+    await expect(loanRow).toContainText(`Ke-${installmentNumber} dari 6`);
+    await loanRow.getByRole('button', { name: 'Bayar' }).click();
     await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeVisible();
     await page.getByTestId('koperasi-installment-payment-submit-button').click();
     await expect(page.getByRole('dialog').filter({ hasText: 'Catat Pembayaran Angsuran' })).toBeHidden();

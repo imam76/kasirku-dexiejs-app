@@ -23,15 +23,19 @@ test.describe.serial('input saldo awal pinjaman koperasi', () => {
       expectedOutstanding: 'Rp 800.000',
     });
 
-    // Angsuran 1-4 ditandai lunas historis -> tersembunyi dari daftar penagihan;
-    // angsuran ke-5 masih terbuka dengan total 112.000 (pokok 100.000 + bunga 12.000).
+    // Angsuran 1-4 ditandai lunas historis; ringkasan menunjukkan posisi berikutnya ke-5
+    // dan drawer tetap memperlihatkan seluruh kartu angsuran untuk audit.
     await page.goto('/koperasi/angsuran');
     await expect(page.getByText('Pembayaran Angsuran', { exact: true })).toBeVisible();
-    await expect(page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-1`)).toBeHidden();
-    await expect(page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-4`)).toBeHidden();
-
-    const fifthInstallment = page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-5`);
-    await expect(fifthInstallment).toBeVisible();
+    const loanRow = page
+      .locator(`[data-testid^="koperasi-installment-loan-row-${migrationFixtureMember.memberNumber}-"]`)
+      .first();
+    await expect(loanRow).toContainText('Ke-5 dari 12');
+    await expect(loanRow).toContainText('Rp 896.000');
+    await loanRow.getByRole('button', { name: 'Detail' }).click();
+    await expect(page.getByTestId(`koperasi-installment-detail-row-${migrationFixtureMember.memberNumber}-1`)).toContainText('Lunas');
+    await expect(page.getByTestId(`koperasi-installment-detail-row-${migrationFixtureMember.memberNumber}-4`)).toContainText('Lunas');
+    const fifthInstallment = page.getByTestId(`koperasi-installment-detail-row-${migrationFixtureMember.memberNumber}-5`);
     await expect(fifthInstallment).toContainText('Rp 112.000');
 
     // Tanpa cutoff GL siap, total sisa pokok migrasi (800.000) tetap disurfacing sebagai panduan
@@ -128,11 +132,15 @@ test.describe.serial('input saldo awal pinjaman koperasi', () => {
 
     await page.goto('/koperasi/angsuran');
     await expect(page.getByText('Pembayaran Angsuran', { exact: true })).toBeVisible();
-    await expect(page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-1`)).toBeHidden();
-    await expect(page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-2`)).toBeHidden();
-
-    const thirdInstallment = page.getByTestId(`koperasi-installment-row-${migrationFixtureMember.memberNumber}-3`);
-    await expect(thirdInstallment).toBeVisible();
+    const loanRow = page
+      .locator(`[data-testid^="koperasi-installment-loan-row-${migrationFixtureMember.memberNumber}-"]`)
+      .first();
+    await expect(loanRow).toContainText('Ke-3 dari 12');
+    await expect(loanRow).toContainText('Rp 2.000.000');
+    await loanRow.getByRole('button', { name: 'Detail' }).click();
+    await expect(page.getByTestId(`koperasi-installment-detail-row-${migrationFixtureMember.memberNumber}-1`)).toContainText('Lunas');
+    await expect(page.getByTestId(`koperasi-installment-detail-row-${migrationFixtureMember.memberNumber}-2`)).toContainText('Lunas');
+    const thirdInstallment = page.getByTestId(`koperasi-installment-detail-row-${migrationFixtureMember.memberNumber}-3`);
     await expect(thirdInstallment).toContainText('Rp 200.000');
   });
 });

@@ -12,6 +12,7 @@ import type {
 } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
+import { createTableMultiSorter } from '@/utils/tableSorting';
 import { cooperativeLoanInstallmentStatusOptions } from '../loans/loanOptions';
 
 const { Text } = Typography;
@@ -134,10 +135,10 @@ export default function CooperativeBillingTable({
       key: 'due_date',
       fixed: 'left',
       width: 150,
-      sorter: {
-        compare: (first, second) => dayjs(first.due_date).valueOf() - dayjs(second.due_date).valueOf(),
-        multiple: sortPriority.dueDate,
-      },
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.dueDate,
+        (first, second) => dayjs(first.due_date).valueOf() - dayjs(second.due_date).valueOf(),
+      ),
       defaultSortOrder: 'ascend',
       render: (value: string) => {
         const isOverdue = dayjs(value).isBefore(dayjs().startOf('day'));
@@ -149,13 +150,13 @@ export default function CooperativeBillingTable({
       key: 'member',
       fixed: 'left',
       width: 220,
-      sorter: {
-        compare: (first, second) => (
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.member,
+        (first, second) => (
           first.member_number.localeCompare(second.member_number) ||
           first.member_name.localeCompare(second.member_name)
         ),
-        multiple: sortPriority.member,
-      },
+      ),
       render: (_value: unknown, installment) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{installment.member_name}</Text>
@@ -168,22 +169,22 @@ export default function CooperativeBillingTable({
       dataIndex: 'loan_number',
       key: 'loan_number',
       width: 140,
-      sorter: {
-        compare: (first, second) => first.loan_number.localeCompare(second.loan_number),
-        multiple: sortPriority.loan,
-      },
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.loan,
+        (first, second) => first.loan_number.localeCompare(second.loan_number),
+      ),
     },
     {
       title: t('cooperative.billing.table.disbursementDate'),
       key: 'disbursementDate',
       width: 150,
-      sorter: {
-        compare: (first, second) => compareOptionalDates(
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.disbursementDate,
+        (first, second) => compareOptionalDates(
           getLoanDisbursementDate(first),
           getLoanDisbursementDate(second),
         ),
-        multiple: sortPriority.disbursementDate,
-      },
+      ),
       render: (_value: unknown, installment) => {
         const disbursementDate = getLoanDisbursementDate(installment);
         return disbursementDate ? formatDate(disbursementDate) : '-';
@@ -194,10 +195,10 @@ export default function CooperativeBillingTable({
       key: 'loanPrincipal',
       align: 'right',
       width: 150,
-      sorter: {
-        compare: (first, second) => getLoanPrincipalAmount(first) - getLoanPrincipalAmount(second),
-        multiple: sortPriority.loanPrincipal,
-      },
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.loanPrincipal,
+        (first, second) => getLoanPrincipalAmount(first) - getLoanPrincipalAmount(second),
+      ),
       render: (_value: unknown, installment) => (
         `Rp ${formatCurrency(getLoanPrincipalAmount(installment))}`
       ),
@@ -208,20 +209,20 @@ export default function CooperativeBillingTable({
       key: 'installment_number',
       align: 'right',
       width: 100,
-      sorter: {
-        compare: (first, second) => first.installment_number - second.installment_number,
-        multiple: sortPriority.installmentNo,
-      },
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.installmentNo,
+        (first, second) => first.installment_number - second.installment_number,
+      ),
     },
     {
       title: t('cooperative.billing.table.bill'),
       key: 'bill',
       align: 'right',
       width: 140,
-      sorter: {
-        compare: (first, second) => getBillAmount(first) - getBillAmount(second),
-        multiple: sortPriority.bill,
-      },
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.bill,
+        (first, second) => getBillAmount(first) - getBillAmount(second),
+      ),
       render: (_value: unknown, installment) => (
         `Rp ${formatCurrency(getBillAmount(installment))}`
       ),
@@ -231,10 +232,10 @@ export default function CooperativeBillingTable({
       key: 'remaining',
       align: 'right',
       width: 140,
-      sorter: {
-        compare: (first, second) => getRemainingAmount(first) - getRemainingAmount(second),
-        multiple: sortPriority.remaining,
-      },
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.remaining,
+        (first, second) => getRemainingAmount(first) - getRemainingAmount(second),
+      ),
       render: (_value: unknown, installment) => {
         return <Text strong>Rp {formatCurrency(getRemainingAmount(installment))}</Text>;
       },
@@ -244,10 +245,10 @@ export default function CooperativeBillingTable({
       key: 'overdueDays',
       align: 'right',
       width: 120,
-      sorter: {
-        compare: (first, second) => getOverdueDays(first) - getOverdueDays(second),
-        multiple: sortPriority.overdueDays,
-      },
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.overdueDays,
+        (first, second) => getOverdueDays(first) - getOverdueDays(second),
+      ),
       render: (_value: unknown, installment) => {
         const diff = getOverdueDays(installment);
         if (diff > 0 && installment.status !== 'PAID') {
@@ -261,10 +262,10 @@ export default function CooperativeBillingTable({
       dataIndex: 'status',
       key: 'status',
       width: 140,
-      sorter: {
-        compare: (first, second) => statusLabels[first.status].localeCompare(statusLabels[second.status]),
-        multiple: sortPriority.status,
-      },
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.status,
+        (first, second) => statusLabels[first.status].localeCompare(statusLabels[second.status]),
+      ),
       render: (status: CooperativeLoanInstallmentStatus) => {
         const option = cooperativeLoanInstallmentStatusOptions.find((item) => item.value === status);
         return <Tag color={option?.color}>{statusLabels[status]}</Tag>;
@@ -274,15 +275,15 @@ export default function CooperativeBillingTable({
       title: t('cooperative.billing.table.collection'),
       key: 'collection',
       width: 170,
-      sorter: {
-        compare: (first, second) => {
+      sorter: createTableMultiSorter<CooperativeLoanInstallment>(
+        sortPriority.collection,
+        (first, second) => {
           const firstStatus = first.collection_status ?? 'NONE';
           const secondStatus = second.collection_status ?? 'NONE';
           return collectionStatusLabels[firstStatus].localeCompare(collectionStatusLabels[secondStatus]) ||
             (first.follow_up_date ?? '').localeCompare(second.follow_up_date ?? '');
         },
-        multiple: sortPriority.collection,
-      },
+      ),
       render: (_value: unknown, installment) => {
         const collectionStatus = installment.collection_status ?? 'NONE';
         return (
