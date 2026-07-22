@@ -16,6 +16,20 @@ import { cooperativeLoanInstallmentStatusOptions } from '../loans/loanOptions';
 
 const { Text } = Typography;
 
+const sortPriority = {
+  disbursementDate: 110,
+  dueDate: 100,
+  member: 90,
+  loan: 80,
+  loanPrincipal: 70,
+  installmentNo: 60,
+  bill: 50,
+  remaining: 40,
+  overdueDays: 30,
+  status: 20,
+  collection: 10,
+};
+
 interface CooperativeBillingTableProps {
   installments: CooperativeLoanInstallment[];
   loanById: Map<string, CooperativeLoan>;
@@ -120,7 +134,10 @@ export default function CooperativeBillingTable({
       key: 'due_date',
       fixed: 'left',
       width: 150,
-      sorter: (first, second) => dayjs(first.due_date).valueOf() - dayjs(second.due_date).valueOf(),
+      sorter: {
+        compare: (first, second) => dayjs(first.due_date).valueOf() - dayjs(second.due_date).valueOf(),
+        multiple: sortPriority.dueDate,
+      },
       defaultSortOrder: 'ascend',
       render: (value: string) => {
         const isOverdue = dayjs(value).isBefore(dayjs().startOf('day'));
@@ -132,10 +149,13 @@ export default function CooperativeBillingTable({
       key: 'member',
       fixed: 'left',
       width: 220,
-      sorter: (first, second) => (
-        first.member_number.localeCompare(second.member_number) ||
-        first.member_name.localeCompare(second.member_name)
-      ),
+      sorter: {
+        compare: (first, second) => (
+          first.member_number.localeCompare(second.member_number) ||
+          first.member_name.localeCompare(second.member_name)
+        ),
+        multiple: sortPriority.member,
+      },
       render: (_value: unknown, installment) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{installment.member_name}</Text>
@@ -148,16 +168,22 @@ export default function CooperativeBillingTable({
       dataIndex: 'loan_number',
       key: 'loan_number',
       width: 140,
-      sorter: (first, second) => first.loan_number.localeCompare(second.loan_number),
+      sorter: {
+        compare: (first, second) => first.loan_number.localeCompare(second.loan_number),
+        multiple: sortPriority.loan,
+      },
     },
     {
       title: t('cooperative.billing.table.disbursementDate'),
       key: 'disbursementDate',
       width: 150,
-      sorter: (first, second) => compareOptionalDates(
-        getLoanDisbursementDate(first),
-        getLoanDisbursementDate(second),
-      ),
+      sorter: {
+        compare: (first, second) => compareOptionalDates(
+          getLoanDisbursementDate(first),
+          getLoanDisbursementDate(second),
+        ),
+        multiple: sortPriority.disbursementDate,
+      },
       render: (_value: unknown, installment) => {
         const disbursementDate = getLoanDisbursementDate(installment);
         return disbursementDate ? formatDate(disbursementDate) : '-';
@@ -168,7 +194,10 @@ export default function CooperativeBillingTable({
       key: 'loanPrincipal',
       align: 'right',
       width: 150,
-      sorter: (first, second) => getLoanPrincipalAmount(first) - getLoanPrincipalAmount(second),
+      sorter: {
+        compare: (first, second) => getLoanPrincipalAmount(first) - getLoanPrincipalAmount(second),
+        multiple: sortPriority.loanPrincipal,
+      },
       render: (_value: unknown, installment) => (
         `Rp ${formatCurrency(getLoanPrincipalAmount(installment))}`
       ),
@@ -179,14 +208,20 @@ export default function CooperativeBillingTable({
       key: 'installment_number',
       align: 'right',
       width: 100,
-      sorter: (first, second) => first.installment_number - second.installment_number,
+      sorter: {
+        compare: (first, second) => first.installment_number - second.installment_number,
+        multiple: sortPriority.installmentNo,
+      },
     },
     {
       title: t('cooperative.billing.table.bill'),
       key: 'bill',
       align: 'right',
       width: 140,
-      sorter: (first, second) => getBillAmount(first) - getBillAmount(second),
+      sorter: {
+        compare: (first, second) => getBillAmount(first) - getBillAmount(second),
+        multiple: sortPriority.bill,
+      },
       render: (_value: unknown, installment) => (
         `Rp ${formatCurrency(getBillAmount(installment))}`
       ),
@@ -196,7 +231,10 @@ export default function CooperativeBillingTable({
       key: 'remaining',
       align: 'right',
       width: 140,
-      sorter: (first, second) => getRemainingAmount(first) - getRemainingAmount(second),
+      sorter: {
+        compare: (first, second) => getRemainingAmount(first) - getRemainingAmount(second),
+        multiple: sortPriority.remaining,
+      },
       render: (_value: unknown, installment) => {
         return <Text strong>Rp {formatCurrency(getRemainingAmount(installment))}</Text>;
       },
@@ -206,7 +244,10 @@ export default function CooperativeBillingTable({
       key: 'overdueDays',
       align: 'right',
       width: 120,
-      sorter: (first, second) => getOverdueDays(first) - getOverdueDays(second),
+      sorter: {
+        compare: (first, second) => getOverdueDays(first) - getOverdueDays(second),
+        multiple: sortPriority.overdueDays,
+      },
       render: (_value: unknown, installment) => {
         const diff = getOverdueDays(installment);
         if (diff > 0 && installment.status !== 'PAID') {
@@ -220,7 +261,10 @@ export default function CooperativeBillingTable({
       dataIndex: 'status',
       key: 'status',
       width: 140,
-      sorter: (first, second) => statusLabels[first.status].localeCompare(statusLabels[second.status]),
+      sorter: {
+        compare: (first, second) => statusLabels[first.status].localeCompare(statusLabels[second.status]),
+        multiple: sortPriority.status,
+      },
       render: (status: CooperativeLoanInstallmentStatus) => {
         const option = cooperativeLoanInstallmentStatusOptions.find((item) => item.value === status);
         return <Tag color={option?.color}>{statusLabels[status]}</Tag>;
@@ -230,11 +274,14 @@ export default function CooperativeBillingTable({
       title: t('cooperative.billing.table.collection'),
       key: 'collection',
       width: 170,
-      sorter: (first, second) => {
-        const firstStatus = first.collection_status ?? 'NONE';
-        const secondStatus = second.collection_status ?? 'NONE';
-        return collectionStatusLabels[firstStatus].localeCompare(collectionStatusLabels[secondStatus]) ||
-          (first.follow_up_date ?? '').localeCompare(second.follow_up_date ?? '');
+      sorter: {
+        compare: (first, second) => {
+          const firstStatus = first.collection_status ?? 'NONE';
+          const secondStatus = second.collection_status ?? 'NONE';
+          return collectionStatusLabels[firstStatus].localeCompare(collectionStatusLabels[secondStatus]) ||
+            (first.follow_up_date ?? '').localeCompare(second.follow_up_date ?? '');
+        },
+        multiple: sortPriority.collection,
       },
       render: (_value: unknown, installment) => {
         const collectionStatus = installment.collection_status ?? 'NONE';
