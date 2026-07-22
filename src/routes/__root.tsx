@@ -334,7 +334,6 @@ const RootLayout = () => {
         { to: '/report/buku-besar', label: t('nav.report.ledger'), icon: BookOpen },
         { to: '/report/aging-report', label: t('nav.report.aging'), icon: FileText },
         { to: '/report/stock-card', label: 'Kartu Stok', icon: ClipboardList },
-        { to: '/profit', label: t('nav.report.profit'), icon: DollarSign },
       ],
     },
     { to: '/sync-db', label: t('nav.syncDb'), icon: RefreshCw },

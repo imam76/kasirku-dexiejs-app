@@ -74,7 +74,6 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/koperasi/kas-petugas': 'COOPERATIVE_FIELD_CASH_VIEW',
   '/sync-db': 'SETTINGS_ACCESS',
   '/settings': 'SETTINGS_ACCESS',
-  '/profit': 'PROFIT_VIEW',
   '/report': GENERAL_REPORT_PERMISSION_LIST,
 };
 

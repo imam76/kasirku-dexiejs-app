@@ -37,8 +37,6 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/finance/chart-of-accounts': ['CHART_OF_ACCOUNTS'],
   '/finance/opening-balances': ['GENERAL_LEDGER', 'CHART_OF_ACCOUNTS'],
   '/finance/general-ledger': ['GENERAL_LEDGER'],
-  // Reports
-  '/profit': ['REPORT_PROFIT'],
   // Koperasi
   '/koperasi/anggota': ['KOPERASI_ANGGOTA'],
   '/koperasi/simpanan': ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
