@@ -1,4 +1,4 @@
-import type { Promo } from '@/types';
+import type { AppliedPromoSnapshot, Promo } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 
 export interface PosVoucherOption {
@@ -30,3 +30,15 @@ export const buildPosVoucherOptions = (promos: Promo[]): PosVoucherOption[] => {
 export const calculatePosDiscountTotal = (discounts: Array<{ amount: number }>) => (
   discounts.reduce((sum, discount) => sum + Number(discount.amount || 0), 0)
 );
+
+export const isAppliedPosVoucher = (
+  voucherCode: string,
+  appliedPromos: AppliedPromoSnapshot[],
+) => {
+  const normalizedVoucherCode = voucherCode.trim().toLowerCase();
+  if (!normalizedVoucherCode) return false;
+
+  return appliedPromos.some((promo) => (
+    promo.voucher_code?.trim().toLowerCase() === normalizedVoucherCode
+  ));
+};

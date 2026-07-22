@@ -271,14 +271,18 @@ export const useTransaction = (draftScope?: string) => {
     const result = storeAddToCart(product);
     if (!result.success && result.error) {
       showTransactionError(result.error);
+      return false;
     }
+    return result.success;
   };
 
   const updateQuantity = (productId: string, newQuantity: number) => {
     const result = storeUpdateQuantity(productId, newQuantity);
     if (!result.success && result.error) {
       showTransactionError(result.error);
+      return false;
     }
+    return result.success;
   };
 
   const updateUnit = (productId: string, newUnit: string) => {

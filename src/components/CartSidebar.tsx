@@ -79,6 +79,7 @@ export default function CartSidebar({
       <div
         className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm"
         data-tour="transaction-desktop-cart"
+        data-pos-cart-target
       >
         <div className="flex items-center justify-between gap-3 border-b border-blue-50 p-3">
           <h3 className="text-lg font-black text-slate-900">{t('cart.title')}</h3>

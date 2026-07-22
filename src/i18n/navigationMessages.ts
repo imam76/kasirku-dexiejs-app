@@ -1,6 +1,7 @@
 export const navigationMessages = {
   id: {
     'nav.transaction': 'POS',
+    'nav.posRestaurant': 'POS Resto',
     'nav.home': 'Home',
     'nav.masterData': 'Master Data',
     'nav.product': 'Produk',
@@ -74,6 +75,7 @@ export const navigationMessages = {
   },
   en: {
     'nav.transaction': 'POS',
+    'nav.posRestaurant': 'Restaurant POS',
     'nav.home': 'Home',
     'nav.masterData': 'Master Data',
     'nav.product': 'Products',

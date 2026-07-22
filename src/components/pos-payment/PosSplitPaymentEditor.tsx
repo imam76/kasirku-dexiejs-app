@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Input, Select, Switch } from 'antd';
 import { CheckCircle2, DollarSign, Plus, Trash2, X } from 'lucide-react';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
@@ -17,6 +17,7 @@ interface Props {
   drafts: PosPaymentDraft[];
   methods: PosPaymentMethodOption[];
   preview: PosPaymentAllocationResult;
+  scrollHeader?: ReactNode;
   onAdd: () => void;
   onUpdate: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   onRemove: (clientId: string) => void;
@@ -30,6 +31,7 @@ export default function PosSplitPaymentEditor({
   drafts,
   methods,
   preview,
+  scrollHeader,
   onAdd,
   onUpdate,
   onRemove,
@@ -63,9 +65,14 @@ export default function PosSplitPaymentEditor({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div
-        data-testid="pos-payment-summary"
-        className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm"
+        data-testid="pos-payment-scroll-area"
+        className="space-y-4 min-[1024px]:min-h-0 min-[1024px]:flex-1 min-[1024px]:overflow-y-auto min-[1024px]:overscroll-contain min-[1024px]:pb-3 min-[1024px]:pr-1 lg:contents"
       >
+        {scrollHeader}
+        <div
+          data-testid="pos-payment-summary"
+          className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm"
+        >
         <div className="space-y-2 border-b border-slate-200 pb-3 text-sm">
           <div className="flex items-center justify-between gap-3 text-slate-600">
             <span>{t('cart.total')}</span>
@@ -94,27 +101,33 @@ export default function PosSplitPaymentEditor({
             </div>
           </div>
         </div>
-      </div>
+        </div>
 
-      {drafts.map((draft, index) => {
-        const option = methods.find((item) => item.method.id === draft.paymentMethodId);
-        const method = option?.method;
-        const line = preview.lines[index];
-        const numericAmount = Number(draft.amount);
-        const currentAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
-        const visibleLineError = line?.error?.startsWith('Nominal pembayaran ')
-          ? undefined
-          : line?.error;
-        return (
-          <div
-            key={draft.clientId}
-            data-testid={`pos-payment-row-${index}`}
-            className={`rounded-xl border-2 p-3 shadow-sm ${
-              index === 0
-                ? 'border-blue-200 bg-blue-50/80'
-                : 'border-violet-200 bg-violet-50/80'
-            }`}
-          >
+        <div
+          data-testid="pos-payment-method-grid"
+          className={drafts.length > 1
+            ? 'space-y-4 min-[1024px]:grid min-[1024px]:grid-cols-2 min-[1024px]:gap-4 min-[1024px]:space-y-0 lg:block lg:space-y-4'
+            : undefined}
+        >
+          {drafts.map((draft, index) => {
+            const option = methods.find((item) => item.method.id === draft.paymentMethodId);
+            const method = option?.method;
+            const line = preview.lines[index];
+            const numericAmount = Number(draft.amount);
+            const currentAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+            const visibleLineError = line?.error?.startsWith('Nominal pembayaran ')
+              ? undefined
+              : line?.error;
+            return (
+              <div
+                key={draft.clientId}
+                data-testid={`pos-payment-row-${index}`}
+                className={`rounded-xl border-2 p-3 shadow-sm ${
+                  index === 0
+                    ? 'border-blue-200 bg-blue-50/80'
+                    : 'border-violet-200 bg-violet-50/80'
+                }`}
+              >
             <div className="flex items-center gap-2">
               <Select
                 data-testid={`pos-payment-method-${index}`}
@@ -219,23 +232,28 @@ export default function PosSplitPaymentEditor({
               </div>
             )}
             {visibleLineError && <p className="mt-1 text-xs text-red-600">{visibleLineError}</p>}
-          </div>
-        );
-      })}
+              </div>
+            );
+          })}
+        </div>
 
-      {drafts.length === 1 && (
-        <button
-          type="button"
-          data-testid="pos-add-payment"
-          disabled={!canAdd}
-          onClick={onAdd}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 py-2 font-semibold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Plus size={17} /> {t('payment.add')}
-        </button>
-      )}
+        {drafts.length === 1 && (
+          <button
+            type="button"
+            data-testid="pos-add-payment"
+            disabled={!canAdd}
+            onClick={onAdd}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 py-2 font-semibold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus size={17} /> {t('payment.add')}
+          </button>
+        )}
+      </div>
 
-      <div className="sticky bottom-0 z-30 -mx-3 mt-auto grid grid-cols-2 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)]">
+      <div
+        data-testid="pos-payment-actions"
+        className="sticky bottom-0 z-30 -mx-3 mt-auto grid shrink-0 grid-cols-2 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)] min-[1024px]:static lg:sticky"
+      >
         <button type="button" onClick={onCancel} className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white py-2.5 font-semibold text-gray-700 hover:bg-gray-50"><X size={16} /> {t('payment.cancel')}</button>
         <button
           type="button"

@@ -37,24 +37,24 @@ const CashierSessionStatusBar = ({
   const { t } = useI18n();
 
   return (
-    <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-3 text-blue-950 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-start gap-3">
-        <div className="rounded-xl bg-white p-2 text-blue-700 shadow-sm ring-1 ring-blue-100">
-          <Banknote size={22} />
+    <header className="-mx-2 mb-2 flex min-h-10 items-center justify-between gap-3 border-b border-blue-100 bg-white/95 px-3 py-1.5 text-blue-950 shadow-sm sm:-mx-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+          <Banknote size={15} />
         </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">{t('cashierSession.activeTitle')}</p>
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-            <span>{session.session_number}</span>
-            <span>{session.cashier_user_name || '-'}</span>
-            <span>{t('cashierSession.openingCash')}: Rp {formatCurrency(session.opening_cash_amount)}</span>
-          </div>
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden text-xs">
+          <span className="shrink-0 font-bold text-blue-900">{t('cashierSession.activeTitle')}</span>
+          <span className="hidden h-4 w-px bg-blue-100 sm:block" />
+          <span className="truncate font-medium text-slate-600">{session.session_number} · {session.cashier_user_name || '-'}</span>
+          <span className="hidden shrink-0 text-slate-500 min-[1024px]:inline">
+            {t('cashierSession.openingCash')}: Rp {formatCurrency(session.opening_cash_amount)}
+          </span>
         </div>
       </div>
-      <Button danger onClick={onClose} loading={isClosing}>
+      <Button danger size="small" onClick={onClose} loading={isClosing} className="shrink-0">
         {t('cashierSession.closeButton')}
       </Button>
-    </div>
+    </header>
   );
 };
 
@@ -317,12 +317,12 @@ export default function Transaction() {
   }
 
   return (
-    <div className="flex min-h-0 flex-col bg-slate-50/60 p-2 sm:p-3 lg:h-full lg:overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50/60 p-2 sm:p-3 min-[1024px]:px-3 min-[1024px]:pb-3 min-[1024px]:pt-0">
       <CashierSessionStatusBar session={activeSession} onClose={openCloseModal} isClosing={isClosingSession} />
 
-      <div className="grid grid-cols-1 gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_270px_270px] xl:grid-cols-[minmax(0,1fr)_300px_300px] 2xl:grid-cols-[minmax(0,1fr)_320px_320px]">
-        <div id="product-list" className="flex min-w-0 flex-col lg:min-h-0 lg:overflow-hidden">
-          <div className="mb-3 shrink-0 rounded-2xl border border-blue-100 bg-white p-3 shadow-sm">
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_270px_270px] xl:grid-cols-[minmax(0,1fr)_300px_300px] 2xl:grid-cols-[minmax(0,1fr)_320px_320px]">
+        <div id="product-list" className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+          <div className="sticky top-0 z-20 mb-2 shrink-0 rounded-2xl border border-blue-100 bg-white p-3 shadow-sm">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
               <Input
                 ref={searchInputRef}
@@ -383,11 +383,12 @@ export default function Transaction() {
             </div>
           </div>
 
-          <div className="lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <ProductList
               products={filteredProducts}
               cart={cart}
               addToCart={addToCart}
+              updateQuantity={updateQuantity}
               pagination={productPagination}
             />
           </div>
@@ -426,12 +427,13 @@ export default function Transaction() {
         />
       </div>
 
-      {/* Mobile/Tablet: Floating Cart Button */}
+      {/* Mobile: floating cart button. Tablet: inline footer below the product panel. */}
       {totalItems > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 lg:hidden z-30">
+        <div className="fixed bottom-4 left-4 right-4 z-30 min-[1024px]:static min-[1024px]:mt-2 min-[1024px]:shrink-0 lg:hidden">
           <button
             onClick={() => setCartOpen(true)}
             data-tour="transaction-mobile-cart"
+            data-pos-cart-target
             className="flex w-full items-center justify-between rounded-2xl bg-blue-600 px-5 py-3.5 font-semibold text-white shadow-xl shadow-blue-200/70 transition-colors hover:bg-blue-700"
           >
             <div className="flex items-center gap-3">

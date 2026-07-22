@@ -1,4 +1,4 @@
-import { AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip, Typography } from 'antd';
+import { AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip } from 'antd';
 import { ChevronDown, ChevronUp, TicketPercent, UserCheck, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
@@ -6,9 +6,8 @@ import type { Contact, MembershipSetting, Promo } from '@/types';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import { formatCurrency } from '@/utils/formatters';
-import { buildPosVoucherOptions } from '@/utils/posVoucher';
+import { buildPosVoucherOptions, isAppliedPosVoucher } from '@/utils/posVoucher';
 
-const { Text } = Typography;
 const MEMBERSHIP_PANEL_STORAGE_KEY = 'frayukti-pos-membership-panel-open';
 
 interface MembershipCheckoutPanelProps {
@@ -62,7 +61,9 @@ export default function MembershipCheckoutPanel({
   const selectedMemberSummary = selectedMember
     ? `${selectedMember.membership_number ?? '-'} - ${selectedMember.name}`
     : undefined;
-  const hasDiscount = membershipPreview.discount_breakdown.some((discount) => discount.amount > 0);
+  const voucherDiscounts = promoPreview.discount_breakdown;
+  const hasVoucherDiscount = voucherDiscounts.some((discount) => discount.amount > 0);
+  const hasValidVoucher = isAppliedPosVoucher(voucherValue, promoPreview.applied_promos_snapshot);
   const discountTotal = membershipPreview.discount_breakdown.reduce((sum, discount) => sum + discount.amount, 0);
   const panelSummary = [
     selectedMemberSummary ?? 'Member belum dipilih',
@@ -119,45 +120,6 @@ export default function MembershipCheckoutPanel({
       {isPanelExpanded && (
         <div className="space-y-3 border-t border-gray-100 p-3 pt-2">
           <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-gray-500">
-              <TicketPercent size={13} />
-              <span>Voucher</span>
-            </div>
-            <AutoComplete
-              data-testid="pos-voucher-input"
-              allowClear
-              value={voucherCode || undefined}
-              options={voucherOptions}
-              onChange={(value) => onVoucherCodeChange(String(value ?? ''))}
-              filterOption={(input, option) => String(option?.searchText ?? option?.label ?? '')
-                .toLowerCase()
-                .includes(input.trim().toLowerCase())}
-              placeholder={t('promo.voucherPlaceholder')}
-              notFoundContent="Ketik kode voucher untuk memasukkan secara manual"
-              className="w-full"
-              styles={{ popup: { root: { zIndex: 1200 } } }}
-            />
-          </div>
-
-          {(hasDiscount || voucherValue) && (
-            <div className="space-y-1 rounded-md border border-green-100 bg-green-50/70 p-2 text-xs">
-              <div className="flex justify-between gap-3 text-gray-600">
-                <span>{t('cart.subtotal')}</span>
-                <span className="font-medium text-gray-800">Rp {formatCurrency(promoPreview.subtotal_before_discount)}</span>
-              </div>
-              {membershipPreview.discount_breakdown.map((discount) => (
-                <div key={discount.label} className="flex justify-between gap-3 font-semibold text-green-700">
-                  <span className="truncate">{discount.label}</span>
-                  <span className="shrink-0">-Rp {formatCurrency(discount.amount)}</span>
-                </div>
-              ))}
-              {!hasDiscount && voucherValue && (
-                <p className="text-gray-500">{t('promo.noVoucherDiscount')}</p>
-              )}
-            </div>
-          )}
-
-          <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-gray-500">
                 <UserCheck size={13} />
@@ -197,9 +159,9 @@ export default function MembershipCheckoutPanel({
 
             {selectedMember && (
               <div className="space-y-2 text-xs text-gray-700">
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <Tag color="blue" className="m-0">{selectedMember.membership_number}</Tag>
-                  <Text className="text-xs">{selectedMember.name}</Text>
+                <div className="flex min-w-0 items-center gap-2 pt-1">
+                  <Tag color="blue" className="m-0 shrink-0">{selectedMember.membership_number ?? '-'}</Tag>
+                  <span className="min-w-0 flex-1 truncate text-xs" title={selectedMember.name}>{selectedMember.name}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-md border border-gray-100 bg-gray-50 px-2 py-1.5">
@@ -232,6 +194,47 @@ export default function MembershipCheckoutPanel({
               </div>
             )}
           </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-gray-500">
+              <TicketPercent size={13} />
+              <span>Voucher</span>
+            </div>
+            <AutoComplete
+              data-testid="pos-voucher-input"
+              allowClear
+              value={voucherCode || undefined}
+              options={voucherOptions}
+              onChange={(value) => onVoucherCodeChange(String(value ?? ''))}
+              filterOption={(input, option) => String(option?.searchText ?? option?.label ?? '')
+                .toLowerCase()
+                .includes(input.trim().toLowerCase())}
+              placeholder={t('promo.voucherPlaceholder')}
+              notFoundContent="Ketik kode voucher untuk memasukkan secara manual"
+              className="w-full"
+              styles={{ popup: { root: { zIndex: 1200 } } }}
+            />
+          </div>
+
+          {(hasVoucherDiscount || voucherValue) && (
+            <div className="space-y-1 rounded-md border border-green-100 bg-green-50/70 p-2 text-xs">
+              {!hasValidVoucher && (
+                <div className="flex justify-between gap-3 text-gray-600">
+                  <span>{t('cart.subtotal')}</span>
+                  <span className="font-medium text-gray-800">Rp {formatCurrency(promoPreview.subtotal_before_discount)}</span>
+                </div>
+              )}
+              {voucherDiscounts.map((discount) => (
+                <div key={discount.label} className="flex justify-between gap-3 font-semibold text-green-700">
+                  <span className="truncate">{discount.label}</span>
+                  <span className="shrink-0">-Rp {formatCurrency(discount.amount)}</span>
+                </div>
+              ))}
+              {!hasVoucherDiscount && voucherValue && (
+                <p className="text-gray-500">{t('promo.noVoucherDiscount')}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

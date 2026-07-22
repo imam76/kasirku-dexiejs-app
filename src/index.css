@@ -324,6 +324,19 @@
   overflow: hidden;
 }
 
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .pos-cart-tablet-drawer .ant-drawer-content-wrapper {
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .pos-cart-tablet-drawer .ant-drawer-content {
+    border-radius: 0;
+  }
+}
+
 @media (min-width: 768px) {
   .full-screen-modal-mobile .ant-modal {
     width: 1000px !important;

@@ -39,6 +39,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Sun,
+  UtensilsCrossed,
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -219,6 +220,7 @@ const RootLayout = () => {
   const navLinks: NavLink[] = [
     { to: '/', label: t('nav.home'), icon: Home },
     { to: '/transaction', label: t('nav.transaction'), icon: ShoppingCart },
+    { to: '/pos-resto', label: t('nav.posRestaurant'), icon: UtensilsCrossed },
     { to: '/sales', label: t('nav.sales'), icon: FileText },
     { to: '/purchases', label: t('nav.purchases'), icon: ShoppingBag },
     { to: '/master-data', label: t('nav.masterData'), icon: Database },
@@ -299,6 +301,7 @@ const RootLayout = () => {
   const requiredPermission = getRequiredPermissionForPath(location.pathname)
   const canOpenCurrentPath = canAccessPermissionRule(currentUser ?? undefined, requiredPermission, { currentRole, permissionSet })
   const isModuleActive = isRouteEnabled(location.pathname)
+  const useFixedPosWorkspace = location.pathname === '/transaction'
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
@@ -448,8 +451,8 @@ const RootLayout = () => {
               transition: 'margin-left 0.2s',
             }}
           >
-            <Content className="transition-all duration-200" style={{ height: '100%', overflowY: 'auto' }}>
-              <div className="p-4">
+            <Content className="transition-all duration-200" style={{ height: '100%', overflowY: useFixedPosWorkspace ? 'hidden' : 'auto' }}>
+              <div className={useFixedPosWorkspace ? 'h-full p-4 min-[1024px]:p-0' : 'p-4'}>
                 {!isModuleActive ? (
                   <Result
                     status="info"
