@@ -4,6 +4,7 @@ import { cooperativeMessages } from './cooperativeMessages';
 import { navigationMessages } from './navigationMessages';
 import { stockMessages } from './stockMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
+import { fixedAssetMessages } from './fixedAssetMessages';
 
 export const messages = {
   id: {
@@ -13,6 +14,7 @@ export const messages = {
     ...stockMessages.id,
     ...stockOpnameMessages.id,
     ...cooperativeMessages.id,
+    ...fixedAssetMessages.id,
 
     'transaction.title': 'Transaksi',
     'transaction.searchPlaceholder': 'Cari produk (nama atau SKU)...',
@@ -1978,6 +1980,7 @@ export const messages = {
     ...stockMessages.en,
     ...stockOpnameMessages.en,
     ...cooperativeMessages.en,
+    ...fixedAssetMessages.en,
 
     'transaction.title': 'Transaction',
     'transaction.searchPlaceholder': 'Search products (name or SKU)...',

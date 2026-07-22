@@ -15,6 +15,7 @@ pub mod department_commands;
 pub mod employee_commands;
 pub mod finance_transaction_commands;
 pub mod fiscal_year_closing_run_commands;
+pub mod fixed_asset_commands;
 pub mod journal_entry_commands;
 pub mod marketplace_commands;
 pub mod opening_balance_commands;

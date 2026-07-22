@@ -25,6 +25,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'UNIT',
     'CURRENCY',
     'ROLE_PERMISSION',
+    'FIXED_ASSET',
   ],
   '/master-data/products': ['PRODUCT'],
   '/master-data/production': ['PRODUCTION'],
@@ -36,6 +37,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/master-data/employees': ['EMPLOYEE'],
   '/master-data/departments': ['DEPARTMENT'],
   '/master-data/projects': ['PROJECT'],
+  '/master-data/fixed-assets': ['FIXED_ASSET', 'GENERAL_LEDGER'],
   '/master-data/taxes': ['TAX'],
   '/master-data/promos': ['PROMO'],
   '/master-data/units': ['UNIT'],
@@ -141,6 +143,9 @@ export const isRouteEnabledForModules = (
   if (!moduleCodes || moduleCodes.length === 0) return true;
 
   const enabledSet = enabledModules instanceof Set ? enabledModules : new Set(enabledModules);
+  if (normalizePath(path).startsWith('/master-data/fixed-assets')) {
+    return moduleCodes.every((code) => enabledSet.has(code));
+  }
   return moduleCodes.some((code) => enabledSet.has(code));
 };
 

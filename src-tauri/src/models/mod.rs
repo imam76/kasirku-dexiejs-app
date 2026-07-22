@@ -15,6 +15,7 @@ pub mod department;
 pub mod employee;
 pub mod finance_transaction;
 pub mod fiscal_year_closing_run;
+pub mod fixed_asset;
 pub mod journal_entry;
 pub mod marketplace;
 pub mod opening_balance;

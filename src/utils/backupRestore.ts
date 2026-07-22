@@ -10,6 +10,7 @@ import { ensureDefaultPaymentMethods } from '@/services/paymentMethodService';
 import { backfillLegacyPosPaymentSnapshots } from '@/services/posPaymentMethodService';
 import { backfillMissingPosTransactionPayments } from '@/services/posTransactionPaymentService';
 import type { AuthUser } from '@/types';
+import { ensureFixedAssetAccountDefaults } from '@/services/fixedAssetService';
 
 const hasActiveOwner = (users: AuthUser[]) => {
   return users.some((user) => user.role === 'OWNER' && user.is_active);
@@ -86,7 +87,10 @@ export const backupDatabase = async () => {
       membershipSettings: await db.membershipSettings.toArray(),
       authUsers: await db.authUsers.toArray(),
       activityLogs: await db.activityLogs.toArray(),
-      version: 27,
+      fixedAssets: await db.fixedAssets.toArray(),
+      fixedAssetDepreciationRuns: await db.fixedAssetDepreciationRuns.toArray(),
+      fixedAssetDepreciationRunLines: await db.fixedAssetDepreciationRunLines.toArray(),
+      version: 28,
       timestamp: new Date().toISOString(),
     };
 
@@ -112,7 +116,7 @@ export const restoreDatabase = async (file: File) => {
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
         const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'paymentMethods', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesOverpaymentSettlements', 'salesOverpaymentSettlementAllocations', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'accountingPeriods', 'accountingFiscalYears', 'closingRuns', 'fiscalYearClosingRuns', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
-        expectedKeys.push('posTransactionPayments');
+        expectedKeys.push('posTransactionPayments', 'fixedAssets', 'fixedAssetDepreciationRuns', 'fixedAssetDepreciationRunLines');
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -204,6 +208,9 @@ export const restoreDatabase = async (file: File) => {
           db.authUsers,
           db.authSessions,
           db.activityLogs,
+          db.fixedAssets,
+          db.fixedAssetDepreciationRuns,
+          db.fixedAssetDepreciationRunLines,
         ];
 
         await db.transaction('rw', tables, async () => {
@@ -275,6 +282,9 @@ export const restoreDatabase = async (file: File) => {
           await db.membershipPointTransactions.clear();
           await db.membershipSettings.clear();
           await db.authSessions.clear();
+          await db.fixedAssetDepreciationRunLines.clear();
+          await db.fixedAssetDepreciationRuns.clear();
+          await db.fixedAssets.clear();
 
           if (hasAuthUsersPayload) {
             await db.authUsers.clear();
@@ -361,9 +371,13 @@ export const restoreDatabase = async (file: File) => {
           if (data.membershipSettings?.length) await db.membershipSettings.bulkAdd(data.membershipSettings);
           if (hasAuthUsersPayload && data.authUsers.length) await db.authUsers.bulkAdd(data.authUsers);
           if (hasActivityLogsPayload && data.activityLogs.length) await db.activityLogs.bulkAdd(data.activityLogs);
+          if (data.fixedAssets?.length) await db.fixedAssets.bulkAdd(data.fixedAssets);
+          if (data.fixedAssetDepreciationRuns?.length) await db.fixedAssetDepreciationRuns.bulkAdd(data.fixedAssetDepreciationRuns);
+          if (data.fixedAssetDepreciationRunLines?.length) await db.fixedAssetDepreciationRunLines.bulkAdd(data.fixedAssetDepreciationRunLines);
         });
 
         await ensureAccountingDefaults();
+        await ensureFixedAssetAccountDefaults();
         await ensureBaseCurrency();
         await ensureCompanyProfileSetting();
         await ensureMembershipSetting();

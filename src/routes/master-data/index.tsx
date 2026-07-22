@@ -13,6 +13,7 @@ import {
   SwapOutlined,
   ShopOutlined,
   TeamOutlined,
+  BankOutlined,
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
@@ -51,6 +52,7 @@ function MasterData() {
     { to: '/master-data/roles', label: t('nav.roles'), icon: TeamOutlined, color: 'text-fuchsia-600', desc: t('home.rolesDesc') },
     { to: '/master-data/departments', label: t('nav.departments'), icon: ApartmentOutlined, color: 'text-sky-600', desc: t('home.departmentsDesc') },
     { to: '/master-data/projects', label: t('nav.projects'), icon: ProjectOutlined, color: 'text-violet-600', desc: t('home.projectsDesc') },
+    { to: '/master-data/fixed-assets', label: t('nav.fixedAssets'), icon: BankOutlined, color: 'text-slate-600', desc: t('home.fixedAssetsDesc') },
     { to: '/master-data/taxes', label: t('nav.taxes'), icon: PercentageOutlined, color: 'text-orange-600', desc: t('home.taxesDesc') },
     { to: '/master-data/units', hash: 'conversions', label: t('nav.units'), icon: SwapOutlined, color: 'text-cyan-600', desc: t('home.unitConversionDesc') },
     { to: '/master-data/units', hash: 'units', label: t('nav.unit'), icon: SettingOutlined, color: 'text-indigo-600', desc: t('home.unitDesc') },

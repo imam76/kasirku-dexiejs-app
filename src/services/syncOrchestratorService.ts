@@ -32,6 +32,7 @@ import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
+import { refreshFixedAssetsFromPostgres, refreshFixedAssetRunsFromPostgres } from '@/services/fixedAssetReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
 import { syncSetupConfigFromRemote } from '@/services/setupKeyService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
@@ -59,6 +60,8 @@ import {
   enqueuePendingRolesForSync,
   enqueuePendingSalesDocumentsForSync,
   enqueuePendingStockOpnamesForSync,
+  enqueuePendingFixedAssetsForSync,
+  enqueuePendingFixedAssetRunsForSync,
   enqueuePendingTaxesForSync,
   processPendingSyncQueue,
   recoverStaleProcessingSyncQueueItems,
@@ -98,6 +101,8 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingPurchaseDocumentsForSync();
   await enqueuePendingSalesDocumentsForSync();
   await enqueuePendingStockOpnamesForSync();
+  await enqueuePendingFixedAssetsForSync();
+  await enqueuePendingFixedAssetRunsForSync();
 };
 
 export const refreshAllDataFromPostgres = async () => {
@@ -125,6 +130,8 @@ export const refreshAllDataFromPostgres = async () => {
     enabledModules: await refreshEnabledModulesFromPostgres(),
     generalLedgerSetting: await refreshGeneralLedgerSettingFromPostgres(),
     projects: await refreshProjectsFromPostgres(),
+    fixedAssets: await refreshFixedAssetsFromPostgres(),
+    fixedAssetDepreciationRuns: await refreshFixedAssetRunsFromPostgres(),
     taxes: await refreshTaxesFromPostgres(),
     paymentMethods: await refreshPaymentMethodsFromPostgres(),
     contacts: await refreshContactsFromPostgres(),

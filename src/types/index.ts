@@ -188,6 +188,7 @@ export type Permission =
   | 'EMPLOYEE_MANAGE'
   | 'DEPARTMENT_MANAGE'
   | 'PROJECT_MANAGE'
+  | 'FIXED_ASSET_MANAGE'
   | 'TAX_MANAGE'
   | 'UNIT_MANAGE'
   | 'STOCK_PURCHASE_ACCESS'
@@ -501,6 +502,8 @@ export type AccountingPeriodSyncStatus = EntitySyncStatus;
 export type ClosingRunSyncStatus = EntitySyncStatus;
 export type AccountingFiscalYearSyncStatus = EntitySyncStatus;
 export type FiscalYearClosingRunSyncStatus = EntitySyncStatus;
+export type FixedAssetSyncStatus = EntitySyncStatus;
+export type FixedAssetDepreciationRunSyncStatus = EntitySyncStatus;
 export type CurrencySyncStatus = EntitySyncStatus;
 export type CurrencyRateSyncStatus = EntitySyncStatus;
 export type CooperativeMemberSyncStatus = EntitySyncStatus;
@@ -2380,6 +2383,23 @@ export type CashBankReconciliationStatus = 'BALANCED' | 'DIFFERENCE' | 'VOIDED';
 export type JournalEntryStatus = 'DRAFT' | 'POSTED' | 'VOIDED' | 'REVERSED';
 export type InventoryAccountingPolicy = 'CASH_FLOW_ONLY' | 'PERPETUAL_INVENTORY';
 
+export type FixedAssetCategory =
+  | 'BUILDING'
+  | 'VEHICLE'
+  | 'MACHINERY_EQUIPMENT'
+  | 'OFFICE_EQUIPMENT'
+  | 'FURNITURE'
+  | 'OTHER';
+
+export type FixedAssetRegistrationType = 'NEW' | 'EXISTING';
+export type FixedAssetDepreciationMethod = 'STRAIGHT_LINE';
+export type FixedAssetDepreciationRunStatus = 'DRAFT' | 'POSTED' | 'REVERSED';
+export type FixedAssetDerivedStatus =
+  | 'NOT_STARTED'
+  | 'DEPRECIATING'
+  | 'FULLY_DEPRECIATED'
+  | 'ARCHIVED';
+
 export type OpeningBalanceModule =
   | 'ACCOUNT'
   | 'RECEIVABLE'
@@ -2455,6 +2475,7 @@ export type JournalSourceType =
   | 'MANUAL_JOURNAL'
   | 'PRODUCTION_ORDER'
   | 'OPENING_BALANCE'
+  | 'FIXED_ASSET_DEPRECIATION'
   | 'CLOSING_JOURNAL';
 
 export type AccountingProfileCode =
@@ -2867,6 +2888,121 @@ export interface FiscalYearClosingRun {
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
+}
+
+export interface FixedAsset {
+  id: string;
+  asset_code: string;
+  name: string;
+  category: FixedAssetCategory;
+  location?: string;
+  description?: string;
+  registration_type: FixedAssetRegistrationType;
+  acquisition_date: string;
+  available_for_use_date: string;
+  acquisition_cost: number;
+  residual_value: number;
+  useful_life_months: number;
+  depreciation_method: FixedAssetDepreciationMethod;
+  depreciation_start_date: string;
+  regular_depreciation_amount: number;
+  opening_balance_date?: string;
+  opening_accumulated_depreciation: number;
+  opening_remaining_useful_life_months?: number;
+  asset_account_id: string;
+  asset_account_code: string;
+  asset_account_name: string;
+  accumulated_depreciation_account_id: string;
+  accumulated_depreciation_account_code: string;
+  accumulated_depreciation_account_name: string;
+  depreciation_expense_account_id: string;
+  depreciation_expense_account_code: string;
+  depreciation_expense_account_name: string;
+  department_id?: string;
+  department_code?: string;
+  department_name?: string;
+  project_id?: string;
+  project_code?: string;
+  project_name?: string;
+  is_active: boolean;
+  version: number;
+  created_by?: string;
+  created_by_name?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  sync_status?: FixedAssetSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface FixedAssetDepreciationRun {
+  id: string;
+  run_number: string;
+  period_id: string;
+  period_name: string;
+  period_start: string;
+  period_end: string;
+  posting_date: string;
+  status: FixedAssetDepreciationRunStatus;
+  asset_count: number;
+  total_depreciation: number;
+  journal_entry_id?: string;
+  reversal_journal_entry_id?: string;
+  reversal_reason?: string;
+  notes?: string;
+  version: number;
+  created_by?: string;
+  created_by_name?: string;
+  posted_by?: string;
+  posted_by_name?: string;
+  posted_at?: string;
+  reversed_by?: string;
+  reversed_by_name?: string;
+  reversed_at?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  sync_status?: FixedAssetDepreciationRunSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface FixedAssetDepreciationRunLine {
+  id: string;
+  run_id: string;
+  asset_id: string;
+  asset_code: string;
+  asset_name: string;
+  asset_category: FixedAssetCategory;
+  acquisition_cost: number;
+  residual_value: number;
+  regular_depreciation_amount: number;
+  opening_accumulated_depreciation: number;
+  opening_book_value: number;
+  depreciation_amount: number;
+  closing_accumulated_depreciation: number;
+  closing_book_value: number;
+  asset_account_id: string;
+  asset_account_code: string;
+  asset_account_name: string;
+  accumulated_depreciation_account_id: string;
+  accumulated_depreciation_account_code: string;
+  accumulated_depreciation_account_name: string;
+  depreciation_expense_account_id: string;
+  depreciation_expense_account_code: string;
+  depreciation_expense_account_name: string;
+  department_id?: string;
+  department_code?: string;
+  department_name?: string;
+  project_id?: string;
+  project_code?: string;
+  project_name?: string;
+  created_at: string;
 }
 
 export interface JournalEntry {

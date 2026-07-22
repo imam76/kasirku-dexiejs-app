@@ -59,6 +59,9 @@ import type {
   TaxFlow,
   UserRole,
   WholesalePrice,
+  FixedAsset,
+  FixedAssetDepreciationRun,
+  FixedAssetDepreciationRunLine,
 } from '@/types';
 
 export interface RemoteAuthUserDto {
@@ -416,6 +419,19 @@ export interface RemoteProjectDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+}
+
+type WithoutLocalSyncMetadata<T> = Omit<
+  T,
+  'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'
+>;
+
+export type RemoteFixedAssetDto = WithoutLocalSyncMetadata<FixedAsset>;
+export type RemoteFixedAssetDepreciationRunDto = WithoutLocalSyncMetadata<FixedAssetDepreciationRun>;
+export type RemoteFixedAssetDepreciationRunLineDto = FixedAssetDepreciationRunLine;
+export interface RemoteFixedAssetDepreciationRunBundleDto {
+  run: RemoteFixedAssetDepreciationRunDto;
+  lines: RemoteFixedAssetDepreciationRunLineDto[];
 }
 
 export interface RemoteTaxDto {
@@ -2037,6 +2053,36 @@ export const projectPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteProjectDto | null>('postgres_delete_project', { id });
+  },
+};
+
+export const fixedAssetPostgresAdapter = {
+  async list(updatedAfter?: string, limit = 500) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteFixedAssetDto[]>('postgres_list_fixed_assets', { updatedAfter, limit });
+  },
+
+  async upsert(input: RemoteFixedAssetDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteFixedAssetDto>('postgres_upsert_fixed_asset', { input });
+  },
+};
+
+export const fixedAssetDepreciationRunPostgresAdapter = {
+  async list(updatedAfter?: string, limit = 300) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteFixedAssetDepreciationRunBundleDto[]>(
+      'postgres_list_fixed_asset_depreciation_run_bundles',
+      { updatedAfter, limit },
+    );
+  },
+
+  async upsert(input: RemoteFixedAssetDepreciationRunBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteFixedAssetDepreciationRunBundleDto>(
+      'postgres_upsert_fixed_asset_depreciation_run_bundle',
+      { input },
+    );
   },
 };
 

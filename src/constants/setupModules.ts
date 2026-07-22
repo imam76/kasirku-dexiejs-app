@@ -20,6 +20,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'EMPLOYEE', label: 'Karyawan', description: 'Data karyawan dan penugasan' },
       { code: 'DEPARTMENT', label: 'Department', description: 'Departemen organisasi' },
       { code: 'PROJECT', label: 'Project', description: 'Proyek & cost center' },
+      { code: 'FIXED_ASSET', label: 'Aset Tetap', description: 'Register dan penyusutan aset tetap' },
       { code: 'TAX', label: 'Tax', description: 'Pajak & tarif perpajakan' },
       { code: 'PROMO', label: 'Promo', description: 'Diskon & promosi' },
       { code: 'UNIT', label: 'Unit', description: 'Satuan & konversi unit' },
@@ -140,6 +141,7 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   'EMPLOYEE',
   'ROLE_PERMISSION',
   'PAYMENT_METHOD',
+  'FIXED_ASSET',
   // POS
   'POS_TRANSACTION',
   // Sales core flow
