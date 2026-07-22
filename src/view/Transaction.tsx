@@ -39,11 +39,11 @@ const CashierSessionStatusBar = ({
   return (
     <header className="-mx-2 mb-2 flex min-h-10 items-center justify-between gap-3 border-b border-blue-100 bg-white/95 px-3 py-1.5 text-blue-950 shadow-sm sm:-mx-3">
       <div className="flex min-w-0 items-center gap-2">
-        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
           <Banknote size={15} />
         </div>
         <div className="flex min-w-0 items-center gap-2 overflow-hidden text-xs">
-          <span className="shrink-0 font-bold text-blue-900">{t('cashierSession.activeTitle')}</span>
+          <span className="shrink-0 font-bold text-emerald-700">{t('cashierSession.activeTitle')}</span>
           <span className="hidden h-4 w-px bg-blue-100 sm:block" />
           <span className="truncate font-medium text-slate-600">{session.session_number} · {session.cashier_user_name || '-'}</span>
           <span className="hidden shrink-0 text-slate-500 min-[1024px]:inline">
@@ -51,7 +51,14 @@ const CashierSessionStatusBar = ({
           </span>
         </div>
       </div>
-      <Button danger size="small" onClick={onClose} loading={isClosing} className="shrink-0">
+      <Button
+        danger
+        size="small"
+        icon={<LockKeyhole size={14} />}
+        onClick={onClose}
+        loading={isClosing}
+        className="shrink-0 !rounded-lg"
+      >
         {t('cashierSession.closeButton')}
       </Button>
     </header>

@@ -53,7 +53,7 @@ const animateProductToCart = (source: HTMLElement) => {
         { transform: `translate3d(${translateX * 0.55}px, ${translateY * 0.35 - 30}px, 0) scale(1)`, opacity: 1, offset: 0.45 },
         { transform: `translate3d(${translateX}px, ${translateY}px, 0) scale(0.25)`, opacity: 0.1 },
       ], {
-        duration: 440,
+        duration: 800,
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards',
       });
@@ -75,7 +75,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden pb-24 min-[1024px]:pb-0">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1" data-testid="pos-product-scroll-panel">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           {products.map((product) => {
             const pricePerSellingUnit = getPrice(product, 1);
             const cartItem = cart.find((item) => item.product.id === product.id);
@@ -112,8 +112,8 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                         {t('product.stock')} {product.stock}
                       </span>
                       {cartItem && (
-                        <span className="inline-flex whitespace-nowrap rounded-full bg-blue-600 px-2 py-1 text-[9px] font-bold text-white ring-1 ring-blue-700">
-                          {cartItem.quantity}
+                        <span className="inline-flex whitespace-nowrap rounded-full bg-gradient-to-br from-blue-50 to-blue-100 px-2 py-1 text-[9px] font-bold text-blue-600 ring-1 ring-blue-100">
+                          {cartItem.quantity} {product.selling_unit}
                         </span>
                       )}
                     </span>
