@@ -94,7 +94,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                 <button
                   type="button"
                   onClick={(event) => handleAddProduct(product, event.currentTarget)}
-                  className="absolute inset-0 z-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                  className={`absolute inset-0 z-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset ${cartItem ? 'hidden lg:block' : 'block'}`}
                   aria-label={`${t('cart.increase')} ${product.name}`}
                   data-testid={`product-add-${product.id}`}
                 />
@@ -123,7 +123,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                   <p className="mt-1 line-clamp-1 text-[10px] font-medium text-slate-400">SKU · {product.sku || '-'}</p>
                 </div>
 
-                <div className="relative z-10 mt-2 flex items-end justify-between gap-2">
+                <div className="pointer-events-none relative z-10 mt-2 flex items-end justify-between gap-2">
                   <div className="pointer-events-none min-w-0">
                     <p className="text-sm font-black text-slate-900">
                       Rp {formatCurrency(pricePerSellingUnit)}
@@ -137,7 +137,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                   </div>
 
                   {cartItem ? (
-                    <div className="flex h-8 w-fit shrink-0 items-center overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm lg:hidden">
+                    <div className="pointer-events-auto flex h-8 w-fit shrink-0 items-center overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm lg:hidden">
                       <button
                         type="button"
                         onClick={() => updateQuantity(product.id, cartItem.quantity - quantityStep)}
