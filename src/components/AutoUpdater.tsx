@@ -2,14 +2,14 @@ import { useEffect } from 'react';
 import { App } from 'antd';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
-import { isTauriRuntime } from '@/utils/export/platform';
+import { isTauriDesktop } from '@/utils/export/platform';
 
 let updateCheckStarted = false;
 
 const UPDATE_MESSAGE_KEY = 'frayukti-auto-updater';
 
 const shouldCheckForUpdates = () =>
-  isTauriRuntime() &&
+  isTauriDesktop() &&
   (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_UPDATER_IN_DEV === 'true');
 
 const progressMessage = (event: DownloadEvent, downloadedBytes: number) => {

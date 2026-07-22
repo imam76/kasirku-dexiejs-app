@@ -1895,13 +1895,15 @@ export const messages = {
     'home.settingsDesc': 'Backup dan restore database aplikasi',
 
     'cart.title': 'Keranjang',
-    'cart.clear': 'Bersihkan',
+    'cart.activeOrder': 'Pesanan aktif',
+    'cart.clear': 'Kosongkan',
     'cart.empty': 'Keranjang kosong',
     'cart.subtotal': 'Subtotal',
     'cart.discount': 'Diskon',
     'cart.total': 'Total',
     'cart.decrease': 'Kurangi',
     'cart.increase': 'Tambah',
+    'cart.remove': 'Hapus item',
 
     'payment.pay': 'Bayar',
     'payment.cash': 'Tunai',
@@ -3864,13 +3866,15 @@ export const messages = {
     'home.settingsDesc': 'Back up and restore app database',
 
     'cart.title': 'Cart',
-    'cart.clear': 'Clear',
+    'cart.activeOrder': 'Active order',
+    'cart.clear': 'Empty',
     'cart.empty': 'Cart is empty',
     'cart.subtotal': 'Subtotal',
     'cart.discount': 'Discount',
     'cart.total': 'Total',
     'cart.decrease': 'Decrease',
     'cart.increase': 'Increase',
+    'cart.remove': 'Remove item',
 
     'payment.pay': 'Pay',
     'payment.cash': 'Cash',

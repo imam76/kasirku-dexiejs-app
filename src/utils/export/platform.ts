@@ -30,3 +30,15 @@ export const isTauriMobile = () => {
     return false;
   }
 };
+
+export const isTauriDesktop = () => {
+  if (!isTauriRuntime()) return false;
+
+  try {
+    const osType = getOsType();
+    return osType === 'linux' || osType === 'macos' || osType === 'windows';
+  } catch (error) {
+    console.warn('Unable to detect Tauri OS type:', error);
+    return false;
+  }
+};

@@ -1,4 +1,4 @@
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { Minus, Package, Plus, Trash2 } from 'lucide-react';
 import { CartItem as CartItemType } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getCartItemOriginalPrice, getCartItemPrice } from '@/utils/pricing';
@@ -17,6 +17,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
   const { t } = useI18n();
   const currentPrice = getCartItemPrice(item);
   const isWholesale = currentPrice < getCartItemOriginalPrice({ ...item, quantity: 1 });
+  const quantityStep = ['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1;
 
   // Get available sellable units for this product
   const sellableUnits = getProductSellableUnits(item.product);
@@ -32,41 +33,53 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
   };
 
   return (
-    <div className="flex flex-col p-3 bg-gray-50 rounded-lg gap-2">
-      <div className="flex items-center justify-between gap-2">
+    <article className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3">
+      <div className="flex items-start gap-2.5">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-blue-600 shadow-sm ring-1 ring-blue-100">
+          <Package size={19} strokeWidth={1.8} />
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 font-medium text-gray-800">{item.product.name}</p>
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-gray-600">
+          <p className="line-clamp-2 text-sm font-bold leading-5 text-slate-800">{item.product.name}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            <p className="text-[11px] font-semibold text-slate-500">
               Rp {formatCurrency(currentPrice)} / {item.unit}
             </p>
             {isWholesale && (
-              <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">{t('product.wholesale')}</span>
+              <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">{t('product.wholesale')}</span>
             )}
           </div>
         </div>
         <button
+          type="button"
           onClick={() => removeFromCart(item.product.id)}
-          className="shrink-0 rounded p-1 text-red-600 transition-colors hover:bg-red-100"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+          title={t('cart.remove')}
         >
-          <Trash2 size={16} />
+          <Trash2 size={15} />
         </button>
       </div>
 
-      <div className="flex flex-col gap-2 sm:gap-3">
-        <p className="text-sm font-bold text-gray-700">
-          {t('cart.total')}: Rp {formatCurrency(currentPrice * item.quantity)}
-        </p>
+      <div className="mt-3 border-t border-blue-100 pt-2.5">
+        <div className="grid grid-cols-2 gap-2">
+          <Select
+            value={item.unit}
+            onChange={handleUnitChange}
+            className="h-9 w-full min-w-0"
+            size="middle"
+            options={sellableUnits.map((unit) => ({
+              value: unit,
+              label: unit,
+            }))}
+          />
 
-        <div className="flex flex-col gap-2">
-          {/* Quantity Controls */}
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-9 min-w-0 items-center overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm">
             <button
-              onClick={() => updateQuantity(item.product.id, item.quantity - (['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1))}
-              className="p-1.5 bg-gray-300 hover:bg-gray-400 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+              type="button"
+              onClick={() => updateQuantity(item.product.id, item.quantity - quantityStep)}
+              className="grid h-full w-8 shrink-0 place-items-center bg-blue-50 text-blue-700 transition hover:bg-blue-600 hover:text-white"
               title={t('cart.decrease')}
             >
-              <Minus size={16} />
+              <Minus size={15} strokeWidth={2.5} />
             </button>
 
             <InputNumber
@@ -74,35 +87,28 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
               min={0}
               value={item.quantity}
               onChange={handleQuantityChange}
-              className="min-w-0 flex-1"
-              size="large"
+              className="h-full min-w-0 flex-1 [&_.ant-input-number-input-wrap]:!h-full [&_.ant-input-number-input]:!h-full [&_.ant-input-number-input]:!p-0 [&_.ant-input-number-input]:!text-center [&_.ant-input-number-input]:!font-bold [&_.ant-input-number-input]:!leading-[34px]"
+              size="small"
               controls={false}
+              variant="borderless"
             />
 
             <button
-              onClick={() => updateQuantity(item.product.id, item.quantity + (['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1))}
-              className="p-1.5 bg-gray-300 hover:bg-gray-400 rounded transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+              type="button"
+              onClick={() => updateQuantity(item.product.id, item.quantity + quantityStep)}
+              className="grid h-full w-8 shrink-0 place-items-center bg-blue-50 text-blue-700 transition hover:bg-blue-600 hover:text-white"
               title={t('cart.increase')}
             >
-              <Plus size={16} />
+              <Plus size={15} strokeWidth={2.5} />
             </button>
           </div>
+        </div>
 
-          {/* Unit Selector */}
-          <div className="w-full">
-            <Select
-              value={item.unit}
-              onChange={handleUnitChange}
-              className="w-full"
-              size="large"
-              options={sellableUnits.map((unit) => ({
-                value: unit,
-                label: unit,
-              }))}
-            />
-          </div>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t('cart.total')}</span>
+          <strong className="text-sm font-black tabular-nums text-slate-900">Rp {formatCurrency(currentPrice * item.quantity)}</strong>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback, useState } from 'react';
+import { useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
@@ -20,8 +20,9 @@ import {
   getMembershipSetting,
   type QuickCreateMemberInput,
 } from '@/services/membershipService';
+import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 
-const TRANSACTION_PRODUCT_PAGE_SIZE = 9;
+const TRANSACTION_PRODUCT_PAGE_SIZE = 12;
 const EMPTY_TRANSACTION_PRODUCT_PAGE = {
   products: [] as Product[],
   total: 0,
@@ -33,12 +34,13 @@ const FALLBACK_MEMBERSHIP_SETTING: MembershipSetting = {
   updated_at: '',
 };
 
-export const useTransaction = () => {
+export const useTransaction = (draftScope?: string) => {
   const queryClient = useQueryClient();
   const { modal, message } = App.useApp();
   const { t } = useI18n();
   const {
     products,
+    productPage,
     cart,
     searchTerm,
     paymentDrafts,
@@ -46,7 +48,9 @@ export const useTransaction = () => {
     memberContactId,
     redeemPoints,
     showPayment,
+    activeDraftScope,
     setProducts,
+    setProductPage,
     setSearchTerm: setStoreSearchTerm,
     setPaymentDrafts,
     addPaymentDraft,
@@ -56,17 +60,23 @@ export const useTransaction = () => {
     setMemberContactId,
     setRedeemPoints,
     setShowPayment,
+    switchDraftScope,
+    discardDraftScope,
     addToCart: storeAddToCart,
     updateQuantity: storeUpdateQuantity,
     removeFromCart,
     reset,
   } = useTransactionStore();
-  const [productPage, setProductPage] = useState(1);
   const { options: paymentMethods, validMethods } = usePosPaymentMethods();
-  const productSearchTerm = searchTerm.trim().toLowerCase();
+  const productSearchTerm = normalizeProductSearchTerm(searchTerm);
+  const isPosProcessReady = activeDraftScope === draftScope;
+
+  useLayoutEffect(() => {
+    switchDraftScope(draftScope);
+  }, [draftScope, switchDraftScope]);
 
   useEffect(() => {
-    if (paymentDrafts.length > 0 || validMethods.length === 0) return;
+    if (!draftScope || !isPosProcessReady || paymentDrafts.length > 0 || validMethods.length === 0) return;
     const defaultMethod = validMethods.find((method) => method.code.toUpperCase() === 'TUNAI')
       ?? validMethods[0];
     setPaymentDrafts([{
@@ -76,22 +86,19 @@ export const useTransaction = () => {
       reference: '',
       isAmountAutoFilled: false,
     }]);
-  }, [paymentDrafts.length, setPaymentDrafts, validMethods]);
+  }, [draftScope, isPosProcessReady, paymentDrafts.length, setPaymentDrafts, validMethods]);
 
   const setSearchTerm = useCallback((value: string) => {
     setProductPage(1);
     setStoreSearchTerm(value);
-  }, [setStoreSearchTerm]);
+  }, [setProductPage, setStoreSearchTerm]);
 
   const productPageResult = useLiveQuery(
     async () => {
       if (productSearchTerm) {
         const matchedProducts = await db.products
           .orderBy('name')
-          .filter((product) => (
-            product.name.toLowerCase().includes(productSearchTerm) ||
-            (product.sku?.toLowerCase() || '').includes(productSearchTerm)
-          ))
+          .filter((product) => matchesProductSearch(product, productSearchTerm))
           .toArray();
 
         return {
@@ -201,6 +208,7 @@ export const useTransaction = () => {
   ), [membershipPreview.total_after_redeem, paymentDrafts, validMethods]);
 
   useEffect(() => {
+    if (!isPosProcessReady) return;
     const last = paymentDrafts[paymentDrafts.length - 1];
     if (!last?.isAmountAutoFilled) return;
     const preceding = paymentDrafts.slice(0, -1);
@@ -217,7 +225,7 @@ export const useTransaction = () => {
     if (precedingPreview.errors.length > 0) return;
     const nextAmount = String(precedingPreview.remainingAmount);
     if (last.amount !== nextAmount) updatePaymentDraft(last.clientId, { amount: nextAmount });
-  }, [membershipPreview.total_after_redeem, paymentDrafts, updatePaymentDraft, validMethods]);
+  }, [isPosProcessReady, membershipPreview.total_after_redeem, paymentDrafts, updatePaymentDraft, validMethods]);
 
   const handleAddPayment = useCallback(() => {
     if (paymentPreview.errors.length > 0 || paymentPreview.remainingAmount <= 0) return;
@@ -419,10 +427,12 @@ export const useTransaction = () => {
     memberContactId,
     redeemPoints,
     showPayment,
+    isPosProcessReady,
     filteredProducts,
     productPagination,
     promoPreview,
     membershipPreview,
+    activePromos,
     activeMembers,
     selectedMember,
     membershipSetting,
@@ -445,5 +455,6 @@ export const useTransaction = () => {
     setMemberContactId,
     setRedeemPoints,
     setShowPayment,
+    discardDraftScope,
   };
 };

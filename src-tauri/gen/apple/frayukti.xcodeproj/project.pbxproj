@@ -1,0 +1,694 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1E7F125EB0CC8F127A9B6CD8 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ED609DDF5FD7338F6D25C3CC /* Metal.framework */; };
+		2FCA3B46784486214C2C7F33 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4AAE37CB0E50A228D6102C64 /* Security.framework */; };
+		5439EE249F67C0671F173AF6 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17A893167D059E7F6D6B7D13 /* QuartzCore.framework */; };
+		609D3BA0579D816E86344C0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2C79B8714A6C5614B1AE7557 /* Assets.xcassets */; };
+		93F29FF746C935E13D1B6C81 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BE7E3C5D36536A0BA68721E3 /* CoreGraphics.framework */; };
+		A097A15C89A5A3F645D23882 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E9D64C40B9E1A69F16470D1A /* UIKit.framework */; };
+		CC1B9FDF21EB4E529F70CA7A /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 8385436950D668023E3CD218 /* main.mm */; };
+		DE67A7016523C4D2BA4FC716 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D1F8BF93D9E825506A6A0462 /* MetalKit.framework */; };
+		E2ABBD32981294C01EAFA5A7 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FEAFFD5651630BDB4B013142 /* WebKit.framework */; };
+		E38C10AA4AA6C517647A12D1 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 64CC77E87391EF09306C0397 /* LaunchScreen.storyboard */; };
+		EB283A1A7A45CD7CD4037E7E /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B5900F143900AF445AE7408E /* libapp.a */; };
+		F1CA66448205E4D6DD0B476E /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 5456A7AC9D374227699AD73B /* assets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0252D0CB90B9E92EDA292B2B /* currency.rs */ = {isa = PBXFileReference; path = currency.rs; sourceTree = "<group>"; };
+		02B6637E14F4958D39CF3EC9 /* cash_bank_reconciliation_commands.rs */ = {isa = PBXFileReference; path = cash_bank_reconciliation_commands.rs; sourceTree = "<group>"; };
+		0350100D03463B5A3148C1FD /* cooperative_repository.rs */ = {isa = PBXFileReference; path = cooperative_repository.rs; sourceTree = "<group>"; };
+		0373351CF83B4AEE3978E6F4 /* opening_balance_commands.rs */ = {isa = PBXFileReference; path = opening_balance_commands.rs; sourceTree = "<group>"; };
+		057EE770223AD634E8C31972 /* accounting_setting_repository.rs */ = {isa = PBXFileReference; path = accounting_setting_repository.rs; sourceTree = "<group>"; };
+		0632E595FEE4D1616662D838 /* auth.rs */ = {isa = PBXFileReference; path = auth.rs; sourceTree = "<group>"; };
+		081DF5704EBA23ECF68D51FB /* journal_entry.rs */ = {isa = PBXFileReference; path = journal_entry.rs; sourceTree = "<group>"; };
+		0A172D029F7C3D05080DE608 /* app_setup_config_repository.rs */ = {isa = PBXFileReference; path = app_setup_config_repository.rs; sourceTree = "<group>"; };
+		0D4B7F9FC301F3DC46314C0B /* purchase_document_commands.rs */ = {isa = PBXFileReference; path = purchase_document_commands.rs; sourceTree = "<group>"; };
+		0D520CDD7AFAA8D90677FDAF /* postgres_health.rs */ = {isa = PBXFileReference; path = postgres_health.rs; sourceTree = "<group>"; };
+		10C645CE33DC2640A9EC03BB /* accounting_fiscal_year.rs */ = {isa = PBXFileReference; path = accounting_fiscal_year.rs; sourceTree = "<group>"; };
+		135931ED21DB1F4A2311B1E0 /* finance_transaction.rs */ = {isa = PBXFileReference; path = finance_transaction.rs; sourceTree = "<group>"; };
+		14EAC86DD548555E47115218 /* department_repository.rs */ = {isa = PBXFileReference; path = department_repository.rs; sourceTree = "<group>"; };
+		17A893167D059E7F6D6B7D13 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		1887808F0590C2E9639C6DF8 /* cooperative_commands.rs */ = {isa = PBXFileReference; path = cooperative_commands.rs; sourceTree = "<group>"; };
+		191A24F8C5B55D049B7755C3 /* bluetooth_printer.rs */ = {isa = PBXFileReference; path = bluetooth_printer.rs; sourceTree = "<group>"; };
+		1E39FC31FDF0FA387E483055 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		2026FBEDCB0C2A4379D7FA68 /* production_order.rs */ = {isa = PBXFileReference; path = production_order.rs; sourceTree = "<group>"; };
+		2453D46F8B3287F7DA9E728F /* frayukti_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = frayukti_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		262ED5C24D3928919B822625 /* purchase_document_repository.rs */ = {isa = PBXFileReference; path = purchase_document_repository.rs; sourceTree = "<group>"; };
+		2632BB9DFCDD3DABFFB90BC9 /* warehouse.rs */ = {isa = PBXFileReference; path = warehouse.rs; sourceTree = "<group>"; };
+		2722DCB70D54BFD40F2DF312 /* tax_repository.rs */ = {isa = PBXFileReference; path = tax_repository.rs; sourceTree = "<group>"; };
+		276B9E79B251CF5DDD9E4C07 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		27D7C9F6AD7D4CD5339EE24B /* sales_document_commands.rs */ = {isa = PBXFileReference; path = sales_document_commands.rs; sourceTree = "<group>"; };
+		2C79B8714A6C5614B1AE7557 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2E2B14FBEC3A4A699A249FD5 /* currency_repository.rs */ = {isa = PBXFileReference; path = currency_repository.rs; sourceTree = "<group>"; };
+		3662B1C00C4608F3698BBC85 /* payment_method_repository.rs */ = {isa = PBXFileReference; path = payment_method_repository.rs; sourceTree = "<group>"; };
+		371EB1C74AB71285991CE9E6 /* chart_of_account_repository.rs */ = {isa = PBXFileReference; path = chart_of_account_repository.rs; sourceTree = "<group>"; };
+		3C6FF251A4619D0D8E9B9214 /* company_profile_setting_repository.rs */ = {isa = PBXFileReference; path = company_profile_setting_repository.rs; sourceTree = "<group>"; };
+		4075416BE1D4366619BC24EF /* postgres_realtime.rs */ = {isa = PBXFileReference; path = postgres_realtime.rs; sourceTree = "<group>"; };
+		40E3F6E47C00CD5C829E2F1A /* stock_mutation_commands.rs */ = {isa = PBXFileReference; path = stock_mutation_commands.rs; sourceTree = "<group>"; };
+		465121F77D8FB999A6F343C2 /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
+		4AAE37CB0E50A228D6102C64 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		4B22FACF6902ABB2549720A4 /* closing_run_commands.rs */ = {isa = PBXFileReference; path = closing_run_commands.rs; sourceTree = "<group>"; };
+		4D7D65FF76E667E86C1DCD32 /* pool.rs */ = {isa = PBXFileReference; path = pool.rs; sourceTree = "<group>"; };
+		4E1CBC585E1C84A574FD99EE /* production_order_repository.rs */ = {isa = PBXFileReference; path = production_order_repository.rs; sourceTree = "<group>"; };
+		5456A7AC9D374227699AD73B /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		59F91C1F8A4C1FB85A485587 /* payroll_commands.rs */ = {isa = PBXFileReference; path = payroll_commands.rs; sourceTree = "<group>"; };
+		5DDDEFA9785CD0ABB5B19E21 /* fiscal_year_closing_run_commands.rs */ = {isa = PBXFileReference; path = fiscal_year_closing_run_commands.rs; sourceTree = "<group>"; };
+		5E0982F89211CF46D3D67CC0 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		64CC77E87391EF09306C0397 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		66576DF94FC59C23874C74F2 /* journal_entry_commands.rs */ = {isa = PBXFileReference; path = journal_entry_commands.rs; sourceTree = "<group>"; };
+		69299B063F86C4E933F3BE7D /* production_order_commands.rs */ = {isa = PBXFileReference; path = production_order_commands.rs; sourceTree = "<group>"; };
+		7075D1FB483A11E5DD3B5A14 /* app_setup_config_commands.rs */ = {isa = PBXFileReference; path = app_setup_config_commands.rs; sourceTree = "<group>"; };
+		72BDEF865B98475E92430661 /* accounting_period_repository.rs */ = {isa = PBXFileReference; path = accounting_period_repository.rs; sourceTree = "<group>"; };
+		73FBA8E2C112A543AF5BA2FA /* payment_method.rs */ = {isa = PBXFileReference; path = payment_method.rs; sourceTree = "<group>"; };
+		77230151EA351DA4C7460BDB /* finance_transaction_repository.rs */ = {isa = PBXFileReference; path = finance_transaction_repository.rs; sourceTree = "<group>"; };
+		77AEAED717CE7E86BBA41CBE /* contact_commands.rs */ = {isa = PBXFileReference; path = contact_commands.rs; sourceTree = "<group>"; };
+		78A70F9A8C0DC09D36651715 /* stock_mutation_repository.rs */ = {isa = PBXFileReference; path = stock_mutation_repository.rs; sourceTree = "<group>"; };
+		7A8FFF4A5EA3A5F13B84572C /* company_profile_setting.rs */ = {isa = PBXFileReference; path = company_profile_setting.rs; sourceTree = "<group>"; };
+		80CE7FEB663C9917ABCDE216 /* fiscal_year_closing_run_repository.rs */ = {isa = PBXFileReference; path = fiscal_year_closing_run_repository.rs; sourceTree = "<group>"; };
+		82D7ADD199A384CD11FD0D5C /* cashier_session.rs */ = {isa = PBXFileReference; path = cashier_session.rs; sourceTree = "<group>"; };
+		8385436950D668023E3CD218 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		899B41E203132D78C6E2D6A9 /* stock_mutation.rs */ = {isa = PBXFileReference; path = stock_mutation.rs; sourceTree = "<group>"; };
+		902BDA3F015DDA4DA3373F5E /* product_commands.rs */ = {isa = PBXFileReference; path = product_commands.rs; sourceTree = "<group>"; };
+		93D0BCDB64EAECAEA1F6096C /* product_repository.rs */ = {isa = PBXFileReference; path = product_repository.rs; sourceTree = "<group>"; };
+		9525F9A0BC692627C3A31925 /* auth_commands.rs */ = {isa = PBXFileReference; path = auth_commands.rs; sourceTree = "<group>"; };
+		9729BBBB056959D884DA5A47 /* purchase_document.rs */ = {isa = PBXFileReference; path = purchase_document.rs; sourceTree = "<group>"; };
+		97915CB68ABB819416EC6707 /* department.rs */ = {isa = PBXFileReference; path = department.rs; sourceTree = "<group>"; };
+		9AFE43D7B52D900C67FA32A6 /* payroll.rs */ = {isa = PBXFileReference; path = payroll.rs; sourceTree = "<group>"; };
+		9B2755E2CC5E88129997F02C /* chart_of_account_commands.rs */ = {isa = PBXFileReference; path = chart_of_account_commands.rs; sourceTree = "<group>"; };
+		9DB673CF92EE71C4A21FE29F /* employee_repository.rs */ = {isa = PBXFileReference; path = employee_repository.rs; sourceTree = "<group>"; };
+		A0515E1FB83862312D2E2E27 /* sales_document_repository.rs */ = {isa = PBXFileReference; path = sales_document_repository.rs; sourceTree = "<group>"; };
+		A3C14654692C8653FA202829 /* payment_method_commands.rs */ = {isa = PBXFileReference; path = payment_method_commands.rs; sourceTree = "<group>"; };
+		A4B2B91B531244E3962C6B00 /* journal_entry_repository.rs */ = {isa = PBXFileReference; path = journal_entry_repository.rs; sourceTree = "<group>"; };
+		A88232B211DA719B28B48F23 /* closing_run.rs */ = {isa = PBXFileReference; path = closing_run.rs; sourceTree = "<group>"; };
+		A892E3CCE6C39C13042B2F53 /* employee_commands.rs */ = {isa = PBXFileReference; path = employee_commands.rs; sourceTree = "<group>"; };
+		AA0B6E8057DBF0CE6FE89BC3 /* product.rs */ = {isa = PBXFileReference; path = product.rs; sourceTree = "<group>"; };
+		AC9A40A081FCCE9EBD9B5999 /* accounting_setting_commands.rs */ = {isa = PBXFileReference; path = accounting_setting_commands.rs; sourceTree = "<group>"; };
+		ADEF32EFCFD558ACC394F118 /* payroll_repository.rs */ = {isa = PBXFileReference; path = payroll_repository.rs; sourceTree = "<group>"; };
+		ADFC884540903FD9066A1A9B /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		AF741FD57F8992EDB4394431 /* cashier_session_repository.rs */ = {isa = PBXFileReference; path = cashier_session_repository.rs; sourceTree = "<group>"; };
+		B096BF4E96632D56BA2844BA /* cooperative_payment_repository.rs */ = {isa = PBXFileReference; path = cooperative_payment_repository.rs; sourceTree = "<group>"; };
+		B0F5EC99A76880A78D5D016A /* cooperative.rs */ = {isa = PBXFileReference; path = cooperative.rs; sourceTree = "<group>"; };
+		B21097E00062C16324D530C8 /* opening_balance_repository.rs */ = {isa = PBXFileReference; path = opening_balance_repository.rs; sourceTree = "<group>"; };
+		B263B1EEF443F5E8E0E3E7DC /* sales_document.rs */ = {isa = PBXFileReference; path = sales_document.rs; sourceTree = "<group>"; };
+		B5900F143900AF445AE7408E /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		B608A0DED104300138A46920 /* app_setup_config.rs */ = {isa = PBXFileReference; path = app_setup_config.rs; sourceTree = "<group>"; };
+		B8551BC58195BFE7924992B6 /* contact.rs */ = {isa = PBXFileReference; path = contact.rs; sourceTree = "<group>"; };
+		B8A6DC71D765701B15A4CE8B /* auth_repository.rs */ = {isa = PBXFileReference; path = auth_repository.rs; sourceTree = "<group>"; };
+		BD5C38830F4790AE8C967980 /* company_profile_setting_commands.rs */ = {isa = PBXFileReference; path = company_profile_setting_commands.rs; sourceTree = "<group>"; };
+		BE7E3C5D36536A0BA68721E3 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		BED9651F8EC9E43F6DC37A66 /* currency_commands.rs */ = {isa = PBXFileReference; path = currency_commands.rs; sourceTree = "<group>"; };
+		BEE6BAF9E7A7FFED326DFDDC /* department_commands.rs */ = {isa = PBXFileReference; path = department_commands.rs; sourceTree = "<group>"; };
+		BF604234C7862BBA5931130A /* project.rs */ = {isa = PBXFileReference; path = project.rs; sourceTree = "<group>"; };
+		BF6C240E0772A1B6F041B84B /* warehouse_repository.rs */ = {isa = PBXFileReference; path = warehouse_repository.rs; sourceTree = "<group>"; };
+		C1D877009CD8B96960C06DF6 /* cash_bank_reconciliation.rs */ = {isa = PBXFileReference; path = cash_bank_reconciliation.rs; sourceTree = "<group>"; };
+		C6A9F517102B7DB530D35052 /* tax.rs */ = {isa = PBXFileReference; path = tax.rs; sourceTree = "<group>"; };
+		C7F6B435031A397ADB3AE270 /* tax_commands.rs */ = {isa = PBXFileReference; path = tax_commands.rs; sourceTree = "<group>"; };
+		C9657552C59ED569668CADF7 /* accounting_period.rs */ = {isa = PBXFileReference; path = accounting_period.rs; sourceTree = "<group>"; };
+		CD79185FD87DD4A53D1DDEA3 /* accounting_setting.rs */ = {isa = PBXFileReference; path = accounting_setting.rs; sourceTree = "<group>"; };
+		CE2BA9906E24276CED1D52EE /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		D06E6E8E97BB13C5F40EA859 /* project_commands.rs */ = {isa = PBXFileReference; path = project_commands.rs; sourceTree = "<group>"; };
+		D1F8BF93D9E825506A6A0462 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		D37365C606791015C1C0407E /* employee.rs */ = {isa = PBXFileReference; path = employee.rs; sourceTree = "<group>"; };
+		D453E717FC214CDDA86E2B1C /* accounting_fiscal_year_commands.rs */ = {isa = PBXFileReference; path = accounting_fiscal_year_commands.rs; sourceTree = "<group>"; };
+		D4D78E8E23E9228B113BA6F0 /* stock_opname.rs */ = {isa = PBXFileReference; path = stock_opname.rs; sourceTree = "<group>"; };
+		D5814708BDAF86300DC22363 /* accounting_fiscal_year_repository.rs */ = {isa = PBXFileReference; path = accounting_fiscal_year_repository.rs; sourceTree = "<group>"; };
+		D5D3CD2E3B9E384600E516EA /* closing_run_repository.rs */ = {isa = PBXFileReference; path = closing_run_repository.rs; sourceTree = "<group>"; };
+		DA77250896F9CA4E559139C5 /* finance_transaction_commands.rs */ = {isa = PBXFileReference; path = finance_transaction_commands.rs; sourceTree = "<group>"; };
+		E03BFD0D125C0A8E75797A8C /* error.rs */ = {isa = PBXFileReference; path = error.rs; sourceTree = "<group>"; };
+		E1377DA353AFD92DD3C6AD2E /* stock_opname_repository.rs */ = {isa = PBXFileReference; path = stock_opname_repository.rs; sourceTree = "<group>"; };
+		E19037301BF1705DCFD9A26F /* cashier_session_commands.rs */ = {isa = PBXFileReference; path = cashier_session_commands.rs; sourceTree = "<group>"; };
+		E485A1BDBEFE3165E50A9F14 /* fiscal_year_closing_run.rs */ = {isa = PBXFileReference; path = fiscal_year_closing_run.rs; sourceTree = "<group>"; };
+		E50BDA590D0D214993858BB4 /* project_repository.rs */ = {isa = PBXFileReference; path = project_repository.rs; sourceTree = "<group>"; };
+		E70408D8F25B83C0132BDF2F /* accounting_period_commands.rs */ = {isa = PBXFileReference; path = accounting_period_commands.rs; sourceTree = "<group>"; };
+		E8CAB52323FD6196D2DBB583 /* stock_opname_commands.rs */ = {isa = PBXFileReference; path = stock_opname_commands.rs; sourceTree = "<group>"; };
+		E9D64C40B9E1A69F16470D1A /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		EB52E410E1B7CB873603984D /* frayukti_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = frayukti_iOS.entitlements; sourceTree = "<group>"; };
+		ED609DDF5FD7338F6D25C3CC /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		EFD246DC45F25278E4084457 /* opening_balance.rs */ = {isa = PBXFileReference; path = opening_balance.rs; sourceTree = "<group>"; };
+		F12CAD3B20137F98FACF705A /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		F4C7026C0C6F67157AF7A378 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		F57108FCF4E7B64BF48FDDFC /* cash_bank_reconciliation_repository.rs */ = {isa = PBXFileReference; path = cash_bank_reconciliation_repository.rs; sourceTree = "<group>"; };
+		F7220BE7AA1FDB8908EB8999 /* contact_repository.rs */ = {isa = PBXFileReference; path = contact_repository.rs; sourceTree = "<group>"; };
+		F790A9CD65158C9AD6AF0148 /* warehouse_commands.rs */ = {isa = PBXFileReference; path = warehouse_commands.rs; sourceTree = "<group>"; };
+		FBCC8A5FF6F27E3B2F68CF21 /* usb_serial_printer.rs */ = {isa = PBXFileReference; path = usb_serial_printer.rs; sourceTree = "<group>"; };
+		FC1C76523322198F43F954CE /* chart_of_account.rs */ = {isa = PBXFileReference; path = chart_of_account.rs; sourceTree = "<group>"; };
+		FEAFFD5651630BDB4B013142 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		20F2FA5A12DD1A4426856B85 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EB283A1A7A45CD7CD4037E7E /* libapp.a in Frameworks */,
+				93F29FF746C935E13D1B6C81 /* CoreGraphics.framework in Frameworks */,
+				1E7F125EB0CC8F127A9B6CD8 /* Metal.framework in Frameworks */,
+				DE67A7016523C4D2BA4FC716 /* MetalKit.framework in Frameworks */,
+				5439EE249F67C0671F173AF6 /* QuartzCore.framework in Frameworks */,
+				2FCA3B46784486214C2C7F33 /* Security.framework in Frameworks */,
+				A097A15C89A5A3F645D23882 /* UIKit.framework in Frameworks */,
+				E2ABBD32981294C01EAFA5A7 /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2243AECD74EEB92401B5DCF7 /* db */ = {
+			isa = PBXGroup;
+			children = (
+				E03BFD0D125C0A8E75797A8C /* error.rs */,
+				CE2BA9906E24276CED1D52EE /* mod.rs */,
+				4D7D65FF76E667E86C1DCD32 /* pool.rs */,
+			);
+			path = db;
+			sourceTree = "<group>";
+		};
+		24A0C3B1C9CE96FBFCE6AC79 /* repositories */ = {
+			isa = PBXGroup;
+			children = (
+				D5814708BDAF86300DC22363 /* accounting_fiscal_year_repository.rs */,
+				72BDEF865B98475E92430661 /* accounting_period_repository.rs */,
+				057EE770223AD634E8C31972 /* accounting_setting_repository.rs */,
+				0A172D029F7C3D05080DE608 /* app_setup_config_repository.rs */,
+				B8A6DC71D765701B15A4CE8B /* auth_repository.rs */,
+				F57108FCF4E7B64BF48FDDFC /* cash_bank_reconciliation_repository.rs */,
+				AF741FD57F8992EDB4394431 /* cashier_session_repository.rs */,
+				371EB1C74AB71285991CE9E6 /* chart_of_account_repository.rs */,
+				D5D3CD2E3B9E384600E516EA /* closing_run_repository.rs */,
+				3C6FF251A4619D0D8E9B9214 /* company_profile_setting_repository.rs */,
+				F7220BE7AA1FDB8908EB8999 /* contact_repository.rs */,
+				B096BF4E96632D56BA2844BA /* cooperative_payment_repository.rs */,
+				0350100D03463B5A3148C1FD /* cooperative_repository.rs */,
+				2E2B14FBEC3A4A699A249FD5 /* currency_repository.rs */,
+				14EAC86DD548555E47115218 /* department_repository.rs */,
+				9DB673CF92EE71C4A21FE29F /* employee_repository.rs */,
+				77230151EA351DA4C7460BDB /* finance_transaction_repository.rs */,
+				80CE7FEB663C9917ABCDE216 /* fiscal_year_closing_run_repository.rs */,
+				A4B2B91B531244E3962C6B00 /* journal_entry_repository.rs */,
+				F4C7026C0C6F67157AF7A378 /* mod.rs */,
+				B21097E00062C16324D530C8 /* opening_balance_repository.rs */,
+				3662B1C00C4608F3698BBC85 /* payment_method_repository.rs */,
+				ADEF32EFCFD558ACC394F118 /* payroll_repository.rs */,
+				93D0BCDB64EAECAEA1F6096C /* product_repository.rs */,
+				4E1CBC585E1C84A574FD99EE /* production_order_repository.rs */,
+				E50BDA590D0D214993858BB4 /* project_repository.rs */,
+				262ED5C24D3928919B822625 /* purchase_document_repository.rs */,
+				A0515E1FB83862312D2E2E27 /* sales_document_repository.rs */,
+				78A70F9A8C0DC09D36651715 /* stock_mutation_repository.rs */,
+				E1377DA353AFD92DD3C6AD2E /* stock_opname_repository.rs */,
+				2722DCB70D54BFD40F2DF312 /* tax_repository.rs */,
+				BF6C240E0772A1B6F041B84B /* warehouse_repository.rs */,
+			);
+			path = repositories;
+			sourceTree = "<group>";
+		};
+		2795A309D61342FA8338F015 /* frayukti */ = {
+			isa = PBXGroup;
+			children = (
+				8385436950D668023E3CD218 /* main.mm */,
+				BDC63FC492BA5D1560D8EB22 /* bindings */,
+			);
+			path = frayukti;
+			sourceTree = "<group>";
+		};
+		3047C627C1BA6D2BD53CD8DA /* models */ = {
+			isa = PBXGroup;
+			children = (
+				10C645CE33DC2640A9EC03BB /* accounting_fiscal_year.rs */,
+				C9657552C59ED569668CADF7 /* accounting_period.rs */,
+				CD79185FD87DD4A53D1DDEA3 /* accounting_setting.rs */,
+				B608A0DED104300138A46920 /* app_setup_config.rs */,
+				0632E595FEE4D1616662D838 /* auth.rs */,
+				C1D877009CD8B96960C06DF6 /* cash_bank_reconciliation.rs */,
+				82D7ADD199A384CD11FD0D5C /* cashier_session.rs */,
+				FC1C76523322198F43F954CE /* chart_of_account.rs */,
+				A88232B211DA719B28B48F23 /* closing_run.rs */,
+				7A8FFF4A5EA3A5F13B84572C /* company_profile_setting.rs */,
+				B8551BC58195BFE7924992B6 /* contact.rs */,
+				B0F5EC99A76880A78D5D016A /* cooperative.rs */,
+				0252D0CB90B9E92EDA292B2B /* currency.rs */,
+				97915CB68ABB819416EC6707 /* department.rs */,
+				D37365C606791015C1C0407E /* employee.rs */,
+				135931ED21DB1F4A2311B1E0 /* finance_transaction.rs */,
+				E485A1BDBEFE3165E50A9F14 /* fiscal_year_closing_run.rs */,
+				081DF5704EBA23ECF68D51FB /* journal_entry.rs */,
+				1E39FC31FDF0FA387E483055 /* mod.rs */,
+				EFD246DC45F25278E4084457 /* opening_balance.rs */,
+				73FBA8E2C112A543AF5BA2FA /* payment_method.rs */,
+				9AFE43D7B52D900C67FA32A6 /* payroll.rs */,
+				AA0B6E8057DBF0CE6FE89BC3 /* product.rs */,
+				2026FBEDCB0C2A4379D7FA68 /* production_order.rs */,
+				BF604234C7862BBA5931130A /* project.rs */,
+				9729BBBB056959D884DA5A47 /* purchase_document.rs */,
+				B263B1EEF443F5E8E0E3E7DC /* sales_document.rs */,
+				899B41E203132D78C6E2D6A9 /* stock_mutation.rs */,
+				D4D78E8E23E9228B113BA6F0 /* stock_opname.rs */,
+				C6A9F517102B7DB530D35052 /* tax.rs */,
+				2632BB9DFCDD3DABFFB90BC9 /* warehouse.rs */,
+			);
+			path = models;
+			sourceTree = "<group>";
+		};
+		317DCDD5FF8C1AEA99D78925 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2453D46F8B3287F7DA9E728F /* frayukti_iOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		668B55F9FB4B4A72D747D487 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				191A24F8C5B55D049B7755C3 /* bluetooth_printer.rs */,
+				5E0982F89211CF46D3D67CC0 /* lib.rs */,
+				465121F77D8FB999A6F343C2 /* main.rs */,
+				4075416BE1D4366619BC24EF /* postgres_realtime.rs */,
+				FBCC8A5FF6F27E3B2F68CF21 /* usb_serial_printer.rs */,
+				E765E9F21C9F2386204D5562 /* commands */,
+				2243AECD74EEB92401B5DCF7 /* db */,
+				3047C627C1BA6D2BD53CD8DA /* models */,
+				24A0C3B1C9CE96FBFCE6AC79 /* repositories */,
+			);
+			name = src;
+			path = ../../src;
+			sourceTree = "<group>";
+		};
+		8C73368AA8D7510D5802DD33 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				2795A309D61342FA8338F015 /* frayukti */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		B8B37BE11A2A253D8BD68F58 = {
+			isa = PBXGroup;
+			children = (
+				5456A7AC9D374227699AD73B /* assets */,
+				2C79B8714A6C5614B1AE7557 /* Assets.xcassets */,
+				64CC77E87391EF09306C0397 /* LaunchScreen.storyboard */,
+				C14FCBC0A2C5999F788133A7 /* Externals */,
+				FA25C15DA3DCED877481CA09 /* frayukti_iOS */,
+				8C73368AA8D7510D5802DD33 /* Sources */,
+				668B55F9FB4B4A72D747D487 /* src */,
+				FBFF3335B8238E66E0396E1B /* Frameworks */,
+				317DCDD5FF8C1AEA99D78925 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BDC63FC492BA5D1560D8EB22 /* bindings */ = {
+			isa = PBXGroup;
+			children = (
+				ADFC884540903FD9066A1A9B /* bindings.h */,
+			);
+			path = bindings;
+			sourceTree = "<group>";
+		};
+		C14FCBC0A2C5999F788133A7 /* Externals */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Externals;
+			sourceTree = "<group>";
+		};
+		E765E9F21C9F2386204D5562 /* commands */ = {
+			isa = PBXGroup;
+			children = (
+				D453E717FC214CDDA86E2B1C /* accounting_fiscal_year_commands.rs */,
+				E70408D8F25B83C0132BDF2F /* accounting_period_commands.rs */,
+				AC9A40A081FCCE9EBD9B5999 /* accounting_setting_commands.rs */,
+				7075D1FB483A11E5DD3B5A14 /* app_setup_config_commands.rs */,
+				9525F9A0BC692627C3A31925 /* auth_commands.rs */,
+				02B6637E14F4958D39CF3EC9 /* cash_bank_reconciliation_commands.rs */,
+				E19037301BF1705DCFD9A26F /* cashier_session_commands.rs */,
+				9B2755E2CC5E88129997F02C /* chart_of_account_commands.rs */,
+				4B22FACF6902ABB2549720A4 /* closing_run_commands.rs */,
+				BD5C38830F4790AE8C967980 /* company_profile_setting_commands.rs */,
+				77AEAED717CE7E86BBA41CBE /* contact_commands.rs */,
+				1887808F0590C2E9639C6DF8 /* cooperative_commands.rs */,
+				BED9651F8EC9E43F6DC37A66 /* currency_commands.rs */,
+				BEE6BAF9E7A7FFED326DFDDC /* department_commands.rs */,
+				A892E3CCE6C39C13042B2F53 /* employee_commands.rs */,
+				DA77250896F9CA4E559139C5 /* finance_transaction_commands.rs */,
+				5DDDEFA9785CD0ABB5B19E21 /* fiscal_year_closing_run_commands.rs */,
+				66576DF94FC59C23874C74F2 /* journal_entry_commands.rs */,
+				F12CAD3B20137F98FACF705A /* mod.rs */,
+				0373351CF83B4AEE3978E6F4 /* opening_balance_commands.rs */,
+				A3C14654692C8653FA202829 /* payment_method_commands.rs */,
+				59F91C1F8A4C1FB85A485587 /* payroll_commands.rs */,
+				0D520CDD7AFAA8D90677FDAF /* postgres_health.rs */,
+				902BDA3F015DDA4DA3373F5E /* product_commands.rs */,
+				69299B063F86C4E933F3BE7D /* production_order_commands.rs */,
+				D06E6E8E97BB13C5F40EA859 /* project_commands.rs */,
+				0D4B7F9FC301F3DC46314C0B /* purchase_document_commands.rs */,
+				27D7C9F6AD7D4CD5339EE24B /* sales_document_commands.rs */,
+				40E3F6E47C00CD5C829E2F1A /* stock_mutation_commands.rs */,
+				E8CAB52323FD6196D2DBB583 /* stock_opname_commands.rs */,
+				C7F6B435031A397ADB3AE270 /* tax_commands.rs */,
+				F790A9CD65158C9AD6AF0148 /* warehouse_commands.rs */,
+			);
+			path = commands;
+			sourceTree = "<group>";
+		};
+		FA25C15DA3DCED877481CA09 /* frayukti_iOS */ = {
+			isa = PBXGroup;
+			children = (
+				EB52E410E1B7CB873603984D /* frayukti_iOS.entitlements */,
+				276B9E79B251CF5DDD9E4C07 /* Info.plist */,
+			);
+			path = frayukti_iOS;
+			sourceTree = "<group>";
+		};
+		FBFF3335B8238E66E0396E1B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				BE7E3C5D36536A0BA68721E3 /* CoreGraphics.framework */,
+				B5900F143900AF445AE7408E /* libapp.a */,
+				ED609DDF5FD7338F6D25C3CC /* Metal.framework */,
+				D1F8BF93D9E825506A6A0462 /* MetalKit.framework */,
+				17A893167D059E7F6D6B7D13 /* QuartzCore.framework */,
+				4AAE37CB0E50A228D6102C64 /* Security.framework */,
+				E9D64C40B9E1A69F16470D1A /* UIKit.framework */,
+				FEAFFD5651630BDB4B013142 /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1E20A9E6A7FE89AF63261829 /* frayukti_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DA9D80D9F31243935490191C /* Build configuration list for PBXNativeTarget "frayukti_iOS" */;
+			buildPhases = (
+				92F1F73F5DCEAC4AC94C9358 /* Build Rust Code */,
+				04F917FD941AB400ED8A17C7 /* Sources */,
+				E9C6F3DBE94717578AEEC63E /* Resources */,
+				20F2FA5A12DD1A4426856B85 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = frayukti_iOS;
+			packageProductDependencies = (
+			);
+			productName = frayukti_iOS;
+			productReference = 2453D46F8B3287F7DA9E728F /* frayukti_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		EF9B5C2FD0F76F9E6F583FEC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 1D4C0AEBDA3E9FF3D44F89AE /* Build configuration list for PBXProject "frayukti" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = B8B37BE11A2A253D8BD68F58;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 317DCDD5FF8C1AEA99D78925 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1E20A9E6A7FE89AF63261829 /* frayukti_iOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E9C6F3DBE94717578AEEC63E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				609D3BA0579D816E86344C0D /* Assets.xcassets in Resources */,
+				E38C10AA4AA6C517647A12D1 /* LaunchScreen.storyboard in Resources */,
+				F1CA66448205E4D6DD0B476E /* assets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		92F1F73F5DCEAC4AC94C9358 /* Build Rust Code */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Code";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "bun tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		04F917FD941AB400ED8A17C7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CC1B9FDF21EB4E529F70CA7A /* main.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		797200FDA3719B019DFD3393 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = frayukti_iOS/frayukti_iOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = frayukti_iOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.asepimamnawawi-imam76.frayukti-app;
+				PRODUCT_NAME = "frayukti";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+		B3AA8A3101C37F97CEEE9576 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = debug;
+		};
+		F3D9FFB9F4E6816944744F1B /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = frayukti_iOS/frayukti_iOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = frayukti_iOS/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.asepimamnawawi-imam76.frayukti-app;
+				PRODUCT_NAME = "frayukti";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = release;
+		};
+		FD22AE2F5F4634D9F93B125D /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1D4C0AEBDA3E9FF3D44F89AE /* Build configuration list for PBXProject "frayukti" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B3AA8A3101C37F97CEEE9576 /* debug */,
+				FD22AE2F5F4634D9F93B125D /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		DA9D80D9F31243935490191C /* Build configuration list for PBXNativeTarget "frayukti_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				797200FDA3719B019DFD3393 /* debug */,
+				F3D9FFB9F4E6816944744F1B /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = EF9B5C2FD0F76F9E6F583FEC /* Project object */;
+}

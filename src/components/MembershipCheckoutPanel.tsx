@@ -1,11 +1,12 @@
-import { Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip, Typography } from 'antd';
+import { AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip, Typography } from 'antd';
 import { ChevronDown, ChevronUp, TicketPercent, UserCheck, UserPlus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { Contact, MembershipSetting } from '@/types';
+import type { Contact, MembershipSetting, Promo } from '@/types';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import { formatCurrency } from '@/utils/formatters';
+import { buildPosVoucherOptions } from '@/utils/posVoucher';
 
 const { Text } = Typography;
 const MEMBERSHIP_PANEL_STORAGE_KEY = 'frayukti-pos-membership-panel-open';
@@ -19,6 +20,7 @@ interface MembershipCheckoutPanelProps {
   membershipSetting: MembershipSetting;
   promoPreview: PromoEvaluationResult;
   membershipPreview: MembershipCheckoutEvaluation;
+  voucherPromos: Promo[];
   onMemberChange: (memberContactId?: string) => void;
   onVoucherCodeChange: (voucherCode: string) => void;
   onRedeemPointsChange: (points: string) => void;
@@ -35,6 +37,7 @@ export default function MembershipCheckoutPanel({
   membershipSetting,
   promoPreview,
   membershipPreview,
+  voucherPromos,
   onMemberChange,
   onVoucherCodeChange,
   onRedeemPointsChange,
@@ -66,6 +69,7 @@ export default function MembershipCheckoutPanel({
     voucherValue ? `Voucher ${voucherValue}` : 'Voucher opsional',
     discountTotal > 0 ? `Diskon Rp ${formatCurrency(discountTotal)}` : undefined,
   ].filter(Boolean).join(' / ');
+  const voucherOptions = useMemo(() => buildPosVoucherOptions(voucherPromos), [voucherPromos]);
 
   useEffect(() => {
     localStorage.setItem(MEMBERSHIP_PANEL_STORAGE_KEY, String(isPanelExpanded));
@@ -119,12 +123,19 @@ export default function MembershipCheckoutPanel({
               <TicketPercent size={13} />
               <span>Voucher</span>
             </div>
-            <Input
+            <AutoComplete
+              data-testid="pos-voucher-input"
               allowClear
-              value={voucherCode}
-              onChange={(event) => onVoucherCodeChange(event.target.value)}
+              value={voucherCode || undefined}
+              options={voucherOptions}
+              onChange={(value) => onVoucherCodeChange(String(value ?? ''))}
+              filterOption={(input, option) => String(option?.searchText ?? option?.label ?? '')
+                .toLowerCase()
+                .includes(input.trim().toLowerCase())}
               placeholder={t('promo.voucherPlaceholder')}
-              className="rounded-md"
+              notFoundContent="Ketik kode voucher untuk memasukkan secara manual"
+              className="w-full"
+              styles={{ popup: { root: { zIndex: 1200 } } }}
             />
           </div>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { App, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
@@ -11,6 +11,7 @@ import dayjs from '@/lib/dayjs';
 import { createPromo, deletePromo, updatePromo, type PromoFormInput } from '@/services/promoService';
 import type { ProductCategory, Promo, PromoAppliesTo, PromoType } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
+import { matchesProductSearch } from '@/utils/productSearch';
 
 const { Text } = Typography;
 
@@ -75,6 +76,22 @@ const toPromoFormInput = (values: PromoFormValues): PromoFormInput => ({
   priority: Number(values.priority ?? 10),
 });
 
+const getPromoFormValues = (promo: Promo): PromoFormValues => ({
+  name: promo.name,
+  type: promo.type,
+  value: promo.value,
+  applies_to: promo.applies_to,
+  product_ids: [...(promo.product_ids ?? [])],
+  categories: [...(promo.categories ?? [])],
+  start_at: promo.start_at ? dayjs(promo.start_at) : null,
+  end_at: promo.end_at ? dayjs(promo.end_at) : null,
+  min_qty: promo.min_qty ?? null,
+  min_total: promo.min_total ?? null,
+  voucher_code: promo.voucher_code ?? null,
+  active: promo.active,
+  priority: promo.priority,
+});
+
 export default function PromoManagement() {
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
@@ -100,6 +117,10 @@ export default function PromoManagement() {
     value: product.id,
     label: product.sku ? `${product.name} (${product.sku})` : product.name,
   }));
+  const productsById = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products],
+  );
   const categoryOptions = PRODUCT_CATEGORIES.map((category) => ({
     value: category.value,
     label: category.label,
@@ -113,36 +134,27 @@ export default function PromoManagement() {
 
   const handleAdd = () => {
     setEditingPromo(null);
-    form.resetFields();
-    form.setFieldsValue({
-      type: 'percent',
-      applies_to: 'all',
-      active: true,
-      priority: 10,
-    });
     setIsModalOpen(true);
   };
 
   const handleEdit = (promo: Promo) => {
     setEditingPromo(promo);
-    form.resetFields();
-    form.setFieldsValue({
-      name: promo.name,
-      type: promo.type,
-      value: promo.value,
-      applies_to: promo.applies_to,
-      product_ids: promo.product_ids ?? [],
-      categories: promo.categories ?? [],
-      start_at: promo.start_at ? dayjs(promo.start_at) : null,
-      end_at: promo.end_at ? dayjs(promo.end_at) : null,
-      min_qty: promo.min_qty ?? null,
-      min_total: promo.min_total ?? null,
-      voucher_code: promo.voucher_code ?? null,
-      active: promo.active,
-      priority: promo.priority,
-    });
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+
+    form.resetFields();
+    form.setFieldsValue(editingPromo
+      ? getPromoFormValues(editingPromo)
+      : {
+          type: 'percent',
+          applies_to: 'all',
+          active: true,
+          priority: 10,
+        });
+  }, [editingPromo, form, isModalOpen]);
 
   const refreshPromoPreview = () => {
     queryClient.invalidateQueries({ queryKey: ['activePromos'] });
@@ -332,10 +344,19 @@ export default function PromoManagement() {
             <Form.Item
               name="product_ids"
               label="Produk"
-              preserve={false}
               rules={[{ required: true, message: 'Pilih minimal satu produk.' }]}
             >
-              <Select mode="multiple" options={productOptions} maxTagCount="responsive" />
+              <Select
+                mode="multiple"
+                showSearch
+                options={productOptions}
+                maxTagCount="responsive"
+                placeholder="Cari nama atau SKU produk"
+                filterOption={(input, option) => {
+                  const product = productsById.get(String(option?.value ?? ''));
+                  return Boolean(product && matchesProductSearch(product, input));
+                }}
+              />
             </Form.Item>
           )}
 
@@ -343,7 +364,6 @@ export default function PromoManagement() {
             <Form.Item
               name="categories"
               label="Kategori"
-              preserve={false}
               rules={[{ required: true, message: 'Pilih minimal satu kategori.' }]}
             >
               <Select mode="multiple" options={categoryOptions} maxTagCount="responsive" />

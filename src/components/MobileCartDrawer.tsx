@@ -1,6 +1,6 @@
 import { Button, Drawer } from 'antd';
 import { Trash2 } from 'lucide-react';
-import { CartItem as CartItemType, Contact, MembershipSetting } from '@/types';
+import { CartItem as CartItemType, Contact, MembershipSetting, Promo } from '@/types';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
@@ -28,6 +28,7 @@ interface MobileCartDrawerProps {
   redeemPoints: string;
   promoPreview: PromoEvaluationResult;
   membershipPreview: MembershipCheckoutEvaluation;
+  activePromos: Promo[];
   activeMembers: Contact[];
   selectedMember: Contact | null;
   membershipSetting: MembershipSetting;
@@ -61,6 +62,7 @@ export default function MobileCartDrawer({
   redeemPoints,
   promoPreview,
   membershipPreview,
+  activePromos,
   activeMembers,
   selectedMember,
   membershipSetting,
@@ -106,7 +108,7 @@ export default function MobileCartDrawer({
       }}
     >
       <div className="flex h-full flex-col">
-        <div className={`${showPayment ? 'hidden' : 'flex-1'} space-y-3 overflow-y-auto px-5 py-3`}>
+        <div className={`${showPayment ? 'hidden' : 'flex-1'} space-y-2 overflow-y-auto bg-slate-50/70 px-3 py-3`}>
           {cart.length === 0 ? (
             <p className="py-8 text-center text-gray-500">{t('cart.empty')}</p>
           ) : null}
@@ -123,7 +125,10 @@ export default function MobileCartDrawer({
         </div>
 
         {cart.length > 0 && (
-          <div className={`${showPayment ? 'min-h-0 flex-1 overflow-y-auto' : ''} border-t border-gray-100 px-5 pb-8 pt-4`}>
+          <div className={`${showPayment
+            ? 'min-h-0 flex-1 overflow-y-auto px-3 pb-0 pt-4'
+            : 'border-t border-blue-100 px-4 pb-8 pt-4'} bg-white`}
+          >
             <CartSummary
               total={total}
               showPayment={showPayment}
@@ -135,6 +140,7 @@ export default function MobileCartDrawer({
               redeemPoints={redeemPoints}
               promoPreview={promoPreview}
               membershipPreview={membershipPreview}
+              activePromos={activePromos}
               activeMembers={activeMembers}
               selectedMember={selectedMember}
               membershipSetting={membershipSetting}

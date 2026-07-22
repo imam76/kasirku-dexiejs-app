@@ -7,6 +7,7 @@ import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
 import type { PosSalesReportData } from '@/services/posSalesReportAggregator';
+export type { PosTransactionWithPayments } from '@/services/posSalesReportAggregator';
 import { getPosSalesReportData } from '@/services/posSalesReportService';
 import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
@@ -28,34 +29,6 @@ import {
 } from '@/utils/posPaymentMethod';
 import { formatPosPaymentSummary, getTransactionPaymentsOrLegacyFallback, groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
 import { matchesPosPaymentFilters, type PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
-
-export interface PosTransactionWithPayments extends Transaction {
-  payments: PosTransactionPayment[];
-}
-
-interface PosSalesReportData {
-  transactions: PosTransactionWithPayments[];
-  totalRevenue: number;
-  totalDiscount: number;
-  totalProfit: number;
-  soldItems: SoldItemSummary;
-  averageTransaction: number;
-  topProducts: TopProduct[];
-}
-
-interface TopProduct {
-  product_id: string;
-  product_name: string;
-  category: string;
-  totalQuantity: string; // Combined quantity with units, e.g., "2.5 kg"
-  totalRevenue: number;
-  totalProfit: number;
-  margin: number;
-  // Detail per unit for breakdown if needed
-  units: Record<string, number>;
-}
-
-type TopProductAggregation = Omit<TopProduct, 'totalQuantity' | 'margin'>;
 
 interface PurchaseReportData {
   purchases: PurchaseReportRow[];
@@ -307,135 +280,9 @@ export const usePosSalesReport = (
         startDate,
         endDate,
         paymentMethodCode,
+        paymentMode,
         categories,
       });
-      let collection = db.transactions.orderBy('created_at').reverse();
-
-      if (startDate && endDate) {
-        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-        collection = db.transactions
-          .where('created_at')
-          .between(startISO, endISO, true, true)
-          .reverse();
-      } else if (startDate) {
-        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-        collection = db.transactions
-          .where('created_at')
-          .aboveOrEqual(startISO)
-          .reverse();
-      } else if (endDate) {
-        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-        collection = db.transactions
-          .where('created_at')
-          .belowOrEqual(endISO)
-          .reverse();
-      }
-
-      const baseTransactions = filterActiveTransactions(await collection.toArray());
-      const candidateIds = baseTransactions.map((transaction) => transaction.id);
-      const allPayments = candidateIds.length > 0
-        ? await db.posTransactionPayments.where('transaction_id').anyOf(candidateIds).toArray()
-        : [];
-      const paymentsByTransaction = groupPosPaymentsByTransaction(allPayments);
-      let transactions: PosTransactionWithPayments[] = baseTransactions.map((transaction) => ({
-        ...transaction,
-        payments: getTransactionPaymentsOrLegacyFallback(transaction, paymentsByTransaction.get(transaction.id)),
-      }));
-
-      transactions = transactions.filter((transaction) => (
-        matchesPosPaymentFilters(transaction, paymentMethodCode, paymentMode)
-      ));
-
-      const totalRevenue = transactions.reduce((sum, t) => sum + t.total_amount, 0);
-      const totalDiscount = transactions.reduce((sum, t) => sum + (t.discount_amount ?? 0), 0);
-      const transactionIds = transactions.map((t) => t.id);
-
-      // Calculate profit and items from transaction items
-      let totalProfit = 0;
-      let soldItems = createEmptySoldItemSummary();
-      let topProducts: TopProduct[] = [];
-
-      if (transactionIds.length > 0) {
-        // Fetch items by date range first for efficiency
-        let itemsCollection = db.transactionItems.orderBy('created_at');
-
-        if (startDate && endDate) {
-          const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-          const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-          itemsCollection = db.transactionItems.where('created_at').between(startISO, endISO, true, true);
-        } else if (startDate) {
-          const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-          itemsCollection = db.transactionItems.where('created_at').aboveOrEqual(startISO);
-        } else if (endDate) {
-          const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-          itemsCollection = db.transactionItems.where('created_at').belowOrEqual(endISO);
-        }
-
-        const items = await itemsCollection.toArray();
-        // Filter items that belong to the filtered transactions
-        const relevantItems = items.filter(item => transactionIds.includes(item.transaction_id));
-
-        totalProfit = relevantItems.reduce((sum, item) => sum + (item.profit || 0), 0);
-
-        // Aggregate Top Products
-        const products = await db.products.toArray();
-        const productMap = new Map(products.map(p => [p.id, p]));
-        soldItems = aggregateSoldItems(relevantItems, productMap);
-
-        const aggregation = relevantItems.reduce((acc, item) => {
-          const product = productMap.get(item.product_id);
-          const category = product?.category || 'non_consumable';
-          const unit = resolveTransactionItemUnit(item, product);
-
-          // Filter by category if provided
-          if (categories && categories.length > 0 && !categories.includes(category)) {
-            return acc;
-          }
-
-          if (!acc[item.product_id]) {
-            acc[item.product_id] = {
-              product_id: item.product_id,
-              product_name: item.product_name,
-              category: category,
-              totalRevenue: 0,
-              totalProfit: 0,
-              units: {},
-            };
-          }
-
-          acc[item.product_id].totalRevenue += item.subtotal;
-          acc[item.product_id].totalProfit += (item.profit || 0);
-          acc[item.product_id].units[unit] = (acc[item.product_id].units[unit] || 0) + item.quantity;
-
-          return acc;
-        }, {} as Record<string, TopProductAggregation>);
-
-        topProducts = Object.values(aggregation).map((p) => {
-          const totalQuantity = Object.entries(p.units)
-            .map(([unit, qty]) => `${qty.toLocaleString('id-ID')} ${unit}`)
-            .join(', ');
-
-          return {
-            ...p,
-            totalQuantity,
-            margin: p.totalRevenue > 0 ? (p.totalProfit / p.totalRevenue) * 100 : 0,
-          } as TopProduct;
-        })
-        .sort((a, b) => b.totalRevenue - a.totalRevenue)
-        .slice(0, 10);
-      }
-
-      return {
-        transactions,
-        totalRevenue,
-        totalDiscount,
-        totalProfit,
-        soldItems,
-        averageTransaction:
-          transactions.length > 0 ? totalRevenue / transactions.length : 0,
-        topProducts,
-      };
     },
   });
 };
