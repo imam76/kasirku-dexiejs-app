@@ -63,6 +63,16 @@ export default function CooperativeBillingTable({
   const getLoanPrincipalAmount = (installment: CooperativeLoanInstallment) => (
     Number(loanById.get(installment.loan_id)?.principal_amount || 0)
   );
+  const getLoanDisbursementDate = (installment: CooperativeLoanInstallment) => (
+    loanById.get(installment.loan_id)?.disbursed_at
+  );
+  const compareOptionalDates = (firstDate?: string, secondDate?: string) => {
+    if (!firstDate && !secondDate) return 0;
+    if (!firstDate) return 1;
+    if (!secondDate) return -1;
+
+    return dayjs(firstDate).valueOf() - dayjs(secondDate).valueOf();
+  };
   const getRemainingAmount = (installment: CooperativeLoanInstallment) => (
     getInstallmentRemainingAmounts(installment).total_amount
   );
@@ -139,6 +149,19 @@ export default function CooperativeBillingTable({
       key: 'loan_number',
       width: 140,
       sorter: (first, second) => first.loan_number.localeCompare(second.loan_number),
+    },
+    {
+      title: t('cooperative.billing.table.disbursementDate'),
+      key: 'disbursementDate',
+      width: 150,
+      sorter: (first, second) => compareOptionalDates(
+        getLoanDisbursementDate(first),
+        getLoanDisbursementDate(second),
+      ),
+      render: (_value: unknown, installment) => {
+        const disbursementDate = getLoanDisbursementDate(installment);
+        return disbursementDate ? formatDate(disbursementDate) : '-';
+      },
     },
     {
       title: t('cooperative.billing.table.loanPrincipal'),
@@ -324,7 +347,7 @@ export default function CooperativeBillingTable({
         } as unknown as HTMLAttributes<HTMLElement>;
       }}
       pagination={{ pageSize: 8 }}
-      scroll={{ x: 2030 }}
+      scroll={{ x: 2180 }}
       locale={{ emptyText: t('cooperative.billing.empty') }}
     />
   );
