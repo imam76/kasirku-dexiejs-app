@@ -18,7 +18,7 @@ test('preview seed Buku Angsuran', async ({ page }) => {
   await expect(page.getByLabel(/Profil login|Logged-in profile/)).toBeVisible();
 
   await seedInstallmentBookFixture(page);
-  await page.goto('/koperasi/buku-angsuran');
+  await page.goto('/koperasi/laporan/buku-angsuran');
 
   const collectionDayFilter = page
     .getByText('Hari Penagihan', { exact: true })

@@ -628,7 +628,7 @@ export async function payRemainingInstallments(page: Page, member: DemoMemberInp
 }
 
 export async function expectCooperativeReportSummary(page: Page) {
-  await page.goto('/koperasi/laporan');
+  await page.goto('/koperasi/laporan/ringkasan');
 
   await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
   await expect(page.getByText('Anggota Aktif').first()).toBeVisible();
@@ -640,24 +640,24 @@ export async function expectCooperativeReportSummary(page: Page) {
   await expect(page.getByTestId('koperasi-shu-report')).toContainText('SHU Periode');
   await expect(page.getByTestId('koperasi-shu-report')).toContainText('Rp 30.000');
 
-  await page.goto('/koperasi/arus-kas');
+  await page.goto('/koperasi/laporan/arus-kas');
   await expect(page.getByTestId('koperasi-cash-flow-report')).toBeVisible();
   await expect(page.getByTestId('koperasi-cash-flow-operating-net')).toContainText('Rp -2.470.000');
   await expect(page.getByTestId('koperasi-cash-flow-financing-net')).toContainText('Rp 0');
 
-  await page.goto('/koperasi/laporan#balance-sheet');
+  await page.goto('/koperasi/laporan/ringkasan#balance-sheet');
   await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
   await expect(page.getByTestId('koperasi-balance-sheet-report')).toContainText('Rp 15.030.000');
   await expect(page.getByTestId('koperasi-balance-sheet-report')).toContainText('Rp 0');
 
-  await page.goto('/koperasi/laporan#equity-change');
+  await page.goto('/koperasi/laporan/ringkasan#equity-change');
   await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
   await expect(page.getByTestId('koperasi-equity-change-report')).toContainText('SHU Periode');
   await expect(page.getByTestId('koperasi-equity-change-report')).toContainText('Rp 30.000');
 }
 
 export async function expectCooperativeFinancialReportsUnavailable(page: Page) {
-  await page.goto('/koperasi/laporan');
+  await page.goto('/koperasi/laporan/ringkasan');
 
   await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
   await clickCooperativeReportTab(page, 'Perhitungan SHU');

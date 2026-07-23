@@ -66,7 +66,7 @@ function MasterData() {
         lg:py-[38px] lg:px-8
       "
     >
-      <div className="max-w-[974px] mx-auto">
+      <div className="mx-auto max-w-[1400px]">
         <div className="mb-7 text-center sm:mb-9 lg:mb-12">
           <h1 className="mb-2 text-[20px] font-medium leading-[1.3] tracking-tight text-gray-900 sm:text-[26px] sm:mb-[10px] lg:text-[34px] lg:leading-[1.2] lg:mb-[14px]">
             {t('nav.masterData')}

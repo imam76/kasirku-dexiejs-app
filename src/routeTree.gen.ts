@@ -21,6 +21,7 @@ import { Route as FinanceIndexRouteImport } from './routes/finance/index'
 import { Route as SalesReturnsIndexRouteImport } from './routes/sales/returns/index'
 import { Route as SalesDocumentTypeIndexRouteImport } from './routes/sales/$documentType/index'
 import { Route as PurchasesDocumentTypeIndexRouteImport } from './routes/purchases/$documentType/index'
+import { Route as KoperasiLaporanIndexRouteImport } from './routes/koperasi/laporan/index'
 import { Route as FinanceSalesIndexRouteImport } from './routes/finance/sales/index'
 import { Route as FinancePurchasesIndexRouteImport } from './routes/finance/purchases/index'
 import { Route as FinanceSalesReturnsIndexRouteImport } from './routes/finance/sales/returns/index'
@@ -124,50 +125,9 @@ const KoperasiPenagihanLazyRouteImport = createFileRoute(
 const KoperasiMigrasiPinjamanLazyRouteImport = createFileRoute(
   '/koperasi/migrasi-pinjaman',
 )()
-const KoperasiLaporanTunaiLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-tunai',
-)()
-const KoperasiLaporanTargetHarianLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-target-harian',
-)()
-const KoperasiLaporanTabunganMasukLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-tabungan-masuk',
-)()
-const KoperasiLaporanTabunganKeluarLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-tabungan-keluar',
-)()
-const KoperasiLaporanStortingHarianLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-storting-harian',
-)()
-const KoperasiLaporanSimpananSukarelaLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-simpanan-sukarela',
-)()
-const KoperasiLaporanPerkembanganResortLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-perkembangan-resort',
-)()
-const KoperasiLaporanKasHarianPdlLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-kas-harian-pdl',
-)()
-const KoperasiLaporanIptwLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-iptw',
-)()
-const KoperasiLaporanIndukAnggotaLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-induk-anggota',
-)()
-const KoperasiLaporanDropMingguanLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-drop-mingguan',
-)()
-const KoperasiLaporanDropHarianLazyRouteImport = createFileRoute(
-  '/koperasi/laporan-drop-harian',
-)()
-const KoperasiLaporanLazyRouteImport = createFileRoute('/koperasi/laporan')()
 const KoperasiKasPetugasLazyRouteImport = createFileRoute(
   '/koperasi/kas-petugas',
 )()
-const KoperasiBukuAngsuranLazyRouteImport = createFileRoute(
-  '/koperasi/buku-angsuran',
-)()
-const KoperasiArusKasLazyRouteImport = createFileRoute('/koperasi/arus-kas')()
 const KoperasiAngsuranLazyRouteImport = createFileRoute('/koperasi/angsuran')()
 const KoperasiAnggotaLazyRouteImport = createFileRoute('/koperasi/anggota')()
 const FinanceReceivablesLazyRouteImport = createFileRoute(
@@ -204,6 +164,51 @@ const PurchasesDocumentTypeNewLazyRouteImport = createFileRoute(
 )()
 const PurchasesDocumentTypeDocumentIdLazyRouteImport = createFileRoute(
   '/purchases/$documentType/$documentId',
+)()
+const KoperasiLaporanTunaiLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/tunai',
+)()
+const KoperasiLaporanTargetHarianLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/target-harian',
+)()
+const KoperasiLaporanTabunganMasukLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/tabungan-masuk',
+)()
+const KoperasiLaporanTabunganKeluarLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/tabungan-keluar',
+)()
+const KoperasiLaporanStortingHarianLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/storting-harian',
+)()
+const KoperasiLaporanSimpananSukarelaLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/simpanan-sukarela',
+)()
+const KoperasiLaporanRingkasanLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/ringkasan',
+)()
+const KoperasiLaporanPerkembanganResortLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/perkembangan-resort',
+)()
+const KoperasiLaporanKasHarianPdlLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/kas-harian-pdl',
+)()
+const KoperasiLaporanIptwLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/iptw',
+)()
+const KoperasiLaporanIndukAnggotaLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/induk-anggota',
+)()
+const KoperasiLaporanDropMingguanLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/drop-mingguan',
+)()
+const KoperasiLaporanDropHarianLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/drop-harian',
+)()
+const KoperasiLaporanBukuAngsuranLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/buku-angsuran',
+)()
+const KoperasiLaporanArusKasLazyRouteImport = createFileRoute(
+  '/koperasi/laporan/arus-kas',
 )()
 const FinanceReceivablesOverpaymentsLazyRouteImport = createFileRoute(
   '/finance/receivables/overpayments',
@@ -612,141 +617,12 @@ const KoperasiMigrasiPinjamanLazyRoute =
   } as any).lazy(() =>
     import('./routes/koperasi/migrasi-pinjaman.lazy').then((d) => d.Route),
   )
-const KoperasiLaporanTunaiLazyRoute =
-  KoperasiLaporanTunaiLazyRouteImport.update({
-    id: '/koperasi/laporan-tunai',
-    path: '/koperasi/laporan-tunai',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-tunai.lazy').then((d) => d.Route),
-  )
-const KoperasiLaporanTargetHarianLazyRoute =
-  KoperasiLaporanTargetHarianLazyRouteImport.update({
-    id: '/koperasi/laporan-target-harian',
-    path: '/koperasi/laporan-target-harian',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-target-harian.lazy').then((d) => d.Route),
-  )
-const KoperasiLaporanTabunganMasukLazyRoute =
-  KoperasiLaporanTabunganMasukLazyRouteImport.update({
-    id: '/koperasi/laporan-tabungan-masuk',
-    path: '/koperasi/laporan-tabungan-masuk',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-tabungan-masuk.lazy').then(
-      (d) => d.Route,
-    ),
-  )
-const KoperasiLaporanTabunganKeluarLazyRoute =
-  KoperasiLaporanTabunganKeluarLazyRouteImport.update({
-    id: '/koperasi/laporan-tabungan-keluar',
-    path: '/koperasi/laporan-tabungan-keluar',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-tabungan-keluar.lazy').then(
-      (d) => d.Route,
-    ),
-  )
-const KoperasiLaporanStortingHarianLazyRoute =
-  KoperasiLaporanStortingHarianLazyRouteImport.update({
-    id: '/koperasi/laporan-storting-harian',
-    path: '/koperasi/laporan-storting-harian',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-storting-harian.lazy').then(
-      (d) => d.Route,
-    ),
-  )
-const KoperasiLaporanSimpananSukarelaLazyRoute =
-  KoperasiLaporanSimpananSukarelaLazyRouteImport.update({
-    id: '/koperasi/laporan-simpanan-sukarela',
-    path: '/koperasi/laporan-simpanan-sukarela',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-simpanan-sukarela.lazy').then(
-      (d) => d.Route,
-    ),
-  )
-const KoperasiLaporanPerkembanganResortLazyRoute =
-  KoperasiLaporanPerkembanganResortLazyRouteImport.update({
-    id: '/koperasi/laporan-perkembangan-resort',
-    path: '/koperasi/laporan-perkembangan-resort',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-perkembangan-resort.lazy').then(
-      (d) => d.Route,
-    ),
-  )
-const KoperasiLaporanKasHarianPdlLazyRoute =
-  KoperasiLaporanKasHarianPdlLazyRouteImport.update({
-    id: '/koperasi/laporan-kas-harian-pdl',
-    path: '/koperasi/laporan-kas-harian-pdl',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-kas-harian-pdl.lazy').then(
-      (d) => d.Route,
-    ),
-  )
-const KoperasiLaporanIptwLazyRoute = KoperasiLaporanIptwLazyRouteImport.update({
-  id: '/koperasi/laporan-iptw',
-  path: '/koperasi/laporan-iptw',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() =>
-  import('./routes/koperasi/laporan-iptw.lazy').then((d) => d.Route),
-)
-const KoperasiLaporanIndukAnggotaLazyRoute =
-  KoperasiLaporanIndukAnggotaLazyRouteImport.update({
-    id: '/koperasi/laporan-induk-anggota',
-    path: '/koperasi/laporan-induk-anggota',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-induk-anggota.lazy').then((d) => d.Route),
-  )
-const KoperasiLaporanDropMingguanLazyRoute =
-  KoperasiLaporanDropMingguanLazyRouteImport.update({
-    id: '/koperasi/laporan-drop-mingguan',
-    path: '/koperasi/laporan-drop-mingguan',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-drop-mingguan.lazy').then((d) => d.Route),
-  )
-const KoperasiLaporanDropHarianLazyRoute =
-  KoperasiLaporanDropHarianLazyRouteImport.update({
-    id: '/koperasi/laporan-drop-harian',
-    path: '/koperasi/laporan-drop-harian',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/laporan-drop-harian.lazy').then((d) => d.Route),
-  )
-const KoperasiLaporanLazyRoute = KoperasiLaporanLazyRouteImport.update({
-  id: '/koperasi/laporan',
-  path: '/koperasi/laporan',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() =>
-  import('./routes/koperasi/laporan.lazy').then((d) => d.Route),
-)
 const KoperasiKasPetugasLazyRoute = KoperasiKasPetugasLazyRouteImport.update({
   id: '/koperasi/kas-petugas',
   path: '/koperasi/kas-petugas',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
   import('./routes/koperasi/kas-petugas.lazy').then((d) => d.Route),
-)
-const KoperasiBukuAngsuranLazyRoute =
-  KoperasiBukuAngsuranLazyRouteImport.update({
-    id: '/koperasi/buku-angsuran',
-    path: '/koperasi/buku-angsuran',
-    getParentRoute: () => rootRouteImport,
-  } as any).lazy(() =>
-    import('./routes/koperasi/buku-angsuran.lazy').then((d) => d.Route),
-  )
-const KoperasiArusKasLazyRoute = KoperasiArusKasLazyRouteImport.update({
-  id: '/koperasi/arus-kas',
-  path: '/koperasi/arus-kas',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() =>
-  import('./routes/koperasi/arus-kas.lazy').then((d) => d.Route),
 )
 const KoperasiAngsuranLazyRoute = KoperasiAngsuranLazyRouteImport.update({
   id: '/koperasi/angsuran',
@@ -847,6 +723,11 @@ const PurchasesDocumentTypeIndexRoute =
     path: '/purchases/$documentType/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const KoperasiLaporanIndexRoute = KoperasiLaporanIndexRouteImport.update({
+  id: '/koperasi/laporan/',
+  path: '/koperasi/laporan/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FinanceSalesIndexRoute = FinanceSalesIndexRouteImport.update({
   id: '/finance/sales/',
   path: '/finance/sales/',
@@ -907,6 +788,137 @@ const PurchasesDocumentTypeDocumentIdLazyRoute =
     import('./routes/purchases/$documentType/$documentId.lazy').then(
       (d) => d.Route,
     ),
+  )
+const KoperasiLaporanTunaiLazyRoute =
+  KoperasiLaporanTunaiLazyRouteImport.update({
+    id: '/koperasi/laporan/tunai',
+    path: '/koperasi/laporan/tunai',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/tunai.lazy').then((d) => d.Route),
+  )
+const KoperasiLaporanTargetHarianLazyRoute =
+  KoperasiLaporanTargetHarianLazyRouteImport.update({
+    id: '/koperasi/laporan/target-harian',
+    path: '/koperasi/laporan/target-harian',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/target-harian.lazy').then((d) => d.Route),
+  )
+const KoperasiLaporanTabunganMasukLazyRoute =
+  KoperasiLaporanTabunganMasukLazyRouteImport.update({
+    id: '/koperasi/laporan/tabungan-masuk',
+    path: '/koperasi/laporan/tabungan-masuk',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/tabungan-masuk.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const KoperasiLaporanTabunganKeluarLazyRoute =
+  KoperasiLaporanTabunganKeluarLazyRouteImport.update({
+    id: '/koperasi/laporan/tabungan-keluar',
+    path: '/koperasi/laporan/tabungan-keluar',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/tabungan-keluar.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const KoperasiLaporanStortingHarianLazyRoute =
+  KoperasiLaporanStortingHarianLazyRouteImport.update({
+    id: '/koperasi/laporan/storting-harian',
+    path: '/koperasi/laporan/storting-harian',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/storting-harian.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const KoperasiLaporanSimpananSukarelaLazyRoute =
+  KoperasiLaporanSimpananSukarelaLazyRouteImport.update({
+    id: '/koperasi/laporan/simpanan-sukarela',
+    path: '/koperasi/laporan/simpanan-sukarela',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/simpanan-sukarela.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const KoperasiLaporanRingkasanLazyRoute =
+  KoperasiLaporanRingkasanLazyRouteImport.update({
+    id: '/koperasi/laporan/ringkasan',
+    path: '/koperasi/laporan/ringkasan',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/ringkasan.lazy').then((d) => d.Route),
+  )
+const KoperasiLaporanPerkembanganResortLazyRoute =
+  KoperasiLaporanPerkembanganResortLazyRouteImport.update({
+    id: '/koperasi/laporan/perkembangan-resort',
+    path: '/koperasi/laporan/perkembangan-resort',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/perkembangan-resort.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const KoperasiLaporanKasHarianPdlLazyRoute =
+  KoperasiLaporanKasHarianPdlLazyRouteImport.update({
+    id: '/koperasi/laporan/kas-harian-pdl',
+    path: '/koperasi/laporan/kas-harian-pdl',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/kas-harian-pdl.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const KoperasiLaporanIptwLazyRoute = KoperasiLaporanIptwLazyRouteImport.update({
+  id: '/koperasi/laporan/iptw',
+  path: '/koperasi/laporan/iptw',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/koperasi/laporan/iptw.lazy').then((d) => d.Route),
+)
+const KoperasiLaporanIndukAnggotaLazyRoute =
+  KoperasiLaporanIndukAnggotaLazyRouteImport.update({
+    id: '/koperasi/laporan/induk-anggota',
+    path: '/koperasi/laporan/induk-anggota',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/induk-anggota.lazy').then((d) => d.Route),
+  )
+const KoperasiLaporanDropMingguanLazyRoute =
+  KoperasiLaporanDropMingguanLazyRouteImport.update({
+    id: '/koperasi/laporan/drop-mingguan',
+    path: '/koperasi/laporan/drop-mingguan',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/drop-mingguan.lazy').then((d) => d.Route),
+  )
+const KoperasiLaporanDropHarianLazyRoute =
+  KoperasiLaporanDropHarianLazyRouteImport.update({
+    id: '/koperasi/laporan/drop-harian',
+    path: '/koperasi/laporan/drop-harian',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/drop-harian.lazy').then((d) => d.Route),
+  )
+const KoperasiLaporanBukuAngsuranLazyRoute =
+  KoperasiLaporanBukuAngsuranLazyRouteImport.update({
+    id: '/koperasi/laporan/buku-angsuran',
+    path: '/koperasi/laporan/buku-angsuran',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/buku-angsuran.lazy').then((d) => d.Route),
+  )
+const KoperasiLaporanArusKasLazyRoute =
+  KoperasiLaporanArusKasLazyRouteImport.update({
+    id: '/koperasi/laporan/arus-kas',
+    path: '/koperasi/laporan/arus-kas',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/laporan/arus-kas.lazy').then((d) => d.Route),
   )
 const FinanceReceivablesOverpaymentsLazyRoute =
   FinanceReceivablesOverpaymentsLazyRouteImport.update({
@@ -1171,22 +1183,7 @@ export interface FileRoutesByFullPath {
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
-  '/koperasi/arus-kas': typeof KoperasiArusKasLazyRoute
-  '/koperasi/buku-angsuran': typeof KoperasiBukuAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
-  '/koperasi/laporan': typeof KoperasiLaporanLazyRoute
-  '/koperasi/laporan-drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
-  '/koperasi/laporan-drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
-  '/koperasi/laporan-induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
-  '/koperasi/laporan-iptw': typeof KoperasiLaporanIptwLazyRoute
-  '/koperasi/laporan-kas-harian-pdl': typeof KoperasiLaporanKasHarianPdlLazyRoute
-  '/koperasi/laporan-perkembangan-resort': typeof KoperasiLaporanPerkembanganResortLazyRoute
-  '/koperasi/laporan-simpanan-sukarela': typeof KoperasiLaporanSimpananSukarelaLazyRoute
-  '/koperasi/laporan-storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
-  '/koperasi/laporan-tabungan-keluar': typeof KoperasiLaporanTabunganKeluarLazyRoute
-  '/koperasi/laporan-tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
-  '/koperasi/laporan-target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
-  '/koperasi/laporan-tunai': typeof KoperasiLaporanTunaiLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
@@ -1237,6 +1234,21 @@ export interface FileRoutesByFullPath {
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
   '/finance/receivables/overpayments': typeof FinanceReceivablesOverpaymentsLazyRoute
+  '/koperasi/laporan/arus-kas': typeof KoperasiLaporanArusKasLazyRoute
+  '/koperasi/laporan/buku-angsuran': typeof KoperasiLaporanBukuAngsuranLazyRoute
+  '/koperasi/laporan/drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
+  '/koperasi/laporan/drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
+  '/koperasi/laporan/induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
+  '/koperasi/laporan/iptw': typeof KoperasiLaporanIptwLazyRoute
+  '/koperasi/laporan/kas-harian-pdl': typeof KoperasiLaporanKasHarianPdlLazyRoute
+  '/koperasi/laporan/perkembangan-resort': typeof KoperasiLaporanPerkembanganResortLazyRoute
+  '/koperasi/laporan/ringkasan': typeof KoperasiLaporanRingkasanLazyRoute
+  '/koperasi/laporan/simpanan-sukarela': typeof KoperasiLaporanSimpananSukarelaLazyRoute
+  '/koperasi/laporan/storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
+  '/koperasi/laporan/tabungan-keluar': typeof KoperasiLaporanTabunganKeluarLazyRoute
+  '/koperasi/laporan/tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
+  '/koperasi/laporan/target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
+  '/koperasi/laporan/tunai': typeof KoperasiLaporanTunaiLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
@@ -1245,6 +1257,7 @@ export interface FileRoutesByFullPath {
   '/sales/returns/new': typeof SalesReturnsNewLazyRoute
   '/finance/purchases/': typeof FinancePurchasesIndexRoute
   '/finance/sales/': typeof FinanceSalesIndexRoute
+  '/koperasi/laporan/': typeof KoperasiLaporanIndexRoute
   '/purchases/$documentType/': typeof PurchasesDocumentTypeIndexRoute
   '/sales/$documentType/': typeof SalesDocumentTypeIndexRoute
   '/sales/returns/': typeof SalesReturnsIndexRoute
@@ -1287,22 +1300,7 @@ export interface FileRoutesByTo {
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
-  '/koperasi/arus-kas': typeof KoperasiArusKasLazyRoute
-  '/koperasi/buku-angsuran': typeof KoperasiBukuAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
-  '/koperasi/laporan': typeof KoperasiLaporanLazyRoute
-  '/koperasi/laporan-drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
-  '/koperasi/laporan-drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
-  '/koperasi/laporan-induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
-  '/koperasi/laporan-iptw': typeof KoperasiLaporanIptwLazyRoute
-  '/koperasi/laporan-kas-harian-pdl': typeof KoperasiLaporanKasHarianPdlLazyRoute
-  '/koperasi/laporan-perkembangan-resort': typeof KoperasiLaporanPerkembanganResortLazyRoute
-  '/koperasi/laporan-simpanan-sukarela': typeof KoperasiLaporanSimpananSukarelaLazyRoute
-  '/koperasi/laporan-storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
-  '/koperasi/laporan-tabungan-keluar': typeof KoperasiLaporanTabunganKeluarLazyRoute
-  '/koperasi/laporan-tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
-  '/koperasi/laporan-target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
-  '/koperasi/laporan-tunai': typeof KoperasiLaporanTunaiLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
@@ -1353,6 +1351,21 @@ export interface FileRoutesByTo {
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
   '/finance/receivables/overpayments': typeof FinanceReceivablesOverpaymentsLazyRoute
+  '/koperasi/laporan/arus-kas': typeof KoperasiLaporanArusKasLazyRoute
+  '/koperasi/laporan/buku-angsuran': typeof KoperasiLaporanBukuAngsuranLazyRoute
+  '/koperasi/laporan/drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
+  '/koperasi/laporan/drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
+  '/koperasi/laporan/induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
+  '/koperasi/laporan/iptw': typeof KoperasiLaporanIptwLazyRoute
+  '/koperasi/laporan/kas-harian-pdl': typeof KoperasiLaporanKasHarianPdlLazyRoute
+  '/koperasi/laporan/perkembangan-resort': typeof KoperasiLaporanPerkembanganResortLazyRoute
+  '/koperasi/laporan/ringkasan': typeof KoperasiLaporanRingkasanLazyRoute
+  '/koperasi/laporan/simpanan-sukarela': typeof KoperasiLaporanSimpananSukarelaLazyRoute
+  '/koperasi/laporan/storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
+  '/koperasi/laporan/tabungan-keluar': typeof KoperasiLaporanTabunganKeluarLazyRoute
+  '/koperasi/laporan/tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
+  '/koperasi/laporan/target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
+  '/koperasi/laporan/tunai': typeof KoperasiLaporanTunaiLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
@@ -1361,6 +1374,7 @@ export interface FileRoutesByTo {
   '/sales/returns/new': typeof SalesReturnsNewLazyRoute
   '/finance/purchases': typeof FinancePurchasesIndexRoute
   '/finance/sales': typeof FinanceSalesIndexRoute
+  '/koperasi/laporan': typeof KoperasiLaporanIndexRoute
   '/purchases/$documentType': typeof PurchasesDocumentTypeIndexRoute
   '/sales/$documentType': typeof SalesDocumentTypeIndexRoute
   '/sales/returns': typeof SalesReturnsIndexRoute
@@ -1404,22 +1418,7 @@ export interface FileRoutesById {
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
-  '/koperasi/arus-kas': typeof KoperasiArusKasLazyRoute
-  '/koperasi/buku-angsuran': typeof KoperasiBukuAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
-  '/koperasi/laporan': typeof KoperasiLaporanLazyRoute
-  '/koperasi/laporan-drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
-  '/koperasi/laporan-drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
-  '/koperasi/laporan-induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
-  '/koperasi/laporan-iptw': typeof KoperasiLaporanIptwLazyRoute
-  '/koperasi/laporan-kas-harian-pdl': typeof KoperasiLaporanKasHarianPdlLazyRoute
-  '/koperasi/laporan-perkembangan-resort': typeof KoperasiLaporanPerkembanganResortLazyRoute
-  '/koperasi/laporan-simpanan-sukarela': typeof KoperasiLaporanSimpananSukarelaLazyRoute
-  '/koperasi/laporan-storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
-  '/koperasi/laporan-tabungan-keluar': typeof KoperasiLaporanTabunganKeluarLazyRoute
-  '/koperasi/laporan-tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
-  '/koperasi/laporan-target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
-  '/koperasi/laporan-tunai': typeof KoperasiLaporanTunaiLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
@@ -1470,6 +1469,21 @@ export interface FileRoutesById {
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
   '/finance/receivables/overpayments': typeof FinanceReceivablesOverpaymentsLazyRoute
+  '/koperasi/laporan/arus-kas': typeof KoperasiLaporanArusKasLazyRoute
+  '/koperasi/laporan/buku-angsuran': typeof KoperasiLaporanBukuAngsuranLazyRoute
+  '/koperasi/laporan/drop-harian': typeof KoperasiLaporanDropHarianLazyRoute
+  '/koperasi/laporan/drop-mingguan': typeof KoperasiLaporanDropMingguanLazyRoute
+  '/koperasi/laporan/induk-anggota': typeof KoperasiLaporanIndukAnggotaLazyRoute
+  '/koperasi/laporan/iptw': typeof KoperasiLaporanIptwLazyRoute
+  '/koperasi/laporan/kas-harian-pdl': typeof KoperasiLaporanKasHarianPdlLazyRoute
+  '/koperasi/laporan/perkembangan-resort': typeof KoperasiLaporanPerkembanganResortLazyRoute
+  '/koperasi/laporan/ringkasan': typeof KoperasiLaporanRingkasanLazyRoute
+  '/koperasi/laporan/simpanan-sukarela': typeof KoperasiLaporanSimpananSukarelaLazyRoute
+  '/koperasi/laporan/storting-harian': typeof KoperasiLaporanStortingHarianLazyRoute
+  '/koperasi/laporan/tabungan-keluar': typeof KoperasiLaporanTabunganKeluarLazyRoute
+  '/koperasi/laporan/tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
+  '/koperasi/laporan/target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
+  '/koperasi/laporan/tunai': typeof KoperasiLaporanTunaiLazyRoute
   '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
@@ -1478,6 +1492,7 @@ export interface FileRoutesById {
   '/sales/returns/new': typeof SalesReturnsNewLazyRoute
   '/finance/purchases/': typeof FinancePurchasesIndexRoute
   '/finance/sales/': typeof FinanceSalesIndexRoute
+  '/koperasi/laporan/': typeof KoperasiLaporanIndexRoute
   '/purchases/$documentType/': typeof PurchasesDocumentTypeIndexRoute
   '/sales/$documentType/': typeof SalesDocumentTypeIndexRoute
   '/sales/returns/': typeof SalesReturnsIndexRoute
@@ -1522,22 +1537,7 @@ export interface FileRouteTypes {
     | '/finance/receivables'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
-    | '/koperasi/arus-kas'
-    | '/koperasi/buku-angsuran'
     | '/koperasi/kas-petugas'
-    | '/koperasi/laporan'
-    | '/koperasi/laporan-drop-harian'
-    | '/koperasi/laporan-drop-mingguan'
-    | '/koperasi/laporan-induk-anggota'
-    | '/koperasi/laporan-iptw'
-    | '/koperasi/laporan-kas-harian-pdl'
-    | '/koperasi/laporan-perkembangan-resort'
-    | '/koperasi/laporan-simpanan-sukarela'
-    | '/koperasi/laporan-storting-harian'
-    | '/koperasi/laporan-tabungan-keluar'
-    | '/koperasi/laporan-tabungan-masuk'
-    | '/koperasi/laporan-target-harian'
-    | '/koperasi/laporan-tunai'
     | '/koperasi/migrasi-pinjaman'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
@@ -1588,6 +1588,21 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
     | '/finance/receivables/overpayments'
+    | '/koperasi/laporan/arus-kas'
+    | '/koperasi/laporan/buku-angsuran'
+    | '/koperasi/laporan/drop-harian'
+    | '/koperasi/laporan/drop-mingguan'
+    | '/koperasi/laporan/induk-anggota'
+    | '/koperasi/laporan/iptw'
+    | '/koperasi/laporan/kas-harian-pdl'
+    | '/koperasi/laporan/perkembangan-resort'
+    | '/koperasi/laporan/ringkasan'
+    | '/koperasi/laporan/simpanan-sukarela'
+    | '/koperasi/laporan/storting-harian'
+    | '/koperasi/laporan/tabungan-keluar'
+    | '/koperasi/laporan/tabungan-masuk'
+    | '/koperasi/laporan/target-harian'
+    | '/koperasi/laporan/tunai'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
     | '/sales/$documentType/$documentId'
@@ -1596,6 +1611,7 @@ export interface FileRouteTypes {
     | '/sales/returns/new'
     | '/finance/purchases/'
     | '/finance/sales/'
+    | '/koperasi/laporan/'
     | '/purchases/$documentType/'
     | '/sales/$documentType/'
     | '/sales/returns/'
@@ -1638,22 +1654,7 @@ export interface FileRouteTypes {
     | '/finance/receivables'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
-    | '/koperasi/arus-kas'
-    | '/koperasi/buku-angsuran'
     | '/koperasi/kas-petugas'
-    | '/koperasi/laporan'
-    | '/koperasi/laporan-drop-harian'
-    | '/koperasi/laporan-drop-mingguan'
-    | '/koperasi/laporan-induk-anggota'
-    | '/koperasi/laporan-iptw'
-    | '/koperasi/laporan-kas-harian-pdl'
-    | '/koperasi/laporan-perkembangan-resort'
-    | '/koperasi/laporan-simpanan-sukarela'
-    | '/koperasi/laporan-storting-harian'
-    | '/koperasi/laporan-tabungan-keluar'
-    | '/koperasi/laporan-tabungan-masuk'
-    | '/koperasi/laporan-target-harian'
-    | '/koperasi/laporan-tunai'
     | '/koperasi/migrasi-pinjaman'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
@@ -1704,6 +1705,21 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
     | '/finance/receivables/overpayments'
+    | '/koperasi/laporan/arus-kas'
+    | '/koperasi/laporan/buku-angsuran'
+    | '/koperasi/laporan/drop-harian'
+    | '/koperasi/laporan/drop-mingguan'
+    | '/koperasi/laporan/induk-anggota'
+    | '/koperasi/laporan/iptw'
+    | '/koperasi/laporan/kas-harian-pdl'
+    | '/koperasi/laporan/perkembangan-resort'
+    | '/koperasi/laporan/ringkasan'
+    | '/koperasi/laporan/simpanan-sukarela'
+    | '/koperasi/laporan/storting-harian'
+    | '/koperasi/laporan/tabungan-keluar'
+    | '/koperasi/laporan/tabungan-masuk'
+    | '/koperasi/laporan/target-harian'
+    | '/koperasi/laporan/tunai'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
     | '/sales/$documentType/$documentId'
@@ -1712,6 +1728,7 @@ export interface FileRouteTypes {
     | '/sales/returns/new'
     | '/finance/purchases'
     | '/finance/sales'
+    | '/koperasi/laporan'
     | '/purchases/$documentType'
     | '/sales/$documentType'
     | '/sales/returns'
@@ -1754,22 +1771,7 @@ export interface FileRouteTypes {
     | '/finance/receivables'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
-    | '/koperasi/arus-kas'
-    | '/koperasi/buku-angsuran'
     | '/koperasi/kas-petugas'
-    | '/koperasi/laporan'
-    | '/koperasi/laporan-drop-harian'
-    | '/koperasi/laporan-drop-mingguan'
-    | '/koperasi/laporan-induk-anggota'
-    | '/koperasi/laporan-iptw'
-    | '/koperasi/laporan-kas-harian-pdl'
-    | '/koperasi/laporan-perkembangan-resort'
-    | '/koperasi/laporan-simpanan-sukarela'
-    | '/koperasi/laporan-storting-harian'
-    | '/koperasi/laporan-tabungan-keluar'
-    | '/koperasi/laporan-tabungan-masuk'
-    | '/koperasi/laporan-target-harian'
-    | '/koperasi/laporan-tunai'
     | '/koperasi/migrasi-pinjaman'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
@@ -1820,6 +1822,21 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
     | '/finance/receivables/overpayments'
+    | '/koperasi/laporan/arus-kas'
+    | '/koperasi/laporan/buku-angsuran'
+    | '/koperasi/laporan/drop-harian'
+    | '/koperasi/laporan/drop-mingguan'
+    | '/koperasi/laporan/induk-anggota'
+    | '/koperasi/laporan/iptw'
+    | '/koperasi/laporan/kas-harian-pdl'
+    | '/koperasi/laporan/perkembangan-resort'
+    | '/koperasi/laporan/ringkasan'
+    | '/koperasi/laporan/simpanan-sukarela'
+    | '/koperasi/laporan/storting-harian'
+    | '/koperasi/laporan/tabungan-keluar'
+    | '/koperasi/laporan/tabungan-masuk'
+    | '/koperasi/laporan/target-harian'
+    | '/koperasi/laporan/tunai'
     | '/purchases/$documentType/$documentId'
     | '/purchases/$documentType/new'
     | '/sales/$documentType/$documentId'
@@ -1828,6 +1845,7 @@ export interface FileRouteTypes {
     | '/sales/returns/new'
     | '/finance/purchases/'
     | '/finance/sales/'
+    | '/koperasi/laporan/'
     | '/purchases/$documentType/'
     | '/sales/$documentType/'
     | '/sales/returns/'
@@ -1871,22 +1889,7 @@ export interface RootRouteChildren {
   FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRouteWithChildren
   KoperasiAnggotaLazyRoute: typeof KoperasiAnggotaLazyRoute
   KoperasiAngsuranLazyRoute: typeof KoperasiAngsuranLazyRoute
-  KoperasiArusKasLazyRoute: typeof KoperasiArusKasLazyRoute
-  KoperasiBukuAngsuranLazyRoute: typeof KoperasiBukuAngsuranLazyRoute
   KoperasiKasPetugasLazyRoute: typeof KoperasiKasPetugasLazyRoute
-  KoperasiLaporanLazyRoute: typeof KoperasiLaporanLazyRoute
-  KoperasiLaporanDropHarianLazyRoute: typeof KoperasiLaporanDropHarianLazyRoute
-  KoperasiLaporanDropMingguanLazyRoute: typeof KoperasiLaporanDropMingguanLazyRoute
-  KoperasiLaporanIndukAnggotaLazyRoute: typeof KoperasiLaporanIndukAnggotaLazyRoute
-  KoperasiLaporanIptwLazyRoute: typeof KoperasiLaporanIptwLazyRoute
-  KoperasiLaporanKasHarianPdlLazyRoute: typeof KoperasiLaporanKasHarianPdlLazyRoute
-  KoperasiLaporanPerkembanganResortLazyRoute: typeof KoperasiLaporanPerkembanganResortLazyRoute
-  KoperasiLaporanSimpananSukarelaLazyRoute: typeof KoperasiLaporanSimpananSukarelaLazyRoute
-  KoperasiLaporanStortingHarianLazyRoute: typeof KoperasiLaporanStortingHarianLazyRoute
-  KoperasiLaporanTabunganKeluarLazyRoute: typeof KoperasiLaporanTabunganKeluarLazyRoute
-  KoperasiLaporanTabunganMasukLazyRoute: typeof KoperasiLaporanTabunganMasukLazyRoute
-  KoperasiLaporanTargetHarianLazyRoute: typeof KoperasiLaporanTargetHarianLazyRoute
-  KoperasiLaporanTunaiLazyRoute: typeof KoperasiLaporanTunaiLazyRoute
   KoperasiMigrasiPinjamanLazyRoute: typeof KoperasiMigrasiPinjamanLazyRoute
   KoperasiPenagihanLazyRoute: typeof KoperasiPenagihanLazyRoute
   KoperasiPinjamanLazyRoute: typeof KoperasiPinjamanLazyRoute
@@ -1930,6 +1933,21 @@ export interface RootRouteChildren {
   ReportIndexRoute: typeof ReportIndexRoute
   SalesIndexRoute: typeof SalesIndexRoute
   FinancePurchasesPendingCostsLazyRoute: typeof FinancePurchasesPendingCostsLazyRoute
+  KoperasiLaporanArusKasLazyRoute: typeof KoperasiLaporanArusKasLazyRoute
+  KoperasiLaporanBukuAngsuranLazyRoute: typeof KoperasiLaporanBukuAngsuranLazyRoute
+  KoperasiLaporanDropHarianLazyRoute: typeof KoperasiLaporanDropHarianLazyRoute
+  KoperasiLaporanDropMingguanLazyRoute: typeof KoperasiLaporanDropMingguanLazyRoute
+  KoperasiLaporanIndukAnggotaLazyRoute: typeof KoperasiLaporanIndukAnggotaLazyRoute
+  KoperasiLaporanIptwLazyRoute: typeof KoperasiLaporanIptwLazyRoute
+  KoperasiLaporanKasHarianPdlLazyRoute: typeof KoperasiLaporanKasHarianPdlLazyRoute
+  KoperasiLaporanPerkembanganResortLazyRoute: typeof KoperasiLaporanPerkembanganResortLazyRoute
+  KoperasiLaporanRingkasanLazyRoute: typeof KoperasiLaporanRingkasanLazyRoute
+  KoperasiLaporanSimpananSukarelaLazyRoute: typeof KoperasiLaporanSimpananSukarelaLazyRoute
+  KoperasiLaporanStortingHarianLazyRoute: typeof KoperasiLaporanStortingHarianLazyRoute
+  KoperasiLaporanTabunganKeluarLazyRoute: typeof KoperasiLaporanTabunganKeluarLazyRoute
+  KoperasiLaporanTabunganMasukLazyRoute: typeof KoperasiLaporanTabunganMasukLazyRoute
+  KoperasiLaporanTargetHarianLazyRoute: typeof KoperasiLaporanTargetHarianLazyRoute
+  KoperasiLaporanTunaiLazyRoute: typeof KoperasiLaporanTunaiLazyRoute
   PurchasesDocumentTypeDocumentIdLazyRoute: typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
   PurchasesDocumentTypeNewLazyRoute: typeof PurchasesDocumentTypeNewLazyRoute
   SalesDocumentTypeDocumentIdLazyRoute: typeof SalesDocumentTypeDocumentIdLazyRoute
@@ -1938,6 +1956,7 @@ export interface RootRouteChildren {
   SalesReturnsNewLazyRoute: typeof SalesReturnsNewLazyRoute
   FinancePurchasesIndexRoute: typeof FinancePurchasesIndexRoute
   FinanceSalesIndexRoute: typeof FinanceSalesIndexRoute
+  KoperasiLaporanIndexRoute: typeof KoperasiLaporanIndexRoute
   PurchasesDocumentTypeIndexRoute: typeof PurchasesDocumentTypeIndexRoute
   SalesDocumentTypeIndexRoute: typeof SalesDocumentTypeIndexRoute
   SalesReturnsIndexRoute: typeof SalesReturnsIndexRoute
@@ -2310,116 +2329,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KoperasiMigrasiPinjamanLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/koperasi/laporan-tunai': {
-      id: '/koperasi/laporan-tunai'
-      path: '/koperasi/laporan-tunai'
-      fullPath: '/koperasi/laporan-tunai'
-      preLoaderRoute: typeof KoperasiLaporanTunaiLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-target-harian': {
-      id: '/koperasi/laporan-target-harian'
-      path: '/koperasi/laporan-target-harian'
-      fullPath: '/koperasi/laporan-target-harian'
-      preLoaderRoute: typeof KoperasiLaporanTargetHarianLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-tabungan-masuk': {
-      id: '/koperasi/laporan-tabungan-masuk'
-      path: '/koperasi/laporan-tabungan-masuk'
-      fullPath: '/koperasi/laporan-tabungan-masuk'
-      preLoaderRoute: typeof KoperasiLaporanTabunganMasukLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-tabungan-keluar': {
-      id: '/koperasi/laporan-tabungan-keluar'
-      path: '/koperasi/laporan-tabungan-keluar'
-      fullPath: '/koperasi/laporan-tabungan-keluar'
-      preLoaderRoute: typeof KoperasiLaporanTabunganKeluarLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-storting-harian': {
-      id: '/koperasi/laporan-storting-harian'
-      path: '/koperasi/laporan-storting-harian'
-      fullPath: '/koperasi/laporan-storting-harian'
-      preLoaderRoute: typeof KoperasiLaporanStortingHarianLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-simpanan-sukarela': {
-      id: '/koperasi/laporan-simpanan-sukarela'
-      path: '/koperasi/laporan-simpanan-sukarela'
-      fullPath: '/koperasi/laporan-simpanan-sukarela'
-      preLoaderRoute: typeof KoperasiLaporanSimpananSukarelaLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-perkembangan-resort': {
-      id: '/koperasi/laporan-perkembangan-resort'
-      path: '/koperasi/laporan-perkembangan-resort'
-      fullPath: '/koperasi/laporan-perkembangan-resort'
-      preLoaderRoute: typeof KoperasiLaporanPerkembanganResortLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-kas-harian-pdl': {
-      id: '/koperasi/laporan-kas-harian-pdl'
-      path: '/koperasi/laporan-kas-harian-pdl'
-      fullPath: '/koperasi/laporan-kas-harian-pdl'
-      preLoaderRoute: typeof KoperasiLaporanKasHarianPdlLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-iptw': {
-      id: '/koperasi/laporan-iptw'
-      path: '/koperasi/laporan-iptw'
-      fullPath: '/koperasi/laporan-iptw'
-      preLoaderRoute: typeof KoperasiLaporanIptwLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-induk-anggota': {
-      id: '/koperasi/laporan-induk-anggota'
-      path: '/koperasi/laporan-induk-anggota'
-      fullPath: '/koperasi/laporan-induk-anggota'
-      preLoaderRoute: typeof KoperasiLaporanIndukAnggotaLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-drop-mingguan': {
-      id: '/koperasi/laporan-drop-mingguan'
-      path: '/koperasi/laporan-drop-mingguan'
-      fullPath: '/koperasi/laporan-drop-mingguan'
-      preLoaderRoute: typeof KoperasiLaporanDropMingguanLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan-drop-harian': {
-      id: '/koperasi/laporan-drop-harian'
-      path: '/koperasi/laporan-drop-harian'
-      fullPath: '/koperasi/laporan-drop-harian'
-      preLoaderRoute: typeof KoperasiLaporanDropHarianLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/laporan': {
-      id: '/koperasi/laporan'
-      path: '/koperasi/laporan'
-      fullPath: '/koperasi/laporan'
-      preLoaderRoute: typeof KoperasiLaporanLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/koperasi/kas-petugas': {
       id: '/koperasi/kas-petugas'
       path: '/koperasi/kas-petugas'
       fullPath: '/koperasi/kas-petugas'
       preLoaderRoute: typeof KoperasiKasPetugasLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/buku-angsuran': {
-      id: '/koperasi/buku-angsuran'
-      path: '/koperasi/buku-angsuran'
-      fullPath: '/koperasi/buku-angsuran'
-      preLoaderRoute: typeof KoperasiBukuAngsuranLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/koperasi/arus-kas': {
-      id: '/koperasi/arus-kas'
-      path: '/koperasi/arus-kas'
-      fullPath: '/koperasi/arus-kas'
-      preLoaderRoute: typeof KoperasiArusKasLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/koperasi/angsuran': {
@@ -2520,6 +2434,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PurchasesDocumentTypeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/koperasi/laporan/': {
+      id: '/koperasi/laporan/'
+      path: '/koperasi/laporan'
+      fullPath: '/koperasi/laporan/'
+      preLoaderRoute: typeof KoperasiLaporanIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/finance/sales/': {
       id: '/finance/sales/'
       path: '/finance/sales'
@@ -2574,6 +2495,111 @@ declare module '@tanstack/react-router' {
       path: '/purchases/$documentType/$documentId'
       fullPath: '/purchases/$documentType/$documentId'
       preLoaderRoute: typeof PurchasesDocumentTypeDocumentIdLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/tunai': {
+      id: '/koperasi/laporan/tunai'
+      path: '/koperasi/laporan/tunai'
+      fullPath: '/koperasi/laporan/tunai'
+      preLoaderRoute: typeof KoperasiLaporanTunaiLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/target-harian': {
+      id: '/koperasi/laporan/target-harian'
+      path: '/koperasi/laporan/target-harian'
+      fullPath: '/koperasi/laporan/target-harian'
+      preLoaderRoute: typeof KoperasiLaporanTargetHarianLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/tabungan-masuk': {
+      id: '/koperasi/laporan/tabungan-masuk'
+      path: '/koperasi/laporan/tabungan-masuk'
+      fullPath: '/koperasi/laporan/tabungan-masuk'
+      preLoaderRoute: typeof KoperasiLaporanTabunganMasukLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/tabungan-keluar': {
+      id: '/koperasi/laporan/tabungan-keluar'
+      path: '/koperasi/laporan/tabungan-keluar'
+      fullPath: '/koperasi/laporan/tabungan-keluar'
+      preLoaderRoute: typeof KoperasiLaporanTabunganKeluarLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/storting-harian': {
+      id: '/koperasi/laporan/storting-harian'
+      path: '/koperasi/laporan/storting-harian'
+      fullPath: '/koperasi/laporan/storting-harian'
+      preLoaderRoute: typeof KoperasiLaporanStortingHarianLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/simpanan-sukarela': {
+      id: '/koperasi/laporan/simpanan-sukarela'
+      path: '/koperasi/laporan/simpanan-sukarela'
+      fullPath: '/koperasi/laporan/simpanan-sukarela'
+      preLoaderRoute: typeof KoperasiLaporanSimpananSukarelaLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/ringkasan': {
+      id: '/koperasi/laporan/ringkasan'
+      path: '/koperasi/laporan/ringkasan'
+      fullPath: '/koperasi/laporan/ringkasan'
+      preLoaderRoute: typeof KoperasiLaporanRingkasanLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/perkembangan-resort': {
+      id: '/koperasi/laporan/perkembangan-resort'
+      path: '/koperasi/laporan/perkembangan-resort'
+      fullPath: '/koperasi/laporan/perkembangan-resort'
+      preLoaderRoute: typeof KoperasiLaporanPerkembanganResortLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/kas-harian-pdl': {
+      id: '/koperasi/laporan/kas-harian-pdl'
+      path: '/koperasi/laporan/kas-harian-pdl'
+      fullPath: '/koperasi/laporan/kas-harian-pdl'
+      preLoaderRoute: typeof KoperasiLaporanKasHarianPdlLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/iptw': {
+      id: '/koperasi/laporan/iptw'
+      path: '/koperasi/laporan/iptw'
+      fullPath: '/koperasi/laporan/iptw'
+      preLoaderRoute: typeof KoperasiLaporanIptwLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/induk-anggota': {
+      id: '/koperasi/laporan/induk-anggota'
+      path: '/koperasi/laporan/induk-anggota'
+      fullPath: '/koperasi/laporan/induk-anggota'
+      preLoaderRoute: typeof KoperasiLaporanIndukAnggotaLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/drop-mingguan': {
+      id: '/koperasi/laporan/drop-mingguan'
+      path: '/koperasi/laporan/drop-mingguan'
+      fullPath: '/koperasi/laporan/drop-mingguan'
+      preLoaderRoute: typeof KoperasiLaporanDropMingguanLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/drop-harian': {
+      id: '/koperasi/laporan/drop-harian'
+      path: '/koperasi/laporan/drop-harian'
+      fullPath: '/koperasi/laporan/drop-harian'
+      preLoaderRoute: typeof KoperasiLaporanDropHarianLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/buku-angsuran': {
+      id: '/koperasi/laporan/buku-angsuran'
+      path: '/koperasi/laporan/buku-angsuran'
+      fullPath: '/koperasi/laporan/buku-angsuran'
+      preLoaderRoute: typeof KoperasiLaporanBukuAngsuranLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/laporan/arus-kas': {
+      id: '/koperasi/laporan/arus-kas'
+      path: '/koperasi/laporan/arus-kas'
+      fullPath: '/koperasi/laporan/arus-kas'
+      preLoaderRoute: typeof KoperasiLaporanArusKasLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/finance/receivables/overpayments': {
@@ -2882,26 +2908,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceReceivablesLazyRoute: FinanceReceivablesLazyRouteWithChildren,
   KoperasiAnggotaLazyRoute: KoperasiAnggotaLazyRoute,
   KoperasiAngsuranLazyRoute: KoperasiAngsuranLazyRoute,
-  KoperasiArusKasLazyRoute: KoperasiArusKasLazyRoute,
-  KoperasiBukuAngsuranLazyRoute: KoperasiBukuAngsuranLazyRoute,
   KoperasiKasPetugasLazyRoute: KoperasiKasPetugasLazyRoute,
-  KoperasiLaporanLazyRoute: KoperasiLaporanLazyRoute,
-  KoperasiLaporanDropHarianLazyRoute: KoperasiLaporanDropHarianLazyRoute,
-  KoperasiLaporanDropMingguanLazyRoute: KoperasiLaporanDropMingguanLazyRoute,
-  KoperasiLaporanIndukAnggotaLazyRoute: KoperasiLaporanIndukAnggotaLazyRoute,
-  KoperasiLaporanIptwLazyRoute: KoperasiLaporanIptwLazyRoute,
-  KoperasiLaporanKasHarianPdlLazyRoute: KoperasiLaporanKasHarianPdlLazyRoute,
-  KoperasiLaporanPerkembanganResortLazyRoute:
-    KoperasiLaporanPerkembanganResortLazyRoute,
-  KoperasiLaporanSimpananSukarelaLazyRoute:
-    KoperasiLaporanSimpananSukarelaLazyRoute,
-  KoperasiLaporanStortingHarianLazyRoute:
-    KoperasiLaporanStortingHarianLazyRoute,
-  KoperasiLaporanTabunganKeluarLazyRoute:
-    KoperasiLaporanTabunganKeluarLazyRoute,
-  KoperasiLaporanTabunganMasukLazyRoute: KoperasiLaporanTabunganMasukLazyRoute,
-  KoperasiLaporanTargetHarianLazyRoute: KoperasiLaporanTargetHarianLazyRoute,
-  KoperasiLaporanTunaiLazyRoute: KoperasiLaporanTunaiLazyRoute,
   KoperasiMigrasiPinjamanLazyRoute: KoperasiMigrasiPinjamanLazyRoute,
   KoperasiPenagihanLazyRoute: KoperasiPenagihanLazyRoute,
   KoperasiPinjamanLazyRoute: KoperasiPinjamanLazyRoute,
@@ -2946,6 +2953,25 @@ const rootRouteChildren: RootRouteChildren = {
   ReportIndexRoute: ReportIndexRoute,
   SalesIndexRoute: SalesIndexRoute,
   FinancePurchasesPendingCostsLazyRoute: FinancePurchasesPendingCostsLazyRoute,
+  KoperasiLaporanArusKasLazyRoute: KoperasiLaporanArusKasLazyRoute,
+  KoperasiLaporanBukuAngsuranLazyRoute: KoperasiLaporanBukuAngsuranLazyRoute,
+  KoperasiLaporanDropHarianLazyRoute: KoperasiLaporanDropHarianLazyRoute,
+  KoperasiLaporanDropMingguanLazyRoute: KoperasiLaporanDropMingguanLazyRoute,
+  KoperasiLaporanIndukAnggotaLazyRoute: KoperasiLaporanIndukAnggotaLazyRoute,
+  KoperasiLaporanIptwLazyRoute: KoperasiLaporanIptwLazyRoute,
+  KoperasiLaporanKasHarianPdlLazyRoute: KoperasiLaporanKasHarianPdlLazyRoute,
+  KoperasiLaporanPerkembanganResortLazyRoute:
+    KoperasiLaporanPerkembanganResortLazyRoute,
+  KoperasiLaporanRingkasanLazyRoute: KoperasiLaporanRingkasanLazyRoute,
+  KoperasiLaporanSimpananSukarelaLazyRoute:
+    KoperasiLaporanSimpananSukarelaLazyRoute,
+  KoperasiLaporanStortingHarianLazyRoute:
+    KoperasiLaporanStortingHarianLazyRoute,
+  KoperasiLaporanTabunganKeluarLazyRoute:
+    KoperasiLaporanTabunganKeluarLazyRoute,
+  KoperasiLaporanTabunganMasukLazyRoute: KoperasiLaporanTabunganMasukLazyRoute,
+  KoperasiLaporanTargetHarianLazyRoute: KoperasiLaporanTargetHarianLazyRoute,
+  KoperasiLaporanTunaiLazyRoute: KoperasiLaporanTunaiLazyRoute,
   PurchasesDocumentTypeDocumentIdLazyRoute:
     PurchasesDocumentTypeDocumentIdLazyRouteWithChildren,
   PurchasesDocumentTypeNewLazyRoute: PurchasesDocumentTypeNewLazyRoute,
@@ -2955,6 +2981,7 @@ const rootRouteChildren: RootRouteChildren = {
   SalesReturnsNewLazyRoute: SalesReturnsNewLazyRoute,
   FinancePurchasesIndexRoute: FinancePurchasesIndexRoute,
   FinanceSalesIndexRoute: FinanceSalesIndexRoute,
+  KoperasiLaporanIndexRoute: KoperasiLaporanIndexRoute,
   PurchasesDocumentTypeIndexRoute: PurchasesDocumentTypeIndexRoute,
   SalesDocumentTypeIndexRoute: SalesDocumentTypeIndexRoute,
   SalesReturnsIndexRoute: SalesReturnsIndexRoute,

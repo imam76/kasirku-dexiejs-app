@@ -263,7 +263,7 @@ export default function CooperativeReportManagement() {
   const activeReportTab = cooperativeReportTabKeys.has(reportTabHash) ? reportTabHash : 'summary';
 
   const handleReportTabChange = (tabKey: string) => {
-    navigate({ to: '/koperasi/laporan', hash: tabKey === 'summary' ? undefined : tabKey });
+    navigate({ to: '/koperasi/laporan/ringkasan', hash: tabKey === 'summary' ? undefined : tabKey });
   };
 
   const renderFinancialReport = (children: ReactNode) => (

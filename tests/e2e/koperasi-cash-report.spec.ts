@@ -7,7 +7,7 @@ import {
 
 test('laporan tunai harian per karyawan dan export', async ({ page }) => {
   await loginAsBootstrappedOwner(page);
-  await page.goto('/koperasi/laporan-tunai');
+  await page.goto('/koperasi/laporan/tunai');
   await seedCashReportFixture(page);
 
   const report = page.getByTestId('koperasi-cash-report');

@@ -1,6 +1,6 @@
 import { getSetupConfig } from '@/services/setupKeyService';
 import { getDocumentModuleCodesForPath } from './documentPermissions';
-import { getReportAccessForPath } from './reportPermissions';
+import { COOPERATIVE_REPORT_MODULE_LIST, getReportAccessForPath } from './reportPermissions';
 
 /**
  * Mapping from route paths to setup module codes.
@@ -88,6 +88,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/koperasi/angsuran': ['KOPERASI_ANGSURAN'],
   '/koperasi/penagihan': ['KOPERASI_PENAGIHAN'],
   '/koperasi/kas-petugas': ['KOPERASI_KAS_PETUGAS'],
+  '/koperasi/laporan': COOPERATIVE_REPORT_MODULE_LIST,
   '/koperasi': [
     'KOPERASI_ANGGOTA',
     'KOPERASI_SIMPANAN_POKOK',
