@@ -128,7 +128,6 @@ export default function CooperativeInstallmentTable({
     {
       title: t('cooperative.installments.table.totalBill'),
       key: 'totalBill',
-      fixed: 'left',
       align: 'right',
       width: 160,
       sorter: createTableMultiSorter<CooperativeInstallmentLoanSummary>(
@@ -140,7 +139,6 @@ export default function CooperativeInstallmentTable({
     {
       title: t('cooperative.installments.table.totalPaid'),
       key: 'totalPaid',
-      fixed: 'left',
       align: 'right',
       width: 160,
       sorter: createTableMultiSorter<CooperativeInstallmentLoanSummary>(

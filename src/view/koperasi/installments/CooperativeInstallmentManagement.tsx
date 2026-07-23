@@ -10,6 +10,7 @@ import {
   type CooperativeInstallmentLoanStatusFilter,
   type CooperativeInstallmentLoanSummary,
   type CooperativeInstallmentMemberFilter,
+  type CooperativeInstallmentOfficerFilter,
   type CooperativeLoanPaymentStatusFilter,
 } from '@/hooks/useCooperativeInstallments';
 import { useI18n } from '@/hooks/useI18n';
@@ -53,6 +54,7 @@ export default function CooperativeInstallmentManagement() {
     payments,
     filteredPayments,
     memberFilterOptions,
+    officerFilterOptions,
     activeCollectors,
     paymentAccounts,
     payingInstallment,
@@ -63,6 +65,8 @@ export default function CooperativeInstallmentManagement() {
     setSearchText,
     memberFilter,
     setMemberFilter,
+    officerFilter,
+    setOfficerFilter,
     loanStatusFilter,
     setLoanStatusFilter,
     paymentStatusFilter,
@@ -398,7 +402,7 @@ export default function CooperativeInstallmentManagement() {
       </div>
 
       {activeTab !== 'approvals' && (
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)_minmax(180px,220px)]">
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)_minmax(220px,260px)_minmax(180px,220px)]">
           <Input.Search
             allowClear
             value={searchText}
@@ -413,6 +417,16 @@ export default function CooperativeInstallmentManagement() {
             options={[
               { value: 'ALL', label: t('cooperative.installments.filter.allMembers') },
               ...memberFilterOptions,
+            ]}
+          />
+          <Select<CooperativeInstallmentOfficerFilter>
+            showSearch
+            value={officerFilter}
+            onChange={setOfficerFilter}
+            optionFilterProp="label"
+            options={[
+              { value: 'ALL', label: t('cooperative.installments.filter.allOfficers') },
+              ...officerFilterOptions,
             ]}
           />
           {activeTab === 'balances' ? (
