@@ -17,6 +17,7 @@ import { Route as ReportIndexRouteImport } from './routes/report/index'
 import { Route as PurchasesIndexRouteImport } from './routes/purchases/index'
 import { Route as MasterDataIndexRouteImport } from './routes/master-data/index'
 import { Route as KoperasiIndexRouteImport } from './routes/koperasi/index'
+import { Route as HrIndexRouteImport } from './routes/hr/index'
 import { Route as FinanceIndexRouteImport } from './routes/finance/index'
 import { Route as SalesReturnsIndexRouteImport } from './routes/sales/returns/index'
 import { Route as SalesDocumentTypeIndexRouteImport } from './routes/sales/$documentType/index'
@@ -341,6 +342,11 @@ const MasterDataIndexRoute = MasterDataIndexRouteImport.update({
 const KoperasiIndexRoute = KoperasiIndexRouteImport.update({
   id: '/koperasi/',
   path: '/koperasi/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HrIndexRoute = HrIndexRouteImport.update({
+  id: '/hr/',
+  path: '/hr/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceIndexRoute = FinanceIndexRouteImport.update({
@@ -1221,6 +1227,7 @@ export interface FileRoutesByFullPath {
   '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance/': typeof FinanceIndexRoute
+  '/hr/': typeof HrIndexRoute
   '/koperasi/': typeof KoperasiIndexRoute
   '/master-data/': typeof MasterDataIndexRoute
   '/purchases/': typeof PurchasesIndexRoute
@@ -1338,6 +1345,7 @@ export interface FileRoutesByTo {
   '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance': typeof FinanceIndexRoute
+  '/hr': typeof HrIndexRoute
   '/koperasi': typeof KoperasiIndexRoute
   '/master-data': typeof MasterDataIndexRoute
   '/purchases': typeof PurchasesIndexRoute
@@ -1456,6 +1464,7 @@ export interface FileRoutesById {
   '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance/': typeof FinanceIndexRoute
+  '/hr/': typeof HrIndexRoute
   '/koperasi/': typeof KoperasiIndexRoute
   '/master-data/': typeof MasterDataIndexRoute
   '/purchases/': typeof PurchasesIndexRoute
@@ -1575,6 +1584,7 @@ export interface FileRouteTypes {
     | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance/'
+    | '/hr/'
     | '/koperasi/'
     | '/master-data/'
     | '/purchases/'
@@ -1692,6 +1702,7 @@ export interface FileRouteTypes {
     | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance'
+    | '/hr'
     | '/koperasi'
     | '/master-data'
     | '/purchases'
@@ -1809,6 +1820,7 @@ export interface FileRouteTypes {
     | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance/'
+    | '/hr/'
     | '/koperasi/'
     | '/master-data/'
     | '/purchases/'
@@ -1927,6 +1939,7 @@ export interface RootRouteChildren {
   ReportStockCardLazyRoute: typeof ReportStockCardLazyRoute
   ReportTransactionDetailReportLazyRoute: typeof ReportTransactionDetailReportLazyRoute
   FinanceIndexRoute: typeof FinanceIndexRoute
+  HrIndexRoute: typeof HrIndexRoute
   KoperasiIndexRoute: typeof KoperasiIndexRoute
   MasterDataIndexRoute: typeof MasterDataIndexRoute
   PurchasesIndexRoute: typeof PurchasesIndexRoute
@@ -2068,6 +2081,13 @@ declare module '@tanstack/react-router' {
       path: '/koperasi'
       fullPath: '/koperasi/'
       preLoaderRoute: typeof KoperasiIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/': {
+      id: '/hr/'
+      path: '/hr'
+      fullPath: '/hr/'
+      preLoaderRoute: typeof HrIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/finance/': {
@@ -2947,6 +2967,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportTransactionDetailReportLazyRoute:
     ReportTransactionDetailReportLazyRoute,
   FinanceIndexRoute: FinanceIndexRoute,
+  HrIndexRoute: HrIndexRoute,
   KoperasiIndexRoute: KoperasiIndexRoute,
   MasterDataIndexRoute: MasterDataIndexRoute,
   PurchasesIndexRoute: PurchasesIndexRoute,

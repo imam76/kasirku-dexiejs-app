@@ -1,4 +1,4 @@
-import { BankOutlined, BookOutlined, FileTextOutlined, LockOutlined, TeamOutlined } from '@ant-design/icons'
+import { BankOutlined, BookOutlined, FileTextOutlined, LockOutlined } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
 import { canAccessPath } from '@/auth/routePermissions'
@@ -48,13 +48,6 @@ function Finance() {
       icon: FileTextOutlined,
       color: 'text-orange-700',
       desc: t('finance.index.payablesDesc'),
-    },
-    {
-      to: '/finance/payroll',
-      label: t('nav.finance.payroll'),
-      icon: TeamOutlined,
-      color: 'text-sky-700',
-      desc: t('finance.index.payrollDesc'),
     },
     {
       to: '/finance/chart-of-accounts',

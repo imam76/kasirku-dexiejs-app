@@ -49,6 +49,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/fixed-assets': 'FIXED_ASSET_MANAGE',
   '/master-data/taxes': 'TAX_MANAGE',
   '/shopping-note': 'PURCHASE_RECEIPT_MANAGE',
+  '/hr': ['AREA_MANAGE', 'EMPLOYEE_MANAGE', 'FINANCE_ACCESS'],
   '/finance': ['FINANCE_ACCESS', 'ACCOUNTING_PERIOD_MANAGE'],
   '/finance/cash-flow': 'FINANCE_ACCESS',
   '/finance/cash-bank-reconciliation': 'FINANCE_ACCESS',

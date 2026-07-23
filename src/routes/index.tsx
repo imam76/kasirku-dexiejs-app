@@ -11,6 +11,7 @@ import {
   SettingOutlined,
   ShoppingOutlined,
   ShoppingCartOutlined,
+  TeamOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
 import { Link, createFileRoute } from '@tanstack/react-router';
@@ -710,6 +711,7 @@ function Index() {
     { to: '/purchases', label: t('nav.purchases'), icon: ShoppingOutlined, color: 'text-teal-600', desc: t('home.menu.purchasesDesc') },
     { to: '/master-data', label: t('nav.masterData'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.masterDataDesc') },
     { to: '/finance', label: t('nav.finance'), icon: BankOutlined, color: 'text-red-600', desc: t('home.menu.financeDesc') },
+    { to: '/hr', label: t('nav.hr'), icon: TeamOutlined, color: 'text-sky-600', desc: t('home.menu.hrDesc') },
     { to: '/koperasi', label: t('nav.cooperative'), icon: BankOutlined, color: 'text-emerald-600', desc: t('home.cooperativeDesc') },
     { to: '/history', label: t('nav.history'), icon: HistoryOutlined, color: 'text-purple-600', desc: t('home.historyDesc') },
     { to: '/profit', label: t('nav.report.profit'), icon: DollarOutlined, color: 'text-emerald-600', desc: t('home.profitDesc') },

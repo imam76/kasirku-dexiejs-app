@@ -40,6 +40,7 @@ import {
   ShoppingCart,
   Store,
   Sun,
+  Users,
   type LucideIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -51,7 +52,14 @@ const SIDEBAR_WIDTH = 250
 const TRIGGER_WIDTH = 36
 
 type FeedbackValues = Record<string, unknown>
-type NavLeaf = { to: string; label: string; icon: LucideIcon; key?: string; hash?: string }
+type NavLeaf = {
+  to: string
+  label: string
+  icon: LucideIcon
+  key?: string
+  hash?: string
+  activePaths?: string[]
+}
 type NavGroup = { label: string; icon: LucideIcon; key: string; children: NavLink[] }
 type NavLink = NavLeaf | NavGroup
 
@@ -217,6 +225,12 @@ const RootLayout = () => {
     { to: '/master-data', label: t('nav.masterData'), icon: Database },
     { to: '/history', label: t('nav.history'), icon: History },
     { to: '/finance', label: t('nav.finance'), icon: Banknote },
+    {
+      to: '/hr',
+      label: t('nav.hr'),
+      icon: Users,
+      activePaths: ['/master-data/areas', '/master-data/employees', '/finance/payroll'],
+    },
     { to: '/koperasi', label: t('nav.cooperative'), icon: Building2 },
     {
       key: 'marketplace',
@@ -277,9 +291,12 @@ const RootLayout = () => {
       .slice()
       .reverse()
       .find((link) => {
-        const pathMatches = link.to === '/'
-          ? location.pathname === '/'
-          : location.pathname === link.to || location.pathname.startsWith(`${link.to}/`)
+        const matchPaths = [link.to, ...(link.activePaths ?? [])]
+        const pathMatches = matchPaths.some((path) => (
+          path === '/'
+            ? location.pathname === '/'
+            : location.pathname === path || location.pathname.startsWith(`${path}/`)
+        ))
 
         if (!pathMatches) return false
         if (link.hash) return currentHash === link.hash
