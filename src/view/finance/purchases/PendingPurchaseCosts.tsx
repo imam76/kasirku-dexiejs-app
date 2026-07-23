@@ -1,14 +1,14 @@
-import { Button, Card, Select, Table, Tag, Typography } from 'antd';
+import { Button, Select, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, FileCheck2, RefreshCw } from 'lucide-react';
+import ManagementListCard from '@/components/ManagementListCard';
 import { getPurchaseDocumentTypePathSegment } from '@/configs/purchase-document';
 import { usePurchaseCostReconciliation } from '@/hooks/usePurchaseCostReconciliation';
+import { useI18n } from '@/hooks/useI18n';
 import type { PendingPurchaseCostRow } from '@/services/purchaseCostReconciliationService';
 import type { PurchaseCostStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-
-const { Title, Text } = Typography;
 
 const costStatusColor: Record<PurchaseCostStatus, string> = {
   FINAL: 'green',
@@ -30,6 +30,7 @@ const estimateSourceLabel: Record<string, string> = {
 };
 
 export default function PendingPurchaseCosts() {
+  const { t } = useI18n();
   const {
     pendingCosts,
     isLoadingPendingCosts,
@@ -120,7 +121,7 @@ export default function PendingPurchaseCosts() {
       render: (value: number) => `${value} hari`,
     },
     {
-      title: '',
+      title: t('common.actions'),
       key: 'action',
       fixed: 'right',
       width: 160,
@@ -141,23 +142,20 @@ export default function PendingPurchaseCosts() {
   ];
 
   return (
-    <div className="space-y-4 p-3 sm:p-4 md:p-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <Title level={2} style={{ margin: 0 }}>Harga Belum Final</Title>
-          <Text type="secondary">View pendukung untuk Purchase Receipt yang masih memakai HPP sementara.</Text>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <ManagementListCard
+      title="Harga Belum Final"
+      icon={<FileCheck2 className="h-5 w-5 text-amber-700" />}
+      actions={(
+        <div className="flex flex-wrap justify-end gap-2">
           <Link to="/purchases">
-            <Button icon={<ArrowLeft size={16} />}>Kembali</Button>
+            <Button icon={<ArrowLeft size={16} />}>{t('common.back')}</Button>
           </Link>
           <Button icon={<RefreshCw size={16} />} loading={isLoadingPendingCosts} onClick={() => void refetchPendingCosts()}>
-            Refresh
+            {t('common.refresh')}
           </Button>
         </div>
-      </div>
-
-      <Card size="small">
+      )}
+      toolbar={(
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="text-sm text-gray-600">
             {pendingCosts.length} baris perlu finalisasi harga.
@@ -169,15 +167,16 @@ export default function PendingPurchaseCosts() {
             disabled
           />
         </div>
-      </Card>
-
+      )}
+    >
       <Table
         rowKey={(row) => `${row.document.id}-${row.item.id}`}
         columns={columns}
         dataSource={pendingCosts}
         loading={isLoadingPendingCosts}
-        scroll={{ x: true }}
+        scroll={{ x: 1300 }}
+        pagination={{ pageSize: 20, showSizeChanger: true }}
       />
-    </div>
+    </ManagementListCard>
   );
 }

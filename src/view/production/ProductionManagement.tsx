@@ -1,15 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, DatePicker, Input, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, DatePicker, Input, Select, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Eye, Package, Plus, RefreshCw } from 'lucide-react';
+import ManagementListCard from '@/components/ManagementListCard';
 import { useProductionOrders } from '@/hooks/useProductionOrders';
 import dayjs from '@/lib/dayjs';
 import type { ProductionOrder, ProductionOrderStatus } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import ProductionOrderDetail from './ProductionOrderDetail';
 import ProductionOrderForm from './ProductionOrderForm';
-
-const { Title } = Typography;
 
 type ScreenState =
   | { type: 'list' }
@@ -145,56 +144,52 @@ export default function ProductionManagement() {
   ];
 
   return (
-    <Card
-      className="rounded-md shadow-md"
-      title={(
-        <div className="flex items-center gap-2">
-          <Package className="h-5 w-5" />
-          <Title level={4} className="!mb-0">Produksi</Title>
-        </div>
-      )}
-      extra={(
+    <ManagementListCard
+      title="Produksi"
+      icon={<Package className="h-5 w-5" />}
+      actions={(
         <Button type="primary" icon={<Plus size={16} />} onClick={() => setScreen({ type: 'form' })}>
           Produksi Baru
         </Button>
       )}
+      toolbar={(
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(240px,1fr)_180px_280px_auto]">
+          <Input.Search
+            allowClear
+            value={searchText}
+            placeholder="Cari nomor produksi atau barang jadi..."
+            onChange={(event) => setSearchText(event.target.value)}
+          />
+          <Select<StatusFilter>
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: 'ALL', label: 'Semua status' },
+              { value: 'DRAFT', label: 'Draft' },
+              { value: 'POSTED', label: 'Posted' },
+              { value: 'VOIDED', label: 'Voided' },
+            ]}
+          />
+          <DatePicker.RangePicker
+            value={dateRange}
+            allowClear
+            format="DD MMM YYYY"
+            onChange={(value) => {
+              if (value?.[0] && value[1]) {
+                setDateRange([value[0], value[1]]);
+                return;
+              }
+              setDateRange(null);
+            }}
+          />
+          <Space>
+            <Button icon={<RefreshCw size={16} />} loading={isFetchingOrders} onClick={() => refetchOrders()}>
+              Refresh
+            </Button>
+          </Space>
+        </div>
+      )}
     >
-      <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(240px,1fr)_180px_280px_auto]">
-        <Input.Search
-          allowClear
-          value={searchText}
-          placeholder="Cari nomor produksi atau barang jadi..."
-          onChange={(event) => setSearchText(event.target.value)}
-        />
-        <Select<StatusFilter>
-          value={statusFilter}
-          onChange={setStatusFilter}
-          options={[
-            { value: 'ALL', label: 'Semua status' },
-            { value: 'DRAFT', label: 'Draft' },
-            { value: 'POSTED', label: 'Posted' },
-            { value: 'VOIDED', label: 'Voided' },
-          ]}
-        />
-        <DatePicker.RangePicker
-          value={dateRange}
-          allowClear
-          format="DD MMM YYYY"
-          onChange={(value) => {
-            if (value?.[0] && value[1]) {
-              setDateRange([value[0], value[1]]);
-              return;
-            }
-            setDateRange(null);
-          }}
-        />
-        <Space>
-          <Button icon={<RefreshCw size={16} />} loading={isFetchingOrders} onClick={() => refetchOrders()}>
-            Refresh
-          </Button>
-        </Space>
-      </div>
-
       <Table
         rowKey="id"
         columns={columns}
@@ -203,6 +198,6 @@ export default function ProductionManagement() {
         scroll={{ x: 1200 }}
         pagination={{ pageSize: 20, showSizeChanger: true }}
       />
-    </Card>
+    </ManagementListCard>
   );
 }
