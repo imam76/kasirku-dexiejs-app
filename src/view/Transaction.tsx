@@ -11,9 +11,11 @@ import CartSidebar from '../components/CartSidebar';
 import MobileCartDrawer from '../components/MobileCartDrawer';
 import ScannerModal from '../components/ScannerModal';
 import { useI18n } from '@/hooks/useI18n';
-import type { CashierSession } from '@/types';
+import type { CashierSession, Product } from '@/types';
 import type { CashierSessionReconciliation } from '@/services/cashierSessionService';
 import { getPosProcessDraftScope } from '@/store/transactionStore';
+import { getAdjacentProductSellableUnit, getProductSellableUnits } from '@/utils/productUnits';
+import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 
 interface OpenCashierFormValues {
   opening_cash_amount: number;
@@ -99,6 +101,26 @@ const ReconciliationSummary = ({ reconciliation }: { reconciliation: CashierSess
   );
 };
 
+const isTypingTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+
+  const tagName = target.tagName.toLowerCase();
+  return target.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+};
+
+const hasVisiblePosShortcutBlocker = () => {
+  const selectors = [
+    '.ant-modal-wrap',
+    '.ant-drawer-open .ant-drawer-content-wrapper',
+    '.ant-select-dropdown',
+  ];
+
+  return selectors.some((selector) => (
+    Array.from(document.querySelectorAll<HTMLElement>(selector))
+      .some((element) => element.getClientRects().length > 0)
+  ));
+};
+
 export default function Transaction() {
   const { message } = App.useApp();
   const { t } = useI18n();
@@ -161,6 +183,9 @@ export default function Transaction() {
   const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0);
   const total = calculateTotal();
   const searchInputRef = useRef<InputRef>(null);
+  const quantityInputRefs = useRef(new Map<string, HTMLInputElement>());
+  const addFromSearchInFlightRef = useRef(false);
+  const [activeCartItemId, setActiveCartItemId] = useState<string>();
 
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -168,6 +193,9 @@ export default function Transaction() {
   const [reconciliation, setReconciliation] = useState<CashierSessionReconciliation | null>(null);
   const desktopShortcuts = [
     { keys: ['/'], label: t('transaction.shortcut.focusSearch') },
+    { keys: ['Enter'], label: t('transaction.shortcut.addProduct') },
+    { keys: ['Num *'], label: t('transaction.shortcut.editQuantity') },
+    { keys: ['Num +', 'Num -'], label: t('transaction.shortcut.changeUnit') },
     { keys: ['Esc'], label: t('transaction.shortcut.clearSearch') },
   ];
 
@@ -181,16 +209,167 @@ export default function Transaction() {
     searchInputRef.current?.select();
   }, []);
 
+  const handleAddProduct = useCallback((product: Product) => {
+    const added = addToCart(product);
+    if (added) setActiveCartItemId(product.id);
+    return added;
+  }, [addToCart]);
+
+  const registerQuantityInput = useCallback((productId: string, element: HTMLInputElement | null) => {
+    if (element) {
+      const nativeElement = (element as HTMLInputElement & { nativeElement?: HTMLElement }).nativeElement;
+      const inputElement = nativeElement instanceof HTMLInputElement
+        ? nativeElement
+        : nativeElement?.querySelector('input') ?? element;
+      quantityInputRefs.current.set(productId, inputElement);
+      return;
+    }
+
+    quantityInputRefs.current.delete(productId);
+  }, []);
+
   useEffect(() => {
-    const isTypingTarget = (target: EventTarget | null) => {
-      if (!(target instanceof HTMLElement)) return false;
+    setActiveCartItemId((currentId) => {
+      if (currentId && cart.some((item) => item.product.id === currentId)) return currentId;
+      return cart[cart.length - 1]?.product.id;
+    });
+  }, [cart]);
 
-      const tagName = target.tagName.toLowerCase();
-      return target.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select';
-    };
+  useEffect(() => {
+    if (!activeCartItemId) return;
 
+    const frame = window.requestAnimationFrame(() => {
+      const activeElement = Array.from(document.querySelectorAll<HTMLElement>('[data-pos-cart-item-id]'))
+        .find((element) => (
+          element.dataset.posCartItemId === activeCartItemId
+          && element.getClientRects().length > 0
+        ));
+      activeElement?.scrollIntoView({ block: 'nearest' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeCartItemId]);
+
+  const focusActiveQuantity = useCallback(() => {
+    if (!activeCartItemId) {
+      message.open({
+        key: 'pos-numpad-shortcut',
+        type: 'info',
+        content: t('transaction.shortcut.emptyCart'),
+        duration: 1,
+      });
+      return;
+    }
+
+    const input = quantityInputRefs.current.get(activeCartItemId);
+    if (!input) return;
+
+    input.focus();
+    input.select();
+  }, [activeCartItemId, message, t]);
+
+  const cycleActiveUnit = useCallback((direction: 1 | -1) => {
+    const activeItem = cart.find((item) => item.product.id === activeCartItemId);
+    if (!activeItem) {
+      message.open({
+        key: 'pos-numpad-shortcut',
+        type: 'info',
+        content: t('transaction.shortcut.emptyCart'),
+        duration: 1,
+      });
+      return;
+    }
+
+    const sellableUnits = getProductSellableUnits(activeItem.product);
+    if (sellableUnits.length <= 1) {
+      message.open({
+        key: 'pos-numpad-shortcut',
+        type: 'info',
+        content: t('transaction.shortcut.singleUnit', { unit: activeItem.unit }),
+        duration: 1,
+      });
+      return;
+    }
+
+    const nextUnit = getAdjacentProductSellableUnit(activeItem.product, activeItem.unit, direction);
+    if (!updateUnit(activeItem.product.id, nextUnit)) return;
+
+    message.open({
+      key: 'pos-numpad-shortcut',
+      type: 'success',
+      content: t('transaction.shortcut.unitChanged', { unit: nextUnit }),
+      duration: 1,
+    });
+  }, [activeCartItemId, cart, message, t, updateUnit]);
+
+  const addProductFromSearch = useCallback(async () => {
+    const normalizedSearchTerm = normalizeProductSearchTerm(searchTerm);
+    if (!normalizedSearchTerm || addFromSearchInFlightRef.current) return;
+
+    addFromSearchInFlightRef.current = true;
+    try {
+      const exactSkuMatch = await findProductByScannedCode(searchTerm);
+      const firstMatchingProduct = filteredProducts.find((product) => (
+        matchesProductSearch(product, normalizedSearchTerm)
+      ));
+      const product = exactSkuMatch ?? firstMatchingProduct;
+
+      if (!product) {
+        message.open({
+          key: 'pos-numpad-shortcut',
+          type: 'warning',
+          content: t('transaction.shortcut.noSearchResult'),
+          duration: 1.5,
+        });
+        return;
+      }
+
+      if (!handleAddProduct(product)) return;
+      setSearchTerm('');
+      window.requestAnimationFrame(focusSearch);
+    } finally {
+      addFromSearchInFlightRef.current = false;
+    }
+  }, [
+    filteredProducts,
+    findProductByScannedCode,
+    focusSearch,
+    handleAddProduct,
+    message,
+    searchTerm,
+    setSearchTerm,
+    t,
+  ]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (
+        event.defaultPrevented
+        || event.ctrlKey
+        || event.metaKey
+        || event.altKey
+        || event.repeat
+        || scannerOpen
+        || closeModalOpen
+        || cartOpen
+        || hasVisiblePosShortcutBlocker()
+      ) return;
+
+      const target = event.target;
+      const searchInput = searchInputRef.current?.input;
+      const activeQuantityInput = activeCartItemId
+        ? quantityInputRefs.current.get(activeCartItemId)
+        : undefined;
+      const isSearchTarget = target === searchInput;
+      const isActiveQuantityTarget = target === activeQuantityInput;
+      const isUnrelatedTypingTarget = isTypingTarget(target) && !isSearchTarget && !isActiveQuantityTarget;
+
+      if (event.code === 'NumpadDivide') {
+        if (isUnrelatedTypingTarget) return;
+        event.preventDefault();
+        focusSearch();
+        return;
+      }
 
       if (event.key === '/' && !isTypingTarget(event.target)) {
         event.preventDefault();
@@ -201,23 +380,63 @@ export default function Transaction() {
       if (event.key === 'Escape' && searchTerm) {
         event.preventDefault();
         clearSearch();
+        return;
+      }
+
+      if ((event.code === 'Enter' || event.code === 'NumpadEnter') && isSearchTarget) {
+        if (!searchTerm.trim()) return;
+        event.preventDefault();
+        void addProductFromSearch();
+        return;
+      }
+
+      if (event.code === 'NumpadMultiply') {
+        if (isUnrelatedTypingTarget) return;
+        event.preventDefault();
+        focusActiveQuantity();
+        return;
+      }
+
+      if (event.code === 'NumpadAdd' || event.code === 'NumpadSubtract') {
+        if (isUnrelatedTypingTarget) return;
+        event.preventDefault();
+        cycleActiveUnit(event.code === 'NumpadAdd' ? 1 : -1);
+        return;
+      }
+
+      if ((event.code === 'Enter' || event.code === 'NumpadEnter') && isActiveQuantityTarget) {
+        event.preventDefault();
+        activeQuantityInput?.blur();
+        focusSearch();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [clearSearch, focusSearch, searchTerm]);
+  }, [
+    activeCartItemId,
+    addProductFromSearch,
+    cartOpen,
+    clearSearch,
+    closeModalOpen,
+    cycleActiveUnit,
+    focusActiveQuantity,
+    focusSearch,
+    scannerOpen,
+    searchTerm,
+  ]);
 
   const handleScan = useCallback(async (text: string) => {
     const match = await findProductByScannedCode(text);
 
     if (match) {
-      addToCart(match);
-      message.success(t('transaction.addedToCart', { name: match.name }));
+      if (handleAddProduct(match)) {
+        message.success(t('transaction.addedToCart', { name: match.name }));
+      }
     } else {
       message.error(t('transaction.productNotFound', { code: text }));
     }
-  }, [addToCart, findProductByScannedCode, message, t]);
+  }, [findProductByScannedCode, handleAddProduct, message, t]);
 
   const handleOpenSession = async (values: OpenCashierFormValues) => {
     await openSession({
@@ -394,7 +613,7 @@ export default function Transaction() {
             <ProductList
               products={filteredProducts}
               cart={cart}
-              addToCart={addToCart}
+              addToCart={handleAddProduct}
               updateQuantity={updateQuantity}
               pagination={productPagination}
             />
@@ -406,6 +625,9 @@ export default function Transaction() {
           updateQuantity={updateQuantity}
           updateUnit={updateUnit}
           removeFromCart={removeFromCart}
+          activeCartItemId={activeCartItemId}
+          onActivateCartItem={setActiveCartItemId}
+          registerQuantityInput={registerQuantityInput}
           clearCart={clearCart}
           total={total}
           showPayment={showPayment}
@@ -461,6 +683,8 @@ export default function Transaction() {
         updateQuantity={updateQuantity}
         updateUnit={updateUnit}
         removeFromCart={removeFromCart}
+        activeCartItemId={activeCartItemId}
+        onActivateCartItem={setActiveCartItemId}
         clearCart={clearCart}
         total={total}
         showPayment={showPayment}

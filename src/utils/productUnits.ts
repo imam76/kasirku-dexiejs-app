@@ -72,6 +72,21 @@ export const getProductSellableUnits = (product: ProductUnitShape) => {
   ]);
 };
 
+export const getAdjacentProductSellableUnit = (
+  product: ProductUnitShape,
+  currentUnit: ProductUnit,
+  direction: 1 | -1,
+) => {
+  const sellableUnits = getProductSellableUnits(product);
+  if (sellableUnits.length <= 1) return sellableUnits[0] ?? normalizeUnit(currentUnit);
+
+  const normalizedCurrentUnit = normalizeUnit(currentUnit);
+  const currentIndex = sellableUnits.indexOf(normalizedCurrentUnit);
+  if (currentIndex === -1) return sellableUnits[0];
+
+  return sellableUnits[(currentIndex + direction + sellableUnits.length) % sellableUnits.length];
+};
+
 export const getProductDocumentUnits = (product: ProductUnitShape) => {
   return uniqueUnits([
     product.selling_unit,

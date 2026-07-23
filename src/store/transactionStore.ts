@@ -275,6 +275,23 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       };
     }
 
+    const quantityInStockUnit = konversiSatuanProduk(
+      item.quantity,
+      item.product,
+      newUnit,
+      item.product.purchase_unit,
+    );
+    if (quantityInStockUnit > item.product.stock) {
+      return {
+        success: false,
+        error: {
+          code: 'INSUFFICIENT_STOCK',
+          stock: item.product.stock,
+          unit: item.product.purchase_unit,
+        },
+      };
+    }
+
     set({
       cart: cart.map((cartItem) => {
         if (cartItem.product.id !== productId) return cartItem;

@@ -291,6 +291,7 @@ export const useTransaction = (draftScope?: string) => {
     if (!result.success && result.error) {
       showTransactionError(result.error);
     }
+    return result.success;
   };
 
   const findProductByScannedCode = useCallback(async (scanCode: string) => {

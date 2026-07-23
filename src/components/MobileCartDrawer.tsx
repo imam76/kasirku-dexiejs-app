@@ -15,8 +15,10 @@ interface MobileCartDrawerProps {
   onClose: () => void;
   cart: CartItemType[];
   updateQuantity: (id: string, quantity: number) => void;
-  updateUnit: (id: string, unit: string) => void;
+  updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
+  activeCartItemId?: string;
+  onActivateCartItem: (id: string) => void;
   clearCart: () => void;
   total: number;
   showPayment: boolean;
@@ -51,6 +53,8 @@ export default function MobileCartDrawer({
   updateQuantity,
   updateUnit,
   removeFromCart,
+  activeCartItemId,
+  onActivateCartItem,
   clearCart,
   total,
   showPayment,
@@ -124,6 +128,8 @@ export default function MobileCartDrawer({
                 updateQuantity={updateQuantity}
                 updateUnit={updateUnit}
                 removeFromCart={removeFromCart}
+                isActive={item.product.id === activeCartItemId}
+                onActivate={() => onActivateCartItem(item.product.id)}
               />
             ))}
           </div>
