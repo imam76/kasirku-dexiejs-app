@@ -4,12 +4,14 @@ import {
   buildPosSalesReportData,
   type PosSalesReportData,
 } from '@/services/posSalesReportAggregator';
+import type { PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
 import { filterActiveTransactions } from '@/utils/transactions';
 
 export interface PosSalesReportFilters {
   startDate?: string;
   endDate?: string;
   paymentMethodCode?: string;
+  paymentMode?: PosPaymentModeFilter;
   categories?: string[];
   topProductsLimit?: number;
 }
@@ -45,6 +47,7 @@ export const getPosSalesReportData = async ({
   startDate,
   endDate,
   paymentMethodCode,
+  paymentMode,
   categories,
   topProductsLimit,
 }: PosSalesReportFilters = {}): Promise<PosSalesReportData> => {
@@ -57,6 +60,7 @@ export const getPosSalesReportData = async ({
       startDate,
       endDate,
       paymentMethodCode,
+      paymentMode,
       categories,
       topProductsLimit,
     });
@@ -76,6 +80,7 @@ export const getPosSalesReportData = async ({
     startDate,
     endDate,
     paymentMethodCode,
+    paymentMode,
     categories,
     topProductsLimit,
   });

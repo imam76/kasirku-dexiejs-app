@@ -2,7 +2,7 @@ import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Banknote, Clock, Keyboard, LockKeyhole, ScanLine } from 'lucide-react';
+import { Banknote, Clock, Keyboard, LockKeyhole, PlayCircle, ScanLine } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { useCashierSession } from '@/hooks/useCashierSession';
 import { formatCurrency } from '@/utils/formatters';
@@ -13,6 +13,7 @@ import ScannerModal from '../components/ScannerModal';
 import { useI18n } from '@/hooks/useI18n';
 import type { CashierSession } from '@/types';
 import type { CashierSessionReconciliation } from '@/services/cashierSessionService';
+import { getPosProcessDraftScope } from '@/store/transactionStore';
 
 interface OpenCashierFormValues {
   opening_cash_amount: number;
@@ -36,24 +37,31 @@ const CashierSessionStatusBar = ({
   const { t } = useI18n();
 
   return (
-    <div className="mb-4 flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-start gap-3">
-        <div className="rounded-lg bg-white p-2 text-emerald-700 shadow-sm">
-          <Banknote size={22} />
+    <header className="-mx-2 mb-2 flex min-h-10 items-center justify-between gap-3 border-b border-blue-100 bg-white/95 px-3 py-1.5 text-blue-950 shadow-sm sm:-mx-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+          <Banknote size={15} />
         </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">{t('cashierSession.activeTitle')}</p>
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-            <span>{session.session_number}</span>
-            <span>{session.cashier_user_name || '-'}</span>
-            <span>{t('cashierSession.openingCash')}: Rp {formatCurrency(session.opening_cash_amount)}</span>
-          </div>
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden text-xs">
+          <span className="shrink-0 font-bold text-emerald-700">{t('cashierSession.activeTitle')}</span>
+          <span className="hidden h-4 w-px bg-blue-100 sm:block" />
+          <span className="truncate font-medium text-slate-600">{session.session_number} · {session.cashier_user_name || '-'}</span>
+          <span className="hidden shrink-0 text-slate-500 min-[1024px]:inline">
+            {t('cashierSession.openingCash')}: Rp {formatCurrency(session.opening_cash_amount)}
+          </span>
         </div>
       </div>
-      <Button danger onClick={onClose} loading={isClosing}>
+      <Button
+        danger
+        size="small"
+        icon={<LockKeyhole size={14} />}
+        onClick={onClose}
+        loading={isClosing}
+        className="shrink-0 !rounded-lg"
+      >
         {t('cashierSession.closeButton')}
       </Button>
-    </div>
+    </header>
   );
 };
 
@@ -105,6 +113,9 @@ export default function Transaction() {
     isClosingSession,
     calculateReconciliation,
   } = useCashierSession();
+  const posProcessDraftScope = activeSession?.cashier_user_id
+    ? getPosProcessDraftScope(activeSession.cashier_user_id, activeSession.id)
+    : undefined;
   const {
     cart,
     searchTerm,
@@ -115,10 +126,12 @@ export default function Transaction() {
     memberContactId,
     redeemPoints,
     showPayment,
+    isPosProcessReady,
     filteredProducts,
     productPagination,
     promoPreview,
     membershipPreview,
+    activePromos,
     activeMembers,
     selectedMember,
     membershipSetting,
@@ -140,7 +153,8 @@ export default function Transaction() {
     setMemberContactId,
     setRedeemPoints,
     setShowPayment,
-  } = useTransaction();
+    discardDraftScope,
+  } = useTransaction(posProcessDraftScope);
 
   // Mobile cart drawer state
   const [cartOpen, setCartOpen] = useState(false);
@@ -240,12 +254,15 @@ export default function Transaction() {
       closing_cash_amount: Number(values.closing_cash_amount || 0),
       closing_note: values.closing_note,
     });
+    if (posProcessDraftScope) {
+      discardDraftScope(posProcessDraftScope);
+    }
     setCloseModalOpen(false);
     setReconciliation(null);
     closeForm.resetFields();
   };
 
-  if (isLoadingActiveSession) {
+  if (isLoadingActiveSession || !isPosProcessReady) {
     return (
       <div className="flex min-h-[360px] items-center justify-center p-6">
         <Spin />
@@ -256,9 +273,9 @@ export default function Transaction() {
   if (!activeSession) {
     return (
       <div className="flex min-h-[calc(100vh-120px)] items-center justify-center p-4 sm:p-6">
-        <Card className="w-full max-w-xl border border-gray-200 shadow-md">
+        <Card className="w-full max-w-xl rounded-2xl border border-blue-100 shadow-md">
           <div className="mb-6 flex items-start gap-3">
-            <div className="rounded-lg bg-emerald-50 p-3 text-emerald-700">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-700">
               <LockKeyhole size={24} />
             </div>
             <div>
@@ -294,8 +311,9 @@ export default function Transaction() {
               type="primary"
               htmlType="submit"
               size="large"
+              icon={<PlayCircle size={18} />}
               loading={isOpeningSession}
-              className="w-full bg-emerald-600 hover:!bg-emerald-700"
+              className="w-full bg-blue-600 hover:!bg-blue-700"
             >
               {t('cashierSession.openButton')}
             </Button>
@@ -306,13 +324,12 @@ export default function Transaction() {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">{t('transaction.title')}</h2>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50/60 p-2 sm:p-3 min-[1024px]:px-3 min-[1024px]:pb-3 min-[1024px]:pt-0">
       <CashierSessionStatusBar session={activeSession} onClose={openCloseModal} isClosing={isClosingSession} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(360px,1fr)_minmax(280px,300px)_minmax(280px,300px)] xl:grid-cols-[minmax(0,1fr)_minmax(300px,320px)_minmax(300px,320px)] 2xl:grid-cols-[minmax(0,1fr)_340px_340px]">
-        <div id="product-list" className="min-w-0">
-          <div className="bg-white rounded-lg shadow-md p-4 mb-4 border border-gray-200">
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_270px_270px] xl:grid-cols-[minmax(0,1fr)_300px_300px] 2xl:grid-cols-[minmax(0,1fr)_320px_320px]">
+        <div id="product-list" className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+          <div className="sticky top-0 z-20 mb-2 shrink-0 rounded-2xl border border-blue-100 bg-white p-3 shadow-sm">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
               <Input
                 ref={searchInputRef}
@@ -341,7 +358,7 @@ export default function Transaction() {
                 icon={<ScanLine size={18} />}
                 onClick={() => setScannerOpen(true)}
                 data-tour="transaction-scan"
-                className="flex w-full items-center justify-center gap-2 bg-indigo-600 font-semibold text-white hover:!border-indigo-700 hover:!bg-indigo-700 hover:!text-white sm:w-auto"
+                className="flex w-full items-center justify-center gap-2 bg-blue-600 font-semibold text-white hover:!border-blue-700 hover:!bg-blue-700 hover:!text-white sm:w-auto"
               >
                 {t('transaction.scanBarcode')}
               </Button>
@@ -373,12 +390,15 @@ export default function Transaction() {
             </div>
           </div>
 
-          <ProductList
-            products={filteredProducts}
-            cart={cart}
-            addToCart={addToCart}
-            pagination={productPagination}
-          />
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <ProductList
+              products={filteredProducts}
+              cart={cart}
+              addToCart={addToCart}
+              updateQuantity={updateQuantity}
+              pagination={productPagination}
+            />
+          </div>
         </div>
 
         <CartSidebar
@@ -397,6 +417,7 @@ export default function Transaction() {
           redeemPoints={redeemPoints}
           promoPreview={promoPreview}
           membershipPreview={membershipPreview}
+          activePromos={activePromos}
           activeMembers={activeMembers}
           selectedMember={selectedMember}
           membershipSetting={membershipSetting}
@@ -413,16 +434,17 @@ export default function Transaction() {
         />
       </div>
 
-      {/* Mobile/Tablet: Floating Cart Button */}
+      {/* Mobile: floating cart button. Tablet: inline footer below the product panel. */}
       {totalItems > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 lg:hidden z-30">
+        <div className="fixed bottom-4 left-4 right-4 z-30 min-[1024px]:static min-[1024px]:mt-2 min-[1024px]:shrink-0 lg:hidden">
           <button
             onClick={() => setCartOpen(true)}
             data-tour="transaction-mobile-cart"
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-3.5 px-5 rounded-xl shadow-xl font-semibold flex items-center justify-between transition-colors"
+            data-pos-cart-target
+            className="flex w-full items-center justify-between rounded-2xl bg-blue-600 px-5 py-3.5 font-semibold text-white shadow-xl shadow-blue-200/70 transition-colors hover:bg-blue-700"
           >
             <div className="flex items-center gap-3">
-              <span className="bg-white text-green-600 font-bold rounded-full w-7 h-7 flex items-center justify-center text-sm">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-600">
                 {totalItems}
               </span>
               <span>{t('transaction.viewCart')}</span>
@@ -450,6 +472,7 @@ export default function Transaction() {
         redeemPoints={redeemPoints}
         promoPreview={promoPreview}
         membershipPreview={membershipPreview}
+        activePromos={activePromos}
         activeMembers={activeMembers}
         selectedMember={selectedMember}
         membershipSetting={membershipSetting}

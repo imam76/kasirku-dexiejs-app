@@ -60,9 +60,10 @@ const buildSessionNumber = (date = new Date()) => {
   return `KS-${year}${month}${day}-${hour}${minute}${second}`;
 };
 
-export const getOpenCashierSessionForCurrentUser = async () => {
+export const getOpenCashierSessionForCurrentUser = async (expectedUserId?: string) => {
   const currentUser = await getCurrentSessionUser();
   if (!currentUser) return null;
+  if (expectedUserId && currentUser.id !== expectedUserId) return null;
 
   return (await db.cashierSessions
     .where('cashier_user_id')

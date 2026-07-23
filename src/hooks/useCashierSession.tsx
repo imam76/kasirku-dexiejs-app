@@ -9,6 +9,11 @@ import {
   type OpenCashierSessionInput,
 } from '@/services/cashierSessionService';
 import { useI18n } from '@/hooks/useI18n';
+import { useAuth } from '@/auth/useAuth';
+
+export const getCashierSessionActiveQueryKey = (userId?: string | null) => (
+  ['cashierSession', 'active', userId ?? 'anonymous'] as const
+);
 
 const RELATED_QUERY_KEYS = [
   'cashierSession',
@@ -22,10 +27,13 @@ export const useCashierSession = () => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
   const { t } = useI18n();
+  const { currentUser } = useAuth();
+  const activeSessionQueryKey = getCashierSessionActiveQueryKey(currentUser?.id);
 
   const activeSessionQuery = useQuery({
-    queryKey: ['cashierSession', 'active'],
-    queryFn: getOpenCashierSessionForCurrentUser,
+    queryKey: activeSessionQueryKey,
+    queryFn: () => getOpenCashierSessionForCurrentUser(currentUser!.id),
+    enabled: Boolean(currentUser?.id),
   });
 
   const invalidate = () => {
@@ -37,7 +45,7 @@ export const useCashierSession = () => {
   const openMutation = useMutation({
     mutationFn: (input: OpenCashierSessionInput) => openCashierSession(input),
     onSuccess: (session) => {
-      queryClient.setQueryData(['cashierSession', 'active'], session);
+      queryClient.setQueryData(getCashierSessionActiveQueryKey(session.cashier_user_id), session);
       invalidate();
       message.success(t('cashierSession.openSuccess'));
     },
@@ -52,7 +60,7 @@ export const useCashierSession = () => {
   const closeMutation = useMutation({
     mutationFn: (input: CloseCashierSessionInput) => closeCashierSession(input),
     onSuccess: (session) => {
-      queryClient.setQueryData(['cashierSession', 'active'], null);
+      queryClient.setQueryData(getCashierSessionActiveQueryKey(session.cashier_user_id), null);
       invalidate();
       if (session.balance_status === 'NON_BALANCED') {
         message.warning(t('cashierSession.closeNonBalancedSuccess'));

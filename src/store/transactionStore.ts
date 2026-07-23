@@ -10,6 +10,7 @@ export type TransactionError =
 
 interface TransactionState {
   products: Product[];
+  productPage: number;
   cart: CartItem[];
   searchTerm: string;
   paymentDrafts: PosPaymentDraft[];
@@ -17,9 +18,11 @@ interface TransactionState {
   memberContactId?: string;
   redeemPoints: string;
   showPayment: boolean;
+  activeDraftScope?: string;
 
   // Actions
   setProducts: (products: Product[]) => void;
+  setProductPage: (page: number) => void;
   setCart: (cart: CartItem[] | ((prev: CartItem[]) => CartItem[])) => void;
   setSearchTerm: (term: string) => void;
   setPaymentDrafts: (drafts: PosPaymentDraft[]) => void;
@@ -30,6 +33,8 @@ interface TransactionState {
   setMemberContactId: (memberContactId?: string) => void;
   setRedeemPoints: (points: string) => void;
   setShowPayment: (show: boolean) => void;
+  switchDraftScope: (scope?: string) => void;
+  discardDraftScope: (scope: string) => void;
 
   // Logical State Actions (Non-DB)
   addToCart: (product: Product) => { success: boolean; error?: TransactionError };
@@ -47,8 +52,27 @@ export interface PosPaymentDraft {
   isAmountAutoFilled: boolean;
 }
 
-export const useTransactionStore = create<TransactionState>((set, get) => ({
-  products: [],
+interface PosProcessDraftSnapshot {
+  productPage: number;
+  cart: CartItem[];
+  searchTerm: string;
+  paymentDrafts: PosPaymentDraft[];
+  voucherCode: string;
+  memberContactId?: string;
+  redeemPoints: string;
+  showPayment: boolean;
+}
+
+const POS_PROCESS_DRAFT_STORAGE_PREFIX = 'frayukti-pos-process-draft';
+
+export const getPosProcessDraftScope = (userId: string, cashierSessionId: string) => (
+  `${userId}:${cashierSessionId}`
+);
+
+const getDraftStorageKey = (scope: string) => `${POS_PROCESS_DRAFT_STORAGE_PREFIX}:${scope}`;
+
+const emptyProcessDraft = (): PosProcessDraftSnapshot => ({
+  productPage: 1,
   cart: [],
   searchTerm: '',
   paymentDrafts: [],
@@ -56,8 +80,73 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   memberContactId: undefined,
   redeemPoints: '',
   showPayment: false,
+});
+
+const toProcessDraftSnapshot = (state: TransactionState): PosProcessDraftSnapshot => ({
+  productPage: state.productPage,
+  cart: state.cart,
+  searchTerm: state.searchTerm,
+  paymentDrafts: state.paymentDrafts,
+  voucherCode: state.voucherCode,
+  memberContactId: state.memberContactId,
+  redeemPoints: state.redeemPoints,
+  showPayment: state.showPayment,
+});
+
+const readProcessDraft = (scope: string): PosProcessDraftSnapshot => {
+  if (typeof sessionStorage === 'undefined') return emptyProcessDraft();
+
+  try {
+    const rawDraft = sessionStorage.getItem(getDraftStorageKey(scope));
+    if (!rawDraft) return emptyProcessDraft();
+    const draft = JSON.parse(rawDraft) as Partial<PosProcessDraftSnapshot>;
+    return {
+      productPage: Number.isInteger(draft.productPage) && Number(draft.productPage) > 0
+        ? Number(draft.productPage)
+        : 1,
+      cart: Array.isArray(draft.cart) ? draft.cart : [],
+      searchTerm: typeof draft.searchTerm === 'string' ? draft.searchTerm : '',
+      paymentDrafts: Array.isArray(draft.paymentDrafts) ? draft.paymentDrafts : [],
+      voucherCode: typeof draft.voucherCode === 'string' ? draft.voucherCode : '',
+      memberContactId: typeof draft.memberContactId === 'string' ? draft.memberContactId : undefined,
+      redeemPoints: typeof draft.redeemPoints === 'string' ? draft.redeemPoints : '',
+      showPayment: draft.showPayment === true,
+    };
+  } catch (error) {
+    console.warn('Draft proses POS tidak dapat dimuat.', error);
+    return emptyProcessDraft();
+  }
+};
+
+const writeProcessDraft = (scope: string, state: TransactionState) => {
+  if (typeof sessionStorage === 'undefined') return;
+
+  try {
+    sessionStorage.setItem(getDraftStorageKey(scope), JSON.stringify(toProcessDraftSnapshot(state)));
+  } catch (error) {
+    console.warn('Draft proses POS tidak dapat disimpan.', error);
+  }
+};
+
+const removeProcessDraft = (scope: string) => {
+  if (typeof sessionStorage === 'undefined') return;
+  sessionStorage.removeItem(getDraftStorageKey(scope));
+};
+
+export const useTransactionStore = create<TransactionState>((set, get) => ({
+  products: [],
+  productPage: 1,
+  cart: [],
+  searchTerm: '',
+  paymentDrafts: [],
+  voucherCode: '',
+  memberContactId: undefined,
+  redeemPoints: '',
+  showPayment: false,
+  activeDraftScope: undefined,
 
   setProducts: (products) => set({ products }),
+  setProductPage: (productPage) => set({ productPage }),
   setCart: (cart) => set((state) => ({
     cart: typeof cart === 'function' ? cart(state.cart) : cart
   })),
@@ -74,6 +163,20 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   setMemberContactId: (memberContactId) => set({ memberContactId, redeemPoints: memberContactId ? get().redeemPoints : '' }),
   setRedeemPoints: (redeemPoints) => set({ redeemPoints }),
   setShowPayment: (showPayment) => set({ showPayment }),
+  switchDraftScope: (scope) => {
+    if (get().activeDraftScope === scope) return;
+    set({
+      ...emptyProcessDraft(),
+      ...(scope ? readProcessDraft(scope) : {}),
+      activeDraftScope: scope,
+    });
+  },
+  discardDraftScope: (scope) => {
+    removeProcessDraft(scope);
+    if (get().activeDraftScope === scope) {
+      set({ ...emptyProcessDraft(), activeDraftScope: undefined });
+    }
+  },
 
   addToCart: (product) => {
     const { cart } = get();
@@ -194,12 +297,25 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   reset: () => {
     set({
-      cart: [],
-      paymentDrafts: [],
-      voucherCode: '',
-      memberContactId: undefined,
-      redeemPoints: '',
-      showPayment: false,
+      ...emptyProcessDraft(),
     });
   }
 }));
+
+useTransactionStore.subscribe((state, previousState) => {
+  if (!state.activeDraftScope) return;
+
+  const processChanged = state.activeDraftScope !== previousState.activeDraftScope
+    || state.productPage !== previousState.productPage
+    || state.cart !== previousState.cart
+    || state.searchTerm !== previousState.searchTerm
+    || state.paymentDrafts !== previousState.paymentDrafts
+    || state.voucherCode !== previousState.voucherCode
+    || state.memberContactId !== previousState.memberContactId
+    || state.redeemPoints !== previousState.redeemPoints
+    || state.showPayment !== previousState.showPayment;
+
+  if (processChanged) {
+    writeProcessDraft(state.activeDraftScope, state);
+  }
+});

@@ -11,7 +11,7 @@ import {
   getTransactionPaymentsOrLegacyFallback,
   groupPosPaymentsByTransaction,
 } from '@/utils/posSplitPayment';
-import { normalizePaymentMethodCode } from '@/utils/posPaymentMethod';
+import { matchesPosPaymentFilters, type PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
 
 export interface PosTransactionWithPayments extends Transaction {
   payments: PosTransactionPayment[];
@@ -54,6 +54,7 @@ export interface BuildPosSalesReportInput {
   startDate?: string;
   endDate?: string;
   paymentMethodCode?: string;
+  paymentMode?: PosPaymentModeFilter;
   categories?: string[];
   topProductsLimit?: number;
 }
@@ -118,6 +119,7 @@ export const buildPosSalesReportData = ({
   startDate,
   endDate,
   paymentMethodCode,
+  paymentMode = 'SEMUA',
   categories,
   topProductsLimit = 10,
 }: BuildPosSalesReportInput): PosSalesReportData => {
@@ -127,13 +129,9 @@ export const buildPosSalesReportData = ({
     ...transaction,
     payments: getTransactionPaymentsOrLegacyFallback(transaction, paymentsByTransaction.get(transaction.id)),
   }));
-  const normalizedPaymentMethodCode = normalizePaymentMethodCode(paymentMethodCode);
-
-  if (normalizedPaymentMethodCode && normalizedPaymentMethodCode !== 'SEMUA') {
-    transactions = transactions.filter((transaction) => transaction.payments.some((payment) => (
-      normalizePaymentMethodCode(payment.payment_method_code) === normalizedPaymentMethodCode
-    )));
-  }
+  transactions = transactions.filter((transaction) => (
+    matchesPosPaymentFilters(transaction, paymentMethodCode, paymentMode)
+  ));
 
   const totalRevenue = transactions.reduce((sum, transaction) => sum + Number(transaction.total_amount || 0), 0);
   const totalDiscount = transactions.reduce((sum, transaction) => sum + Number(transaction.discount_amount ?? 0), 0);

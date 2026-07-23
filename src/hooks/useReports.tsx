@@ -7,6 +7,7 @@ import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
 import type { PosSalesReportData } from '@/services/posSalesReportAggregator';
+export type { PosTransactionWithPayments } from '@/services/posSalesReportAggregator';
 import { getPosSalesReportData } from '@/services/posSalesReportService';
 import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
@@ -25,11 +26,9 @@ import type {
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 import {
   getTransactionPaymentSnapshot,
-  normalizePaymentMethodCode,
 } from '@/utils/posPaymentMethod';
 import { formatPosPaymentSummary, getTransactionPaymentsOrLegacyFallback, groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
-
-export type { PosTransactionWithPayments } from '@/services/posSalesReportAggregator';
+import { matchesPosPaymentFilters, type PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
 
 interface PurchaseReportData {
   purchases: PurchaseReportRow[];
@@ -270,16 +269,18 @@ export const usePosSalesReport = (
   startDate?: string,
   endDate?: string,
   paymentMethodCode?: string,
+  paymentMode: PosPaymentModeFilter = 'SEMUA',
   categories?: string[]
 ) => {
   return useQuery({
-    queryKey: ['posSalesReport', startDate, endDate, paymentMethodCode, categories],
+    queryKey: ['posSalesReport', startDate, endDate, paymentMethodCode, paymentMode, categories],
     queryFn: async (): Promise<PosSalesReportData> => {
       await requireUserPermission(await getCurrentSessionUser(), 'REPORT_POS_SALES_VIEW');
       return getPosSalesReportData({
         startDate,
         endDate,
         paymentMethodCode,
+        paymentMode,
         categories,
       });
     },
@@ -384,11 +385,12 @@ export const useTransactionDetailReport = (
   startDate?: string,
   endDate?: string,
   paymentMethodCode?: string,
+  paymentMode: PosPaymentModeFilter = 'SEMUA',
   categories?: string[],
   search?: string
 ) => {
   return useQuery({
-    queryKey: ['transactionDetailReport', startDate, endDate, paymentMethodCode, categories, search],
+    queryKey: ['transactionDetailReport', startDate, endDate, paymentMethodCode, paymentMode, categories, search],
     queryFn: async (): Promise<TransactionDetailReportData> => {
       await requireUserPermission(await getCurrentSessionUser(), 'REPORT_TRANSACTION_DETAIL_VIEW');
       let collection = db.transactions.orderBy('created_at').reverse();
@@ -425,12 +427,9 @@ export const useTransactionDetailReport = (
         payments: getTransactionPaymentsOrLegacyFallback(transaction, paymentsByTransaction.get(transaction.id)),
       }));
 
-      const normalizedPaymentMethodCode = normalizePaymentMethodCode(paymentMethodCode);
-      if (normalizedPaymentMethodCode && normalizedPaymentMethodCode !== 'SEMUA') {
-        transactions = transactions.filter((transaction) => transaction.payments.some((payment) => (
-          normalizePaymentMethodCode(payment.payment_method_code) === normalizedPaymentMethodCode
-        )));
-      }
+      transactions = transactions.filter((transaction) => (
+        matchesPosPaymentFilters(transaction, paymentMethodCode, paymentMode)
+      ));
 
       const transactionIds = transactions.map((transaction) => transaction.id);
       if (transactionIds.length === 0) {

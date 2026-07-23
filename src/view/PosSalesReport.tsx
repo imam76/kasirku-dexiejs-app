@@ -20,6 +20,7 @@ import TopProductsTable from './pos-sales-report/TopProductsTable';
 import { usePosPaymentMethodFilterOptions } from '@/hooks/usePosPaymentMethodFilterOptions';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import { formatPosPaymentSummary } from '@/utils/posSplitPayment';
+import type { PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
 
 const { Title, Text } = Typography;
 
@@ -39,11 +40,18 @@ export default function PosSalesReport() {
 
   // New Filter States
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | undefined>('SEMUA');
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<PosPaymentModeFilter>('SEMUA');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const categoryOptions = getProductCategoryOptions(t);
   const { options: paymentMethodOptions, isLoading: isLoadingPaymentMethods } = usePosPaymentMethodFilterOptions();
 
-  const { data, isLoading, error, refetch } = usePosSalesReport(startDate, endDate, selectedPaymentMethod, selectedCategories);
+  const { data, isLoading, error, refetch } = usePosSalesReport(
+    startDate,
+    endDate,
+    selectedPaymentMethod,
+    selectedPaymentMode,
+    selectedCategories,
+  );
 
   const handleExportPDF = async (target: ExportTarget = 'auto') => {
     if (!data) return;
@@ -308,6 +316,7 @@ export default function PosSalesReport() {
     setEndDate(todayRange[1].format('YYYY-MM-DD'));
     setSelectedHelper('today');
     setSelectedPaymentMethod('SEMUA');
+    setSelectedPaymentMode('SEMUA');
     setSelectedCategories([]);
   };
 
@@ -381,21 +390,39 @@ export default function PosSalesReport() {
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.paymentMethod')}</span>
-              <Select
-                data-testid="pos-sales-payment-method-filter"
-                placeholder={t('report.allMethods')}
-                className="w-full"
-                value={selectedPaymentMethod}
-                onChange={setSelectedPaymentMethod}
-                loading={isLoadingPaymentMethods}
-                options={[
-                  { value: 'SEMUA', label: t('report.allMethods') },
-                  ...paymentMethodOptions.map((option) => ({ value: option.value, label: option.label })),
-                ]}
-                size="large"
-              />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.paymentMethod')}</span>
+                <Select
+                  data-testid="pos-sales-payment-method-filter"
+                  placeholder={t('report.allMethods')}
+                  className="w-full"
+                  value={selectedPaymentMethod}
+                  onChange={setSelectedPaymentMethod}
+                  loading={isLoadingPaymentMethods}
+                  options={[
+                    { value: 'SEMUA', label: t('report.allMethods') },
+                    ...paymentMethodOptions.map((option) => ({ value: option.value, label: option.label })),
+                  ]}
+                  size="large"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-medium text-gray-700 ml-0.5">{t('report.paymentMode')}</span>
+                <Select<PosPaymentModeFilter>
+                  data-testid="pos-sales-payment-mode-filter"
+                  className="w-full"
+                  value={selectedPaymentMode}
+                  onChange={setSelectedPaymentMode}
+                  options={[
+                    { value: 'SEMUA', label: t('report.allPaymentModes') },
+                    { value: 'SINGLE', label: t('report.singlePayment') },
+                    { value: 'SPLIT', label: t('report.splitPayment') },
+                  ]}
+                  size="large"
+                />
+              </div>
             </div>
           </div>
 
@@ -420,7 +447,7 @@ export default function PosSalesReport() {
                 </Button>
               ))}
 
-              {(selectedCategories.length > 0 || selectedHelper !== 'today' || selectedPaymentMethod !== 'SEMUA') && (
+              {(selectedCategories.length > 0 || selectedHelper !== 'today' || selectedPaymentMethod !== 'SEMUA' || selectedPaymentMode !== 'SEMUA') && (
                 <Button type="link" onClick={handleReset} className="text-gray-400 hover:text-red-500 flex items-center gap-1">
                   <ReloadOutlined className="text-[10px]" /> {t('common.resetAll')}
                 </Button>

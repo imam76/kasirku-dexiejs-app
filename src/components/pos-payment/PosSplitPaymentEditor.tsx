@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Input, Select, Switch } from 'antd';
-import { Delete, DollarSign, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, DollarSign, Plus, Trash2, X } from 'lucide-react';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PosPaymentDraft } from '@/store/transactionStore';
 import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
@@ -9,12 +9,15 @@ import { useI18n } from '@/hooks/useI18n';
 
 const PAYMENT_SHORTCUTS_STORAGE_KEY = 'frayukti-show-payment-shortcuts';
 const QUICK_AMOUNTS = [5000, 10000, 20000, 50000, 100000];
+const PAYMENT_SHORTCUT_CLASS = 'flex min-h-9 items-center justify-center gap-1 rounded-lg border border-blue-100 bg-white px-1.5 py-2 text-[10px] font-semibold tabular-nums text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700';
 
 interface Props {
   total: number;
+  discountAmount: number;
   drafts: PosPaymentDraft[];
   methods: PosPaymentMethodOption[];
   preview: PosPaymentAllocationResult;
+  scrollHeader?: ReactNode;
   onAdd: () => void;
   onUpdate: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   onRemove: (clientId: string) => void;
@@ -24,9 +27,11 @@ interface Props {
 
 export default function PosSplitPaymentEditor({
   total,
+  discountAmount,
   drafts,
   methods,
   preview,
+  scrollHeader,
   onAdd,
   onUpdate,
   onRemove,
@@ -58,15 +63,24 @@ export default function PosSplitPaymentEditor({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div
-        data-testid="pos-payment-summary"
-        className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm"
+        data-testid="pos-payment-scroll-area"
+        className="space-y-4 min-[1024px]:min-h-0 min-[1024px]:flex-1 min-[1024px]:overflow-y-auto min-[1024px]:overscroll-contain min-[1024px]:pb-3 min-[1024px]:pr-1 lg:contents"
       >
+        {scrollHeader}
+        <div
+          data-testid="pos-payment-summary"
+          className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm"
+        >
         <div className="space-y-2 border-b border-slate-200 pb-3 text-sm">
           <div className="flex items-center justify-between gap-3 text-slate-600">
             <span>{t('cart.total')}</span>
             <strong className="tabular-nums text-slate-950">Rp {formatCurrency(total)}</strong>
+          </div>
+          <div data-testid="pos-payment-discount" className="flex items-center justify-between gap-3 text-emerald-700">
+            <span>{t('cart.discount')}</span>
+            <strong className="tabular-nums">-Rp {formatCurrency(discountAmount)}</strong>
           </div>
           <div className="flex items-center justify-between gap-3 text-slate-600">
             <span>{t('payment.totalPaid')}</span>
@@ -87,31 +101,38 @@ export default function PosSplitPaymentEditor({
             </div>
           </div>
         </div>
-      </div>
+        </div>
 
-      {drafts.map((draft, index) => {
-        const option = methods.find((item) => item.method.id === draft.paymentMethodId);
-        const method = option?.method;
-        const line = preview.lines[index];
-        const numericAmount = Number(draft.amount);
-        const currentAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
-        const visibleLineError = line?.error?.startsWith('Nominal pembayaran ')
-          ? undefined
-          : line?.error;
-        return (
-          <div
-            key={draft.clientId}
-            data-testid={`pos-payment-row-${index}`}
-            className={`rounded-xl border-2 p-3 shadow-sm ${
-              index === 0
-                ? 'border-blue-200 bg-blue-50/80'
-                : 'border-violet-200 bg-violet-50/80'
-            }`}
-          >
+        <div
+          data-testid="pos-payment-method-grid"
+          className={drafts.length > 1
+            ? 'space-y-4 min-[1024px]:grid min-[1024px]:grid-cols-2 min-[1024px]:gap-4 min-[1024px]:space-y-0 lg:block lg:space-y-4'
+            : undefined}
+        >
+          {drafts.map((draft, index) => {
+            const option = methods.find((item) => item.method.id === draft.paymentMethodId);
+            const method = option?.method;
+            const line = preview.lines[index];
+            const numericAmount = Number(draft.amount);
+            const currentAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+            const visibleLineError = line?.error?.startsWith('Nominal pembayaran ')
+              ? undefined
+              : line?.error;
+            return (
+              <div
+                key={draft.clientId}
+                data-testid={`pos-payment-row-${index}`}
+                className={`rounded-xl border-2 p-3 shadow-sm ${
+                  index === 0
+                    ? 'border-blue-200 bg-blue-50/80'
+                    : 'border-violet-200 bg-violet-50/80'
+                }`}
+              >
             <div className="flex items-center gap-2">
               <Select
                 data-testid={`pos-payment-method-${index}`}
                 className="min-w-0 flex-1"
+                styles={{ popup: { root: { zIndex: 1200 } } }}
                 value={draft.paymentMethodId}
                 placeholder={t('report.paymentMethod')}
                 onChange={(paymentMethodId) => {
@@ -152,15 +173,28 @@ export default function PosSplitPaymentEditor({
                 onChange={(event) => onUpdate(draft.clientId, { reference: event.target.value })}
               />
             )}
-            <input
-              data-testid={`pos-payment-amount-${index}`}
-              type="number"
-              min="0"
-              value={draft.amount}
-              placeholder={t('payment.amountPlaceholder')}
-              onChange={(event) => onUpdate(draft.clientId, { amount: event.target.value, isAmountAutoFilled: false })}
-              className={`mt-2 w-full rounded-lg border px-3 py-2 ${visibleLineError ? 'border-red-400' : 'border-gray-300'}`}
-            />
+            <div className="mt-2 flex items-stretch gap-2">
+              <input
+                data-testid={`pos-payment-amount-${index}`}
+                type="number"
+                min="0"
+                value={draft.amount}
+                placeholder={t('payment.amountPlaceholder')}
+                onChange={(event) => onUpdate(draft.clientId, { amount: event.target.value, isAmountAutoFilled: false })}
+                className={`min-w-0 flex-1 rounded-lg border px-3 py-2 ${visibleLineError ? 'border-red-400' : 'border-gray-300'}`}
+              />
+              {method?.category === 'CASH' && (
+                <button
+                  type="button"
+                  onClick={() => onUpdate(draft.clientId, { amount: '', isAmountAutoFilled: false })}
+                  className="grid w-10 shrink-0 place-items-center rounded-lg border border-red-200 bg-white text-red-600 transition hover:border-red-400 hover:bg-red-50"
+                  aria-label={t('cart.clear')}
+                  title={t('cart.clear')}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
             {method?.category === 'CASH' && (
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between">
@@ -172,7 +206,7 @@ export default function PosSplitPaymentEditor({
                   />
                 </div>
                 {showPaymentShortcuts && (
-                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {QUICK_AMOUNTS.map((amount) => (
                       <button
                         key={amount}
@@ -181,56 +215,54 @@ export default function PosSplitPaymentEditor({
                           amount: String(currentAmount + amount),
                           isAmountAutoFilled: false,
                         })}
-                        className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm font-medium text-gray-700 hover:border-green-400 hover:text-green-700"
+                        className={PAYMENT_SHORTCUT_CLASS}
                       >
                         +Rp {formatCurrency(amount)}
                       </button>
                     ))}
                     <button
                       type="button"
-                      onClick={() => onUpdate(draft.clientId, { amount: '', isAmountAutoFilled: false })}
-                      className="flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-2 text-sm font-medium text-red-600 hover:border-red-400"
+                      onClick={() => onUpdate(draft.clientId, { amount: String(preview.remainingAmount + line!.appliedAmount), isAmountAutoFilled: true })}
+                      className={PAYMENT_SHORTCUT_CLASS}
                     >
-                      <Delete size={16} /> {t('cart.clear')}
+                      <DollarSign size={13} /> {t('payment.exactAmount')}
                     </button>
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => onUpdate(draft.clientId, { amount: String(preview.remainingAmount + line!.appliedAmount), isAmountAutoFilled: true })}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-100 px-3 py-2 font-semibold text-green-700 hover:bg-green-200"
-                >
-                  <DollarSign size={17} /> {t('payment.exactAmount')}
-                </button>
               </div>
             )}
             {visibleLineError && <p className="mt-1 text-xs text-red-600">{visibleLineError}</p>}
-          </div>
-        );
-      })}
+              </div>
+            );
+          })}
+        </div>
 
-      {drafts.length === 1 && (
-        <button
-          type="button"
-          data-testid="pos-add-payment"
-          disabled={!canAdd}
-          onClick={onAdd}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 py-2 font-semibold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Plus size={17} /> {t('payment.add')}
-        </button>
-      )}
+        {drafts.length === 1 && (
+          <button
+            type="button"
+            data-testid="pos-add-payment"
+            disabled={!canAdd}
+            onClick={onAdd}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 py-2 font-semibold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus size={17} /> {t('payment.add')}
+          </button>
+        )}
+      </div>
 
-      <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-2 border-t border-gray-200 bg-white/95 pb-1 pt-3 backdrop-blur">
-        <button type="button" onClick={onCancel} className="rounded-lg border border-gray-300 bg-white py-2.5 font-semibold text-gray-700 hover:bg-gray-50">{t('payment.cancel')}</button>
+      <div
+        data-testid="pos-payment-actions"
+        className="sticky bottom-0 z-30 -mx-3 mt-auto grid shrink-0 grid-cols-2 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)] min-[1024px]:static lg:sticky"
+      >
+        <button type="button" onClick={onCancel} className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white py-2.5 font-semibold text-gray-700 hover:bg-gray-50"><X size={16} /> {t('payment.cancel')}</button>
         <button
           type="button"
           data-testid="pos-confirm-payment"
           disabled={!canConfirm}
           onClick={onConfirm}
-          className="rounded-lg bg-green-600 py-2.5 font-bold text-white shadow-sm hover:bg-green-700 disabled:bg-gray-300 disabled:shadow-none"
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2.5 font-bold text-white shadow-sm hover:bg-blue-700 disabled:bg-gray-300 disabled:shadow-none"
         >
-          {t('payment.confirm')}
+          <CheckCircle2 size={16} /> {t('payment.confirm')}
         </button>
       </div>
     </div>
