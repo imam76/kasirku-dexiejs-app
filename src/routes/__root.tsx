@@ -3,6 +3,7 @@ import FeedbackModal from '@/components/FeedbackModal'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
 import LoginProfile from '@/components/auth/LoginProfile'
+import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
@@ -491,7 +492,10 @@ const RootLayout = () => {
                     )}
                   />
                 ) : canOpenCurrentPath ? (
-                  <Outlet />
+                  <>
+                    <GlobalBreadcrumb pathname={location.pathname} />
+                    <Outlet />
+                  </>
                 ) : (
                   <Result
                     status="403"
