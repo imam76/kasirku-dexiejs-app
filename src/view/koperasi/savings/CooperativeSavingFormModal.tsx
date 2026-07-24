@@ -115,13 +115,21 @@ export default function CooperativeSavingFormModal({
             selectedMemberId,
             selectedSavingType,
           );
+          const availableInterest = Math.min(
+            interestAtTransactionDate.availableInterest,
+            currentInterest.availableInterest,
+          );
+          const availableOpeningInterest = Math.min(
+            availableInterest,
+            interestAtTransactionDate.availableOpeningInterest,
+            currentInterest.availableOpeningInterest,
+          );
 
           return {
             ...interestAtTransactionDate,
-            availableInterest: Math.min(
-              interestAtTransactionDate.availableInterest,
-              currentInterest.availableInterest,
-            ),
+            availableOpeningInterest,
+            availableAccruedInterest: availableInterest - availableOpeningInterest,
+            availableInterest,
           };
         })()
       : undefined
@@ -264,9 +272,17 @@ export default function CooperativeSavingFormModal({
               {t('cooperative.savings.memberSavingBalance')}: Rp {formatCurrency(Number(selectedSavingBalance?.balance || 0))}
             </Tag>
             {selectedSavingType !== 'WAJIB' && (
-              <Tag color="green">
-                {t('cooperative.savings.availableInterest')}: Rp {formatCurrency(selectedInterest?.availableInterest || 0)}
-              </Tag>
+              <>
+                <Tag color="green">
+                  {t('cooperative.savings.availableInterest')}: Rp {formatCurrency(selectedInterest?.availableInterest || 0)}
+                </Tag>
+                <Tag>
+                  {t('cooperative.savings.historicalInterest')}: Rp {formatCurrency(selectedInterest?.availableOpeningInterest || 0)}
+                </Tag>
+                <Tag>
+                  {t('cooperative.savings.accruedInterest')}: Rp {formatCurrency(selectedInterest?.availableAccruedInterest || 0)}
+                </Tag>
+              </>
             )}
             {selectedPendingReturn && (
               <Tag color="gold">

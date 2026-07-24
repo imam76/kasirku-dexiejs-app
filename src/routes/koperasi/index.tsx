@@ -36,6 +36,13 @@ function Cooperative() {
       desc: t('cooperative.index.savingsDesc'),
     },
     {
+      to: '/koperasi/migrasi-simpanan',
+      label: t('nav.cooperative.savingMigration'),
+      icon: DatabaseOutlined,
+      color: 'text-sky-700',
+      desc: t('cooperative.index.savingMigrationDesc'),
+    },
+    {
       to: '/koperasi/pinjaman',
       label: t('nav.cooperative.loans'),
       icon: BankOutlined,

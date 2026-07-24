@@ -77,6 +77,8 @@ macro_rules! cooperative_saving_transaction_select {
             transaction_type,
             withdrawal_source,
             interest_rate_per_month,
+            opening_interest_amount,
+            opening_interest_applied_amount,
             amount,
             transaction_date,
             status,
@@ -645,6 +647,8 @@ pub async fn upsert_cooperative_saving_transaction(
             transaction_type,
             withdrawal_source,
             interest_rate_per_month,
+            opening_interest_amount,
+            opening_interest_applied_amount,
             amount,
             transaction_date,
             status,
@@ -695,12 +699,14 @@ pub async fn upsert_cooperative_saving_transaction(
             $23,
             $24,
             $25,
-            $26::TIMESTAMPTZ,
-            $27::TIMESTAMPTZ,
-            $28,
-            $29,
+            $26,
+            $27,
+            $28::TIMESTAMPTZ,
+            $29::TIMESTAMPTZ,
             $30,
-            $31
+            $31,
+            $32,
+            $33
         )
         ON CONFLICT (id) DO UPDATE SET
             member_id = EXCLUDED.member_id,
@@ -710,6 +716,8 @@ pub async fn upsert_cooperative_saving_transaction(
             transaction_type = EXCLUDED.transaction_type,
             withdrawal_source = EXCLUDED.withdrawal_source,
             interest_rate_per_month = EXCLUDED.interest_rate_per_month,
+            opening_interest_amount = EXCLUDED.opening_interest_amount,
+            opening_interest_applied_amount = EXCLUDED.opening_interest_applied_amount,
             amount = EXCLUDED.amount,
             transaction_date = EXCLUDED.transaction_date,
             status = EXCLUDED.status,
@@ -742,6 +750,8 @@ pub async fn upsert_cooperative_saving_transaction(
             transaction_type,
             withdrawal_source,
             interest_rate_per_month,
+            opening_interest_amount,
+            opening_interest_applied_amount,
             amount,
             transaction_date,
             status,
@@ -775,6 +785,8 @@ pub async fn upsert_cooperative_saving_transaction(
     .bind(input.transaction_type)
     .bind(input.withdrawal_source)
     .bind(input.interest_rate_per_month)
+    .bind(input.opening_interest_amount)
+    .bind(input.opening_interest_applied_amount)
     .bind(input.amount)
     .bind(input.transaction_date)
     .bind(input.status)

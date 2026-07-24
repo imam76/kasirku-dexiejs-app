@@ -23,7 +23,13 @@ interface SavingDepositTranche {
 export interface CooperativeSavingInterestSummary {
   ratePerMonth: number;
   grossInterest: number;
+  openingInterest: number;
+  accruedInterest: number;
   withdrawnInterest: number;
+  withdrawnOpeningInterest: number;
+  withdrawnAccruedInterest: number;
+  availableOpeningInterest: number;
+  availableAccruedInterest: number;
   availableInterest: number;
 }
 
@@ -37,14 +43,21 @@ export const calculateCooperativeSavingInterest = (
     return {
       ratePerMonth: COOPERATIVE_SAVING_INTEREST_RATE_PER_MONTH,
       grossInterest: 0,
+      openingInterest: 0,
+      accruedInterest: 0,
       withdrawnInterest: 0,
+      withdrawnOpeningInterest: 0,
+      withdrawnAccruedInterest: 0,
+      availableOpeningInterest: 0,
+      availableAccruedInterest: 0,
       availableInterest: 0,
     };
   }
 
   const asOf = dayjs(asOfDate);
   const tranches: SavingDepositTranche[] = [];
-  let grossInterest = 0;
+  let accruedInterest = 0;
+  let openingInterest = 0;
   let withdrawnInterest = 0;
 
   const accrueUntil = (date: string) => {
@@ -55,8 +68,8 @@ export const calculateCooperativeSavingInterest = (
       const newMonths = Math.max(0, completedMonths - tranche.accruedMonths);
       if (newMonths <= 0 || tranche.remainingAmount <= 0) return;
 
-      grossInterest = roundCurrency(
-        grossInterest + (tranche.remainingAmount * INTEREST_RATE_DECIMAL * newMonths),
+      accruedInterest = roundCurrency(
+        accruedInterest + (tranche.remainingAmount * INTEREST_RATE_DECIMAL * newMonths),
       );
       tranche.accruedMonths = completedMonths;
     });
@@ -80,6 +93,11 @@ export const calculateCooperativeSavingInterest = (
     accrueUntil(transaction.transaction_date);
 
     if (transaction.transaction_type === 'DEPOSIT' || transaction.transaction_type === 'OPENING_BALANCE') {
+      if (transaction.transaction_type === 'OPENING_BALANCE') {
+        openingInterest = roundCurrency(
+          openingInterest + Number(transaction.opening_interest_amount || 0),
+        );
+      }
       tranches.push({
         remainingAmount: roundCurrency(transaction.amount),
         depositDate: transaction.transaction_date,
@@ -105,10 +123,21 @@ export const calculateCooperativeSavingInterest = (
 
   accrueUntil(asOfDate);
 
+  const withdrawnOpeningInterest = Math.min(openingInterest, withdrawnInterest);
+  const withdrawnAccruedInterest = Math.max(0, roundCurrency(withdrawnInterest - withdrawnOpeningInterest));
+  const availableOpeningInterest = Math.max(0, roundCurrency(openingInterest - withdrawnOpeningInterest));
+  const availableAccruedInterest = Math.max(0, roundCurrency(accruedInterest - withdrawnAccruedInterest));
+
   return {
     ratePerMonth: COOPERATIVE_SAVING_INTEREST_RATE_PER_MONTH,
-    grossInterest: roundCurrency(grossInterest),
+    grossInterest: roundCurrency(openingInterest + accruedInterest),
+    openingInterest: roundCurrency(openingInterest),
+    accruedInterest: roundCurrency(accruedInterest),
     withdrawnInterest: roundCurrency(withdrawnInterest),
-    availableInterest: Math.max(0, roundCurrency(grossInterest - withdrawnInterest)),
+    withdrawnOpeningInterest: roundCurrency(withdrawnOpeningInterest),
+    withdrawnAccruedInterest: roundCurrency(withdrawnAccruedInterest),
+    availableOpeningInterest,
+    availableAccruedInterest,
+    availableInterest: roundCurrency(availableOpeningInterest + availableAccruedInterest),
   };
 };

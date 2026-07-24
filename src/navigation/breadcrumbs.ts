@@ -78,6 +78,7 @@ const STATIC_LABEL_KEYS: Record<string, TranslationKey> = {
 
   '/koperasi/anggota': 'nav.cooperative.members',
   '/koperasi/simpanan': 'nav.cooperative.savings',
+  '/koperasi/migrasi-simpanan': 'nav.cooperative.savingMigration',
   '/koperasi/pinjaman': 'nav.cooperative.loans',
   '/koperasi/migrasi-pinjaman': 'nav.cooperative.loanMigration',
   '/koperasi/angsuran': 'nav.cooperative.installments',

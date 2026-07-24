@@ -105,9 +105,16 @@ export default function CooperativeSavingTable({
       align: 'right',
       width: 150,
       render: (amount: number, transaction) => (
-        <span className={transaction.status === 'REVERSED' ? 'line-through text-gray-400' : 'font-semibold'}>
-          Rp {formatCurrency(amount)}
-        </span>
+        <div className={transaction.status === 'REVERSED' ? 'line-through text-gray-400' : ''}>
+          <span className="font-semibold">Rp {formatCurrency(amount)}</span>
+          {transaction.transaction_type === 'OPENING_BALANCE' && Number(transaction.opening_interest_amount || 0) > 0 && (
+            <div className="text-xs text-green-700">
+              {t('cooperative.savings.openingBalance.interestShort')}: Rp {formatCurrency(
+                Number(transaction.opening_interest_amount || 0),
+              )}
+            </div>
+          )}
+        </div>
       ),
     },
     {
@@ -149,7 +156,11 @@ export default function CooperativeSavingTable({
             danger
             type="text"
             icon={<Ban size={16} />}
-            disabled={transaction.status !== 'POSTED' || transaction.transaction_type === 'REVERSAL'}
+            disabled={
+              transaction.status !== 'POSTED' ||
+              transaction.transaction_type === 'REVERSAL' ||
+              transaction.transaction_type === 'OPENING_BALANCE'
+            }
             data-testid={`koperasi-saving-reverse-${transaction.id}`}
             onClick={() => onReverse(transaction)}
           >

@@ -96,8 +96,9 @@ test.describe('trial web role dan permission', () => {
 
     await page.goto('/koperasi');
     await expect(page.getByRole('heading', { name: 'Koperasi' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Anggota', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Simpanan', exact: true })).toBeVisible();
+    await expect(page.locator('main a[href="/koperasi/anggota"]')).toBeVisible();
+    await expect(page.locator('main a[href="/koperasi/simpanan"]')).toBeVisible();
+    await expect(page.locator('main a[href="/koperasi/migrasi-simpanan"]')).toBeVisible();
 
     await page.goto('/report');
     await expect(page.getByRole('link', { name: 'Laba Rugi' })).toBeVisible();
@@ -108,14 +109,18 @@ test.describe('trial web role dan permission', () => {
 
     await page.goto('/koperasi');
     await expect(page.getByRole('heading', { name: 'Koperasi' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Anggota', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Simpanan', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Pinjaman', exact: true })).toHaveCount(0);
+    await expect(page.locator('main a[href="/koperasi/anggota"]')).toBeVisible();
+    await expect(page.locator('main a[href="/koperasi/simpanan"]')).toHaveCount(0);
+    await expect(page.locator('main a[href="/koperasi/migrasi-simpanan"]')).toHaveCount(0);
+    await expect(page.locator('main a[href="/koperasi/pinjaman"]')).toHaveCount(0);
 
     await page.goto('/koperasi/anggota');
     await expect(page.getByText('Master Anggota Koperasi')).toBeVisible();
 
     await page.goto('/koperasi/simpanan');
+    await expect(page.getByText(/Module tidak aktif|Akses tidak tersedia/)).toBeVisible();
+
+    await page.goto('/koperasi/migrasi-simpanan');
     await expect(page.getByText(/Module tidak aktif|Akses tidak tersedia/)).toBeVisible();
 
     await page.goto('/report/profit-loss-report');

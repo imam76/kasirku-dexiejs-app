@@ -426,6 +426,8 @@ const mapCooperativeSavingTransactionToRemoteDto = (
   transaction_type: transaction.transaction_type,
   withdrawal_source: transaction.withdrawal_source,
   interest_rate_per_month: transaction.interest_rate_per_month,
+  opening_interest_amount: transaction.opening_interest_amount,
+  opening_interest_applied_amount: transaction.opening_interest_applied_amount,
   amount: normalizeRemoteNumber(transaction.amount),
   transaction_date: transaction.transaction_date,
   status: transaction.status,

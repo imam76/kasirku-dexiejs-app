@@ -34,9 +34,26 @@ export const cooperativeSavingTransactionSchema = z.object({
 export const cooperativeSavingOpeningBalanceSchema = z.object({
   member_id: z.string().trim().min(1, 'Anggota wajib dipilih.'),
   saving_type: z.enum(cooperativeSavingTypeValues, { message: 'Jenis simpanan wajib dipilih.' }),
-  amount: z.coerce.number().positive('Nominal saldo awal harus lebih dari 0.'),
+  amount: z.coerce.number().nonnegative('Saldo simpanan terkini tidak boleh negatif.'),
+  opening_interest_amount: z.coerce.number().nonnegative('Akumulasi jasa tidak boleh negatif.').default(0),
   transaction_date: z.string().trim().min(1, 'Tanggal saldo awal wajib diisi.'),
   notes: optionalTrimmedString,
+}).superRefine((value, context) => {
+  if (value.amount <= 0 && value.opening_interest_amount <= 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['amount'],
+      message: 'Saldo simpanan atau akumulasi jasa harus lebih dari 0.',
+    });
+  }
+
+  if (value.saving_type === 'WAJIB' && value.opening_interest_amount > 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['opening_interest_amount'],
+      message: 'Akumulasi jasa hanya berlaku untuk simpanan pokok dan sukarela.',
+    });
+  }
 });
 
 export const cooperativeSavingReversalSchema = z.object({

@@ -162,6 +162,7 @@ export async function expectCooperativeOverview(page: Page) {
   await expect(page.getByRole('heading', { name: 'Koperasi' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Anggota', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Simpanan', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Saldo Awal Simpanan', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Pinjaman', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Angsuran', exact: true })).toBeVisible();
   await expect(page.locator('main a[href="/koperasi/laporan"]')).toBeVisible();
@@ -264,12 +265,14 @@ export async function recordOpeningSaving(page: Page, input: {
   member: DemoMemberInput;
   savingType: SavingType;
   amount: number;
+  openingInterest?: number;
+  transactionDate?: string;
   expectedError?: string;
 }) {
-  await page.goto('/koperasi/simpanan');
-  await expect(page.getByText('Simpanan Anggota')).toBeVisible();
+  await page.goto('/koperasi/migrasi-simpanan');
+  await expect(page.getByText('Saldo Awal Simpanan', { exact: true }).first()).toBeVisible();
 
-  await page.getByTestId('koperasi-saving-opening-button').click();
+  await page.getByTestId('koperasi-saving-opening-add-button').click();
   await selectAntdOptionByTestId(
     page,
     'koperasi-saving-opening-member-select',
@@ -277,6 +280,16 @@ export async function recordOpeningSaving(page: Page, input: {
   );
   await selectAntdOptionByTestId(page, 'koperasi-saving-opening-type-select', savingTypeLabels[input.savingType]);
   await fillControlByTestId(page, 'koperasi-saving-opening-amount-input', String(input.amount));
+  if (input.openingInterest !== undefined) {
+    await fillControlByTestId(
+      page,
+      'koperasi-saving-opening-interest-input',
+      String(input.openingInterest),
+    );
+  }
+  if (input.transactionDate) {
+    await setAntdDateByTestId(page, 'koperasi-saving-opening-date-input', input.transactionDate);
+  }
   await page.getByTestId('koperasi-saving-opening-submit-button').click();
 
   if (input.expectedError) {
@@ -285,9 +298,12 @@ export async function recordOpeningSaving(page: Page, input: {
     return;
   }
 
-  await expect(
-    savingMutationRow(page, input.member.name, input.savingType, 'OPENING_BALANCE', input.amount),
-  ).toBeVisible();
+  const row = page.getByTestId(
+    `koperasi-saving-opening-row-${input.member.memberNumber}-${input.savingType}`,
+  );
+  await expect(row).toBeVisible();
+  await expect(row).toContainText(`Rp ${formatCurrency(input.amount)}`);
+  await expect(row).toContainText(`Rp ${formatCurrency(input.openingInterest || 0)}`);
 }
 
 export function savingMutationRow(
@@ -313,6 +329,19 @@ export async function expectSavingBalance(page: Page, member: DemoMemberInput, s
   const row = page.getByTestId(`koperasi-saving-balance-row-${member.memberNumber}-${savingType}`);
   await expect(row).toContainText(member.name);
   await expect(row).toContainText(savingTypeLabels[savingType]);
+  await expect(row).toContainText(`Rp ${formatCurrency(amount)}`);
+}
+
+export async function expectSavingInterest(
+  page: Page,
+  member: DemoMemberInput,
+  savingType: SavingType,
+  amount: number,
+) {
+  await page.goto('/koperasi/simpanan');
+  await page.getByRole('tab', { name: 'Saldo' }).click();
+
+  const row = page.getByTestId(`koperasi-saving-balance-row-${member.memberNumber}-${savingType}`);
   await expect(row).toContainText(`Rp ${formatCurrency(amount)}`);
 }
 

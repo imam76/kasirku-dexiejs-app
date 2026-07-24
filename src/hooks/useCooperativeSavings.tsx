@@ -24,7 +24,10 @@ import type {
   CooperativeSavingType,
   Employee,
 } from '@/types';
-import { calculateCooperativeSavingInterest } from '@/utils/koperasi/savingInterest';
+import {
+  calculateCooperativeSavingInterest,
+  type CooperativeSavingInterestSummary,
+} from '@/utils/koperasi/savingInterest';
 
 export type CooperativeSavingTypeFilter = CooperativeSavingType | 'ALL';
 export type CooperativeSavingTransactionTypeFilter = CooperativeSavingTransactionType | 'ALL';
@@ -287,8 +290,8 @@ export const useCooperativeSavings = () => {
     );
     return new Map(suggestions.map((suggestion) => [suggestion.member_id, suggestion]));
   }, [balances, loans, transactions]);
-  const interestByBalanceKey = useMemo(() => {
-    const result = new Map<string, number>();
+  const interestSummaryByBalanceKey = useMemo(() => {
+    const result = new Map<string, CooperativeSavingInterestSummary>();
 
     balances.forEach((balance) => {
       result.set(
@@ -297,12 +300,18 @@ export const useCooperativeSavings = () => {
           transactions,
           balance.member_id,
           balance.saving_type,
-        ).availableInterest,
+        ),
       );
     });
 
     return result;
   }, [balances, transactions]);
+  const interestByBalanceKey = useMemo(() => new Map(
+    Array.from(interestSummaryByBalanceKey.entries()).map(([key, summary]) => [
+      key,
+      summary.availableInterest,
+    ]),
+  ), [interestSummaryByBalanceKey]);
 
   const invalidate = () => {
     COOPERATIVE_SAVING_RELATED_QUERY_KEYS.forEach((queryKey) => {
@@ -332,6 +341,7 @@ export const useCooperativeSavings = () => {
     filteredBalances,
     pendingReturnByBalanceKey,
     openingBalanceSuggestionByMemberId,
+    interestSummaryByBalanceKey,
     interestByBalanceKey,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
     openingBalanceCutoffDate: generalLedgerSetting?.is_ready

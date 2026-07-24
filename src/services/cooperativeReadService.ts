@@ -172,6 +172,8 @@ const mapRemoteCooperativeSavingTransactionToLocal = (
   transaction_type: remoteTransaction.transaction_type,
   withdrawal_source: remoteTransaction.withdrawal_source ?? undefined,
   interest_rate_per_month: remoteTransaction.interest_rate_per_month ?? undefined,
+  opening_interest_amount: remoteTransaction.opening_interest_amount ?? undefined,
+  opening_interest_applied_amount: remoteTransaction.opening_interest_applied_amount ?? undefined,
   amount: remoteTransaction.amount,
   transaction_date: remoteTransaction.transaction_date,
   status: remoteTransaction.status,

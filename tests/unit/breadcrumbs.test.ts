@@ -42,6 +42,11 @@ describe('global breadcrumb resolver', () => {
   });
 
   test('builds deep cooperative report and opening-balance hierarchies', () => {
+    expect(labels('/koperasi/migrasi-simpanan')).toEqual([
+      'Home',
+      'Koperasi',
+      'Saldo Awal Simpanan',
+    ]);
     expect(labels('/koperasi/laporan/drop-harian')).toEqual([
       'Home',
       'Koperasi',

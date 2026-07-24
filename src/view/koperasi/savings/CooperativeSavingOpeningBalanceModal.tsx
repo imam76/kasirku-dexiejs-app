@@ -18,6 +18,7 @@ export interface CooperativeSavingOpeningBalanceFormValues {
   member_id: string;
   saving_type: CooperativeSavingType;
   amount: number;
+  opening_interest_amount: number;
   transaction_date: Dayjs;
   notes?: string;
 }
@@ -45,6 +46,7 @@ export default function CooperativeSavingOpeningBalanceModal({
   const selectedMemberId = Form.useWatch('member_id', form);
   const selectedSavingType = Form.useWatch('saving_type', form);
   const selectedAmount = Number(Form.useWatch('amount', form) || 0);
+  const selectedOpeningInterestAmount = Number(Form.useWatch('opening_interest_amount', form) || 0);
   const memberOptions = useMemo(() => activeMembers.map((member) => ({
     value: member.id,
     label: `${member.member_number} - ${member.name}`,
@@ -119,6 +121,11 @@ export default function CooperativeSavingOpeningBalanceModal({
                 value: option.value,
                 label: t(option.labelKey),
               }))}
+              onChange={(value: CooperativeSavingType) => {
+                if (value === 'WAJIB') {
+                  form.setFieldValue('opening_interest_amount', 0);
+                }
+              }}
               data-testid="koperasi-saving-opening-type-select"
             />
           </Form.Item>
@@ -155,18 +162,57 @@ export default function CooperativeSavingOpeningBalanceModal({
           <Form.Item
             name="amount"
             label={t('cooperative.savings.openingBalance.amount')}
+            dependencies={['opening_interest_amount']}
             rules={[
-              { required: true, message: t('finance.amountRequired') },
-              { type: 'number', min: 1, message: t('finance.amountMin') },
+              { required: true, message: t('cooperative.savings.openingBalance.amountRequired') },
+              { type: 'number', min: 0, message: t('cooperative.savings.openingBalance.amountMin') },
+              ({ getFieldValue }) => ({
+                validator(_, value?: number) {
+                  const openingInterest = Number(getFieldValue('opening_interest_amount') || 0);
+                  if (Number(value || 0) > 0 || openingInterest > 0) return Promise.resolve();
+                  return Promise.reject(new Error(t('cooperative.savings.openingBalance.totalRequired')));
+                },
+              }),
             ]}
           >
             <InputNumber<number>
-              min={1}
+              min={0}
               className="w-full"
               formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
               parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
               placeholder="0"
               data-testid="koperasi-saving-opening-amount-input"
+            />
+          </Form.Item>
+          <Form.Item
+            name="opening_interest_amount"
+            label={t('cooperative.savings.openingBalance.interestAmount')}
+            dependencies={['amount', 'saving_type']}
+            extra={selectedSavingType === 'WAJIB'
+              ? t('cooperative.savings.openingBalance.interestNotEligible')
+              : t('cooperative.savings.openingBalance.interestAmountExtra')}
+            rules={[
+              { type: 'number', min: 0, message: t('cooperative.savings.openingBalance.interestMin') },
+              ({ getFieldValue }) => ({
+                validator(_, value?: number) {
+                  if (getFieldValue('saving_type') === 'WAJIB' && Number(value || 0) > 0) {
+                    return Promise.reject(new Error(t('cooperative.savings.openingBalance.interestNotEligible')));
+                  }
+                  const savingAmount = Number(getFieldValue('amount') || 0);
+                  if (savingAmount > 0 || Number(value || 0) > 0) return Promise.resolve();
+                  return Promise.reject(new Error(t('cooperative.savings.openingBalance.totalRequired')));
+                },
+              }),
+            ]}
+          >
+            <InputNumber<number>
+              min={0}
+              disabled={selectedSavingType === 'WAJIB'}
+              className="w-full"
+              formatter={(value) => `Rp ${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+              parser={(value) => value?.replace(/Rp\s?|(\.*)/g, '') as unknown as number}
+              placeholder="0"
+              data-testid="koperasi-saving-opening-interest-input"
             />
           </Form.Item>
           <Form.Item
@@ -176,6 +222,13 @@ export default function CooperativeSavingOpeningBalanceModal({
           >
             <DatePicker showTime className="w-full" data-testid="koperasi-saving-opening-date-input" />
           </Form.Item>
+        </div>
+
+        <div className="mb-4 rounded border border-blue-100 bg-blue-50 px-4 py-3">
+          <Text type="secondary">{t('cooperative.savings.openingBalance.totalEntitlement')}</Text>
+          <div className="text-lg font-semibold text-blue-800">
+            Rp {formatCurrency(selectedAmount + selectedOpeningInterestAmount)}
+          </div>
         </div>
 
         <Form.Item name="notes" label={t('cooperative.savings.form.notes')}>

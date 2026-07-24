@@ -1340,6 +1340,8 @@ export interface RemoteCooperativeSavingTransactionDto {
   transaction_type: CooperativeSavingTransactionType;
   withdrawal_source?: CooperativeSavingWithdrawalSource | null;
   interest_rate_per_month?: number | null;
+  opening_interest_amount?: number | null;
+  opening_interest_applied_amount?: number | null;
   amount: number;
   transaction_date: string;
   status: CooperativeSavingTransactionStatus;

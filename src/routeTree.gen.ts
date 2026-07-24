@@ -124,6 +124,9 @@ const KoperasiPinjamanLazyRouteImport = createFileRoute('/koperasi/pinjaman')()
 const KoperasiPenagihanLazyRouteImport = createFileRoute(
   '/koperasi/penagihan',
 )()
+const KoperasiMigrasiSimpananLazyRouteImport = createFileRoute(
+  '/koperasi/migrasi-simpanan',
+)()
 const KoperasiMigrasiPinjamanLazyRouteImport = createFileRoute(
   '/koperasi/migrasi-pinjaman',
 )()
@@ -621,6 +624,14 @@ const KoperasiPenagihanLazyRoute = KoperasiPenagihanLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/koperasi/penagihan.lazy').then((d) => d.Route),
 )
+const KoperasiMigrasiSimpananLazyRoute =
+  KoperasiMigrasiSimpananLazyRouteImport.update({
+    id: '/koperasi/migrasi-simpanan',
+    path: '/koperasi/migrasi-simpanan',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/migrasi-simpanan.lazy').then((d) => d.Route),
+  )
 const KoperasiMigrasiPinjamanLazyRoute =
   KoperasiMigrasiPinjamanLazyRouteImport.update({
     id: '/koperasi/migrasi-pinjaman',
@@ -1198,6 +1209,7 @@ export interface FileRoutesByFullPath {
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
+  '/koperasi/migrasi-simpanan': typeof KoperasiMigrasiSimpananLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -1317,6 +1329,7 @@ export interface FileRoutesByTo {
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
+  '/koperasi/migrasi-simpanan': typeof KoperasiMigrasiSimpananLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -1437,6 +1450,7 @@ export interface FileRoutesById {
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
+  '/koperasi/migrasi-simpanan': typeof KoperasiMigrasiSimpananLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -1558,6 +1572,7 @@ export interface FileRouteTypes {
     | '/koperasi/angsuran'
     | '/koperasi/kas-petugas'
     | '/koperasi/migrasi-pinjaman'
+    | '/koperasi/migrasi-simpanan'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1677,6 +1692,7 @@ export interface FileRouteTypes {
     | '/koperasi/angsuran'
     | '/koperasi/kas-petugas'
     | '/koperasi/migrasi-pinjaman'
+    | '/koperasi/migrasi-simpanan'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1796,6 +1812,7 @@ export interface FileRouteTypes {
     | '/koperasi/angsuran'
     | '/koperasi/kas-petugas'
     | '/koperasi/migrasi-pinjaman'
+    | '/koperasi/migrasi-simpanan'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1916,6 +1933,7 @@ export interface RootRouteChildren {
   KoperasiAngsuranLazyRoute: typeof KoperasiAngsuranLazyRoute
   KoperasiKasPetugasLazyRoute: typeof KoperasiKasPetugasLazyRoute
   KoperasiMigrasiPinjamanLazyRoute: typeof KoperasiMigrasiPinjamanLazyRoute
+  KoperasiMigrasiSimpananLazyRoute: typeof KoperasiMigrasiSimpananLazyRoute
   KoperasiPenagihanLazyRoute: typeof KoperasiPenagihanLazyRoute
   KoperasiPinjamanLazyRoute: typeof KoperasiPinjamanLazyRoute
   KoperasiSimpananLazyRoute: typeof KoperasiSimpananLazyRoute
@@ -2360,6 +2378,13 @@ declare module '@tanstack/react-router' {
       path: '/koperasi/penagihan'
       fullPath: '/koperasi/penagihan'
       preLoaderRoute: typeof KoperasiPenagihanLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/migrasi-simpanan': {
+      id: '/koperasi/migrasi-simpanan'
+      path: '/koperasi/migrasi-simpanan'
+      fullPath: '/koperasi/migrasi-simpanan'
+      preLoaderRoute: typeof KoperasiMigrasiSimpananLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/koperasi/migrasi-pinjaman': {
@@ -2951,6 +2976,7 @@ const rootRouteChildren: RootRouteChildren = {
   KoperasiAngsuranLazyRoute: KoperasiAngsuranLazyRoute,
   KoperasiKasPetugasLazyRoute: KoperasiKasPetugasLazyRoute,
   KoperasiMigrasiPinjamanLazyRoute: KoperasiMigrasiPinjamanLazyRoute,
+  KoperasiMigrasiSimpananLazyRoute: KoperasiMigrasiSimpananLazyRoute,
   KoperasiPenagihanLazyRoute: KoperasiPenagihanLazyRoute,
   KoperasiPinjamanLazyRoute: KoperasiPinjamanLazyRoute,
   KoperasiSimpananLazyRoute: KoperasiSimpananLazyRoute,

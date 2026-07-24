@@ -58,6 +58,8 @@ pub struct CooperativeSavingTransactionDto {
     pub transaction_type: String,
     pub withdrawal_source: Option<String>,
     pub interest_rate_per_month: Option<f64>,
+    pub opening_interest_amount: Option<f64>,
+    pub opening_interest_applied_amount: Option<f64>,
     pub amount: f64,
     pub transaction_date: String,
     pub status: String,

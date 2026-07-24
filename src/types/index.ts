@@ -2113,6 +2113,8 @@ export interface CooperativeSavingTransaction {
   transaction_type: CooperativeSavingTransactionType;
   withdrawal_source?: CooperativeSavingWithdrawalSource;
   interest_rate_per_month?: number;
+  opening_interest_amount?: number;
+  opening_interest_applied_amount?: number;
   amount: number;
   transaction_date: string;
   status: CooperativeSavingTransactionStatus;

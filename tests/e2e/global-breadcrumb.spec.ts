@@ -66,6 +66,12 @@ test('breadcrumb global follows hierarchy, navigates with SPA links, and hides o
   await expect(page).toHaveURL(/\/master-data\/?$/);
   await expect(page.getByTestId('global-breadcrumb')).toHaveCount(0);
 
+  await page.goto('/koperasi/migrasi-simpanan');
+  const savingMigrationBreadcrumb = page.getByTestId('global-breadcrumb');
+  await expect(savingMigrationBreadcrumb).toContainText('Home');
+  await expect(savingMigrationBreadcrumb).toContainText('Koperasi');
+  await expect(savingMigrationBreadcrumb).toContainText('Saldo Awal Simpanan');
+
   await page.goto('/koperasi/laporan/drop-harian');
   const reportBreadcrumb = page.getByTestId('global-breadcrumb');
   await expect(reportBreadcrumb).toBeVisible();
