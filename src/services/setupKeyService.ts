@@ -3,6 +3,8 @@ import type { AuthUser, Role } from '@/types';
 import { SETUP_CONFIG_STORAGE_KEY } from '@/constants/setupModules';
 import { isTauriRuntime } from '@/utils/export/platform';
 import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
+import { usePostgresConnectionStore } from '@/store/postgresConnectionStore';
+import { resolveSetupConfigReconciliation } from '@/utils/setupConfigReconciliation';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
 export const CURRENT_MODULE_CATALOG_VERSION = 11;
@@ -198,6 +200,20 @@ export const syncSetupConfigFromRemote = async (): Promise<SetupConfig | null> =
   return remoteConfig;
 };
 
+export const reconcileSetupConfigWithRemote = async (): Promise<SetupConfig | null> => {
+  const remoteConfig = await getRemoteSetupConfig();
+  const localConfig = getSetupConfig();
+  const decision = resolveSetupConfigReconciliation(remoteConfig, localConfig);
+  if (!decision.config) return null;
+
+  if (!decision.shouldUploadLocal) {
+    saveSetupConfig(decision.config);
+    return decision.config;
+  }
+
+  return saveSetupConfigToRemote(decision.config);
+};
+
 export const saveSetupConfigToRemote = async (config: SetupConfig): Promise<SetupConfig> => {
   const normalizedConfig = normalizeSetupConfig(config);
   const remoteConfig = await appSetupConfigPostgresAdapter.upsert({
@@ -222,11 +238,19 @@ export const saveSetupConfigToRemote = async (config: SetupConfig): Promise<Setu
 
 export const saveSetupConfigForRuntime = async (config: SetupConfig): Promise<SetupConfig> => {
   const normalizedConfig = normalizeSetupConfig(config);
-  if (isTauriRuntime()) {
-    return saveSetupConfigToRemote(normalizedConfig);
+  saveSetupConfig(normalizedConfig);
+
+  if (
+    isTauriRuntime() &&
+    usePostgresConnectionStore.getState().health?.available
+  ) {
+    try {
+      return await saveSetupConfigToRemote(normalizedConfig);
+    } catch (error) {
+      console.error('Failed to persist setup config to PostgreSQL; keeping local config pending reconciliation.', error);
+    }
   }
 
-  saveSetupConfig(normalizedConfig);
   return normalizedConfig;
 };
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { App, Alert, Button, Empty, Input, Segmented, Table, Tag, Tooltip } from 'antd';
+import { App, Alert, Button, Empty, Input, Modal, Segmented, Table, Tag, Tooltip } from 'antd';
 import type { TableProps } from 'antd';
 import {
   AlertTriangle,
@@ -12,15 +12,22 @@ import {
   RefreshCw,
   RotateCw,
   Search,
+  ServerCog,
   type LucideIcon,
 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { useSyncQueueDetails } from '@/hooks/useSyncQueueDetails';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
 import dayjs from '@/lib/dayjs';
-import { postgresAdapter, type PostgresHealth } from '@/services/postgresAdapter';
+import type { PostgresHealth } from '@/services/postgresAdapter';
 import { runDatabaseSyncNow, retryFailedDatabaseSyncItems } from '@/services/syncOrchestratorService';
+import {
+  checkPostgresConnection,
+  setPostgresConnectionHealth,
+  usePostgresConnectionStore,
+} from '@/store/postgresConnectionStore';
 import type { SyncQueueItem, SyncQueueStatus } from '@/types';
+import { HostDatabaseSetup } from '@/view/auth/HostDatabaseSetup';
 
 type ActiveQueueStatusFilter = 'all' | Extract<SyncQueueStatus, 'pending' | 'processing' | 'failed'>;
 
@@ -76,7 +83,7 @@ const formatDateTime = (value?: string) => (
 
 const getEntityLabel = (entity: string) => entityLabelByName[entity] ?? entity;
 
-const getHealthTagColor = (health?: PostgresHealth) => {
+const getHealthTagColor = (health?: PostgresHealth | null) => {
   if (!health) return 'default';
   if (health.available) return 'green';
   if (health.status === 'unconfigured') return 'default';
@@ -113,22 +120,19 @@ export default function SyncDatabaseManagement() {
   const { message } = App.useApp();
   const syncStatus = useSyncStatus();
   const queueDetails = useSyncQueueDetails();
-  const [health, setHealth] = useState<PostgresHealth>();
-  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const health = usePostgresConnectionStore((state) => state.health);
+  const isCheckingHealth = usePostgresConnectionStore((state) => state.isChecking);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
   const [isRetryingFailed, setIsRetryingFailed] = useState(false);
+  const [isConfiguringHost, setIsConfiguringHost] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ActiveQueueStatusFilter>('all');
   const [searchText, setSearchText] = useState('');
 
   const checkHealth = useCallback(async () => {
-    setIsCheckingHealth(true);
     try {
-      const nextHealth = await postgresAdapter.healthCheck();
-      setHealth(nextHealth);
+      await checkPostgresConnection();
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('syncDb.healthCheckFailed'));
-    } finally {
-      setIsCheckingHealth(false);
     }
   }, [message, t]);
 
@@ -143,7 +147,7 @@ export default function SyncDatabaseManagement() {
       SYNC_REFRESH_QUERY_KEYS.forEach((queryKey) => {
         queryClient.invalidateQueries({ queryKey: [queryKey] });
       });
-      setHealth(result.postgresHealth);
+      setPostgresConnectionHealth(result.postgresHealth);
       message.success(result.skipped ? t('syncDb.uploadOnlyStarted') : t('syncDb.syncStarted'));
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('syncDb.syncFailed'));
@@ -275,6 +279,12 @@ export default function SyncDatabaseManagement() {
 
   const activeQueueTotal = queueDetails.counts.pending + queueDetails.counts.processing + queueDetails.counts.failed;
   const isBusy = syncStatus.isBusy || isSyncingNow || isRetryingFailed;
+  const unavailableHealth = health && !health.available ? health : undefined;
+  const unavailableDescription = unavailableHealth?.message ?? (
+    unavailableHealth?.status === 'unconfigured'
+      ? t('syncDb.unconfiguredDescription')
+      : t('syncDb.unavailableDescription')
+  );
   const statCards: Array<{
     key: string;
     label: string;
@@ -349,6 +359,12 @@ export default function SyncDatabaseManagement() {
             {t('syncDb.checkConnection')}
           </Button>
           <Button
+            icon={<ServerCog size={16} />}
+            onClick={() => setIsConfiguringHost(true)}
+          >
+            {health?.status === 'unconfigured' ? t('syncDb.configureHost') : t('syncDb.changeHost')}
+          </Button>
+          <Button
             icon={<RotateCw size={16} />}
             disabled={queueDetails.counts.failed === 0 || isBusy}
             loading={isRetryingFailed}
@@ -367,12 +383,30 @@ export default function SyncDatabaseManagement() {
         </div>
       </div>
 
-      {(syncStatus.activityErrorMessage || health?.status === 'migration_failed') && (
+      {unavailableHealth && (
+        <Alert
+          type={unavailableHealth.status === 'migration_failed' ? 'error' : 'warning'}
+          showIcon
+          message={unavailableHealth.status === 'migration_failed'
+            ? t('syncDb.migrationIssue')
+            : t('syncDb.connectionIssue')}
+          description={unavailableDescription}
+          action={(
+            <Button size="small" onClick={() => setIsConfiguringHost(true)}>
+              {unavailableHealth.status === 'unconfigured'
+                ? t('syncDb.configureHost')
+                : t('syncDb.changeHost')}
+            </Button>
+          )}
+        />
+      )}
+
+      {syncStatus.activityErrorMessage && (
         <Alert
           type="error"
           showIcon
           message={t('syncDb.syncIssue')}
-          description={syncStatus.activityErrorMessage ?? health?.message}
+          description={syncStatus.activityErrorMessage}
         />
       )}
 
@@ -463,6 +497,24 @@ export default function SyncDatabaseManagement() {
           locale={{ emptyText: <Empty description={t('syncDb.emptyRecentSynced')} /> }}
         />
       </div>
+
+      <Modal
+        open={isConfiguringHost}
+        footer={null}
+        width={640}
+        destroyOnHidden
+        onCancel={() => setIsConfiguringHost(false)}
+        title={health?.status === 'unconfigured' ? t('syncDb.configureHost') : t('syncDb.changeHost')}
+      >
+        <HostDatabaseSetup
+          embedded
+          health={health}
+          onConfigured={(nextHealth) => {
+            setPostgresConnectionHealth(nextHealth);
+            setIsConfiguringHost(false);
+          }}
+        />
+      </Modal>
     </div>
   );
 }

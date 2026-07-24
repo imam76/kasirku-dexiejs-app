@@ -37,12 +37,14 @@ interface HostDatabaseSetupProps {
   health: PostgresHealth | null;
   errorMessage?: string | null;
   onConfigured: (health: PostgresHealth) => void;
+  embedded?: boolean;
 }
 
 export const HostDatabaseSetup = ({
   health,
   errorMessage,
   onConfigured,
+  embedded = false,
 }: HostDatabaseSetupProps) => {
   const { message } = App.useApp();
   const [dbParts, setDbParts] = useState<DatabaseParts>(DEFAULT_DB_PARTS);
@@ -79,8 +81,8 @@ export const HostDatabaseSetup = ({
   const statusMessage = errorMessage ?? health?.message;
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-xl rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+    <div className={embedded ? '' : 'flex min-h-[100dvh] items-center justify-center bg-gray-50 p-4'}>
+      <div className={embedded ? 'w-full' : 'w-full max-w-xl rounded-2xl border border-gray-100 bg-white p-6 shadow-sm'}>
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white">
             <ServerCog size={24} />
@@ -90,7 +92,7 @@ export const HostDatabaseSetup = ({
               Setup Host Database
             </Title>
             <Text type="secondary">
-              Hubungkan aplikasi ke PostgreSQL pusat sebelum setup fitur.
+              Atur PostgreSQL pusat untuk sinkronisasi data antar perangkat.
             </Text>
           </div>
         </div>

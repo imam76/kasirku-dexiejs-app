@@ -34,7 +34,7 @@ import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumen
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshFixedAssetsFromPostgres, refreshFixedAssetRunsFromPostgres } from '@/services/fixedAssetReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
-import { syncSetupConfigFromRemote } from '@/services/setupKeyService';
+import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import {
   enqueuePendingAccountingSettingsForSync,
@@ -121,7 +121,7 @@ export const refreshAllDataFromPostgres = async () => {
     roles: await refreshRolesFromPostgres(),
     authUsers: await refreshAuthUsersFromPostgres(),
     activityLogs: await refreshActivityLogsFromPostgres(),
-    appSetupConfig: await syncSetupConfigFromRemote(),
+    appSetupConfig: await reconcileSetupConfigWithRemote(),
     departments: await refreshDepartmentsFromPostgres(),
     chartOfAccounts: await refreshChartOfAccountsFromPostgres(),
     financeAccountMappings: await refreshFinanceAccountMappingsFromPostgres(),
