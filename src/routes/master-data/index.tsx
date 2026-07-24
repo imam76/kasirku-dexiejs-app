@@ -3,7 +3,6 @@ import {
   ContactsOutlined,
   CreditCardOutlined,
   DollarOutlined,
-  EnvironmentOutlined,
   PercentageOutlined,
   ProductOutlined,
   ProjectOutlined,
@@ -13,6 +12,7 @@ import {
   SwapOutlined,
   ShopOutlined,
   TeamOutlined,
+  BankOutlined,
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
@@ -46,11 +46,10 @@ function MasterData() {
     { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: ShopOutlined, color: 'text-teal-600', desc: t('home.warehousesDesc') },
     { to: '/master-data/payment-methods', label: t('nav.paymentMethods'), icon: CreditCardOutlined, color: 'text-blue-600', desc: t('home.paymentMethodsDesc') },
     { to: '/master-data/currencies', label: t('nav.currencies'), icon: MoneyCollectOutlined, color: 'text-emerald-600', desc: t('home.currenciesDesc') },
-    { to: '/master-data/areas', label: t('nav.areas'), icon: EnvironmentOutlined, color: 'text-lime-600', desc: t('home.areasDesc') },
-    { to: '/master-data/employees', label: t('nav.employees'), icon: TeamOutlined, color: 'text-blue-600', desc: t('home.employeesDesc') },
     { to: '/master-data/roles', label: t('nav.roles'), icon: TeamOutlined, color: 'text-fuchsia-600', desc: t('home.rolesDesc') },
     { to: '/master-data/departments', label: t('nav.departments'), icon: ApartmentOutlined, color: 'text-sky-600', desc: t('home.departmentsDesc') },
     { to: '/master-data/projects', label: t('nav.projects'), icon: ProjectOutlined, color: 'text-violet-600', desc: t('home.projectsDesc') },
+    { to: '/master-data/fixed-assets', label: t('nav.fixedAssets'), icon: BankOutlined, color: 'text-slate-600', desc: t('home.fixedAssetsDesc') },
     { to: '/master-data/taxes', label: t('nav.taxes'), icon: PercentageOutlined, color: 'text-orange-600', desc: t('home.taxesDesc') },
     { to: '/master-data/units', hash: 'conversions', label: t('nav.units'), icon: SwapOutlined, color: 'text-cyan-600', desc: t('home.unitConversionDesc') },
     { to: '/master-data/units', hash: 'units', label: t('nav.unit'), icon: SettingOutlined, color: 'text-indigo-600', desc: t('home.unitDesc') },
@@ -64,7 +63,7 @@ function MasterData() {
         lg:py-[38px] lg:px-8
       "
     >
-      <div className="max-w-[974px] mx-auto">
+      <div className="mx-auto max-w-[1400px]">
         <div className="mb-7 text-center sm:mb-9 lg:mb-12">
           <h1 className="mb-2 text-[20px] font-medium leading-[1.3] tracking-tight text-gray-900 sm:text-[26px] sm:mb-[10px] lg:text-[34px] lg:leading-[1.2] lg:mb-[14px]">
             {t('nav.masterData')}

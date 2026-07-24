@@ -129,6 +129,14 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['PROJECT'],
   },
   {
+    code: 'FIXED_ASSET_MANAGE',
+    label: 'Kelola Aset Tetap',
+    description: 'Melihat dan mengelola register serta proses penyusutan aset tetap.',
+    group: 'Data Master',
+    moduleCodes: ['FIXED_ASSET'],
+    isSensitive: true,
+  },
+  {
     code: 'TAX_MANAGE',
     label: 'Kelola Tax',
     group: 'Data Master',
@@ -496,6 +504,21 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     label: 'Lihat Semua Area Koperasi',
     group: 'Koperasi',
     moduleCodes: ['KOPERASI_ANGGOTA', 'KOPERASI_ANGSURAN'],
+    isSensitive: true,
+  },
+  {
+    code: 'MARKETPLACE_VIEW',
+    label: 'Lihat Marketplace',
+    description: 'Melihat koneksi toko dan pesanan Marketplace.',
+    group: 'Marketplace',
+    moduleCodes: ['MARKETPLACE'],
+  },
+  {
+    code: 'MARKETPLACE_MANAGE',
+    label: 'Kelola Marketplace',
+    description: 'Menghubungkan toko dan menjalankan sinkronisasi pesanan.',
+    group: 'Marketplace',
+    moduleCodes: ['MARKETPLACE'],
     isSensitive: true,
   },
   {

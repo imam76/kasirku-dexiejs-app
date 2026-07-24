@@ -24,7 +24,7 @@ test.describe('laporan tabungan masuk dan keluar koperasi', () => {
   test('menampilkan tabungan masuk valid, group harian, filter tipe, dan filter karyawan', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
     await seedSavingMovementReportFixture(page);
-    await page.goto('/koperasi/laporan-tabungan-masuk');
+    await page.goto('/koperasi/laporan/tabungan-masuk');
     await selectJune2026(page);
 
     const report = page.getByTestId('koperasi-saving-movement-report');
@@ -60,7 +60,7 @@ test.describe('laporan tabungan masuk dan keluar koperasi', () => {
   test('menampilkan tabungan keluar valid dan mengecualikan setoran serta reversal', async ({ page }) => {
     await loginAsBootstrappedOwner(page);
     await seedSavingMovementReportFixture(page);
-    await page.goto('/koperasi/laporan-tabungan-keluar');
+    await page.goto('/koperasi/laporan/tabungan-keluar');
     await selectJune2026(page);
 
     const report = page.getByTestId('koperasi-saving-movement-report');

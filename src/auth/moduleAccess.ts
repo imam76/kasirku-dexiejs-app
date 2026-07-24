@@ -1,6 +1,6 @@
 import { getSetupConfig } from '@/services/setupKeyService';
 import { getDocumentModuleCodesForPath } from './documentPermissions';
-import { getReportAccessForPath } from './reportPermissions';
+import { COOPERATIVE_REPORT_MODULE_LIST, getReportAccessForPath } from './reportPermissions';
 
 /**
  * Mapping from route paths to setup module codes.
@@ -25,6 +25,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'UNIT',
     'CURRENCY',
     'ROLE_PERMISSION',
+    'FIXED_ASSET',
   ],
   '/master-data/products': ['PRODUCT'],
   '/master-data/production': ['PRODUCTION'],
@@ -36,6 +37,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/master-data/employees': ['EMPLOYEE'],
   '/master-data/departments': ['DEPARTMENT'],
   '/master-data/projects': ['PROJECT'],
+  '/master-data/fixed-assets': ['FIXED_ASSET', 'GENERAL_LEDGER'],
   '/master-data/taxes': ['TAX'],
   '/master-data/promos': ['PROMO'],
   '/master-data/units': ['UNIT'],
@@ -46,6 +48,8 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/history': ['POS_TRANSACTION'],
   // Legacy stock shopping route redirects to Purchase Receipt.
   '/shopping-note': ['PURCHASE_RECEIPT'],
+  // Human Resources
+  '/hr': ['AREA', 'EMPLOYEE', 'CASH_FLOW'],
   // Finance
   '/finance': ['CASH_FLOW', 'RECEIVABLES', 'PAYABLES', 'CHART_OF_ACCOUNTS', 'GENERAL_LEDGER'],
   '/finance/cash-flow': ['CASH_FLOW'],
@@ -75,6 +79,9 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'REPORT_STOCK_CARD',
   ],
   '/profit': ['REPORT_PROFIT'],
+  // Marketplace
+  '/marketplace': ['MARKETPLACE'],
+  '/marketplace/shopee': ['MARKETPLACE'],
   // Koperasi
   '/koperasi/anggota': ['KOPERASI_ANGGOTA'],
   '/koperasi/simpanan': ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
@@ -83,6 +90,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/koperasi/angsuran': ['KOPERASI_ANGSURAN'],
   '/koperasi/penagihan': ['KOPERASI_PENAGIHAN'],
   '/koperasi/kas-petugas': ['KOPERASI_KAS_PETUGAS'],
+  '/koperasi/laporan': COOPERATIVE_REPORT_MODULE_LIST,
   '/koperasi': [
     'KOPERASI_ANGGOTA',
     'KOPERASI_SIMPANAN_POKOK',
@@ -138,6 +146,9 @@ export const isRouteEnabledForModules = (
   if (!moduleCodes || moduleCodes.length === 0) return true;
 
   const enabledSet = enabledModules instanceof Set ? enabledModules : new Set(enabledModules);
+  if (normalizePath(path).startsWith('/master-data/fixed-assets')) {
+    return moduleCodes.every((code) => enabledSet.has(code));
+  }
   return moduleCodes.some((code) => enabledSet.has(code));
 };
 

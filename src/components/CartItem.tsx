@@ -9,11 +9,22 @@ import { useI18n } from '@/hooks/useI18n';
 interface CartItemProps {
   item: CartItemType;
   updateQuantity: (id: string, quantity: number) => void;
-  updateUnit: (id: string, unit: string) => void;
+  updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
+  isActive?: boolean;
+  onActivate?: () => void;
+  quantityInputRef?: (element: HTMLInputElement | null) => void;
 }
 
-export default function CartItem({ item, updateQuantity, updateUnit, removeFromCart }: CartItemProps) {
+export default function CartItem({
+  item,
+  updateQuantity,
+  updateUnit,
+  removeFromCart,
+  isActive = false,
+  onActivate,
+  quantityInputRef,
+}: CartItemProps) {
   const { t } = useI18n();
   const currentPrice = getCartItemPrice(item);
   const isWholesale = currentPrice < getCartItemOriginalPrice({ ...item, quantity: 1 });
@@ -39,10 +50,21 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
 
   return (
     <>
-      <article className="hidden rounded-xl border border-blue-100 bg-blue-50/40 p-2.5 min-[1024px]:block lg:hidden">
+      <article
+        data-pos-cart-item-id={item.product.id}
+        data-pos-active={isActive ? 'true' : 'false'}
+        onClick={onActivate}
+        className={`hidden rounded-xl border bg-blue-50/40 p-2.5 min-[1024px]:block lg:hidden ${
+          isActive
+            ? 'border-blue-500 shadow-md shadow-blue-100 ring-2 ring-blue-200'
+            : 'border-blue-100'
+        }`}
+      >
         <div className="flex min-w-0 items-center gap-1.5">
           <div className="min-w-0 flex-1" title={item.product.name}>
-            <p className="truncate text-sm font-bold leading-5 text-slate-800">{item.product.name}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-sm font-bold leading-5 text-slate-800">{item.product.name}</p>
+            </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <p className="text-[11px] font-semibold text-slate-500">
                 Rp {formatCurrency(currentPrice)} / {item.unit}
@@ -107,13 +129,25 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
         </div>
       </article>
 
-      <article className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3 min-[1024px]:hidden lg:block">
+      <article
+        data-testid={`pos-cart-item-${item.product.id}`}
+        data-pos-cart-item-id={item.product.id}
+        data-pos-active={isActive ? 'true' : 'false'}
+        onClick={onActivate}
+        className={`rounded-2xl border bg-blue-50/40 p-3 min-[1024px]:hidden lg:block ${
+          isActive
+            ? 'border-blue-500 shadow-md shadow-blue-100 ring-2 ring-blue-200'
+            : 'border-blue-100'
+        }`}
+      >
         <div className="flex items-start gap-2.5">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-blue-600 shadow-sm ring-1 ring-blue-100">
             <Package size={19} strokeWidth={1.8} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="line-clamp-2 text-sm font-bold leading-5 text-slate-800">{item.product.name}</p>
+            <div className="flex items-start gap-1.5">
+              <p className="line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-5 text-slate-800">{item.product.name}</p>
+            </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <p className="text-[11px] font-semibold text-slate-500">
                 Rp {formatCurrency(currentPrice)} / {item.unit}
@@ -136,6 +170,7 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
         <div className="mt-3 border-t border-blue-100 pt-2.5">
           <div className="grid grid-cols-2 gap-2">
             <Select
+              data-testid={`pos-cart-unit-${item.product.id}`}
               value={item.unit}
               onChange={handleUnitChange}
               className="h-9 w-full min-w-0"
@@ -154,6 +189,8 @@ export default function CartItem({ item, updateQuantity, updateUnit, removeFromC
               </button>
 
               <InputNumber
+                ref={quantityInputRef}
+                data-testid={`pos-cart-quantity-${item.product.id}`}
                 inputMode='decimal'
                 min={0}
                 value={item.quantity}

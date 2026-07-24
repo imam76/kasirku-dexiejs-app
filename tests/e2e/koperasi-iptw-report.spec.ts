@@ -4,7 +4,13 @@ import { seedIptwReportFixture } from './helpers/koperasiIptwReport';
 
 test('laporan IPTW bulanan per karyawan dan anggota', async ({ page }) => {
   await loginAsBootstrappedOwner(page);
-  await page.goto('/koperasi/laporan-iptw');
+  await page.goto('/koperasi/laporan');
+  await expect(page.getByTestId('cooperative-report-link-iptw')).toHaveAttribute(
+    'href',
+    '/koperasi/laporan/iptw',
+  );
+
+  await page.goto('/koperasi/laporan/iptw');
   await seedIptwReportFixture(page);
 
   const report = page.getByTestId('koperasi-iptw-report');
@@ -27,8 +33,4 @@ test('laporan IPTW bulanan per karyawan dan anggota', async ({ page }) => {
   await expect(total).toContainText('Rp 30.000');
   await expect(total).toContainText('Rp 70.000');
   await expect(page.getByRole('textbox', { name: 'Select month' })).not.toHaveValue('');
-  await expect(page.getByRole('link', { name: 'L.IPTW' })).toHaveAttribute(
-    'href',
-    '/koperasi/laporan-iptw',
-  );
 });

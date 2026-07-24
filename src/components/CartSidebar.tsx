@@ -12,8 +12,11 @@ import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
 interface CartSidebarProps {
   cart: CartItemType[];
   updateQuantity: (id: string, quantity: number) => void;
-  updateUnit: (id: string, unit: string) => void;
+  updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
+  activeCartItemId?: string;
+  onActivateCartItem: (id: string) => void;
+  registerQuantityInput: (id: string, element: HTMLInputElement | null) => void;
   clearCart: () => void;
   total: number;
   showPayment: boolean;
@@ -46,6 +49,9 @@ export default function CartSidebar({
   updateQuantity,
   updateUnit,
   removeFromCart,
+  activeCartItemId,
+  onActivateCartItem,
+  registerQuantityInput,
   clearCart,
   total,
   showPayment,
@@ -103,6 +109,9 @@ export default function CartSidebar({
               updateQuantity={updateQuantity}
               updateUnit={updateUnit}
               removeFromCart={removeFromCart}
+              isActive={item.product.id === activeCartItemId}
+              onActivate={() => onActivateCartItem(item.product.id)}
+              quantityInputRef={(element) => registerQuantityInput(item.product.id, element)}
             />
           ))}
           {cart.length === 0 && (

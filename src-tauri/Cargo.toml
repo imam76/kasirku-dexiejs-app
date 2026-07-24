@@ -21,21 +21,26 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["arbitrary_precision"] }
 tauri-plugin-share = "2.0.5"
 tauri-plugin-fs = "2"
 tauri-plugin-os = "2"
 tauri-plugin-dialog = "2"
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "uuid", "json", "migrate", "macros"] }
-tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "time", "net", "io-util", "sync"] }
 dotenvy = "0.15.7"
 thiserror = "2.0.18"
 anyhow = "1.0.102"
 chrono = { version = "0.4.44", features = ["serde"] }
 uuid = { version = "1.23.2", features = ["serde", "v4"] }
 quick-xml = "0.38.4"
-reqwest = { version = "0.13.2", default-features = false, features = ["rustls"] }
+reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "json", "query"] }
 sha2 = "0.10.9"
+hmac = "0.12.1"
+aes-gcm = "0.10.3"
+base64 = "0.22.1"
+rand = "0.9.2"
+url = "2.5.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"

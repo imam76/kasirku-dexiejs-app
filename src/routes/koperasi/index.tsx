@@ -1,4 +1,4 @@
-import { BankOutlined, BellOutlined, BookOutlined, CreditCardOutlined, DatabaseOutlined, FileTextOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons';
+import { BankOutlined, BellOutlined, CreditCardOutlined, DatabaseOutlined, FileTextOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { Empty } from 'antd';
 import { canAccessPath } from '@/auth/routePermissions';
@@ -76,104 +76,6 @@ function Cooperative() {
       icon: FileTextOutlined,
       color: 'text-amber-700',
       desc: t('cooperative.index.reportsDesc'),
-    },
-    {
-      to: '/koperasi/laporan-simpanan-sukarela',
-      label: t('nav.cooperative.voluntarySavingsReport'),
-      icon: WalletOutlined,
-      color: 'text-emerald-700',
-      desc: t('cooperative.index.voluntarySavingsReportDesc'),
-    },
-    {
-      to: '/koperasi/laporan-tabungan-masuk',
-      label: t('nav.cooperative.savingInReport'),
-      icon: WalletOutlined,
-      color: 'text-green-700',
-      desc: t('cooperative.index.savingInReportDesc'),
-    },
-    {
-      to: '/koperasi/laporan-tabungan-keluar',
-      label: t('nav.cooperative.savingOutReport'),
-      icon: WalletOutlined,
-      color: 'text-red-700',
-      desc: t('cooperative.index.savingOutReportDesc'),
-    },
-    {
-      to: '/koperasi/laporan-tunai',
-      label: t('nav.cooperative.cashReport'),
-      icon: BankOutlined,
-      color: 'text-emerald-700',
-      desc: t('cooperative.index.cashReportDesc'),
-    },
-    {
-      to: '/koperasi/laporan-target-harian',
-      label: t('nav.cooperative.dailyTarget'),
-      icon: FileTextOutlined,
-      color: 'text-slate-700',
-      desc: t('cooperative.index.dailyTargetDesc'),
-    },
-    {
-      to: '/koperasi/laporan-storting-harian',
-      label: t('nav.cooperative.dailyStorting'),
-      icon: FileTextOutlined,
-      color: 'text-green-700',
-      desc: t('cooperative.index.dailyStortingDesc'),
-    },
-    {
-      to: '/koperasi/laporan-kas-harian-pdl',
-      label: t('cooperative.reports.dailyFieldCash.title'),
-      icon: FileTextOutlined,
-      color: 'text-blue-700',
-      desc: t('cooperative.reports.dailyFieldCash.subtitle'),
-    },
-    {
-      to: '/koperasi/laporan-drop-harian',
-      label: t('nav.cooperative.dailyDrop'),
-      icon: FileTextOutlined,
-      color: 'text-orange-700',
-      desc: t('cooperative.index.dailyDropDesc'),
-    },
-    {
-      to: '/koperasi/laporan-drop-mingguan',
-      label: t('nav.cooperative.weeklyDrop'),
-      icon: FileTextOutlined,
-      color: 'text-fuchsia-700',
-      desc: t('cooperative.index.weeklyDropDesc'),
-    },
-    {
-      to: '/koperasi/laporan-perkembangan-resort',
-      label: t('nav.cooperative.resortDevelopment'),
-      icon: FileTextOutlined,
-      color: 'text-cyan-700',
-      desc: t('cooperative.index.resortDevelopmentDesc'),
-    },
-    {
-      to: '/koperasi/laporan-iptw',
-      label: t('nav.cooperative.iptwReport'),
-      icon: FileTextOutlined,
-      color: 'text-emerald-700',
-      desc: t('cooperative.index.iptwReportDesc'),
-    },
-    {
-      to: '/koperasi/buku-angsuran',
-      label: t('nav.cooperative.installmentBook'),
-      icon: BookOutlined,
-      color: 'text-rose-700',
-      desc: t('cooperative.index.installmentBookDesc'),
-    },
-    {
-      to: '/koperasi/laporan-induk-anggota',
-      label: t('nav.cooperative.memberRegister'),
-      icon: FileTextOutlined,
-      color: 'text-indigo-700',
-      desc: t('cooperative.memberRegister.subtitle'),
-    },
-    {
-      to: '/koperasi/arus-kas',
-      label: t('cooperative.reports.tabs.cashFlowStatement'),
-      icon: BankOutlined,
-      color: 'text-teal-700',
-      desc: t('cooperative.index.cashFlowDesc'),
     },
   ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }));
 

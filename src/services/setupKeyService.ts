@@ -5,7 +5,7 @@ import { isTauriRuntime } from '@/utils/export/platform';
 import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
-export const CURRENT_MODULE_CATALOG_VERSION = 10;
+export const CURRENT_MODULE_CATALOG_VERSION = 11;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 const ACCOUNTING_BASELINE_TRIGGER_MODULES = new Set([
   'CHART_OF_ACCOUNTS',

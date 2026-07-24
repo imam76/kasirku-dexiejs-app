@@ -94,6 +94,9 @@ const FINANCE_REALTIME_TABLES = new Set([
   'journal_entry_lines',
   'opening_balance_batches',
   'opening_balance_lines',
+  'fixed_assets',
+  'fixed_asset_depreciation_runs',
+  'fixed_asset_depreciation_run_lines',
 ]);
 
 const FINANCE_QUERY_KEYS = [
@@ -120,6 +123,8 @@ const FINANCE_QUERY_KEYS = [
   'cooperativeDailyFieldCashReport',
   'cooperativeCashReport',
   'ledgerReport',
+  'fixedAssets',
+  'fixedAssetDepreciationRuns',
 ];
 
 const PAYROLL_REALTIME_TABLES = new Set([

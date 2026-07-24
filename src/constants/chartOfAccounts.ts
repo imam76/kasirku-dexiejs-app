@@ -1,6 +1,7 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import type {
   AccountType,
+  AccountNormalBalance,
   AccountingProfileTemplateRecommendation,
   ChartOfAccount,
   ChartOfAccountTemplate,
@@ -19,13 +20,13 @@ const createAccountSeed = (
   code: string,
   name: string,
   type: AccountType,
-  options: Partial<Pick<ChartOfAccount, 'parent_id' | 'parent_code' | 'parent_name' | 'is_postable' | 'description'>> = {},
+  options: Partial<Pick<ChartOfAccount, 'parent_id' | 'parent_code' | 'parent_name' | 'is_postable' | 'description' | 'normal_balance'>> = {},
 ): DefaultAccountSeed => ({
   id,
   code,
   name,
   type,
-  normal_balance: getAccountNormalBalance(type),
+  normal_balance: options.normal_balance ?? getAccountNormalBalance(type),
   is_postable: options.is_postable ?? true,
   is_system: true,
   is_active: true,
@@ -48,6 +49,10 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
   createAccountSeed('cooperative-loan-receivable', '1120', 'Piutang Pinjaman Anggota', 'ASSET'),
   createAccountSeed('employee-cash-advance-receivable', '1130', 'Piutang Kasbon Karyawan', 'ASSET'),
   createAccountSeed('inventory', '1200', 'Persediaan Barang', 'ASSET'),
+  createAccountSeed('fixed-asset', '1500', 'Aset Tetap', 'ASSET'),
+  createAccountSeed('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', {
+    normal_balance: 'CREDIT',
+  }),
   createAccountSeed('input-tax', '1305', 'PPN Masukan', 'ASSET'),
   createAccountSeed('advance-paid', '1310', 'Uang Muka Dibayar', 'ASSET'),
   createAccountSeed('accounts-payable', '2000', 'Hutang Usaha', 'LIABILITY'),
@@ -81,6 +86,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: DefaultAccountSeed[] = [
     parent_code: '6100',
     parent_name: 'Beban Operasional',
   }),
+  createAccountSeed('depreciation-expense', '6080', 'Beban Penyusutan', 'EXPENSE'),
   createAccountSeed('cooperative-saving-interest-expense', '6095', 'Beban Jasa Simpanan Anggota', 'EXPENSE'),
   createAccountSeed('other-expense', '6900', 'Beban Lainnya', 'EXPENSE'),
 ];
@@ -361,7 +367,7 @@ const createEtapTemplateLine = (
   code: string,
   name: string,
   type: AccountType,
-  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> = {},
+  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> & { normal_balance?: AccountNormalBalance } = {},
 ): ChartOfAccountTemplateLine => ({
   id: `${SAK_ETAP_KOPERASI_TEMPLATE.id}-${templateAccountId}`,
   template_id: SAK_ETAP_KOPERASI_TEMPLATE.id,
@@ -369,7 +375,7 @@ const createEtapTemplateLine = (
   code,
   name,
   type,
-  normal_balance: getAccountNormalBalance(type),
+  normal_balance: options.normal_balance ?? getAccountNormalBalance(type),
   is_postable: options.is_postable ?? true,
   created_at: '',
   ...options,
@@ -410,7 +416,7 @@ export const SAK_ETAP_KOPERASI_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createEtapTemplateLine('advance-paid', '1310', 'Uang Muka Dibayar', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createEtapTemplateLine('fixed-asset', '1500', 'Aset Tetap', 'ASSET', { is_postable: false }),
   createEtapTemplateLine('equipment', '1510', 'Peralatan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
-  createEtapTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
+  createEtapTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', { parent_template_account_id: 'fixed-asset', normal_balance: 'CREDIT' }),
 
   // === KEWAJIBAN ===
   createEtapTemplateLine('liability', '2000', 'Kewajiban', 'LIABILITY', { is_postable: false }),
@@ -562,7 +568,7 @@ const createTemplateLine = (
   code: string,
   name: string,
   type: AccountType,
-  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> = {},
+  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> & { normal_balance?: AccountNormalBalance } = {},
 ): ChartOfAccountTemplateLine => ({
   id: `${SAK_EMKM_RETAIL_TEMPLATE.id}-${templateAccountId}`,
   template_id: SAK_EMKM_RETAIL_TEMPLATE.id,
@@ -570,7 +576,7 @@ const createTemplateLine = (
   code,
   name,
   type,
-  normal_balance: getAccountNormalBalance(type),
+  normal_balance: options.normal_balance ?? getAccountNormalBalance(type),
   is_postable: options.is_postable ?? true,
   created_at: '',
   ...options,
@@ -604,7 +610,7 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('advance-paid', '1310', 'Uang Muka Dibayar', 'ASSET', { parent_template_account_id: 'asset-current' }),
   createTemplateLine('fixed-asset', '1500', 'Aset Tetap', 'ASSET', { is_postable: false }),
   createTemplateLine('equipment', '1510', 'Peralatan Toko', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
-  createTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', { parent_template_account_id: 'fixed-asset' }),
+  createTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', { parent_template_account_id: 'fixed-asset', normal_balance: 'CREDIT' }),
   createTemplateLine('liability', '2000', 'Liabilitas', 'LIABILITY', { is_postable: false }),
   createTemplateLine('accounts-payable', '2010', 'Hutang Usaha', 'LIABILITY', {
     parent_template_account_id: 'liability',
@@ -664,6 +670,7 @@ export const SAK_EMKM_RETAIL_TEMPLATE_LINES: ChartOfAccountTemplateLine[] = [
   createTemplateLine('electricity-expense', '6030', 'Beban Listrik', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('transport-expense', '6040', 'Beban Transport', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
   createTemplateLine('supplies-expense', '6050', 'Beban Perlengkapan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
+  createTemplateLine('depreciation-expense', '6080', 'Beban Penyusutan', 'EXPENSE', { parent_template_account_id: 'operational-expense' }),
 
   createTemplateLine('other-expense', '6900', 'Beban Lainnya', 'EXPENSE', {
     mapping_keys: [
@@ -693,7 +700,7 @@ const createServiceTemplateLine = (
   code: string,
   name: string,
   type: AccountType,
-  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> = {},
+  options: Partial<Pick<ChartOfAccountTemplateLine, 'parent_template_account_id' | 'is_postable' | 'description' | 'mapping_keys'>> & { normal_balance?: AccountNormalBalance } = {},
 ): ChartOfAccountTemplateLine => ({
   id: `${SAK_EMKM_GENERAL_SERVICE_TEMPLATE.id}-${templateAccountId}`,
   template_id: SAK_EMKM_GENERAL_SERVICE_TEMPLATE.id,
@@ -701,7 +708,7 @@ const createServiceTemplateLine = (
   code,
   name,
   type,
-  normal_balance: getAccountNormalBalance(type),
+  normal_balance: options.normal_balance ?? getAccountNormalBalance(type),
   is_postable: options.is_postable ?? true,
   created_at: '',
   ...options,
@@ -743,6 +750,7 @@ export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES: ChartOfAccountTemplateLine
   }),
   createServiceTemplateLine('accumulated-depreciation', '1590', 'Akumulasi Penyusutan', 'ASSET', {
     parent_template_account_id: 'fixed-asset',
+    normal_balance: 'CREDIT',
   }),
   createServiceTemplateLine('liability', '2000', 'Liabilitas', 'LIABILITY', { is_postable: false }),
   createServiceTemplateLine('accounts-payable', '2010', 'Hutang Usaha', 'LIABILITY', {
@@ -787,6 +795,9 @@ export const SAK_EMKM_GENERAL_SERVICE_TEMPLATE_LINES: ChartOfAccountTemplateLine
   }),
   createServiceTemplateLine('sales-discount', '4110', 'Diskon Pendapatan', 'CONTRA_REVENUE'),
   createServiceTemplateLine('operational-expense', '6000', 'Beban Operasional', 'EXPENSE', { is_postable: false }),
+  createServiceTemplateLine('depreciation-expense', '6080', 'Beban Penyusutan', 'EXPENSE', {
+    parent_template_account_id: 'operational-expense',
+  }),
   createServiceTemplateLine('salary-expense', '6010', 'Beban Gaji', 'EXPENSE', {
     parent_template_account_id: 'operational-expense',
     mapping_keys: [FINANCE_CATEGORIES.PAYROLL],

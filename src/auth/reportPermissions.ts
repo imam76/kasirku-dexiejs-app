@@ -65,63 +65,63 @@ export const GENERAL_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
 };
 
 export const COOPERATIVE_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
-  '/koperasi/laporan': {
+  '/koperasi/laporan/ringkasan': {
     permission: 'COOPERATIVE_OVERVIEW_REPORT_VIEW',
     moduleCode: 'KOPERASI_SHU',
   },
-  '/koperasi/laporan-simpanan-sukarela': {
+  '/koperasi/laporan/simpanan-sukarela': {
     permission: 'COOPERATIVE_SAVING_VIEW',
     moduleCode: 'KOPERASI_SIMPANAN_SUKARELA',
   },
-  '/koperasi/laporan-tabungan-masuk': {
+  '/koperasi/laporan/tabungan-masuk': {
     permission: 'COOPERATIVE_SAVING_VIEW',
     moduleCode: ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
   },
-  '/koperasi/laporan-tabungan-keluar': {
+  '/koperasi/laporan/tabungan-keluar': {
     permission: 'COOPERATIVE_SAVING_VIEW',
     moduleCode: ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
   },
-  '/koperasi/laporan-tunai': {
+  '/koperasi/laporan/tunai': {
     permission: 'COOPERATIVE_CASH_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_CASH',
   },
-  '/koperasi/laporan-target-harian': {
+  '/koperasi/laporan/target-harian': {
     permission: 'COOPERATIVE_DAILY_TARGET_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_DAILY_TARGET',
   },
-  '/koperasi/laporan-kas-harian-pdl': {
+  '/koperasi/laporan/kas-harian-pdl': {
     permission: 'COOPERATIVE_CASH_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_DAILY_FIELD_CASH',
   },
-  '/koperasi/laporan-storting-harian': {
+  '/koperasi/laporan/storting-harian': {
     permission: 'COOPERATIVE_DAILY_STORTING_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_DAILY_STORTING',
   },
-  '/koperasi/laporan-drop-harian': {
+  '/koperasi/laporan/drop-harian': {
     permission: 'COOPERATIVE_DAILY_DROP_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_DAILY_DROP',
   },
-  '/koperasi/laporan-drop-mingguan': {
+  '/koperasi/laporan/drop-mingguan': {
     permission: 'COOPERATIVE_WEEKLY_DROP_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_WEEKLY_DROP',
   },
-  '/koperasi/laporan-perkembangan-resort': {
+  '/koperasi/laporan/perkembangan-resort': {
     permission: 'COOPERATIVE_RESORT_DEVELOPMENT_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_RESORT_DEVELOPMENT',
   },
-  '/koperasi/laporan-iptw': {
+  '/koperasi/laporan/iptw': {
     permission: 'COOPERATIVE_IPTW_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_IPTW',
   },
-  '/koperasi/laporan-induk-anggota': {
+  '/koperasi/laporan/induk-anggota': {
     permission: 'COOPERATIVE_MEMBER_REGISTER_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_MEMBER_REGISTER',
   },
-  '/koperasi/buku-angsuran': {
+  '/koperasi/laporan/buku-angsuran': {
     permission: 'COOPERATIVE_INSTALLMENT_BOOK_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_INSTALLMENT_BOOK',
   },
-  '/koperasi/arus-kas': {
+  '/koperasi/laporan/arus-kas': {
     permission: 'COOPERATIVE_CASH_FLOW_REPORT_VIEW',
     moduleCode: 'KOPERASI_REPORT_CASH_FLOW',
   },
@@ -130,8 +130,14 @@ export const COOPERATIVE_REPORT_ACCESS: Record<string, ReportAccessDefinition> =
 export const GENERAL_REPORT_PERMISSION_LIST = Array.from(new Set(
   Object.values(GENERAL_REPORT_ACCESS).map((item) => item.permission),
 ));
-export const COOPERATIVE_REPORT_PERMISSION_LIST = Object.values(COOPERATIVE_REPORT_ACCESS)
-  .map((item) => item.permission);
+export const COOPERATIVE_REPORT_PERMISSION_LIST = Array.from(new Set(
+  Object.values(COOPERATIVE_REPORT_ACCESS).map((item) => item.permission),
+));
+export const COOPERATIVE_REPORT_MODULE_LIST = Array.from(new Set(
+  Object.values(COOPERATIVE_REPORT_ACCESS).flatMap((item) => (
+    Array.isArray(item.moduleCode) ? item.moduleCode : [item.moduleCode]
+  )),
+));
 
 const findReportDefinition = (
   path: string,

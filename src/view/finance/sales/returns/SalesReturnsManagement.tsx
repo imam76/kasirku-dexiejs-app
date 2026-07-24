@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Input, Select, Table, Tag, Typography } from 'antd';
+import { Button, DatePicker, Input, Select, Table, Tag } from 'antd';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, Eye, Plus, RotateCcw } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
+import ManagementListCard from '@/components/ManagementListCard';
 import { useI18n } from '@/hooks/useI18n';
 import { useSalesReturns } from '@/hooks/useSalesReturns';
+import dayjs from '@/lib/dayjs';
 import type { SalesReturn, SalesReturnResolution, SalesReturnStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-
-const { Title, Text } = Typography;
 
 const statusColor: Record<SalesReturnStatus, string> = {
   DRAFT: 'default',
@@ -39,6 +39,7 @@ export default function SalesReturnsManagement() {
   const { salesReturns } = useSalesReturns();
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<SalesReturnStatus | 'ALL'>('ALL');
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
 
   const filteredReturns = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -50,10 +51,15 @@ export default function SalesReturnsManagement() {
         salesReturn.source_number,
         salesReturn.customer_name,
       ].some((value) => value?.toLowerCase().includes(query));
+      const returnDate = dayjs(salesReturn.document_date);
+      const matchesDate = !dateRange || (
+        !returnDate.isBefore(dateRange[0], 'day')
+        && !returnDate.isAfter(dateRange[1], 'day')
+      );
 
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesSearch && matchesDate;
     });
-  }, [salesReturns, searchText, statusFilter]);
+  }, [dateRange, salesReturns, searchText, statusFilter]);
 
   const columns: ColumnsType<SalesReturn> = [
     {
@@ -99,7 +105,7 @@ export default function SalesReturnsManagement() {
       render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
     },
     {
-      title: '',
+      title: t('common.actions'),
       key: 'action',
       fixed: 'right',
       width: 110,
@@ -114,13 +120,11 @@ export default function SalesReturnsManagement() {
   ];
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <Title level={2} style={{ margin: 0 }}>{t('salesReturns.title')}</Title>
-          <Text type="secondary">{t('salesReturns.subtitle')}</Text>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <ManagementListCard
+      title={t('salesReturns.title')}
+      icon={<RotateCcw className="h-5 w-5 text-rose-600" />}
+      actions={(
+        <div className="flex flex-wrap justify-end gap-2">
           <Link to="/sales">
             <Button icon={<ArrowLeft size={16} />}>{t('salesDocuments.backToSalesMenu')}</Button>
           </Link>
@@ -128,13 +132,11 @@ export default function SalesReturnsManagement() {
             <Button type="primary" icon={<Plus size={16} />}>{t('salesReturns.new')}</Button>
           </Link>
         </div>
-      </div>
-
-      <Card size="small">
-        <div className="grid gap-2 md:grid-cols-[1fr_220px]">
-          <Input
+      )}
+      toolbar={(
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(240px,1fr)_180px_280px_auto]">
+          <Input.Search
             allowClear
-            prefix={<RotateCcw size={14} />}
             placeholder={t('salesReturns.searchPlaceholder')}
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
@@ -149,15 +151,38 @@ export default function SalesReturnsManagement() {
               { value: 'VOIDED', label: t('salesReturns.status.voided') },
             ]}
           />
+          <DatePicker.RangePicker
+            value={dateRange}
+            allowClear
+            format="DD MMM YYYY"
+            onChange={(value) => {
+              if (value?.[0] && value[1]) {
+                setDateRange([value[0], value[1]]);
+                return;
+              }
+              setDateRange(null);
+            }}
+          />
+          <Button
+            icon={<RotateCcw size={16} />}
+            onClick={() => {
+              setSearchText('');
+              setStatusFilter('ALL');
+              setDateRange(null);
+            }}
+          >
+            {t('common.reset')}
+          </Button>
         </div>
-      </Card>
-
+      )}
+    >
       <Table
         rowKey="id"
         columns={columns}
         dataSource={filteredReturns}
-        scroll={{ x: true }}
+        scroll={{ x: 1100 }}
+        pagination={{ pageSize: 20, showSizeChanger: true }}
       />
-    </div>
+    </ManagementListCard>
   );
 }

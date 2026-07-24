@@ -86,6 +86,9 @@ import type {
   EmployeeCashAdvanceRepayment,
   PaymentMethodMaster,
   PosTransactionPayment,
+  FixedAsset,
+  FixedAssetDepreciationRun,
+  FixedAssetDepreciationRunLine,
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
@@ -177,6 +180,9 @@ export class KasirkuDB extends Dexie {
   membershipSettings!: Table<MembershipSetting>;
   paymentMethods!: Table<PaymentMethodMaster>;
   posTransactionPayments!: Table<PosTransactionPayment>;
+  fixedAssets!: Table<FixedAsset>;
+  fixedAssetDepreciationRuns!: Table<FixedAssetDepreciationRun>;
+  fixedAssetDepreciationRunLines!: Table<FixedAssetDepreciationRunLine>;
 
   constructor() {
     super('KasirkuDB');

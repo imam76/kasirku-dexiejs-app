@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Input, Table, Tag, Typography } from 'antd';
+import { Button, DatePicker, Input, Select, Table, Tag, Typography } from 'antd';
 import { Link } from '@tanstack/react-router';
 import {
   ArrowLeft,
@@ -32,6 +32,8 @@ import { formatDate } from '@/utils/formatters';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
 import { canAccessPath } from '@/auth/routePermissions';
 import { useAuth } from '@/auth/useAuth';
+import ManagementListCard from '@/components/ManagementListCard';
+import dayjs from '@/lib/dayjs';
 
 const { Title, Text } = Typography;
 
@@ -228,6 +230,8 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
   const { t } = useI18n();
   const { documents } = useSalesDocuments();
   const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<SalesDocumentStatus | 'ALL'>('ALL');
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const config = getSalesDocumentConfig(documentType);
   const menuItem = salesDocumentMenuItems.find((item) => item.type === documentType);
   const documentPathSegment = getSalesDocumentTypePathSegment(documentType);
@@ -236,16 +240,22 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
     const query = searchText.trim().toLowerCase();
     return documents.filter((document) => {
       const matchesType = document.type === documentType;
+      const matchesStatus = statusFilter === 'ALL' || document.status === statusFilter;
       const matchesSearch = !query || [
         document.document_number,
         document.customer_name,
         document.project_name,
         document.department_name,
       ].some((value) => value?.toLowerCase().includes(query));
+      const documentDate = dayjs(document.document_date);
+      const matchesDate = !dateRange || (
+        !documentDate.isBefore(dateRange[0], 'day')
+        && !documentDate.isAfter(dateRange[1], 'day')
+      );
 
-      return matchesType && matchesSearch;
+      return matchesType && matchesStatus && matchesSearch && matchesDate;
     });
-  }, [documents, documentType, searchText]);
+  }, [dateRange, documents, documentType, searchText, statusFilter]);
 
   const showPaymentColumn = filteredDocuments.some(hasPaymentStatus) || config.behavior.hasPaymentStatus;
   const showTotalColumn = filteredDocuments.some(hasPricing) || config.behavior.hasPricing;
@@ -297,7 +307,7 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
       width: 150,
     }] : []),
     {
-      title: '',
+      title: t('common.actions'),
       key: 'action',
       fixed: 'right',
       width: 110,
@@ -315,15 +325,13 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
   ];
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <Title level={2} style={{ margin: 0 }}>
-            {menuItem ? `${menuItem.code} - ${t(config.titleKey)}` : t(config.titleKey)}
-          </Title>
-          <Text type="secondary">{t('salesDocuments.typePageSubtitle', { type: t(config.titleKey) })}</Text>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <ManagementListCard
+      title={menuItem ? `${menuItem.code} - ${t(config.titleKey)}` : t(config.titleKey)}
+      icon={menuItem
+        ? <menuItem.icon className={`h-5 w-5 ${menuItem.color}`} />
+        : <FileText className="h-5 w-5" />}
+      actions={(
+        <div className="flex flex-wrap justify-end gap-2">
           <Link to="/sales">
             <Button icon={<ArrowLeft size={16} />}>
               {t('salesDocuments.backToSalesMenu')}
@@ -338,23 +346,58 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
             </Button>
           </Link>
         </div>
-      </div>
-
-      <Card size="small">
-        <Input
-          allowClear
-          placeholder={t('salesDocuments.searchPlaceholder')}
-          value={searchText}
-          onChange={(event) => setSearchText(event.target.value)}
-        />
-      </Card>
-
+      )}
+      toolbar={(
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(240px,1fr)_180px_280px_auto]">
+          <Input.Search
+            allowClear
+            placeholder={t('salesDocuments.searchPlaceholder')}
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+          />
+          <Select<SalesDocumentStatus | 'ALL'>
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: 'ALL', label: t('common.allStatuses') },
+              { value: 'DRAFT', label: t(salesDocumentStatusLabelKeys.DRAFT) },
+              { value: 'ISSUED', label: t(salesDocumentStatusLabelKeys.ISSUED) },
+              { value: 'CONVERTED', label: t(salesDocumentStatusLabelKeys.CONVERTED) },
+              { value: 'VOIDED', label: t(salesDocumentStatusLabelKeys.VOIDED) },
+            ]}
+          />
+          <DatePicker.RangePicker
+            value={dateRange}
+            allowClear
+            format="DD MMM YYYY"
+            onChange={(value) => {
+              if (value?.[0] && value[1]) {
+                setDateRange([value[0], value[1]]);
+                return;
+              }
+              setDateRange(null);
+            }}
+          />
+          <Button
+            icon={<RotateCcw size={16} />}
+            onClick={() => {
+              setSearchText('');
+              setStatusFilter('ALL');
+              setDateRange(null);
+            }}
+          >
+            {t('common.reset')}
+          </Button>
+        </div>
+      )}
+    >
       <Table
         rowKey="id"
         columns={columns}
         dataSource={filteredDocuments}
-        scroll={{ x: true }}
+        scroll={{ x: 1000 }}
+        pagination={{ pageSize: 20, showSizeChanger: true }}
       />
-    </div>
+    </ManagementListCard>
   );
 }

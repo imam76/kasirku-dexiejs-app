@@ -56,7 +56,7 @@ test.describe.serial('input saldo awal pinjaman koperasi', () => {
       expectedOutstanding: 'Rp 800.000',
     });
 
-    await page.goto('/koperasi/laporan');
+    await page.goto('/koperasi/laporan/ringkasan');
     await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
 
     // paid_* historis migrasi tidak lagi dihitung sebagai mismatch payment-vs-installment.
@@ -89,7 +89,7 @@ test.describe.serial('input saldo awal pinjaman koperasi', () => {
       expectedOutstanding: 'Rp 800.000',
     });
 
-    await page.goto('/koperasi/laporan-perkembangan-resort');
+    await page.goto('/koperasi/laporan/perkembangan-resort');
     await expect(page.getByRole('heading', { name: 'LAPORAN PERKEMBANGAN RESORT/KARYAWAN' })).toBeVisible();
 
     const grandTotalCells = page.getByTestId('koperasi-resort-development-grand-total').locator('td');

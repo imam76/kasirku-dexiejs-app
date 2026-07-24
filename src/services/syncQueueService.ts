@@ -46,6 +46,10 @@ import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
 import { mergeRemoteProductionOrderBundlesIntoDexie } from '@/services/productionReadService';
 import { mergeRemotePurchaseDocumentBundlesIntoDexie } from '@/services/purchaseDocumentReadService';
 import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
+import {
+  mergeRemoteFixedAssetsIntoDexie,
+  mergeRemoteFixedAssetRunBundlesIntoDexie,
+} from '@/services/fixedAssetReadService';
 import { mergeRemoteSalesDocumentBundlesIntoDexie } from '@/services/salesDocumentReadService';
 import { mergeRemoteStockOpnameBundlesIntoDexie } from '@/services/stockOpnameReadService';
 import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
@@ -93,6 +97,8 @@ import {
   productionOrderPostgresAdapter,
   purchaseDocumentPostgresAdapter,
   projectPostgresAdapter,
+  fixedAssetPostgresAdapter,
+  fixedAssetDepreciationRunPostgresAdapter,
   rolePermissionPostgresAdapter,
   rolePostgresAdapter,
   salesDocumentPostgresAdapter,
@@ -152,6 +158,8 @@ import {
   type RemotePurchaseDocumentDto,
   type RemotePurchaseDocumentItemDto,
   type RemoteProjectDto,
+  type RemoteFixedAssetDto,
+  type RemoteFixedAssetDepreciationRunBundleDto,
   type RemoteRoleDto,
   type RemoteRolePermissionDto,
   type RemoteRecordCooperativeLoanCollectionEventResult,
@@ -172,7 +180,7 @@ import {
   mergeRemoteAccountingFiscalYearsIntoDexie,
   mergeRemoteFiscalYearClosingRunsIntoDexie,
 } from '@/services/fiscalYearReadService';
-import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse } from '@/types';
+import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -216,6 +224,8 @@ const PAYROLL_RUN_ENTITY = 'payrollRuns';
 const PRODUCT_ENTITY = 'products';
 const PRODUCTION_ORDER_ENTITY = 'productionOrders';
 const PROJECT_ENTITY = 'projects';
+const FIXED_ASSET_ENTITY = 'fixedAssets';
+const FIXED_ASSET_DEPRECIATION_RUN_ENTITY = 'fixedAssetDepreciationRuns';
 const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
 const ROLE_ENTITY = 'roles';
 const ROLE_PERMISSION_ENTITY = 'rolePermissions';
@@ -928,6 +938,27 @@ const mapProjectToRemoteDto = (project: Project): RemoteProjectDto => ({
   created_at: project.created_at,
   updated_at: project.updated_at,
 });
+
+const mapFixedAssetToRemoteDto = (asset: FixedAsset): RemoteFixedAssetDto => {
+  const remote = { ...asset };
+  delete remote.sync_status;
+  delete remote.sync_error;
+  delete remote.last_synced_at;
+  delete remote.remote_updated_at;
+  return remote;
+};
+
+const mapFixedAssetRunBundleToRemoteDto = (
+  run: FixedAssetDepreciationRun,
+  lines: FixedAssetDepreciationRunLine[],
+): RemoteFixedAssetDepreciationRunBundleDto => {
+  const remoteRun = { ...run };
+  delete remoteRun.sync_status;
+  delete remoteRun.sync_error;
+  delete remoteRun.last_synced_at;
+  delete remoteRun.remote_updated_at;
+  return { run: remoteRun, lines };
+};
 
 const mapProductToRemoteDto = (product: Product): RemoteProductDto => ({
   id: product.id,
@@ -2312,6 +2343,24 @@ const isRemoteProjectDto = (payload: unknown): payload is RemoteProjectDto => {
   );
 };
 
+const isRemoteFixedAssetDto = (payload: unknown): payload is RemoteFixedAssetDto => {
+  if (!payload || typeof payload !== 'object') return false;
+  const candidate = payload as Partial<RemoteFixedAssetDto>;
+  return typeof candidate.id === 'string' && typeof candidate.asset_code === 'string' &&
+    typeof candidate.name === 'string' && typeof candidate.version === 'number' &&
+    typeof candidate.updated_at === 'string';
+};
+
+const isRemoteFixedAssetRunBundleDto = (
+  payload: unknown,
+): payload is RemoteFixedAssetDepreciationRunBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+  const candidate = payload as Partial<RemoteFixedAssetDepreciationRunBundleDto>;
+  return Boolean(candidate.run && typeof candidate.run.id === 'string' &&
+    typeof candidate.run.updated_at === 'string' && typeof candidate.run.version === 'number' &&
+    Array.isArray(candidate.lines));
+};
+
 const isRemoteProductDto = (payload: unknown): payload is RemoteProductDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3219,6 +3268,26 @@ const updateProjectSyncMetadata = async (
   await db.projects.update(projectId, syncMetadata);
 };
 
+const updateFixedAssetSyncMetadata = async (
+  assetId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<FixedAsset, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const current = await db.fixedAssets.get(assetId);
+  if (!current || current.updated_at !== sourceUpdatedAt) return;
+  await db.fixedAssets.update(assetId, syncMetadata);
+};
+
+const updateFixedAssetRunSyncMetadata = async (
+  runId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<FixedAssetDepreciationRun, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const current = await db.fixedAssetDepreciationRuns.get(runId);
+  if (!current || current.updated_at !== sourceUpdatedAt) return;
+  await db.fixedAssetDepreciationRuns.update(runId, syncMetadata);
+};
+
 const updateProductSyncMetadata = async (
   productId: string,
   sourceUpdatedAt: string,
@@ -3650,6 +3719,18 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     await updateProjectSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === FIXED_ASSET_ENTITY && isRemoteFixedAssetDto(queueItem.payload)) {
+    await updateFixedAssetSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed', sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === FIXED_ASSET_DEPRECIATION_RUN_ENTITY && isRemoteFixedAssetRunBundleDto(queueItem.payload)) {
+    await updateFixedAssetRunSyncMetadata(queueItem.entity_id, queueItem.payload.run.updated_at, {
+      sync_status: 'failed', sync_error: errorMessage,
     });
   }
 
@@ -4120,6 +4201,16 @@ const processProjectQueueItem = async (queueItem: SyncQueueItem) => {
   return projectPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processFixedAssetQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteFixedAssetDto(queueItem.payload)) throw new Error('Payload aset tetap sync queue tidak valid.');
+  return fixedAssetPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processFixedAssetRunQueueItem = async (queueItem: SyncQueueItem) => {
+  if (!isRemoteFixedAssetRunBundleDto(queueItem.payload)) throw new Error('Payload run penyusutan sync queue tidak valid.');
+  return fixedAssetDepreciationRunPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processProductQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     return productPostgresAdapter.delete(queueItem.entity_id);
@@ -4324,6 +4415,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProductionOrderBundle: RemoteProductionOrderBundleDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
+    let remoteFixedAsset: RemoteFixedAssetDto | null = null;
+    let remoteFixedAssetRunBundle: RemoteFixedAssetDepreciationRunBundleDto | null = null;
     let remotePurchaseDocumentBundle: RemotePurchaseDocumentBundleDto | null = null;
     let remoteRole: RemoteRoleDto | null = null;
     let remoteRolePermission: RemoteRolePermissionDto | null = null;
@@ -4408,6 +4501,10 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteProductionOrderBundle = await processProductionOrderQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
       remoteProject = await processProjectQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === FIXED_ASSET_ENTITY) {
+      remoteFixedAsset = await processFixedAssetQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === FIXED_ASSET_DEPRECIATION_RUN_ENTITY) {
+      remoteFixedAssetRunBundle = await processFixedAssetRunQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PURCHASE_DOCUMENT_ENTITY) {
       remotePurchaseDocumentBundle = await processPurchaseDocumentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === ROLE_ENTITY) {
@@ -5062,6 +5159,26 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteProject.updated_at,
       });
       await mergeRemoteProjectsIntoDexie([remoteProject], syncedAt);
+      return;
+    }
+
+    if (remoteFixedAsset && isRemoteFixedAssetDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateFixedAssetSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced', sync_error: undefined, last_synced_at: syncedAt,
+        remote_updated_at: remoteFixedAsset.updated_at,
+      });
+      await mergeRemoteFixedAssetsIntoDexie([remoteFixedAsset], syncedAt);
+      return;
+    }
+
+    if (remoteFixedAssetRunBundle && isRemoteFixedAssetRunBundleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateFixedAssetRunSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.run.updated_at, {
+        sync_status: 'synced', sync_error: undefined, last_synced_at: syncedAt,
+        remote_updated_at: remoteFixedAssetRunBundle.run.updated_at,
+      });
+      await mergeRemoteFixedAssetRunBundlesIntoDexie([remoteFixedAssetRunBundle], syncedAt);
       return;
     }
 
@@ -7161,6 +7278,60 @@ export const enqueuePendingPaymentMethodsForSync = async () => {
       queueItem.payload.updated_at === method.updated_at
     ));
     if (!existingQueueItem) await enqueuePaymentMethodSync(method, 'update');
+  }
+};
+
+export const enqueueFixedAssetSync = async (
+  asset: FixedAsset,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(), entity: FIXED_ASSET_ENTITY, entity_id: asset.id,
+    operation, payload: mapFixedAssetToRemoteDto(asset), status: 'pending', attempts: 0,
+    created_at: now, updated_at: now,
+  };
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+  return queueItem;
+};
+
+export const enqueueFixedAssetRunBundleSync = async (
+  run: FixedAssetDepreciationRun,
+  lines: FixedAssetDepreciationRunLine[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(), entity: FIXED_ASSET_DEPRECIATION_RUN_ENTITY, entity_id: run.id,
+    operation, payload: mapFixedAssetRunBundleToRemoteDto(run, lines), status: 'pending', attempts: 0,
+    created_at: now, updated_at: now,
+  };
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+  return queueItem;
+};
+
+export const enqueuePendingFixedAssetsForSync = async () => {
+  const records = (await db.fixedAssets.toArray()).filter((asset) => asset.sync_status === 'pending' || asset.sync_status === 'failed');
+  const queued = await db.syncQueue.where('entity').equals(FIXED_ASSET_ENTITY).toArray();
+  for (const asset of records) {
+    const exists = queued.some((item) => item.entity_id === asset.id && item.status !== 'synced' &&
+      isRemoteFixedAssetDto(item.payload) && item.payload.updated_at === asset.updated_at && item.payload.version === asset.version);
+    if (!exists) await enqueueFixedAssetSync(asset, 'update');
+  }
+};
+
+export const enqueuePendingFixedAssetRunsForSync = async () => {
+  const records = (await db.fixedAssetDepreciationRuns.toArray()).filter((run) => run.sync_status === 'pending' || run.sync_status === 'failed');
+  const queued = await db.syncQueue.where('entity').equals(FIXED_ASSET_DEPRECIATION_RUN_ENTITY).toArray();
+  for (const run of records) {
+    const exists = queued.some((item) => item.entity_id === run.id && item.status !== 'synced' &&
+      isRemoteFixedAssetRunBundleDto(item.payload) && item.payload.run.updated_at === run.updated_at && item.payload.run.version === run.version);
+    if (!exists) {
+      const lines = await db.fixedAssetDepreciationRunLines.where('run_id').equals(run.id).toArray();
+      await enqueueFixedAssetRunBundleSync(run, lines, 'update');
+    }
   }
 };
 

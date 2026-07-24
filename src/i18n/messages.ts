@@ -4,6 +4,7 @@ import { cooperativeMessages } from './cooperativeMessages';
 import { navigationMessages } from './navigationMessages';
 import { stockMessages } from './stockMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
+import { fixedAssetMessages } from './fixedAssetMessages';
 
 export const messages = {
   id: {
@@ -13,6 +14,7 @@ export const messages = {
     ...stockMessages.id,
     ...stockOpnameMessages.id,
     ...cooperativeMessages.id,
+    ...fixedAssetMessages.id,
 
     'transaction.title': 'Transaksi',
     'transaction.searchPlaceholder': 'Cari produk (nama atau SKU)...',
@@ -23,7 +25,15 @@ export const messages = {
     'transaction.productNotFound': 'Produk dengan SKU/barcode "{code}" tidak ditemukan.',
     'transaction.desktopShortcutTitle': 'Shortcut desktop',
     'transaction.shortcut.focusSearch': 'Fokus pencarian',
+    'transaction.shortcut.addProduct': 'Tambah hasil pencarian',
+    'transaction.shortcut.editQuantity': 'Edit qty item aktif',
+    'transaction.shortcut.changeUnit': 'Ganti unit item aktif',
     'transaction.shortcut.clearSearch': 'Bersihkan pencarian',
+    'transaction.shortcut.emptyCart': 'Keranjang masih kosong.',
+    'transaction.shortcut.singleUnit': 'Produk hanya memiliki unit {unit}.',
+    'transaction.shortcut.unitChanged': 'Unit aktif: {unit}',
+    'transaction.shortcut.noSearchResult': 'Produk yang cocok tidak ditemukan.',
+    'transaction.activeItem': 'Aktif',
 
     'product.wholesale': 'Grosir',
     'product.stock': 'Stok',
@@ -93,7 +103,7 @@ export const messages = {
     'finance.recalculateFailedContent': 'Terjadi kesalahan saat menghitung ulang data keuangan.',
     'finance.defaultOpeningDescription': 'Saldo awal kas toko',
     'finance.index.title': 'Keuangan',
-    'finance.index.subtitle': 'Kelola arus kas, piutang, hutang, payroll, akun, dan buku besar toko dari satu area',
+    'finance.index.subtitle': 'Kelola arus kas, piutang, hutang, akun, dan buku besar toko dari satu area',
     'finance.index.cashFlowDesc': 'Pantau saldo kas/bank, pemasukan, pengeluaran, dan riwayat uang toko',
     'finance.index.chartOfAccountsDesc': 'Kelola daftar akun dan mapping kategori finance',
     'finance.index.generalLedgerDesc': 'Lihat jurnal, buku besar, trial balance, laba rugi, dan neraca',
@@ -1385,6 +1395,7 @@ export const messages = {
     'home.menu.salesDesc': 'Kelola quotation, order, delivery, invoice, dan retur sales',
     'home.menu.purchasesDesc': 'Kelola request, RFQ, order, receipt, invoice, dan retur purchase',
     'home.menu.financeDesc': 'Lihat ringkasan keuangan bisnis Anda secara real-time',
+    'home.menu.hrDesc': 'Kelola area kerja, data karyawan, dan proses payroll dari satu tempat',
     'home.menu.stockDesc': 'Tambah, edit, dan kelola inventori produk',
     'home.productionDesc': 'Kelola resep, bahan baku, dan proses produksi',
     'home.stockOpnameDesc': 'Cocokkan stok fisik dengan stok sistem',
@@ -1400,6 +1411,9 @@ export const messages = {
     'home.currenciesDesc': 'Kelola mata uang dan kurs BI untuk dokumen sales dan purchase',
     'home.areasDesc': 'Kelola area anggota untuk penugasan penagihan',
     'home.employeesDesc': 'Kelola karyawan dan area tugas penagihan',
+    'hr.index.title': 'Human Resources',
+    'hr.index.subtitle': 'Kelola alur HR mulai dari area kerja dan data karyawan hingga proses payroll',
+    'hr.index.empty': 'Tidak ada menu HR yang tersedia untuk role ini.',
     'home.rolesDesc': 'Kelola role dinamis dan hak akses user',
     'home.departmentsDesc': 'Kelola divisi, cabang, atau cost center internal',
     'home.projectsDesc': 'Kelola pekerjaan, kontrak, atau campaign bisnis',
@@ -1984,6 +1998,7 @@ export const messages = {
     ...stockMessages.en,
     ...stockOpnameMessages.en,
     ...cooperativeMessages.en,
+    ...fixedAssetMessages.en,
 
     'transaction.title': 'Transaction',
     'transaction.searchPlaceholder': 'Search products (name or SKU)...',
@@ -1994,7 +2009,15 @@ export const messages = {
     'transaction.productNotFound': 'Product with SKU/barcode "{code}" was not found.',
     'transaction.desktopShortcutTitle': 'Desktop shortcuts',
     'transaction.shortcut.focusSearch': 'Focus search',
+    'transaction.shortcut.addProduct': 'Add search result',
+    'transaction.shortcut.editQuantity': 'Edit active item quantity',
+    'transaction.shortcut.changeUnit': 'Change active item unit',
     'transaction.shortcut.clearSearch': 'Clear search',
+    'transaction.shortcut.emptyCart': 'The cart is still empty.',
+    'transaction.shortcut.singleUnit': 'This product only has the {unit} unit.',
+    'transaction.shortcut.unitChanged': 'Active unit: {unit}',
+    'transaction.shortcut.noSearchResult': 'No matching product was found.',
+    'transaction.activeItem': 'Active',
 
     'product.wholesale': 'Wholesale',
     'product.stock': 'Stock',
@@ -2064,7 +2087,7 @@ export const messages = {
     'finance.recalculateFailedContent': 'An error occurred while recalculating finance data.',
     'finance.defaultOpeningDescription': 'Store opening cash balance',
     'finance.index.title': 'Finance',
-    'finance.index.subtitle': 'Manage store cash and bank, receivables, payables, payroll, accounts, and general ledger from one area',
+    'finance.index.subtitle': 'Manage store cash and bank, receivables, payables, accounts, and general ledger from one area',
     'finance.index.cashFlowDesc': 'Track cash/bank balances, income, expenses, and store money history',
     'finance.index.chartOfAccountsDesc': 'Manage account list and finance category mapping',
     'finance.index.generalLedgerDesc': 'View journal entries, ledger, trial balance, income statement, and balance sheet',
@@ -3356,6 +3379,7 @@ export const messages = {
     'home.menu.salesDesc': 'Manage quotations, orders, deliveries, invoices, and sales returns',
     'home.menu.purchasesDesc': 'Manage requests, RFQs, orders, receipts, invoices, and purchase returns',
     'home.menu.financeDesc': 'View your business finance summary in real time',
+    'home.menu.hrDesc': 'Manage work areas, employee data, and payroll processes in one place',
     'home.menu.stockDesc': 'Add, edit, and manage product inventory',
     'home.productionDesc': 'Manage recipes, raw materials, and production processes',
     'home.stockOpnameDesc': 'Match physical stock with system stock',
@@ -3371,6 +3395,9 @@ export const messages = {
     'home.currenciesDesc': 'Manage currencies and BI rates for sales and purchase documents',
     'home.areasDesc': 'Manage member areas for collection assignment',
     'home.employeesDesc': 'Manage employees and collection duty areas',
+    'hr.index.title': 'Human Resources',
+    'hr.index.subtitle': 'Manage HR workflows from work areas and employee data through payroll processing',
+    'hr.index.empty': 'No HR menu is available for this role.',
     'home.rolesDesc': 'Manage dynamic roles and user access rights',
     'home.departmentsDesc': 'Manage internal divisions, branches, or cost centers',
     'home.projectsDesc': 'Manage jobs, contracts, or business campaigns',

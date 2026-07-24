@@ -93,7 +93,7 @@ interface AccountCandidate {
   codes: string[];
 }
 
-interface JournalLineDraft {
+export interface JournalLineDraft {
   account: ChartOfAccount;
   debit?: number;
   credit?: number;
@@ -114,7 +114,7 @@ interface NormalizedJournalLine {
   project_id?: string;
 }
 
-interface PostJournalEntryInput {
+export interface PostJournalEntryInput {
   source_type: JournalSourceType;
   source_id?: string;
   source_number?: string;
@@ -381,6 +381,25 @@ export const isGeneralLedgerPostingEnabled = async (entryDate?: string) => {
   return true;
 };
 
+/**
+ * Guard untuk jurnal nonkas. Berbeda dari guard transaksi persediaan, guard ini
+ * sengaja tidak bergantung pada inventory_policy dan mewajibkan periode bulanan.
+ */
+export const isNonCashGeneralLedgerPostingEnabled = async (entryDate: string) => {
+  const module = await db.enabledModules.get('GENERAL_LEDGER');
+  const setting = await getGeneralLedgerSetting();
+  if (!module?.is_enabled || !setting?.is_ready || !setting.cutoff_date) return false;
+  if (isDateBeforeCutoff(entryDate, setting.cutoff_date)) return false;
+  const period = await getAccountingPeriodForDate(entryDate);
+  return Boolean(period && period.period_type === 'MONTHLY' && period.status === 'OPEN');
+};
+
+export const assertNonCashGeneralLedgerPostingEnabled = async (entryDate: string) => {
+  if (!await isNonCashGeneralLedgerPostingEnabled(entryDate)) {
+    throw new Error('Periode belum dapat diposting karena General Ledger belum siap. Pastikan module aktif, cutoff valid, dan periode bulanan berstatus OPEN.');
+  }
+};
+
 const getInventoryPolicy = async (): Promise<InventoryAccountingPolicy> => {
   const setting = await getGeneralLedgerSetting();
   return setting?.inventory_policy ?? 'CASH_FLOW_ONLY';
@@ -627,9 +646,9 @@ const getPostedJournalEntryForSource = async (
     .first();
 };
 
-const getJournalSignature = (lines: Array<Pick<NormalizedJournalLine | JournalEntryLine, 'account_id' | 'debit' | 'credit'>>) => {
+const getJournalSignature = (lines: Array<Pick<NormalizedJournalLine | JournalEntryLine, 'account_id' | 'debit' | 'credit' | 'department_id' | 'project_id'>>) => {
   return lines
-    .map((line) => `${line.account_id}:${roundCurrency(line.debit)}:${roundCurrency(line.credit)}`)
+    .map((line) => `${line.account_id}:${roundCurrency(line.debit)}:${roundCurrency(line.credit)}:${line.department_id ?? ''}:${line.project_id ?? ''}`)
     .sort()
     .join('|');
 };
@@ -761,6 +780,88 @@ export const postBalancedJournalEntry = async (input: PostJournalEntryInput) => 
     }
 
     return createPostedJournalEntry({ ...input, lines });
+  });
+};
+
+/**
+ * Memposting jurnal operasional nonkas secara idempotent. Source yang sudah ada
+ * hanya dikembalikan jika signature-nya sama; perbedaan selalu dianggap konflik
+ * agar caller dapat membatalkan transaksi tanpa reversal implisit.
+ */
+export const postNonCashBalancedJournalEntry = async (input: PostJournalEntryInput) => {
+  await assertNonCashGeneralLedgerPostingEnabled(input.entry_date);
+
+  return db.transaction('rw', [db.journalEntries, db.journalEntryLines], async () => {
+    const lines = normalizeLines(input.lines);
+    const existingEntry = await getPostedJournalEntryForSource(input.source_type, input.source_id, input.source_event);
+
+    if (existingEntry) {
+      const existingLines = await db.journalEntryLines
+        .where('journal_entry_id')
+        .equals(existingEntry.id)
+        .toArray();
+      if (getJournalSignature(existingLines) === getJournalSignature(lines)) {
+        return existingEntry;
+      }
+      throw new Error('Jurnal sumber sudah ada dengan signature berbeda.');
+    }
+
+    return createPostedJournalEntry({ ...input, lines });
+  });
+};
+
+export const reverseNonCashJournalEntry = async ({
+  entryId,
+  reason,
+  entryDate,
+  sourceEvent,
+  actor,
+}: {
+  entryId: string;
+  reason: string;
+  entryDate: string;
+  sourceEvent: string;
+  actor?: Pick<AuthUser, 'id' | 'name'> | null;
+}) => {
+  await assertNonCashGeneralLedgerPostingEnabled(entryDate);
+
+  return db.transaction('rw', [db.journalEntries, db.journalEntryLines], async () => {
+    const entry = await db.journalEntries.get(entryId);
+    if (!entry) throw new Error('Jurnal yang akan dibalik tidak ditemukan.');
+
+    const existing = await getPostedJournalEntryForSource(entry.source_type, entry.source_id, sourceEvent);
+    if (existing) return existing;
+
+    const originalLines = await db.journalEntryLines.where('journal_entry_id').equals(entry.id).toArray();
+    const reversal = await createPostedJournalEntry({
+      source_type: entry.source_type,
+      source_id: entry.source_id,
+      source_number: entry.source_number,
+      source_event: sourceEvent,
+      entry_date: entryDate,
+      description: reason,
+      reversed_entry_id: entry.id,
+      lines: originalLines.map((line) => ({
+        account_id: line.account_id,
+        account_code: line.account_code,
+        account_name: line.account_name,
+        account_type: line.account_type,
+        debit: line.credit,
+        credit: line.debit,
+        description: reason,
+        department_id: line.department_id,
+        project_id: line.project_id,
+      })),
+      actor,
+    });
+    const updatedEntry = withUpdatedJournalEntrySync({
+      ...entry,
+      status: 'REVERSED',
+      reversed_entry_id: reversal.id,
+    }, actor);
+    await db.journalEntries.put(updatedEntry);
+    scheduleJournalEntryBundleSync(updatedEntry.id, 'update');
+    return reversal;
   });
 };
 

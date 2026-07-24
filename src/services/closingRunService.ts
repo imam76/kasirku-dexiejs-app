@@ -1,6 +1,9 @@
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
+import { getSetupConfig } from '@/services/setupKeyService';
+import { getFixedAssetPostedLines } from '@/services/fixedAssetService';
+import { calculateDepreciationForPeriod } from '@/utils/fixedAssets/calculateDepreciation';
 import {
   buildFiscalYearName,
   buildNextFiscalYearRange,
@@ -281,6 +284,42 @@ const buildPeriodPrechecks = async (
     blocking: true,
     message: 'Tidak ada jurnal draft/unposted di periode ini.',
   });
+
+  const setup = getSetupConfig();
+  const fixedAssetModuleEnabled = !setup || setup.enabledModules.includes('FIXED_ASSET');
+  if (fixedAssetModuleEnabled && period.period_type === 'MONTHLY') {
+    const [assets, postedLines, periodRuns] = await Promise.all([
+      db.fixedAssets.filter((asset) => !asset.deleted_at && asset.is_active).toArray(),
+      getFixedAssetPostedLines(),
+      db.fixedAssetDepreciationRuns.where('period_id').equals(period.id).toArray(),
+    ]);
+    const linesBeforePeriod = postedLines.filter((line) => !line.period_end || line.period_end < period.start_date);
+    const eligibleAssetIds = assets
+      .filter((asset) => calculateDepreciationForPeriod(asset, linesBeforePeriod, period).eligible)
+      .map((asset) => asset.id);
+    const postedRunIds = new Set(periodRuns
+      .filter((run) => !run.deleted_at && run.status === 'POSTED')
+      .map((run) => run.id));
+    const coveredAssetIds = new Set((await db.fixedAssetDepreciationRunLines.toArray())
+      .filter((line) => postedRunIds.has(line.run_id))
+      .map((line) => line.asset_id));
+    const complete = eligibleAssetIds.every((assetId) => coveredAssetIds.has(assetId));
+    prechecks.push({
+      key: 'fixed_asset_depreciation_posted',
+      ok: eligibleAssetIds.length === 0 || complete,
+      blocking: true,
+      message: eligibleAssetIds.length === 0
+        ? 'Tidak ada aset tetap eligible yang perlu disusutkan pada periode ini.'
+        : 'Penyusutan seluruh aset tetap eligible sudah diposting untuk periode ini.',
+    });
+  } else {
+    prechecks.push({
+      key: 'fixed_asset_depreciation_posted',
+      ok: true,
+      blocking: true,
+      message: 'Module Aset Tetap tidak aktif; pre-check penyusutan dilewati.',
+    });
+  }
 
   return prechecks;
 };

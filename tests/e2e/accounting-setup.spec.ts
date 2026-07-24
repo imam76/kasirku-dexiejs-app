@@ -239,7 +239,7 @@ test.describe.serial('accounting initial setup regression', () => {
     expect(state.mappingByKey.KSP_ADMIN_PINJAMAN).toMatchObject({ account_code: '4050' });
     expect(state.mappingByKey.KSP_INSENTIF_PEMBAYARAN_TEPAT_WAKTU).toMatchObject({ account_code: '6090' });
 
-    await page.goto('/koperasi/laporan#shu');
+    await page.goto('/koperasi/laporan/ringkasan#shu');
     await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();
     await expect(page.getByText('Laporan ditampilkan, baseline belum final.')).toBeVisible();
     await expect(page.getByTestId('koperasi-shu-report')).toBeVisible();

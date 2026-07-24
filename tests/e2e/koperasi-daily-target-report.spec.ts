@@ -22,7 +22,7 @@ async function selectJune2026(page: Page) {
 test('TH-01, TH-03, TH-04, TH-06, TH-07, TH-10, TH-11, TH-12 - laporan target harian per PDL', async ({ page }) => {
   await loginAsBootstrappedOwner(page);
   await seedDailyTargetFixture(page);
-  await page.goto('/koperasi/laporan-target-harian');
+  await page.goto('/koperasi/laporan/target-harian');
   await selectJune2026(page);
 
   const report = page.getByTestId('koperasi-daily-target-report');
@@ -103,7 +103,7 @@ test('TH-01, TH-03, TH-04, TH-06, TH-07, TH-10, TH-11, TH-12 - laporan target ha
 test('laporan target harian mereset running drop setelah tutup buku petugas', async ({ page }) => {
   await loginAsBootstrappedOwner(page);
   await seedDailyTargetCloseBookResetFixture(page);
-  await page.goto('/koperasi/laporan-target-harian');
+  await page.goto('/koperasi/laporan/target-harian');
   await selectJune2026(page);
 
   const thursday = page.getByTestId(
@@ -127,7 +127,7 @@ test('laporan target harian mereset running drop setelah tutup buku petugas', as
 test('pencairan lebih awal memisahkan tanggal drop dan tanggal masuk target', async ({ page }) => {
   await loginAsBootstrappedOwner(page);
   await seedEarlyDisbursementTargetFixture(page);
-  await page.goto('/koperasi/laporan-target-harian');
+  await page.goto('/koperasi/laporan/target-harian');
   await selectJune2026(page);
 
   const actualDisbursementRow = page.getByTestId(
