@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button, DatePicker, Input, Select, Table, Tag, Typography } from 'antd';
+import { Button, DatePicker, Input, Select, Table, Tag } from 'antd';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, Eye, FileCheck2, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, type LucideIcon } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
@@ -23,8 +23,6 @@ import { canAccessPath } from '@/auth/routePermissions';
 import { useAuth } from '@/auth/useAuth';
 import ManagementListCard from '@/components/ManagementListCard';
 import dayjs from '@/lib/dayjs';
-
-const { Title, Text } = Typography;
 
 const statusColor: Record<PurchaseDocumentStatus, string> = {
   DRAFT: 'default',
@@ -258,14 +256,22 @@ export default function PurchaseDocumentsManagement() {
   const { t } = useI18n();
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-4">
-      <div>
-        <Title level={2} style={{ margin: 0 }}>{t('purchaseDocuments.title')}</Title>
-        <Text type="secondary">{t('purchaseDocuments.subtitle')}</Text>
-      </div>
+    <div className="px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-[38px]">
+      <div className="mx-auto max-w-[1400px]">
+        <div className="mb-7 text-center sm:mb-9 lg:mb-12">
+          <h1 className="mb-2 text-[20px] font-medium leading-[1.3] tracking-tight text-gray-900 sm:mb-[10px] sm:text-[26px] lg:mb-[14px] lg:text-[34px] lg:leading-[1.2]">
+            {t('purchaseDocuments.title')}
+          </h1>
+          <p className="px-2 text-[12px] leading-[1.618] text-gray-400 sm:mx-auto sm:max-w-[420px] sm:px-0 sm:text-sm lg:max-w-[560px] lg:text-base lg:font-light">
+            {t('purchaseDocuments.subtitle')}
+          </p>
+        </div>
 
-      <PurchaseDocumentMenuGrid />
-      <PurchaseFinanceActionGrid />
+        <div className="space-y-4">
+          <PurchaseDocumentMenuGrid />
+          <PurchaseFinanceActionGrid />
+        </div>
+      </div>
     </div>
   );
 }
