@@ -13,6 +13,28 @@ export const formatCurrency = (value: number): string => {
   return value.toLocaleString('id-ID');
 };
 
+export const formatCurrencyInput = (
+  value: number | string | null | undefined,
+): string => {
+  if (value === undefined || value === null || value === '') return '';
+
+  const [integerPart, decimalPart] = String(value).replace(',', '.').split('.');
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  return decimalPart === undefined
+    ? formattedInteger
+    : `${formattedInteger},${decimalPart}`;
+};
+
+export const parseCurrencyInput = (value?: string): number => {
+  const normalized = (value ?? '')
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+
+  return Number(normalized || 0);
+};
+
 export const getStockStatusClass = (stock: number): string => {
   return stock < 10
     ? 'bg-red-100 text-red-800'
