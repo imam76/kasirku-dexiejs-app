@@ -1,7 +1,7 @@
 export const navigationMessages = {
   id: {
     'nav.transaction': 'POS',
-    'nav.posRestaurant': 'POS Resto',
+    'nav.posRestaurant': 'POS Resto Prototype',
     'nav.home': 'Home',
     'nav.masterData': 'Master Data',
     'nav.product': 'Produk',
