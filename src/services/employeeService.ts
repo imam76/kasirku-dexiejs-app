@@ -309,6 +309,15 @@ const buildEmployeeCollectionSchedules = (
   });
 };
 
+const generateEmployeeNumber = async () => {
+  const employees = await db.employees.toArray();
+  const highest = employees.reduce((current, employee) => {
+    const match = employee.employee_number?.match(/^EMP-(\d+)$/i);
+    return Math.max(current, match ? Number(match[1]) : 0);
+  }, 0);
+  return `EMP-${String(highest + 1).padStart(5, '0')}`;
+};
+
 export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employee> => {
   const currentUser = await requireEmployeeActor();
   const sanitizedInput = sanitizeEmployeeInput(input);
@@ -339,6 +348,7 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
 
   const employee: Employee = withPendingSync({
     id: employeeId,
+    employee_number: await generateEmployeeNumber(),
     name: sanitizedInput.name,
     phone: sanitizedInput.phone,
     email: sanitizedInput.email,
@@ -349,6 +359,12 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
     pin_hash: pinHash,
     pin_salt: pinSalt,
     notes: sanitizedInput.notes,
+    employment_status: 'PERMANENT',
+    active_status: sanitizedInput.is_active ? 'ACTIVE' : 'INACTIVE',
+    work_schedule_type: 'FULL_TIME',
+    salary_currency: 'IDR',
+    payroll_period: 'MONTHLY',
+    base_salary: 0,
     is_active: sanitizedInput.is_active,
     created_at: now,
     updated_at: now,
@@ -444,6 +460,7 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     pin_hash: pinHash,
     pin_salt: pinSalt,
     notes: sanitizedInput.notes,
+    active_status: sanitizedInput.is_active ? 'ACTIVE' : 'INACTIVE',
     is_active: sanitizedInput.is_active,
     updated_at: updatedAt,
   });
@@ -521,6 +538,7 @@ export const archiveEmployee = async (id: string): Promise<Employee> => {
 
   const archivedEmployee: Employee = withPendingSync({
     ...employee,
+    active_status: 'INACTIVE',
     is_active: false,
     updated_at: new Date().toISOString(),
   });
@@ -551,6 +569,7 @@ export const restoreEmployee = async (id: string): Promise<Employee> => {
 
   const restoredEmployee: Employee = withPendingSync({
     ...employee,
+    active_status: 'ACTIVE',
     is_active: true,
     updated_at: new Date().toISOString(),
   });

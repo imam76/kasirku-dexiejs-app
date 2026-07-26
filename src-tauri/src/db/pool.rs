@@ -757,6 +757,21 @@ async fn is_current_migration_schema_compatible(
                 ],
             )
             .await?),
+        63 => Ok(tables_exist(
+            pool,
+            &[
+                "hr_positions",
+                "employment_contracts",
+                "salary_components",
+                "employee_salary_components",
+            ],
+        )
+        .await?
+            && column_exists(pool, "employees", "employee_number").await?
+            && column_exists(pool, "employees", "active_status").await?
+            && column_exists(pool, "employees", "base_salary").await?
+            && column_exists(pool, "departments", "parent_department_id").await?
+            && column_exists(pool, "activity_logs", "changes").await?),
         _ => Ok(false),
     }
 }

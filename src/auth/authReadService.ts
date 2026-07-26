@@ -132,6 +132,7 @@ const mapRemoteActivityLogToLocal = (remoteLog: RemoteActivityLogDto): ActivityL
   entity: remoteLog.entity,
   entity_id: remoteLog.entity_id ?? undefined,
   description: remoteLog.description,
+  changes: remoteLog.changes ?? undefined,
   created_at: remoteLog.created_at,
 });
 

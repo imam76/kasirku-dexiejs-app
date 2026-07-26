@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Dayjs } from 'dayjs';
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -25,17 +26,25 @@ import {
   Edit3,
   Plus,
   ReceiptText,
+  RefreshCw,
   UserRoundCheck,
   Users,
   XCircle,
 } from 'lucide-react';
 import ExportActions from '@/components/ExportActions';
+import { useAuth } from '@/auth/useAuth';
 import dayjs from '@/lib/dayjs';
 import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useEmployeeCashAdvances, type EmployeeCashAdvanceStatusFilter, type EmployeeCashAdvanceWithRepayments } from '@/hooks/useEmployeeCashAdvances';
 import { usePayroll, type PayrollRunWithItems, type PayrollStatusFilter } from '@/hooks/usePayroll';
 import type { ExportTarget } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
+import {
+  buildPayrollEmployeeDefaults,
+  isEmployeeEligibleForPayrollPeriod,
+  type PayrollComponentPreview,
+} from '@/utils/payrollDefaults';
 import { exportPayrollEmployeeSlipPdf, exportPayrollRunSlipsPdf } from '@/utils/payrollSlipPdf';
 import type {
   ChartOfAccount,
@@ -43,9 +52,13 @@ import type {
   EmployeeCashAdvanceRepayment,
   EmployeeCashAdvanceRepaymentStatus,
   EmployeeCashAdvanceStatus,
+  EmployeePayrollPeriod,
+  EmployeeSalaryComponent,
+  EmploymentContract,
   PaymentMethod,
   PayrollRunItem,
   PayrollRunStatus,
+  SalaryComponent,
 } from '@/types';
 
 const { RangePicker } = DatePicker;
@@ -54,7 +67,16 @@ const { Text, Title } = Typography;
 interface PayrollItemFormValue {
   employee_id: string;
   employee_name: string;
+  employee_number?: string;
   employee_position?: string;
+  employee_department?: string;
+  payroll_period?: EmployeePayrollPeriod;
+  salary_currency?: string;
+  salary_payment_method?: Employee['salary_payment_method'];
+  bank_name?: string;
+  bank_account_number?: string;
+  base_salary_source?: 'EMPLOYEE' | 'CONTRACT' | 'COMPONENT';
+  component_previews?: PayrollComponentPreview[];
   base_salary: number;
   allowance_amount: number;
   bonus_amount: number;
@@ -66,6 +88,8 @@ interface PayrollItemFormValue {
 
 interface PayrollRunFormValues {
   period: [Dayjs, Dayjs];
+  payroll_period: EmployeePayrollPeriod;
+  salary_currency: string;
   notes?: string;
   items: PayrollItemFormValue[];
 }
@@ -112,12 +136,17 @@ const repaymentStatusMeta: Record<EmployeeCashAdvanceRepaymentStatus, { color: s
   VOIDED: { color: 'red', label: 'Void' },
 };
 
-const currencyFormatter = (value: string | number | undefined) => (
-  `Rp ${value ?? 0}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+const currencyFormatter = (value: string | number | undefined, symbol = 'Rp') => (
+  `${symbol} ${value ?? 0}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 );
 
 const currencyParser = (value: string | undefined) => (
-  Number(value?.replace(/Rp\s?|(\.*)/g, '') || 0)
+  Number(
+    value
+      ?.replace(/[^\d,.-]/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.') || 0,
+  )
 );
 
 const formatDateOnly = (value: string) => dayjs(value).tz().format('DD MMM YYYY');
@@ -132,26 +161,71 @@ const getDefaultCashAccountId = (accounts: ChartOfAccount[], paymentMethod: Paym
     ?? accounts[0]?.id;
 };
 
-const buildItemsFromEmployees = (employees: Employee[]): PayrollItemFormValue[] => (
-  employees.map((employee) => ({
-    employee_id: employee.id,
-    employee_name: employee.name,
-    employee_position: employee.position,
-    base_salary: 0,
-    allowance_amount: 0,
-    bonus_amount: 0,
-    other_deduction_amount: 0,
-    cash_advance_deduction_amount: 0,
-    deduction_amount: 0,
-    notes: undefined,
-  }))
+const payrollPeriodMeta: Record<EmployeePayrollPeriod, { label: string; shortLabel: string }> = {
+  MONTHLY: { label: 'Bulanan', shortLabel: 'Bulanan' },
+  WEEKLY: { label: 'Mingguan', shortLabel: 'Mingguan' },
+  DAILY: { label: 'Harian', shortLabel: 'Harian' },
+};
+
+const baseSalarySourceLabel: Record<NonNullable<PayrollItemFormValue['base_salary_source']>, string> = {
+  EMPLOYEE: 'Profil karyawan',
+  CONTRACT: 'Kontrak aktif',
+  COMPONENT: 'Komponen gaji pokok',
+};
+
+const buildItemsFromEmployees = ({
+  employees,
+  assignments,
+  salaryComponents,
+  contracts,
+  periodStart,
+  periodEnd,
+  payrollPeriod,
+  salaryCurrency,
+}: {
+  employees: Employee[];
+  assignments: EmployeeSalaryComponent[];
+  salaryComponents: SalaryComponent[];
+  contracts: EmploymentContract[];
+  periodStart: string;
+  periodEnd: string;
+  payrollPeriod: EmployeePayrollPeriod;
+  salaryCurrency: string;
+}): PayrollItemFormValue[] => (
+  employees
+    .filter((employee) => (
+      isEmployeeEligibleForPayrollPeriod(employee, periodStart, periodEnd) &&
+      (employee.payroll_period ?? 'MONTHLY') === payrollPeriod &&
+      (employee.salary_currency ?? 'IDR') === salaryCurrency
+    ))
+    .map((employee) => {
+      const defaults = buildPayrollEmployeeDefaults({
+        employee,
+        assignments,
+        salaryComponents,
+        contracts,
+        periodStart,
+        periodEnd,
+      });
+      return {
+        ...defaults,
+        cash_advance_deduction_amount: 0,
+        deduction_amount: defaults.other_deduction_amount,
+        notes: undefined,
+      };
+    })
 );
 
 const buildItemsFromRun = (items: PayrollRunItem[]): PayrollItemFormValue[] => (
   items.map((item) => ({
     employee_id: item.employee_id,
     employee_name: item.employee_name,
+    employee_number: item.employee_number,
     employee_position: item.employee_position,
+    employee_department: item.employee_department,
+    payroll_period: item.payroll_period,
+    salary_currency: item.salary_currency,
+    salary_payment_method: item.salary_payment_method,
     base_salary: item.base_salary,
     allowance_amount: item.allowance_amount,
     bonus_amount: item.bonus_amount,
@@ -186,6 +260,11 @@ const calculatePayrollPreview = (
 function PayrollRunFormModal({
   open,
   employees,
+  baseCurrencyCode,
+  baseCurrencySymbol,
+  salaryComponents,
+  employeeSalaryComponents,
+  employmentContracts,
   cashAdvanceAvailableByEmployee,
   editingRun,
   submitting,
@@ -194,6 +273,11 @@ function PayrollRunFormModal({
 }: {
   open: boolean;
   employees: Employee[];
+  baseCurrencyCode: string;
+  baseCurrencySymbol: string;
+  salaryComponents: SalaryComponent[];
+  employeeSalaryComponents: EmployeeSalaryComponent[];
+  employmentContracts: EmploymentContract[];
   cashAdvanceAvailableByEmployee: Record<string, number>;
   editingRun?: PayrollRunWithItems | null;
   submitting: boolean;
@@ -202,6 +286,10 @@ function PayrollRunFormModal({
 }) {
   const [form] = Form.useForm<PayrollRunFormValues>();
   const watchedItems = Form.useWatch('items', form);
+  const currencyOptions = useMemo(() => [{
+    value: baseCurrencyCode,
+    label: `${baseCurrencyCode} (mata uang dasar)`,
+  }], [baseCurrencyCode]);
   const summary = useMemo(() => (
     (watchedItems ?? []).reduce((acc, item) => {
       const preview = calculatePayrollPreview(item, cashAdvanceAvailableByEmployee);
@@ -216,24 +304,79 @@ function PayrollRunFormModal({
     }, { gross: 0, otherDeduction: 0, cashAdvanceDeduction: 0, deduction: 0, net: 0 })
   ), [cashAdvanceAvailableByEmployee, watchedItems]);
 
+  const loadHrDefaults = ({
+    period,
+    payrollPeriod,
+    salaryCurrency,
+  }: {
+    period?: [Dayjs, Dayjs] | null;
+    payrollPeriod?: EmployeePayrollPeriod;
+    salaryCurrency?: string;
+  } = {}) => {
+    const currentValues = form.getFieldsValue();
+    const resolvedPeriod = period ?? currentValues.period;
+    const resolvedPayrollPeriod = payrollPeriod ?? currentValues.payroll_period ?? 'MONTHLY';
+    const resolvedSalaryCurrency = salaryCurrency ?? currentValues.salary_currency ?? baseCurrencyCode;
+    if (!resolvedPeriod?.[0] || !resolvedPeriod?.[1]) {
+      form.setFieldValue('items', []);
+      return;
+    }
+
+    form.setFieldValue('items', buildItemsFromEmployees({
+      employees,
+      assignments: employeeSalaryComponents,
+      salaryComponents,
+      contracts: employmentContracts,
+      periodStart: resolvedPeriod[0].format('YYYY-MM-DD'),
+      periodEnd: resolvedPeriod[1].format('YYYY-MM-DD'),
+      payrollPeriod: resolvedPayrollPeriod,
+      salaryCurrency: resolvedSalaryCurrency,
+    }));
+  };
+
   useEffect(() => {
     if (!open) return;
 
     if (editingRun) {
       form.setFieldsValue({
         period: [dayjs(editingRun.period_start).tz(), dayjs(editingRun.period_end).tz()],
+        payroll_period: editingRun.payroll_period ?? editingRun.items[0]?.payroll_period ?? 'MONTHLY',
+        salary_currency: editingRun.salary_currency
+          ?? editingRun.items[0]?.salary_currency
+          ?? baseCurrencyCode,
         notes: editingRun.notes,
         items: buildItemsFromRun(editingRun.items),
       });
       return;
     }
 
+    const period: [Dayjs, Dayjs] = [dayjs().tz().startOf('month'), dayjs().tz().endOf('month')];
     form.setFieldsValue({
-      period: [dayjs().tz().startOf('month'), dayjs().tz().endOf('month')],
+      period,
+      payroll_period: 'MONTHLY',
+      salary_currency: baseCurrencyCode,
       notes: undefined,
-      items: buildItemsFromEmployees(employees),
+      items: buildItemsFromEmployees({
+        employees,
+        assignments: employeeSalaryComponents,
+        salaryComponents,
+        contracts: employmentContracts,
+        periodStart: period[0].format('YYYY-MM-DD'),
+        periodEnd: period[1].format('YYYY-MM-DD'),
+        payrollPeriod: 'MONTHLY',
+        salaryCurrency: baseCurrencyCode,
+      }),
     });
-  }, [editingRun, employees, form, open]);
+  }, [
+    editingRun,
+    employeeSalaryComponents,
+    employees,
+    employmentContracts,
+    form,
+    open,
+    salaryComponents,
+    baseCurrencyCode,
+  ]);
 
   const handleFinish = async (values: PayrollRunFormValues) => {
     await onSubmit(values);
@@ -244,15 +387,26 @@ function PayrollRunFormModal({
     {
       title: 'Karyawan',
       key: 'employee',
-      width: 220,
+      width: 260,
       render: (_: unknown, field: PayrollFormListField) => (
         <Form.Item noStyle shouldUpdate>
           {({ getFieldValue }) => {
             const item = getFieldValue(['items', field.name]) as PayrollItemFormValue | undefined;
             return (
               <div>
-                <div className="font-medium text-gray-900">{item?.employee_name}</div>
-                <div className="text-xs text-gray-500">{item?.employee_position || '-'}</div>
+                <div className="font-medium text-gray-900">
+                  {item?.employee_number ? `${item.employee_number} - ` : ''}{item?.employee_name}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {[item?.employee_position, item?.employee_department].filter(Boolean).join(' • ') || '-'}
+                </div>
+                <Space size={[4, 4]} wrap className="mt-1">
+                  <Tag className="!mr-0">{item?.payroll_period ? payrollPeriodMeta[item.payroll_period].shortLabel : 'Legacy'}</Tag>
+                  <Tag className="!mr-0">{item?.salary_currency ?? 'IDR'}</Tag>
+                  <Tag color={item?.salary_payment_method === 'BANK_TRANSFER' ? 'blue' : 'default'} className="!mr-0">
+                    {item?.salary_payment_method === 'BANK_TRANSFER' ? 'Transfer' : 'Tunai'}
+                  </Tag>
+                </Space>
                 <Form.Item name={[field.name, 'employee_id']} hidden>
                   <Input />
                 </Form.Item>
@@ -273,18 +427,58 @@ function PayrollRunFormModal({
       key: 'base_salary',
       width: 160,
       render: (_: unknown, field: PayrollFormListField) => (
-        <Form.Item
-          name={[field.name, 'base_salary']}
-          rules={[{ required: true, message: 'Wajib diisi.' }]}
-          className="mb-0"
-        >
-          <InputNumber
-            min={0}
-            controls={false}
-            formatter={currencyFormatter}
-            parser={currencyParser}
-            className="w-full"
-          />
+        <div>
+          <Form.Item
+            name={[field.name, 'base_salary']}
+            rules={[{ required: true, message: 'Wajib diisi.' }]}
+            className="mb-0"
+          >
+            <InputNumber
+              min={0}
+              controls={false}
+              formatter={(value) => currencyFormatter(value, baseCurrencySymbol)}
+              parser={currencyParser}
+              className="w-full"
+            />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate>
+            {({ getFieldValue }) => {
+              const source = getFieldValue(['items', field.name, 'base_salary_source']) as PayrollItemFormValue['base_salary_source'];
+              return source ? <div className="mt-1 text-[11px] text-gray-400">{baseSalarySourceLabel[source]}</div> : null;
+            }}
+          </Form.Item>
+        </div>
+      ),
+    },
+    {
+      title: 'Komponen HRIS',
+      key: 'salary_components',
+      width: 240,
+      render: (_: unknown, field: PayrollFormListField) => (
+        <Form.Item noStyle shouldUpdate>
+          {({ getFieldValue }) => {
+            const components = (getFieldValue(
+              ['items', field.name, 'component_previews'],
+            ) ?? []) as PayrollComponentPreview[];
+            if (components.length === 0) {
+              return <Text type="secondary" className="text-xs">Belum dikonfigurasi</Text>;
+            }
+            return (
+              <Space size={[4, 4]} wrap>
+                {components.map((component) => (
+                  <Tag
+                    key={component.assignment_id}
+                    color={component.kind === 'EARNING' ? 'green' : 'red'}
+                    className="!mr-0"
+                  >
+                    {component.component_name}: {component.calculation === 'PERCENTAGE'
+                      ? `${component.configured_value}% = ${baseCurrencySymbol} ${formatCurrency(component.amount)}`
+                      : `${baseCurrencySymbol} ${formatCurrency(component.amount)}`}
+                  </Tag>
+                ))}
+              </Space>
+            );
+          }}
         </Form.Item>
       ),
     },
@@ -294,7 +488,7 @@ function PayrollRunFormModal({
       width: 150,
       render: (_: unknown, field: PayrollFormListField) => (
         <Form.Item name={[field.name, 'allowance_amount']} className="mb-0">
-          <InputNumber min={0} controls={false} formatter={currencyFormatter} parser={currencyParser} className="w-full" />
+          <InputNumber min={0} controls={false} formatter={(value) => currencyFormatter(value, baseCurrencySymbol)} parser={currencyParser} className="w-full" />
         </Form.Item>
       ),
     },
@@ -304,7 +498,7 @@ function PayrollRunFormModal({
       width: 150,
       render: (_: unknown, field: PayrollFormListField) => (
         <Form.Item name={[field.name, 'bonus_amount']} className="mb-0">
-          <InputNumber min={0} controls={false} formatter={currencyFormatter} parser={currencyParser} className="w-full" />
+          <InputNumber min={0} controls={false} formatter={(value) => currencyFormatter(value, baseCurrencySymbol)} parser={currencyParser} className="w-full" />
         </Form.Item>
       ),
     },
@@ -314,7 +508,7 @@ function PayrollRunFormModal({
       width: 150,
       render: (_: unknown, field: PayrollFormListField) => (
         <Form.Item name={[field.name, 'other_deduction_amount']} className="mb-0">
-          <InputNumber min={0} controls={false} formatter={currencyFormatter} parser={currencyParser} className="w-full" />
+          <InputNumber min={0} controls={false} formatter={(value) => currencyFormatter(value, baseCurrencySymbol)} parser={currencyParser} className="w-full" />
         </Form.Item>
       ),
     },
@@ -329,9 +523,9 @@ function PayrollRunFormModal({
             const preview = calculatePayrollPreview(item, cashAdvanceAvailableByEmployee);
             return (
               <div>
-                <Text className="text-red-600">Rp {formatCurrency(preview.cashAdvanceDeduction)}</Text>
+                <Text className="text-red-600">{baseCurrencySymbol} {formatCurrency(preview.cashAdvanceDeduction)}</Text>
                 <div className="text-[11px] text-gray-400">
-                  Sisa Rp {formatCurrency(Math.max(0, (item?.employee_id ? cashAdvanceAvailableByEmployee[item.employee_id] ?? 0 : 0) - preview.cashAdvanceDeduction))}
+                  Sisa {baseCurrencySymbol} {formatCurrency(Math.max(0, (item?.employee_id ? cashAdvanceAvailableByEmployee[item.employee_id] ?? 0 : 0) - preview.cashAdvanceDeduction))}
                 </div>
               </div>
             );
@@ -348,7 +542,7 @@ function PayrollRunFormModal({
           {({ getFieldValue }) => {
             const item = getFieldValue(['items', field.name]) as PayrollItemFormValue | undefined;
             const preview = calculatePayrollPreview(item, cashAdvanceAvailableByEmployee);
-            return <Text className="text-red-600">Rp {formatCurrency(preview.deduction)}</Text>;
+            return <Text className="text-red-600">{baseCurrencySymbol} {formatCurrency(preview.deduction)}</Text>;
           }}
         </Form.Item>
       ),
@@ -362,7 +556,7 @@ function PayrollRunFormModal({
           {({ getFieldValue }) => {
             const item = getFieldValue(['items', field.name]) as PayrollItemFormValue | undefined;
             const preview = calculatePayrollPreview(item, cashAdvanceAvailableByEmployee);
-            return <Text strong className={preview.net < 0 ? 'text-red-600' : 'text-gray-900'}>Rp {formatCurrency(preview.net)}</Text>;
+            return <Text strong className={preview.net < 0 ? 'text-red-600' : 'text-gray-900'}>{baseCurrencySymbol} {formatCurrency(preview.net)}</Text>;
           }}
         </Form.Item>
       ),
@@ -389,35 +583,93 @@ function PayrollRunFormModal({
       destroyOnClose
     >
       <Form form={form} layout="vertical" onFinish={handleFinish} className="mt-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,360px)_1fr]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Form.Item
             name="period"
             label="Periode Gaji"
             rules={[{ required: true, message: 'Periode gaji wajib dipilih.' }]}
           >
-            <RangePicker className="w-full" format="DD MMM YYYY" />
+            <RangePicker
+              className="w-full"
+              format="DD MMM YYYY"
+              onChange={(value) => {
+                if (!editingRun && value?.[0] && value?.[1]) {
+                  loadHrDefaults({ period: [value[0], value[1]] });
+                }
+              }}
+            />
+          </Form.Item>
+          <Form.Item
+            name="payroll_period"
+            label="Kelompok Penggajian"
+            rules={[{ required: true, message: 'Kelompok wajib dipilih.' }]}
+          >
+            <Select
+              disabled={Boolean(editingRun)}
+              options={Object.entries(payrollPeriodMeta).map(([value, meta]) => ({
+                value,
+                label: meta.label,
+              }))}
+              onChange={(value: EmployeePayrollPeriod) => loadHrDefaults({ payrollPeriod: value })}
+            />
+          </Form.Item>
+          <Form.Item
+            name="salary_currency"
+            label="Mata Uang"
+            rules={[{ required: true, message: 'Mata uang wajib dipilih.' }]}
+          >
+            <Select
+              showSearch
+              disabled={Boolean(editingRun)}
+              options={currencyOptions}
+              onChange={(value: string) => loadHrDefaults({ salaryCurrency: value })}
+            />
           </Form.Item>
           <Form.Item name="notes" label="Catatan Run">
             <Input placeholder="Contoh: Payroll reguler bulan ini" />
           </Form.Item>
         </div>
 
+        {!editingRun && (
+          <Alert
+            className="mb-3"
+            type="info"
+            showIcon
+            message="Draft diisi dari konfigurasi HRIS"
+            description={(
+              <div className="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                <span>
+                  Karyawan dipilih menurut status, periode penggajian, mata uang, dan tanggal kerja.
+                  Gaji pokok memakai kontrak yang berlaku lalu profil karyawan; komponen tetap dan persentase dihitung otomatis.
+                </span>
+                <Button
+                  size="small"
+                  icon={<RefreshCw size={14} />}
+                  onClick={() => loadHrDefaults()}
+                >
+                  Muat ulang HRIS
+                </Button>
+              </div>
+            )}
+          />
+        )}
+
         <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-4">
           <div className="rounded-md border border-gray-100 bg-gray-50 p-3">
             <div className="text-xs text-gray-500">Gross</div>
-            <div className="font-semibold text-gray-900">Rp {formatCurrency(summary.gross)}</div>
+            <div className="font-semibold text-gray-900">{baseCurrencySymbol} {formatCurrency(summary.gross)}</div>
           </div>
           <div className="rounded-md border border-gray-100 bg-gray-50 p-3">
             <div className="text-xs text-gray-500">Potongan Lain</div>
-            <div className="font-semibold text-red-600">Rp {formatCurrency(summary.otherDeduction)}</div>
+            <div className="font-semibold text-red-600">{baseCurrencySymbol} {formatCurrency(summary.otherDeduction)}</div>
           </div>
           <div className="rounded-md border border-gray-100 bg-gray-50 p-3">
             <div className="text-xs text-gray-500">Potongan Kasbon</div>
-            <div className="font-semibold text-red-600">Rp {formatCurrency(summary.cashAdvanceDeduction)}</div>
+            <div className="font-semibold text-red-600">{baseCurrencySymbol} {formatCurrency(summary.cashAdvanceDeduction)}</div>
           </div>
           <div className="rounded-md border border-gray-100 bg-gray-50 p-3">
             <div className="text-xs text-gray-500">Net Dibayar</div>
-            <div className="font-semibold text-green-700">Rp {formatCurrency(summary.net)}</div>
+            <div className="font-semibold text-green-700">{baseCurrencySymbol} {formatCurrency(summary.net)}</div>
           </div>
         </div>
 
@@ -430,10 +682,10 @@ function PayrollRunFormModal({
                 pagination={false}
                 dataSource={fields}
                 columns={columns}
-                scroll={{ x: 1420, y: 420 }}
+                scroll={{ x: 1700, y: 420 }}
               />
             ) : (
-              <Empty description="Belum ada karyawan aktif untuk dibuatkan payroll." />
+              <Empty description="Tidak ada karyawan yang sesuai status, periode, mata uang, dan rentang tanggal ini." />
             )
           )}
         </Form.List>
@@ -465,17 +717,27 @@ function PayrollPaymentModal({
   onSubmit: (values: PayrollPaymentFormValues) => Promise<void>;
 }) {
   const [form] = Form.useForm<PayrollPaymentFormValues>();
+  const employeePaymentSummary = useMemo(() => (
+    (run?.items ?? []).reduce((summary, item) => {
+      if (item.salary_payment_method === 'BANK_TRANSFER') summary.bankTransfer += 1;
+      else summary.cash += 1;
+      return summary;
+    }, { bankTransfer: 0, cash: 0 })
+  ), [run]);
 
   useEffect(() => {
     if (!open) return;
 
+    const paymentMethod: PaymentMethod = employeePaymentSummary.bankTransfer > 0
+      ? 'NON_TUNAI'
+      : 'TUNAI';
     form.setFieldsValue({
       paid_at: dayjs().tz(),
-      payment_method: 'TUNAI',
-      cash_account_id: getDefaultCashAccountId(accounts, 'TUNAI'),
+      payment_method: paymentMethod,
+      cash_account_id: getDefaultCashAccountId(accounts, paymentMethod),
       payment_channel: undefined,
     });
-  }, [accounts, form, open]);
+  }, [accounts, employeePaymentSummary.bankTransfer, form, open]);
 
   const handlePaymentMethodChange = (paymentMethod: PaymentMethod) => {
     form.setFieldsValue({
@@ -499,8 +761,24 @@ function PayrollPaymentModal({
       {run && (
         <div className="mb-4 rounded-md border border-green-100 bg-green-50 p-3">
           <div className="text-xs text-green-700">Total net dibayar</div>
-          <div className="text-lg font-semibold text-green-900">Rp {formatCurrency(run.net_amount)}</div>
+          <div className="text-lg font-semibold text-green-900">
+            {run.salary_currency ?? 'IDR'} {formatCurrency(run.net_amount)}
+          </div>
         </div>
+      )}
+      {run && (
+        <Alert
+          className="mb-4"
+          type={employeePaymentSummary.bankTransfer > 0 && employeePaymentSummary.cash > 0 ? 'warning' : 'info'}
+          showIcon
+          message="Metode pembayaran dari profil HR"
+          description={(
+            <span>
+              {employeePaymentSummary.bankTransfer} transfer bank dan {employeePaymentSummary.cash} tunai.
+              Akun di bawah mencatat sumber pembayaran run; instruksi per karyawan tetap tercantum pada detail/slip.
+            </span>
+          )}
+        />
       )}
 
       <Form form={form} layout="vertical" onFinish={handleFinish}>
@@ -561,6 +839,7 @@ function EmployeeCashAdvanceFormModal({
   open,
   employees,
   accounts,
+  baseCurrencySymbol,
   submitting,
   onCancel,
   onSubmit,
@@ -568,6 +847,7 @@ function EmployeeCashAdvanceFormModal({
   open: boolean;
   employees: Employee[];
   accounts: ChartOfAccount[];
+  baseCurrencySymbol: string;
   submitting: boolean;
   onCancel: () => void;
   onSubmit: (values: EmployeeCashAdvanceFormValues) => Promise<void>;
@@ -630,7 +910,7 @@ function EmployeeCashAdvanceFormModal({
           <InputNumber
             min={1}
             controls={false}
-            formatter={currencyFormatter}
+            formatter={(value) => currencyFormatter(value, baseCurrencySymbol)}
             parser={currencyParser}
             className="w-full"
           />
@@ -695,6 +975,8 @@ function EmployeeCashAdvanceFormModal({
 
 export default function PayrollManagement() {
   const { message, modal } = App.useApp();
+  const { can } = useAuth();
+  const canManagePayroll = can('hr.payroll.manage');
   const [activeTab, setActiveTab] = useState('payroll');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCashAdvanceFormOpen, setIsCashAdvanceFormOpen] = useState(false);
@@ -702,8 +984,12 @@ export default function PayrollManagement() {
   const [payingRun, setPayingRun] = useState<PayrollRunWithItems | null>(null);
   const [exportingSlipKey, setExportingSlipKey] = useState<string | null>(null);
   const { profile } = useCompanyProfileSetting();
+  const { baseCurrencyCode, baseCurrencySymbol } = useBaseCurrency();
   const {
     employees,
+    salaryComponents,
+    employeeSalaryComponents,
+    employmentContracts,
     cashBankAccounts,
     payrollRuns,
     filteredPayrollRuns,
@@ -781,6 +1067,8 @@ export default function PayrollManagement() {
     const payload = {
       period_start: values.period[0].format('YYYY-MM-DD'),
       period_end: values.period[1].format('YYYY-MM-DD'),
+      payroll_period: values.payroll_period,
+      salary_currency: values.salary_currency,
       notes: values.notes,
       items: values.items.map((item) => ({
         employee_id: item.employee_id,
@@ -939,6 +1227,10 @@ export default function PayrollManagement() {
         <div>
           <div className="font-semibold text-gray-900">{value}</div>
           <div className="text-xs text-gray-500">{formatDateOnly(run.period_start)} - {formatDateOnly(run.period_end)}</div>
+          <Space size={4} className="mt-1">
+            <Tag className="!mr-0">{payrollPeriodMeta[run.payroll_period ?? 'MONTHLY'].shortLabel}</Tag>
+            <Tag className="!mr-0">{run.salary_currency ?? 'IDR'}</Tag>
+          </Space>
         </div>
       ),
     },
@@ -963,7 +1255,7 @@ export default function PayrollManagement() {
       dataIndex: 'gross_amount',
       key: 'gross_amount',
       width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value)}`,
+      render: (value: number, run: PayrollRunWithItems) => `${run.salary_currency ?? 'IDR'} ${formatCurrency(value)}`,
     },
     {
       title: 'Potongan',
@@ -972,9 +1264,9 @@ export default function PayrollManagement() {
       width: 180,
       render: (value: number, run: PayrollRunWithItems) => (
         <div className="text-xs">
-          <div className="font-medium text-red-600">Rp {formatCurrency(value)}</div>
-          <div className="text-gray-500">Lain Rp {formatCurrency(run.other_deduction_amount || 0)}</div>
-          <div className="text-gray-500">Kasbon Rp {formatCurrency(run.cash_advance_deduction_amount || 0)}</div>
+          <div className="font-medium text-red-600">{run.salary_currency ?? 'IDR'} {formatCurrency(value)}</div>
+          <div className="text-gray-500">Lain {run.salary_currency ?? 'IDR'} {formatCurrency(run.other_deduction_amount || 0)}</div>
+          <div className="text-gray-500">Kasbon {run.salary_currency ?? 'IDR'} {formatCurrency(run.cash_advance_deduction_amount || 0)}</div>
         </div>
       ),
     },
@@ -983,7 +1275,9 @@ export default function PayrollManagement() {
       dataIndex: 'net_amount',
       key: 'net_amount',
       width: 160,
-      render: (value: number) => <span className="font-semibold text-green-700">Rp {formatCurrency(value)}</span>,
+      render: (value: number, run: PayrollRunWithItems) => (
+        <span className="font-semibold text-green-700">{run.salary_currency ?? 'IDR'} {formatCurrency(value)}</span>
+      ),
     },
     {
       title: 'Pembayaran',
@@ -1006,7 +1300,7 @@ export default function PayrollManagement() {
       width: 340,
       render: (_: unknown, run: PayrollRunWithItems) => (
         <Space wrap>
-          {run.status === 'DRAFT' && (
+          {canManagePayroll && run.status === 'DRAFT' && (
             <>
               <Button size="small" icon={<Edit3 size={14} />} onClick={() => openEditForm(run)}>
                 Edit
@@ -1016,7 +1310,7 @@ export default function PayrollManagement() {
               </Button>
             </>
           )}
-          {run.status === 'APPROVED' && (
+          {canManagePayroll && run.status === 'APPROVED' && (
             <Button size="small" type="primary" icon={<CreditCard size={14} />} onClick={() => setPayingRun(run)} loading={isPaying}>
               Bayar
             </Button>
@@ -1039,7 +1333,7 @@ export default function PayrollManagement() {
               ]}
             />
           )}
-          {(run.status === 'DRAFT' || run.status === 'APPROVED') && (
+          {canManagePayroll && (run.status === 'DRAFT' || run.status === 'APPROVED') && (
             <Button size="small" danger icon={<XCircle size={14} />} onClick={() => handleVoid(run)} loading={isVoiding}>
               Void
             </Button>
@@ -1055,8 +1349,12 @@ export default function PayrollManagement() {
       key: 'employee',
       render: (_: unknown, item: PayrollRunItem) => (
         <div>
-          <div className="font-medium">{item.employee_name}</div>
-          <div className="text-xs text-gray-500">{item.employee_position || '-'}</div>
+          <div className="font-medium">
+            {item.employee_number ? `${item.employee_number} - ` : ''}{item.employee_name}
+          </div>
+          <div className="text-xs text-gray-500">
+            {[item.employee_position, item.employee_department].filter(Boolean).join(' • ') || '-'}
+          </div>
         </div>
       ),
     },
@@ -1064,43 +1362,43 @@ export default function PayrollManagement() {
       title: 'Gaji Pokok',
       dataIndex: 'base_salary',
       key: 'base_salary',
-      render: (value: number) => `Rp ${formatCurrency(value)}`,
+      render: (value: number, item: PayrollRunItem) => `${item.salary_currency ?? run.salary_currency ?? 'IDR'} ${formatCurrency(value)}`,
     },
     {
       title: 'Tunjangan',
       dataIndex: 'allowance_amount',
       key: 'allowance_amount',
-      render: (value: number) => `Rp ${formatCurrency(value)}`,
+      render: (value: number, item: PayrollRunItem) => `${item.salary_currency ?? run.salary_currency ?? 'IDR'} ${formatCurrency(value)}`,
     },
     {
       title: 'Bonus/Lembur',
       dataIndex: 'bonus_amount',
       key: 'bonus_amount',
-      render: (value: number) => `Rp ${formatCurrency(value)}`,
+      render: (value: number, item: PayrollRunItem) => `${item.salary_currency ?? run.salary_currency ?? 'IDR'} ${formatCurrency(value)}`,
     },
     {
       title: 'Potongan Lain',
       dataIndex: 'other_deduction_amount',
       key: 'other_deduction_amount',
-      render: (value: number) => <span className="text-red-600">Rp {formatCurrency(value || 0)}</span>,
+      render: (value: number, item: PayrollRunItem) => <span className="text-red-600">{item.salary_currency ?? run.salary_currency ?? 'IDR'} {formatCurrency(value || 0)}</span>,
     },
     {
       title: 'Kasbon',
       dataIndex: 'cash_advance_deduction_amount',
       key: 'cash_advance_deduction_amount',
-      render: (value: number) => <span className="text-red-600">Rp {formatCurrency(value || 0)}</span>,
+      render: (value: number, item: PayrollRunItem) => <span className="text-red-600">{item.salary_currency ?? run.salary_currency ?? 'IDR'} {formatCurrency(value || 0)}</span>,
     },
     {
       title: 'Total Potongan',
       dataIndex: 'deduction_amount',
       key: 'deduction_amount',
-      render: (value: number) => <span className="text-red-600">Rp {formatCurrency(value || 0)}</span>,
+      render: (value: number, item: PayrollRunItem) => <span className="text-red-600">{item.salary_currency ?? run.salary_currency ?? 'IDR'} {formatCurrency(value || 0)}</span>,
     },
     {
       title: 'Net',
       dataIndex: 'net_amount',
       key: 'net_amount',
-      render: (value: number) => <span className="font-semibold">Rp {formatCurrency(value)}</span>,
+      render: (value: number, item: PayrollRunItem) => <span className="font-semibold">{item.salary_currency ?? run.salary_currency ?? 'IDR'} {formatCurrency(value)}</span>,
     },
     {
       title: 'Catatan',
@@ -1160,7 +1458,7 @@ export default function PayrollManagement() {
       dataIndex: 'amount',
       key: 'amount',
       width: 150,
-      render: (value: number) => `Rp ${formatCurrency(value)}`,
+      render: (value: number) => `${baseCurrencySymbol} ${formatCurrency(value)}`,
     },
     {
       title: 'Outstanding',
@@ -1169,9 +1467,9 @@ export default function PayrollManagement() {
       width: 180,
       render: (value: number, advance: EmployeeCashAdvanceWithRepayments) => (
         <div className="text-xs">
-          <div className="font-semibold text-blue-700">Rp {formatCurrency(value)}</div>
-          <div className="text-gray-500">Reserved Rp {formatCurrency(advance.reserved_amount)}</div>
-          <div className="text-gray-500">Terpotong Rp {formatCurrency(advance.posted_amount)}</div>
+          <div className="font-semibold text-blue-700">{baseCurrencySymbol} {formatCurrency(value)}</div>
+          <div className="text-gray-500">Reserved {baseCurrencySymbol} {formatCurrency(advance.reserved_amount)}</div>
+          <div className="text-gray-500">Terpotong {baseCurrencySymbol} {formatCurrency(advance.posted_amount)}</div>
         </div>
       ),
     },
@@ -1208,7 +1506,7 @@ export default function PayrollManagement() {
           repayment.status === 'RESERVED' || repayment.status === 'POSTED'
         ));
 
-        return advance.status === 'ACTIVE' ? (
+        return canManagePayroll && advance.status === 'ACTIVE' ? (
           <Button
             size="small"
             danger
@@ -1245,7 +1543,7 @@ export default function PayrollManagement() {
       title: 'Nominal',
       dataIndex: 'amount',
       key: 'amount',
-      render: (value: number) => `Rp ${formatCurrency(value)}`,
+      render: (value: number) => `${baseCurrencySymbol} ${formatCurrency(value)}`,
     },
     {
       title: 'Dialokasikan',
@@ -1268,13 +1566,15 @@ export default function PayrollManagement() {
           <Title level={2} style={{ margin: 0 }}>Payroll Karyawan</Title>
           <Text type="secondary">Kelola run gaji karyawan dan posting pembayaran ke Cash & Bank.</Text>
         </div>
-        <Button
-          type="primary"
-          icon={<Plus size={16} />}
-          onClick={activeTab === 'payroll' ? openCreateForm : () => setIsCashAdvanceFormOpen(true)}
-        >
-          {activeTab === 'payroll' ? 'Buat Payroll' : 'Cairkan Kasbon'}
-        </Button>
+        {canManagePayroll && (
+          <Button
+            type="primary"
+            icon={<Plus size={16} />}
+            onClick={activeTab === 'payroll' ? openCreateForm : () => setIsCashAdvanceFormOpen(true)}
+          >
+            {activeTab === 'payroll' ? 'Buat Payroll' : 'Cairkan Kasbon'}
+          </Button>
+        )}
       </div>
 
       <Tabs
@@ -1297,7 +1597,7 @@ export default function PayrollManagement() {
                     <Statistic
                       title="Menunggu Bayar"
                       value={summary.approvedNet}
-                      formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+                      formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
                       prefix={<UserRoundCheck size={18} />}
                     />
                   </Card>
@@ -1305,7 +1605,7 @@ export default function PayrollManagement() {
                     <Statistic
                       title="Sudah Dibayar"
                       value={summary.paidNet}
-                      formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+                      formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
                       prefix={<Banknote size={18} />}
                     />
                   </Card>
@@ -1376,7 +1676,7 @@ export default function PayrollManagement() {
                     <Statistic
                       title="Outstanding"
                       value={cashAdvanceSummary.outstandingAmount}
-                      formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+                      formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
                       prefix={<Banknote size={18} />}
                     />
                   </Card>
@@ -1384,7 +1684,7 @@ export default function PayrollManagement() {
                     <Statistic
                       title="Reserved Payroll"
                       value={cashAdvanceSummary.reservedAmount}
-                      formatter={(value) => `Rp ${formatCurrency(Number(value))}`}
+                      formatter={(value) => `${baseCurrencySymbol} ${formatCurrency(Number(value))}`}
                       prefix={<UserRoundCheck size={18} />}
                     />
                   </Card>
@@ -1454,6 +1754,11 @@ export default function PayrollManagement() {
       <PayrollRunFormModal
         open={isFormOpen}
         employees={employees}
+        baseCurrencyCode={baseCurrencyCode}
+        baseCurrencySymbol={baseCurrencySymbol}
+        salaryComponents={salaryComponents}
+        employeeSalaryComponents={employeeSalaryComponents}
+        employmentContracts={employmentContracts}
         cashAdvanceAvailableByEmployee={cashAdvanceAvailableByEmployee}
         editingRun={editingRun}
         submitting={isSubmitting}
@@ -1474,6 +1779,7 @@ export default function PayrollManagement() {
         open={isCashAdvanceFormOpen}
         employees={cashAdvanceEmployees}
         accounts={cashAdvanceCashBankAccounts}
+        baseCurrencySymbol={baseCurrencySymbol}
         submitting={isCreatingCashAdvance}
         onCancel={closeCashAdvanceForm}
         onSubmit={handleSubmitCashAdvance}

@@ -86,8 +86,11 @@ import {
   employeeAreaPostgresAdapter,
   employeeCollectionSchedulePostgresAdapter,
   employeePostgresAdapter,
+  employeeSalaryComponentPostgresAdapter,
+  employmentContractPostgresAdapter,
   financeTransactionPostgresAdapter,
   isTauriRuntime,
+  hrPositionPostgresAdapter,
   journalEntryPostgresAdapter,
   openingBalancePostgresAdapter,
   paymentMethodPostgresAdapter,
@@ -102,6 +105,7 @@ import {
   rolePermissionPostgresAdapter,
   rolePostgresAdapter,
   salesDocumentPostgresAdapter,
+  salaryComponentPostgresAdapter,
   stockOpnamePostgresAdapter,
   stockMutationPostgresAdapter,
   taxPostgresAdapter,
@@ -137,8 +141,11 @@ import {
   type RemoteEmployeeCashAdvanceRepaymentDto,
   type RemoteEmployeeCollectionScheduleDto,
   type RemoteEmployeeDto,
+  type RemoteEmployeeSalaryComponentDto,
+  type RemoteEmploymentContractDto,
   type RemoteFinanceTransactionDto,
   type RemoteFiscalYearClosingRunDto,
+  type RemoteHrPositionDto,
   type RemoteJournalEntryBundleDto,
   type RemoteJournalEntryDto,
   type RemoteJournalEntryLineDto,
@@ -166,6 +173,7 @@ import {
   type RemoteSalesDocumentBundleDto,
   type RemoteSalesDocumentDto,
   type RemoteSalesDocumentItemDto,
+  type RemoteSalaryComponentDto,
   type RemoteStockOpnameBundleDto,
   type RemoteStockOpnameDto,
   type RemoteStockOpnameItemDto,
@@ -181,6 +189,7 @@ import {
   mergeRemoteFiscalYearClosingRunsIntoDexie,
 } from '@/services/fiscalYearReadService';
 import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
+import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -214,6 +223,10 @@ const ENABLED_MODULE_ENTITY = 'enabledModules';
 const GENERAL_LEDGER_SETTING_ENTITY = 'generalLedgerSetting';
 const DEPARTMENT_ENTITY = 'departments';
 const EMPLOYEE_ENTITY = 'employees';
+const HR_POSITION_ENTITY = 'hrPositions';
+const EMPLOYMENT_CONTRACT_ENTITY = 'employmentContracts';
+const SALARY_COMPONENT_ENTITY = 'salaryComponents';
+const EMPLOYEE_SALARY_COMPONENT_ENTITY = 'employeeSalaryComponents';
 const EMPLOYEE_AREA_ENTITY = 'employeeAreas';
 const EMPLOYEE_CASH_ADVANCE_ENTITY = 'employeeCashAdvances';
 const EMPLOYEE_COLLECTION_SCHEDULE_ENTITY = 'employeeCollectionSchedules';
@@ -286,6 +299,7 @@ const mapActivityLogToRemoteDto = (log: ActivityLog): RemoteActivityLogDto => ({
   entity: log.entity,
   entity_id: log.entity_id,
   description: log.description,
+  changes: log.changes ?? null,
   created_at: log.created_at,
 });
 
@@ -727,6 +741,11 @@ const mapDepartmentToRemoteDto = (department: Department): RemoteDepartmentDto =
   id: department.id,
   code: department.code,
   name: department.name,
+  head_employee_id: department.head_employee_id ?? null,
+  head_employee_name: department.head_employee_name ?? null,
+  parent_department_id: department.parent_department_id ?? null,
+  parent_department_code: department.parent_department_code ?? null,
+  parent_department_name: department.parent_department_name ?? null,
   description: department.description,
   is_active: department.is_active,
   created_at: department.created_at,
@@ -735,11 +754,59 @@ const mapDepartmentToRemoteDto = (department: Department): RemoteDepartmentDto =
 
 const mapEmployeeToRemoteDto = (employee: Employee): RemoteEmployeeDto => ({
   id: employee.id,
+  employee_number: employee.employee_number ?? null,
   name: employee.name,
+  preferred_name: employee.preferred_name ?? null,
+  photo_data_url: employee.photo_data_url ?? null,
+  gender: employee.gender ?? null,
+  birth_place: employee.birth_place ?? null,
+  birth_date: employee.birth_date ?? null,
+  marital_status: employee.marital_status ?? null,
+  nationality: employee.nationality ?? null,
   phone: employee.phone ?? null,
   email: employee.email ?? null,
+  personal_email: employee.personal_email ?? null,
   address: employee.address ?? null,
+  identity_address: employee.identity_address ?? null,
+  domicile_address: employee.domicile_address ?? null,
+  emergency_contact_name: employee.emergency_contact_name ?? null,
+  emergency_contact_relationship: employee.emergency_contact_relationship ?? null,
+  emergency_contact_phone: employee.emergency_contact_phone ?? null,
+  nik: employee.nik ?? null,
+  family_card_number: employee.family_card_number ?? null,
+  tax_number: employee.tax_number ?? null,
+  health_bpjs_number: employee.health_bpjs_number ?? null,
+  employment_bpjs_number: employee.employment_bpjs_number ?? null,
+  company_unit: employee.company_unit ?? null,
+  department_id: employee.department_id ?? null,
+  department_code: employee.department_code ?? null,
+  department_name: employee.department_name ?? null,
+  job_position_id: employee.job_position_id ?? null,
+  job_position_code: employee.job_position_code ?? null,
+  job_position_name: employee.job_position_name ?? null,
   position: employee.position ?? null,
+  supervisor_id: employee.supervisor_id ?? null,
+  supervisor_name: employee.supervisor_name ?? null,
+  work_location: employee.work_location ?? null,
+  join_date: employee.join_date ?? null,
+  employment_status: employee.employment_status ?? null,
+  active_status: employee.active_status ?? null,
+  work_schedule_type: employee.work_schedule_type ?? null,
+  contract_start_date: employee.contract_start_date ?? null,
+  contract_end_date: employee.contract_end_date ?? null,
+  permanent_date: employee.permanent_date ?? null,
+  exit_date: employee.exit_date ?? null,
+  exit_reason: employee.exit_reason ?? null,
+  salary_payment_method: employee.salary_payment_method ?? null,
+  bank_name: employee.bank_name ?? null,
+  bank_account_number: employee.bank_account_number ?? null,
+  bank_account_holder: employee.bank_account_holder ?? null,
+  base_salary: employee.base_salary ?? null,
+  salary_currency: employee.salary_currency ?? null,
+  payroll_period: employee.payroll_period ?? null,
+  is_taxable: employee.is_taxable ?? null,
+  ptkp_status: employee.ptkp_status ?? null,
+  is_bpjs_participant: employee.is_bpjs_participant ?? null,
   user_id: employee.user_id ?? null,
   user_name: employee.user_name ?? null,
   login_role_id: employee.login_role_id ?? null,
@@ -752,6 +819,48 @@ const mapEmployeeToRemoteDto = (employee: Employee): RemoteEmployeeDto => ({
   is_active: employee.is_active,
   created_at: employee.created_at,
   updated_at: employee.updated_at,
+  deleted_at: null,
+});
+
+type SyncMetadata = {
+  sync_status?: unknown;
+  sync_error?: unknown;
+  last_synced_at?: unknown;
+  remote_updated_at?: unknown;
+};
+
+const stripSyncMetadata = <T extends object>(record: T) => {
+  const remote = { ...record } as T & SyncMetadata;
+  delete remote.sync_status;
+  delete remote.sync_error;
+  delete remote.last_synced_at;
+  delete remote.remote_updated_at;
+  return remote;
+};
+
+const mapHrPositionToRemoteDto = (position: HrPosition): RemoteHrPositionDto => ({
+  ...stripSyncMetadata(position),
+  deleted_at: null,
+});
+
+const mapEmploymentContractToRemoteDto = (
+  contract: EmploymentContract,
+): RemoteEmploymentContractDto => ({
+  ...stripSyncMetadata(contract),
+  deleted_at: null,
+});
+
+const mapSalaryComponentToRemoteDto = (
+  component: SalaryComponent,
+): RemoteSalaryComponentDto => ({
+  ...stripSyncMetadata(component),
+  deleted_at: null,
+});
+
+const mapEmployeeSalaryComponentToRemoteDto = (
+  assignment: EmployeeSalaryComponent,
+): RemoteEmployeeSalaryComponentDto => ({
+  ...stripSyncMetadata(assignment),
   deleted_at: null,
 });
 
@@ -809,6 +918,8 @@ const mapPayrollRunToRemoteDto = (run: PayrollRun): RemotePayrollRunDto => ({
   payroll_number: run.payroll_number,
   period_start: run.period_start,
   period_end: run.period_end,
+  payroll_period: run.payroll_period ?? 'MONTHLY',
+  salary_currency: run.salary_currency ?? 'IDR',
   status: run.status,
   employee_count: Math.trunc(normalizeRemoteNumber(run.employee_count)),
   gross_amount: normalizeRemoteNumber(run.gross_amount),
@@ -841,7 +952,12 @@ const mapPayrollRunItemToRemoteDto = (item: PayrollRunItem): RemotePayrollRunIte
   payroll_run_id: item.payroll_run_id,
   employee_id: item.employee_id,
   employee_name: item.employee_name,
+  employee_number: item.employee_number ?? null,
   employee_position: item.employee_position ?? null,
+  employee_department: item.employee_department ?? null,
+  payroll_period: item.payroll_period ?? 'MONTHLY',
+  salary_currency: item.salary_currency ?? 'IDR',
+  salary_payment_method: item.salary_payment_method ?? 'CASH',
   base_salary: normalizeRemoteNumber(item.base_salary),
   allowance_amount: normalizeRemoteNumber(item.allowance_amount),
   bonus_amount: normalizeRemoteNumber(item.bonus_amount),
@@ -2190,6 +2306,22 @@ const isRemoteEmployeeDto = (payload: unknown): payload is RemoteEmployeeDto => 
     typeof candidate.id === 'string' &&
     typeof candidate.name === 'string' &&
     typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteHrRecordDto = (
+  payload: unknown,
+): payload is
+  | RemoteHrPositionDto
+  | RemoteEmploymentContractDto
+  | RemoteSalaryComponentDto
+  | RemoteEmployeeSalaryComponentDto => {
+  if (!payload || typeof payload !== 'object') return false;
+  const candidate = payload as { id?: unknown; created_at?: unknown; updated_at?: unknown };
+  return (
+    typeof candidate.id === 'string' &&
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'
   );
@@ -3612,6 +3744,22 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (isRemoteHrRecordDto(queueItem.payload)) {
+    const syncMetadata = {
+      sync_status: 'failed' as const,
+      sync_error: errorMessage,
+    };
+    if (queueItem.entity === HR_POSITION_ENTITY) {
+      await db.hrPositions.update(queueItem.entity_id, syncMetadata);
+    } else if (queueItem.entity === EMPLOYMENT_CONTRACT_ENTITY) {
+      await db.employmentContracts.update(queueItem.entity_id, syncMetadata);
+    } else if (queueItem.entity === SALARY_COMPONENT_ENTITY) {
+      await db.salaryComponents.update(queueItem.entity_id, syncMetadata);
+    } else if (queueItem.entity === EMPLOYEE_SALARY_COMPONENT_ENTITY) {
+      await db.employeeSalaryComponents.update(queueItem.entity_id, syncMetadata);
+    }
+  }
+
   if (queueItem.entity === EMPLOYEE_AREA_ENTITY && isRemoteEmployeeAreaDto(queueItem.payload)) {
     await updateEmployeeAreaSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -4059,6 +4207,27 @@ const processEmployeeQueueItem = async (queueItem: SyncQueueItem) => {
   return employeePostgresAdapter.upsert(queueItem.payload);
 };
 
+const processHrRecordQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete' || !isRemoteHrRecordDto(queueItem.payload)) {
+    throw new Error('Payload master HR sync queue tidak valid.');
+  }
+  if (queueItem.entity === HR_POSITION_ENTITY) {
+    return hrPositionPostgresAdapter.upsert(queueItem.payload as RemoteHrPositionDto);
+  }
+  if (queueItem.entity === EMPLOYMENT_CONTRACT_ENTITY) {
+    return employmentContractPostgresAdapter.upsert(queueItem.payload as RemoteEmploymentContractDto);
+  }
+  if (queueItem.entity === SALARY_COMPONENT_ENTITY) {
+    return salaryComponentPostgresAdapter.upsert(queueItem.payload as RemoteSalaryComponentDto);
+  }
+  if (queueItem.entity === EMPLOYEE_SALARY_COMPONENT_ENTITY) {
+    return employeeSalaryComponentPostgresAdapter.upsert(
+      queueItem.payload as RemoteEmployeeSalaryComponentDto,
+    );
+  }
+  throw new Error('Entity master HR tidak didukung.');
+};
+
 const processEmployeeAreaQueueItem = async (queueItem: SyncQueueItem) => {
   if (!isRemoteEmployeeAreaDto(queueItem.payload)) {
     throw new Error('Payload area karyawan sync queue tidak valid.');
@@ -4402,6 +4571,12 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteCashierSession: RemoteCashierSessionDto | null = null;
     let remoteDepartment: RemoteDepartmentDto | null = null;
     let remoteEmployee: RemoteEmployeeDto | null = null;
+    let remoteHrRecord:
+      | RemoteHrPositionDto
+      | RemoteEmploymentContractDto
+      | RemoteSalaryComponentDto
+      | RemoteEmployeeSalaryComponentDto
+      | null = null;
     let remoteEmployeeArea: RemoteEmployeeAreaDto | null = null;
     let remoteEmployeeCashAdvanceBundle: RemoteEmployeeCashAdvanceBundleDto | null = null;
     let remoteEmployeeCollectionSchedule: RemoteEmployeeCollectionScheduleDto | null = null;
@@ -4473,6 +4648,13 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteDepartment = await processDepartmentQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === EMPLOYEE_ENTITY) {
       remoteEmployee = await processEmployeeQueueItem(currentQueueItem);
+    } else if (
+      currentQueueItem.entity === HR_POSITION_ENTITY ||
+      currentQueueItem.entity === EMPLOYMENT_CONTRACT_ENTITY ||
+      currentQueueItem.entity === SALARY_COMPONENT_ENTITY ||
+      currentQueueItem.entity === EMPLOYEE_SALARY_COMPONENT_ENTITY
+    ) {
+      remoteHrRecord = await processHrRecordQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === EMPLOYEE_AREA_ENTITY) {
       remoteEmployeeArea = await processEmployeeAreaQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === EMPLOYEE_CASH_ADVANCE_ENTITY) {
@@ -4527,6 +4709,27 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remotePaymentMethod = await processPaymentMethodQueueItem(currentQueueItem);
     } else {
       throw new Error(`Entity sync queue tidak didukung: ${currentQueueItem.entity}`);
+    }
+
+    if (remoteHrRecord) {
+      const syncedAt = new Date().toISOString();
+      const syncMetadata = {
+        sync_status: 'synced' as const,
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteHrRecord.updated_at,
+      };
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      if (currentQueueItem.entity === HR_POSITION_ENTITY) {
+        await db.hrPositions.update(currentQueueItem.entity_id, syncMetadata);
+      } else if (currentQueueItem.entity === EMPLOYMENT_CONTRACT_ENTITY) {
+        await db.employmentContracts.update(currentQueueItem.entity_id, syncMetadata);
+      } else if (currentQueueItem.entity === SALARY_COMPONENT_ENTITY) {
+        await db.salaryComponents.update(currentQueueItem.entity_id, syncMetadata);
+      } else if (currentQueueItem.entity === EMPLOYEE_SALARY_COMPONENT_ENTITY) {
+        await db.employeeSalaryComponents.update(currentQueueItem.entity_id, syncMetadata);
+      }
+      return;
     }
 
     if (
@@ -6271,6 +6474,72 @@ export const enqueueEmployeeSync = async (
   return queueItem;
 };
 
+const enqueueHrRecordSync = async (
+  entity: string,
+  entityId: string,
+  payload: RemoteHrPositionDto
+    | RemoteEmploymentContractDto
+    | RemoteSalaryComponentDto
+    | RemoteEmployeeSalaryComponentDto,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity,
+    entity_id: entityId,
+    operation,
+    payload,
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+  return queueItem;
+};
+
+export const enqueueHrPositionSync = (
+  position: HrPosition,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => enqueueHrRecordSync(
+  HR_POSITION_ENTITY,
+  position.id,
+  mapHrPositionToRemoteDto(position),
+  operation,
+);
+
+export const enqueueEmploymentContractSync = (
+  contract: EmploymentContract,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => enqueueHrRecordSync(
+  EMPLOYMENT_CONTRACT_ENTITY,
+  contract.id,
+  mapEmploymentContractToRemoteDto(contract),
+  operation,
+);
+
+export const enqueueSalaryComponentSync = (
+  component: SalaryComponent,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => enqueueHrRecordSync(
+  SALARY_COMPONENT_ENTITY,
+  component.id,
+  mapSalaryComponentToRemoteDto(component),
+  operation,
+);
+
+export const enqueueEmployeeSalaryComponentSync = (
+  assignment: EmployeeSalaryComponent,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => enqueueHrRecordSync(
+  EMPLOYEE_SALARY_COMPONENT_ENTITY,
+  assignment.id,
+  mapEmployeeSalaryComponentToRemoteDto(assignment),
+  operation,
+);
+
 export const enqueueEmployeeAreaSync = async (
   assignment: EmployeeArea,
   operation: Extract<SyncQueueOperation, 'create' | 'update'>,
@@ -6359,6 +6628,51 @@ export const enqueueEmployeeCollectionScheduleDeleteSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueuePendingHrDataForSync = async () => {
+  const queueItems = await db.syncQueue.toArray();
+  const hasCurrentQueueItem = (entity: string, id: string, updatedAt: string) => (
+    queueItems.some((queueItem) => (
+      queueItem.entity === entity &&
+      queueItem.entity_id === id &&
+      queueItem.status !== 'synced' &&
+      isRemoteHrRecordDto(queueItem.payload) &&
+      queueItem.payload.updated_at === updatedAt
+    ))
+  );
+
+  const positions = (await db.hrPositions.toArray())
+    .filter((record) => record.sync_status === 'pending' || record.sync_status === 'failed');
+  for (const position of positions) {
+    if (!hasCurrentQueueItem(HR_POSITION_ENTITY, position.id, position.updated_at)) {
+      await enqueueHrPositionSync(position, 'update');
+    }
+  }
+
+  const contracts = (await db.employmentContracts.toArray())
+    .filter((record) => record.sync_status === 'pending' || record.sync_status === 'failed');
+  for (const contract of contracts) {
+    if (!hasCurrentQueueItem(EMPLOYMENT_CONTRACT_ENTITY, contract.id, contract.updated_at)) {
+      await enqueueEmploymentContractSync(contract, 'update');
+    }
+  }
+
+  const components = (await db.salaryComponents.toArray())
+    .filter((record) => record.sync_status === 'pending' || record.sync_status === 'failed');
+  for (const component of components) {
+    if (!hasCurrentQueueItem(SALARY_COMPONENT_ENTITY, component.id, component.updated_at)) {
+      await enqueueSalaryComponentSync(component, 'update');
+    }
+  }
+
+  const assignments = (await db.employeeSalaryComponents.toArray())
+    .filter((record) => record.sync_status === 'pending' || record.sync_status === 'failed');
+  for (const assignment of assignments) {
+    if (!hasCurrentQueueItem(EMPLOYEE_SALARY_COMPONENT_ENTITY, assignment.id, assignment.updated_at)) {
+      await enqueueEmployeeSalaryComponentSync(assignment, 'update');
+    }
+  }
 };
 
 export const enqueuePendingEmployeesForSync = async () => {

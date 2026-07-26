@@ -187,6 +187,14 @@ export type Permission =
   | 'AREA_MANAGE'
   | 'EMPLOYEE_MANAGE'
   | 'DEPARTMENT_MANAGE'
+  | 'hr.employee.view'
+  | 'hr.employee.create'
+  | 'hr.employee.update'
+  | 'hr.employee.deactivate'
+  | 'hr.organization.manage'
+  | 'hr.contract.manage'
+  | 'hr.payroll.view'
+  | 'hr.payroll.manage'
   | 'PROJECT_MANAGE'
   | 'FIXED_ASSET_MANAGE'
   | 'TAX_MANAGE'
@@ -319,7 +327,15 @@ export interface ActivityLog {
   entity: string;
   entity_id?: string;
   description: string;
+  changes?: ActivityLogChange[];
   created_at: string;
+}
+
+export interface ActivityLogChange {
+  field: string;
+  before?: string | number | boolean | null;
+  after?: string | number | boolean | null;
+  sensitive?: boolean;
 }
 
 export type DashboardWidgetId =
@@ -517,6 +533,10 @@ export type CooperativeLoanCollectionEventSyncStatus = EntitySyncStatus;
 export type EmployeeSyncStatus = EntitySyncStatus;
 export type EmployeeAreaSyncStatus = EntitySyncStatus;
 export type EmployeeCollectionScheduleSyncStatus = EntitySyncStatus;
+export type HrPositionSyncStatus = EntitySyncStatus;
+export type EmploymentContractSyncStatus = EntitySyncStatus;
+export type SalaryComponentSyncStatus = EntitySyncStatus;
+export type EmployeeSalaryComponentSyncStatus = EntitySyncStatus;
 export type PayrollRunSyncStatus = EntitySyncStatus;
 export type EmployeeCashAdvanceSyncStatus = EntitySyncStatus;
 
@@ -536,11 +556,59 @@ export interface CooperativeArea {
 
 export interface Employee {
   id: string;
+  employee_number?: string;
   name: string;
+  preferred_name?: string;
+  photo_data_url?: string;
+  gender?: EmployeeGender;
+  birth_place?: string;
+  birth_date?: string;
+  marital_status?: EmployeeMaritalStatus;
+  nationality?: string;
   phone?: string;
   email?: string;
+  personal_email?: string;
   address?: string;
+  identity_address?: string;
+  domicile_address?: string;
+  emergency_contact_name?: string;
+  emergency_contact_relationship?: string;
+  emergency_contact_phone?: string;
+  nik?: string;
+  family_card_number?: string;
+  tax_number?: string;
+  health_bpjs_number?: string;
+  employment_bpjs_number?: string;
+  company_unit?: string;
+  department_id?: string;
+  department_code?: string;
+  department_name?: string;
+  job_position_id?: string;
+  job_position_code?: string;
+  job_position_name?: string;
   position?: string;
+  supervisor_id?: string;
+  supervisor_name?: string;
+  work_location?: string;
+  join_date?: string;
+  employment_status?: EmployeeEmploymentStatus;
+  active_status?: EmployeeActiveStatus;
+  work_schedule_type?: EmployeeWorkScheduleType;
+  contract_start_date?: string;
+  contract_end_date?: string;
+  permanent_date?: string;
+  exit_date?: string;
+  exit_reason?: string;
+  salary_payment_method?: EmployeeSalaryPaymentMethod;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_holder?: string;
+  base_salary?: number;
+  salary_currency?: string;
+  payroll_period?: EmployeePayrollPeriod;
+  is_taxable?: boolean;
+  ptkp_status?: string;
+  is_bpjs_participant?: boolean;
   user_id?: string;
   user_name?: string;
   login_role_id?: string;
@@ -554,6 +622,103 @@ export interface Employee {
   created_at: string;
   updated_at: string;
   sync_status?: EmployeeSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type EmployeeGender = 'MALE' | 'FEMALE';
+export type EmployeeMaritalStatus = 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED';
+export type EmployeeEmploymentStatus = 'PROBATION' | 'CONTRACT' | 'PERMANENT' | 'INTERN' | 'FREELANCE';
+export type EmployeeActiveStatus = 'ACTIVE' | 'LONG_LEAVE' | 'INACTIVE' | 'RESIGNED' | 'TERMINATED';
+export type EmployeeWorkScheduleType = 'FULL_TIME' | 'PART_TIME' | 'SHIFT';
+export type EmployeeSalaryPaymentMethod = 'BANK_TRANSFER' | 'CASH';
+export type EmployeePayrollPeriod = 'MONTHLY' | 'WEEKLY' | 'DAILY';
+
+export interface HrPosition {
+  id: string;
+  code: string;
+  name: string;
+  department_id: string;
+  department_code?: string;
+  department_name?: string;
+  level: string;
+  reports_to_position_id?: string;
+  reports_to_position_code?: string;
+  reports_to_position_name?: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: HrPositionSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type EmploymentContractType = 'PROBATION' | 'FIXED_TERM' | 'PERMANENT' | 'INTERNSHIP' | 'FREELANCE';
+export type EmploymentContractStatus = 'DRAFT' | 'ACTIVE' | 'EXPIRED' | 'RENEWED' | 'TERMINATED';
+
+export interface EmploymentContract {
+  id: string;
+  contract_number: string;
+  employee_id: string;
+  employee_number?: string;
+  employee_name: string;
+  contract_type: EmploymentContractType;
+  start_date: string;
+  end_date?: string;
+  job_position_id: string;
+  job_position_code?: string;
+  job_position_name: string;
+  department_id: string;
+  department_code?: string;
+  department_name: string;
+  base_salary: number;
+  status: EmploymentContractStatus;
+  notes?: string;
+  renewed_from_contract_id?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: EmploymentContractSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type SalaryComponentKind = 'EARNING' | 'DEDUCTION';
+export type SalaryComponentCalculation = 'FIXED' | 'PERCENTAGE';
+
+export interface SalaryComponent {
+  id: string;
+  code: string;
+  name: string;
+  kind: SalaryComponentKind;
+  calculation: SalaryComponentCalculation;
+  default_value: number;
+  is_taxable: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: SalaryComponentSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface EmployeeSalaryComponent {
+  id: string;
+  employee_id: string;
+  salary_component_id: string;
+  component_code: string;
+  component_name: string;
+  kind: SalaryComponentKind;
+  calculation: SalaryComponentCalculation;
+  value: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: EmployeeSalaryComponentSyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
@@ -600,6 +765,8 @@ export interface PayrollRun {
   payroll_number: string;
   period_start: string;
   period_end: string;
+  payroll_period?: EmployeePayrollPeriod;
+  salary_currency?: string;
   status: PayrollRunStatus;
   employee_count: number;
   gross_amount: number;
@@ -636,7 +803,12 @@ export interface PayrollRunItem {
   payroll_run_id: string;
   employee_id: string;
   employee_name: string;
+  employee_number?: string;
   employee_position?: string;
+  employee_department?: string;
+  payroll_period?: EmployeePayrollPeriod;
+  salary_currency?: string;
+  salary_payment_method?: EmployeeSalaryPaymentMethod;
   base_salary: number;
   allowance_amount: number;
   bonus_amount: number;
@@ -738,6 +910,11 @@ export interface Department {
   id: string;
   name: string;
   code?: string;
+  head_employee_id?: string;
+  head_employee_name?: string;
+  parent_department_id?: string;
+  parent_department_code?: string;
+  parent_department_name?: string;
   description?: string;
   is_active: boolean;
   created_at: string;

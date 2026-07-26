@@ -240,7 +240,17 @@ const RootLayout = () => {
       to: '/hr',
       label: t('nav.hr'),
       icon: Users,
-      activePaths: ['/master-data/areas', '/master-data/employees', '/finance/payroll'],
+      activePaths: [
+        '/hr/dashboard',
+        '/hr/employees',
+        '/hr/departments',
+        '/hr/positions',
+        '/hr/contracts',
+        '/hr/salary-components',
+        '/master-data/areas',
+        '/master-data/employees',
+        '/finance/payroll',
+      ],
     },
     { to: '/koperasi', label: t('nav.cooperative'), icon: Building2 },
     {

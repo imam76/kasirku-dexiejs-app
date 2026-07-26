@@ -10,6 +10,7 @@ import {
 } from '@/services/employeeCashAdvanceService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { getCashOrBankAccountForPayment, postPayrollRunPaidJournal } from '@/services/generalLedgerService';
+import { getBaseCurrencyCode } from '@/services/baseCurrencyService';
 import { enqueueEmployeeCashAdvanceBundleSync, enqueuePayrollRunBundleSync } from '@/services/syncQueueService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import type {
@@ -20,6 +21,10 @@ import type {
   PayrollRun,
   PayrollRunItem,
 } from '@/types';
+import {
+  getApplicablePayrollContract,
+  isEmployeeEligibleForPayrollPeriod,
+} from '@/utils/payrollDefaults';
 
 export interface PayrollRunItemInput {
   id?: string;
@@ -35,6 +40,8 @@ export interface PayrollRunItemInput {
 export interface PayrollRunUpsertInput {
   period_start: string;
   period_end: string;
+  payroll_period?: 'MONTHLY' | 'WEEKLY' | 'DAILY';
+  salary_currency?: string;
   notes?: string;
   items: PayrollRunItemInput[];
 }
@@ -50,7 +57,7 @@ const roundCurrency = (value: number) => Math.round((Number(value || 0) + Number
 
 const requirePayrollActor = async () => {
   const currentUser = await getCurrentSessionUser();
-  await requireUserPermission(currentUser, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'hr.payroll.manage');
   return currentUser;
 };
 
@@ -121,30 +128,109 @@ const getEmployeeSnapshots = async (employeeIds: string[]) => {
   return new Map((employees as Employee[]).map((employee) => [employee.id, employee]));
 };
 
-const sanitizePayrollRunInput = async (input: PayrollRunUpsertInput) => {
+const assertEmployeesNotInOverlappingPayroll = async ({
+  employeeIds,
+  periodStart,
+  periodEnd,
+  excludePayrollRunId,
+}: {
+  employeeIds: string[];
+  periodStart: string;
+  periodEnd: string;
+  excludePayrollRunId?: string;
+}) => {
+  const overlappingRuns = await db.payrollRuns
+    .filter((run) => (
+      run.id !== excludePayrollRunId &&
+      run.status !== 'VOIDED' &&
+      run.period_start <= periodEnd &&
+      run.period_end >= periodStart
+    ))
+    .toArray();
+  if (overlappingRuns.length === 0) return;
+
+  const overlappingRunIds = overlappingRuns.map((run) => run.id);
+  const employeeIdSet = new Set(employeeIds);
+  const conflictingItems = await db.payrollRunItems
+    .where('payroll_run_id')
+    .anyOf(overlappingRunIds)
+    .filter((item) => employeeIdSet.has(item.employee_id))
+    .toArray();
+  if (conflictingItems.length === 0) return;
+
+  const runById = new Map(overlappingRuns.map((run) => [run.id, run]));
+  const conflictDescriptions = Array.from(new Map(conflictingItems.map((item) => {
+    const run = runById.get(item.payroll_run_id);
+    return [
+      item.employee_id,
+      `${item.employee_name} (${run?.payroll_number ?? 'payroll lain'})`,
+    ];
+  })).values());
+  throw new Error(
+    `Karyawan sudah tercatat pada payroll dengan periode beririsan: ${conflictDescriptions.join(', ')}.`,
+  );
+};
+
+const sanitizePayrollRunInput = async (
+  input: PayrollRunUpsertInput,
+  excludePayrollRunId?: string,
+) => {
   const parsed = payrollRunSchema.parse(input);
+  const baseCurrencyCode = await getBaseCurrencyCode();
+  if (parsed.salary_currency !== baseCurrencyCode) {
+    throw new Error(
+      `Payroll hanya dapat diproses dalam mata uang dasar ${baseCurrencyCode}. `
+      + 'Sesuaikan mata uang gaji karyawan atau konfigurasi mata uang dasar.',
+    );
+  }
   const employeeIds = parsed.items.map((item) => item.employee_id);
   const uniqueEmployeeIds = new Set(employeeIds);
 
   if (uniqueEmployeeIds.size !== employeeIds.length) {
     throw new Error('Satu karyawan hanya boleh muncul satu kali dalam payroll.');
   }
+  await assertEmployeesNotInOverlappingPayroll({
+    employeeIds,
+    periodStart: normalizeDateOnly(parsed.period_start),
+    periodEnd: normalizeDateOnly(parsed.period_end),
+    excludePayrollRunId,
+  });
 
-  const employeeById = await getEmployeeSnapshots(employeeIds);
+  const [employeeById, contracts] = await Promise.all([
+    getEmployeeSnapshots(employeeIds),
+    db.employmentContracts.where('employee_id').anyOf(Array.from(uniqueEmployeeIds)).toArray(),
+  ]);
 
   return {
     period_start: normalizeDateOnly(parsed.period_start),
     period_end: normalizeDateOnly(parsed.period_end),
+    payroll_period: parsed.payroll_period,
+    salary_currency: parsed.salary_currency,
     notes: parsed.notes,
     items: parsed.items.map((item) => {
       const employee = employeeById.get(item.employee_id);
       if (!employee) {
         throw new Error('Karyawan payroll tidak ditemukan.');
       }
+      if (!isEmployeeEligibleForPayrollPeriod(employee, parsed.period_start, parsed.period_end)) {
+        throw new Error(`${employee.name} tidak aktif pada periode payroll yang dipilih.`);
+      }
+      if ((employee.payroll_period ?? 'MONTHLY') !== parsed.payroll_period) {
+        throw new Error(`${employee.name} tidak menggunakan periode penggajian ${parsed.payroll_period}.`);
+      }
+      if ((employee.salary_currency ?? 'IDR').toUpperCase() !== parsed.salary_currency) {
+        throw new Error(`${employee.name} tidak menggunakan mata uang ${parsed.salary_currency}.`);
+      }
 
       return {
         ...item,
         employee,
+        contract: getApplicablePayrollContract(
+          employee.id,
+          contracts,
+          parsed.period_start,
+          parsed.period_end,
+        ),
         base_salary: roundCurrency(item.base_salary),
         allowance_amount: roundCurrency(item.allowance_amount),
         bonus_amount: roundCurrency(item.bonus_amount),
@@ -169,7 +255,14 @@ const buildPayrollItems = (
     payroll_run_id: payrollRunId,
     employee_id: item.employee.id,
     employee_name: item.employee.name,
-    employee_position: item.employee.position,
+    employee_number: item.employee.employee_number,
+    employee_position: item.contract?.job_position_name
+      ?? item.employee.job_position_name
+      ?? item.employee.position,
+    employee_department: item.contract?.department_name ?? item.employee.department_name,
+    payroll_period: item.employee.payroll_period ?? 'MONTHLY',
+    salary_currency: item.employee.salary_currency ?? 'IDR',
+    salary_payment_method: item.employee.salary_payment_method ?? 'CASH',
     base_salary: item.base_salary,
     allowance_amount: item.allowance_amount,
     bonus_amount: item.bonus_amount,
@@ -296,6 +389,8 @@ export const createPayrollRun = async (input: PayrollRunUpsertInput): Promise<Pa
     payroll_number: payrollNumber,
     period_start: sanitized.period_start,
     period_end: sanitized.period_end,
+    payroll_period: sanitized.payroll_period,
+    salary_currency: sanitized.salary_currency,
     status: 'DRAFT',
     ...totals,
     notes: sanitized.notes,
@@ -339,7 +434,7 @@ export const updatePayrollRun = async (
     throw new Error('Hanya payroll draft yang bisa diedit.');
   }
 
-  const sanitized = await sanitizePayrollRunInput(input);
+  const sanitized = await sanitizePayrollRunInput(input, existingRun.id);
   const now = new Date().toISOString();
   const draftItems = buildPayrollItems(existingRun.id, sanitized.items, now);
   const { items, repayments } = await buildPayrollCashAdvanceAllocations({
@@ -353,6 +448,8 @@ export const updatePayrollRun = async (
     ...existingRun,
     period_start: sanitized.period_start,
     period_end: sanitized.period_end,
+    payroll_period: sanitized.payroll_period,
+    salary_currency: sanitized.salary_currency,
     ...totals,
     notes: sanitized.notes,
     updated_by: currentUser?.id,

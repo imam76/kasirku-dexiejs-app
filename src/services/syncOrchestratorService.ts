@@ -22,6 +22,7 @@ import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/coope
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
+import { refreshHrDataFromPostgres } from '@/services/hrReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
 import { refreshOpeningBalancesFromPostgres } from '@/services/openingBalanceReadService';
@@ -49,6 +50,7 @@ import {
   enqueuePendingContactsForSync,
   enqueuePendingCooperativeDataForSync,
   enqueuePendingEmployeesForSync,
+  enqueuePendingHrDataForSync,
   enqueuePendingFinanceTransactionsForSync,
   enqueuePendingJournalEntriesForSync,
   enqueuePendingOpeningBalancesForSync,
@@ -87,6 +89,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingContactsForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingEmployeesForSync();
+  await enqueuePendingHrDataForSync();
   await enqueuePendingPayrollDataForSync();
   await enqueuePendingCashierSessionsForSync();
   await enqueuePendingFinanceTransactionsForSync();
@@ -138,6 +141,7 @@ export const refreshAllDataFromPostgres = async () => {
     warehouses: await refreshWarehousesFromPostgres(),
     cooperativeAreas: await refreshCooperativeAreasFromPostgres(),
     employees: await refreshEmployeesFromPostgres(),
+    hr: await refreshHrDataFromPostgres(),
     currencies: await refreshCurrenciesFromPostgres(),
     currencyRates: await refreshCurrencyRatesFromPostgres(),
     products: await refreshProductsFromPostgres(),

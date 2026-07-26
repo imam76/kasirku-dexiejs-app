@@ -47,7 +47,7 @@ const roundCurrency = (value: number) => Math.round((Number(value || 0) + Number
 
 const requireCashAdvanceActor = async () => {
   const currentUser = await getCurrentSessionUser();
-  await requireUserPermission(currentUser, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'hr.payroll.manage');
   return currentUser;
 };
 

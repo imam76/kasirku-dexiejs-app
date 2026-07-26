@@ -50,6 +50,12 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/shopping-note': ['PURCHASE_RECEIPT'],
   // Human Resources
   '/hr': ['AREA', 'EMPLOYEE', 'CASH_FLOW'],
+  '/hr/dashboard': ['EMPLOYEE'],
+  '/hr/employees': ['EMPLOYEE'],
+  '/hr/departments': ['DEPARTMENT'],
+  '/hr/positions': ['EMPLOYEE', 'DEPARTMENT'],
+  '/hr/contracts': ['EMPLOYEE'],
+  '/hr/salary-components': ['EMPLOYEE', 'CASH_FLOW'],
   // Finance
   '/finance': ['CASH_FLOW', 'RECEIVABLES', 'PAYABLES', 'CHART_OF_ACCOUNTS', 'GENERAL_LEDGER'],
   '/finance/cash-flow': ['CASH_FLOW'],

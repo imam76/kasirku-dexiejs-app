@@ -32,6 +32,7 @@ interface ActivityLogInput {
   entity: string;
   entity_id?: string;
   description: string;
+  changes?: ActivityLog['changes'];
   user?: AuthUser | null;
 }
 
@@ -898,6 +899,7 @@ export const writeActivityLog = async (input: ActivityLogInput): Promise<void> =
     entity: input.entity,
     entity_id: input.entity_id,
     description: input.description,
+    changes: input.changes,
     created_at: new Date().toISOString(),
   };
 

@@ -32,6 +32,13 @@ export const payrollRunItemSchema = z.object({
 export const payrollRunSchema = z.object({
   period_start: z.string().trim().min(1, 'Tanggal awal periode wajib diisi.'),
   period_end: z.string().trim().min(1, 'Tanggal akhir periode wajib diisi.'),
+  payroll_period: z.enum(['MONTHLY', 'WEEKLY', 'DAILY']).default('MONTHLY'),
+  salary_currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, 'Mata uang harus berupa kode ISO 3 huruf.')
+    .default('IDR'),
   notes: optionalTrimmedString,
   items: z.array(payrollRunItemSchema).min(1, 'Minimal satu karyawan harus masuk payroll.'),
 }).refine((value) => value.period_start.slice(0, 10) <= value.period_end.slice(0, 10), {

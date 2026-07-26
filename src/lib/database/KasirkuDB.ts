@@ -89,6 +89,10 @@ import type {
   FixedAsset,
   FixedAssetDepreciationRun,
   FixedAssetDepreciationRunLine,
+  HrPosition,
+  EmploymentContract,
+  SalaryComponent,
+  EmployeeSalaryComponent,
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
@@ -183,6 +187,10 @@ export class KasirkuDB extends Dexie {
   fixedAssets!: Table<FixedAsset>;
   fixedAssetDepreciationRuns!: Table<FixedAssetDepreciationRun>;
   fixedAssetDepreciationRunLines!: Table<FixedAssetDepreciationRunLine>;
+  hrPositions!: Table<HrPosition>;
+  employmentContracts!: Table<EmploymentContract>;
+  salaryComponents!: Table<SalaryComponent>;
+  employeeSalaryComponents!: Table<EmployeeSalaryComponent>;
 
   constructor() {
     super('KasirkuDB');

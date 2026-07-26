@@ -642,6 +642,7 @@ pub async fn list_activity_logs(
             entity,
             entity_id,
             description,
+            changes,
             created_at::TEXT AS created_at
         FROM activity_logs
         ORDER BY created_at DESC
@@ -669,9 +670,10 @@ pub async fn upsert_activity_log(
             entity,
             entity_id,
             description,
+            changes,
             created_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::TIMESTAMPTZ)
         ON CONFLICT (id) DO NOTHING
         RETURNING
             id,
@@ -682,6 +684,7 @@ pub async fn upsert_activity_log(
             entity,
             entity_id,
             description,
+            changes,
             created_at::TEXT AS created_at
         "#,
     )
@@ -693,6 +696,7 @@ pub async fn upsert_activity_log(
     .bind(input.entity)
     .bind(input.entity_id)
     .bind(input.description)
+    .bind(input.changes)
     .bind(input.created_at)
     .fetch_optional(pool)
     .await?;
@@ -712,6 +716,7 @@ pub async fn upsert_activity_log(
             entity,
             entity_id,
             description,
+            changes,
             created_at::TEXT AS created_at
         FROM activity_logs
         WHERE id = $1

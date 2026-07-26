@@ -29,11 +29,11 @@ const assertDepartmentCodeAvailable = async (code: string | undefined, excludeDe
   const existingDepartment = await db.departments
     .where('code')
     .equals(code)
-    .and((department) => department.id !== excludeDepartmentId && department.is_active)
+    .and((department) => department.id !== excludeDepartmentId)
     .first();
 
   if (existingDepartment) {
-    throw new Error('Kode department sudah dipakai department aktif lain.');
+    throw new Error('Kode department sudah dipakai department lain.');
   }
 };
 

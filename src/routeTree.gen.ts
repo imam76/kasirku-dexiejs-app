@@ -135,6 +135,14 @@ const KoperasiKasPetugasLazyRouteImport = createFileRoute(
 )()
 const KoperasiAngsuranLazyRouteImport = createFileRoute('/koperasi/angsuran')()
 const KoperasiAnggotaLazyRouteImport = createFileRoute('/koperasi/anggota')()
+const HrSalaryComponentsLazyRouteImport = createFileRoute(
+  '/hr/salary-components',
+)()
+const HrPositionsLazyRouteImport = createFileRoute('/hr/positions')()
+const HrEmployeesLazyRouteImport = createFileRoute('/hr/employees')()
+const HrDepartmentsLazyRouteImport = createFileRoute('/hr/departments')()
+const HrDashboardLazyRouteImport = createFileRoute('/hr/dashboard')()
+const HrContractsLazyRouteImport = createFileRoute('/hr/contracts')()
 const FinanceReceivablesLazyRouteImport = createFileRoute(
   '/finance/receivables',
 )()
@@ -661,6 +669,40 @@ const KoperasiAnggotaLazyRoute = KoperasiAnggotaLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/koperasi/anggota.lazy').then((d) => d.Route),
 )
+const HrSalaryComponentsLazyRoute = HrSalaryComponentsLazyRouteImport.update({
+  id: '/hr/salary-components',
+  path: '/hr/salary-components',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/hr/salary-components.lazy').then((d) => d.Route),
+)
+const HrPositionsLazyRoute = HrPositionsLazyRouteImport.update({
+  id: '/hr/positions',
+  path: '/hr/positions',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/positions.lazy').then((d) => d.Route))
+const HrEmployeesLazyRoute = HrEmployeesLazyRouteImport.update({
+  id: '/hr/employees',
+  path: '/hr/employees',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/employees.lazy').then((d) => d.Route))
+const HrDepartmentsLazyRoute = HrDepartmentsLazyRouteImport.update({
+  id: '/hr/departments',
+  path: '/hr/departments',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/hr/departments.lazy').then((d) => d.Route),
+)
+const HrDashboardLazyRoute = HrDashboardLazyRouteImport.update({
+  id: '/hr/dashboard',
+  path: '/hr/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/dashboard.lazy').then((d) => d.Route))
+const HrContractsLazyRoute = HrContractsLazyRouteImport.update({
+  id: '/hr/contracts',
+  path: '/hr/contracts',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/contracts.lazy').then((d) => d.Route))
 const FinanceReceivablesLazyRoute = FinanceReceivablesLazyRouteImport.update({
   id: '/finance/receivables',
   path: '/finance/receivables',
@@ -1205,6 +1247,12 @@ export interface FileRoutesByFullPath {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
+  '/hr/contracts': typeof HrContractsLazyRoute
+  '/hr/dashboard': typeof HrDashboardLazyRoute
+  '/hr/departments': typeof HrDepartmentsLazyRoute
+  '/hr/employees': typeof HrEmployeesLazyRoute
+  '/hr/positions': typeof HrPositionsLazyRoute
+  '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
@@ -1325,6 +1373,12 @@ export interface FileRoutesByTo {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
+  '/hr/contracts': typeof HrContractsLazyRoute
+  '/hr/dashboard': typeof HrDashboardLazyRoute
+  '/hr/departments': typeof HrDepartmentsLazyRoute
+  '/hr/employees': typeof HrEmployeesLazyRoute
+  '/hr/positions': typeof HrPositionsLazyRoute
+  '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
@@ -1446,6 +1500,12 @@ export interface FileRoutesById {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
+  '/hr/contracts': typeof HrContractsLazyRoute
+  '/hr/dashboard': typeof HrDashboardLazyRoute
+  '/hr/departments': typeof HrDepartmentsLazyRoute
+  '/hr/employees': typeof HrEmployeesLazyRoute
+  '/hr/positions': typeof HrPositionsLazyRoute
+  '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
@@ -1568,6 +1628,12 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
+    | '/hr/contracts'
+    | '/hr/dashboard'
+    | '/hr/departments'
+    | '/hr/employees'
+    | '/hr/positions'
+    | '/hr/salary-components'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
     | '/koperasi/kas-petugas'
@@ -1688,6 +1754,12 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
+    | '/hr/contracts'
+    | '/hr/dashboard'
+    | '/hr/departments'
+    | '/hr/employees'
+    | '/hr/positions'
+    | '/hr/salary-components'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
     | '/koperasi/kas-petugas'
@@ -1808,6 +1880,12 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
+    | '/hr/contracts'
+    | '/hr/dashboard'
+    | '/hr/departments'
+    | '/hr/employees'
+    | '/hr/positions'
+    | '/hr/salary-components'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
     | '/koperasi/kas-petugas'
@@ -1929,6 +2007,12 @@ export interface RootRouteChildren {
   FinancePayablesLazyRoute: typeof FinancePayablesLazyRoute
   FinancePayrollLazyRoute: typeof FinancePayrollLazyRoute
   FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRouteWithChildren
+  HrContractsLazyRoute: typeof HrContractsLazyRoute
+  HrDashboardLazyRoute: typeof HrDashboardLazyRoute
+  HrDepartmentsLazyRoute: typeof HrDepartmentsLazyRoute
+  HrEmployeesLazyRoute: typeof HrEmployeesLazyRoute
+  HrPositionsLazyRoute: typeof HrPositionsLazyRoute
+  HrSalaryComponentsLazyRoute: typeof HrSalaryComponentsLazyRoute
   KoperasiAnggotaLazyRoute: typeof KoperasiAnggotaLazyRoute
   KoperasiAngsuranLazyRoute: typeof KoperasiAngsuranLazyRoute
   KoperasiKasPetugasLazyRoute: typeof KoperasiKasPetugasLazyRoute
@@ -2413,6 +2497,48 @@ declare module '@tanstack/react-router' {
       path: '/koperasi/anggota'
       fullPath: '/koperasi/anggota'
       preLoaderRoute: typeof KoperasiAnggotaLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/salary-components': {
+      id: '/hr/salary-components'
+      path: '/hr/salary-components'
+      fullPath: '/hr/salary-components'
+      preLoaderRoute: typeof HrSalaryComponentsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/positions': {
+      id: '/hr/positions'
+      path: '/hr/positions'
+      fullPath: '/hr/positions'
+      preLoaderRoute: typeof HrPositionsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/employees': {
+      id: '/hr/employees'
+      path: '/hr/employees'
+      fullPath: '/hr/employees'
+      preLoaderRoute: typeof HrEmployeesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/departments': {
+      id: '/hr/departments'
+      path: '/hr/departments'
+      fullPath: '/hr/departments'
+      preLoaderRoute: typeof HrDepartmentsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/dashboard': {
+      id: '/hr/dashboard'
+      path: '/hr/dashboard'
+      fullPath: '/hr/dashboard'
+      preLoaderRoute: typeof HrDashboardLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/contracts': {
+      id: '/hr/contracts'
+      path: '/hr/contracts'
+      fullPath: '/hr/contracts'
+      preLoaderRoute: typeof HrContractsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/finance/receivables': {
@@ -2972,6 +3098,12 @@ const rootRouteChildren: RootRouteChildren = {
   FinancePayablesLazyRoute: FinancePayablesLazyRoute,
   FinancePayrollLazyRoute: FinancePayrollLazyRoute,
   FinanceReceivablesLazyRoute: FinanceReceivablesLazyRouteWithChildren,
+  HrContractsLazyRoute: HrContractsLazyRoute,
+  HrDashboardLazyRoute: HrDashboardLazyRoute,
+  HrDepartmentsLazyRoute: HrDepartmentsLazyRoute,
+  HrEmployeesLazyRoute: HrEmployeesLazyRoute,
+  HrPositionsLazyRoute: HrPositionsLazyRoute,
+  HrSalaryComponentsLazyRoute: HrSalaryComponentsLazyRoute,
   KoperasiAnggotaLazyRoute: KoperasiAnggotaLazyRoute,
   KoperasiAngsuranLazyRoute: KoperasiAngsuranLazyRoute,
   KoperasiKasPetugasLazyRoute: KoperasiKasPetugasLazyRoute,
