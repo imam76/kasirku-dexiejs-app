@@ -635,7 +635,7 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
   },
   {
     code: 'USER_MANAGE',
-    label: 'Kelola User dan Role',
+    label: 'Kelola Akun Pengguna dan Peran',
     group: 'Administrasi',
     moduleCodes: ['ROLE_PERMISSION'],
     isSensitive: true,

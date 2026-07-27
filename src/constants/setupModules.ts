@@ -25,7 +25,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'PROMO', label: 'Promo', description: 'Diskon & promosi' },
       { code: 'UNIT', label: 'Unit', description: 'Satuan & konversi unit' },
       { code: 'CURRENCY', label: 'Currency', description: 'Mata uang & kurs' },
-      { code: 'ROLE_PERMISSION', label: 'Role & Permission', description: 'Manajemen role dan hak akses user' },
+      { code: 'ROLE_PERMISSION', label: 'Peran & Izin', description: 'Manajemen peran dan izin akun pengguna' },
     ],
   },
   {

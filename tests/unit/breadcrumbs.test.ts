@@ -41,6 +41,21 @@ describe('global breadcrumb resolver', () => {
     expect(labels('/finance/payroll')).toEqual(['Home', 'HR', 'Payroll']);
   });
 
+  test('labels user access management inside master data', () => {
+    expect(labels('/master-data/users')).toEqual([
+      'Home',
+      'Master Data',
+      'Akun Pengguna',
+    ]);
+    expect(labels('/master-data/users', en)).toEqual([
+      'Home',
+      'Master Data',
+      'User Accounts',
+    ]);
+    expect(labels('/master-data/roles')).toEqual(['Home', 'Master Data', 'Peran & Izin']);
+    expect(labels('/master-data/roles', en)).toEqual(['Home', 'Master Data', 'Roles & Permissions']);
+  });
+
   test('builds deep cooperative report and opening-balance hierarchies', () => {
     expect(labels('/koperasi/migrasi-simpanan')).toEqual([
       'Home',

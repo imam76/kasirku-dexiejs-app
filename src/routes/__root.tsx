@@ -93,7 +93,7 @@ const RootLayout = () => {
   const location = useLocation()
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
-  const { can, currentUser, currentRole, permissionSet, logout } = useAuth()
+  const { can, currentUser, currentRole, permissionSet, logout, refreshCurrentUser } = useAuth()
   const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole })
   const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
@@ -437,6 +437,7 @@ const RootLayout = () => {
                 currentUser={currentUser}
                 currentRole={currentRole}
                 onLogout={handleLogoutClick}
+                onPinChanged={refreshCurrentUser}
               />
             </div>
           </div>

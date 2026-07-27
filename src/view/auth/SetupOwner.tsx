@@ -3,6 +3,7 @@ import { App, Button, Form, Input, Typography } from 'antd';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { createOwnerUser, normalizeAuthEmail } from '@/auth/authService';
 import { useAuth } from '@/auth/useAuth';
+import { AUTH_PIN_LENGTH, AUTH_PIN_VALIDATION_MESSAGE } from '@/auth/pinPolicy';
 import { DEFAULT_SELECTED_MODULES } from '@/constants/setupModules';
 import { db } from '@/lib/db';
 import { getBaseCurrencyLockSignals } from '@/services/baseCurrencyService';
@@ -221,11 +222,17 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
           name="pin"
           rules={[
             { required: true, message: 'PIN wajib diisi.' },
-            { min: 4, message: 'PIN minimal 4 digit.' },
-            { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
+            { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
+            { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
           ]}
         >
-          <Input.Password size="large" inputMode="numeric" placeholder="Masukkan PIN" disabled={isSubmitting} />
+          <Input.Password
+            size="large"
+            inputMode="numeric"
+            maxLength={AUTH_PIN_LENGTH}
+            placeholder="Masukkan PIN"
+            disabled={isSubmitting}
+          />
         </Form.Item>
 
         <Form.Item
@@ -233,11 +240,17 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
           name="confirmPin"
           rules={[
             { required: true, message: 'Konfirmasi PIN wajib diisi.' },
-            { min: 4, message: 'PIN minimal 4 digit.' },
-            { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
+            { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
+            { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
           ]}
         >
-          <Input.Password size="large" inputMode="numeric" placeholder="Ulangi PIN" disabled={isSubmitting} />
+          <Input.Password
+            size="large"
+            inputMode="numeric"
+            maxLength={AUTH_PIN_LENGTH}
+            placeholder="Ulangi PIN"
+            disabled={isSubmitting}
+          />
         </Form.Item>
 
         <OwnerAccountingSetup

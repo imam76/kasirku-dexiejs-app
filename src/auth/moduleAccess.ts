@@ -35,6 +35,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/master-data/payment-methods': ['PAYMENT_METHOD'],
   '/master-data/areas': ['AREA'],
   '/master-data/employees': ['EMPLOYEE'],
+  '/master-data/users': ['ROLE_PERMISSION'],
   '/master-data/departments': ['DEPARTMENT'],
   '/master-data/projects': ['PROJECT'],
   '/master-data/fixed-assets': ['FIXED_ASSET', 'GENERAL_LEDGER'],

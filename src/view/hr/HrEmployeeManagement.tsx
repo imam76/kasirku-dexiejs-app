@@ -33,6 +33,7 @@ import type { Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Eye, Pencil, Plus, Power, RotateCcw, UploadCloud, UserRound } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
+import { AUTH_PIN_LENGTH, AUTH_PIN_VALIDATION_MESSAGE } from '@/auth/pinPolicy';
 import { CURRENCY_PRESETS } from '@/constants/currencies';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
@@ -1282,9 +1283,13 @@ export default function HrEmployeeManagement() {
           <Form.Item
             name="pin"
             label={detailUser ? 'PIN baru (opsional)' : 'PIN'}
-            rules={detailUser ? [] : [{ required: true }, { len: 6, message: 'PIN harus 6 digit.' }]}
+            rules={[
+              ...(detailUser ? [] : [{ required: true, message: 'PIN wajib diisi.' }]),
+              { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
+              { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
+            ]}
           >
-            <Input.Password inputMode="numeric" maxLength={6} />
+            <Input.Password inputMode="numeric" maxLength={AUTH_PIN_LENGTH} />
           </Form.Item>
           <Form.Item name="is_active" label="Login aktif" valuePropName="checked"><Switch /></Form.Item>
         </Form>

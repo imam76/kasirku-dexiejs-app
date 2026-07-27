@@ -43,6 +43,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/currencies': 'CURRENCY_MANAGE',
   '/master-data/areas': 'AREA_MANAGE',
   '/master-data/employees': ['EMPLOYEE_MANAGE', 'hr.employee.view'],
+  '/master-data/users': 'USER_MANAGE',
   '/master-data/roles': 'USER_MANAGE',
   '/master-data/departments': ['DEPARTMENT_MANAGE', 'hr.organization.manage'],
   '/master-data/projects': 'PROJECT_MANAGE',
