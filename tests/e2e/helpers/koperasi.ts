@@ -160,11 +160,11 @@ export async function expectCooperativeOverview(page: Page) {
   await page.goto('/koperasi');
 
   await expect(page.getByRole('heading', { name: 'Koperasi' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Anggota', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Simpanan', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Saldo Awal Simpanan', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Pinjaman', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Angsuran', exact: true })).toBeVisible();
+  await expect(page.locator('main a[href="/koperasi/anggota"]')).toBeVisible();
+  await expect(page.locator('main a[href="/koperasi/simpanan"]')).toBeVisible();
+  await expect(page.locator('main a[href="/koperasi/migrasi-simpanan"]')).toBeVisible();
+  await expect(page.locator('main a[href="/koperasi/pinjaman"]')).toBeVisible();
+  await expect(page.locator('main a[href="/koperasi/angsuran"]')).toBeVisible();
   await expect(page.locator('main a[href="/koperasi/laporan"]')).toBeVisible();
 }
 
@@ -435,7 +435,13 @@ async function openAndFillMigrationForm(
 ) {
   const pad = (value: number) => String(value).padStart(2, '0');
   const isoWeekday = (date: Date) => (date.getDay() === 0 ? 7 : date.getDay());
-  const scheduled = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const cutoffDate = await page.evaluate(async () => {
+    const { db } = await import('/src/lib/db.ts');
+    return (await db.generalLedgerSetting.get('default'))?.cutoff_date;
+  });
+  const scheduled = cutoffDate
+    ? new Date(new Date(cutoffDate).getTime() - 7 * 24 * 60 * 60 * 1000)
+    : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   while (isoWeekday(scheduled) !== (input.disbursementWeekday ?? 1)) {
     scheduled.setDate(scheduled.getDate() - 1);
   }
@@ -608,15 +614,12 @@ export async function payFlexibleInstallmentAmount(page: Page, member: DemoMembe
 
 export async function payFirstInstallmentFromBillingShortcut(page: Page, member: DemoMemberInput) {
   await page.goto('/koperasi/penagihan');
-  await expect(page.getByText('Setoran Penagihan', { exact: true })).toBeVisible();
+  await expect(page.getByText('Setoran Penagihan', { exact: true }).last()).toBeVisible();
   await page.getByRole('tab', { name: 'Semua Belum Lunas', exact: true }).click();
 
   const firstInstallmentRow = page.getByTestId(`koperasi-billing-row-${member.memberNumber}-1`);
   await expect(firstInstallmentRow).toBeVisible();
-  await firstInstallmentRow
-    .locator('[data-testid^="koperasi-billing-quick-payment-input-"] input')
-    .first()
-    .fill('530000');
+  await firstInstallmentRow.getByRole('spinbutton').fill('530000');
   await firstInstallmentRow
     .locator('[data-testid^="koperasi-billing-quick-payment-submit-"]')
     .first()
@@ -686,6 +689,16 @@ export async function expectCooperativeReportSummary(page: Page) {
 }
 
 export async function expectCooperativeFinancialReportsUnavailable(page: Page) {
+  await page.evaluate(async () => {
+    const { db } = await import('/src/lib/db.ts');
+    const generalLedgerModules = (await db.enabledModules.toArray())
+      .filter((module) => module.code === 'GENERAL_LEDGER')
+      .map((module) => module.id);
+    await db.generalLedgerSetting.clear();
+    if (generalLedgerModules.length > 0) {
+      await db.enabledModules.bulkDelete(generalLedgerModules);
+    }
+  });
   await page.goto('/koperasi/laporan/ringkasan');
 
   await expect(page.getByRole('heading', { name: 'Laporan Koperasi' })).toBeVisible();

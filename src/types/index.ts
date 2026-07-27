@@ -195,6 +195,11 @@ export type Permission =
   | 'hr.contract.manage'
   | 'hr.payroll.view'
   | 'hr.payroll.manage'
+  | 'hr.schedule.manage'
+  | 'hr.leave.self_service'
+  | 'hr.leave.supervisor_approve'
+  | 'hr.leave.hr_approve'
+  | 'hr.leave.policy.manage'
   | 'PROJECT_MANAGE'
   | 'FIXED_ASSET_MANAGE'
   | 'TAX_MANAGE'
@@ -240,6 +245,8 @@ export type Permission =
   | 'COOPERATIVE_PAYMENT_CREATE'
   | 'COOPERATIVE_PAYMENT_APPROVE'
   | 'COOPERATIVE_BILLING_ACCESS'
+  | 'cooperative.collection.assignment.manage'
+  | 'cooperative.collection.coverage.manage'
   | 'COOPERATIVE_FIELD_CASH_VIEW'
   | 'COOPERATIVE_FIELD_CASH_MANAGE'
   | 'COOPERATIVE_REPORT_VIEW'
@@ -533,6 +540,9 @@ export type CooperativeLoanCollectionEventSyncStatus = EntitySyncStatus;
 export type EmployeeSyncStatus = EntitySyncStatus;
 export type EmployeeAreaSyncStatus = EntitySyncStatus;
 export type EmployeeCollectionScheduleSyncStatus = EntitySyncStatus;
+export type WorkScheduleSyncStatus = EntitySyncStatus;
+export type LeaveSyncStatus = EntitySyncStatus;
+export type CollectionCoverageSyncStatus = EntitySyncStatus;
 export type HrPositionSyncStatus = EntitySyncStatus;
 export type EmploymentContractSyncStatus = EntitySyncStatus;
 export type SalaryComponentSyncStatus = EntitySyncStatus;
@@ -730,6 +740,9 @@ export interface EmployeeArea {
   area_id: string;
   area_name: string;
   area_code?: string;
+  effective_from?: string;
+  effective_until?: string;
+  is_primary?: boolean;
   created_at: string;
   updated_at: string;
   sync_status?: EmployeeAreaSyncStatus;
@@ -751,6 +764,7 @@ export interface EmployeeCollectionSchedule {
   weekday: CooperativeCollectionWeekday;
   effective_from?: string;
   effective_until?: string;
+  is_default_for_new_members?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -758,6 +772,243 @@ export interface EmployeeCollectionSchedule {
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
+}
+
+export interface WorkScheduleTemplate {
+  id: string;
+  code: string;
+  name: string;
+  timezone: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: WorkScheduleSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface WorkScheduleDay {
+  id: string;
+  template_id: string;
+  weekday: CooperativeCollectionWeekday;
+  is_working_day: boolean;
+  start_time?: string;
+  end_time?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: WorkScheduleSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface EmployeeWorkScheduleAssignment {
+  id: string;
+  employee_id: string;
+  template_id: string;
+  template_name: string;
+  effective_from: string;
+  effective_until?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: WorkScheduleSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type CompanyCalendarDayKind = 'HOLIDAY' | 'WORKING_OVERRIDE';
+
+export interface CompanyCalendarDay {
+  id: string;
+  date: string;
+  kind: CompanyCalendarDayKind;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: WorkScheduleSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface LeaveType {
+  id: string;
+  code: string;
+  name: string;
+  is_paid: boolean;
+  requires_balance: boolean;
+  annual_quota_days: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: LeaveSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type LeaveRequestStatus =
+  | 'DRAFT'
+  | 'PENDING_SUPERVISOR'
+  | 'PENDING_HR'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CANCELLED';
+
+export interface LeaveRequest {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  leave_type_id: string;
+  leave_type_name: string;
+  start_date: string;
+  end_date: string;
+  day_count: number;
+  reason: string;
+  status: LeaveRequestStatus;
+  supervisor_id?: string;
+  supervisor_name?: string;
+  submitted_at?: string;
+  supervisor_decided_at?: string;
+  hr_decided_at?: string;
+  decided_by?: string;
+  decided_by_name?: string;
+  decision_notes?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: LeaveSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type LeaveRequestActionType =
+  | 'CREATED'
+  | 'SUBMITTED'
+  | 'SUPERVISOR_APPROVED'
+  | 'HR_APPROVED'
+  | 'REJECTED'
+  | 'CANCELLED'
+  | 'SUPERVISOR_SKIPPED';
+
+export interface LeaveRequestAction {
+  id: string;
+  leave_request_id: string;
+  action: LeaveRequestActionType;
+  actor_user_id?: string;
+  actor_name?: string;
+  notes?: string;
+  created_at: string;
+  sync_status?: LeaveSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type LeaveBalanceMovementKind =
+  | 'GRANT'
+  | 'ADJUSTMENT'
+  | 'RESERVE'
+  | 'RELEASE'
+  | 'CONSUME'
+  | 'REVERSAL';
+
+export interface LeaveBalanceLedgerEntry {
+  id: string;
+  employee_id: string;
+  leave_type_id: string;
+  year: number;
+  movement_kind: LeaveBalanceMovementKind;
+  available_delta: number;
+  reserved_delta: number;
+  used_delta: number;
+  leave_request_id?: string;
+  notes?: string;
+  created_at: string;
+  created_by?: string;
+  created_by_name?: string;
+  sync_status?: LeaveSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface EmployeeAvailabilityException {
+  id: string;
+  employee_id: string;
+  date: string;
+  source_type: 'LEAVE';
+  source_id: string;
+  reason?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: LeaveSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type CollectionCoverageStatus = 'OPEN' | 'RESOLVED' | 'CANCELLED';
+export type CollectionCoverageResolution = 'SUBSTITUTE' | 'RESCHEDULE';
+
+export interface CollectionCoverageException {
+  id: string;
+  collection_schedule_id: string;
+  area_id: string;
+  area_name: string;
+  original_employee_id: string;
+  original_employee_name: string;
+  collection_date: string;
+  source_leave_request_id?: string;
+  status: CollectionCoverageStatus;
+  resolution_type?: CollectionCoverageResolution;
+  replacement_employee_id?: string;
+  replacement_employee_name?: string;
+  rescheduled_date?: string;
+  reason?: string;
+  resolved_at?: string;
+  resolved_by?: string;
+  resolved_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: CollectionCoverageSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export interface CollectionWorklistRow {
+  member_id: string;
+  member_number: string;
+  member_name: string;
+  area_id: string;
+  area_name?: string;
+  collection_schedule_id: string;
+  scheduled_date: string;
+  operational_date: string;
+  original_employee_id: string;
+  effective_employee_id?: string;
+  effective_employee_name?: string;
+  coverage_status?: CollectionCoverageStatus;
+  coverage_resolution?: CollectionCoverageResolution;
+  target_amount?: number;
+  is_blocked: boolean;
+}
+
+export interface ImplementationReviewItem {
+  id: string;
+  review_type: 'EMPLOYEE_ACCESS' | 'MEMBER_COLLECTION_SCHEDULE' | 'COLLECTION_DEFAULT';
+  entity_type: string;
+  entity_id: string;
+  summary: string;
+  status: 'OPEN' | 'RESOLVED';
+  payload?: Record<string, unknown>;
+  resolved_at?: string;
+  resolved_by?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PayrollRun {
@@ -2259,6 +2510,9 @@ export interface CooperativeMember {
   officer_id?: string;
   officer_name?: string;
   officer_position?: string;
+  collection_schedule_id?: string;
+  collection_weekday?: CooperativeCollectionWeekday;
+  collection_assignment_needs_review?: boolean;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string;

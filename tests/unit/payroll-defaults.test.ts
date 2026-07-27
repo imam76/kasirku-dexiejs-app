@@ -179,4 +179,48 @@ describe('payroll defaults from HRIS', () => {
     expect(result.bonus_amount).toBe(700_000);
     expect(result.other_deduction_amount).toBe(70_000);
   });
+
+  test('keeps the calculation method stored on the employee assignment', () => {
+    const result = buildPayrollEmployeeDefaults({
+      employee,
+      assignments,
+      salaryComponents: components.map((component) => {
+        if (component.id === 'meal') return { ...component, calculation: 'PERCENTAGE' as const };
+        if (component.id === 'bpjs') return { ...component, calculation: 'FIXED' as const };
+        return component;
+      }),
+      contracts: [contract],
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-31',
+    });
+
+    expect(result.allowance_amount).toBe(300_000);
+    expect(result.other_deduction_amount).toBe(60_000);
+    expect(result.component_previews.find((component) => component.component_code === 'TUNJ-MAKAN')).toMatchObject({
+      calculation: 'FIXED',
+      configured_value: 300_000,
+      amount: 300_000,
+    });
+  });
+
+  test('uses only the latest active assignment when local duplicates exist', () => {
+    const oldMealAssignment = assignments[0];
+    const latestMealAssignment: EmployeeSalaryComponent = {
+      ...oldMealAssignment,
+      id: 'assignment-meal-latest',
+      value: 450_000,
+      updated_at: '2026-02-01T00:00:00.000Z',
+    };
+    const result = buildPayrollEmployeeDefaults({
+      employee,
+      assignments: [oldMealAssignment, latestMealAssignment],
+      salaryComponents: components,
+      contracts: [],
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-31',
+    });
+
+    expect(result.allowance_amount).toBe(450_000);
+    expect(result.component_previews).toHaveLength(1);
+  });
 });

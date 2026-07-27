@@ -58,22 +58,34 @@ test('payroll loads HR profile and assigned salary components into a draft snaps
   await page.goto('/finance/payroll');
   await page.getByRole('button', { name: 'Buat Payroll' }).click();
 
-  const modal = page.getByRole('dialog', { name: 'Buat Payroll Karyawan' });
-  await expect(modal).toBeVisible();
-  const employeeRow = modal.locator('tbody tr', { hasText: employeeName });
-  await expect(employeeRow).toBeVisible();
-  await expect(employeeRow).toContainText('Tunjangan Payroll E2E: Rp 200.000');
-  await expect(employeeRow).toContainText('Potongan Payroll E2E: 2% = Rp 80.000');
+  const workspace = page.getByTestId('payroll-workspace');
+  await expect(workspace).toBeVisible();
+  await workspace.getByRole('button', { name: 'Lanjut' }).click();
 
-  const amounts = employeeRow.getByRole('spinbutton');
+  const employeeRow = workspace.locator('tbody tr', { hasText: employeeName });
+  await expect(employeeRow).toBeVisible();
+  await expect(employeeRow).toContainText('Rp 4.000.000');
+  await expect(employeeRow).toContainText('Siap');
+
+  await workspace.getByRole('button', { name: 'Lanjut' }).click();
+  const reviewRow = workspace.locator('tbody tr', { hasText: employeeName });
+  await reviewRow.getByRole('button', { name: `Detail ${employeeName}` }).click();
+
+  const drawer = page.getByRole('dialog', { name: `Detail Payroll — ${employeeName}` });
+  await expect(drawer).toContainText('Tunjangan Payroll E2E: Rp 200.000');
+  await expect(drawer).toContainText('Potongan Payroll E2E: 2% = Rp 80.000');
+
+  const amounts = drawer.getByRole('spinbutton');
   await expect(amounts).toHaveCount(4);
   await expect(amounts.nth(0)).toHaveValue('Rp 4.000.000');
   await expect(amounts.nth(1)).toHaveValue('Rp 200.000');
   await expect(amounts.nth(2)).toHaveValue('Rp 0');
   await expect(amounts.nth(3)).toHaveValue('Rp 80.000');
 
-  await modal.getByRole('button', { name: 'Simpan Draft' }).click();
-  await expect(modal).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+  await workspace.getByRole('button', { name: 'Simpan Draft' }).click();
+  await expect(workspace).toBeHidden();
 
   const snapshot = await page.evaluate(async ({ employeeName }) => {
     const [{ db }, payroll] = await Promise.all([

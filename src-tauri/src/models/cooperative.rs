@@ -29,6 +29,15 @@ pub struct CooperativeMemberDto {
     pub officer_id: Option<String>,
     pub officer_name: Option<String>,
     pub officer_position: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub collection_schedule_id: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub collection_weekday: Option<i32>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub collection_assignment_needs_review: Option<bool>,
     pub join_date: String,
     pub status: String,
     pub notes: Option<String>,

@@ -62,6 +62,10 @@ import {
   postgresAdapter,
 } from '@/services/postgresAdapter';
 import {
+  assertCollectorCanCollectSchedule,
+  resolveEffectiveCollector,
+} from '@/services/collectionCoverageService';
+import {
   assertSufficientCashAccountBalance,
   buildFieldCashFinanceTransactionFields,
   getCashAccountBalance,
@@ -2588,6 +2592,33 @@ const recordCooperativeLoanPaymentOnServer = async (
   };
 };
 
+const resolvePaymentCoverage = async (
+  input: RecordCooperativeLoanPaymentInput,
+): Promise<RecordCooperativeLoanPaymentInput> => {
+  const parsedInput = cooperativeLoanPaymentSchema.parse(input);
+  const installment = await db.cooperativeLoanInstallments.get(parsedInput.installment_id);
+  if (!installment) throw new Error('Jadwal angsuran tidak ditemukan.');
+  const loan = await db.cooperativeLoans.get(installment.loan_id);
+  if (!loan) throw new Error('Pinjaman koperasi tidak ditemukan.');
+  const member = await db.cooperativeMembers.get(loan.member_id);
+  const scheduleId = loan.collection_schedule_id ?? member?.collection_schedule_id;
+
+  // Pinjaman legacy yang belum memiliki snapshot jadwal tetap memakai compatibility path.
+  if (!scheduleId) return input;
+
+  const paymentDate = parsedInput.payment_date ?? new Date().toISOString();
+  const resolution = await resolveEffectiveCollector(scheduleId, paymentDate);
+  if (resolution.is_blocked || !resolution.effective_employee_id) {
+    throw new Error('Penagihan belum memiliki petugas coverage yang valid.');
+  }
+  const collectorId = parsedInput.collector_id ?? resolution.effective_employee_id;
+  await assertCollectorCanCollectSchedule(scheduleId, paymentDate, collectorId);
+  return {
+    ...input,
+    collector_id: collectorId,
+  };
+};
+
 const recordCooperativeLoanPaymentLocally = async (
   input: RecordCooperativeLoanPaymentInput,
 ): Promise<RecordCooperativeLoanPaymentResult> => {
@@ -2916,7 +2947,8 @@ const recordCooperativeLoanPaymentLocally = async (
 export const recordCooperativeLoanPayment = async (
   input: RecordCooperativeLoanPaymentInput,
 ): Promise<RecordCooperativeLoanPaymentOutcome> => {
-  const parsedInput = cooperativeLoanPaymentSchema.parse(input);
+  const coverageInput = await resolvePaymentCoverage(input);
+  const parsedInput = cooperativeLoanPaymentSchema.parse(coverageInput);
   if (await isBeforeGeneralLedgerCutoff(parsedInput.payment_date ?? new Date().toISOString())) {
     throw new Error(
       'Pembayaran angsuran sebelum cutoff buku besar harus tercermin sebagai saldo awal/sisa pinjaman, bukan transaksi kas historis.',
@@ -2925,7 +2957,7 @@ export const recordCooperativeLoanPayment = async (
 
   const health = await postgresAdapter.healthCheck();
   if (health.available) {
-    return recordCooperativeLoanPaymentOnServer(input);
+    return recordCooperativeLoanPaymentOnServer(coverageInput);
   }
   if (health.status !== 'unconfigured') {
     throw new Error(
@@ -2933,7 +2965,7 @@ export const recordCooperativeLoanPayment = async (
     );
   }
 
-  return recordCooperativeLoanPaymentLocally(input);
+  return recordCooperativeLoanPaymentLocally(coverageInput);
 };
 
 const recordCooperativeLoanInstallmentCollectionLocally = async (

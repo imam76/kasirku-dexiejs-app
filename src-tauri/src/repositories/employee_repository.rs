@@ -59,20 +59,31 @@ pub async fn list_employees(pool: &PgPool) -> Result<Vec<EmployeeDto>, sqlx::Err
             is_taxable,
             ptkp_status,
             is_bpjs_participant,
-            user_id,
-            user_name,
-            login_role_id,
+            COALESCE(access_profile.access_user_id, user_id) AS user_id,
+            COALESCE(access_profile.access_user_name, user_name) AS user_name,
+            COALESCE(access_profile.access_login_role_id, login_role_id) AS login_role_id,
             field_cash_account_id,
             field_cash_account_code,
             field_cash_account_name,
-            pin_hash,
-            pin_salt,
+            COALESCE(access_profile.access_pin_hash, pin_hash) AS pin_hash,
+            COALESCE(access_profile.access_pin_salt, pin_salt) AS pin_salt,
             notes,
             is_active,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM employees
+        LEFT JOIN (
+            SELECT
+                employee_id,
+                user_id AS access_user_id,
+                user_name AS access_user_name,
+                login_role_id AS access_login_role_id,
+                pin_hash AS access_pin_hash,
+                pin_salt AS access_pin_salt
+            FROM employee_access_profiles
+            WHERE deleted_at IS NULL
+        ) access_profile ON access_profile.employee_id = employees.id
         WHERE deleted_at IS NULL
         ORDER BY name ASC
         "#,
@@ -139,20 +150,31 @@ pub async fn get_employee(pool: &PgPool, id: String) -> Result<Option<EmployeeDt
             is_taxable,
             ptkp_status,
             is_bpjs_participant,
-            user_id,
-            user_name,
-            login_role_id,
+            COALESCE(access_profile.access_user_id, user_id) AS user_id,
+            COALESCE(access_profile.access_user_name, user_name) AS user_name,
+            COALESCE(access_profile.access_login_role_id, login_role_id) AS login_role_id,
             field_cash_account_id,
             field_cash_account_code,
             field_cash_account_name,
-            pin_hash,
-            pin_salt,
+            COALESCE(access_profile.access_pin_hash, pin_hash) AS pin_hash,
+            COALESCE(access_profile.access_pin_salt, pin_salt) AS pin_salt,
             notes,
             is_active,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM employees
+        LEFT JOIN (
+            SELECT
+                employee_id,
+                user_id AS access_user_id,
+                user_name AS access_user_name,
+                login_role_id AS access_login_role_id,
+                pin_hash AS access_pin_hash,
+                pin_salt AS access_pin_salt
+            FROM employee_access_profiles
+            WHERE deleted_at IS NULL
+        ) access_profile ON access_profile.employee_id = employees.id
         WHERE id = $1 AND deleted_at IS NULL
         "#,
     )
@@ -167,7 +189,8 @@ pub async fn upsert_employee(
 ) -> Result<EmployeeDto, sqlx::Error> {
     let employee_id = input.id.clone();
     let hr_payload = serde_json::to_value(&input).unwrap_or(serde_json::Value::Null);
-    let _upserted_employee = sqlx::query_as::<_, EmployeeDto>(
+    let mut tx = pool.begin().await?;
+    let upsert_result = sqlx::query(
         r#"
         INSERT INTO employees (
             id,
@@ -210,26 +233,6 @@ pub async fn upsert_employee(
             updated_at = EXCLUDED.updated_at,
             deleted_at = EXCLUDED.deleted_at
         WHERE EXCLUDED.updated_at >= employees.updated_at
-        RETURNING
-            id,
-            name,
-            phone,
-            email,
-            address,
-            position,
-            user_id,
-            user_name,
-            login_role_id,
-            field_cash_account_id,
-            field_cash_account_code,
-            field_cash_account_name,
-            pin_hash,
-            pin_salt,
-            notes,
-            is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
         "#,
     )
     .bind(&input.id)
@@ -251,69 +254,77 @@ pub async fn upsert_employee(
     .bind(&input.created_at)
     .bind(&input.updated_at)
     .bind(&input.deleted_at)
-    .fetch_one(pool)
+    .execute(&mut *tx)
     .await?;
 
-    sqlx::query(
-        r#"
-        UPDATE employees AS employee
-        SET
-            employee_number = payload.employee_number,
-            preferred_name = payload.preferred_name,
-            photo_data_url = payload.photo_data_url,
-            gender = payload.gender,
-            birth_place = payload.birth_place,
-            birth_date = payload.birth_date,
-            marital_status = payload.marital_status,
-            nationality = payload.nationality,
-            personal_email = payload.personal_email,
-            identity_address = payload.identity_address,
-            domicile_address = payload.domicile_address,
-            emergency_contact_name = payload.emergency_contact_name,
-            emergency_contact_relationship = payload.emergency_contact_relationship,
-            emergency_contact_phone = payload.emergency_contact_phone,
-            nik = payload.nik,
-            family_card_number = payload.family_card_number,
-            tax_number = payload.tax_number,
-            health_bpjs_number = payload.health_bpjs_number,
-            employment_bpjs_number = payload.employment_bpjs_number,
-            company_unit = payload.company_unit,
-            department_id = payload.department_id,
-            department_code = payload.department_code,
-            department_name = payload.department_name,
-            job_position_id = payload.job_position_id,
-            job_position_code = payload.job_position_code,
-            job_position_name = payload.job_position_name,
-            supervisor_id = payload.supervisor_id,
-            supervisor_name = payload.supervisor_name,
-            work_location = payload.work_location,
-            join_date = payload.join_date,
-            employment_status = payload.employment_status,
-            active_status = payload.active_status,
-            work_schedule_type = payload.work_schedule_type,
-            contract_start_date = payload.contract_start_date,
-            contract_end_date = payload.contract_end_date,
-            permanent_date = payload.permanent_date,
-            exit_date = payload.exit_date,
-            exit_reason = payload.exit_reason,
-            salary_payment_method = payload.salary_payment_method,
-            bank_name = payload.bank_name,
-            bank_account_number = payload.bank_account_number,
-            bank_account_holder = payload.bank_account_holder,
-            base_salary = payload.base_salary,
-            salary_currency = payload.salary_currency,
-            payroll_period = payload.payroll_period,
-            is_taxable = payload.is_taxable,
-            ptkp_status = payload.ptkp_status,
-            is_bpjs_participant = payload.is_bpjs_participant
-        FROM jsonb_populate_record(NULL::employees, $2::JSONB) AS payload
-        WHERE employee.id = $1
-        "#,
-    )
-    .bind(&employee_id)
-    .bind(hr_payload)
-    .execute(pool)
-    .await?;
+    if upsert_result.rows_affected() > 0 {
+        sqlx::query(
+            r#"
+            UPDATE employees AS employee
+            SET
+                employee_number = COALESCE(
+                    NULLIF(BTRIM(payload.employee_number), ''),
+                    employee.employee_number
+                ),
+                preferred_name = payload.preferred_name,
+                photo_data_url = payload.photo_data_url,
+                gender = payload.gender,
+                birth_place = payload.birth_place,
+                birth_date = payload.birth_date,
+                marital_status = payload.marital_status,
+                nationality = payload.nationality,
+                personal_email = payload.personal_email,
+                identity_address = payload.identity_address,
+                domicile_address = payload.domicile_address,
+                emergency_contact_name = payload.emergency_contact_name,
+                emergency_contact_relationship = payload.emergency_contact_relationship,
+                emergency_contact_phone = payload.emergency_contact_phone,
+                nik = payload.nik,
+                family_card_number = payload.family_card_number,
+                tax_number = payload.tax_number,
+                health_bpjs_number = payload.health_bpjs_number,
+                employment_bpjs_number = payload.employment_bpjs_number,
+                company_unit = payload.company_unit,
+                department_id = payload.department_id,
+                department_code = payload.department_code,
+                department_name = payload.department_name,
+                job_position_id = payload.job_position_id,
+                job_position_code = payload.job_position_code,
+                job_position_name = payload.job_position_name,
+                supervisor_id = payload.supervisor_id,
+                supervisor_name = payload.supervisor_name,
+                work_location = payload.work_location,
+                join_date = payload.join_date,
+                employment_status = payload.employment_status,
+                active_status = payload.active_status,
+                work_schedule_type = payload.work_schedule_type,
+                contract_start_date = payload.contract_start_date,
+                contract_end_date = payload.contract_end_date,
+                permanent_date = payload.permanent_date,
+                exit_date = payload.exit_date,
+                exit_reason = payload.exit_reason,
+                salary_payment_method = payload.salary_payment_method,
+                bank_name = payload.bank_name,
+                bank_account_number = payload.bank_account_number,
+                bank_account_holder = payload.bank_account_holder,
+                base_salary = payload.base_salary,
+                salary_currency = payload.salary_currency,
+                payroll_period = payload.payroll_period,
+                is_taxable = payload.is_taxable,
+                ptkp_status = payload.ptkp_status,
+                is_bpjs_participant = payload.is_bpjs_participant
+            FROM jsonb_populate_record(NULL::employees, $2::JSONB) AS payload
+            WHERE employee.id = $1
+                AND NULLIF(BTRIM(payload.employee_number), '') IS NOT NULL
+            "#,
+        )
+        .bind(&employee_id)
+        .bind(hr_payload)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
 
     get_employee(pool, employee_id)
         .await?
@@ -329,6 +340,9 @@ pub async fn list_employee_areas(pool: &PgPool) -> Result<Vec<EmployeeAreaDto>, 
             area_id,
             area_name,
             area_code,
+            effective_from::TEXT AS effective_from,
+            effective_until::TEXT AS effective_until,
+            is_primary,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
@@ -352,16 +366,22 @@ pub async fn upsert_employee_area(
             area_id,
             area_name,
             area_code,
+            effective_from,
+            effective_until,
+            is_primary,
             created_at,
             updated_at,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6::TIMESTAMPTZ, $7::TIMESTAMPTZ, $8::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6::DATE, $7::DATE, COALESCE($8, FALSE), $9::TIMESTAMPTZ, $10::TIMESTAMPTZ, $11::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
             employee_id = EXCLUDED.employee_id,
             area_id = EXCLUDED.area_id,
             area_name = EXCLUDED.area_name,
             area_code = EXCLUDED.area_code,
+            effective_from = EXCLUDED.effective_from,
+            effective_until = EXCLUDED.effective_until,
+            is_primary = EXCLUDED.is_primary,
             updated_at = EXCLUDED.updated_at,
             deleted_at = EXCLUDED.deleted_at
         WHERE EXCLUDED.updated_at >= employee_areas.updated_at
@@ -371,6 +391,9 @@ pub async fn upsert_employee_area(
             area_id,
             area_name,
             area_code,
+            effective_from::TEXT AS effective_from,
+            effective_until::TEXT AS effective_until,
+            is_primary,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
@@ -381,6 +404,9 @@ pub async fn upsert_employee_area(
     .bind(&input.area_id)
     .bind(&input.area_name)
     .bind(&input.area_code)
+    .bind(&input.effective_from)
+    .bind(&input.effective_until)
+    .bind(input.is_primary)
     .bind(&input.created_at)
     .bind(&input.updated_at)
     .bind(&input.deleted_at)
@@ -404,6 +430,7 @@ pub async fn list_employee_collection_schedules(
             weekday,
             effective_from::TEXT AS effective_from,
             effective_until::TEXT AS effective_until,
+            is_default_for_new_members,
             is_active,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
@@ -433,12 +460,13 @@ pub async fn upsert_employee_collection_schedule(
             weekday,
             effective_from,
             effective_until,
+            is_default_for_new_members,
             is_active,
             created_at,
             updated_at,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::TIMESTAMPTZ, $10::TIMESTAMPTZ, $11, $12::TIMESTAMPTZ, $13::TIMESTAMPTZ, $14::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::DATE, $10::DATE, COALESCE($11, FALSE), $12, $13::TIMESTAMPTZ, $14::TIMESTAMPTZ, $15::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
             employee_id = EXCLUDED.employee_id,
             employee_name = EXCLUDED.employee_name,
@@ -449,6 +477,7 @@ pub async fn upsert_employee_collection_schedule(
             weekday = EXCLUDED.weekday,
             effective_from = EXCLUDED.effective_from,
             effective_until = EXCLUDED.effective_until,
+            is_default_for_new_members = EXCLUDED.is_default_for_new_members,
             is_active = EXCLUDED.is_active,
             updated_at = EXCLUDED.updated_at,
             deleted_at = EXCLUDED.deleted_at
@@ -464,6 +493,7 @@ pub async fn upsert_employee_collection_schedule(
             weekday,
             effective_from::TEXT AS effective_from,
             effective_until::TEXT AS effective_until,
+            is_default_for_new_members,
             is_active,
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at,
@@ -480,6 +510,7 @@ pub async fn upsert_employee_collection_schedule(
     .bind(input.weekday)
     .bind(&input.effective_from)
     .bind(&input.effective_until)
+    .bind(input.is_default_for_new_members)
     .bind(input.is_active)
     .bind(&input.created_at)
     .bind(&input.updated_at)

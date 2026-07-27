@@ -1,5 +1,4 @@
 import {
-  createPinHash,
   getCurrentSessionUser,
   normalizeAuthEmail,
   requireUserPermission,
@@ -16,6 +15,11 @@ import {
   enqueueEmployeeSync,
 } from '@/services/syncQueueService';
 import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
+import {
+  createOrLinkEmployeeUser,
+  getEmployeeAccessSummary,
+  updateEmployeeAccess,
+} from '@/services/employeeAccessService';
 import type {
   ChartOfAccount,
   CooperativeArea,
@@ -31,6 +35,7 @@ export interface EmployeeCollectionScheduleInput {
   weekday: CooperativeCollectionWeekday;
   effective_from?: string;
   effective_until?: string;
+  is_default_for_new_members?: boolean;
   is_active?: boolean;
 }
 
@@ -238,6 +243,8 @@ const buildEmployeeAreaAssignments = (
   area_id: area.id,
   area_name: area.name,
   area_code: area.code,
+  effective_from: now.slice(0, 10),
+  is_primary: areas[0]?.id === area.id,
   created_at: now,
   updated_at: now,
 }));
@@ -302,6 +309,7 @@ const buildEmployeeCollectionSchedules = (
       weekday: input.weekday,
       effective_from: input.effective_from,
       effective_until: input.effective_until,
+      is_default_for_new_members: input.is_default_for_new_members ?? false,
       is_active: input.is_active ?? true,
       created_at: now,
       updated_at: now,
@@ -337,15 +345,6 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
   const now = new Date().toISOString();
   const employeeId = crypto.randomUUID();
 
-  let pinHash: string | undefined;
-  let pinSalt: string | undefined;
-
-  if (sanitizedInput.login_pin) {
-    const { hash, salt } = await createPinHash(sanitizedInput.login_pin);
-    pinHash = hash;
-    pinSalt = salt;
-  }
-
   const employee: Employee = withPendingSync({
     id: employeeId,
     employee_number: await generateEmployeeNumber(),
@@ -354,10 +353,7 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
     email: sanitizedInput.email,
     address: sanitizedInput.address,
     position: sanitizedInput.position,
-    login_role_id: sanitizedInput.login_role_id,
     ...fieldCashAccountSnapshot,
-    pin_hash: pinHash,
-    pin_salt: pinSalt,
     notes: sanitizedInput.notes,
     employment_status: 'PERMANENT',
     active_status: sanitizedInput.is_active ? 'ACTIVE' : 'INACTIVE',
@@ -406,6 +402,14 @@ export const createEmployee = async (input: EmployeeUpsertInput): Promise<Employ
   for (const schedule of collectionSchedules) {
     await enqueueEmployeeCollectionScheduleSync(schedule, 'create');
   }
+  if (sanitizedInput.login_pin && sanitizedInput.login_role_id && sanitizedInput.email) {
+    await createOrLinkEmployeeUser({
+      employee_id: employee.id,
+      email: sanitizedInput.email,
+      role_id: sanitizedInput.login_role_id,
+      pin: sanitizedInput.login_pin,
+    });
+  }
 
   return employee;
 };
@@ -432,19 +436,6 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
   );
   const fieldCashAccountSnapshot = await getFieldCashAccountSnapshot(sanitizedInput.field_cash_account_id);
 
-  let pinHash = existingEmployee.pin_hash;
-  let pinSalt = existingEmployee.pin_salt;
-  let loginRoleId = existingEmployee.login_role_id;
-
-  if (sanitizedInput.login_pin) {
-    const { hash, salt } = await createPinHash(sanitizedInput.login_pin);
-    pinHash = hash;
-    pinSalt = salt;
-    loginRoleId = sanitizedInput.login_role_id;
-  } else if (sanitizedInput.login_role_id) {
-    loginRoleId = sanitizedInput.login_role_id;
-  }
-
   const updatedAt = new Date().toISOString();
   const updatedEmployee: Employee = withPendingSync({
     ...existingEmployee,
@@ -453,12 +444,9 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
     email: sanitizedInput.email,
     address: sanitizedInput.address,
     position: sanitizedInput.position,
-    login_role_id: loginRoleId,
     field_cash_account_id: fieldCashAccountSnapshot.field_cash_account_id,
     field_cash_account_code: fieldCashAccountSnapshot.field_cash_account_code,
     field_cash_account_name: fieldCashAccountSnapshot.field_cash_account_name,
-    pin_hash: pinHash,
-    pin_salt: pinSalt,
     notes: sanitizedInput.notes,
     active_status: sanitizedInput.is_active ? 'ACTIVE' : 'INACTIVE',
     is_active: sanitizedInput.is_active,
@@ -524,6 +512,24 @@ export const updateEmployee = async (id: string, input: EmployeeUpsertInput): Pr
   }
   for (const schedule of removedSchedules) {
     await enqueueEmployeeCollectionScheduleDeleteSync(schedule, updatedAt);
+  }
+  if (sanitizedInput.login_role_id && sanitizedInput.email) {
+    const access = await getEmployeeAccessSummary(id);
+    if (access.user) {
+      await updateEmployeeAccess({
+        employee_id: id,
+        email: sanitizedInput.email,
+        role_id: sanitizedInput.login_role_id,
+        pin: sanitizedInput.login_pin,
+      });
+    } else if (sanitizedInput.login_pin) {
+      await createOrLinkEmployeeUser({
+        employee_id: id,
+        email: sanitizedInput.email,
+        role_id: sanitizedInput.login_role_id,
+        pin: sanitizedInput.login_pin,
+      });
+    }
   }
 
   return updatedEmployee;

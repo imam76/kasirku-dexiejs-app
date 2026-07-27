@@ -153,8 +153,17 @@ export const salaryComponentSchema = z.object({
 
 export const employeeSalaryComponentSchema = z.object({
   salary_component_id: z.string().trim().min(1, 'Komponen wajib dipilih.'),
+  calculation: z.enum(['FIXED', 'PERCENTAGE']).optional(),
   value: z.number().min(0, 'Nilai tidak boleh negatif.'),
   is_active: z.boolean().optional(),
+}).superRefine((value, context) => {
+  if (value.calculation === 'PERCENTAGE' && value.value > 100) {
+    context.addIssue({
+      code: 'custom',
+      path: ['value'],
+      message: 'Persentase tidak boleh lebih dari 100%.',
+    });
+  }
 });
 
 export type HrEmployeeInput = z.input<typeof hrEmployeeSchema>;

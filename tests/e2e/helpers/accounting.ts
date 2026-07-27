@@ -211,7 +211,7 @@ async function skipEmptyDetailOpeningBalanceModules(page: Page) {
   });
 }
 
-async function expectFinanceMappingVisible(page: Page, label: string) {
+async function expectFinanceMappingVisible(page: Page, label: string | RegExp) {
   const mapping = page.getByText(label, { exact: true });
   const firstPage = page.locator('li[title="1"]').last();
   if (await firstPage.count()) {
@@ -281,7 +281,7 @@ export async function expectAccountingMappingReady(page: Page) {
 
   await expectFinanceMappingVisible(page, 'Penjualan');
   await expectFinanceMappingVisible(page, 'Pembelian Stok');
-  await expectFinanceMappingVisible(page, 'Payroll');
+  await expectFinanceMappingVisible(page, /^(Payroll|Employee Salary|Gaji Karyawan)$/);
   await expectKspMappingsAvailable(page);
 }
 
@@ -289,13 +289,13 @@ export async function postOpeningBalance(
   page: Page,
   options: { equityAccountCode?: string; expectInactiveModule?: boolean } = {},
 ) {
-  const { equityAccountCode = '3000', expectInactiveModule = true } = options;
+  const { equityAccountCode = '3000', expectInactiveModule = false } = options;
 
   await ensureAccountingReferenceSetting(page);
 
   await page.goto('/finance/opening-balances/accounts');
   await expect(page.getByText('Saldo Awal Akun').first()).toBeVisible();
-  await expect(page.getByTestId('gl-opening-balance-save-draft-button')).toHaveCount(0);
+  await expect(page.getByTestId('gl-opening-balance-save-draft-button')).toBeEnabled();
 
   await gotoOpeningBalancePage(page, 1);
   await fillOpeningBalanceAmount(page, '1010', 'debit', demoOpeningBalance[0].debit);

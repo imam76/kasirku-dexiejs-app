@@ -32,3 +32,4 @@ pub mod stock_mutation_repository;
 pub mod stock_opname_repository;
 pub mod tax_repository;
 pub mod warehouse_repository;
+pub mod workforce_repository;

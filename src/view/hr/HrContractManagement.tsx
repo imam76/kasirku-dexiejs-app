@@ -44,6 +44,7 @@ import type {
   EmploymentContractType,
   HrPosition,
 } from '@/types';
+import { formatCurrencyInput, parseCurrencyInput } from '@/utils/formatters';
 
 const { Title, Text } = Typography;
 
@@ -376,7 +377,15 @@ export default function HrContractManagement() {
             {canViewPayroll && (
               <Col xs={24} md={12}>
                 <Form.Item name="base_salary" label="Gaji pokok" rules={[{ required: true, message: 'Gaji pokok wajib diisi.' }]}>
-                  <InputNumber disabled={!canManagePayroll} min={0} controls={false} prefix="Rp" className="w-full" />
+                  <InputNumber
+                    disabled={!canManagePayroll}
+                    min={0}
+                    controls={false}
+                    prefix="Rp"
+                    formatter={formatCurrencyInput}
+                    parser={parseCurrencyInput}
+                    className="w-full"
+                  />
                 </Form.Item>
               </Col>
             )}

@@ -34,10 +34,16 @@ test.describe.serial('input saldo awal pinjaman koperasi', () => {
     await expect(fifthInstallment).toBeVisible();
     await expect(fifthInstallment).toContainText('Rp 112.000');
 
-    // Tanpa cutoff GL siap, total sisa pokok migrasi (800.000) tetap disurfacing sebagai panduan
-    // untuk baris Piutang Pinjaman (1120) / backfill opening balance.
+    // Saat baseline GL belum selesai, total sisa pokok migrasi (800.000) tetap
+    // disurfacing sebagai panduan untuk baris Piutang Pinjaman (1120).
     await page.goto('/finance/general-ledger');
-    await expect(page.getByText('Setup Cutoff dan Opening Balance')).toBeVisible();
+    await expect(page.getByText('Saldo awal belum lengkap', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Buka Saldo Awal' }).click();
+    const accountOpeningRow = page.getByRole('row').filter({
+      has: page.getByText('Saldo Awal Akun', { exact: true }),
+    });
+    await accountOpeningRow.getByRole('button', { name: 'Buka' }).click();
+    await expect(page.getByText('Saldo Awal Akun').first()).toBeVisible();
     const fillButton = page.getByTestId('gl-opening-balance-fill-migration');
     await expect(fillButton).toBeVisible();
     await expect(page.getByText(/Rp\s*800\.000/)).toBeVisible();

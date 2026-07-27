@@ -174,6 +174,15 @@ pub struct EmployeeAreaDto {
     pub area_id: String,
     pub area_name: String,
     pub area_code: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub effective_from: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub effective_until: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub is_primary: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
@@ -191,6 +200,9 @@ pub struct EmployeeCollectionScheduleDto {
     pub weekday: i32,
     pub effective_from: Option<String>,
     pub effective_until: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub is_default_for_new_members: Option<bool>,
     pub is_active: bool,
     pub created_at: String,
     pub updated_at: String,

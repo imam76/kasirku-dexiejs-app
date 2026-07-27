@@ -24,10 +24,12 @@ import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Eye, Pencil, Plus, Power, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
+import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { db } from '@/lib/db';
 import type { SalaryComponentInput } from '@/lib/validations/hr';
 import { createSalaryComponent, updateSalaryComponent } from '@/services/hrService';
 import type { SalaryComponent, SalaryComponentKind } from '@/types';
+import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from '@/utils/formatters';
 
 const { Title, Text } = Typography;
 
@@ -53,6 +55,9 @@ export default function HrSalaryComponentManagement() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const canManage = can('hr.payroll.manage');
+  const { baseCurrencySymbol } = useBaseCurrency();
+  const selectedCalculation = Form.useWatch('calculation', form) ?? 'FIXED';
+  const isPercentage = selectedCalculation === 'PERCENTAGE';
 
   const result = useLiveQuery(async () => {
     try {
@@ -136,7 +141,7 @@ export default function HrSalaryComponentManagement() {
       sorter: (left, right) => left.default_value - right.default_value,
       render: (value: number, component) => component.calculation === 'PERCENTAGE'
         ? `${value}%`
-        : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(value),
+        : `${baseCurrencySymbol} ${formatCurrency(value)}`,
     },
     { title: 'Kena pajak', dataIndex: 'is_taxable', render: (value: boolean) => value ? <Tag color="orange">Ya</Tag> : 'Tidak' },
     { title: 'Status', dataIndex: 'is_active', sorter: (left, right) => Number(right.is_active) - Number(left.is_active), render: (value: boolean) => <Tag color={value ? 'green' : 'default'}>{value ? 'Aktif' : 'Nonaktif'}</Tag> },
@@ -218,8 +223,41 @@ export default function HrSalaryComponentManagement() {
           <Form.Item name="calculation" label="Perhitungan" rules={[{ required: true }]}>
             <Select options={[{ value: 'FIXED', label: 'Nominal tetap' }, { value: 'PERCENTAGE', label: 'Persentase' }]} />
           </Form.Item>
-          <Form.Item name="default_value" label="Nilai default" rules={[{ required: true, message: 'Nilai default wajib diisi.' }]}>
-            <InputNumber min={0} className="w-full" />
+          <Alert
+            className="mb-4"
+            type="info"
+            showIcon
+            message={isPercentage ? 'Persentase dari gaji pokok' : `Nominal tetap dalam ${baseCurrencySymbol}`}
+            description={isPercentage
+              ? 'Masukkan 2 untuk 2%. Nilai assignment per karyawan dapat memakai metode yang berbeda.'
+              : 'Pemisah ribuan akan diformat otomatis. Nilai assignment per karyawan dapat memakai metode yang berbeda.'}
+          />
+          <Form.Item
+            name="default_value"
+            label={isPercentage ? 'Persentase default' : 'Nominal default'}
+            rules={[
+              { required: true, message: 'Nilai default wajib diisi.' },
+              {
+                validator: async (_, value) => {
+                  if (isPercentage && Number(value || 0) > 100) {
+                    throw new Error('Persentase maksimal 100%.');
+                  }
+                },
+              },
+            ]}
+          >
+            <InputNumber
+              min={0}
+              max={isPercentage ? 100 : undefined}
+              precision={isPercentage ? 2 : undefined}
+              controls={false}
+              prefix={isPercentage ? undefined : baseCurrencySymbol}
+              suffix={isPercentage ? '%' : undefined}
+              formatter={isPercentage ? undefined : formatCurrencyInput}
+              parser={isPercentage ? undefined : parseCurrencyInput}
+              className="w-full"
+              placeholder={isPercentage ? 'Contoh: 2' : 'Contoh: 500.000'}
+            />
           </Form.Item>
           <Form.Item name="is_taxable" label="Kena pajak" valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="is_active" label="Status aktif" valuePropName="checked"><Switch /></Form.Item>
@@ -231,7 +269,7 @@ export default function HrSalaryComponentManagement() {
           <Descriptions bordered column={1}>
             <Descriptions.Item label="Jenis"><Tag color={detail.kind === 'EARNING' ? 'green' : 'red'}>{KIND_LABEL[detail.kind]}</Tag></Descriptions.Item>
             <Descriptions.Item label="Perhitungan">{detail.calculation === 'FIXED' ? 'Nominal tetap' : 'Persentase'}</Descriptions.Item>
-            <Descriptions.Item label="Nilai default">{detail.calculation === 'PERCENTAGE' ? `${detail.default_value}%` : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(detail.default_value)}</Descriptions.Item>
+            <Descriptions.Item label="Nilai default">{detail.calculation === 'PERCENTAGE' ? `${detail.default_value}%` : `${baseCurrencySymbol} ${formatCurrency(detail.default_value)}`}</Descriptions.Item>
             <Descriptions.Item label="Kena pajak">{detail.is_taxable ? 'Ya' : 'Tidak'}</Descriptions.Item>
             <Descriptions.Item label="Status">{detail.is_active ? 'Aktif' : 'Nonaktif'}</Descriptions.Item>
           </Descriptions>

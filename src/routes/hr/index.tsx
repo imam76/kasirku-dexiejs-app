@@ -1,6 +1,7 @@
 import {
   ApartmentOutlined,
   BankOutlined,
+  CalendarOutlined,
   DashboardOutlined,
   DollarCircleOutlined,
   FileProtectOutlined,
@@ -26,6 +27,8 @@ type HumanResourcesMenuItem = {
     | '/hr/positions'
     | '/hr/contracts'
     | '/hr/salary-components'
+    | '/hr/work-schedules'
+    | '/hr/leave'
     | '/finance/payroll'
   label: string
   icon: typeof TeamOutlined
@@ -72,6 +75,20 @@ function HumanResources() {
       icon: FileProtectOutlined,
       color: 'text-amber-700',
       desc: 'Riwayat kontrak immutable serta alur perpanjangan dengan record baru.',
+    },
+    {
+      to: '/hr/work-schedules',
+      label: 'Jadwal Kerja',
+      icon: CalendarOutlined,
+      color: 'text-sky-700',
+      desc: 'Template jam kerja, assignment efektif, hari libur, dan hari kerja khusus.',
+    },
+    {
+      to: '/hr/leave',
+      label: 'Cuti & Ketersediaan',
+      icon: CalendarOutlined,
+      color: 'text-orange-700',
+      desc: 'Pengajuan cuti, approval berjenjang, saldo, dan dampak ketersediaan.',
     },
     {
       to: '/hr/salary-components',

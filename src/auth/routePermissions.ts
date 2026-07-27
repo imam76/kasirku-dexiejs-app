@@ -55,6 +55,13 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/hr/positions': 'hr.organization.manage',
   '/hr/contracts': 'hr.contract.manage',
   '/hr/salary-components': 'hr.payroll.view',
+  '/hr/work-schedules': 'hr.schedule.manage',
+  '/hr/leave': [
+    'hr.leave.self_service',
+    'hr.leave.supervisor_approve',
+    'hr.leave.hr_approve',
+    'hr.leave.policy.manage',
+  ],
   '/hr': [
     'hr.employee.view',
     'hr.organization.manage',
@@ -91,6 +98,8 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/koperasi/migrasi-pinjaman': 'COOPERATIVE_LOAN_DISBURSE',
   '/koperasi/angsuran': 'COOPERATIVE_INSTALLMENT_VIEW',
   '/koperasi/penagihan': 'COOPERATIVE_BILLING_ACCESS',
+  '/koperasi/collection-assignments': 'cooperative.collection.assignment.manage',
+  '/koperasi/coverage-conflicts': 'cooperative.collection.coverage.manage',
   '/koperasi/kas-petugas': 'COOPERATIVE_FIELD_CASH_VIEW',
   '/koperasi/laporan': COOPERATIVE_REPORT_PERMISSION_LIST,
   '/marketplace': 'MARKETPLACE_VIEW',

@@ -141,8 +141,8 @@ test.describe.serial('simpanan anggota koperasi', () => {
     });
 
     await page.goto('/finance/general-ledger');
-    await expect(page.getByText(/Setoran simpanan POKOK KSU-001 - Siti Aminah/)).toBeVisible();
-    await expect(page.getByText(/Penarikan simpanan SUKARELA KSU-001 - Siti Aminah/)).toBeVisible();
+    await expect(page.getByText(/Setoran simpanan POKOK 0001 - Siti Aminah/)).toBeVisible();
+    await expect(page.getByText(/Penarikan simpanan SUKARELA 0001 - Siti Aminah/)).toBeVisible();
   });
 
   test('SAV-OPEN-01, SAV-OPEN-05 - saldo awal simpanan tercatat sebagai mutasi historis dan duplikasi ditolak', async ({ page }) => {

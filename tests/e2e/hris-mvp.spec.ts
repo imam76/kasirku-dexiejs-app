@@ -174,3 +174,69 @@ test('HRIS MVP persists its core lifecycle and exposes all six HR pages', async 
     await expect(page.getByText(/gagal dimuat/i)).toHaveCount(0);
   }
 });
+
+test('employee salary assignment supports fixed and percentage methods with contextual input', async ({ page }) => {
+  await loginAsBootstrappedOwner(page);
+
+  const fixture = await page.evaluate(async () => {
+    const hr = await import('/src/services/hrService.ts');
+    const employee = await hr.createHrEmployee({
+      name: 'Metode Komponen E2E',
+      employment_status: 'PERMANENT',
+      active_status: 'ACTIVE',
+      work_schedule_type: 'FULL_TIME',
+      salary_payment_method: 'CASH',
+      base_salary: 5_000_000,
+      salary_currency: 'IDR',
+      payroll_period: 'MONTHLY',
+      is_taxable: true,
+      is_bpjs_participant: false,
+    });
+    const component = await hr.createSalaryComponent({
+      code: 'E2E-METODE',
+      name: 'Komponen Metode E2E',
+      kind: 'EARNING',
+      calculation: 'FIXED',
+      default_value: 250_000,
+      is_taxable: false,
+      is_active: true,
+    });
+    await hr.upsertEmployeeSalaryComponent(employee.id, {
+      salary_component_id: component.id,
+      calculation: 'FIXED',
+      value: 250_000,
+      is_active: true,
+    });
+    return { employeeId: employee.id, employeeName: employee.name };
+  });
+
+  await page.goto('/hr/employees');
+  const employeeRow = page.locator('tbody tr', { hasText: fixture.employeeName });
+  await employeeRow.getByRole('button', { name: 'Edit' }).click();
+
+  const dialog = page.getByRole('dialog', { name: /Edit EMP-/ });
+  await dialog.getByRole('tab', { name: 'Penggajian' }).click();
+  await expect(dialog.locator('#base_salary')).toHaveValue('5.000.000');
+  await expect(dialog.getByText('Rupiah Indonesia (Rp)', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Pendapatan (+)')).toBeVisible();
+  await expect(dialog.getByText('Nominal tetap dalam Rp')).toBeVisible();
+  await expect(dialog.locator('#salary_components_0_value')).toHaveValue('250.000');
+
+  await dialog.locator('#salary_components_0_calculation').click();
+  await page.locator('.ant-select-dropdown:visible').getByText('Persentase', { exact: true }).click();
+  await expect(dialog.getByText('Dihitung dari gaji pokok')).toBeVisible();
+  await dialog.locator('#salary_components_0_value').fill('2');
+  await dialog.getByRole('button', { name: 'Simpan' }).click();
+  await expect(page.locator('.ant-message-notice').last()).toContainText('berhasil');
+  await expect(dialog).toBeHidden();
+
+  const assignment = await page.evaluate(async ({ employeeId }) => {
+    const { db } = await import('/src/lib/db.ts');
+    return db.employeeSalaryComponents.where('employee_id').equals(employeeId).first();
+  }, { employeeId: fixture.employeeId });
+
+  expect(assignment).toMatchObject({
+    calculation: 'PERCENTAGE',
+    value: 2,
+  });
+});

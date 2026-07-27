@@ -36,6 +36,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'hr.contract.manage',
     'hr.payroll.view',
     'hr.payroll.manage',
+    'hr.schedule.manage',
+    'hr.leave.self_service',
+    'hr.leave.supervisor_approve',
+    'hr.leave.hr_approve',
+    'hr.leave.policy.manage',
     'PROJECT_MANAGE',
     'FIXED_ASSET_MANAGE',
     'TAX_MANAGE',
@@ -80,6 +85,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'COOPERATIVE_PAYMENT_CREATE',
     'COOPERATIVE_PAYMENT_APPROVE',
     'COOPERATIVE_BILLING_ACCESS',
+    'cooperative.collection.assignment.manage',
+    'cooperative.collection.coverage.manage',
     'COOPERATIVE_FIELD_CASH_VIEW',
     'COOPERATIVE_FIELD_CASH_MANAGE',
     'COOPERATIVE_OVERVIEW_REPORT_VIEW',
@@ -126,6 +133,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'hr.contract.manage',
     'hr.payroll.view',
     'hr.payroll.manage',
+    'hr.schedule.manage',
+    'hr.leave.self_service',
+    'hr.leave.supervisor_approve',
+    'hr.leave.hr_approve',
+    'hr.leave.policy.manage',
     'PROJECT_MANAGE',
     'FIXED_ASSET_MANAGE',
     'TAX_MANAGE',
@@ -168,6 +180,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'COOPERATIVE_PAYMENT_CREATE',
     'COOPERATIVE_PAYMENT_APPROVE',
     'COOPERATIVE_BILLING_ACCESS',
+    'cooperative.collection.assignment.manage',
+    'cooperative.collection.coverage.manage',
     'COOPERATIVE_FIELD_CASH_VIEW',
     'COOPERATIVE_FIELD_CASH_MANAGE',
     'COOPERATIVE_OVERVIEW_REPORT_VIEW',
@@ -193,6 +207,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'REPORT_POS_SALES_VIEW',
     'REPORT_DEPOSIT_VIEW',
     'REPORT_TRANSACTION_DETAIL_VIEW',
+    'hr.leave.self_service',
   ],
   GUDANG: [
     'STOCK_ACCESS',
@@ -203,6 +218,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'STOCK_PURCHASE_ACCESS',
     'REPORT_PURCHASE_VIEW',
     'REPORT_STOCK_CARD_VIEW',
+    'hr.leave.self_service',
   ],
 };
 
@@ -214,5 +230,6 @@ export const hasPermission = (
   if (!role) return false;
   const bypassSetupModuleLock = options.bypassSetupModuleLock ?? (role === 'OWNER' && shouldBypassSetupModuleLock());
   if (!isPermissionEnabledBySetup(permission, { bypassSetupModuleLock })) return false;
+  if (role === 'OWNER') return true;
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 };

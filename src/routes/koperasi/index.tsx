@@ -1,4 +1,4 @@
-import { BankOutlined, BellOutlined, CreditCardOutlined, DatabaseOutlined, FileTextOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons';
+import { BankOutlined, BellOutlined, CalendarOutlined, CreditCardOutlined, DatabaseOutlined, FileTextOutlined, SwapOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { Empty } from 'antd';
 import { canAccessPath } from '@/auth/routePermissions';
@@ -69,6 +69,20 @@ function Cooperative() {
       icon: BellOutlined,
       color: 'text-rose-600',
       desc: t('cooperative.billing.subtitle'),
+    },
+    {
+      to: '/koperasi/collection-assignments',
+      label: 'Penugasan Penagihan',
+      icon: CalendarOutlined,
+      color: 'text-sky-700',
+      desc: 'Kelola assignment area, jadwal dasar, dan default anggota baru.',
+    },
+    {
+      to: '/koperasi/coverage-conflicts',
+      label: 'Konflik Coverage',
+      icon: SwapOutlined,
+      color: 'text-orange-700',
+      desc: 'Alihkan seluruh rute ke petugas pengganti atau tanggal operasional lain.',
     },
     {
       to: '/koperasi/kas-petugas',

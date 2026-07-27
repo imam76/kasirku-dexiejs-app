@@ -31,3 +31,4 @@ pub mod stock_mutation;
 pub mod stock_opname;
 pub mod tax;
 pub mod warehouse;
+pub mod workforce;

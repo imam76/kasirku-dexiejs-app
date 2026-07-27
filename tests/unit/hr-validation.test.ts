@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { PERMISSION_CATALOG } from '@/auth/permissionCatalog'
 import {
+  employeeSalaryComponentSchema,
   employmentContractSchema,
   hrEmployeeSchema,
   salaryComponentSchema,
@@ -89,6 +90,18 @@ describe('HRIS validation', () => {
       is_taxable: false,
       is_active: true,
     }).success).toBe(true)
+
+    expect(employeeSalaryComponentSchema.safeParse({
+      salary_component_id: 'bpjs',
+      calculation: 'PERCENTAGE',
+      value: 101,
+    }).success).toBe(false)
+
+    expect(employeeSalaryComponentSchema.safeParse({
+      salary_component_id: 'meal',
+      calculation: 'FIXED',
+      value: 500_000,
+    }).success).toBe(true)
   })
 })
 
@@ -103,6 +116,13 @@ describe('HRIS permission catalog', () => {
       'hr.contract.manage',
       'hr.payroll.view',
       'hr.payroll.manage',
+      'hr.schedule.manage',
+      'hr.leave.self_service',
+      'hr.leave.supervisor_approve',
+      'hr.leave.hr_approve',
+      'hr.leave.policy.manage',
+      'cooperative.collection.assignment.manage',
+      'cooperative.collection.coverage.manage',
     ]
     const codes = PERMISSION_CATALOG.map((item) => item.code)
 

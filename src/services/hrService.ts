@@ -1,5 +1,6 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
+import dayjs from '@/lib/dayjs';
 import {
   employeeSalaryComponentSchema,
   employmentContractSchema,
@@ -169,6 +170,34 @@ const getActiveSupervisor = async (id: string | undefined, employeeId?: string) 
   return supervisor;
 };
 
+const assertEmployeeOffboardingReady = async (
+  employeeId: string,
+  activeStatus: Employee['active_status'],
+) => {
+  if (activeStatus !== 'RESIGNED' && activeStatus !== 'TERMINATED') return;
+  const today = dayjs().tz().format('YYYY-MM-DD');
+  const [user, areaAssignments, collectionSchedules] = await Promise.all([
+    db.authUsers.where('employee_id').equals(employeeId).first(),
+    db.employeeAreas.where('employee_id').equals(employeeId).toArray(),
+    db.employeeCollectionSchedules.where('employee_id').equals(employeeId).toArray(),
+  ]);
+  if (user?.is_active) {
+    throw new Error('Offboarding belum dapat diselesaikan: login aplikasi karyawan masih aktif.');
+  }
+  const futureArea = areaAssignments.some((row) => (
+    !row.effective_until || row.effective_until.slice(0, 10) >= today
+  ));
+  if (futureArea) {
+    throw new Error('Offboarding belum dapat diselesaikan: assignment area aktif harus ditutup atau dialihkan.');
+  }
+  const futureSchedule = collectionSchedules.some((row) => (
+    row.is_active && (!row.effective_until || row.effective_until.slice(0, 10) >= today)
+  ));
+  if (futureSchedule) {
+    throw new Error('Offboarding belum dapat diselesaikan: jadwal penagihan masa depan harus ditutup atau dialihkan.');
+  }
+};
+
 const buildEmployee = async (
   input: HrEmployeeInput,
   existing?: Employee,
@@ -273,6 +302,7 @@ export const updateHrEmployee = async (id: string, input: HrEmployeeInput) => {
   if (!existing) throw new Error('Karyawan tidak ditemukan.');
   await assertEmployeePayrollMutationAllowed(actor, input, existing);
   const employee = await buildEmployee(input, existing);
+  await assertEmployeeOffboardingReady(id, employee.active_status);
   await db.employees.put(employee);
   const changes = buildEmployeeChanges(existing, employee);
   const organizationChanged = (
@@ -307,6 +337,7 @@ export const setHrEmployeeActiveStatus = async (
   const actor = await requireHrActor('hr.employee.deactivate');
   const existing = await db.employees.get(id);
   if (!existing) throw new Error('Karyawan tidak ditemukan.');
+  await assertEmployeeOffboardingReady(id, activeStatus);
   const updated = withPendingSync({
     ...existing,
     active_status: activeStatus ?? 'INACTIVE',
@@ -716,6 +747,10 @@ export const upsertEmployeeSalaryComponent = async (
   if (!component || (!component.is_active && parsed.is_active !== false)) {
     throw new Error('Komponen gaji tidak ditemukan atau sudah nonaktif.');
   }
+  const calculation = parsed.calculation ?? component.calculation;
+  if (calculation === 'PERCENTAGE' && parsed.value > 100) {
+    throw new Error(`Nilai ${component.name} tidak boleh lebih dari 100%.`);
+  }
   const existing = await db.employeeSalaryComponents
     .where('[employee_id+salary_component_id]')
     .equals([employeeId, component.id])
@@ -729,7 +764,7 @@ export const upsertEmployeeSalaryComponent = async (
     component_code: component.code,
     component_name: component.name,
     kind: component.kind,
-    calculation: component.calculation,
+    calculation,
     value: parsed.value,
     is_active: parsed.is_active ?? true,
     created_at: existing?.created_at ?? now,
@@ -742,12 +777,19 @@ export const upsertEmployeeSalaryComponent = async (
     entity: 'employeeSalaryComponents',
     entity_id: assignment.id,
     description: `${actor.name} mengubah komponen ${component.name} untuk ${employee.name}.`,
-    changes: [{
-      field: component.code,
-      before: maskSensitive(existing?.value),
-      after: maskSensitive(assignment.value),
-      sensitive: true,
-    }],
+    changes: [
+      {
+        field: `${component.code}.calculation`,
+        before: existing?.calculation,
+        after: assignment.calculation,
+      },
+      {
+        field: component.code,
+        before: maskSensitive(existing?.value),
+        after: maskSensitive(assignment.value),
+        sensitive: true,
+      },
+    ],
   });
   await enqueueEmployeeSalaryComponentSync(assignment, existing ? 'update' : 'create');
   return assignment;

@@ -38,6 +38,9 @@ macro_rules! cooperative_member_select {
             officer_id,
             officer_name,
             officer_position,
+            collection_schedule_id,
+            collection_weekday,
+            collection_assignment_needs_review,
             join_date,
             status,
             notes,
@@ -487,6 +490,9 @@ pub async fn upsert_cooperative_member(
             officer_id,
             officer_name,
             officer_position,
+            collection_schedule_id,
+            collection_weekday,
+            collection_assignment_needs_review,
             join_date,
             status,
             notes,
@@ -512,13 +518,16 @@ pub async fn upsert_cooperative_member(
             $12,
             $13,
             $14,
-            $15,
-            $16::TIMESTAMPTZ,
-            $17::TIMESTAMPTZ,
+            COALESCE($15, FALSE),
+            $16,
+            $17,
             $18,
-            $19,
-            $20,
-            $21
+            $19::TIMESTAMPTZ,
+            $20::TIMESTAMPTZ,
+            $21,
+            $22,
+            $23,
+            $24
         )
         ON CONFLICT (id) DO UPDATE SET
             member_number = EXCLUDED.member_number,
@@ -532,6 +541,9 @@ pub async fn upsert_cooperative_member(
             officer_id = EXCLUDED.officer_id,
             officer_name = EXCLUDED.officer_name,
             officer_position = EXCLUDED.officer_position,
+            collection_schedule_id = EXCLUDED.collection_schedule_id,
+            collection_weekday = EXCLUDED.collection_weekday,
+            collection_assignment_needs_review = EXCLUDED.collection_assignment_needs_review,
             join_date = EXCLUDED.join_date,
             status = EXCLUDED.status,
             notes = EXCLUDED.notes,
@@ -554,6 +566,9 @@ pub async fn upsert_cooperative_member(
             officer_id,
             officer_name,
             officer_position,
+            collection_schedule_id,
+            collection_weekday,
+            collection_assignment_needs_review,
             join_date,
             status,
             notes,
@@ -577,6 +592,9 @@ pub async fn upsert_cooperative_member(
     .bind(input.officer_id)
     .bind(input.officer_name)
     .bind(input.officer_position)
+    .bind(input.collection_schedule_id)
+    .bind(input.collection_weekday)
+    .bind(input.collection_assignment_needs_review)
     .bind(input.join_date)
     .bind(input.status)
     .bind(input.notes)

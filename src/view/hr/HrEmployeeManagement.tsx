@@ -20,6 +20,7 @@ import {
   Select,
   Space,
   Spin,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -32,23 +33,38 @@ import type { Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Eye, Pencil, Plus, Power, RotateCcw, UploadCloud, UserRound } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
+import { CURRENCY_PRESETS } from '@/constants/currencies';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import type { HrEmployeeInput } from '@/lib/validations/hr';
+import { getCurrencySymbol } from '@/services/baseCurrencyService';
 import {
   createHrEmployee,
   setHrEmployeeActiveStatus,
   updateHrEmployee,
   upsertEmployeeSalaryComponent,
 } from '@/services/hrService';
+import { formatCurrencyInput, parseCurrencyInput } from '@/utils/formatters';
+import {
+  createOrLinkEmployeeUser,
+  updateEmployeeAccess,
+} from '@/services/employeeAccessService';
 import type {
   Department,
   Employee,
+  EmployeeArea,
   EmployeeActiveStatus,
+  EmployeeCollectionSchedule,
   EmployeeEmploymentStatus,
   EmployeeSalaryComponent,
+  EmployeeWorkScheduleAssignment,
   HrPosition,
+  LeaveRequest,
+  Role,
   SalaryComponent,
+  SalaryComponentCalculation,
+  WorkScheduleTemplate,
+  AuthUser,
 } from '@/types';
 
 const { Title, Text, Paragraph } = Typography;
@@ -87,6 +103,7 @@ type EmployeeDateField =
 
 interface SalaryAssignmentValue {
   salary_component_id: string;
+  calculation?: SalaryComponentCalculation;
   value: number;
 }
 
@@ -100,16 +117,34 @@ type EmployeeFormValues = Omit<HrEmployeeInput, EmployeeDateField> & {
   salary_components?: SalaryAssignmentValue[];
 };
 
+type EmployeeAccessFormValues = {
+  email: string;
+  role_id: string;
+  pin?: string;
+  is_active: boolean;
+};
+
 interface EmployeeDataResult {
   employees: Employee[];
   departments: Department[];
   positions: HrPosition[];
   salaryComponents: SalaryComponent[];
   assignments: EmployeeSalaryComponent[];
+  authUsers: AuthUser[];
+  roles: Role[];
+  workScheduleAssignments: EmployeeWorkScheduleAssignment[];
+  workScheduleTemplates: WorkScheduleTemplate[];
+  leaveRequests: LeaveRequest[];
+  areaAssignments: EmployeeArea[];
+  collectionSchedules: EmployeeCollectionSchedule[];
 }
 
 const toDateValue = (value: string | undefined) => value ? dayjs(value) : undefined;
 const toDateString = (value: Dayjs | undefined) => value?.format('YYYY-MM-DD');
+const salaryCurrencyOptions = Object.entries(CURRENCY_PRESETS).map(([value, currency]) => ({
+  value,
+  label: `${currency.name} (${currency.symbol})`,
+}));
 const formatMoney = (value: number | undefined, currency = 'IDR') => (
   new Intl.NumberFormat('id-ID', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value ?? 0)
 );
@@ -125,6 +160,7 @@ export default function HrEmployeeManagement() {
   const { message } = App.useApp();
   const { can } = useAuth();
   const [form] = Form.useForm<EmployeeFormValues>();
+  const [accessForm] = Form.useForm<EmployeeAccessFormValues>();
   const [search, setSearch] = useState('');
   const [activeStatus, setActiveStatus] = useState<EmployeeActiveStatus | 'ALL'>('ALL');
   const [departmentId, setDepartmentId] = useState<string | 'ALL'>('ALL');
@@ -133,6 +169,7 @@ export default function HrEmployeeManagement() {
   const [detail, setDetail] = useState<Employee | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [accessEmployee, setAccessEmployee] = useState<Employee | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -141,17 +178,56 @@ export default function HrEmployeeManagement() {
   const canDeactivate = can('hr.employee.deactivate');
   const canViewPayroll = can('hr.payroll.view');
   const canManagePayroll = can('hr.payroll.manage');
+  const canViewSchedule = can('hr.schedule.manage');
+  const canViewLeave = can('hr.leave.hr_approve') || can('hr.leave.supervisor_approve');
+  const canViewCollectionAssignment = can('cooperative.collection.assignment.manage');
+  const canViewAccess = can('USER_MANAGE');
 
   const result = useLiveQuery(async () => {
     try {
-      const [employees, departments, positions, salaryComponents, assignments] = await Promise.all([
+      const [
+        employees,
+        departments,
+        positions,
+        salaryComponents,
+        assignments,
+        authUsers,
+        roles,
+        workScheduleAssignments,
+        workScheduleTemplates,
+        leaveRequests,
+        areaAssignments,
+        collectionSchedules,
+      ] = await Promise.all([
         db.employees.orderBy('name').toArray(),
         db.departments.orderBy('name').toArray(),
         db.hrPositions.orderBy('name').toArray(),
         db.salaryComponents.orderBy('name').toArray(),
         db.employeeSalaryComponents.toArray(),
+        db.authUsers.toArray(),
+        db.roles.toArray(),
+        db.employeeWorkScheduleAssignments.toArray(),
+        db.workScheduleTemplates.toArray(),
+        db.leaveRequests.toArray(),
+        db.employeeAreas.toArray(),
+        db.employeeCollectionSchedules.toArray(),
       ]);
-      return { data: { employees, departments, positions, salaryComponents, assignments } };
+      return {
+        data: {
+          employees,
+          departments,
+          positions,
+          salaryComponents,
+          assignments,
+          authUsers,
+          roles,
+          workScheduleAssignments,
+          workScheduleTemplates,
+          leaveRequests,
+          areaAssignments,
+          collectionSchedules,
+        },
+      };
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Data karyawan gagal dimuat.' };
     }
@@ -163,6 +239,13 @@ export default function HrEmployeeManagement() {
     positions: [],
     salaryComponents: [],
     assignments: [],
+    authUsers: [],
+    roles: [],
+    workScheduleAssignments: [],
+    workScheduleTemplates: [],
+    leaveRequests: [],
+    areaAssignments: [],
+    collectionSchedules: [],
   };
 
   const filteredEmployees = useMemo(() => {
@@ -198,6 +281,9 @@ export default function HrEmployeeManagement() {
   const selectedDepartmentId = Form.useWatch('department_id', form);
   const selectedPaymentMethod = Form.useWatch('salary_payment_method', form);
   const selectedPhoto = Form.useWatch('photo_data_url', form);
+  const selectedSalaryCurrency = Form.useWatch('salary_currency', form) ?? 'IDR';
+  const selectedSalarySymbol = getCurrencySymbol(selectedSalaryCurrency);
+  const selectedSalaryAssignments = Form.useWatch('salary_components', form) ?? [];
   const availablePositions = data.positions.filter((position) => (
     position.is_active && (!selectedDepartmentId || position.department_id === selectedDepartmentId)
   ));
@@ -206,6 +292,50 @@ export default function HrEmployeeManagement() {
     setFormOpen(false);
     setEditing(null);
     form.resetFields();
+  };
+
+  const openAccessForm = (employee: Employee) => {
+    const user = data.authUsers.find((row) => row.employee_id === employee.id);
+    accessForm.setFieldsValue({
+      email: user?.email ?? employee.personal_email ?? employee.email ?? '',
+      role_id: user?.role_id,
+      pin: undefined,
+      is_active: user?.is_active ?? true,
+    });
+    setAccessEmployee(employee);
+  };
+
+  const saveAccess = async () => {
+    if (!accessEmployee) return;
+    const values = await accessForm.validateFields();
+    const existing = data.authUsers.find((row) => row.employee_id === accessEmployee.id);
+    setSaving(true);
+    try {
+      if (existing) {
+        await updateEmployeeAccess({
+          employee_id: accessEmployee.id,
+          email: values.email,
+          role_id: values.role_id,
+          pin: values.pin,
+          is_active: values.is_active,
+        });
+      } else {
+        if (!values.pin) throw new Error('PIN wajib diisi saat membuat user aplikasi.');
+        await createOrLinkEmployeeUser({
+          employee_id: accessEmployee.id,
+          email: values.email,
+          role_id: values.role_id,
+          pin: values.pin,
+        });
+      }
+      message.success(existing ? 'Akses aplikasi diperbarui.' : 'User aplikasi dibuat dan dihubungkan.');
+      setAccessEmployee(null);
+      accessForm.resetFields();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Akses aplikasi gagal disimpan.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openCreate = () => {
@@ -232,6 +362,7 @@ export default function HrEmployeeManagement() {
       .filter((assignment) => assignment.employee_id === employee.id && assignment.is_active)
       .map((assignment) => ({
         salary_component_id: assignment.salary_component_id,
+        calculation: assignment.calculation,
         value: assignment.value,
       }));
     form.setFieldsValue({
@@ -253,7 +384,8 @@ export default function HrEmployeeManagement() {
     setFormOpen(true);
   };
 
-  const handleSubmit = async (values: EmployeeFormValues) => {
+  const handleSubmit = async () => {
+    const values = form.getFieldsValue(true) as EmployeeFormValues;
     setSaving(true);
     try {
       const componentIds = (values.salary_components ?? []).map((assignment) => assignment.salary_component_id);
@@ -308,11 +440,13 @@ export default function HrEmployeeManagement() {
         await Promise.all([
           ...selectedAssignments.map((assignment) => upsertEmployeeSalaryComponent(employee.id, {
             salary_component_id: assignment.salary_component_id,
+            calculation: assignment.calculation,
             value: assignment.value,
             is_active: true,
           })),
           ...removedAssignments.map((assignment) => upsertEmployeeSalaryComponent(employee.id, {
             salary_component_id: assignment.salary_component_id,
+            calculation: assignment.calculation,
             value: assignment.value,
             is_active: false,
           })),
@@ -466,6 +600,20 @@ export default function HrEmployeeManagement() {
 
   const detailAssignments = detail
     ? data.assignments.filter((assignment) => assignment.employee_id === detail.id && assignment.is_active)
+    : [];
+  const detailUser = detail ? data.authUsers.find((user) => user.employee_id === detail.id) : undefined;
+  const detailRole = detailUser?.role_id ? data.roles.find((role) => role.id === detailUser.role_id) : undefined;
+  const detailWorkSchedules = detail
+    ? data.workScheduleAssignments.filter((assignment) => assignment.employee_id === detail.id)
+    : [];
+  const detailLeaveRequests = detail
+    ? data.leaveRequests.filter((request) => request.employee_id === detail.id)
+    : [];
+  const detailAreas = detail
+    ? data.areaAssignments.filter((assignment) => assignment.employee_id === detail.id)
+    : [];
+  const detailCollectionSchedules = detail
+    ? data.collectionSchedules.filter((schedule) => schedule.employee_id === detail.id)
     : [];
 
   return (
@@ -747,10 +895,21 @@ export default function HrEmployeeManagement() {
                       )}
                       <Col xs={24} md={8}>
                         <Form.Item name="base_salary" label="Gaji pokok">
-                          <InputNumber min={0} controls={false} className="w-full" prefix="Rp" />
+                          <InputNumber
+                            min={0}
+                            controls={false}
+                            className="w-full"
+                            prefix={selectedSalarySymbol}
+                            formatter={formatCurrencyInput}
+                            parser={parseCurrencyInput}
+                          />
                         </Form.Item>
                       </Col>
-                      <Col xs={24} md={8}><Form.Item name="salary_currency" label="Mata uang"><Input /></Form.Item></Col>
+                      <Col xs={24} md={8}>
+                        <Form.Item name="salary_currency" label="Mata uang">
+                          <Select showSearch optionFilterProp="label" options={salaryCurrencyOptions} />
+                        </Form.Item>
+                      </Col>
                       <Col xs={24} md={8}>
                         <Form.Item name="payroll_period" label="Periode penggajian">
                           <Select options={[
@@ -778,29 +937,129 @@ export default function HrEmployeeManagement() {
                         <Form.List name="salary_components">
                           {(fields, { add, remove }) => (
                             <Space orientation="vertical" className="w-full">
-                              {fields.map((field) => (
-                                <Space key={field.key} align="baseline" wrap>
-                                  <Form.Item
-                                    {...field}
-                                    name={[field.name, 'salary_component_id']}
-                                    rules={[{ required: true, message: 'Pilih komponen.' }]}
-                                  >
-                                    <Select
-                                      className="min-w-64"
-                                      placeholder="Pilih komponen"
-                                      options={data.salaryComponents.filter((component) => component.is_active).map((component) => ({
-                                        value: component.id,
-                                        label: `${component.code} - ${component.name}`,
-                                      }))}
-                                    />
-                                  </Form.Item>
-                                  <Form.Item {...field} name={[field.name, 'value']} rules={[{ required: true }]}>
-                                    <InputNumber min={0} className="w-48" placeholder="Nilai" />
-                                  </Form.Item>
-                                  <Button danger type="text" onClick={() => remove(field.name)}>Hapus</Button>
-                                </Space>
-                              ))}
-                              <Button type="dashed" onClick={() => add({ value: 0 })} icon={<Plus size={15} />}>
+                              {fields.map((field) => {
+                                const assignment = selectedSalaryAssignments[field.name] as SalaryAssignmentValue | undefined;
+                                const component = data.salaryComponents.find(
+                                  (candidate) => candidate.id === assignment?.salary_component_id,
+                                );
+                                const calculation = assignment?.calculation
+                                  ?? component?.calculation
+                                  ?? 'FIXED';
+                                const isPercentage = calculation === 'PERCENTAGE';
+
+                                return (
+                                  <div key={field.key} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1fr)_180px_220px_auto] md:items-start">
+                                      <Form.Item
+                                        name={[field.name, 'salary_component_id']}
+                                        label="Komponen"
+                                        rules={[{ required: true, message: 'Pilih komponen.' }]}
+                                        className="mb-0"
+                                      >
+                                        <Select
+                                          showSearch
+                                          optionFilterProp="label"
+                                          placeholder="Pilih komponen"
+                                          options={data.salaryComponents.filter((candidate) => candidate.is_active).map((candidate) => ({
+                                            value: candidate.id,
+                                            label: `${candidate.code} - ${candidate.name} • ${candidate.kind === 'EARNING' ? 'Pendapatan' : 'Potongan'} • ${candidate.calculation === 'PERCENTAGE' ? 'Persentase' : 'Nominal tetap'}`,
+                                          }))}
+                                          onChange={(componentId: string) => {
+                                            const nextComponent = data.salaryComponents.find(
+                                              (candidate) => candidate.id === componentId,
+                                            );
+                                            form.setFieldValue(
+                                              ['salary_components', field.name, 'calculation'],
+                                              nextComponent?.calculation ?? 'FIXED',
+                                            );
+                                            form.setFieldValue(
+                                              ['salary_components', field.name, 'value'],
+                                              nextComponent?.default_value ?? 0,
+                                            );
+                                          }}
+                                        />
+                                      </Form.Item>
+
+                                      <Form.Item
+                                        name={[field.name, 'calculation']}
+                                        label="Metode"
+                                        rules={[{ required: true, message: 'Pilih metode.' }]}
+                                        className="mb-0"
+                                      >
+                                        <Select
+                                          options={[
+                                            { value: 'FIXED', label: 'Nominal tetap' },
+                                            { value: 'PERCENTAGE', label: 'Persentase' },
+                                          ]}
+                                          onChange={(nextCalculation: SalaryComponentCalculation) => {
+                                            const currentValue = Number(
+                                              form.getFieldValue(['salary_components', field.name, 'value']) || 0,
+                                            );
+                                            if (nextCalculation === 'PERCENTAGE' && currentValue > 100) {
+                                              form.setFieldValue(['salary_components', field.name, 'value'], 0);
+                                            }
+                                          }}
+                                        />
+                                      </Form.Item>
+
+                                      <Form.Item
+                                        name={[field.name, 'value']}
+                                        label={isPercentage ? 'Persentase' : 'Nominal'}
+                                        rules={[
+                                          { required: true, message: 'Nilai wajib diisi.' },
+                                          {
+                                            validator: async (_, value) => {
+                                              if (isPercentage && Number(value || 0) > 100) {
+                                                throw new Error('Persentase maksimal 100%.');
+                                              }
+                                            },
+                                          },
+                                        ]}
+                                        className="mb-0"
+                                      >
+                                        <InputNumber
+                                          min={0}
+                                          max={isPercentage ? 100 : undefined}
+                                          precision={isPercentage ? 2 : undefined}
+                                          controls={false}
+                                          prefix={isPercentage ? undefined : selectedSalarySymbol}
+                                          suffix={isPercentage ? '%' : undefined}
+                                          formatter={isPercentage ? undefined : formatCurrencyInput}
+                                          parser={isPercentage ? undefined : parseCurrencyInput}
+                                          className="w-full"
+                                          placeholder={isPercentage ? 'Contoh: 2' : 'Contoh: 500.000'}
+                                        />
+                                      </Form.Item>
+
+                                      <Button
+                                        danger
+                                        type="text"
+                                        className="md:mt-7"
+                                        onClick={() => remove(field.name)}
+                                      >
+                                        Hapus
+                                      </Button>
+                                    </div>
+                                    <Space size={[4, 4]} wrap className="mt-3">
+                                      {component && (
+                                        <Tag color={component.kind === 'EARNING' ? 'green' : 'red'}>
+                                          {component.kind === 'EARNING' ? 'Pendapatan (+)' : 'Potongan (-)'}
+                                        </Tag>
+                                      )}
+                                      <Text type="secondary" className="text-xs">
+                                        {isPercentage
+                                          ? 'Dihitung dari gaji pokok. Contoh: 2 berarti 2%, bukan Rp2.'
+                                          : `Nominal tetap dalam ${selectedSalarySymbol}; pemisah ribuan diformat otomatis.`}
+                                      </Text>
+                                    </Space>
+                                  </div>
+                                );
+                              })}
+                              <Button
+                                type="dashed"
+                                onClick={() => add({ calculation: 'FIXED', value: 0 })}
+                                icon={<Plus size={15} />}
+                              >
                                 Tambah komponen
                               </Button>
                             </Space>
@@ -883,9 +1142,10 @@ export default function HrEmployeeManagement() {
                     <Space wrap>
                       {detailAssignments.map((assignment) => (
                         <Tag key={assignment.id} color={assignment.kind === 'EARNING' ? 'green' : 'red'}>
+                          {assignment.kind === 'EARNING' ? '(+) ' : '(-) '}
                           {assignment.component_name}: {assignment.calculation === 'PERCENTAGE'
-                            ? `${assignment.value}%`
-                            : formatMoney(assignment.value, detail.salary_currency)}
+                            ? `${assignment.value}% dari gaji pokok`
+                            : `${formatMoney(assignment.value, detail.salary_currency)} tetap`}
                         </Tag>
                       ))}
                     </Space>
@@ -900,10 +1160,135 @@ export default function HrEmployeeManagement() {
                 description="Permission hr.payroll.view diperlukan untuk melihat rekening, gaji, pajak, BPJS, dan komponen gaji."
               />
             )}
+            <Tabs
+              items={[
+                ...(canViewAccess ? [{
+                  key: 'access',
+                  label: 'Akses',
+                  children: (
+                    <Space direction="vertical" className="w-full">
+                      <Descriptions bordered column={1} size="small">
+                        <Descriptions.Item label="User aplikasi">{detailUser?.email ?? 'Belum dibuat'}</Descriptions.Item>
+                        <Descriptions.Item label="Role">{detailRole?.name ?? detailUser?.role_name ?? '-'}</Descriptions.Item>
+                        <Descriptions.Item label="Login">
+                          <Tag color={detailUser?.is_active ? 'green' : 'default'}>
+                            {detailUser?.is_active ? 'Aktif' : 'Nonaktif'}
+                          </Tag>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Sumber credential">auth_users</Descriptions.Item>
+                      </Descriptions>
+                      <Button onClick={() => openAccessForm(detail)}>
+                        {detailUser ? 'Ubah Akses' : 'Buat User Aplikasi'}
+                      </Button>
+                    </Space>
+                  ),
+                }] : []),
+                ...(canViewSchedule ? [{
+                  key: 'work-schedule',
+                  label: 'Jadwal Kerja',
+                  children: detailWorkSchedules.length > 0 ? (
+                    <Table
+                      size="small"
+                      rowKey="id"
+                      pagination={false}
+                      dataSource={detailWorkSchedules}
+                      columns={[
+                        { title: 'Template', dataIndex: 'template_name' },
+                        { title: 'Mulai', dataIndex: 'effective_from' },
+                        { title: 'Sampai', render: (_, row) => row.effective_until ?? 'Terbuka' },
+                      ]}
+                    />
+                  ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Belum ada assignment jadwal kerja." />,
+                }] : []),
+                ...(canViewLeave ? [{
+                  key: 'leave',
+                  label: 'Cuti',
+                  children: detailLeaveRequests.length > 0 ? (
+                    <Table
+                      size="small"
+                      rowKey="id"
+                      pagination={false}
+                      dataSource={detailLeaveRequests}
+                      columns={[
+                        { title: 'Tipe', dataIndex: 'leave_type_name' },
+                        { title: 'Periode', render: (_, row) => `${row.start_date} s.d. ${row.end_date}` },
+                        { title: 'Hari', dataIndex: 'day_count' },
+                        { title: 'Status', render: (_, row) => <Tag>{row.status}</Tag> },
+                      ]}
+                    />
+                  ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Belum ada pengajuan cuti." />,
+                }] : []),
+                ...(canViewCollectionAssignment ? [{
+                  key: 'areas',
+                  label: 'Area',
+                  children: detailAreas.length > 0 ? (
+                    <Table
+                      size="small"
+                      rowKey="id"
+                      pagination={false}
+                      dataSource={detailAreas}
+                      columns={[
+                        { title: 'Area', dataIndex: 'area_name' },
+                        { title: 'Mulai', render: (_, row) => row.effective_from ?? row.created_at.slice(0, 10) },
+                        { title: 'Sampai', render: (_, row) => row.effective_until ?? 'Terbuka' },
+                        { title: 'Utama', render: (_, row) => row.is_primary ? <Tag color="blue">Ya</Tag> : '-' },
+                      ]}
+                    />
+                  ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Belum ada assignment area." />,
+                }, {
+                  key: 'collection-schedule',
+                  label: 'Jadwal Penagihan',
+                  children: detailCollectionSchedules.length > 0 ? (
+                    <Table
+                      size="small"
+                      rowKey="id"
+                      pagination={false}
+                      dataSource={detailCollectionSchedules}
+                      columns={[
+                        { title: 'Area', dataIndex: 'area_name' },
+                        { title: 'Hari', dataIndex: 'weekday' },
+                        { title: 'Mulai', render: (_, row) => row.effective_from?.slice(0, 10) ?? '-' },
+                        { title: 'Sampai', render: (_, row) => row.effective_until?.slice(0, 10) ?? 'Terbuka' },
+                        { title: 'Default', render: (_, row) => row.is_default_for_new_members ? <Tag color="blue">Ya</Tag> : '-' },
+                      ]}
+                    />
+                  ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Belum ada jadwal penagihan." />,
+                }] : []),
+              ]}
+            />
             {detail.notes && <Paragraph type="secondary">{detail.notes}</Paragraph>}
           </Space>
         )}
       </Drawer>
+      <Modal
+        title={accessEmployee ? `Akses Aplikasi — ${accessEmployee.name}` : 'Akses Aplikasi'}
+        open={Boolean(accessEmployee)}
+        onCancel={() => setAccessEmployee(null)}
+        onOk={saveAccess}
+        confirmLoading={saving}
+        destroyOnHidden
+      >
+        <Alert
+          className="mb-4"
+          type="info"
+          showIcon
+          message="Employee tidak otomatis memperoleh akses aplikasi. Credential hanya disimpan di auth_users."
+        />
+        <Form form={accessForm} layout="vertical">
+          <Form.Item name="email" label="Email login" rules={[{ required: true, type: 'email' }]}><Input /></Form.Item>
+          <Form.Item name="role_id" label="Role" rules={[{ required: true }]}>
+            <Select options={data.roles.filter((role) => role.is_active).map((role) => ({ value: role.id, label: role.name }))} />
+          </Form.Item>
+          <Form.Item
+            name="pin"
+            label={detailUser ? 'PIN baru (opsional)' : 'PIN'}
+            rules={detailUser ? [] : [{ required: true }, { len: 6, message: 'PIN harus 6 digit.' }]}
+          >
+            <Input.Password inputMode="numeric" maxLength={6} />
+          </Form.Item>
+          <Form.Item name="is_active" label="Login aktif" valuePropName="checked"><Switch /></Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

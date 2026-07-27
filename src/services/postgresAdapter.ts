@@ -74,6 +74,16 @@ import type {
   EmploymentContract,
   HrPosition,
   SalaryComponent,
+  LeaveRequest,
+  LeaveRequestAction,
+  LeaveBalanceLedgerEntry,
+  LeaveType,
+  EmployeeAvailabilityException,
+  CollectionCoverageException,
+  WorkScheduleTemplate,
+  WorkScheduleDay,
+  EmployeeWorkScheduleAssignment,
+  CompanyCalendarDay,
 } from '@/types';
 
 export interface RemoteAuthUserDto {
@@ -132,6 +142,42 @@ export interface RemoteRolePermissionDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+}
+
+export interface FinalizeLeaveRequestDto {
+  session_token: string;
+  leave_type: LeaveType;
+  request: LeaveRequest;
+  actions: LeaveRequestAction[];
+  ledger: LeaveBalanceLedgerEntry[];
+  availability: EmployeeAvailabilityException[];
+  coverage: CollectionCoverageException[];
+}
+
+export interface RemoteLeaveWorkflowBundleDto {
+  request: LeaveRequest;
+  actions: LeaveRequestAction[];
+  ledger: LeaveBalanceLedgerEntry[];
+}
+
+export interface CancelApprovedLeaveRequestDto {
+  session_token: string;
+  request: LeaveRequest;
+  action: LeaveRequestAction;
+  ledger?: LeaveBalanceLedgerEntry | null;
+}
+
+export interface RemoteWorkforceStateDto {
+  work_schedule_templates: WorkScheduleTemplate[];
+  work_schedule_days: WorkScheduleDay[];
+  employee_work_schedule_assignments: EmployeeWorkScheduleAssignment[];
+  company_calendar_days: CompanyCalendarDay[];
+  leave_types: LeaveType[];
+  leave_requests: LeaveRequest[];
+  leave_request_actions: LeaveRequestAction[];
+  leave_balance_ledger: LeaveBalanceLedgerEntry[];
+  availability: EmployeeAvailabilityException[];
+  coverage: CollectionCoverageException[];
 }
 
 export interface RemoteEmployeeDto {
@@ -210,6 +256,9 @@ export interface RemoteEmployeeAreaDto {
   area_id: string;
   area_name: string;
   area_code?: string | null;
+  effective_from?: string | null;
+  effective_until?: string | null;
+  is_primary?: boolean | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
@@ -226,6 +275,7 @@ export interface RemoteEmployeeCollectionScheduleDto {
   weekday: CooperativeCollectionWeekday;
   effective_from?: string | null;
   effective_until?: string | null;
+  is_default_for_new_members?: boolean | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -1399,6 +1449,9 @@ export interface RemoteCooperativeMemberDto {
   officer_id?: string | null;
   officer_name?: string | null;
   officer_position?: string | null;
+  collection_schedule_id?: string | null;
+  collection_weekday?: CooperativeCollectionWeekday | null;
+  collection_assignment_needs_review?: boolean | null;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string | null;
@@ -1969,6 +2022,61 @@ export const employeeCollectionSchedulePostgresAdapter = {
   async upsert(input: RemoteEmployeeCollectionScheduleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteEmployeeCollectionScheduleDto>('postgres_upsert_employee_collection_schedule', { input });
+  },
+};
+
+export const workforcePostgresAdapter = {
+  async listState() {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteWorkforceStateDto>('postgres_list_workforce_state');
+  },
+  async finalizeLeaveRequest(input: FinalizeLeaveRequestDto) {
+    return invoke<void>('postgres_finalize_leave_request', { input });
+  },
+  async upsertLeaveWorkflow(sessionToken: string, workflow: RemoteLeaveWorkflowBundleDto) {
+    return invoke<void>('postgres_upsert_leave_workflow', {
+      input: { session_token: sessionToken, workflow },
+    });
+  },
+  async resolveCollectionCoverage(sessionToken: string, coverage: CollectionCoverageException) {
+    return invoke<void>('postgres_resolve_collection_coverage', {
+      input: { session_token: sessionToken, coverage },
+    });
+  },
+  async cancelApprovedLeaveRequest(input: CancelApprovedLeaveRequestDto) {
+    return invoke<void>('postgres_cancel_approved_leave_request', { input });
+  },
+  async upsertWorkScheduleTemplateBundle(
+    sessionToken: string,
+    template: WorkScheduleTemplate,
+    days: WorkScheduleDay[],
+  ) {
+    return invoke<void>('postgres_upsert_work_schedule_template_bundle', {
+      input: { session_token: sessionToken, template, days },
+    });
+  },
+  async upsertEmployeeWorkScheduleAssignment(
+    sessionToken: string,
+    assignment: EmployeeWorkScheduleAssignment,
+  ) {
+    return invoke<void>('postgres_upsert_employee_work_schedule_assignment', {
+      input: { session_token: sessionToken, assignment },
+    });
+  },
+  async upsertCompanyCalendarDay(sessionToken: string, calendarDay: CompanyCalendarDay) {
+    return invoke<void>('postgres_upsert_company_calendar_day', {
+      input: { session_token: sessionToken, calendar_day: calendarDay },
+    });
+  },
+  async upsertLeaveType(sessionToken: string, leaveType: LeaveType) {
+    return invoke<void>('postgres_upsert_leave_type', {
+      input: { session_token: sessionToken, leave_type: leaveType },
+    });
+  },
+  async upsertLeaveBalanceLedger(sessionToken: string, ledger: LeaveBalanceLedgerEntry) {
+    return invoke<void>('postgres_upsert_leave_balance_ledger', {
+      input: { session_token: sessionToken, ledger },
+    });
   },
 };
 

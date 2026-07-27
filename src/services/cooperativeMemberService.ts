@@ -2,7 +2,16 @@ import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import { cooperativeMemberSchema } from '@/lib/validations/cooperativeMember';
 import { enqueueCooperativeMembersSync, withPendingCooperativeSync } from '@/services/cooperativeSyncService';
-import type { CooperativeMember, CooperativeMemberCode, CooperativeMemberStatus } from '@/types';
+import {
+  listCollectionScheduleOptions,
+  resolveMemberCollectionDefault,
+} from '@/services/collectionCoverageService';
+import type {
+  CooperativeMember,
+  CooperativeMemberCode,
+  CooperativeMemberStatus,
+  EmployeeCollectionSchedule,
+} from '@/types';
 
 export interface CooperativeMemberUpsertInput {
   member_number?: string;
@@ -12,6 +21,7 @@ export interface CooperativeMemberUpsertInput {
   address?: string;
   area_id: string;
   officer_id?: string;
+  collection_schedule_id?: string;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string;
@@ -185,7 +195,7 @@ const resolveActiveArea = async (areaId: string) => {
   return area;
 };
 
-const resolveOfficer = async (officerId: string | undefined, areaId: string) => {
+const resolveOfficer = async (officerId: string | undefined, areaId: string, effectiveDate: string) => {
   if (!officerId) return undefined;
 
   const officer = await db.employees.get(officerId);
@@ -198,13 +208,36 @@ const resolveOfficer = async (officerId: string | undefined, areaId: string) => 
   const areaAssignment = await db.employeeAreas
     .where('employee_id')
     .equals(officerId)
-    .and((assignment) => assignment.area_id === areaId)
+    .and((assignment) => (
+      assignment.area_id === areaId &&
+      (!assignment.effective_from || assignment.effective_from.slice(0, 10) <= effectiveDate) &&
+      (!assignment.effective_until || assignment.effective_until.slice(0, 10) >= effectiveDate)
+    ))
     .first();
   if (!areaAssignment) {
     throw new Error('Area anggota belum termasuk wilayah tugas petugas yang dipilih.');
   }
 
   return officer;
+};
+
+const resolveCollectionAssignment = async (input: SanitizedCooperativeMemberInput) => {
+  const schedule = input.collection_schedule_id
+    ? await db.employeeCollectionSchedules.get(input.collection_schedule_id)
+    : await resolveMemberCollectionDefault(input.area_id, input.join_date);
+  if (!schedule) {
+    if (input.status === 'ACTIVE') {
+      throw new Error('Anggota aktif wajib memiliki jadwal penagihan yang valid.');
+    }
+    return undefined;
+  }
+  const options = await listCollectionScheduleOptions(input.area_id, input.join_date);
+  const valid = options.find((row) => row.id === schedule.id);
+  if (!valid) throw new Error('Jadwal penagihan tidak aktif atau tidak berlaku pada tanggal bergabung.');
+  if (input.officer_id && valid.employee_id !== input.officer_id) {
+    throw new Error('Petugas anggota harus sesuai dengan jadwal penagihan yang dipilih.');
+  }
+  return valid as EmployeeCollectionSchedule;
 };
 
 export const createCooperativeMember = async (
@@ -216,7 +249,12 @@ export const createCooperativeMember = async (
     sanitizedInput.status === 'ACTIVE' ? await generateCooperativeMemberNumber() : ''
   );
   const area = await resolveActiveArea(sanitizedInput.area_id);
-  const officer = await resolveOfficer(sanitizedInput.officer_id, sanitizedInput.area_id);
+  const collectionSchedule = await resolveCollectionAssignment(sanitizedInput);
+  const officer = await resolveOfficer(
+    collectionSchedule?.employee_id ?? sanitizedInput.officer_id,
+    sanitizedInput.area_id,
+    sanitizedInput.join_date,
+  );
   const now = new Date().toISOString();
   const member: CooperativeMember = withPendingCooperativeSync({
     id: crypto.randomUUID(),
@@ -224,8 +262,12 @@ export const createCooperativeMember = async (
     member_number: memberNumber,
     area_name: area.name,
     area_code: area.code,
+    officer_id: collectionSchedule?.employee_id ?? sanitizedInput.officer_id,
     officer_name: officer?.name,
     officer_position: officer?.position,
+    collection_schedule_id: collectionSchedule?.id,
+    collection_weekday: collectionSchedule?.weekday,
+    collection_assignment_needs_review: sanitizedInput.status === 'ACTIVE' && !collectionSchedule,
     created_at: now,
     updated_at: now,
     created_by: currentUser?.id,
@@ -265,7 +307,12 @@ export const updateCooperativeMember = async (
     sanitizedInput.status === 'ACTIVE' ? await generateCooperativeMemberNumber(id) : ''
   );
   const area = await resolveActiveArea(sanitizedInput.area_id);
-  const officer = await resolveOfficer(sanitizedInput.officer_id, sanitizedInput.area_id);
+  const collectionSchedule = await resolveCollectionAssignment(sanitizedInput);
+  const officer = await resolveOfficer(
+    collectionSchedule?.employee_id ?? sanitizedInput.officer_id,
+    sanitizedInput.area_id,
+    sanitizedInput.join_date,
+  );
   const updatedAt = new Date().toISOString();
   let updatedMember: CooperativeMember | undefined;
 
@@ -285,8 +332,12 @@ export const updateCooperativeMember = async (
       member_number: memberNumber,
       area_name: area.name,
       area_code: area.code,
+      officer_id: collectionSchedule?.employee_id ?? sanitizedInput.officer_id,
       officer_name: officer?.name,
       officer_position: officer?.position,
+      collection_schedule_id: collectionSchedule?.id,
+      collection_weekday: collectionSchedule?.weekday,
+      collection_assignment_needs_review: sanitizedInput.status === 'ACTIVE' && !collectionSchedule,
       updated_at: updatedAt,
       updated_by: currentUser?.id,
       updated_by_name: currentUser?.name,
@@ -305,6 +356,14 @@ export const updateCooperativeMember = async (
 
   if (!updatedMember) {
     throw new Error('Anggota koperasi tidak ditemukan setelah diperbarui.');
+  }
+  if (!updatedMember.collection_assignment_needs_review) {
+    await db.implementationReviewQueue.update(`member-collection-schedule:${id}`, {
+      status: 'RESOLVED',
+      resolved_at: updatedAt,
+      resolved_by: currentUser?.id,
+      updated_at: updatedAt,
+    });
   }
 
   await enqueueCooperativeMembersSync([updatedMember], 'update');

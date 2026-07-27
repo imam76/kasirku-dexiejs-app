@@ -772,6 +772,50 @@ async fn is_current_migration_schema_compatible(
             && column_exists(pool, "employees", "base_salary").await?
             && column_exists(pool, "departments", "parent_department_id").await?
             && column_exists(pool, "activity_logs", "changes").await?),
+        65 => Ok(table_has_columns(
+            pool,
+            "employee_access_profiles",
+            &[
+                "employee_id",
+                "user_id",
+                "user_name",
+                "login_role_id",
+                "pin_hash",
+                "pin_salt",
+                "is_login_enabled",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            ],
+        )
+        .await?
+            && function_exists(pool, "generate_employee_number").await?
+            && function_exists(pool, "ensure_legacy_employee_hr_defaults").await?
+            && function_exists(pool, "sync_employee_access_profile_from_legacy_columns").await?),
+        66 => Ok(tables_exist(
+            pool,
+            &[
+                "work_schedule_templates",
+                "work_schedule_days",
+                "employee_work_schedule_assignments",
+                "company_calendar_days",
+                "leave_types",
+                "leave_requests",
+                "leave_request_actions",
+                "leave_balance_ledger",
+                "employee_availability_exceptions",
+                "collection_coverage_exceptions",
+            ],
+        )
+        .await?
+            && column_exists(pool, "cooperative_members", "collection_schedule_id").await?
+            && column_exists(
+                pool,
+                "employee_collection_schedules",
+                "is_default_for_new_members",
+            )
+            .await?
+            && column_exists(pool, "employee_areas", "effective_from").await?),
         _ => Ok(false),
     }
 }

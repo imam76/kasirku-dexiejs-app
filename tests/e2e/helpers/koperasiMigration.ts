@@ -40,6 +40,8 @@ const employeeArea: EmployeeArea = {
   area_id: area.id,
   area_name: area.name,
   area_code: area.code,
+  effective_from: createdAt,
+  is_primary: true,
   created_at: createdAt,
   updated_at: createdAt,
 };
@@ -54,6 +56,7 @@ const schedule: EmployeeCollectionSchedule = {
   area_code: area.code,
   weekday: 1,
   effective_from: createdAt,
+  is_default_for_new_members: true,
   is_active: true,
   created_at: createdAt,
   updated_at: createdAt,
@@ -69,6 +72,8 @@ const member: CooperativeMember = {
   officer_id: employee.id,
   officer_name: employee.name,
   officer_position: employee.position,
+  collection_schedule_id: schedule.id,
+  collection_weekday: schedule.weekday,
   join_date: createdAt,
   status: 'ACTIVE',
   created_at: createdAt,
@@ -112,6 +117,17 @@ export async function seedMigrationFixture(page: Page) {
       };
     });
   }, fixture);
+
+  await page.evaluate(async () => {
+    const { db } = await import('/src/lib/db.ts');
+    const generalLedgerModules = (await db.enabledModules.toArray())
+      .filter((module) => module.code === 'GENERAL_LEDGER')
+      .map((module) => module.id);
+    await db.generalLedgerSetting.clear();
+    if (generalLedgerModules.length > 0) {
+      await db.enabledModules.bulkDelete(generalLedgerModules);
+    }
+  });
 
   await page.reload();
 }

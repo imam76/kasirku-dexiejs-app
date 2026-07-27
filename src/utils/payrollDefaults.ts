@@ -133,20 +133,30 @@ export const buildPayrollEmployeeDefaults = ({
       .filter((component) => component.is_active)
       .map((component) => [component.id, component]),
   );
-  const activeAssignments = assignments.filter((assignment) => (
-    assignment.employee_id === employee.id &&
-    assignment.is_active &&
-    activeSalaryComponentById.has(assignment.salary_component_id)
-  ));
+  const activeAssignments = Array.from(
+    assignments
+      .filter((assignment) => (
+        assignment.employee_id === employee.id
+        && assignment.is_active
+        && activeSalaryComponentById.has(assignment.salary_component_id)
+      ))
+      .sort((left, right) => (
+        left.updated_at.localeCompare(right.updated_at)
+        || left.id.localeCompare(right.id)
+      ))
+      .reduce<Map<string, EmployeeSalaryComponent>>((result, assignment) => {
+        result.set(assignment.salary_component_id, assignment);
+        return result;
+      }, new Map())
+      .values(),
+  );
   const baseSalaryAssignment = activeAssignments.find((assignment) => (
     BASE_SALARY_CODES.has(normalizeComponentCode(
       activeSalaryComponentById.get(assignment.salary_component_id)?.code
         ?? assignment.component_code,
     )) &&
-    (
-      activeSalaryComponentById.get(assignment.salary_component_id)?.calculation
-        ?? assignment.calculation
-    ) === 'FIXED'
+    (assignment.calculation
+      ?? activeSalaryComponentById.get(assignment.salary_component_id)?.calculation) === 'FIXED'
   ));
 
   const profileBaseSalary = roundPayrollAmount(
@@ -164,12 +174,12 @@ export const buildPayrollEmployeeDefaults = ({
       component?.code ?? assignment.component_code,
     )))
     .map(({ assignment, component }): PayrollComponentPreview => {
-      const calculation = component?.calculation ?? assignment.calculation;
+      const calculation = assignment.calculation ?? component?.calculation;
       return {
         assignment_id: assignment.id,
         component_code: component?.code ?? assignment.component_code,
         component_name: component?.name ?? assignment.component_name,
-        kind: component?.kind ?? assignment.kind,
+        kind: assignment.kind ?? component?.kind,
         calculation,
         configured_value: assignment.value,
         amount: calculateComponentAmount(calculation, assignment.value, baseSalary),

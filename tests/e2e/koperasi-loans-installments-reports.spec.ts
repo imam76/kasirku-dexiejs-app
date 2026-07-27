@@ -36,7 +36,7 @@ test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
     await expectCooperativeReportSummary(page);
 
     await page.goto('/finance/general-ledger');
-    await expect(page.getByText(/Pencairan pinjaman .*KSU-002 - Budi Hartono/)).toBeVisible();
+    await expect(page.getByText(/Pencairan pinjaman .*0002 - Budi Hartono/)).toBeVisible();
     await expect(page.getByText(/Pembayaran angsuran/)).toBeVisible();
 
     await payRemainingInstallments(page, demoMembers.budi);

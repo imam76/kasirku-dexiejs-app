@@ -110,6 +110,7 @@ import {
   stockMutationPostgresAdapter,
   taxPostgresAdapter,
   warehousePostgresAdapter,
+  workforcePostgresAdapter,
   type RemoteAccountingFiscalYearDto,
   type RemoteAccountingPeriodDto,
   type RemoteAccountingInitialSetupSettingDto,
@@ -170,6 +171,7 @@ import {
   type RemoteRoleDto,
   type RemoteRolePermissionDto,
   type RemoteRecordCooperativeLoanCollectionEventResult,
+  type RemoteLeaveWorkflowBundleDto,
   type RemoteSalesDocumentBundleDto,
   type RemoteSalesDocumentDto,
   type RemoteSalesDocumentItemDto,
@@ -190,6 +192,7 @@ import {
 } from '@/services/fiscalYearReadService';
 import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
+import type { LeaveRequest } from '@/types';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -230,6 +233,7 @@ const EMPLOYEE_SALARY_COMPONENT_ENTITY = 'employeeSalaryComponents';
 const EMPLOYEE_AREA_ENTITY = 'employeeAreas';
 const EMPLOYEE_CASH_ADVANCE_ENTITY = 'employeeCashAdvances';
 const EMPLOYEE_COLLECTION_SCHEDULE_ENTITY = 'employeeCollectionSchedules';
+const LEAVE_WORKFLOW_ENTITY = 'leaveWorkflows';
 const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
 const JOURNAL_ENTRY_ENTITY = 'journalEntries';
 const OPENING_BALANCE_ENTITY = 'openingBalanceBatches';
@@ -418,6 +422,9 @@ const mapCooperativeMemberToRemoteDto = (member: CooperativeMember): RemoteCoope
   officer_id: member.officer_id,
   officer_name: member.officer_name,
   officer_position: member.officer_position,
+  collection_schedule_id: member.collection_schedule_id,
+  collection_weekday: member.collection_weekday,
+  collection_assignment_needs_review: member.collection_assignment_needs_review,
   join_date: member.join_date,
   status: member.status,
   notes: member.notes,
@@ -870,6 +877,9 @@ const mapEmployeeAreaToRemoteDto = (assignment: EmployeeArea): RemoteEmployeeAre
   area_id: assignment.area_id,
   area_name: assignment.area_name,
   area_code: assignment.area_code ?? null,
+  effective_from: assignment.effective_from ?? null,
+  effective_until: assignment.effective_until ?? null,
+  is_primary: assignment.is_primary ?? false,
   created_at: assignment.created_at,
   updated_at: assignment.updated_at,
   deleted_at: null,
@@ -897,6 +907,7 @@ const mapEmployeeCollectionScheduleToRemoteDto = (
   weekday: schedule.weekday,
   effective_from: schedule.effective_from ?? null,
   effective_until: schedule.effective_until ?? null,
+  is_default_for_new_members: schedule.is_default_for_new_members ?? false,
   is_active: schedule.is_active,
   created_at: schedule.created_at,
   updated_at: schedule.updated_at,
@@ -2360,6 +2371,33 @@ const isRemoteEmployeeCollectionScheduleDto = (
   );
 };
 
+const isRemoteLeaveWorkflowBundleDto = (
+  payload: unknown,
+): payload is RemoteLeaveWorkflowBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+  const candidate = payload as Partial<RemoteLeaveWorkflowBundleDto>;
+  return Boolean(
+    candidate.request &&
+    typeof candidate.request.id === 'string' &&
+    typeof candidate.request.employee_id === 'string' &&
+    typeof candidate.request.status === 'string' &&
+    typeof candidate.request.updated_at === 'string' &&
+    Array.isArray(candidate.actions) &&
+    candidate.actions.every((action) => (
+      typeof action?.id === 'string' &&
+      typeof action?.leave_request_id === 'string' &&
+      typeof action?.action === 'string'
+    )) &&
+    Array.isArray(candidate.ledger) &&
+    candidate.ledger.every((entry) => (
+      typeof entry?.id === 'string' &&
+      typeof entry?.employee_id === 'string' &&
+      typeof entry?.leave_type_id === 'string' &&
+      typeof entry?.movement_kind === 'string'
+    )),
+  );
+};
+
 const isRemotePayrollRunDto = (payload: unknown): payload is RemotePayrollRunDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3777,6 +3815,16 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === LEAVE_WORKFLOW_ENTITY && isRemoteLeaveWorkflowBundleDto(queueItem.payload)) {
+    const current = await db.leaveRequests.get(queueItem.entity_id);
+    if (current?.updated_at === queueItem.payload.request.updated_at) {
+      await db.leaveRequests.update(queueItem.entity_id, {
+        sync_status: 'failed',
+        sync_error: errorMessage,
+      });
+    }
+  }
+
   if (queueItem.entity === PAYROLL_RUN_ENTITY && isRemotePayrollRunBundleDto(queueItem.payload)) {
     await updatePayrollRunSyncMetadata(queueItem.entity_id, queueItem.payload.run.updated_at, {
       sync_status: 'failed',
@@ -4244,6 +4292,21 @@ const processEmployeeCollectionScheduleQueueItem = async (queueItem: SyncQueueIt
   return employeeCollectionSchedulePostgresAdapter.upsert(queueItem.payload);
 };
 
+const processLeaveWorkflowQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Workflow cuti sync queue tidak mendukung operasi delete.');
+  }
+  if (!isRemoteLeaveWorkflowBundleDto(queueItem.payload)) {
+    throw new Error('Payload workflow cuti sync queue tidak valid.');
+  }
+  const sessionToken = await getCurrentSyncServerSessionToken();
+  if (!sessionToken) {
+    throw new Error('Sesi server tidak tersedia untuk sinkronisasi workflow cuti. Login server lalu retry sync.');
+  }
+  await workforcePostgresAdapter.upsertLeaveWorkflow(sessionToken, queueItem.payload);
+  return true;
+};
+
 const processPayrollRunQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Payroll sync queue tidak mendukung operasi delete.');
@@ -4580,6 +4643,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteEmployeeArea: RemoteEmployeeAreaDto | null = null;
     let remoteEmployeeCashAdvanceBundle: RemoteEmployeeCashAdvanceBundleDto | null = null;
     let remoteEmployeeCollectionSchedule: RemoteEmployeeCollectionScheduleDto | null = null;
+    let remoteLeaveWorkflowSynced = false;
     let remoteFinanceTransaction: RemoteFinanceTransactionDto | null = null;
     let remoteCashBankReconciliation: RemoteCashBankReconciliationDto | null = null;
     let remoteAccountingPeriod: RemoteAccountingPeriodDto | null = null;
@@ -4661,6 +4725,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteEmployeeCashAdvanceBundle = await processEmployeeCashAdvanceQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === EMPLOYEE_COLLECTION_SCHEDULE_ENTITY) {
       remoteEmployeeCollectionSchedule = await processEmployeeCollectionScheduleQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === LEAVE_WORKFLOW_ENTITY) {
+      remoteLeaveWorkflowSynced = await processLeaveWorkflowQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FINANCE_TRANSACTION_ENTITY) {
       remoteFinanceTransaction = await processFinanceTransactionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === CASH_BANK_RECONCILIATION_ENTITY) {
@@ -4709,6 +4775,37 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remotePaymentMethod = await processPaymentMethodQueueItem(currentQueueItem);
     } else {
       throw new Error(`Entity sync queue tidak didukung: ${currentQueueItem.entity}`);
+    }
+
+    if (remoteLeaveWorkflowSynced && isRemoteLeaveWorkflowBundleDto(currentQueueItem.payload)) {
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      const current = await db.leaveRequests.get(currentQueueItem.entity_id);
+      if (current?.updated_at === currentQueueItem.payload.request.updated_at) {
+        await db.leaveRequests.update(current.id, {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at: currentQueueItem.payload.request.updated_at,
+        });
+      }
+      await Promise.all([
+        ...currentQueueItem.payload.actions.map((action) => (
+          db.leaveRequestActions.update(action.id, {
+            sync_status: 'synced',
+            sync_error: undefined,
+            last_synced_at: syncedAt,
+          })
+        )),
+        ...currentQueueItem.payload.ledger.map((entry) => (
+          db.leaveBalanceLedger.update(entry.id, {
+            sync_status: 'synced',
+            sync_error: undefined,
+            last_synced_at: syncedAt,
+          })
+        )),
+      ]);
+      return;
     }
 
     if (remoteHrRecord) {
@@ -6539,6 +6636,63 @@ export const enqueueEmployeeSalaryComponentSync = (
   mapEmployeeSalaryComponentToRemoteDto(assignment),
   operation,
 );
+
+const buildLeaveWorkflowSyncBundle = async (
+  request: LeaveRequest,
+): Promise<RemoteLeaveWorkflowBundleDto> => {
+  const [actions, ledger] = await Promise.all([
+    db.leaveRequestActions.where('leave_request_id').equals(request.id).toArray(),
+    db.leaveBalanceLedger.where('leave_request_id').equals(request.id).toArray(),
+  ]);
+  return { request, actions, ledger };
+};
+
+export const enqueueLeaveWorkflowSync = async (
+  request: LeaveRequest,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: LEAVE_WORKFLOW_ENTITY,
+    entity_id: request.id,
+    operation,
+    payload: await buildLeaveWorkflowSyncBundle(request),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+  return queueItem;
+};
+
+export const enqueuePendingWorkforceForSync = async () => {
+  const [requests, queueItems, actions] = await Promise.all([
+    db.leaveRequests
+      .filter((request) => request.sync_status === 'pending' || request.sync_status === 'failed')
+      .toArray(),
+    db.syncQueue.toArray(),
+    db.leaveRequestActions.toArray(),
+  ]);
+  const approvedRequestIds = new Set(
+    actions
+      .filter((action) => action.action === 'HR_APPROVED')
+      .map((action) => action.leave_request_id),
+  );
+  for (const request of requests) {
+    if (request.status === 'APPROVED' || approvedRequestIds.has(request.id)) continue;
+    const alreadyQueued = queueItems.some((queueItem) => (
+      queueItem.entity === LEAVE_WORKFLOW_ENTITY &&
+      queueItem.entity_id === request.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteLeaveWorkflowBundleDto(queueItem.payload) &&
+      queueItem.payload.request.updated_at === request.updated_at
+    ));
+    if (!alreadyQueued) await enqueueLeaveWorkflowSync(request, 'update');
+  }
+};
 
 export const enqueueEmployeeAreaSync = async (
   assignment: EmployeeArea,

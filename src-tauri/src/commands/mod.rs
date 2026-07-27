@@ -32,3 +32,4 @@ pub mod stock_mutation_commands;
 pub mod stock_opname_commands;
 pub mod tax_commands;
 pub mod warehouse_commands;
+pub mod workforce_commands;

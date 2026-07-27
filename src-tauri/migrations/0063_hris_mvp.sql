@@ -231,28 +231,34 @@ VALUES
     ('deduction-tax', 'PPH-21', 'PPh 21', 'DEDUCTION', 'FIXED', 0, FALSE, TRUE, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+WITH permission_grants AS (
+    SELECT DISTINCT
+        source.role_id,
+        mapping.target_permission
+    FROM role_permissions source
+    JOIN (
+        VALUES
+            ('EMPLOYEE_MANAGE', 'hr.employee.view'),
+            ('EMPLOYEE_MANAGE', 'hr.employee.create'),
+            ('EMPLOYEE_MANAGE', 'hr.employee.update'),
+            ('EMPLOYEE_MANAGE', 'hr.employee.deactivate'),
+            ('EMPLOYEE_MANAGE', 'hr.contract.manage'),
+            ('DEPARTMENT_MANAGE', 'hr.organization.manage'),
+            ('FINANCE_ACCESS', 'hr.payroll.view'),
+            ('FINANCE_ACCESS', 'hr.payroll.manage'),
+            ('REPORT_PAYROLL_VIEW', 'hr.payroll.view')
+    ) AS mapping(source_permission, target_permission)
+        ON mapping.source_permission = source.permission_code
+    WHERE source.deleted_at IS NULL
+)
 INSERT INTO role_permissions (id, role_id, permission_code, created_at, updated_at, deleted_at)
 SELECT
-    source.role_id || ':' || mapping.target_permission,
-    source.role_id,
-    mapping.target_permission,
+    permission_grants.role_id || ':' || permission_grants.target_permission,
+    permission_grants.role_id,
+    permission_grants.target_permission,
     NOW(),
     NOW(),
     NULL
-FROM role_permissions source
-JOIN (
-    VALUES
-        ('EMPLOYEE_MANAGE', 'hr.employee.view'),
-        ('EMPLOYEE_MANAGE', 'hr.employee.create'),
-        ('EMPLOYEE_MANAGE', 'hr.employee.update'),
-        ('EMPLOYEE_MANAGE', 'hr.employee.deactivate'),
-        ('EMPLOYEE_MANAGE', 'hr.contract.manage'),
-        ('DEPARTMENT_MANAGE', 'hr.organization.manage'),
-        ('FINANCE_ACCESS', 'hr.payroll.view'),
-        ('FINANCE_ACCESS', 'hr.payroll.manage'),
-        ('REPORT_PAYROLL_VIEW', 'hr.payroll.view')
-) AS mapping(source_permission, target_permission)
-    ON mapping.source_permission = source.permission_code
-WHERE source.deleted_at IS NULL
+FROM permission_grants
 ON CONFLICT (role_id, permission_code) DO UPDATE
 SET deleted_at = NULL, updated_at = EXCLUDED.updated_at;

@@ -1,8 +1,9 @@
-import { AutoComplete, Button, DatePicker, Form, Input, Modal, Select } from 'antd';
+import { Alert, AutoComplete, Button, DatePicker, Form, Input, Modal, Select } from 'antd';
 import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import dayjs from '@/lib/dayjs';
 import { useI18n } from '@/hooks/useI18n';
 import { buildAvailableCooperativeMemberNumberOptions } from '@/services/cooperativeMemberService';
 import type {
@@ -12,6 +13,7 @@ import type {
   CooperativeMemberStatus,
   Employee,
   EmployeeArea,
+  EmployeeCollectionSchedule,
 } from '@/types';
 import { cooperativeMemberStatusOptions } from './memberOptions';
 
@@ -25,6 +27,7 @@ export interface CooperativeMemberFormValues {
   address?: string;
   area_id: string;
   officer_id?: string;
+  collection_schedule_id?: string;
   join_date: Dayjs | null;
   status: CooperativeMemberStatus;
   notes?: string;
@@ -36,6 +39,7 @@ interface CooperativeMemberFormModalProps {
   areas: CooperativeArea[];
   employees: Employee[];
   employeeAreaAssignments: EmployeeArea[];
+  collectionSchedules: EmployeeCollectionSchedule[];
   members: CooperativeMember[];
   memberCodes: CooperativeMemberCode[];
   editingMemberId?: string;
@@ -53,6 +57,7 @@ export default function CooperativeMemberFormModal({
   areas,
   employees,
   employeeAreaAssignments,
+  collectionSchedules,
   members,
   memberCodes,
   editingMemberId,
@@ -67,6 +72,23 @@ export default function CooperativeMemberFormModal({
   const [areaSearchText, setAreaSearchText] = useState('');
   const selectedOfficerId = Form.useWatch('officer_id', form);
   const selectedAreaId = Form.useWatch('area_id', form);
+  const selectedJoinDate = Form.useWatch('join_date', form);
+  const selectedScheduleId = Form.useWatch('collection_schedule_id', form);
+  const selectedStatus = Form.useWatch('status', form);
+  const joinDateKey = selectedJoinDate?.format('YYYY-MM-DD') ?? dayjs().format('YYYY-MM-DD');
+  const scheduleOptions = useMemo(() => collectionSchedules
+    .filter((schedule) => (
+      schedule.is_active &&
+      schedule.area_id === selectedAreaId &&
+      (!selectedOfficerId || schedule.employee_id === selectedOfficerId) &&
+      (!schedule.effective_from || schedule.effective_from.slice(0, 10) <= joinDateKey) &&
+      (!schedule.effective_until || schedule.effective_until.slice(0, 10) >= joinDateKey)
+    ))
+    .sort((left, right) => (
+      Number(Boolean(right.is_default_for_new_members)) - Number(Boolean(left.is_default_for_new_members)) ||
+      left.weekday - right.weekday
+    )), [collectionSchedules, joinDateKey, selectedAreaId, selectedOfficerId]);
+  const selectedSchedule = scheduleOptions.find((schedule) => schedule.id === selectedScheduleId);
   const memberNumberOptions = useMemo(() => (
     buildAvailableCooperativeMemberNumberOptions(memberCodes, members, { excludeMemberId: editingMemberId })
       .map((memberNumber) => ({ value: memberNumber, label: memberNumber }))
@@ -101,15 +123,38 @@ export default function CooperativeMemberFormModal({
     const defaultAreaId = officerId ? defaultAreaByEmployeeId.get(officerId) : undefined;
     if (!defaultAreaId) return;
 
-    form.setFieldsValue({ area_id: defaultAreaId });
+    const candidate = collectionSchedules.find((schedule) => (
+      schedule.employee_id === officerId &&
+      schedule.area_id === defaultAreaId &&
+      schedule.is_active &&
+      (schedule.is_default_for_new_members || collectionSchedules.filter((row) => (
+        row.employee_id === officerId && row.area_id === defaultAreaId && row.is_active
+      )).length === 1)
+    ));
+    form.setFieldsValue({
+      area_id: defaultAreaId,
+      collection_schedule_id: candidate?.id,
+    });
   };
 
   const handleAreaChange = (areaId: string) => {
     setAreaSearchText('');
     const officerId = form.getFieldValue('officer_id');
-    if (officerId && !assignedAreaIdsByEmployee.get(officerId)?.has(areaId)) {
-      form.setFieldsValue({ officer_id: undefined });
-    }
+    const available = collectionSchedules.filter((schedule) => (
+      schedule.area_id === areaId &&
+      schedule.is_active &&
+      (!schedule.effective_from || schedule.effective_from.slice(0, 10) <= joinDateKey) &&
+      (!schedule.effective_until || schedule.effective_until.slice(0, 10) >= joinDateKey)
+    ));
+    const defaultSchedule = available.filter((schedule) => schedule.is_default_for_new_members).length === 1
+      ? available.find((schedule) => schedule.is_default_for_new_members)
+      : (available.length === 1 ? available[0] : undefined);
+    form.setFieldsValue({
+      officer_id: officerId && assignedAreaIdsByEmployee.get(officerId)?.has(areaId)
+        ? officerId
+        : defaultSchedule?.employee_id,
+      collection_schedule_id: defaultSchedule?.id,
+    });
   };
 
   const areaCreateName = areaSearchText.trim();
@@ -294,6 +339,49 @@ export default function CooperativeMemberFormModal({
             }))}
           />
         </Form.Item>
+
+        <Form.Item
+          name="collection_schedule_id"
+          label="Jadwal Penagihan"
+          dependencies={['status', 'area_id', 'officer_id', 'join_date']}
+          rules={[
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (getFieldValue('status') === 'ACTIVE' && !value) {
+                  return Promise.reject(new Error('Jadwal penagihan wajib dikonfirmasi untuk anggota aktif.'));
+                }
+                return Promise.resolve();
+              },
+            }),
+          ]}
+        >
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={selectedAreaId ? 'Konfirmasi jadwal area' : 'Pilih area terlebih dahulu'}
+            disabled={!selectedAreaId}
+            data-testid="koperasi-member-collection-schedule-select"
+            onChange={(scheduleId?: string) => {
+              const schedule = collectionSchedules.find((row) => row.id === scheduleId);
+              form.setFieldsValue({ officer_id: schedule?.employee_id });
+            }}
+            options={scheduleOptions.map((schedule) => ({
+              value: schedule.id,
+              label: `${schedule.employee_name} • Hari ${schedule.weekday}${schedule.is_default_for_new_members ? ' • Default area' : ''}`,
+            }))}
+          />
+        </Form.Item>
+
+        {selectedAreaId && selectedStatus === 'ACTIVE' && !selectedSchedule && (
+          <Alert
+            type="warning"
+            showIcon
+            className="mb-4"
+            message="Jadwal perlu dikonfirmasi"
+            description="Sistem hanya mengisi otomatis bila area memiliki tepat satu jadwal default. Pilih jadwal sebelum menyimpan anggota aktif."
+          />
+        )}
 
         <Form.Item name="address" label={t('cooperative.members.form.address')}>
           <TextArea
