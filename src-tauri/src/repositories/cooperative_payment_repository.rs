@@ -10,7 +10,7 @@ use crate::models::cooperative::{
 use crate::repositories::{
     cooperative_repository, finance_transaction_repository, journal_entry_repository,
 };
-use chrono::{DateTime, Duration, FixedOffset, Utc};
+use chrono::{DateTime, Duration, FixedOffset, NaiveDate, Utc};
 use sqlx::{FromRow, PgPool, Postgres, Transaction};
 use thiserror::Error;
 use uuid::Uuid;
@@ -67,6 +67,16 @@ struct LockedLoan {
     officer_name: Option<String>,
     officer_position: Option<String>,
     area_id: Option<String>,
+    collection_schedule_id: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+struct CoverageResolutionRow {
+    status: String,
+    resolution_type: Option<String>,
+    replacement_employee_id: Option<String>,
+    collection_date: NaiveDate,
+    rescheduled_date: Option<NaiveDate>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -398,6 +408,146 @@ fn assert_actor_scope(
     Ok(())
 }
 
+async fn resolve_effective_collector(
+    tx: &mut Transaction<'_, Postgres>,
+    loan: &LockedLoan,
+    payment_date: DateTime<FixedOffset>,
+) -> Result<Option<String>, CooperativeMutationError> {
+    let Some(schedule_id) = loan.collection_schedule_id.as_deref() else {
+        // Compatibility untuk snapshot pinjaman lama sebelum jadwal penagihan diwajibkan.
+        return Ok(loan.officer_id.clone());
+    };
+    let jakarta_offset = FixedOffset::east_opt(7 * 60 * 60).ok_or_else(|| {
+        CooperativeMutationError::Invalid("Timezone Asia/Jakarta tidak valid.".to_string())
+    })?;
+    let local_date = payment_date.with_timezone(&jakarta_offset).date_naive();
+
+    let direct = sqlx::query_as::<_, CoverageResolutionRow>(
+        r#"
+        SELECT
+          status,
+          resolution_type,
+          replacement_employee_id,
+          collection_date,
+          rescheduled_date
+        FROM collection_coverage_exceptions
+        WHERE collection_schedule_id = $1
+          AND collection_date = $2
+          AND status <> 'CANCELLED'
+          AND deleted_at IS NULL
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(schedule_id)
+    .bind(local_date)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    if let Some(coverage) = direct {
+        match (
+            coverage.status.as_str(),
+            coverage.resolution_type.as_deref(),
+        ) {
+            ("OPEN", _) => {
+                return Err(CooperativeMutationError::Conflict(
+                    "Penagihan belum memiliki coverage yang terselesaikan.".to_string(),
+                ));
+            }
+            ("RESOLVED", Some("SUBSTITUTE")) => {
+                return coverage.replacement_employee_id.map(Some).ok_or_else(|| {
+                    CooperativeMutationError::Conflict(
+                        "Coverage pengganti belum memiliki petugas yang valid.".to_string(),
+                    )
+                });
+            }
+            ("RESOLVED", Some("RESCHEDULE")) => {
+                return Err(CooperativeMutationError::Conflict(format!(
+                    "Penagihan dijadwalkan ulang ke {}.",
+                    coverage
+                        .rescheduled_date
+                        .map(|date| date.to_string())
+                        .unwrap_or_else(|| coverage.collection_date.to_string())
+                )));
+            }
+            _ => {}
+        }
+    }
+
+    let moved_to_date = sqlx::query_as::<_, CoverageResolutionRow>(
+        r#"
+        SELECT
+          status,
+          resolution_type,
+          replacement_employee_id,
+          collection_date,
+          rescheduled_date
+        FROM collection_coverage_exceptions
+        WHERE collection_schedule_id = $1
+          AND rescheduled_date = $2
+          AND status = 'RESOLVED'
+          AND resolution_type = 'RESCHEDULE'
+          AND deleted_at IS NULL
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(schedule_id)
+    .bind(local_date)
+    .fetch_optional(&mut **tx)
+    .await?;
+    if moved_to_date.is_some() {
+        return Ok(loan.officer_id.clone());
+    }
+
+    if let Some(employee_id) = loan.officer_id.as_deref() {
+        let unavailable = sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT EXISTS (
+              SELECT 1
+              FROM employee_availability_exceptions
+              WHERE employee_id = $1
+                AND date = $2
+                AND deleted_at IS NULL
+            )
+            "#,
+        )
+        .bind(employee_id)
+        .bind(local_date)
+        .fetch_one(&mut **tx)
+        .await?;
+        if unavailable {
+            return Err(CooperativeMutationError::Conflict(
+                "Petugas asal tidak tersedia dan coverage belum ditentukan.".to_string(),
+            ));
+        }
+    }
+    Ok(loan.officer_id.clone())
+}
+
+fn assert_actor_collection_scope(
+    actor: &ActorAccess,
+    can_access_all_areas: bool,
+    loan: &LockedLoan,
+    effective_collector_id: Option<&str>,
+) -> Result<(), CooperativeMutationError> {
+    if loan.area_id.is_none() {
+        return Err(CooperativeMutationError::Invalid(
+            "Pinjaman belum memiliki snapshot area penagihan.".to_string(),
+        ));
+    }
+    if can_access_all_areas {
+        return Ok(());
+    }
+    let actor_employee_id = actor.employee_id.as_deref().unwrap_or(&actor.user_id);
+    if effective_collector_id != Some(actor_employee_id) {
+        return Err(CooperativeMutationError::Unauthorized(
+            "Penagihan berada di luar worklist efektif petugas yang sedang login.".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 async fn get_locked_installment(
     tx: &mut Transaction<'_, Postgres>,
     installment_id: &str,
@@ -501,7 +651,8 @@ async fn get_locked_loan(
           officer_id,
           officer_name,
           officer_position,
-          area_id
+          area_id,
+          collection_schedule_id
         FROM cooperative_loans
         WHERE id = $1
         FOR UPDATE
@@ -1219,21 +1370,28 @@ async fn post_loan_payment_batch_internal(
             "Pembayaran hanya dapat diposting untuk pinjaman aktif.".to_string(),
         ));
     }
-    assert_actor_scope(&actor, can_access_all_areas, &loan)?;
+    let effective_collector_id =
+        resolve_effective_collector(&mut tx, &loan, parsed_payment_date).await?;
+    assert_actor_collection_scope(
+        &actor,
+        can_access_all_areas,
+        &loan,
+        effective_collector_id.as_deref(),
+    )?;
 
     let collector_id = input
         .collector_id
         .clone()
-        .or_else(|| loan.officer_id.clone());
-    if loan.officer_id.is_none() && collector_id.is_some() {
+        .or_else(|| effective_collector_id.clone());
+    if effective_collector_id.is_none() && collector_id.is_some() {
         return Err(CooperativeMutationError::Invalid(
-            "Kolektor tidak dapat diverifikasi karena pinjaman tidak memiliki snapshot petugas."
+            "Kolektor tidak dapat diverifikasi karena jadwal tidak memiliki petugas efektif."
                 .to_string(),
         ));
     }
-    if loan.officer_id.is_some() && collector_id != loan.officer_id {
+    if effective_collector_id.is_some() && collector_id != effective_collector_id {
         return Err(CooperativeMutationError::Invalid(
-            "Kolektor harus sesuai dengan snapshot petugas pinjaman.".to_string(),
+            "Kolektor harus sesuai dengan coverage penagihan pada tanggal operasional.".to_string(),
         ));
     }
 
@@ -1911,21 +2069,28 @@ async fn post_loan_payment_internal(
             "Pembayaran hanya dapat diposting untuk pinjaman aktif.".to_string(),
         ));
     }
-    assert_actor_scope(&actor, can_access_all_areas, &loan)?;
+    let effective_collector_id =
+        resolve_effective_collector(&mut tx, &loan, parsed_payment_date).await?;
+    assert_actor_collection_scope(
+        &actor,
+        can_access_all_areas,
+        &loan,
+        effective_collector_id.as_deref(),
+    )?;
 
     let collector_id = input
         .collector_id
         .clone()
-        .or_else(|| loan.officer_id.clone());
-    if loan.officer_id.is_none() && collector_id.is_some() {
+        .or_else(|| effective_collector_id.clone());
+    if effective_collector_id.is_none() && collector_id.is_some() {
         return Err(CooperativeMutationError::Invalid(
-            "Kolektor tidak dapat diverifikasi karena pinjaman tidak memiliki snapshot petugas."
+            "Kolektor tidak dapat diverifikasi karena jadwal tidak memiliki petugas efektif."
                 .to_string(),
         ));
     }
-    if loan.officer_id.is_some() && collector_id != loan.officer_id {
+    if effective_collector_id.is_some() && collector_id != effective_collector_id {
         return Err(CooperativeMutationError::Invalid(
-            "Kolektor harus sesuai dengan snapshot petugas pinjaman.".to_string(),
+            "Kolektor harus sesuai dengan coverage penagihan pada tanggal operasional.".to_string(),
         ));
     }
 

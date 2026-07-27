@@ -58,6 +58,7 @@ export interface RecordCooperativeSavingOpeningBalanceInput {
   member_id: string;
   saving_type: CooperativeSavingType;
   amount: number;
+  opening_interest_amount?: number;
   transaction_date: string;
   notes?: string;
 }
@@ -306,7 +307,11 @@ const assertSavingBusinessRules = async (
       if (availableInterest + 0.01 < amount) {
         throw new Error(`Pengambilan jasa tidak boleh melebihi saldo jasa Rp ${availableInterest}.`);
       }
-      return;
+      return Math.min(
+        amount,
+        interestAtTransactionDate.availableOpeningInterest,
+        currentInterest.availableOpeningInterest,
+      );
     }
 
     const balance = await db.cooperativeMemberSavingBalances.get(getSavingBalanceId(member.id, savingType));
@@ -315,6 +320,8 @@ const assertSavingBusinessRules = async (
       throw new Error(`Penarikan tidak boleh melebihi saldo simpanan ${savingLabel}.`);
     }
   }
+
+  return 0;
 };
 
 const buildBalance = async (
@@ -383,6 +390,7 @@ export const recordCooperativeSaving = async (
         member_id: parsedInput.member_id,
         saving_type: parsedInput.saving_type,
         amount,
+        opening_interest_amount: 0,
         transaction_date: transactionDate,
         notes: parsedInput.notes,
       });
@@ -404,7 +412,7 @@ export const recordCooperativeSaving = async (
 
   await db.transaction('rw', cooperativeSavingTables, async () => {
     const member = assertActiveMember(await db.cooperativeMembers.get(parsedInput.member_id));
-    await assertSavingBusinessRules(
+    const openingInterestAppliedAmount = await assertSavingBusinessRules(
       member,
       parsedInput.saving_type,
       parsedInput.transaction_type,
@@ -435,6 +443,9 @@ export const recordCooperativeSaving = async (
       withdrawal_source: withdrawalSource,
       interest_rate_per_month: withdrawalSource === 'INTEREST'
         ? COOPERATIVE_SAVING_INTEREST_RATE_PER_MONTH
+        : undefined,
+      opening_interest_applied_amount: withdrawalSource === 'INTEREST'
+        ? roundCurrency(openingInterestAppliedAmount)
         : undefined,
       amount,
       transaction_date: transactionDate,
@@ -560,6 +571,7 @@ export const recordCooperativeSavingOpeningBalance = async (
 
   const parsedInput = cooperativeSavingOpeningBalanceSchema.parse(input);
   const amount = roundCurrency(parsedInput.amount);
+  const openingInterestAmount = roundCurrency(parsedInput.opening_interest_amount);
   const now = new Date().toISOString();
   const transactionDate = parsedInput.transaction_date;
   const savingTransactionId = crypto.randomUUID();
@@ -578,6 +590,7 @@ export const recordCooperativeSavingOpeningBalance = async (
       member_name: member.name,
       saving_type: parsedInput.saving_type,
       transaction_type: 'OPENING_BALANCE',
+      opening_interest_amount: openingInterestAmount,
       amount,
       transaction_date: transactionDate,
       status: 'POSTED',
@@ -618,7 +631,7 @@ export const recordCooperativeSavingOpeningBalance = async (
       action: 'COOPERATIVE_SAVING_OPENING_BALANCE_RECORDED',
       entity: 'cooperativeSavingTransactions',
       entity_id: savingTransaction.id,
-      description: `${currentUser?.name ?? 'User'} mencatat saldo awal simpanan ${parsedInput.saving_type} ${member.member_number} sebesar ${amount}.`,
+      description: `${currentUser?.name ?? 'User'} mencatat saldo awal simpanan ${parsedInput.saving_type} ${member.member_number} sebesar ${amount} dan akumulasi jasa ${openingInterestAmount}.`,
     });
   });
 
@@ -661,6 +674,22 @@ export const reverseCooperativeSaving = async (
     }
     if (originalTransaction.transaction_type === 'REVERSAL') {
       throw new Error('Transaksi reversal tidak bisa direversal lagi.');
+    }
+
+    const openingInterestAmount = roundCurrency(Number(originalTransaction.opening_interest_amount || 0));
+    if (originalTransaction.transaction_type === 'OPENING_BALANCE' && openingInterestAmount > 0) {
+      const memberTransactions = await db.cooperativeSavingTransactions
+        .where('member_id')
+        .equals(originalTransaction.member_id)
+        .toArray();
+      const interestSummary = calculateCooperativeSavingInterest(
+        memberTransactions,
+        originalTransaction.member_id,
+        originalTransaction.saving_type,
+      );
+      if (interestSummary.availableOpeningInterest + 0.01 < openingInterestAmount) {
+        throw new Error('Saldo awal tidak dapat direversal karena jasa historisnya sudah digunakan.');
+      }
     }
 
     const existingReversal = await db.cooperativeSavingTransactions
@@ -736,6 +765,8 @@ export const reverseCooperativeSaving = async (
       transaction_type: 'REVERSAL',
       withdrawal_source: originalTransaction.withdrawal_source,
       interest_rate_per_month: originalTransaction.interest_rate_per_month,
+      opening_interest_amount: originalTransaction.opening_interest_amount,
+      opening_interest_applied_amount: originalTransaction.opening_interest_applied_amount,
       amount: originalTransaction.amount,
       transaction_date: now,
       status: 'POSTED',

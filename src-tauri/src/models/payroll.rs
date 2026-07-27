@@ -1,11 +1,23 @@
 use serde::{Deserialize, Serialize};
 
+fn default_payroll_period() -> String {
+    "MONTHLY".to_string()
+}
+
+fn default_salary_currency() -> String {
+    "IDR".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct PayrollRunDto {
     pub id: String,
     pub payroll_number: String,
     pub period_start: String,
     pub period_end: String,
+    #[serde(default = "default_payroll_period")]
+    pub payroll_period: String,
+    #[serde(default = "default_salary_currency")]
+    pub salary_currency: String,
     pub status: String,
     pub employee_count: i32,
     pub gross_amount: f64,
@@ -39,7 +51,14 @@ pub struct PayrollRunItemDto {
     pub payroll_run_id: String,
     pub employee_id: String,
     pub employee_name: String,
+    pub employee_number: Option<String>,
     pub employee_position: Option<String>,
+    pub employee_department: Option<String>,
+    #[serde(default = "default_payroll_period")]
+    pub payroll_period: String,
+    #[serde(default = "default_salary_currency")]
+    pub salary_currency: String,
+    pub salary_payment_method: Option<String>,
     pub base_salary: f64,
     pub allowance_amount: f64,
     pub bonus_amount: f64,

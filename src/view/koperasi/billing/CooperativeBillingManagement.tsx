@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { App, Card, Form, Input, Select, Tabs } from 'antd';
+import { Alert, App, Card, DatePicker, Form, Input, Select, Space, Table, Tabs, Tag } from 'antd';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Bell } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
 import dayjs from '@/lib/dayjs';
@@ -9,6 +10,7 @@ import { useI18n } from '@/hooks/useI18n';
 import type { CooperativeLoanInstallment } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
+import { getCollectionWorklist } from '@/services/collectionCoverageService';
 import CooperativeLoanPaymentFormModal, { type CooperativeLoanPaymentFormValues } from '../installments/CooperativeLoanPaymentFormModal';
 import CooperativeBillingCollectionModal, { type CooperativeBillingCollectionFormValues } from './CooperativeBillingCollectionModal';
 import CooperativeBillingDrawer from './CooperativeBillingDrawer';
@@ -29,7 +31,7 @@ function StatCard({ label, count, amount }: { label: string; count: number; amou
 export default function CooperativeBillingManagement() {
   const { message } = App.useApp();
   const { t } = useI18n();
-  const { can } = useAuth();
+  const { can, currentUser } = useAuth();
   const [form] = Form.useForm<CooperativeLoanPaymentFormValues>();
   const [collectionForm] = Form.useForm<CooperativeBillingCollectionFormValues>();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -37,6 +39,15 @@ export default function CooperativeBillingManagement() {
   const [payingInstallment, setPayingInstallment] = useState<CooperativeLoanInstallment | null>(null);
   const [collectingInstallment, setCollectingInstallment] = useState<CooperativeLoanInstallment | null>(null);
   const [fieldCashPaymentBadge, setFieldCashPaymentBadge] = useState<string | undefined>();
+  const [worklistDate, setWorklistDate] = useState(() => dayjs().tz());
+  const effectiveWorklist = useLiveQuery(
+    () => getCollectionWorklist(
+      worklistDate.format('YYYY-MM-DD'),
+      currentUser?.employee_id,
+    ),
+    [worklistDate.format('YYYY-MM-DD'), currentUser?.employee_id],
+    [],
+  );
 
   const { getRememberedCashAccountFields, rememberCashAccount } = useCooperativeCashPreference('loanPayment');
   const {
@@ -265,6 +276,39 @@ export default function CooperativeBillingManagement() {
 
       <Tabs
         items={[
+          {
+            key: 'worklist',
+            label: `Worklist Efektif (${effectiveWorklist.length})`,
+            children: (
+              <Space direction="vertical" className="w-full">
+                <div className="flex items-center justify-between gap-3">
+                  <Alert
+                    className="flex-1"
+                    type="info"
+                    showIcon
+                    message="Worklist ini sudah menerapkan cuti, petugas pengganti, dan reschedule."
+                  />
+                  <DatePicker
+                    value={worklistDate}
+                    onChange={(value) => value && setWorklistDate(value)}
+                  />
+                </div>
+                <Table
+                  rowKey={(row) => `${row.collection_schedule_id}:${row.member_id}`}
+                  dataSource={effectiveWorklist}
+                  columns={[
+                    { title: 'Anggota', render: (_, row) => `${row.member_number} - ${row.member_name}` },
+                    { title: 'Area', dataIndex: 'area_name' },
+                    { title: 'Tanggal Operasional', dataIndex: 'operational_date' },
+                    { title: 'Petugas Efektif', dataIndex: 'effective_employee_name' },
+                    { title: 'Target', render: (_, row) => `Rp ${formatCurrency(row.target_amount ?? 0)}` },
+                    { title: 'Coverage', render: (_, row) => row.coverage_resolution ? <Tag color="blue">{row.coverage_resolution}</Tag> : 'Normal' },
+                    { title: 'Status', render: (_, row) => <Tag color={row.is_blocked ? 'red' : 'green'}>{row.is_blocked ? 'Diblokir' : 'Siap ditagih'}</Tag> },
+                  ]}
+                />
+              </Space>
+            ),
+          },
           {
             key: 'overdue',
             label: t('cooperative.billing.tab.overdue'),

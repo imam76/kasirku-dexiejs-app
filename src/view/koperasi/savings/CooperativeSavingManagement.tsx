@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { App, Button, Card, Form, Input, Select, Space, Tabs } from 'antd';
-import { ArrowUpRight, History, Plus, WalletCards } from 'lucide-react';
+import { ArrowUpRight, Plus, WalletCards } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { useCooperativeCashPreference } from '@/hooks/useCooperativeCashPreference';
 import {
@@ -21,9 +21,6 @@ import { getDefaultCashAccountId } from '@/utils/chartOfAccounts/getDefaultCashA
 import CooperativeSavingBalanceTable from './CooperativeSavingBalanceTable';
 import CooperativeSavingDetailDrawer from './CooperativeSavingDetailDrawer';
 import CooperativeSavingFormModal, { type CooperativeSavingFormValues } from './CooperativeSavingFormModal';
-import CooperativeSavingOpeningBalanceModal, {
-  type CooperativeSavingOpeningBalanceFormValues,
-} from './CooperativeSavingOpeningBalanceModal';
 import CooperativeSavingTable from './CooperativeSavingTable';
 import {
   cooperativeSavingStatusOptions,
@@ -39,9 +36,7 @@ export default function CooperativeSavingManagement() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
   const [form] = Form.useForm<CooperativeSavingFormValues>();
-  const [openingBalanceForm] = Form.useForm<CooperativeSavingOpeningBalanceFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isOpeningBalanceModalOpen, setIsOpeningBalanceModalOpen] = useState(false);
   const { rememberCashAccount } = useCooperativeCashPreference('savings');
   const {
     activeMembers,
@@ -50,8 +45,7 @@ export default function CooperativeSavingManagement() {
     filteredBalances,
     balances,
     pendingReturnByBalanceKey,
-    openingBalanceSuggestionByMemberId,
-    openingBalanceCutoffDate,
+    interestSummaryByBalanceKey,
     interestByBalanceKey,
     paymentAccounts,
     fieldCashAccountIds,
@@ -67,7 +61,6 @@ export default function CooperativeSavingManagement() {
     statusFilter,
     setStatusFilter,
     recordSaving,
-    recordOpeningBalance,
     reverseSaving,
     isMutating,
   } = useCooperativeSavings();
@@ -75,11 +68,6 @@ export default function CooperativeSavingManagement() {
   const closeModal = () => {
     setIsModalOpen(false);
     form.resetFields();
-  };
-
-  const closeOpeningBalanceModal = () => {
-    setIsOpeningBalanceModalOpen(false);
-    openingBalanceForm.resetFields();
   };
 
   const openSavingModal = (
@@ -112,15 +100,6 @@ export default function CooperativeSavingManagement() {
 
   const openAddModal = () => openSavingModal('DEPOSIT');
 
-  const openOpeningBalanceModal = () => {
-    openingBalanceForm.resetFields();
-    openingBalanceForm.setFieldsValue({
-      saving_type: 'WAJIB',
-      transaction_date: openingBalanceCutoffDate ? dayjs(openingBalanceCutoffDate) : dayjs(),
-    });
-    setIsOpeningBalanceModalOpen(true);
-  };
-
   const openWithdrawModal = (
     balance?: CooperativeMemberSavingBalance,
     withdrawalSource: CooperativeSavingWithdrawalSource = 'SAVING',
@@ -151,22 +130,6 @@ export default function CooperativeSavingManagement() {
       closeModal();
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('cooperative.savings.recordFailed'));
-    }
-  };
-
-  const handleOpeningBalanceSubmit = async (values: CooperativeSavingOpeningBalanceFormValues) => {
-    try {
-      await recordOpeningBalance({
-        member_id: values.member_id,
-        saving_type: values.saving_type,
-        amount: Number(values.amount || 0),
-        transaction_date: values.transaction_date.toISOString(),
-        notes: values.notes,
-      });
-      message.success(t('cooperative.savings.openingBalance.success'));
-      closeOpeningBalanceModal();
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : t('cooperative.savings.openingBalance.failed'));
     }
   };
 
@@ -226,13 +189,6 @@ export default function CooperativeSavingManagement() {
       )}
       extra={(
         <Space wrap>
-          <Button
-            icon={<History size={16} />}
-            data-testid="koperasi-saving-opening-button"
-            onClick={openOpeningBalanceModal}
-          >
-            {t('cooperative.savings.openingBalance.action')}
-          </Button>
           <Button
             icon={<ArrowUpRight size={16} />}
             data-testid="koperasi-saving-withdraw-button"
@@ -306,6 +262,7 @@ export default function CooperativeSavingManagement() {
               <CooperativeSavingBalanceTable
                 balances={filteredBalances}
                 pendingReturnByBalanceKey={pendingReturnByBalanceKey}
+                interestSummaryByBalanceKey={interestSummaryByBalanceKey}
                 interestByBalanceKey={interestByBalanceKey}
                 loading={isMutating}
                 onWithdraw={openWithdrawModal}
@@ -329,15 +286,6 @@ export default function CooperativeSavingManagement() {
         defaultCashAccountId={getDefaultCashAccountId(paymentAccounts)}
         onCancel={closeModal}
         onSubmit={handleSubmit}
-      />
-      <CooperativeSavingOpeningBalanceModal
-        form={openingBalanceForm}
-        open={isOpeningBalanceModalOpen}
-        isSubmitting={isMutating}
-        activeMembers={activeMembers}
-        suggestionByMemberId={openingBalanceSuggestionByMemberId}
-        onCancel={closeOpeningBalanceModal}
-        onSubmit={handleOpeningBalanceSubmit}
       />
       <CooperativeSavingDetailDrawer
         transaction={selectedTransaction}

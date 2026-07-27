@@ -30,6 +30,7 @@ import type {
 import { getCurrentSessionUser, requireAnyUserPermission } from '@/auth/authService';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 import { roundCurrency } from '@/utils/koperasi/loanSchedule';
+import { calculateCooperativeSavingInterest } from '@/utils/koperasi/savingInterest';
 
 const COOPERATIVE_JOURNAL_SOURCE_TYPES: JournalSourceType[] = [
   'COOPERATIVE_SAVING',
@@ -1484,13 +1485,36 @@ const getSavingLiabilityAccountIds = (accounts: ChartOfAccount[]) => {
 
 const buildSavingLiabilityLedgerReconciliation = (
   savingBalances: CooperativeMemberSavingBalance[],
+  savingTransactions: CooperativeSavingTransaction[],
   accounts: ChartOfAccount[],
   journalEntries: JournalEntryWithLines[],
 ): CooperativeReconciliationRow => {
-  const expectedAmount = savingBalances.reduce(
+  const principalBalance = savingBalances.reduce(
     (sum, balance) => sum + Number(balance.balance || 0),
     0,
   );
+  const interestKeys = new Map(
+    savingTransactions
+      .filter((transaction) => transaction.saving_type !== 'WAJIB')
+      .map((transaction) => [
+        `${transaction.member_id}:${transaction.saving_type}`,
+        {
+          memberId: transaction.member_id,
+          savingType: transaction.saving_type,
+        },
+      ]),
+  );
+  const openingInterestLiability = Array.from(interestKeys.values()).reduce(
+    (sum, key) => (
+      sum + calculateCooperativeSavingInterest(
+        savingTransactions,
+        key.memberId,
+        key.savingType,
+      ).availableOpeningInterest
+    ),
+    0,
+  );
+  const expectedAmount = roundCurrency(principalBalance + openingInterestLiability);
   const savingLiabilityAccountIds = getSavingLiabilityAccountIds(accounts);
   const actualAmount = journalEntries.reduce((sum, entry) => sum + entry.lines.reduce(
     (lineSum, line) => (savingLiabilityAccountIds.has(line.account_id)
@@ -1536,7 +1560,12 @@ const buildReconciliationSummary = (
     isGeneralLedgerReady ||
     savingTransactions.some((transaction) => transaction.transaction_type === 'OPENING_BALANCE')
   ) {
-    rows.push(buildSavingLiabilityLedgerReconciliation(savingBalances, accounts, receivableJournalEntries));
+    rows.push(buildSavingLiabilityLedgerReconciliation(
+      savingBalances,
+      savingTransactions,
+      accounts,
+      receivableJournalEntries,
+    ));
   }
   const mismatchCount = rows.reduce((sum, row) => sum + row.mismatch_count, 0);
 

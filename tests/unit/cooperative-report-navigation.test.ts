@@ -7,6 +7,16 @@ import {
 } from '@/auth/reportPermissions';
 
 describe('cooperative report navigation access', () => {
+  test('opening saving balance route follows saving access rules', () => {
+    expect(getRequiredPermissionForPath('/koperasi/migrasi-simpanan'))
+      .toBe('COOPERATIVE_SAVING_VIEW');
+    expect(getModuleCodesForPath('/koperasi/migrasi-simpanan')).toEqual([
+      'KOPERASI_SIMPANAN_POKOK',
+      'KOPERASI_SIMPANAN_WAJIB',
+      'KOPERASI_SIMPANAN_SUKARELA',
+    ]);
+  });
+
   test('report index accepts every cooperative report permission and module', () => {
     expect(getRequiredPermissionForPath('/koperasi/laporan')).toEqual(COOPERATIVE_REPORT_PERMISSION_LIST);
     expect(getModuleCodesForPath('/koperasi/laporan')).toEqual(COOPERATIVE_REPORT_MODULE_LIST);

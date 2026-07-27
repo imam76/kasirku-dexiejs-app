@@ -81,6 +81,23 @@ export default function CooperativeSavingDetailDrawer({
             <Descriptions.Item label={t('cooperative.savings.table.amount')}>
               Rp {formatCurrency(transaction.amount)}
             </Descriptions.Item>
+            {transaction.transaction_type === 'OPENING_BALANCE' && (
+              <>
+                <Descriptions.Item label={t('cooperative.savings.openingBalance.interestAmount')}>
+                  Rp {formatCurrency(Number(transaction.opening_interest_amount || 0))}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('cooperative.savings.openingBalance.totalEntitlement')}>
+                  Rp {formatCurrency(
+                    Number(transaction.amount || 0) + Number(transaction.opening_interest_amount || 0),
+                  )}
+                </Descriptions.Item>
+              </>
+            )}
+            {transaction.withdrawal_source === 'INTEREST' && (
+              <Descriptions.Item label={t('cooperative.savings.openingBalance.historicalInterestApplied')}>
+                Rp {formatCurrency(Number(transaction.opening_interest_applied_amount || 0))}
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label={t('finance.cashAccount')}>
               {transaction.cash_account_code && transaction.cash_account_name
                 ? `${transaction.cash_account_code} - ${transaction.cash_account_name}`

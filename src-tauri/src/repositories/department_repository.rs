@@ -8,6 +8,11 @@ pub async fn list_departments(pool: &PgPool) -> Result<Vec<DepartmentDto>, sqlx:
             id,
             code,
             name,
+            head_employee_id,
+            head_employee_name,
+            parent_department_id,
+            parent_department_code,
+            parent_department_name,
             description,
             is_active,
             created_at::TEXT AS created_at,
@@ -32,6 +37,11 @@ pub async fn get_department(
             id,
             code,
             name,
+            head_employee_id,
+            head_employee_name,
+            parent_department_id,
+            parent_department_code,
+            parent_department_name,
             description,
             is_active,
             created_at::TEXT AS created_at,
@@ -56,6 +66,11 @@ async fn get_department_including_deleted(
             id,
             code,
             name,
+            head_employee_id,
+            head_employee_name,
+            parent_department_id,
+            parent_department_code,
+            parent_department_name,
             description,
             is_active,
             created_at::TEXT AS created_at,
@@ -81,16 +96,26 @@ pub async fn upsert_department(
             id,
             code,
             name,
+            head_employee_id,
+            head_employee_name,
+            parent_department_id,
+            parent_department_code,
+            parent_department_name,
             description,
             is_active,
             created_at,
             updated_at,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6::TIMESTAMPTZ, $7::TIMESTAMPTZ, $8::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::TIMESTAMPTZ, $12::TIMESTAMPTZ, $13::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
             code = EXCLUDED.code,
             name = EXCLUDED.name,
+            head_employee_id = EXCLUDED.head_employee_id,
+            head_employee_name = EXCLUDED.head_employee_name,
+            parent_department_id = EXCLUDED.parent_department_id,
+            parent_department_code = EXCLUDED.parent_department_code,
+            parent_department_name = EXCLUDED.parent_department_name,
             description = EXCLUDED.description,
             is_active = EXCLUDED.is_active,
             updated_at = EXCLUDED.updated_at,
@@ -100,6 +125,11 @@ pub async fn upsert_department(
             id,
             code,
             name,
+            head_employee_id,
+            head_employee_name,
+            parent_department_id,
+            parent_department_code,
+            parent_department_name,
             description,
             is_active,
             created_at::TEXT AS created_at,
@@ -110,6 +140,11 @@ pub async fn upsert_department(
     .bind(input.id)
     .bind(input.code)
     .bind(input.name)
+    .bind(input.head_employee_id)
+    .bind(input.head_employee_name)
+    .bind(input.parent_department_id)
+    .bind(input.parent_department_code)
+    .bind(input.parent_department_name)
     .bind(input.description)
     .bind(input.is_active)
     .bind(input.created_at)

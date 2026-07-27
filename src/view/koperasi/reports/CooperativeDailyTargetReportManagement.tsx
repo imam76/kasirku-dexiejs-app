@@ -1,6 +1,20 @@
 import { useMemo, useRef, useState } from 'react';
 import { FilePdfOutlined, FileTextOutlined } from '@ant-design/icons';
-import { App, Alert, Button, DatePicker, Empty, Select, Space, Typography } from 'antd';
+import {
+  App,
+  Alert,
+  Button,
+  Card,
+  DatePicker,
+  Empty,
+  Select,
+  Space,
+  Statistic,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import type { Dayjs } from 'dayjs';
 import { FileText, RefreshCw } from 'lucide-react';
 import ExportActions from '@/components/ExportActions';
@@ -11,6 +25,7 @@ import {
 } from '@/hooks/useCooperativeDailyTargetReport';
 import { useI18n } from '@/hooks/useI18n';
 import dayjs from '@/lib/dayjs';
+import { getCollectionWorklist } from '@/services/collectionCoverageService';
 import {
   COOPERATIVE_DAILY_TARGET_UNASSIGNED_EMPLOYEE,
   type CooperativeDailyTargetEmployeeOption,
@@ -78,6 +93,7 @@ export default function CooperativeDailyTargetReportManagement() {
   const { profile } = useCompanyProfileSetting();
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<Dayjs>(() => dayjs().tz().startOf('month'));
+  const [operationalDate, setOperationalDate] = useState<Dayjs>(() => dayjs().tz().startOf('day'));
   const [employeeId, setEmployeeId] = useState<string | undefined>();
   const filters = useMemo<CooperativeDailyTargetReportFilters>(() => ({
     monthDate: selectedMonth.startOf('month').toISOString(),
@@ -109,6 +125,23 @@ export default function CooperativeDailyTargetReportManagement() {
       label: employeeLabel(employee),
     })),
   ], [report?.employeeOptions, t]);
+  const effectiveWorklistQuery = useQuery({
+    queryKey: ['cooperative-effective-daily-target', operationalDate.format('YYYY-MM-DD')],
+    queryFn: () => getCollectionWorklist(operationalDate.format('YYYY-MM-DD')),
+  });
+  const effectiveWorklist = useMemo(() => {
+    const rows = effectiveWorklistQuery.data ?? [];
+    if (!employeeId) return rows;
+    if (employeeId === COOPERATIVE_DAILY_TARGET_UNASSIGNED_EMPLOYEE) {
+      return rows.filter((row) => !row.effective_employee_id);
+    }
+    return rows.filter((row) => row.effective_employee_id === employeeId);
+  }, [effectiveWorklistQuery.data, employeeId]);
+  const effectiveTargetAmount = effectiveWorklist.reduce(
+    (total, row) => total + (row.target_amount ?? 0),
+    0,
+  );
+  const blockedWorklistCount = effectiveWorklist.filter((row) => row.is_blocked).length;
 
   const columnHeaders = [
     t('cooperative.reports.dailyTarget.day'),
@@ -329,6 +362,52 @@ export default function CooperativeDailyTargetReportManagement() {
           />
         </div>
       </div>
+
+      <Card
+        title="Target Operasional Efektif"
+        extra={(
+          <DatePicker
+            value={operationalDate}
+            format="DD MMM YYYY"
+            onChange={(value) => setOperationalDate(value?.startOf('day') ?? dayjs().tz().startOf('day'))}
+          />
+        )}
+      >
+        <Alert
+          className="mb-4"
+          type={blockedWorklistCount > 0 ? 'warning' : 'info'}
+          showIcon
+          message="Target ini memakai resolver coverage."
+          description="Substitusi dan reschedule mengubah petugas/tanggal operasional tanpa mengubah jadwal dasar, jatuh tempo, atau histori pinjaman."
+        />
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Statistic title="Anggota dalam worklist" value={effectiveWorklist.length} />
+          <Statistic title="Target efektif" value={effectiveTargetAmount} prefix="Rp" />
+          <Statistic
+            title="Konflik belum selesai"
+            value={blockedWorklistCount}
+            valueStyle={{ color: blockedWorklistCount > 0 ? '#d97706' : undefined }}
+          />
+        </div>
+        <Table
+          rowKey={(row) => `${row.collection_schedule_id}:${row.member_id}:${row.operational_date}`}
+          loading={effectiveWorklistQuery.isLoading || effectiveWorklistQuery.isFetching}
+          dataSource={effectiveWorklist}
+          pagination={{ pageSize: 10, hideOnSinglePage: true }}
+          columns={[
+            { title: 'Anggota', render: (_, row) => `${row.member_number} - ${row.member_name}` },
+            { title: 'Area', dataIndex: 'area_name' },
+            { title: 'Petugas efektif', render: (_, row) => row.effective_employee_name ?? 'Belum ditentukan' },
+            {
+              title: 'Coverage',
+              render: (_, row) => row.is_blocked
+                ? <Tag color="orange">Konflik terbuka</Tag>
+                : <Tag color={row.coverage_resolution ? 'blue' : 'green'}>{row.coverage_resolution ?? 'Jadwal dasar'}</Tag>,
+            },
+            { title: 'Target', align: 'right', render: (_, row) => `Rp ${Number(row.target_amount ?? 0).toLocaleString('id-ID')}` },
+          ]}
+        />
+      </Card>
 
       {!isLoading && !hasRows ? (
         <Empty description={t('cooperative.reports.dailyTarget.empty')} />

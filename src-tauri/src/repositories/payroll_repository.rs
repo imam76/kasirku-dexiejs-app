@@ -13,6 +13,8 @@ macro_rules! payroll_run_select {
             payroll_number,
             period_start::TEXT AS period_start,
             period_end::TEXT AS period_end,
+            payroll_period,
+            salary_currency,
             status,
             employee_count,
             gross_amount,
@@ -51,7 +53,12 @@ macro_rules! payroll_run_item_select {
             payroll_run_id,
             employee_id,
             employee_name,
+            employee_number,
             employee_position,
+            employee_department,
+            payroll_period,
+            salary_currency,
+            salary_payment_method,
             base_salary,
             allowance_amount,
             bonus_amount,
@@ -411,6 +418,8 @@ async fn upsert_payroll_run(
             payroll_number,
             period_start,
             period_end,
+            payroll_period,
+            salary_currency,
             status,
             employee_count,
             gross_amount,
@@ -458,20 +467,24 @@ async fn upsert_payroll_run(
             $18,
             $19,
             $20,
-            $21::TIMESTAMPTZ,
-            $22::TIMESTAMPTZ,
+            $21,
+            $22,
             $23::TIMESTAMPTZ,
-            $24,
-            $25,
+            $24::TIMESTAMPTZ,
+            $25::TIMESTAMPTZ,
             $26,
             $27,
-            $28::TIMESTAMPTZ,
-            $29::TIMESTAMPTZ
+            $28,
+            $29,
+            $30::TIMESTAMPTZ,
+            $31::TIMESTAMPTZ
         )
         ON CONFLICT (id) DO UPDATE SET
             payroll_number = EXCLUDED.payroll_number,
             period_start = EXCLUDED.period_start,
             period_end = EXCLUDED.period_end,
+            payroll_period = EXCLUDED.payroll_period,
+            salary_currency = EXCLUDED.salary_currency,
             status = EXCLUDED.status,
             employee_count = EXCLUDED.employee_count,
             gross_amount = EXCLUDED.gross_amount,
@@ -502,6 +515,8 @@ async fn upsert_payroll_run(
             payroll_number,
             period_start::TEXT AS period_start,
             period_end::TEXT AS period_end,
+            payroll_period,
+            salary_currency,
             status,
             employee_count,
             gross_amount,
@@ -533,6 +548,8 @@ async fn upsert_payroll_run(
     .bind(input.payroll_number)
     .bind(input.period_start)
     .bind(input.period_end)
+    .bind(input.payroll_period)
+    .bind(input.salary_currency)
     .bind(input.status)
     .bind(input.employee_count)
     .bind(input.gross_amount)
@@ -580,7 +597,12 @@ async fn replace_payroll_run_items(
                 payroll_run_id,
                 employee_id,
                 employee_name,
+                employee_number,
                 employee_position,
+                employee_department,
+                payroll_period,
+                salary_currency,
+                salary_payment_method,
                 base_salary,
                 allowance_amount,
                 bonus_amount,
@@ -608,14 +630,24 @@ async fn replace_payroll_run_items(
                 $12,
                 $13,
                 $14,
-                $15::TIMESTAMPTZ,
-                $16::TIMESTAMPTZ
+                $15,
+                $16,
+                $17,
+                $18,
+                $19,
+                $20::TIMESTAMPTZ,
+                $21::TIMESTAMPTZ
             )
             ON CONFLICT (id) DO UPDATE SET
                 payroll_run_id = EXCLUDED.payroll_run_id,
                 employee_id = EXCLUDED.employee_id,
                 employee_name = EXCLUDED.employee_name,
+                employee_number = EXCLUDED.employee_number,
                 employee_position = EXCLUDED.employee_position,
+                employee_department = EXCLUDED.employee_department,
+                payroll_period = EXCLUDED.payroll_period,
+                salary_currency = EXCLUDED.salary_currency,
+                salary_payment_method = EXCLUDED.salary_payment_method,
                 base_salary = EXCLUDED.base_salary,
                 allowance_amount = EXCLUDED.allowance_amount,
                 bonus_amount = EXCLUDED.bonus_amount,
@@ -632,7 +664,12 @@ async fn replace_payroll_run_items(
         .bind(item.payroll_run_id)
         .bind(item.employee_id)
         .bind(item.employee_name)
+        .bind(item.employee_number)
         .bind(item.employee_position)
+        .bind(item.employee_department)
+        .bind(item.payroll_period)
+        .bind(item.salary_currency)
+        .bind(item.salary_payment_method)
         .bind(item.base_salary)
         .bind(item.allowance_amount)
         .bind(item.bonus_amount)

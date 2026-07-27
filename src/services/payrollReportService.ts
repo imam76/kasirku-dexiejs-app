@@ -1,5 +1,11 @@
 import { db } from '@/lib/db';
-import type { PaymentMethod, PayrollRun, PayrollRunItem, PayrollRunStatus } from '@/types';
+import type {
+  EmployeePayrollPeriod,
+  PaymentMethod,
+  PayrollRun,
+  PayrollRunItem,
+  PayrollRunStatus,
+} from '@/types';
 
 export type PayrollReportStatusFilter = PayrollRunStatus | 'ALL';
 
@@ -28,6 +34,8 @@ export interface PayrollReportRow {
   payroll_number: string;
   period_start: string;
   period_end: string;
+  payroll_period: EmployeePayrollPeriod;
+  salary_currency: string;
   status: PayrollRunStatus;
   paid_at?: string;
   payment_method?: PaymentMethod;
@@ -36,7 +44,9 @@ export interface PayrollReportRow {
   cash_account_name?: string;
   employee_id: string;
   employee_name: string;
+  employee_number?: string;
   employee_position?: string;
+  employee_department?: string;
   base_salary: number;
   allowance_amount: number;
   bonus_amount: number;
@@ -53,6 +63,8 @@ export interface PayrollReportGroup {
   payroll_number: string;
   period_start: string;
   period_end: string;
+  payroll_period: EmployeePayrollPeriod;
+  salary_currency: string;
   status: PayrollRunStatus;
   paid_at?: string;
   payment_method?: PaymentMethod;
@@ -121,6 +133,8 @@ const buildReportRow = (run: PayrollRun, item: PayrollRunItem): PayrollReportRow
   payroll_number: run.payroll_number,
   period_start: run.period_start,
   period_end: run.period_end,
+  payroll_period: run.payroll_period ?? item.payroll_period ?? 'MONTHLY',
+  salary_currency: run.salary_currency ?? item.salary_currency ?? 'IDR',
   status: run.status,
   paid_at: run.paid_at,
   payment_method: run.payment_method,
@@ -129,7 +143,9 @@ const buildReportRow = (run: PayrollRun, item: PayrollRunItem): PayrollReportRow
   cash_account_name: run.cash_account_name,
   employee_id: item.employee_id,
   employee_name: item.employee_name,
+  employee_number: item.employee_number,
   employee_position: item.employee_position,
+  employee_department: item.employee_department,
   base_salary: Number(item.base_salary || 0),
   allowance_amount: Number(item.allowance_amount || 0),
   bonus_amount: Number(item.bonus_amount || 0),
@@ -167,6 +183,8 @@ export const getPayrollReport = async (filters: PayrollReportFilters): Promise<P
       payroll_number: run.payroll_number,
       period_start: run.period_start,
       period_end: run.period_end,
+      payroll_period: run.payroll_period ?? rows[0]?.payroll_period ?? 'MONTHLY',
+      salary_currency: run.salary_currency ?? rows[0]?.salary_currency ?? 'IDR',
       status: run.status,
       paid_at: run.paid_at,
       payment_method: run.payment_method,

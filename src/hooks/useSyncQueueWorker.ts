@@ -3,8 +3,11 @@ import { listen } from '@tauri-apps/api/event';
 import { queryClient } from '@/providers/queryClient';
 import { isTauriRuntime } from '@/services/postgresAdapter';
 import { runDatabaseRefreshNow, runDatabaseSyncNow } from '@/services/syncOrchestratorService';
+import { checkPostgresConnection } from '@/store/postgresConnectionStore';
+import { shouldRunDatabaseSyncForHealth } from '@/utils/postgresConnection';
 
 const REALTIME_SYNC_DEBOUNCE_MS = 750;
+export const POSTGRES_CONNECTION_RETRY_INTERVAL_MS = 10_000;
 
 const CASHIER_QUERY_KEYS = [
   'cashierSession',
@@ -203,6 +206,8 @@ const invalidateServerAuthoritativeQueries = (change: PostgresRealtimeChangeEven
 export const useSyncQueueWorker = () => {
   useEffect(() => {
     let isDisposed = false;
+    let previousPostgresAvailability: boolean | undefined;
+    let connectionCheckIntervalId: number | undefined;
     let realtimeSyncTimeoutId: number | undefined;
     let isRealtimeSyncRunning = false;
     let pendingRealtimeSync = false;
@@ -215,6 +220,27 @@ export const useSyncQueueWorker = () => {
         invalidateQueryKeys(DATABASE_SYNC_QUERY_KEYS);
       } catch (error) {
         console.error('Failed to refresh PostgreSQL read data', error);
+      }
+    };
+
+    const checkConnectionAndRecover = async () => {
+      const health = await checkPostgresConnection();
+      if (isDisposed) return;
+
+      const shouldSync = shouldRunDatabaseSyncForHealth(
+        previousPostgresAvailability,
+        health.available,
+      );
+      previousPostgresAvailability = health.available;
+
+      if (shouldSync) {
+        await syncWhenOnline();
+      }
+    };
+
+    const checkConnectionWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void checkConnectionAndRecover();
       }
     };
 
@@ -255,11 +281,14 @@ export const useSyncQueueWorker = () => {
       }, REALTIME_SYNC_DEBOUNCE_MS);
     };
 
-    void syncWhenOnline();
-
-    window.addEventListener('online', syncWhenOnline);
-
     if (isTauriRuntime()) {
+      void checkConnectionAndRecover();
+      connectionCheckIntervalId = window.setInterval(() => {
+        void checkConnectionAndRecover();
+      }, POSTGRES_CONNECTION_RETRY_INTERVAL_MS);
+      window.addEventListener('online', checkConnectionAndRecover);
+      document.addEventListener('visibilitychange', checkConnectionWhenVisible);
+
       void listen<PostgresRealtimeChangeEvent>('postgres-data-change', (event) => {
         pendingRealtimeChanges.push(event.payload);
         scheduleRealtimeSync();
@@ -275,15 +304,21 @@ export const useSyncQueueWorker = () => {
         .catch((error) => {
           console.error('Failed to listen for PostgreSQL realtime changes', error);
         });
+    } else {
+      void syncWhenOnline();
     }
 
     return () => {
       isDisposed = true;
+      if (connectionCheckIntervalId !== undefined) {
+        window.clearInterval(connectionCheckIntervalId);
+      }
       if (realtimeSyncTimeoutId !== undefined) {
         window.clearTimeout(realtimeSyncTimeoutId);
       }
       unlistenPostgresRealtime?.();
-      window.removeEventListener('online', syncWhenOnline);
+      window.removeEventListener('online', checkConnectionAndRecover);
+      document.removeEventListener('visibilitychange', checkConnectionWhenVisible);
     };
   }, []);
 };

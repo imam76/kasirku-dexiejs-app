@@ -29,6 +29,15 @@ pub struct CooperativeMemberDto {
     pub officer_id: Option<String>,
     pub officer_name: Option<String>,
     pub officer_position: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub collection_schedule_id: Option<String>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub collection_weekday: Option<i32>,
+    #[serde(default)]
+    #[sqlx(default)]
+    pub collection_assignment_needs_review: Option<bool>,
     pub join_date: String,
     pub status: String,
     pub notes: Option<String>,
@@ -58,6 +67,8 @@ pub struct CooperativeSavingTransactionDto {
     pub transaction_type: String,
     pub withdrawal_source: Option<String>,
     pub interest_rate_per_month: Option<f64>,
+    pub opening_interest_amount: Option<f64>,
+    pub opening_interest_applied_amount: Option<f64>,
     pub amount: f64,
     pub transaction_date: String,
     pub status: String,

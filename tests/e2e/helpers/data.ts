@@ -12,21 +12,21 @@ export const demoOpeningBalance = [
 
 export const demoMembers = {
   siti: {
-    memberNumber: 'KSU-001',
+    memberNumber: '0001',
     name: 'Siti Aminah',
     identityNumber: '3271010101010001',
     phone: '081234567001',
     address: 'Alamat demo Siti Aminah',
   },
   budi: {
-    memberNumber: 'KSU-002',
+    memberNumber: '0002',
     name: 'Budi Hartono',
     identityNumber: '3271010101010002',
     phone: '081234567002',
     address: 'Alamat demo Budi Hartono',
   },
   rani: {
-    memberNumber: 'KSU-003',
+    memberNumber: '0003',
     name: 'Rani Permata',
     identityNumber: '3271010101010003',
     phone: '081234567003',

@@ -1,4 +1,13 @@
-import { DollarOutlined, EnvironmentOutlined, TeamOutlined } from '@ant-design/icons'
+import {
+  ApartmentOutlined,
+  BankOutlined,
+  CalendarOutlined,
+  DashboardOutlined,
+  DollarCircleOutlined,
+  FileProtectOutlined,
+  IdcardOutlined,
+  TeamOutlined,
+} from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
 import { canAccessPath } from '@/auth/routePermissions'
@@ -11,7 +20,16 @@ export const Route = createFileRoute('/hr/')({
 })
 
 type HumanResourcesMenuItem = {
-  to: '/master-data/areas' | '/master-data/employees' | '/finance/payroll'
+  to:
+    | '/hr/dashboard'
+    | '/hr/employees'
+    | '/hr/departments'
+    | '/hr/positions'
+    | '/hr/contracts'
+    | '/hr/salary-components'
+    | '/hr/work-schedules'
+    | '/hr/leave'
+    | '/finance/payroll'
   label: string
   icon: typeof TeamOutlined
   color: string
@@ -24,25 +42,67 @@ function HumanResources() {
   const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole })
   const availableMenuItems: HumanResourcesMenuItem[] = [
     {
-      to: '/master-data/areas',
-      label: t('nav.areas'),
-      icon: EnvironmentOutlined,
-      color: 'text-lime-600',
-      desc: t('home.areasDesc'),
+      to: '/hr/dashboard',
+      label: 'Dashboard HR',
+      icon: DashboardOutlined,
+      color: 'text-indigo-600',
+      desc: 'Ringkasan karyawan aktif, kontrak, karyawan baru, dan distribusi departemen.',
     },
     {
-      to: '/master-data/employees',
+      to: '/hr/employees',
       label: t('nav.employees'),
       icon: TeamOutlined,
       color: 'text-blue-600',
-      desc: t('home.employeesDesc'),
+      desc: 'Data pribadi, identitas, kepegawaian, status, dan konfigurasi gaji karyawan.',
+    },
+    {
+      to: '/hr/departments',
+      label: 'Departemen',
+      icon: ApartmentOutlined,
+      color: 'text-lime-700',
+      desc: 'Struktur departemen bertingkat, kepala departemen, dan status aktif.',
+    },
+    {
+      to: '/hr/positions',
+      label: 'Jabatan',
+      icon: IdcardOutlined,
+      color: 'text-cyan-700',
+      desc: 'Master jabatan, level, departemen, dan garis pelaporan jabatan.',
+    },
+    {
+      to: '/hr/contracts',
+      label: 'Kontrak Kerja',
+      icon: FileProtectOutlined,
+      color: 'text-amber-700',
+      desc: 'Riwayat kontrak immutable serta alur perpanjangan dengan record baru.',
+    },
+    {
+      to: '/hr/work-schedules',
+      label: 'Jadwal Kerja',
+      icon: CalendarOutlined,
+      color: 'text-sky-700',
+      desc: 'Template jam kerja, assignment efektif, hari libur, dan hari kerja khusus.',
+    },
+    {
+      to: '/hr/leave',
+      label: 'Cuti & Ketersediaan',
+      icon: CalendarOutlined,
+      color: 'text-orange-700',
+      desc: 'Pengajuan cuti, approval berjenjang, saldo, dan dampak ketersediaan.',
+    },
+    {
+      to: '/hr/salary-components',
+      label: 'Komponen Gaji',
+      icon: BankOutlined,
+      color: 'text-rose-700',
+      desc: 'Master komponen pendapatan dan potongan untuk konfigurasi gaji karyawan.',
     },
     {
       to: '/finance/payroll',
-      label: t('nav.finance.payroll'),
-      icon: DollarOutlined,
-      color: 'text-sky-700',
-      desc: t('finance.index.payrollDesc'),
+      label: 'Payroll',
+      icon: DollarCircleOutlined,
+      color: 'text-emerald-700',
+      desc: 'Proses payroll karyawan, persetujuan, pembayaran, posting, dan slip gaji.',
     },
   ]
   const menuItems = availableMenuItems.filter((item) => (

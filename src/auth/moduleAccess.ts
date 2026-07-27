@@ -35,6 +35,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/master-data/payment-methods': ['PAYMENT_METHOD'],
   '/master-data/areas': ['AREA'],
   '/master-data/employees': ['EMPLOYEE'],
+  '/master-data/users': ['ROLE_PERMISSION'],
   '/master-data/departments': ['DEPARTMENT'],
   '/master-data/projects': ['PROJECT'],
   '/master-data/fixed-assets': ['FIXED_ASSET', 'GENERAL_LEDGER'],
@@ -50,6 +51,12 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/shopping-note': ['PURCHASE_RECEIPT'],
   // Human Resources
   '/hr': ['AREA', 'EMPLOYEE', 'CASH_FLOW'],
+  '/hr/dashboard': ['EMPLOYEE'],
+  '/hr/employees': ['EMPLOYEE'],
+  '/hr/departments': ['DEPARTMENT'],
+  '/hr/positions': ['EMPLOYEE', 'DEPARTMENT'],
+  '/hr/contracts': ['EMPLOYEE'],
+  '/hr/salary-components': ['EMPLOYEE', 'CASH_FLOW'],
   // Finance
   '/finance': ['CASH_FLOW', 'RECEIVABLES', 'PAYABLES', 'CHART_OF_ACCOUNTS', 'GENERAL_LEDGER'],
   '/finance/cash-flow': ['CASH_FLOW'],
@@ -85,6 +92,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   // Koperasi
   '/koperasi/anggota': ['KOPERASI_ANGGOTA'],
   '/koperasi/simpanan': ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
+  '/koperasi/migrasi-simpanan': ['KOPERASI_SIMPANAN_POKOK', 'KOPERASI_SIMPANAN_WAJIB', 'KOPERASI_SIMPANAN_SUKARELA'],
   '/koperasi/pinjaman': ['KOPERASI_PINJAMAN'],
   '/koperasi/migrasi-pinjaman': ['KOPERASI_PINJAMAN'],
   '/koperasi/angsuran': ['KOPERASI_ANGSURAN'],

@@ -16,9 +16,12 @@ import type {
   ChartOfAccount,
   Employee,
   EmployeeCashAdvanceRepayment,
+  EmployeeSalaryComponent,
+  EmploymentContract,
   PayrollRun,
   PayrollRunItem,
   PayrollRunStatus,
+  SalaryComponent,
 } from '@/types';
 
 export interface PayrollRunWithItems extends PayrollRun {
@@ -43,14 +46,30 @@ export const usePayroll = () => {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<PayrollStatusFilter>('ALL');
 
-  const employees = useLiveQuery(
-    () => db.employees
-      .orderBy('name')
-      .filter((employee) => employee.is_active)
-      .toArray(),
+  const hrPayrollData = useLiveQuery(
+    async () => {
+      const [employees, salaryComponents, employeeSalaryComponents, employmentContracts] = await Promise.all([
+        db.employees.orderBy('name').toArray(),
+        db.salaryComponents.toArray(),
+        db.employeeSalaryComponents.toArray(),
+        db.employmentContracts.toArray(),
+      ]);
+      return { employees, salaryComponents, employeeSalaryComponents, employmentContracts };
+    },
     [],
-    [] as Employee[],
+    {
+      employees: [] as Employee[],
+      salaryComponents: [] as SalaryComponent[],
+      employeeSalaryComponents: [] as EmployeeSalaryComponent[],
+      employmentContracts: [] as EmploymentContract[],
+    },
   );
+  const {
+    employees,
+    salaryComponents,
+    employeeSalaryComponents,
+    employmentContracts,
+  } = hrPayrollData;
 
   const cashBankAccounts = useLiveQuery(
     () => db.chartOfAccounts
@@ -128,7 +147,13 @@ export const usePayroll = () => {
           repayment.cash_advance_number,
           repayment.status,
         ]),
-        ...run.items.flatMap((item) => [item.employee_name, item.employee_position, item.notes]),
+        ...run.items.flatMap((item) => [
+          item.employee_number,
+          item.employee_name,
+          item.employee_position,
+          item.employee_department,
+          item.notes,
+        ]),
       ].some((value) => value?.toLowerCase().includes(query));
 
       return matchesStatus && matchesSearch;
@@ -207,6 +232,9 @@ export const usePayroll = () => {
 
   return {
     employees,
+    salaryComponents,
+    employeeSalaryComponents,
+    employmentContracts,
     cashBankAccounts,
     payrollRuns,
     filteredPayrollRuns,

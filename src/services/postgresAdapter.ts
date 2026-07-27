@@ -62,6 +62,28 @@ import type {
   FixedAsset,
   FixedAssetDepreciationRun,
   FixedAssetDepreciationRunLine,
+  ActivityLogChange,
+  EmployeeActiveStatus,
+  EmployeeEmploymentStatus,
+  EmployeeGender,
+  EmployeeMaritalStatus,
+  EmployeePayrollPeriod,
+  EmployeeSalaryPaymentMethod,
+  EmployeeWorkScheduleType,
+  EmployeeSalaryComponent,
+  EmploymentContract,
+  HrPosition,
+  SalaryComponent,
+  LeaveRequest,
+  LeaveRequestAction,
+  LeaveBalanceLedgerEntry,
+  LeaveType,
+  EmployeeAvailabilityException,
+  CollectionCoverageException,
+  WorkScheduleTemplate,
+  WorkScheduleDay,
+  EmployeeWorkScheduleAssignment,
+  CompanyCalendarDay,
 } from '@/types';
 
 export interface RemoteAuthUserDto {
@@ -96,6 +118,7 @@ export interface RemoteActivityLogDto {
   entity: string;
   entity_id?: string | null;
   description: string;
+  changes?: ActivityLogChange[] | null;
   created_at: string;
 }
 
@@ -121,13 +144,97 @@ export interface RemoteRolePermissionDto {
   deleted_at?: string | null;
 }
 
+export interface FinalizeLeaveRequestDto {
+  session_token: string;
+  leave_type: LeaveType;
+  request: LeaveRequest;
+  actions: LeaveRequestAction[];
+  ledger: LeaveBalanceLedgerEntry[];
+  availability: EmployeeAvailabilityException[];
+  coverage: CollectionCoverageException[];
+}
+
+export interface RemoteLeaveWorkflowBundleDto {
+  request: LeaveRequest;
+  actions: LeaveRequestAction[];
+  ledger: LeaveBalanceLedgerEntry[];
+}
+
+export interface CancelApprovedLeaveRequestDto {
+  session_token: string;
+  request: LeaveRequest;
+  action: LeaveRequestAction;
+  ledger?: LeaveBalanceLedgerEntry | null;
+}
+
+export interface RemoteWorkforceStateDto {
+  work_schedule_templates: WorkScheduleTemplate[];
+  work_schedule_days: WorkScheduleDay[];
+  employee_work_schedule_assignments: EmployeeWorkScheduleAssignment[];
+  company_calendar_days: CompanyCalendarDay[];
+  leave_types: LeaveType[];
+  leave_requests: LeaveRequest[];
+  leave_request_actions: LeaveRequestAction[];
+  leave_balance_ledger: LeaveBalanceLedgerEntry[];
+  availability: EmployeeAvailabilityException[];
+  coverage: CollectionCoverageException[];
+}
+
 export interface RemoteEmployeeDto {
   id: string;
+  employee_number?: string | null;
   name: string;
+  preferred_name?: string | null;
+  photo_data_url?: string | null;
+  gender?: EmployeeGender | null;
+  birth_place?: string | null;
+  birth_date?: string | null;
+  marital_status?: EmployeeMaritalStatus | null;
+  nationality?: string | null;
   phone?: string | null;
   email?: string | null;
+  personal_email?: string | null;
   address?: string | null;
+  identity_address?: string | null;
+  domicile_address?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_relationship?: string | null;
+  emergency_contact_phone?: string | null;
+  nik?: string | null;
+  family_card_number?: string | null;
+  tax_number?: string | null;
+  health_bpjs_number?: string | null;
+  employment_bpjs_number?: string | null;
+  company_unit?: string | null;
+  department_id?: string | null;
+  department_code?: string | null;
+  department_name?: string | null;
+  job_position_id?: string | null;
+  job_position_code?: string | null;
+  job_position_name?: string | null;
   position?: string | null;
+  supervisor_id?: string | null;
+  supervisor_name?: string | null;
+  work_location?: string | null;
+  join_date?: string | null;
+  employment_status?: EmployeeEmploymentStatus | null;
+  active_status?: EmployeeActiveStatus | null;
+  work_schedule_type?: EmployeeWorkScheduleType | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  permanent_date?: string | null;
+  exit_date?: string | null;
+  exit_reason?: string | null;
+  salary_payment_method?: EmployeeSalaryPaymentMethod | null;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_holder?: string | null;
+  base_salary?: number | null;
+  salary_currency?: string | null;
+  payroll_period?: EmployeePayrollPeriod | null;
+  is_taxable?: boolean | null;
+  ptkp_status?: string | null;
+  is_bpjs_participant?: boolean | null;
   user_id?: string | null;
   user_name?: string | null;
   login_role_id?: string | null;
@@ -149,6 +256,9 @@ export interface RemoteEmployeeAreaDto {
   area_id: string;
   area_name: string;
   area_code?: string | null;
+  effective_from?: string | null;
+  effective_until?: string | null;
+  is_primary?: boolean | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
@@ -165,6 +275,7 @@ export interface RemoteEmployeeCollectionScheduleDto {
   weekday: CooperativeCollectionWeekday;
   effective_from?: string | null;
   effective_until?: string | null;
+  is_default_for_new_members?: boolean | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -176,6 +287,8 @@ export interface RemotePayrollRunDto {
   payroll_number: string;
   period_start: string;
   period_end: string;
+  payroll_period?: EmployeePayrollPeriod | null;
+  salary_currency?: string | null;
   status: PayrollRunStatus;
   employee_count: number;
   gross_amount: number;
@@ -208,7 +321,12 @@ export interface RemotePayrollRunItemDto {
   payroll_run_id: string;
   employee_id: string;
   employee_name: string;
+  employee_number?: string | null;
   employee_position?: string | null;
+  employee_department?: string | null;
+  payroll_period?: EmployeePayrollPeriod | null;
+  salary_currency?: string | null;
+  salary_payment_method?: EmployeeSalaryPaymentMethod | null;
   base_salary: number;
   allowance_amount: number;
   bonus_amount: number;
@@ -282,12 +400,41 @@ export interface RemoteDepartmentDto {
   id: string;
   code?: string | null;
   name: string;
+  head_employee_id?: string | null;
+  head_employee_name?: string | null;
+  parent_department_id?: string | null;
+  parent_department_code?: string | null;
+  parent_department_name?: string | null;
   description?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
 }
+
+type RemoteEntityMetadata = {
+  deleted_at?: string | null;
+};
+
+export type RemoteHrPositionDto = Omit<
+  HrPosition,
+  'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'
+> & RemoteEntityMetadata;
+
+export type RemoteEmploymentContractDto = Omit<
+  EmploymentContract,
+  'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'
+> & RemoteEntityMetadata;
+
+export type RemoteSalaryComponentDto = Omit<
+  SalaryComponent,
+  'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'
+> & RemoteEntityMetadata;
+
+export type RemoteEmployeeSalaryComponentDto = Omit<
+  EmployeeSalaryComponent,
+  'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'
+> & RemoteEntityMetadata;
 
 export interface RemoteCashierSessionDto {
   id: string;
@@ -1302,6 +1449,9 @@ export interface RemoteCooperativeMemberDto {
   officer_id?: string | null;
   officer_name?: string | null;
   officer_position?: string | null;
+  collection_schedule_id?: string | null;
+  collection_weekday?: CooperativeCollectionWeekday | null;
+  collection_assignment_needs_review?: boolean | null;
   join_date: string;
   status: CooperativeMemberStatus;
   notes?: string | null;
@@ -1340,6 +1490,8 @@ export interface RemoteCooperativeSavingTransactionDto {
   transaction_type: CooperativeSavingTransactionType;
   withdrawal_source?: CooperativeSavingWithdrawalSource | null;
   interest_rate_per_month?: number | null;
+  opening_interest_amount?: number | null;
+  opening_interest_applied_amount?: number | null;
   amount: number;
   transaction_date: string;
   status: CooperativeSavingTransactionStatus;
@@ -1873,6 +2025,61 @@ export const employeeCollectionSchedulePostgresAdapter = {
   },
 };
 
+export const workforcePostgresAdapter = {
+  async listState() {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteWorkforceStateDto>('postgres_list_workforce_state');
+  },
+  async finalizeLeaveRequest(input: FinalizeLeaveRequestDto) {
+    return invoke<void>('postgres_finalize_leave_request', { input });
+  },
+  async upsertLeaveWorkflow(sessionToken: string, workflow: RemoteLeaveWorkflowBundleDto) {
+    return invoke<void>('postgres_upsert_leave_workflow', {
+      input: { session_token: sessionToken, workflow },
+    });
+  },
+  async resolveCollectionCoverage(sessionToken: string, coverage: CollectionCoverageException) {
+    return invoke<void>('postgres_resolve_collection_coverage', {
+      input: { session_token: sessionToken, coverage },
+    });
+  },
+  async cancelApprovedLeaveRequest(input: CancelApprovedLeaveRequestDto) {
+    return invoke<void>('postgres_cancel_approved_leave_request', { input });
+  },
+  async upsertWorkScheduleTemplateBundle(
+    sessionToken: string,
+    template: WorkScheduleTemplate,
+    days: WorkScheduleDay[],
+  ) {
+    return invoke<void>('postgres_upsert_work_schedule_template_bundle', {
+      input: { session_token: sessionToken, template, days },
+    });
+  },
+  async upsertEmployeeWorkScheduleAssignment(
+    sessionToken: string,
+    assignment: EmployeeWorkScheduleAssignment,
+  ) {
+    return invoke<void>('postgres_upsert_employee_work_schedule_assignment', {
+      input: { session_token: sessionToken, assignment },
+    });
+  },
+  async upsertCompanyCalendarDay(sessionToken: string, calendarDay: CompanyCalendarDay) {
+    return invoke<void>('postgres_upsert_company_calendar_day', {
+      input: { session_token: sessionToken, calendar_day: calendarDay },
+    });
+  },
+  async upsertLeaveType(sessionToken: string, leaveType: LeaveType) {
+    return invoke<void>('postgres_upsert_leave_type', {
+      input: { session_token: sessionToken, leave_type: leaveType },
+    });
+  },
+  async upsertLeaveBalanceLedger(sessionToken: string, ledger: LeaveBalanceLedgerEntry) {
+    return invoke<void>('postgres_upsert_leave_balance_ledger', {
+      input: { session_token: sessionToken, ledger },
+    });
+  },
+};
+
 export const payrollRunPostgresAdapter = {
   async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
@@ -1932,6 +2139,50 @@ export const departmentPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteDepartmentDto | null>('postgres_delete_department', { id });
+  },
+};
+
+export const hrPositionPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteHrPositionDto[]>('postgres_list_hr_positions');
+  },
+  async upsert(input: RemoteHrPositionDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteHrPositionDto>('postgres_upsert_hr_position', { input });
+  },
+};
+
+export const employmentContractPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteEmploymentContractDto[]>('postgres_list_employment_contracts');
+  },
+  async upsert(input: RemoteEmploymentContractDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEmploymentContractDto>('postgres_upsert_employment_contract', { input });
+  },
+};
+
+export const salaryComponentPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteSalaryComponentDto[]>('postgres_list_salary_components');
+  },
+  async upsert(input: RemoteSalaryComponentDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteSalaryComponentDto>('postgres_upsert_salary_component', { input });
+  },
+};
+
+export const employeeSalaryComponentPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteEmployeeSalaryComponentDto[]>('postgres_list_employee_salary_components');
+  },
+  async upsert(input: RemoteEmployeeSalaryComponentDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteEmployeeSalaryComponentDto>('postgres_upsert_employee_salary_component', { input });
   },
 };
 

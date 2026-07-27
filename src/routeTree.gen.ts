@@ -81,6 +81,7 @@ const PurchasesPendingCostsLazyRouteImport = createFileRoute(
 const MasterDataWarehousesLazyRouteImport = createFileRoute(
   '/master-data/warehouses',
 )()
+const MasterDataUsersLazyRouteImport = createFileRoute('/master-data/users')()
 const MasterDataUnitsLazyRouteImport = createFileRoute('/master-data/units')()
 const MasterDataTaxesLazyRouteImport = createFileRoute('/master-data/taxes')()
 const MasterDataStockOpnameLazyRouteImport = createFileRoute(
@@ -124,14 +125,33 @@ const KoperasiPinjamanLazyRouteImport = createFileRoute('/koperasi/pinjaman')()
 const KoperasiPenagihanLazyRouteImport = createFileRoute(
   '/koperasi/penagihan',
 )()
+const KoperasiMigrasiSimpananLazyRouteImport = createFileRoute(
+  '/koperasi/migrasi-simpanan',
+)()
 const KoperasiMigrasiPinjamanLazyRouteImport = createFileRoute(
   '/koperasi/migrasi-pinjaman',
 )()
 const KoperasiKasPetugasLazyRouteImport = createFileRoute(
   '/koperasi/kas-petugas',
 )()
+const KoperasiCoverageConflictsLazyRouteImport = createFileRoute(
+  '/koperasi/coverage-conflicts',
+)()
+const KoperasiCollectionAssignmentsLazyRouteImport = createFileRoute(
+  '/koperasi/collection-assignments',
+)()
 const KoperasiAngsuranLazyRouteImport = createFileRoute('/koperasi/angsuran')()
 const KoperasiAnggotaLazyRouteImport = createFileRoute('/koperasi/anggota')()
+const HrWorkSchedulesLazyRouteImport = createFileRoute('/hr/work-schedules')()
+const HrSalaryComponentsLazyRouteImport = createFileRoute(
+  '/hr/salary-components',
+)()
+const HrPositionsLazyRouteImport = createFileRoute('/hr/positions')()
+const HrLeaveLazyRouteImport = createFileRoute('/hr/leave')()
+const HrEmployeesLazyRouteImport = createFileRoute('/hr/employees')()
+const HrDepartmentsLazyRouteImport = createFileRoute('/hr/departments')()
+const HrDashboardLazyRouteImport = createFileRoute('/hr/dashboard')()
+const HrContractsLazyRouteImport = createFileRoute('/hr/contracts')()
 const FinanceReceivablesLazyRouteImport = createFileRoute(
   '/finance/receivables',
 )()
@@ -482,6 +502,13 @@ const MasterDataWarehousesLazyRoute =
   } as any).lazy(() =>
     import('./routes/master-data/warehouses.lazy').then((d) => d.Route),
   )
+const MasterDataUsersLazyRoute = MasterDataUsersLazyRouteImport.update({
+  id: '/master-data/users',
+  path: '/master-data/users',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/master-data/users.lazy').then((d) => d.Route),
+)
 const MasterDataUnitsLazyRoute = MasterDataUnitsLazyRouteImport.update({
   id: '/master-data/units',
   path: '/master-data/units',
@@ -621,6 +648,14 @@ const KoperasiPenagihanLazyRoute = KoperasiPenagihanLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/koperasi/penagihan.lazy').then((d) => d.Route),
 )
+const KoperasiMigrasiSimpananLazyRoute =
+  KoperasiMigrasiSimpananLazyRouteImport.update({
+    id: '/koperasi/migrasi-simpanan',
+    path: '/koperasi/migrasi-simpanan',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/migrasi-simpanan.lazy').then((d) => d.Route),
+  )
 const KoperasiMigrasiPinjamanLazyRoute =
   KoperasiMigrasiPinjamanLazyRouteImport.update({
     id: '/koperasi/migrasi-pinjaman',
@@ -636,6 +671,24 @@ const KoperasiKasPetugasLazyRoute = KoperasiKasPetugasLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/koperasi/kas-petugas.lazy').then((d) => d.Route),
 )
+const KoperasiCoverageConflictsLazyRoute =
+  KoperasiCoverageConflictsLazyRouteImport.update({
+    id: '/koperasi/coverage-conflicts',
+    path: '/koperasi/coverage-conflicts',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/coverage-conflicts.lazy').then((d) => d.Route),
+  )
+const KoperasiCollectionAssignmentsLazyRoute =
+  KoperasiCollectionAssignmentsLazyRouteImport.update({
+    id: '/koperasi/collection-assignments',
+    path: '/koperasi/collection-assignments',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/koperasi/collection-assignments.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const KoperasiAngsuranLazyRoute = KoperasiAngsuranLazyRouteImport.update({
   id: '/koperasi/angsuran',
   path: '/koperasi/angsuran',
@@ -650,6 +703,52 @@ const KoperasiAnggotaLazyRoute = KoperasiAnggotaLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/koperasi/anggota.lazy').then((d) => d.Route),
 )
+const HrWorkSchedulesLazyRoute = HrWorkSchedulesLazyRouteImport.update({
+  id: '/hr/work-schedules',
+  path: '/hr/work-schedules',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/hr/work-schedules.lazy').then((d) => d.Route),
+)
+const HrSalaryComponentsLazyRoute = HrSalaryComponentsLazyRouteImport.update({
+  id: '/hr/salary-components',
+  path: '/hr/salary-components',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/hr/salary-components.lazy').then((d) => d.Route),
+)
+const HrPositionsLazyRoute = HrPositionsLazyRouteImport.update({
+  id: '/hr/positions',
+  path: '/hr/positions',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/positions.lazy').then((d) => d.Route))
+const HrLeaveLazyRoute = HrLeaveLazyRouteImport.update({
+  id: '/hr/leave',
+  path: '/hr/leave',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/leave.lazy').then((d) => d.Route))
+const HrEmployeesLazyRoute = HrEmployeesLazyRouteImport.update({
+  id: '/hr/employees',
+  path: '/hr/employees',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/employees.lazy').then((d) => d.Route))
+const HrDepartmentsLazyRoute = HrDepartmentsLazyRouteImport.update({
+  id: '/hr/departments',
+  path: '/hr/departments',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/hr/departments.lazy').then((d) => d.Route),
+)
+const HrDashboardLazyRoute = HrDashboardLazyRouteImport.update({
+  id: '/hr/dashboard',
+  path: '/hr/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/dashboard.lazy').then((d) => d.Route))
+const HrContractsLazyRoute = HrContractsLazyRouteImport.update({
+  id: '/hr/contracts',
+  path: '/hr/contracts',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/hr/contracts.lazy').then((d) => d.Route))
 const FinanceReceivablesLazyRoute = FinanceReceivablesLazyRouteImport.update({
   id: '/finance/receivables',
   path: '/finance/receivables',
@@ -1194,10 +1293,21 @@ export interface FileRoutesByFullPath {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
+  '/hr/contracts': typeof HrContractsLazyRoute
+  '/hr/dashboard': typeof HrDashboardLazyRoute
+  '/hr/departments': typeof HrDepartmentsLazyRoute
+  '/hr/employees': typeof HrEmployeesLazyRoute
+  '/hr/leave': typeof HrLeaveLazyRoute
+  '/hr/positions': typeof HrPositionsLazyRoute
+  '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
+  '/hr/work-schedules': typeof HrWorkSchedulesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
+  '/koperasi/collection-assignments': typeof KoperasiCollectionAssignmentsLazyRoute
+  '/koperasi/coverage-conflicts': typeof KoperasiCoverageConflictsLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
+  '/koperasi/migrasi-simpanan': typeof KoperasiMigrasiSimpananLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -1217,6 +1327,7 @@ export interface FileRoutesByFullPath {
   '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
+  '/master-data/users': typeof MasterDataUsersLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
   '/purchases/pending-costs': typeof PurchasesPendingCostsLazyRoute
   '/report/aging-report': typeof ReportAgingReportLazyRoute
@@ -1313,10 +1424,21 @@ export interface FileRoutesByTo {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
+  '/hr/contracts': typeof HrContractsLazyRoute
+  '/hr/dashboard': typeof HrDashboardLazyRoute
+  '/hr/departments': typeof HrDepartmentsLazyRoute
+  '/hr/employees': typeof HrEmployeesLazyRoute
+  '/hr/leave': typeof HrLeaveLazyRoute
+  '/hr/positions': typeof HrPositionsLazyRoute
+  '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
+  '/hr/work-schedules': typeof HrWorkSchedulesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
+  '/koperasi/collection-assignments': typeof KoperasiCollectionAssignmentsLazyRoute
+  '/koperasi/coverage-conflicts': typeof KoperasiCoverageConflictsLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
+  '/koperasi/migrasi-simpanan': typeof KoperasiMigrasiSimpananLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -1336,6 +1458,7 @@ export interface FileRoutesByTo {
   '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
+  '/master-data/users': typeof MasterDataUsersLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
   '/purchases/pending-costs': typeof PurchasesPendingCostsLazyRoute
   '/report/aging-report': typeof ReportAgingReportLazyRoute
@@ -1433,10 +1556,21 @@ export interface FileRoutesById {
   '/finance/payables': typeof FinancePayablesLazyRoute
   '/finance/payroll': typeof FinancePayrollLazyRoute
   '/finance/receivables': typeof FinanceReceivablesLazyRouteWithChildren
+  '/hr/contracts': typeof HrContractsLazyRoute
+  '/hr/dashboard': typeof HrDashboardLazyRoute
+  '/hr/departments': typeof HrDepartmentsLazyRoute
+  '/hr/employees': typeof HrEmployeesLazyRoute
+  '/hr/leave': typeof HrLeaveLazyRoute
+  '/hr/positions': typeof HrPositionsLazyRoute
+  '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
+  '/hr/work-schedules': typeof HrWorkSchedulesLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
+  '/koperasi/collection-assignments': typeof KoperasiCollectionAssignmentsLazyRoute
+  '/koperasi/coverage-conflicts': typeof KoperasiCoverageConflictsLazyRoute
   '/koperasi/kas-petugas': typeof KoperasiKasPetugasLazyRoute
   '/koperasi/migrasi-pinjaman': typeof KoperasiMigrasiPinjamanLazyRoute
+  '/koperasi/migrasi-simpanan': typeof KoperasiMigrasiSimpananLazyRoute
   '/koperasi/penagihan': typeof KoperasiPenagihanLazyRoute
   '/koperasi/pinjaman': typeof KoperasiPinjamanLazyRoute
   '/koperasi/simpanan': typeof KoperasiSimpananLazyRoute
@@ -1456,6 +1590,7 @@ export interface FileRoutesById {
   '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
   '/master-data/units': typeof MasterDataUnitsLazyRoute
+  '/master-data/users': typeof MasterDataUsersLazyRoute
   '/master-data/warehouses': typeof MasterDataWarehousesLazyRoute
   '/purchases/pending-costs': typeof PurchasesPendingCostsLazyRoute
   '/report/aging-report': typeof ReportAgingReportLazyRoute
@@ -1554,10 +1689,21 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
+    | '/hr/contracts'
+    | '/hr/dashboard'
+    | '/hr/departments'
+    | '/hr/employees'
+    | '/hr/leave'
+    | '/hr/positions'
+    | '/hr/salary-components'
+    | '/hr/work-schedules'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
+    | '/koperasi/collection-assignments'
+    | '/koperasi/coverage-conflicts'
     | '/koperasi/kas-petugas'
     | '/koperasi/migrasi-pinjaman'
+    | '/koperasi/migrasi-simpanan'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1577,6 +1723,7 @@ export interface FileRouteTypes {
     | '/master-data/stock-opname'
     | '/master-data/taxes'
     | '/master-data/units'
+    | '/master-data/users'
     | '/master-data/warehouses'
     | '/purchases/pending-costs'
     | '/report/aging-report'
@@ -1673,10 +1820,21 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
+    | '/hr/contracts'
+    | '/hr/dashboard'
+    | '/hr/departments'
+    | '/hr/employees'
+    | '/hr/leave'
+    | '/hr/positions'
+    | '/hr/salary-components'
+    | '/hr/work-schedules'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
+    | '/koperasi/collection-assignments'
+    | '/koperasi/coverage-conflicts'
     | '/koperasi/kas-petugas'
     | '/koperasi/migrasi-pinjaman'
+    | '/koperasi/migrasi-simpanan'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1696,6 +1854,7 @@ export interface FileRouteTypes {
     | '/master-data/stock-opname'
     | '/master-data/taxes'
     | '/master-data/units'
+    | '/master-data/users'
     | '/master-data/warehouses'
     | '/purchases/pending-costs'
     | '/report/aging-report'
@@ -1792,10 +1951,21 @@ export interface FileRouteTypes {
     | '/finance/payables'
     | '/finance/payroll'
     | '/finance/receivables'
+    | '/hr/contracts'
+    | '/hr/dashboard'
+    | '/hr/departments'
+    | '/hr/employees'
+    | '/hr/leave'
+    | '/hr/positions'
+    | '/hr/salary-components'
+    | '/hr/work-schedules'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
+    | '/koperasi/collection-assignments'
+    | '/koperasi/coverage-conflicts'
     | '/koperasi/kas-petugas'
     | '/koperasi/migrasi-pinjaman'
+    | '/koperasi/migrasi-simpanan'
     | '/koperasi/penagihan'
     | '/koperasi/pinjaman'
     | '/koperasi/simpanan'
@@ -1815,6 +1985,7 @@ export interface FileRouteTypes {
     | '/master-data/stock-opname'
     | '/master-data/taxes'
     | '/master-data/units'
+    | '/master-data/users'
     | '/master-data/warehouses'
     | '/purchases/pending-costs'
     | '/report/aging-report'
@@ -1912,10 +2083,21 @@ export interface RootRouteChildren {
   FinancePayablesLazyRoute: typeof FinancePayablesLazyRoute
   FinancePayrollLazyRoute: typeof FinancePayrollLazyRoute
   FinanceReceivablesLazyRoute: typeof FinanceReceivablesLazyRouteWithChildren
+  HrContractsLazyRoute: typeof HrContractsLazyRoute
+  HrDashboardLazyRoute: typeof HrDashboardLazyRoute
+  HrDepartmentsLazyRoute: typeof HrDepartmentsLazyRoute
+  HrEmployeesLazyRoute: typeof HrEmployeesLazyRoute
+  HrLeaveLazyRoute: typeof HrLeaveLazyRoute
+  HrPositionsLazyRoute: typeof HrPositionsLazyRoute
+  HrSalaryComponentsLazyRoute: typeof HrSalaryComponentsLazyRoute
+  HrWorkSchedulesLazyRoute: typeof HrWorkSchedulesLazyRoute
   KoperasiAnggotaLazyRoute: typeof KoperasiAnggotaLazyRoute
   KoperasiAngsuranLazyRoute: typeof KoperasiAngsuranLazyRoute
+  KoperasiCollectionAssignmentsLazyRoute: typeof KoperasiCollectionAssignmentsLazyRoute
+  KoperasiCoverageConflictsLazyRoute: typeof KoperasiCoverageConflictsLazyRoute
   KoperasiKasPetugasLazyRoute: typeof KoperasiKasPetugasLazyRoute
   KoperasiMigrasiPinjamanLazyRoute: typeof KoperasiMigrasiPinjamanLazyRoute
+  KoperasiMigrasiSimpananLazyRoute: typeof KoperasiMigrasiSimpananLazyRoute
   KoperasiPenagihanLazyRoute: typeof KoperasiPenagihanLazyRoute
   KoperasiPinjamanLazyRoute: typeof KoperasiPinjamanLazyRoute
   KoperasiSimpananLazyRoute: typeof KoperasiSimpananLazyRoute
@@ -1935,6 +2117,7 @@ export interface RootRouteChildren {
   MasterDataStockOpnameLazyRoute: typeof MasterDataStockOpnameLazyRoute
   MasterDataTaxesLazyRoute: typeof MasterDataTaxesLazyRoute
   MasterDataUnitsLazyRoute: typeof MasterDataUnitsLazyRoute
+  MasterDataUsersLazyRoute: typeof MasterDataUsersLazyRoute
   MasterDataWarehousesLazyRoute: typeof MasterDataWarehousesLazyRoute
   PurchasesPendingCostsLazyRoute: typeof PurchasesPendingCostsLazyRoute
   ReportAgingReportLazyRoute: typeof ReportAgingReportLazyRoute
@@ -2229,6 +2412,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MasterDataWarehousesLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/master-data/users': {
+      id: '/master-data/users'
+      path: '/master-data/users'
+      fullPath: '/master-data/users'
+      preLoaderRoute: typeof MasterDataUsersLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/master-data/units': {
       id: '/master-data/units'
       path: '/master-data/units'
@@ -2362,6 +2552,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KoperasiPenagihanLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/koperasi/migrasi-simpanan': {
+      id: '/koperasi/migrasi-simpanan'
+      path: '/koperasi/migrasi-simpanan'
+      fullPath: '/koperasi/migrasi-simpanan'
+      preLoaderRoute: typeof KoperasiMigrasiSimpananLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/koperasi/migrasi-pinjaman': {
       id: '/koperasi/migrasi-pinjaman'
       path: '/koperasi/migrasi-pinjaman'
@@ -2376,6 +2573,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KoperasiKasPetugasLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/koperasi/coverage-conflicts': {
+      id: '/koperasi/coverage-conflicts'
+      path: '/koperasi/coverage-conflicts'
+      fullPath: '/koperasi/coverage-conflicts'
+      preLoaderRoute: typeof KoperasiCoverageConflictsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/koperasi/collection-assignments': {
+      id: '/koperasi/collection-assignments'
+      path: '/koperasi/collection-assignments'
+      fullPath: '/koperasi/collection-assignments'
+      preLoaderRoute: typeof KoperasiCollectionAssignmentsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/koperasi/angsuran': {
       id: '/koperasi/angsuran'
       path: '/koperasi/angsuran'
@@ -2388,6 +2599,62 @@ declare module '@tanstack/react-router' {
       path: '/koperasi/anggota'
       fullPath: '/koperasi/anggota'
       preLoaderRoute: typeof KoperasiAnggotaLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/work-schedules': {
+      id: '/hr/work-schedules'
+      path: '/hr/work-schedules'
+      fullPath: '/hr/work-schedules'
+      preLoaderRoute: typeof HrWorkSchedulesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/salary-components': {
+      id: '/hr/salary-components'
+      path: '/hr/salary-components'
+      fullPath: '/hr/salary-components'
+      preLoaderRoute: typeof HrSalaryComponentsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/positions': {
+      id: '/hr/positions'
+      path: '/hr/positions'
+      fullPath: '/hr/positions'
+      preLoaderRoute: typeof HrPositionsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/leave': {
+      id: '/hr/leave'
+      path: '/hr/leave'
+      fullPath: '/hr/leave'
+      preLoaderRoute: typeof HrLeaveLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/employees': {
+      id: '/hr/employees'
+      path: '/hr/employees'
+      fullPath: '/hr/employees'
+      preLoaderRoute: typeof HrEmployeesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/departments': {
+      id: '/hr/departments'
+      path: '/hr/departments'
+      fullPath: '/hr/departments'
+      preLoaderRoute: typeof HrDepartmentsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/dashboard': {
+      id: '/hr/dashboard'
+      path: '/hr/dashboard'
+      fullPath: '/hr/dashboard'
+      preLoaderRoute: typeof HrDashboardLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr/contracts': {
+      id: '/hr/contracts'
+      path: '/hr/contracts'
+      fullPath: '/hr/contracts'
+      preLoaderRoute: typeof HrContractsLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/finance/receivables': {
@@ -2947,10 +3214,22 @@ const rootRouteChildren: RootRouteChildren = {
   FinancePayablesLazyRoute: FinancePayablesLazyRoute,
   FinancePayrollLazyRoute: FinancePayrollLazyRoute,
   FinanceReceivablesLazyRoute: FinanceReceivablesLazyRouteWithChildren,
+  HrContractsLazyRoute: HrContractsLazyRoute,
+  HrDashboardLazyRoute: HrDashboardLazyRoute,
+  HrDepartmentsLazyRoute: HrDepartmentsLazyRoute,
+  HrEmployeesLazyRoute: HrEmployeesLazyRoute,
+  HrLeaveLazyRoute: HrLeaveLazyRoute,
+  HrPositionsLazyRoute: HrPositionsLazyRoute,
+  HrSalaryComponentsLazyRoute: HrSalaryComponentsLazyRoute,
+  HrWorkSchedulesLazyRoute: HrWorkSchedulesLazyRoute,
   KoperasiAnggotaLazyRoute: KoperasiAnggotaLazyRoute,
   KoperasiAngsuranLazyRoute: KoperasiAngsuranLazyRoute,
+  KoperasiCollectionAssignmentsLazyRoute:
+    KoperasiCollectionAssignmentsLazyRoute,
+  KoperasiCoverageConflictsLazyRoute: KoperasiCoverageConflictsLazyRoute,
   KoperasiKasPetugasLazyRoute: KoperasiKasPetugasLazyRoute,
   KoperasiMigrasiPinjamanLazyRoute: KoperasiMigrasiPinjamanLazyRoute,
+  KoperasiMigrasiSimpananLazyRoute: KoperasiMigrasiSimpananLazyRoute,
   KoperasiPenagihanLazyRoute: KoperasiPenagihanLazyRoute,
   KoperasiPinjamanLazyRoute: KoperasiPinjamanLazyRoute,
   KoperasiSimpananLazyRoute: KoperasiSimpananLazyRoute,
@@ -2970,6 +3249,7 @@ const rootRouteChildren: RootRouteChildren = {
   MasterDataStockOpnameLazyRoute: MasterDataStockOpnameLazyRoute,
   MasterDataTaxesLazyRoute: MasterDataTaxesLazyRoute,
   MasterDataUnitsLazyRoute: MasterDataUnitsLazyRoute,
+  MasterDataUsersLazyRoute: MasterDataUsersLazyRoute,
   MasterDataWarehousesLazyRoute: MasterDataWarehousesLazyRoute,
   PurchasesPendingCostsLazyRoute: PurchasesPendingCostsLazyRoute,
   ReportAgingReportLazyRoute: ReportAgingReportLazyRoute,

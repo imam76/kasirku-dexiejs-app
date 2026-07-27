@@ -5,6 +5,7 @@ import { Edit2, KeyRound, Plus, ShieldCheck, UserCheck, UserX } from 'lucide-rea
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getEnabledPermissionCatalog } from '@/auth/permissionCatalog';
 import { useAuth } from '@/auth/useAuth';
+import { useI18n } from '@/hooks/useI18n';
 import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
 import dayjs from '@/lib/dayjs';
 import {
@@ -29,6 +30,7 @@ type RoleRow = Role & { permission_count: number };
 
 export default function RoleManagement() {
   const { message, modal } = App.useApp();
+  const { t } = useI18n();
   const { currentUser, currentRole } = useAuth();
   const [roleForm] = Form.useForm<RoleFormValues>();
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
@@ -230,7 +232,7 @@ export default function RoleManagement() {
       title={(
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5" />
-          Manajemen Role
+          {t('nav.roles')}
         </div>
       )}
       extra={(

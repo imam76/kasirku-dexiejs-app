@@ -2169,13 +2169,17 @@ export const postCooperativeSavingTransactionJournal = async (
   );
   const savingAccountCandidate = getCooperativeSavingAccountCandidate(transaction.saving_type);
   const savingAccountLabel = getCooperativeSavingAccountLabel(transaction.saving_type);
-  const savingAccount = isInterestWithdrawal
-    ? undefined
-    : (
-        tryGetPostableAccount(accounts, savingAccountCandidate)
-        ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeMemberSavings, 'Simpanan Anggota')
-      );
-  const interestExpenseAccount = isInterestWithdrawal
+  const savingAccount = (
+    tryGetPostableAccount(accounts, savingAccountCandidate)
+    ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeMemberSavings, 'Simpanan Anggota')
+  );
+  const openingInterestAppliedAmount = isInterestWithdrawal
+    ? Math.min(amount, amountOrZero(transaction.opening_interest_applied_amount))
+    : 0;
+  const accruedInterestAmount = isInterestWithdrawal
+    ? Math.max(0, amount - openingInterestAppliedAmount)
+    : 0;
+  const interestExpenseAccount = accruedInterestAmount > 0
     ? (
         tryGetPostableAccount(accounts, ACCOUNT_CANDIDATES.cooperativeSavingInterestExpense)
         ?? getPostableAccount(accounts, ACCOUNT_CANDIDATES.otherExpense, 'Beban Jasa Simpanan')
@@ -2188,7 +2192,12 @@ export const postCooperativeSavingTransactionJournal = async (
       ]
     : isInterestWithdrawal
       ? [
-          createDebitLine(interestExpenseAccount!, amount, 'Beban jasa simpanan anggota'),
+          openingInterestAppliedAmount > 0
+            ? createDebitLine(savingAccount, openingInterestAppliedAmount, 'Pembayaran kewajiban jasa historis simpanan anggota')
+            : undefined,
+          accruedInterestAmount > 0
+            ? createDebitLine(interestExpenseAccount!, accruedInterestAmount, 'Beban jasa simpanan berjalan anggota')
+            : undefined,
           createCreditLine(cashAccount, amount, 'Kas/bank berkurang karena pengambilan jasa simpanan'),
         ]
     : [
@@ -2221,7 +2230,9 @@ export const postCooperativeSavingOpeningBalanceJournal = async (
   if (!entryDate) return undefined;
 
   const amount = amountOrZero(transaction.amount);
-  if (amount <= 0) return undefined;
+  const openingInterestAmount = amountOrZero(transaction.opening_interest_amount);
+  const totalOpeningAmount = amount + openingInterestAmount;
+  if (totalOpeningAmount <= 0) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
   const openingEquityAccount = getPostableAccount(
@@ -2242,8 +2253,13 @@ export const postCooperativeSavingOpeningBalanceJournal = async (
     entry_date: entryDate,
     description: `Saldo awal simpanan ${transaction.saving_type} ${transaction.member_number} - ${transaction.member_name}`,
     lines: [
-      createDebitLine(openingEquityAccount, amount, 'Saldo awal ekuitas berkurang untuk kewajiban simpanan anggota'),
-      createCreditLine(savingAccount, amount, `Saldo awal kewajiban ${savingAccountLabel.toLowerCase()}`),
+      createDebitLine(openingEquityAccount, totalOpeningAmount, 'Saldo awal ekuitas berkurang untuk kewajiban simpanan anggota'),
+      amount > 0
+        ? createCreditLine(savingAccount, amount, `Saldo awal kewajiban ${savingAccountLabel.toLowerCase()}`)
+        : undefined,
+      openingInterestAmount > 0
+        ? createCreditLine(savingAccount, openingInterestAmount, 'Saldo awal kewajiban jasa historis simpanan anggota')
+        : undefined,
     ].filter((line): line is JournalLineDraft => Boolean(line)),
     actor,
   });

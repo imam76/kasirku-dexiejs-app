@@ -7,6 +7,10 @@ import {
   toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
+import {
+  formatCurrencyInput,
+  parseCurrencyInput,
+} from '@/utils/formatters';
 
 interface Option {
   value: string;
@@ -55,6 +59,8 @@ export const PurchaseLineItemExpandedFields = ({
             min={0}
             className={expandedFieldControlClassName}
             value={displayedPrice}
+            formatter={formatCurrencyInput}
+            parser={parseCurrencyInput}
             onChange={(value) => onUpdateItem(item.id, isForeignCurrency
               ? { foreign_price: Number(value || 0) }
               : { price: Number(value || 0) })}

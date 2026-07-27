@@ -2,6 +2,7 @@ import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres, refreshR
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshCooperativeAreasFromPostgres } from '@/services/cooperativeAreaReadService';
 import { refreshCooperativeDataFromPostgres } from '@/services/cooperativeReadService';
+import { refreshWorkforceStateFromPostgres } from '@/services/workforceReadService';
 import {
   refreshAccountingInitialSetupSettingFromPostgres,
   refreshAccountingProfileSettingFromPostgres,
@@ -22,6 +23,7 @@ import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/coope
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
 import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
+import { refreshHrDataFromPostgres } from '@/services/hrReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
 import { refreshOpeningBalancesFromPostgres } from '@/services/openingBalanceReadService';
@@ -34,7 +36,7 @@ import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumen
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshFixedAssetsFromPostgres, refreshFixedAssetRunsFromPostgres } from '@/services/fixedAssetReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
-import { syncSetupConfigFromRemote } from '@/services/setupKeyService';
+import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import {
   enqueuePendingAccountingSettingsForSync,
@@ -49,6 +51,8 @@ import {
   enqueuePendingContactsForSync,
   enqueuePendingCooperativeDataForSync,
   enqueuePendingEmployeesForSync,
+  enqueuePendingHrDataForSync,
+  enqueuePendingWorkforceForSync,
   enqueuePendingFinanceTransactionsForSync,
   enqueuePendingJournalEntriesForSync,
   enqueuePendingOpeningBalancesForSync,
@@ -87,6 +91,8 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingContactsForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingEmployeesForSync();
+  await enqueuePendingHrDataForSync();
+  await enqueuePendingWorkforceForSync();
   await enqueuePendingPayrollDataForSync();
   await enqueuePendingCashierSessionsForSync();
   await enqueuePendingFinanceTransactionsForSync();
@@ -121,7 +127,7 @@ export const refreshAllDataFromPostgres = async () => {
     roles: await refreshRolesFromPostgres(),
     authUsers: await refreshAuthUsersFromPostgres(),
     activityLogs: await refreshActivityLogsFromPostgres(),
-    appSetupConfig: await syncSetupConfigFromRemote(),
+    appSetupConfig: await reconcileSetupConfigWithRemote(),
     departments: await refreshDepartmentsFromPostgres(),
     chartOfAccounts: await refreshChartOfAccountsFromPostgres(),
     financeAccountMappings: await refreshFinanceAccountMappingsFromPostgres(),
@@ -138,6 +144,8 @@ export const refreshAllDataFromPostgres = async () => {
     warehouses: await refreshWarehousesFromPostgres(),
     cooperativeAreas: await refreshCooperativeAreasFromPostgres(),
     employees: await refreshEmployeesFromPostgres(),
+    hr: await refreshHrDataFromPostgres(),
+    workforce: await refreshWorkforceStateFromPostgres(),
     currencies: await refreshCurrenciesFromPostgres(),
     currencyRates: await refreshCurrencyRatesFromPostgres(),
     products: await refreshProductsFromPostgres(),

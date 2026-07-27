@@ -10,6 +10,7 @@ import type {
   CooperativeSavingWithdrawalSource,
 } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import type { CooperativeSavingInterestSummary } from '@/utils/koperasi/savingInterest';
 import { cooperativeSavingTypeOptions } from './savingOptions';
 
 const { Text } = Typography;
@@ -17,6 +18,7 @@ const { Text } = Typography;
 interface CooperativeSavingBalanceTableProps {
   balances: CooperativeMemberSavingBalance[];
   pendingReturnByBalanceKey: Map<string, CooperativeSavingPendingReturn>;
+  interestSummaryByBalanceKey: Map<string, CooperativeSavingInterestSummary>;
   interestByBalanceKey: Map<string, number>;
   onWithdraw?: (
     balance: CooperativeMemberSavingBalance,
@@ -28,6 +30,7 @@ interface CooperativeSavingBalanceTableProps {
 export default function CooperativeSavingBalanceTable({
   balances,
   pendingReturnByBalanceKey,
+  interestSummaryByBalanceKey,
   interestByBalanceKey,
   onWithdraw,
   loading,
@@ -86,11 +89,24 @@ export default function CooperativeSavingBalanceTable({
       key: 'available_interest',
       align: 'right',
       width: 180,
-      render: (_value: unknown, balance) => (
-        balance.saving_type === 'WAJIB'
-          ? '-'
-          : <span className="font-semibold text-green-700">Rp {formatCurrency(interestByBalanceKey.get(balance.id) || 0)}</span>
-      ),
+      render: (_value: unknown, balance) => {
+        if (balance.saving_type === 'WAJIB') return '-';
+
+        const summary = interestSummaryByBalanceKey.get(balance.id);
+        return (
+          <div>
+            <span className="font-semibold text-green-700">
+              Rp {formatCurrency(summary?.availableInterest || 0)}
+            </span>
+            <div className="text-xs text-gray-500">
+              {t('cooperative.savings.historicalInterest')}: Rp {formatCurrency(summary?.availableOpeningInterest || 0)}
+            </div>
+            <div className="text-xs text-gray-500">
+              {t('cooperative.savings.accruedInterest')}: Rp {formatCurrency(summary?.availableAccruedInterest || 0)}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: t('cooperative.savings.table.updatedAt'),

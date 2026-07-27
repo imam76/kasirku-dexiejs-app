@@ -3,6 +3,7 @@ import FeedbackModal from '@/components/FeedbackModal'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
 import LoginProfile from '@/components/auth/LoginProfile'
+import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
@@ -92,7 +93,7 @@ const RootLayout = () => {
   const location = useLocation()
   const { isDark, toggle } = useTheme()
   const { locale, t, toggleLocale } = useI18n()
-  const { can, currentUser, currentRole, permissionSet, logout } = useAuth()
+  const { can, currentUser, currentRole, permissionSet, logout, refreshCurrentUser } = useAuth()
   const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole })
   const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
@@ -239,7 +240,17 @@ const RootLayout = () => {
       to: '/hr',
       label: t('nav.hr'),
       icon: Users,
-      activePaths: ['/master-data/areas', '/master-data/employees', '/finance/payroll'],
+      activePaths: [
+        '/hr/dashboard',
+        '/hr/employees',
+        '/hr/departments',
+        '/hr/positions',
+        '/hr/contracts',
+        '/hr/salary-components',
+        '/master-data/areas',
+        '/master-data/employees',
+        '/finance/payroll',
+      ],
     },
     { to: '/koperasi', label: t('nav.cooperative'), icon: Building2 },
     {
@@ -426,6 +437,7 @@ const RootLayout = () => {
                 currentUser={currentUser}
                 currentRole={currentRole}
                 onLogout={handleLogoutClick}
+                onPinChanged={refreshCurrentUser}
               />
             </div>
           </div>
@@ -491,7 +503,10 @@ const RootLayout = () => {
                     )}
                   />
                 ) : canOpenCurrentPath ? (
-                  <Outlet />
+                  <>
+                    <GlobalBreadcrumb pathname={location.pathname} />
+                    <Outlet />
+                  </>
                 ) : (
                   <Result
                     status="403"

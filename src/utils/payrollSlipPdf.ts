@@ -54,7 +54,9 @@ const escapeHtml = (value: string | number | null | undefined) => (
 
 const cleanText = (value?: string | null) => value?.trim() || '';
 const displayText = (value?: string | null) => cleanText(value) || '-';
-const money = (value: number) => `Rp ${formatCurrency(Number(value || 0))}`;
+const money = (value: number, currencyCode = 'IDR') => (
+  `${currencyCode} ${formatCurrency(Number(value || 0))}`
+);
 
 const safeFilenameSegment = (value: string) => (
   value
@@ -139,7 +141,7 @@ const toIndonesianWords = (value: number): string => {
   );
 };
 
-const formatTerbilang = (value: number) => {
+const formatTerbilang = (value: number, currencyCode = 'IDR') => {
   const rounded = Math.round(Number(value || 0));
   const words = rounded < 0
     ? `minus ${toIndonesianWords(rounded)}`
@@ -148,7 +150,7 @@ const formatTerbilang = (value: number) => {
   return `${words
     .split(' ')
     .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-    .join(' ')} Rupiah`;
+    .join(' ')} ${currencyCode === 'IDR' ? 'Rupiah' : currencyCode}`;
 };
 
 const payrollSlipStyles = `
@@ -511,25 +513,25 @@ const renderField = (label: string, value: string | number | undefined | null) =
   </div>
 `;
 
-const renderAmountRows = (rows: Array<[string, number]>) => (
+const renderAmountRows = (rows: Array<[string, number]>, currencyCode: string) => (
   rows.map(([label, value]) => `
     <tr>
       <td>${escapeHtml(label)}</td>
-      <td class="payroll-slip-number-cell">${escapeHtml(money(value))}</td>
+      <td class="payroll-slip-number-cell">${escapeHtml(money(value, currencyCode))}</td>
     </tr>
   `).join('')
 );
 
-const moneyDeduction = (value: number) => {
+const moneyDeduction = (value: number, currencyCode: string) => {
   const amount = Number(value || 0);
-  return amount > 0 ? `(${money(amount)})` : money(0);
+  return amount > 0 ? `(${money(amount, currencyCode)})` : money(0, currencyCode);
 };
 
-const renderDeductionRows = (rows: Array<[string, number]>) => (
+const renderDeductionRows = (rows: Array<[string, number]>, currencyCode: string) => (
   rows.map(([label, value]) => `
     <tr>
       <td>${escapeHtml(label)}</td>
-      <td class="payroll-slip-number-cell${Number(value || 0) > 0 ? ' payroll-slip-deduction-cell' : ''}">${escapeHtml(moneyDeduction(value))}</td>
+      <td class="payroll-slip-number-cell${Number(value || 0) > 0 ? ' payroll-slip-deduction-cell' : ''}">${escapeHtml(moneyDeduction(value, currencyCode))}</td>
     </tr>
   `).join('')
 );
@@ -560,6 +562,10 @@ const renderPayrollSlipPage = ({
     ['Potongan Kasbon', item.cash_advance_deduction_amount || 0],
   ];
   const employeeNote = cleanText(item.notes);
+  const currencyCode = item.salary_currency ?? run.salary_currency ?? 'IDR';
+  const employeePaymentMethod = item.salary_payment_method === 'BANK_TRANSFER'
+    ? 'Transfer bank'
+    : 'Tunai';
 
   return `
     <section class="payroll-slip-page">
@@ -580,15 +586,18 @@ const renderPayrollSlipPage = ({
       <section class="payroll-slip-info-grid">
         <div class="payroll-slip-panel">
           <h3 class="payroll-slip-panel-title">Data Karyawan</h3>
+          ${renderField('Nomor Karyawan', item.employee_number)}
           ${renderField('Nama', item.employee_name)}
           ${renderField('Jabatan', item.employee_position)}
+          ${renderField('Departemen', item.employee_department)}
           ${renderField('Periode Gaji', formatPeriod(run))}
         </div>
 
         <div class="payroll-slip-panel">
           <h3 class="payroll-slip-panel-title">Informasi Pembayaran</h3>
           ${renderField('Tanggal Bayar', formatDateTime(run.paid_at))}
-          ${renderField('Metode Bayar', paymentMethodLabel(run.payment_method))}
+          ${renderField('Metode Karyawan', employeePaymentMethod)}
+          ${renderField('Sumber Pembayaran', paymentMethodLabel(run.payment_method))}
           ${renderField('Status', 'Dibayar')}
         </div>
       </section>
@@ -605,36 +614,36 @@ const renderPayrollSlipPage = ({
             <thead>
               <tr>
                 <th>Keterangan</th>
-                <th>Jumlah (Rp)</th>
+                <th>Jumlah (${escapeHtml(currencyCode)})</th>
               </tr>
             </thead>
             <tbody>
               <tr class="payroll-slip-section-row">
                 <td colspan="2">Pendapatan</td>
               </tr>
-              ${renderAmountRows(earnings)}
+              ${renderAmountRows(earnings, currencyCode)}
               <tr class="payroll-slip-total-row">
                 <td>Total Pendapatan</td>
-                <td class="payroll-slip-number-cell">${escapeHtml(money(item.gross_amount))}</td>
+                <td class="payroll-slip-number-cell">${escapeHtml(money(item.gross_amount, currencyCode))}</td>
               </tr>
               <tr class="payroll-slip-section-row">
                 <td colspan="2">Potongan</td>
               </tr>
-              ${renderDeductionRows(deductions)}
+              ${renderDeductionRows(deductions, currencyCode)}
               <tr class="payroll-slip-total-row">
                 <td>Total Potongan</td>
-                <td class="payroll-slip-number-cell${Number(item.deduction_amount || 0) > 0 ? ' payroll-slip-deduction-cell' : ''}">${escapeHtml(moneyDeduction(item.deduction_amount))}</td>
+                <td class="payroll-slip-number-cell${Number(item.deduction_amount || 0) > 0 ? ' payroll-slip-deduction-cell' : ''}">${escapeHtml(moneyDeduction(item.deduction_amount, currencyCode))}</td>
               </tr>
               <tr class="payroll-slip-net-row">
                 <td>Gaji Neto Diterima</td>
-                <td class="payroll-slip-number-cell">${escapeHtml(money(item.net_amount))}</td>
+                <td class="payroll-slip-number-cell">${escapeHtml(money(item.net_amount, currencyCode))}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <div class="payroll-slip-terbilang"><strong>Terbilang:</strong> ${escapeHtml(formatTerbilang(item.net_amount))}</div>
+      <div class="payroll-slip-terbilang"><strong>Terbilang:</strong> ${escapeHtml(formatTerbilang(item.net_amount, currencyCode))}</div>
 
       <section class="payroll-slip-signatures">
         <div>

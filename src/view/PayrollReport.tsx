@@ -189,7 +189,7 @@ export default function PayrollReport() {
               String(index + 1),
               row.payroll_number,
               formatPeriod(row.period_start, row.period_end),
-              row.employee_name,
+              row.employee_number ? `${row.employee_number} - ${row.employee_name}` : row.employee_name,
               money(row.base_salary),
               money(row.allowance_amount),
               money(row.bonus_amount),
@@ -335,8 +335,8 @@ export default function PayrollReport() {
             index + 1,
             row.payroll_number,
             formatPeriod(row.period_start, row.period_end),
-            row.employee_name,
-            row.employee_position || '-',
+            row.employee_number ? `${row.employee_number} - ${row.employee_name}` : row.employee_name,
+            [row.employee_position, row.employee_department].filter(Boolean).join(' / ') || '-',
             row.base_salary,
             row.allowance_amount,
             row.bonus_amount,
@@ -542,8 +542,12 @@ export default function PayrollReport() {
                     {group.rows.map((row, index) => (
                       <tr key={row.id}>
                         <td className={`${tableTextClass} text-center`}>{index + 1}</td>
-                        <td className={tableTextClass}>{row.employee_name}</td>
-                        <td className={tableTextClass}>{row.employee_position || '-'}</td>
+                        <td className={tableTextClass}>
+                          {row.employee_number ? `${row.employee_number} - ` : ''}{row.employee_name}
+                        </td>
+                        <td className={tableTextClass}>
+                          {[row.employee_position, row.employee_department].filter(Boolean).join(' / ') || '-'}
+                        </td>
                         <td className={tableNumberClass}>{moneyWithPrefix(row.base_salary)}</td>
                         <td className={tableNumberClass}>{moneyWithPrefix(row.allowance_amount)}</td>
                         <td className={tableNumberClass}>{moneyWithPrefix(row.bonus_amount)}</td>

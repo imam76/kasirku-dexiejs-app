@@ -4,6 +4,7 @@ import type { FormInstance } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { Plus, Trash2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
+import { AUTH_PIN_LENGTH, AUTH_PIN_VALIDATION_MESSAGE } from '@/auth/pinPolicy';
 import type {
   ChartOfAccount,
   CooperativeArea,
@@ -250,11 +251,11 @@ export default function EmployeeFormModal({
                           preserve={false}
                           rules={[
                             { required: !isEditing && Boolean(form.getFieldValue('login_role_id')), message: 'PIN login wajib diisi jika role dipilih.' },
-                            { min: 4, message: 'PIN minimal 4 digit.' },
-                            { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
+                            { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
+                            { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
                           ]}
                         >
-                          <Input.Password inputMode="numeric" placeholder="Masukkan PIN" />
+                          <Input.Password inputMode="numeric" maxLength={AUTH_PIN_LENGTH} placeholder="Masukkan PIN" />
                         </Form.Item>
                         {loginPinValue && (
                           <Form.Item
@@ -275,7 +276,7 @@ export default function EmployeeFormModal({
                             ]}
                             className="md:col-start-2"
                           >
-                            <Input.Password inputMode="numeric" placeholder="Ulangi PIN" />
+                            <Input.Password inputMode="numeric" maxLength={AUTH_PIN_LENGTH} placeholder="Ulangi PIN" />
                           </Form.Item>
                         )}
                       </div>

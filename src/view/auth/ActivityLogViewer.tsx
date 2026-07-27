@@ -16,6 +16,12 @@ const actionColor = (action: string) => {
   return 'default';
 };
 
+const formatChangeValue = (value: string | number | boolean | null | undefined) => {
+  if (value === undefined || value === null || value === '') return '-';
+  if (typeof value === 'boolean') return value ? 'Ya' : 'Tidak';
+  return String(value);
+};
+
 export const ActivityLogViewer = () => {
   const logs = useLiveQuery(
     () => getActivityLogs({ limit: 200 }),
@@ -64,6 +70,24 @@ export const ActivityLogViewer = () => {
       title: 'Keterangan',
       dataIndex: 'description',
       key: 'description',
+    },
+    {
+      title: 'Perubahan penting',
+      key: 'changes',
+      width: 320,
+      render: (_value: unknown, log) => log.changes?.length ? (
+        <Space orientation="vertical" size={2}>
+          {log.changes.map((change, index) => (
+            <Text key={`${change.field}-${index}`} className="text-xs">
+              <Text code>{change.field}</Text>
+              {' '}
+              {formatChangeValue(change.before)}
+              {' → '}
+              {formatChangeValue(change.after)}
+            </Text>
+          ))}
+        </Space>
+      ) : <Text type="secondary">-</Text>,
     },
   ];
 

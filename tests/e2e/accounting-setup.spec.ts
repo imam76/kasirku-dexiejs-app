@@ -325,7 +325,7 @@ test.describe.serial('accounting initial setup regression', () => {
     await page.goto('/finance/opening-balances/accounts');
     await expect(page.getByText('Opening balance sudah posted.')).toBeVisible();
     await expect(page.getByTestId('gl-opening-balance-debit-1010')).toBeDisabled();
-    await expect(page.getByTestId('gl-opening-balance-save-draft-button')).toHaveCount(0);
+    await expect(page.getByTestId('gl-opening-balance-save-draft-button')).toBeDisabled();
     await expect(page.getByTestId('gl-opening-balance-post-button')).toBeDisabled();
 
     const result = await page.evaluate(async () => {

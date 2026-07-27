@@ -23,6 +23,7 @@ import { isPermissionEnabledBySetup } from './permissionCatalog';
 import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './roleSeed';
 import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
 import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
+import { AUTH_PIN_VALIDATION_MESSAGE, isValidAuthPin } from './pinPolicy';
 
 const SESSION_STORAGE_KEY = 'frayukti-auth-session-id';
 const PIN_HASH_ALGORITHM = 'SHA-256';
@@ -32,6 +33,7 @@ interface ActivityLogInput {
   entity: string;
   entity_id?: string;
   description: string;
+  changes?: ActivityLog['changes'];
   user?: AuthUser | null;
 }
 
@@ -56,6 +58,11 @@ interface UpdateAuthUserInput {
 interface ResetAuthUserPinInput {
   userId: string;
   pin: string;
+}
+
+interface ChangeCurrentUserPinInput {
+  currentPin: string;
+  newPin: string;
 }
 
 interface ActivityLogQueryInput {
@@ -202,8 +209,32 @@ const assertValidName = (name: string) => {
 };
 
 const assertValidPin = (pin: string) => {
-  if (!/^\d{4,}$/.test(pin)) {
-    throw new Error('PIN harus berupa angka minimal 4 digit.');
+  if (!isValidAuthPin(pin)) {
+    throw new Error(AUTH_PIN_VALIDATION_MESSAGE);
+  }
+};
+
+const assertEmailAvailable = async (email: string | undefined, excludeUserId?: string) => {
+  const normalizedEmail = normalizeAuthEmail(email);
+  if (!normalizedEmail) return;
+
+  const existingUser = await db.authUsers.where('email').equals(normalizedEmail).first();
+  if (existingUser && existingUser.id !== excludeUserId) {
+    throw new Error('Email sudah digunakan user lain.');
+  }
+};
+
+const assertEmployeeLinkAvailable = async (employeeId: string | undefined, excludeUserId?: string) => {
+  if (!employeeId) return;
+
+  const employee = await db.employees.get(employeeId);
+  if (!employee) {
+    throw new Error('Karyawan yang akan ditautkan tidak ditemukan.');
+  }
+
+  const linkedUser = await db.authUsers.where('employee_id').equals(employeeId).first();
+  if (linkedUser && linkedUser.id !== excludeUserId) {
+    throw new Error('Karyawan sudah terhubung dengan user aplikasi lain.');
   }
 };
 
@@ -332,6 +363,7 @@ export const createOwnerUser = async (input: { id?: string; name: string; email:
   const name = normalizeName(input.name);
   assertValidName(name);
   assertValidPin(input.pin);
+  await assertEmailAvailable(input.email);
   await assertPinAvailable(input.pin);
 
   const now = new Date().toISOString();
@@ -371,6 +403,8 @@ export const createAuthUser = async (input: CreateAuthUserInput): Promise<AuthUs
   const name = normalizeName(input.name);
 
   assertValidName(name);
+  await assertEmailAvailable(input.email);
+  await assertEmployeeLinkAvailable(input.employee_id);
   assertValidPin(input.pin);
   await assertPinAvailable(input.pin);
 
@@ -415,6 +449,8 @@ export const updateAuthUser = async (input: UpdateAuthUserInput): Promise<AuthUs
 
   const name = normalizeName(input.name);
   assertValidName(name);
+  await assertEmailAvailable(input.email, targetUser.id);
+  await assertEmployeeLinkAvailable(input.employee_id, targetUser.id);
 
   const role = await getRoleForAuthInput(input);
   const nextLegacyRole = (role.code as UserRole | undefined) ?? input.role ?? targetUser.role;
@@ -487,6 +523,60 @@ export const resetAuthUserPin = async (input: ResetAuthUserPinInput): Promise<vo
     entity_id: targetUser.id,
     description: `${actor.name} mereset PIN user ${targetUser.name}.`,
   });
+};
+
+export const changeCurrentUserPin = async (input: ChangeCurrentUserPinInput): Promise<AuthUser> => {
+  const currentUser = await getCurrentSessionUser({
+    touchSession: false,
+    cleanupInvalidSession: false,
+  });
+  if (!currentUser) {
+    throw new Error('Session user tidak ditemukan.');
+  }
+
+  const targetUser = await db.authUsers.get(currentUser.id)
+    ?? (currentUser.employee_id
+      ? await db.authUsers.where('employee_id').equals(currentUser.employee_id).first()
+      : undefined);
+  if (!targetUser) {
+    throw new Error('Akun login lama belum terhubung ke auth_users. Hubungi Owner untuk membuat akses aplikasi.');
+  }
+
+  if (!await verifyPin(input.currentPin, targetUser.pin_hash, targetUser.pin_salt)) {
+    throw new Error('PIN saat ini tidak sesuai.');
+  }
+
+  assertValidPin(input.newPin);
+  if (await verifyPin(input.newPin, targetUser.pin_hash, targetUser.pin_salt)) {
+    throw new Error('PIN baru harus berbeda dari PIN saat ini.');
+  }
+  await assertPinAvailable(input.newPin, targetUser.id);
+
+  const { hash, salt } = await createPinHash(input.newPin);
+  const updatedAt = new Date().toISOString();
+  await db.authUsers.update(targetUser.id, {
+    pin_hash: hash,
+    pin_salt: salt,
+    updated_at: updatedAt,
+    sync_status: 'pending',
+    sync_error: undefined,
+  });
+
+  const updatedUser = await db.authUsers.get(targetUser.id);
+  if (!updatedUser) {
+    throw new Error('User tidak ditemukan setelah PIN diperbarui.');
+  }
+
+  await enqueueAuthUserSync(updatedUser, 'update');
+  await writeActivityLog({
+    user: updatedUser,
+    action: 'AUTH_USER_PIN_CHANGED',
+    entity: 'authUsers',
+    entity_id: updatedUser.id,
+    description: `${updatedUser.name} mengganti PIN miliknya sendiri.`,
+  });
+
+  return updatedUser;
 };
 
 export const setAuthUserActive = async (userId: string, isActive: boolean): Promise<void> => {
@@ -898,6 +988,7 @@ export const writeActivityLog = async (input: ActivityLogInput): Promise<void> =
     entity: input.entity,
     entity_id: input.entity_id,
     description: input.description,
+    changes: input.changes,
     created_at: new Date().toISOString(),
   };
 

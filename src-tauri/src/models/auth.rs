@@ -30,6 +30,7 @@ pub struct ActivityLogDto {
     pub entity: String,
     pub entity_id: Option<String>,
     pub description: String,
+    pub changes: Option<serde_json::Value>,
     pub created_at: String,
 }
 

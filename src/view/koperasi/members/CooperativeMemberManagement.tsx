@@ -31,6 +31,7 @@ export default function CooperativeMemberManagement() {
     areas,
     employees,
     employeeAreaAssignments,
+    employeeCollectionSchedules,
     visibleAreas,
     editingMember,
     selectedMember,
@@ -78,6 +79,7 @@ export default function CooperativeMemberManagement() {
       address: member.address,
       area_id: member.area_id,
       officer_id: member.officer_id,
+      collection_schedule_id: member.collection_schedule_id,
       join_date: member.join_date ? dayjs(member.join_date) : null,
       status: member.status,
       notes: member.notes,
@@ -93,6 +95,7 @@ export default function CooperativeMemberManagement() {
     address: values.address,
     area_id: values.area_id,
     officer_id: values.officer_id,
+    collection_schedule_id: values.collection_schedule_id,
     join_date: values.join_date?.format('YYYY-MM-DD') ?? '',
     status: values.status,
     notes: values.notes,
@@ -248,7 +251,8 @@ export default function CooperativeMemberManagement() {
         open={isModalOpen}
         areas={areas}
         employees={employees}
-        employeeAreaAssignments={employeeAreaAssignments}
+      employeeAreaAssignments={employeeAreaAssignments}
+      collectionSchedules={employeeCollectionSchedules}
         members={members}
         memberCodes={memberCodes}
         editingMemberId={editingMember?.id}

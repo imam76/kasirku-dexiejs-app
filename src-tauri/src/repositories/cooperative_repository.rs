@@ -38,6 +38,9 @@ macro_rules! cooperative_member_select {
             officer_id,
             officer_name,
             officer_position,
+            collection_schedule_id,
+            collection_weekday,
+            collection_assignment_needs_review,
             join_date,
             status,
             notes,
@@ -77,6 +80,8 @@ macro_rules! cooperative_saving_transaction_select {
             transaction_type,
             withdrawal_source,
             interest_rate_per_month,
+            opening_interest_amount,
+            opening_interest_applied_amount,
             amount,
             transaction_date,
             status,
@@ -485,6 +490,9 @@ pub async fn upsert_cooperative_member(
             officer_id,
             officer_name,
             officer_position,
+            collection_schedule_id,
+            collection_weekday,
+            collection_assignment_needs_review,
             join_date,
             status,
             notes,
@@ -510,13 +518,16 @@ pub async fn upsert_cooperative_member(
             $12,
             $13,
             $14,
-            $15,
-            $16::TIMESTAMPTZ,
-            $17::TIMESTAMPTZ,
+            COALESCE($15, FALSE),
+            $16,
+            $17,
             $18,
-            $19,
-            $20,
-            $21
+            $19::TIMESTAMPTZ,
+            $20::TIMESTAMPTZ,
+            $21,
+            $22,
+            $23,
+            $24
         )
         ON CONFLICT (id) DO UPDATE SET
             member_number = EXCLUDED.member_number,
@@ -530,6 +541,9 @@ pub async fn upsert_cooperative_member(
             officer_id = EXCLUDED.officer_id,
             officer_name = EXCLUDED.officer_name,
             officer_position = EXCLUDED.officer_position,
+            collection_schedule_id = EXCLUDED.collection_schedule_id,
+            collection_weekday = EXCLUDED.collection_weekday,
+            collection_assignment_needs_review = EXCLUDED.collection_assignment_needs_review,
             join_date = EXCLUDED.join_date,
             status = EXCLUDED.status,
             notes = EXCLUDED.notes,
@@ -552,6 +566,9 @@ pub async fn upsert_cooperative_member(
             officer_id,
             officer_name,
             officer_position,
+            collection_schedule_id,
+            collection_weekday,
+            collection_assignment_needs_review,
             join_date,
             status,
             notes,
@@ -575,6 +592,9 @@ pub async fn upsert_cooperative_member(
     .bind(input.officer_id)
     .bind(input.officer_name)
     .bind(input.officer_position)
+    .bind(input.collection_schedule_id)
+    .bind(input.collection_weekday)
+    .bind(input.collection_assignment_needs_review)
     .bind(input.join_date)
     .bind(input.status)
     .bind(input.notes)
@@ -645,6 +665,8 @@ pub async fn upsert_cooperative_saving_transaction(
             transaction_type,
             withdrawal_source,
             interest_rate_per_month,
+            opening_interest_amount,
+            opening_interest_applied_amount,
             amount,
             transaction_date,
             status,
@@ -695,12 +717,14 @@ pub async fn upsert_cooperative_saving_transaction(
             $23,
             $24,
             $25,
-            $26::TIMESTAMPTZ,
-            $27::TIMESTAMPTZ,
-            $28,
-            $29,
+            $26,
+            $27,
+            $28::TIMESTAMPTZ,
+            $29::TIMESTAMPTZ,
             $30,
-            $31
+            $31,
+            $32,
+            $33
         )
         ON CONFLICT (id) DO UPDATE SET
             member_id = EXCLUDED.member_id,
@@ -710,6 +734,8 @@ pub async fn upsert_cooperative_saving_transaction(
             transaction_type = EXCLUDED.transaction_type,
             withdrawal_source = EXCLUDED.withdrawal_source,
             interest_rate_per_month = EXCLUDED.interest_rate_per_month,
+            opening_interest_amount = EXCLUDED.opening_interest_amount,
+            opening_interest_applied_amount = EXCLUDED.opening_interest_applied_amount,
             amount = EXCLUDED.amount,
             transaction_date = EXCLUDED.transaction_date,
             status = EXCLUDED.status,
@@ -742,6 +768,8 @@ pub async fn upsert_cooperative_saving_transaction(
             transaction_type,
             withdrawal_source,
             interest_rate_per_month,
+            opening_interest_amount,
+            opening_interest_applied_amount,
             amount,
             transaction_date,
             status,
@@ -775,6 +803,8 @@ pub async fn upsert_cooperative_saving_transaction(
     .bind(input.transaction_type)
     .bind(input.withdrawal_source)
     .bind(input.interest_rate_per_month)
+    .bind(input.opening_interest_amount)
+    .bind(input.opening_interest_applied_amount)
     .bind(input.amount)
     .bind(input.transaction_date)
     .bind(input.status)

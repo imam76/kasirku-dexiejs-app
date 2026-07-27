@@ -11,7 +11,13 @@ import {
   type CooperativeMemberArchiveOptions,
   type CooperativeMemberUpsertInput,
 } from '@/services/cooperativeMemberService';
-import type { CooperativeMember, CooperativeMemberStatus, Employee, EmployeeArea } from '@/types';
+import type {
+  CooperativeMember,
+  CooperativeMemberStatus,
+  Employee,
+  EmployeeArea,
+  EmployeeCollectionSchedule,
+} from '@/types';
 
 export type CooperativeMemberStatusFilter = CooperativeMemberStatus | 'ALL';
 export type CooperativeMemberAreaFilter = string | 'ALL' | 'UNASSIGNED';
@@ -49,6 +55,11 @@ export const useCooperativeMembers = () => {
     () => db.employeeAreas.toArray(),
     [],
     [] as EmployeeArea[],
+  );
+  const employeeCollectionSchedules = useLiveQuery(
+    () => db.employeeCollectionSchedules.toArray(),
+    [],
+    [] as EmployeeCollectionSchedule[],
   );
 
   const visibleAreas = useMemo(() => {
@@ -123,6 +134,7 @@ export const useCooperativeMembers = () => {
     areas,
     employees,
     employeeAreaAssignments,
+    employeeCollectionSchedules,
     visibleAreas,
     filteredMembers,
     areaScope,

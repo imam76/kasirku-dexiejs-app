@@ -1,6 +1,5 @@
-import { createLazyFileRoute } from '@tanstack/react-router';
-import EmployeeManagement from '@/view/master-data/employees/EmployeeManagement';
+import { Navigate, createLazyFileRoute } from '@tanstack/react-router';
 
 export const Route = createLazyFileRoute('/master-data/employees')({
-  component: EmployeeManagement,
+  component: () => <Navigate to="/hr/employees" replace />,
 });

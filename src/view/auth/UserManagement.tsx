@@ -4,12 +4,14 @@ import type { ColumnsType } from 'antd/es/table';
 import { Edit2, KeyRound, Plus, UserCheck, UserRoundCog, UserX } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { createAuthUser, normalizeAuthEmail, resetAuthUserPin, setAuthUserActive, updateAuthUser } from '@/auth/authService';
+import { AUTH_PIN_LENGTH, AUTH_PIN_VALIDATION_MESSAGE } from '@/auth/pinPolicy';
 import { ROLE_LABEL } from '@/auth/permissions';
 import { resolveLegacyRoleId } from '@/auth/roleSeed';
 import { useAuth } from '@/auth/useAuth';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
-import type { AuthUser, Role, UserRole } from '@/types';
+import { useI18n } from '@/hooks/useI18n';
+import type { AuthUser, Employee, Role, UserRole } from '@/types';
 
 const { Text } = Typography;
 
@@ -17,6 +19,7 @@ interface UserFormValues {
   name: string;
   email: string;
   role_id: string;
+  employee_id?: string;
   pin?: string;
   confirmPin?: string;
 }
@@ -40,6 +43,7 @@ const roleOptions = (Object.keys(ROLE_LABEL) as UserRole[]).map((role) => ({
 
 export const UserManagement = () => {
   const { message, modal } = App.useApp();
+  const { t } = useI18n();
   const { currentUser, refreshCurrentUser } = useAuth();
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -59,11 +63,29 @@ export const UserManagement = () => {
     [],
     [],
   );
+  const employees = useLiveQuery(
+    () => db.employees.orderBy('name').toArray(),
+    [],
+    [],
+  );
   const activeRoleOptions = (roles && roles.length > 0 ? roles : []).map((role: Role) => ({
     value: role.id,
     label: role.name,
   }));
   const selectRoleOptions = activeRoleOptions.length > 0 ? activeRoleOptions : roleOptions;
+  const employeeById = new Map((employees ?? []).map((employee) => [employee.id, employee]));
+  const employeeOptions = (employees ?? [])
+    .filter((employee) => {
+      if (!employee.is_active || (employee.active_status ?? 'ACTIVE') !== 'ACTIVE') return false;
+      const linkedUser = users.find((user) => user.employee_id === employee.id);
+      return !linkedUser || linkedUser.id === editingUser?.id;
+    })
+    .map((employee) => ({
+      value: employee.id,
+      label: employee.employee_number
+        ? `${employee.employee_number} — ${employee.name}`
+        : employee.name,
+    }));
 
   const closeUserModal = () => {
     setIsUserModalOpen(false);
@@ -91,6 +113,7 @@ export const UserManagement = () => {
       name: user.name,
       email: user.email,
       role_id: user.role_id ?? resolveLegacyRoleId(user.role),
+      employee_id: user.employee_id,
     });
     setIsUserModalOpen(true);
   };
@@ -111,6 +134,7 @@ export const UserManagement = () => {
           name: values.name,
           email: normalizeAuthEmail(values.email),
           role_id: values.role_id,
+          employee_id: values.employee_id,
         });
 
         if (editingUser.id === currentUser?.id) {
@@ -131,6 +155,7 @@ export const UserManagement = () => {
         name: values.name,
         email: normalizeAuthEmail(values.email),
         role_id: values.role_id,
+        employee_id: values.employee_id,
         pin: values.pin,
       });
       message.success('User berhasil ditambahkan.');
@@ -212,6 +237,16 @@ export const UserManagement = () => {
       ),
     },
     {
+      title: 'Karyawan Tertaut',
+      dataIndex: 'employee_id',
+      key: 'employee_id',
+      render: (employeeId?: string) => {
+        if (!employeeId) return <Text type="secondary">User umum</Text>;
+        const employee = employeeById.get(employeeId);
+        return employee?.name ?? employeeId;
+      },
+    },
+    {
       title: 'Status',
       dataIndex: 'is_active',
       key: 'is_active',
@@ -268,7 +303,7 @@ export const UserManagement = () => {
       title={(
         <div className="flex items-center gap-2">
           <UserRoundCog className="h-5 w-5" />
-          User dan Hak Akses
+          {t('nav.users')}
         </div>
       )}
       extra={(
@@ -332,6 +367,30 @@ export const UserManagement = () => {
             <Select options={selectRoleOptions} />
           </Form.Item>
 
+          <Form.Item
+            name="employee_id"
+            label="Karyawan Tertaut (Opsional)"
+            extra="Kosongkan untuk Owner atau user umum yang bukan karyawan."
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Pilih karyawan"
+              options={employeeOptions}
+              onChange={(employeeId?: string) => {
+                if (!employeeId) return;
+                const employee = employeeById.get(employeeId) as Employee | undefined;
+                if (!employee) return;
+                const currentValues = userForm.getFieldsValue();
+                userForm.setFieldsValue({
+                  name: currentValues.name || employee.name,
+                  email: currentValues.email || employee.personal_email || employee.email,
+                });
+              }}
+            />
+          </Form.Item>
+
           {!editingUser && (
             <>
               <Form.Item
@@ -340,11 +399,11 @@ export const UserManagement = () => {
                 preserve={false}
                 rules={[
                   { required: true, message: 'PIN wajib diisi.' },
-                  { min: 4, message: 'PIN minimal 4 digit.' },
-                  { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
+                  { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
+                  { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
                 ]}
               >
-                <Input.Password inputMode="numeric" placeholder="Masukkan PIN" />
+                <Input.Password inputMode="numeric" maxLength={AUTH_PIN_LENGTH} placeholder="Masukkan PIN" />
               </Form.Item>
 
               <Form.Item
@@ -364,7 +423,7 @@ export const UserManagement = () => {
                   }),
                 ]}
               >
-                <Input.Password inputMode="numeric" placeholder="Ulangi PIN" />
+                <Input.Password inputMode="numeric" maxLength={AUTH_PIN_LENGTH} placeholder="Ulangi PIN" />
               </Form.Item>
             </>
           )}
@@ -392,11 +451,11 @@ export const UserManagement = () => {
             label="PIN Baru"
             rules={[
               { required: true, message: 'PIN baru wajib diisi.' },
-              { min: 4, message: 'PIN minimal 4 digit.' },
-              { pattern: /^\d+$/, message: 'PIN hanya boleh angka.' },
+              { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
+              { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
             ]}
           >
-            <Input.Password inputMode="numeric" placeholder="Masukkan PIN baru" />
+            <Input.Password inputMode="numeric" maxLength={AUTH_PIN_LENGTH} placeholder="Masukkan PIN baru" />
           </Form.Item>
 
           <Form.Item
@@ -415,7 +474,7 @@ export const UserManagement = () => {
               }),
             ]}
           >
-            <Input.Password inputMode="numeric" placeholder="Ulangi PIN baru" />
+            <Input.Password inputMode="numeric" maxLength={AUTH_PIN_LENGTH} placeholder="Ulangi PIN baru" />
           </Form.Item>
         </Form>
       </Modal>
