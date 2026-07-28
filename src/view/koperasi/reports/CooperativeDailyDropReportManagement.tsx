@@ -224,7 +224,7 @@ export default function CooperativeDailyDropReportManagement() {
   };
 
   return (
-    <div className="space-y-4 p-3 sm:p-4 md:p-6">
+    <div className="min-w-0 max-w-full space-y-4 p-3 sm:p-4 md:p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <Title level={2} className="!mb-1 flex items-center gap-2">
@@ -280,7 +280,10 @@ export default function CooperativeDailyDropReportManagement() {
         <Empty description={t('cooperative.reports.dailyDrop.empty')} />
       ) : null}
 
-      <div style={{ overflowX: 'auto' }}>
+      <div
+        className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain"
+        data-testid="koperasi-daily-drop-report-viewport"
+      >
         <CooperativeDailyDropReport
           ref={reportRef}
           data={report}
