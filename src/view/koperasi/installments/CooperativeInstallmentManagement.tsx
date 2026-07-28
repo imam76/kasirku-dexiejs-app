@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { App, Button, Card, Form, Input, Select, Space, Table, Tabs, Tag, Typography } from 'antd';
+import { App, Button, Card, Form, Input, Segmented, Select, Space, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { CreditCard, Plus } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
@@ -20,6 +20,7 @@ import type {
   CooperativePaymentApprovalRequest,
 } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
+import type { CooperativeInstallmentScheduleFilter } from '@/utils/koperasi/installmentScheduleFilter';
 import { getInstallmentRemainingAmounts } from '@/utils/koperasi/loanPaymentAllocation';
 import CooperativeInstallmentLoanDrawer from './CooperativeInstallmentLoanDrawer';
 import CooperativeInstallmentTable from './CooperativeInstallmentTable';
@@ -71,6 +72,8 @@ export default function CooperativeInstallmentManagement() {
     setLoanStatusFilter,
     paymentStatusFilter,
     setPaymentStatusFilter,
+    scheduleFilter,
+    setScheduleFilter,
     approvalRequests,
     canApprovePayment,
     recordPayment,
@@ -402,55 +405,75 @@ export default function CooperativeInstallmentManagement() {
       </div>
 
       {activeTab !== 'approvals' && (
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)_minmax(220px,260px)_minmax(180px,220px)]">
-          <Input.Search
-            allowClear
-            value={searchText}
-            placeholder={t('cooperative.installments.searchPlaceholder')}
-            onChange={(event) => setSearchText(event.target.value)}
-          />
-          <Select<CooperativeInstallmentMemberFilter>
-            showSearch
-            value={memberFilter}
-            onChange={setMemberFilter}
-            optionFilterProp="label"
-            options={[
-              { value: 'ALL', label: t('cooperative.installments.filter.allMembers') },
-              ...memberFilterOptions,
-            ]}
-          />
-          <Select<CooperativeInstallmentOfficerFilter>
-            showSearch
-            value={officerFilter}
-            onChange={setOfficerFilter}
-            optionFilterProp="label"
-            options={[
-              { value: 'ALL', label: t('cooperative.installments.filter.allOfficers') },
-              ...officerFilterOptions,
-            ]}
-          />
-          {activeTab === 'balances' ? (
-            <Select<CooperativeInstallmentLoanStatusFilter>
-              value={loanStatusFilter}
-              onChange={setLoanStatusFilter}
-              options={[
-                { value: 'ACTIVE', label: t('cooperative.installments.filter.activeLoans') },
-                { value: 'PAID_OFF', label: t('cooperative.installments.filter.paidOffLoans') },
-                { value: 'ALL', label: t('cooperative.installments.filter.allLoans') },
-              ]}
-            />
-          ) : (
-            <Select<CooperativeLoanPaymentStatusFilter>
-              value={paymentStatusFilter}
-              onChange={setPaymentStatusFilter}
-              options={[
-                { value: 'POSTED', label: t('cooperative.installments.paymentStatus.posted') },
-                { value: 'REVERSED', label: t('cooperative.installments.paymentStatus.reversed') },
-                { value: 'ALL', label: t('cooperative.installments.filter.allPayments') },
-              ]}
-            />
+        <>
+          {activeTab === 'balances' && loanStatusFilter === 'ACTIVE' && (
+            <div className="mb-4 flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <Typography.Text strong>
+                {t('cooperative.installments.filter.schedule')}
+              </Typography.Text>
+              <Segmented<CooperativeInstallmentScheduleFilter>
+                block
+                value={scheduleFilter}
+                data-testid="koperasi-installment-schedule-filter"
+                onChange={setScheduleFilter}
+                options={[
+                  { value: 'TODAY', label: t('cooperative.installments.filter.today') },
+                  { value: 'THIS_WEEK', label: t('cooperative.installments.filter.thisWeek') },
+                  { value: 'ALL_UNPAID', label: t('cooperative.installments.filter.allUnpaid') },
+                ]}
+              />
+            </div>
           )}
-        </div>
+          <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_minmax(220px,260px)_minmax(220px,260px)_minmax(180px,220px)]">
+            <Input.Search
+              allowClear
+              value={searchText}
+              placeholder={t('cooperative.installments.searchPlaceholder')}
+              onChange={(event) => setSearchText(event.target.value)}
+            />
+            <Select<CooperativeInstallmentMemberFilter>
+              showSearch
+              value={memberFilter}
+              onChange={setMemberFilter}
+              optionFilterProp="label"
+              options={[
+                { value: 'ALL', label: t('cooperative.installments.filter.allMembers') },
+                ...memberFilterOptions,
+              ]}
+            />
+            <Select<CooperativeInstallmentOfficerFilter>
+              showSearch
+              value={officerFilter}
+              onChange={setOfficerFilter}
+              optionFilterProp="label"
+              options={[
+                { value: 'ALL', label: t('cooperative.installments.filter.allOfficers') },
+                ...officerFilterOptions,
+              ]}
+            />
+            {activeTab === 'balances' ? (
+              <Select<CooperativeInstallmentLoanStatusFilter>
+                value={loanStatusFilter}
+                onChange={setLoanStatusFilter}
+                options={[
+                  { value: 'ACTIVE', label: t('cooperative.installments.filter.activeLoans') },
+                  { value: 'PAID_OFF', label: t('cooperative.installments.filter.paidOffLoans') },
+                  { value: 'ALL', label: t('cooperative.installments.filter.allLoans') },
+                ]}
+              />
+            ) : (
+              <Select<CooperativeLoanPaymentStatusFilter>
+                value={paymentStatusFilter}
+                onChange={setPaymentStatusFilter}
+                options={[
+                  { value: 'POSTED', label: t('cooperative.installments.paymentStatus.posted') },
+                  { value: 'REVERSED', label: t('cooperative.installments.paymentStatus.reversed') },
+                  { value: 'ALL', label: t('cooperative.installments.filter.allPayments') },
+                ]}
+              />
+            )}
+          </div>
+        </>
       )}
 
       <Tabs

@@ -25,6 +25,10 @@ import {
   buildCooperativeInstallmentLoanSummaries,
   type CooperativeInstallmentLoanSummary,
 } from '@/utils/koperasi/installmentLoanSummary';
+import {
+  hasUnpaidInstallmentForSchedule,
+  type CooperativeInstallmentScheduleFilter,
+} from '@/utils/koperasi/installmentScheduleFilter';
 
 export type CooperativeInstallmentLoanStatusFilter = 'ACTIVE' | 'PAID_OFF' | 'ALL';
 export type CooperativeLoanPaymentStatusFilter = CooperativeLoanPaymentStatus | 'ALL';
@@ -82,6 +86,7 @@ export const useCooperativeInstallments = () => {
   const [officerFilter, setOfficerFilter] = useState<CooperativeInstallmentOfficerFilter>('ALL');
   const [loanStatusFilter, setLoanStatusFilter] = useState<CooperativeInstallmentLoanStatusFilter>('ACTIVE');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<CooperativeLoanPaymentStatusFilter>('POSTED');
+  const [scheduleFilter, setScheduleFilter] = useState<CooperativeInstallmentScheduleFilter>('ALL_UNPAID');
 
   const loans = useLiveQuery(
     () => db.cooperativeLoans.orderBy('loan_number').toArray(),
@@ -205,10 +210,14 @@ export const useCooperativeInstallments = () => {
           : loan.status === 'PAID_OFF' || summary.remainingAmount <= 0.01);
       const matchesMember = memberFilter === 'ALL' || loan.member_id === memberFilter;
       const matchesOfficer = officerFilter === 'ALL' || loan.officer_id === officerFilter;
+      const matchesSchedule = loanStatusFilter !== 'ACTIVE' || hasUnpaidInstallmentForSchedule(
+        summary.installments,
+        scheduleFilter,
+      );
 
-      return matchesSearch && matchesStatus && matchesMember && matchesOfficer;
+      return matchesSearch && matchesStatus && matchesMember && matchesOfficer && matchesSchedule;
     });
-  }, [loanStatusFilter, loanSummaries, memberFilter, officerFilter, searchText]);
+  }, [loanStatusFilter, loanSummaries, memberFilter, officerFilter, scheduleFilter, searchText]);
 
   const filteredPayments = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -317,6 +326,8 @@ export const useCooperativeInstallments = () => {
     setLoanStatusFilter,
     paymentStatusFilter,
     setPaymentStatusFilter,
+    scheduleFilter,
+    setScheduleFilter,
     approvalRequests: approvalRequestsQuery.data ?? [],
     canApprovePayment,
     recordPayment: (input: RecordCooperativeLoanPaymentInput) => recordMutation.mutateAsync(input),
