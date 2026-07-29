@@ -59,10 +59,10 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
       {canLogin ? null : (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <Text strong className="block text-sm text-amber-900">
-            Belum ada user aktif.
+            Belum ada akun Owner.
           </Text>
           <Text className="mt-1 block text-sm text-amber-800">
-            Buat Owner pertama lewat halaman register sebelum masuk ke aplikasi.
+            Buat Owner pertama sebelum masuk ke aplikasi.
           </Text>
         </div>
       )}
@@ -105,7 +105,7 @@ export const Login = ({ registrationAvailable = false, onRegister }: LoginProps)
 
       {registrationAvailable && (
         <Button type={canLogin ? 'default' : 'primary'} size="large" block className={canLogin ? 'mt-3' : ''} onClick={onRegister}>
-          Register Owner Pertama
+          Buat Owner Pertama
         </Button>
       )}
 

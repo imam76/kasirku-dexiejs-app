@@ -57,7 +57,7 @@ export const validateAccountingDraft = (
   if (requiresAccountingBaseline) {
     const template = ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[draft.businessTemplateCode];
     if (!template || template.status !== 'ENABLED') {
-      errors.business_template_code = 'Pilih jenis bisnis yang sudah aktif untuk wizard v1.';
+      errors.business_template_code = 'Pilih jenis usaha yang tersedia.';
     }
 
     const fiscalStart = dayjs(draft.fiscalPeriodStart);
@@ -67,27 +67,27 @@ export const validateAccountingDraft = (
     const cutoff = dayjs(draft.cutoffDate);
 
     if (!cutoff.isValid()) {
-      errors.cutoff_date = 'Cutoff wajib diisi dengan tanggal valid.';
+      errors.cutoff_date = 'Tanggal mulai pembukuan wajib diisi.';
     }
     if (!fiscalStart.isValid()) {
-      errors.fiscal_period_start = 'Awal periode fiskal wajib diisi.';
+      errors.fiscal_period_start = 'Awal tahun buku wajib diisi.';
     }
     if (!fiscalEnd.isValid()) {
-      errors.fiscal_period_end = 'Akhir periode fiskal wajib diisi.';
+      errors.fiscal_period_end = 'Akhir tahun buku wajib diisi.';
     }
     if (!currentStart.isValid()) {
-      errors.current_period_start = 'Awal periode berjalan wajib diisi.';
+      errors.current_period_start = 'Awal periode aktif wajib diisi.';
     }
     if (!currentEnd.isValid()) {
-      errors.current_period_end = 'Akhir periode berjalan wajib diisi.';
+      errors.current_period_end = 'Akhir periode aktif wajib diisi.';
     }
 
     if (fiscalStart.isValid() && fiscalEnd.isValid() && fiscalEnd.isBefore(fiscalStart, 'day')) {
-      errors.fiscal_period_end = 'Akhir periode fiskal harus sama atau setelah awal periode fiskal.';
+      errors.fiscal_period_end = 'Akhir tahun buku tidak boleh sebelum tanggal awal.';
     }
 
     if (currentStart.isValid() && currentEnd.isValid() && currentEnd.isBefore(currentStart, 'day')) {
-      errors.current_period_end = 'Akhir periode berjalan harus sama atau setelah awal periode berjalan.';
+      errors.current_period_end = 'Akhir periode aktif tidak boleh sebelum tanggal awal.';
     }
 
     if (
@@ -97,21 +97,21 @@ export const validateAccountingDraft = (
       currentEnd.isValid() &&
       (currentStart.isBefore(fiscalStart, 'day') || currentEnd.isAfter(fiscalEnd, 'day'))
     ) {
-      errors.current_period_start = 'Periode berjalan harus berada di dalam periode fiskal.';
-      errors.current_period_end = 'Periode berjalan harus berada di dalam periode fiskal.';
+      errors.current_period_start = 'Periode aktif harus berada di dalam tahun buku.';
+      errors.current_period_end = 'Periode aktif harus berada di dalam tahun buku.';
     }
 
     if (cutoff.isValid() && currentEnd.isValid() && cutoff.isAfter(currentEnd, 'day')) {
-      errors.cutoff_date = 'Cutoff tidak boleh setelah akhir periode berjalan.';
+      errors.cutoff_date = 'Mulai pembukuan tidak boleh setelah akhir periode aktif.';
     }
   }
 
   if (!/^[A-Z]{3}$/.test(baseCurrencyCode)) {
-    errors.base_currency_code = 'Kode base currency harus 3 huruf uppercase.';
+    errors.base_currency_code = 'Pilih mata uang utama yang valid.';
   }
 
   if (hasOperationalSignal && baseCurrencyCode !== (lockedBaseCurrencyCode ?? BASE_CURRENCY_CODE)) {
-    errors.base_currency_code = 'Base currency sudah terkunci setelah transaksi, dokumen, jurnal, payroll, koperasi, atau opening balance pertama.';
+    errors.base_currency_code = 'Mata uang utama tidak dapat diubah setelah transaksi atau saldo awal dibuat.';
   }
 
   return errors;

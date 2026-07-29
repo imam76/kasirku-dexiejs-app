@@ -42,22 +42,23 @@ async function normalizeOwnerAccountingBaseline(page: Page) {
 export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
   await page.goto('/');
 
-  const registerHeading = page.getByRole('heading', { name: 'Register Owner' });
-  await expect(page.getByRole('heading', { name: /Masuk Frayukti|Register Owner/ })).toBeVisible();
+  const registerHeading = page.getByRole('heading', { name: 'Daftarkan Owner' });
+  await expect(page.getByRole('heading', { name: /Masuk Frayukti|Daftarkan Owner/ })).toBeVisible();
 
   if (!await registerHeading.isVisible()) {
     await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
-    await expect(page.getByText('Belum ada user aktif.')).toBeVisible();
+    await expect(page.getByText('Belum ada akun Owner.')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Register Owner Pertama' }).click();
+    await page.getByRole('button', { name: 'Buat Owner Pertama' }).click();
   }
-  await expect(page.getByRole('heading', { name: 'Register Owner' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Daftarkan Owner' })).toBeVisible();
 
   await page.getByLabel('Nama Owner').fill(demoOwner.name);
   await page.getByLabel('Email').fill(demoOwner.email);
   await page.getByLabel('PIN', { exact: true }).fill(pin);
   await page.getByLabel('Konfirmasi PIN').fill(pin);
-  await page.getByRole('button', { name: 'Simpan Owner' }).click();
+  await page.getByRole('button', { name: 'Lanjut ke Pengaturan Usaha' }).click();
+  await page.getByRole('button', { name: 'Buat Owner' }).click();
 
   await expect(page.getByLabel(/Profil login|Logged-in profile/)).toBeVisible();
   await normalizeOwnerAccountingBaseline(page);

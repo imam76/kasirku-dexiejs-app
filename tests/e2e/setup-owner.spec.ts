@@ -29,11 +29,11 @@ test.describe.serial('setup awal owner', () => {
 
   test('AUTH-02 - register menolak konfirmasi PIN berbeda', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: /Masuk Frayukti|Register Owner/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Masuk Frayukti|Daftarkan Owner/ })).toBeVisible();
 
-    const registerHeading = page.getByRole('heading', { name: 'Register Owner' });
+    const registerHeading = page.getByRole('heading', { name: 'Daftarkan Owner' });
     if (await page.getByRole('heading', { name: 'Masuk Frayukti' }).isVisible()) {
-      await page.getByRole('button', { name: 'Register Owner Pertama' }).click();
+      await page.getByRole('button', { name: 'Buat Owner Pertama' }).click();
     }
     await expect(registerHeading).toBeVisible();
 
@@ -41,8 +41,9 @@ test.describe.serial('setup awal owner', () => {
     await page.getByLabel('Email').fill(demoOwner.email);
     await page.getByLabel('PIN', { exact: true }).fill(demoOwner.pin);
     await page.getByLabel('Konfirmasi PIN').fill('654321');
-    await page.getByRole('button', { name: 'Simpan Owner' }).click();
+    await page.getByRole('button', { name: 'Lanjut ke Pengaturan Usaha' }).click();
 
     await expect(page.getByText('Konfirmasi PIN tidak sama.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Lanjut ke Pengaturan Usaha' })).toBeVisible();
   });
 });

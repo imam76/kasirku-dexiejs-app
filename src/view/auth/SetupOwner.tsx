@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Button, Form, Input, Typography } from 'antd';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { App, Button, Form, Input, Steps, Typography } from 'antd';
+import { ArrowLeft, ArrowRight, Check, ShieldCheck } from 'lucide-react';
 import { createOwnerUser, normalizeAuthEmail } from '@/auth/authService';
 import { useAuth } from '@/auth/useAuth';
 import { AUTH_PIN_LENGTH, AUTH_PIN_VALIDATION_MESSAGE } from '@/auth/pinPolicy';
@@ -42,6 +42,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
   const { message } = App.useApp();
   const { login } = useAuth();
   const [form] = Form.useForm<SetupOwnerFormValues>();
+  const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const setupConfig = useMemo(() => getSetupConfig(), []);
   const enabledModules = useMemo(
@@ -122,6 +123,19 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
     updateAccountingDraft({ businessTemplateCode: code });
   }, [updateAccountingDraft]);
 
+  const goToOwnerStep = useCallback(() => {
+    setCurrentStep(0);
+  }, []);
+
+  const goToBusinessStep = useCallback(async () => {
+    try {
+      await form.validateFields(['name', 'email', 'pin', 'confirmPin']);
+      setCurrentStep(1);
+    } catch {
+      // Ant Design menampilkan pesan validasi pada kolom terkait.
+    }
+  }, [form]);
+
   const handleSubmit = async (values: SetupOwnerFormValues) => {
     if (isSubmitting) return;
 
@@ -168,7 +182,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
         pin: values.pin,
       });
       await login(email, values.pin);
-      message.success('Owner dan setup akuntansi berhasil dibuat.');
+      message.success('Owner dan pengaturan usaha berhasil dibuat.');
       onComplete?.();
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Gagal membuat Owner.');
@@ -177,109 +191,194 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
     }
   };
 
+  const handleFormFinish = () => {
+    if (currentStep === 0) {
+      setCurrentStep(1);
+      return;
+    }
+
+    void handleSubmit(form.getFieldsValue(true));
+  };
+
   return (
-    <div className="mx-auto flex min-h-[100dvh] max-w-3xl flex-col justify-center px-4 py-8">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-          <ShieldCheck size={24} />
+    <div className="h-[100dvh] overflow-y-auto [scrollbar-gutter:stable]">
+      <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-6 sm:py-16">
+        <div className="mb-9 sm:mb-11">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <ShieldCheck size={24} />
+          </div>
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-gray-900">Daftarkan Owner</h1>
+          <Text type="secondary" className="mt-2 block max-w-lg text-sm leading-relaxed">
+            Akun Owner memegang akses utama aplikasi dan menentukan dasar pencatatan usaha.
+          </Text>
         </div>
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Register Owner</h1>
-          <Text type="secondary">Buat akses utama untuk toko ini.</Text>
-        </div>
-      </div>
 
-      <Form<SetupOwnerFormValues>
-        form={form}
-        layout="vertical"
-        onFinish={handleSubmit}
-        requiredMark={false}
-      >
-        <Form.Item
-          label="Nama Owner"
-          name="name"
-          rules={[
-            { required: true, message: 'Nama Owner wajib diisi.' },
-            { min: 2, message: 'Nama minimal 2 karakter.' },
+        <Steps
+          current={currentStep}
+          responsive={false}
+          size="small"
+          className="mb-7 [&_.ant-steps-item-process_.ant-steps-item-icon]:!border-blue-600 [&_.ant-steps-item-process_.ant-steps-item-icon]:!bg-blue-600 [&_.ant-steps-item-process_.ant-steps-item-icon]:!text-white"
+          items={[
+            { title: 'Akun Owner' },
+            { title: 'Pengaturan Usaha' },
           ]}
-        >
-          <Input size="large" autoFocus placeholder="Contoh: Imam" disabled={isSubmitting} />
-        </Form.Item>
-
-        <Form.Item
-          label="Email"
-          name="email"
-          rules={[
-            { required: true, message: 'Email wajib diisi.' },
-            { type: 'email', message: 'Format email tidak valid.' },
-          ]}
-        >
-          <Input size="large" placeholder="Contoh: owner@toko.com" disabled={isSubmitting} />
-        </Form.Item>
-
-        <Form.Item
-          label="PIN"
-          name="pin"
-          rules={[
-            { required: true, message: 'PIN wajib diisi.' },
-            { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
-            { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
-          ]}
-        >
-          <Input.Password
-            size="large"
-            inputMode="numeric"
-            maxLength={AUTH_PIN_LENGTH}
-            placeholder="Masukkan PIN"
-            disabled={isSubmitting}
-          />
-        </Form.Item>
-
-        <Form.Item
-          label="Konfirmasi PIN"
-          name="confirmPin"
-          rules={[
-            { required: true, message: 'Konfirmasi PIN wajib diisi.' },
-            { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
-            { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
-          ]}
-        >
-          <Input.Password
-            size="large"
-            inputMode="numeric"
-            maxLength={AUTH_PIN_LENGTH}
-            placeholder="Ulangi PIN"
-            disabled={isSubmitting}
-          />
-        </Form.Item>
-
-        <OwnerAccountingSetup
-          draft={accountingDraft}
-          errors={accountingErrors}
-          existingAccountingSetup={existingAccountingSetup}
-          hasOperationalSignal={hasOperationalSignal}
-          moduleCount={enabledModules.length}
-          onChange={updateAccountingDraft}
-          onSelectBusinessTemplate={handleSelectBusinessTemplate}
-          requiresAccountingBaseline={requiresAccountingBaseline}
         />
 
-        <Button type="primary" htmlType="submit" size="large" block loading={isSubmitting}>
-          {isSubmitting ? 'Menyimpan...' : 'Simpan Owner'}
-        </Button>
+        <Form<SetupOwnerFormValues>
+          form={form}
+          layout="vertical"
+          onFinish={handleFormFinish}
+          requiredMark={false}
+          scrollToFirstError
+        >
+          <div className="w-full rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+            {currentStep === 0 ? (
+              <>
+                <Form.Item
+                  label="Nama Owner"
+                  name="name"
+                  className="!mb-6"
+                  rules={[
+                    { required: true, message: 'Nama Owner wajib diisi.' },
+                    { min: 2, message: 'Nama minimal 2 karakter.' },
+                  ]}
+                >
+                  <Input size="large" autoFocus placeholder="Contoh: Imam" disabled={isSubmitting} />
+                </Form.Item>
 
-        {onBackToLogin && (
-          <Button
-            type="link"
-            icon={<ArrowLeft size={16} />}
-            onClick={onBackToLogin}
-            disabled={isSubmitting}
-            block
-          >
-            Kembali ke Login
-          </Button>
-        )}
-      </Form>
+                <Form.Item
+                  label="Email"
+                  name="email"
+                  className="!mb-8"
+                  rules={[
+                    { required: true, message: 'Email wajib diisi.' },
+                    { type: 'email', message: 'Masukkan alamat email yang valid.' },
+                  ]}
+                >
+                  <Input size="large" placeholder="Contoh: owner@toko.com" disabled={isSubmitting} />
+                </Form.Item>
+
+                <div className="mb-4 border-t border-gray-100 pt-6">
+                  <Text strong className="block text-sm">PIN Masuk</Text>
+                  <Text type="secondary" className="mt-1.5 block text-xs leading-relaxed">
+                    {AUTH_PIN_LENGTH} digit angka, dipakai setiap kali masuk aplikasi.
+                  </Text>
+                </div>
+
+                <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+                  <Form.Item
+                    label="PIN"
+                    name="pin"
+                    className="!mb-6 sm:!mb-0"
+                    rules={[
+                      { required: true, message: 'PIN wajib diisi.' },
+                      { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
+                      { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
+                    ]}
+                  >
+                    <Input.Password
+                      size="large"
+                      inputMode="numeric"
+                      maxLength={AUTH_PIN_LENGTH}
+                      placeholder={`${AUTH_PIN_LENGTH} digit angka`}
+                      disabled={isSubmitting}
+                    />
+                  </Form.Item>
+
+                  <Form.Item
+                    label="Konfirmasi PIN"
+                    name="confirmPin"
+                    className="!mb-0"
+                    dependencies={['pin']}
+                    rules={[
+                      { required: true, message: 'Konfirmasi PIN wajib diisi.' },
+                      { len: AUTH_PIN_LENGTH, message: AUTH_PIN_VALIDATION_MESSAGE },
+                      { pattern: /^\d+$/, message: AUTH_PIN_VALIDATION_MESSAGE },
+                      ({ getFieldValue }) => ({
+                        validator(_, value) {
+                          if (!value || getFieldValue('pin') === value) {
+                            return Promise.resolve();
+                          }
+                          return Promise.reject(new Error('Konfirmasi PIN tidak sama.'));
+                        },
+                      }),
+                    ]}
+                  >
+                    <Input.Password
+                      size="large"
+                      inputMode="numeric"
+                      maxLength={AUTH_PIN_LENGTH}
+                      placeholder="Ulangi PIN"
+                      disabled={isSubmitting}
+                    />
+                  </Form.Item>
+                </div>
+              </>
+            ) : (
+              <OwnerAccountingSetup
+                disabled={isSubmitting}
+                draft={accountingDraft}
+                errors={accountingErrors}
+                existingAccountingSetup={existingAccountingSetup}
+                hasOperationalSignal={hasOperationalSignal}
+                onChange={updateAccountingDraft}
+                onSelectBusinessTemplate={handleSelectBusinessTemplate}
+                requiresAccountingBaseline={requiresAccountingBaseline}
+              />
+            )}
+          </div>
+
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {currentStep === 0 ? (
+              <>
+                {onBackToLogin ? (
+                  <Button
+                    size="large"
+                    icon={<ArrowLeft size={16} />}
+                    onClick={onBackToLogin}
+                    disabled={isSubmitting}
+                    className="w-full sm:w-auto"
+                  >
+                    Kembali ke Login
+                  </Button>
+                ) : <span />}
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<ArrowRight size={16} />}
+                  iconPlacement="end"
+                  onClick={() => void goToBusinessStep()}
+                  className="w-full sm:w-auto sm:min-w-56"
+                >
+                  Lanjut ke Pengaturan Usaha
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="large"
+                  icon={<ArrowLeft size={16} />}
+                  onClick={goToOwnerStep}
+                  disabled={isSubmitting}
+                  className="w-full sm:w-auto"
+                >
+                  Kembali
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  size="large"
+                  icon={<Check size={16} />}
+                  loading={isSubmitting}
+                  className="w-full sm:w-auto sm:min-w-44"
+                >
+                  {isSubmitting ? 'Menyimpan...' : 'Buat Owner'}
+                </Button>
+              </>
+            )}
+          </div>
+        </Form>
+      </div>
     </div>
   );
 };
