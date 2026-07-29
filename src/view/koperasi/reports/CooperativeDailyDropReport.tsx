@@ -36,10 +36,12 @@ const emptySummary: CooperativeDailyDropReportSummary = {
 const reportWrapperStyle: CSSProperties = {
   background: '#ffffff',
   border: '1px solid #e5e7eb',
+  boxSizing: 'border-box',
   color: '#111827',
   fontFamily: 'Arial, sans-serif',
   minWidth: REPORT_MIN_WIDTH,
   padding: 24,
+  width: '100%',
 };
 
 const reportHeaderStyle: CSSProperties = {

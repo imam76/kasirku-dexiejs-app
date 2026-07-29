@@ -16,22 +16,38 @@ import type {
   ChartOfAccount,
   CooperativeLoan,
   CooperativeLoanInstallment,
-  CooperativeLoanInstallmentStatus,
   CooperativeLoanPayment,
   CooperativeLoanPaymentStatus,
   CooperativeMember,
   Employee,
 } from '@/types';
+import {
+  buildCooperativeInstallmentLoanSummaries,
+  type CooperativeInstallmentLoanSummary,
+} from '@/utils/koperasi/installmentLoanSummary';
+import {
+  hasUnpaidInstallmentForSchedule,
+  type CooperativeInstallmentScheduleFilter,
+} from '@/utils/koperasi/installmentScheduleFilter';
 
-export type CooperativeInstallmentStatusFilter = CooperativeLoanInstallmentStatus | 'DUE' | 'ALL';
+export type CooperativeInstallmentLoanStatusFilter = 'ACTIVE' | 'PAID_OFF' | 'ALL';
 export type CooperativeLoanPaymentStatusFilter = CooperativeLoanPaymentStatus | 'ALL';
 export type CooperativeInstallmentMemberFilter = string;
+export type CooperativeInstallmentOfficerFilter = string;
+
+export type { CooperativeInstallmentLoanSummary } from '@/utils/koperasi/installmentLoanSummary';
 
 interface CooperativeInstallmentMemberOption {
   value: string;
   label: string;
   memberNumber: string;
   memberName: string;
+}
+
+interface CooperativeInstallmentOfficerOption {
+  value: string;
+  label: string;
+  officerName: string;
 }
 
 type CooperativeInstallmentMemberSnapshot = Pick<CooperativeLoanInstallment, 'member_id' | 'member_number' | 'member_name'>;
@@ -67,8 +83,10 @@ export const useCooperativeInstallments = () => {
   const [selectedPayment, setSelectedPayment] = useState<CooperativeLoanPayment | null>(null);
   const [searchText, setSearchText] = useState('');
   const [memberFilter, setMemberFilter] = useState<CooperativeInstallmentMemberFilter>('ALL');
-  const [installmentStatusFilter, setInstallmentStatusFilter] = useState<CooperativeInstallmentStatusFilter>('DUE');
+  const [officerFilter, setOfficerFilter] = useState<CooperativeInstallmentOfficerFilter>('ALL');
+  const [loanStatusFilter, setLoanStatusFilter] = useState<CooperativeInstallmentLoanStatusFilter>('ACTIVE');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<CooperativeLoanPaymentStatusFilter>('POSTED');
+  const [scheduleFilter, setScheduleFilter] = useState<CooperativeInstallmentScheduleFilter>('ALL_UNPAID');
 
   const loans = useLiveQuery(
     () => db.cooperativeLoans.orderBy('loan_number').toArray(),
@@ -138,6 +156,30 @@ export const useCooperativeInstallments = () => {
     ));
   }, [installments, payments]);
 
+  const officerFilterOptions = useMemo(() => {
+    const officerById = new Map<string, CooperativeInstallmentOfficerOption>();
+
+    const addOfficer = (officerId?: string, officerName?: string, officerPosition?: string) => {
+      if (!officerId || officerById.has(officerId)) return;
+
+      const employee = employeeById.get(officerId);
+      const name = officerName ?? employee?.name ?? officerId;
+      const position = officerPosition ?? employee?.position;
+      officerById.set(officerId, {
+        value: officerId,
+        label: position ? `${name} - ${position}` : name,
+        officerName: name,
+      });
+    };
+
+    loans.forEach((loan) => addOfficer(loan.officer_id, loan.officer_name, loan.officer_position));
+    payments.forEach((payment) => addOfficer(payment.collector_id, payment.collector_name, payment.collector_position));
+
+    return Array.from(officerById.values()).sort((left, right) => (
+      left.officerName.localeCompare(right.officerName)
+    ));
+  }, [employeeById, loans, payments]);
+
   const payableInstallments = useMemo(() => (
     installments.filter((installment) => {
       const loan = loanById.get(installment.loan_id);
@@ -145,25 +187,37 @@ export const useCooperativeInstallments = () => {
     })
   ), [installments, loanById]);
 
-  const filteredInstallments = useMemo(() => {
+  const loanSummaries = useMemo<CooperativeInstallmentLoanSummary[]>(() => {
+    return buildCooperativeInstallmentLoanSummaries(loans as CooperativeLoan[], installments);
+  }, [installments, loans]);
+
+  const filteredLoanSummaries = useMemo(() => {
     const query = searchText.trim().toLowerCase();
 
-    return installments.filter((installment) => {
-      const loan = loanById.get(installment.loan_id);
+    return loanSummaries.filter((summary) => {
+      const { loan } = summary;
       const matchesSearch = !query || [
-        installment.loan_number,
-        installment.member_number,
-        installment.member_name,
-      ].some((value) => value.toLowerCase().includes(query));
-      const matchesStatus = installmentStatusFilter === 'ALL' ||
-        (installmentStatusFilter === 'DUE'
-          ? installment.status !== 'PAID'
-          : installment.status === installmentStatusFilter);
-      const matchesMember = memberFilter === 'ALL' || installment.member_id === memberFilter;
+        loan.loan_number,
+        loan.member_number,
+        loan.member_name,
+        loan.area_code,
+        loan.area_name,
+        loan.officer_name,
+      ].some((value) => value?.toLowerCase().includes(query));
+      const matchesStatus = loanStatusFilter === 'ALL' ||
+        (loanStatusFilter === 'ACTIVE'
+          ? loan.status === 'DISBURSED' && summary.remainingAmount > 0.01
+          : loan.status === 'PAID_OFF' || summary.remainingAmount <= 0.01);
+      const matchesMember = memberFilter === 'ALL' || loan.member_id === memberFilter;
+      const matchesOfficer = officerFilter === 'ALL' || loan.officer_id === officerFilter;
+      const matchesSchedule = loanStatusFilter !== 'ACTIVE' || hasUnpaidInstallmentForSchedule(
+        summary.installments,
+        scheduleFilter,
+      );
 
-      return matchesSearch && matchesStatus && matchesMember && (!loan || loan.status !== 'REVERSED');
+      return matchesSearch && matchesStatus && matchesMember && matchesOfficer && matchesSchedule;
     });
-  }, [installmentStatusFilter, installments, loanById, memberFilter, searchText]);
+  }, [loanStatusFilter, loanSummaries, memberFilter, officerFilter, scheduleFilter, searchText]);
 
   const filteredPayments = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -175,15 +229,18 @@ export const useCooperativeInstallments = () => {
         payment.member_number,
         payment.member_name,
         payment.cash_account_name,
+        payment.collector_name,
+        payment.collector_position,
         payment.notes,
         payment.reversal_reason,
       ].some((value) => value?.toLowerCase().includes(query));
       const matchesStatus = paymentStatusFilter === 'ALL' || payment.status === paymentStatusFilter;
       const matchesMember = memberFilter === 'ALL' || payment.member_id === memberFilter;
+      const matchesOfficer = officerFilter === 'ALL' || payment.collector_id === officerFilter;
 
-      return matchesSearch && matchesStatus && matchesMember;
+      return matchesSearch && matchesStatus && matchesMember && matchesOfficer;
     });
-  }, [memberFilter, paymentStatusFilter, payments, searchText]);
+  }, [memberFilter, officerFilter, paymentStatusFilter, payments, searchText]);
 
   const invalidate = () => {
     COOPERATIVE_INSTALLMENT_RELATED_QUERY_KEYS.forEach((queryKey) => {
@@ -245,11 +302,13 @@ export const useCooperativeInstallments = () => {
   return {
     loans: loans as CooperativeLoan[],
     installments,
-    filteredInstallments,
+    loanSummaries,
+    filteredLoanSummaries,
     payableInstallments,
     payments,
     filteredPayments,
     memberFilterOptions,
+    officerFilterOptions,
     activeCollectors,
     paymentAccounts: paymentAccounts as ChartOfAccount[],
     loanById,
@@ -261,10 +320,14 @@ export const useCooperativeInstallments = () => {
     setSearchText,
     memberFilter,
     setMemberFilter,
-    installmentStatusFilter,
-    setInstallmentStatusFilter,
+    officerFilter,
+    setOfficerFilter,
+    loanStatusFilter,
+    setLoanStatusFilter,
     paymentStatusFilter,
     setPaymentStatusFilter,
+    scheduleFilter,
+    setScheduleFilter,
     approvalRequests: approvalRequestsQuery.data ?? [],
     canApprovePayment,
     recordPayment: (input: RecordCooperativeLoanPaymentInput) => recordMutation.mutateAsync(input),

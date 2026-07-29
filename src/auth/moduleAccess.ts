@@ -85,7 +85,6 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'REPORT_AGING',
     'REPORT_STOCK_CARD',
   ],
-  '/profit': ['REPORT_PROFIT'],
   // Marketplace
   '/marketplace': ['MARKETPLACE'],
   '/marketplace/shopee': ['MARKETPLACE'],

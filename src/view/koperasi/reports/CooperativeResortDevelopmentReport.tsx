@@ -22,7 +22,9 @@ type CooperativeResortDevelopmentReportProps = {
   printDateText: string;
 };
 
-const REPORT_MIN_WIDTH = 1380;
+const REPORT_TABLE_WIDTH = 92 + (7 * 118) + 72 + 74 + 114 + 114 + 72;
+const REPORT_HORIZONTAL_PADDING = 24;
+const REPORT_MIN_WIDTH = REPORT_TABLE_WIDTH + (REPORT_HORIZONTAL_PADDING * 2) + 2;
 
 const emptySummary: CooperativeResortDevelopmentReportSummary = {
   row_count: 0,
@@ -43,10 +45,12 @@ const emptySummary: CooperativeResortDevelopmentReportSummary = {
 const wrapperStyle: CSSProperties = {
   background: '#ffffff',
   border: '1px solid #d1d5db',
+  boxSizing: 'border-box',
   color: '#111827',
   fontFamily: 'Arial, sans-serif',
   minWidth: REPORT_MIN_WIDTH,
-  padding: 24,
+  padding: REPORT_HORIZONTAL_PADDING,
+  width: '100%',
 };
 
 const headerStyle: CSSProperties = {

@@ -976,7 +976,7 @@ export default function CooperativeReportManagement() {
   ];
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-4">
+    <div className="min-w-0 max-w-full space-y-4 p-3 sm:p-4 md:p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <Title level={2} className="!mb-1 flex items-center gap-2">
@@ -1157,25 +1157,35 @@ export default function CooperativeReportManagement() {
             key: 'installments',
             label: t('cooperative.reports.tabs.installments'),
             children: (
-              <Space direction="vertical" className="w-full" size="middle">
+              <Space direction="vertical" className="w-full min-w-0 max-w-full" size="middle">
                 <Title level={4} className="!mb-0">{t('cooperative.reports.installments.schedule')}</Title>
-                <Table
-                  dataSource={data?.installmentRows ?? []}
-                  columns={installmentColumns}
-                  rowKey="id"
-                  loading={isLoading}
-                  scroll={{ x: 1160 }}
-                  locale={{ emptyText: t('cooperative.reports.empty.installments') }}
-                />
+                <div
+                  className="min-w-0 max-w-full"
+                  data-testid="koperasi-report-installments-schedule-viewport"
+                >
+                  <Table
+                    dataSource={data?.installmentRows ?? []}
+                    columns={installmentColumns}
+                    rowKey="id"
+                    loading={isLoading}
+                    scroll={{ x: 1170 }}
+                    locale={{ emptyText: t('cooperative.reports.empty.installments') }}
+                  />
+                </div>
                 <Title level={4} className="!mb-0">{t('cooperative.reports.installments.payments')}</Title>
-                <Table
-                  dataSource={data?.loanPaymentRows ?? []}
-                  columns={loanPaymentColumns}
-                  rowKey="id"
-                  loading={isLoading}
-                  scroll={{ x: 1260 }}
-                  locale={{ emptyText: t('cooperative.reports.empty.payments') }}
-                />
+                <div
+                  className="min-w-0 max-w-full"
+                  data-testid="koperasi-report-installments-payments-viewport"
+                >
+                  <Table
+                    dataSource={data?.loanPaymentRows ?? []}
+                    columns={loanPaymentColumns}
+                    rowKey="id"
+                    loading={isLoading}
+                    scroll={{ x: 1160 }}
+                    locale={{ emptyText: t('cooperative.reports.empty.payments') }}
+                  />
+                </div>
               </Space>
             ),
           },

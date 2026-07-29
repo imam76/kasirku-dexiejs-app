@@ -714,7 +714,6 @@ function Index() {
     { to: '/hr', label: t('nav.hr'), icon: TeamOutlined, color: 'text-sky-600', desc: t('home.menu.hrDesc') },
     { to: '/koperasi', label: t('nav.cooperative'), icon: BankOutlined, color: 'text-emerald-600', desc: t('home.cooperativeDesc') },
     { to: '/history', label: t('nav.history'), icon: HistoryOutlined, color: 'text-purple-600', desc: t('home.historyDesc') },
-    { to: '/profit', label: t('nav.report.profit'), icon: DollarOutlined, color: 'text-emerald-600', desc: t('home.profitDesc') },
     { to: '/report', label: t('nav.reports'), icon: FileTextOutlined, color: 'text-orange-600', desc: t('home.reportDesc') },
     { to: '/settings', label: t('nav.settings'), icon: SettingOutlined, color: 'text-gray-600', desc: t('home.settingsDesc') },
   ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }) && isRouteEnabled(item.to));

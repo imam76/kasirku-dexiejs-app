@@ -107,8 +107,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/marketplace/shopee': 'MARKETPLACE_VIEW',
   '/sync-db': 'SETTINGS_ACCESS',
   '/settings': 'SETTINGS_ACCESS',
-  '/profit': 'PROFIT_VIEW',
-  '/report': [...GENERAL_REPORT_PERMISSION_LIST, 'PROFIT_VIEW'],
+  '/report': GENERAL_REPORT_PERMISSION_LIST,
 };
 
 const routeEntries = Object.entries(ROUTE_PERMISSIONS)

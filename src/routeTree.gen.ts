@@ -33,7 +33,6 @@ const TransactionLazyRouteImport = createFileRoute('/transaction')()
 const SyncDbLazyRouteImport = createFileRoute('/sync-db')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
 const SettingsLazyRouteImport = createFileRoute('/settings')()
-const ProfitLazyRouteImport = createFileRoute('/profit')()
 const PosRestoLazyRouteImport = createFileRoute('/pos-resto')()
 const HistoryLazyRouteImport = createFileRoute('/history')()
 const SplatLazyRouteImport = createFileRoute('/$')()
@@ -320,11 +319,6 @@ const SettingsLazyRoute = SettingsLazyRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/settings.lazy').then((d) => d.Route))
-const ProfitLazyRoute = ProfitLazyRouteImport.update({
-  id: '/profit',
-  path: '/profit',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/profit.lazy').then((d) => d.Route))
 const PosRestoLazyRoute = PosRestoLazyRouteImport.update({
   id: '/pos-resto',
   path: '/pos-resto',
@@ -1279,7 +1273,6 @@ export interface FileRoutesByFullPath {
   '/$': typeof SplatLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
-  '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1410,7 +1403,6 @@ export interface FileRoutesByTo {
   '/$': typeof SplatLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
-  '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1542,7 +1534,6 @@ export interface FileRoutesById {
   '/$': typeof SplatLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
-  '/profit': typeof ProfitLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1675,7 +1666,6 @@ export interface FileRouteTypes {
     | '/$'
     | '/history'
     | '/pos-resto'
-    | '/profit'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -1806,7 +1796,6 @@ export interface FileRouteTypes {
     | '/$'
     | '/history'
     | '/pos-resto'
-    | '/profit'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -1937,7 +1926,6 @@ export interface FileRouteTypes {
     | '/$'
     | '/history'
     | '/pos-resto'
-    | '/profit'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -2069,7 +2057,6 @@ export interface RootRouteChildren {
   SplatLazyRoute: typeof SplatLazyRoute
   HistoryLazyRoute: typeof HistoryLazyRoute
   PosRestoLazyRoute: typeof PosRestoLazyRoute
-  ProfitLazyRoute: typeof ProfitLazyRoute
   SettingsLazyRoute: typeof SettingsLazyRoute
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
   SyncDbLazyRoute: typeof SyncDbLazyRoute
@@ -2214,13 +2201,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/profit': {
-      id: '/profit'
-      path: '/profit'
-      fullPath: '/profit'
-      preLoaderRoute: typeof ProfitLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pos-resto': {
@@ -3199,7 +3179,6 @@ const rootRouteChildren: RootRouteChildren = {
   SplatLazyRoute: SplatLazyRoute,
   HistoryLazyRoute: HistoryLazyRoute,
   PosRestoLazyRoute: PosRestoLazyRoute,
-  ProfitLazyRoute: ProfitLazyRoute,
   SettingsLazyRoute: SettingsLazyRoute,
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
   SyncDbLazyRoute: SyncDbLazyRoute,

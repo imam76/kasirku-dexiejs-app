@@ -14,6 +14,7 @@ import {
   payRemainingInstallments,
   payFirstInstallment,
   payFirstInstallmentFromBillingShortcut,
+  payNextInstallmentFromBalanceShortcut,
   payFlexibleInstallmentAmount,
 } from './helpers/koperasi';
 
@@ -70,7 +71,11 @@ test.describe.serial('pinjaman, angsuran, dan laporan koperasi', () => {
     await payFirstInstallmentFromBillingShortcut(page, demoMembers.siti);
 
     await page.goto('/koperasi/angsuran');
-    await expect(page.getByTestId(`koperasi-installment-row-${demoMembers.siti.memberNumber}-1`)).toBeHidden();
-    await expect(page.getByTestId(`koperasi-installment-row-${demoMembers.siti.memberNumber}-2`)).toBeVisible();
+    const loanRow = page
+      .locator(`[data-testid^="koperasi-installment-loan-row-${demoMembers.siti.memberNumber}-"]`)
+      .first();
+    await expect(loanRow).toBeVisible();
+    await expect(loanRow).toContainText('Ke-2 dari 6');
+    await payNextInstallmentFromBalanceShortcut(page, demoMembers.siti);
   });
 });

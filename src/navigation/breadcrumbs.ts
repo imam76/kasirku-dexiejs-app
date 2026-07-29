@@ -43,7 +43,6 @@ const STATIC_LABEL_KEYS: Record<string, TranslationKey> = {
   '/report': 'nav.reports',
   '/sync-db': 'nav.syncDb',
   '/settings': 'nav.settings',
-  '/profit': 'nav.report.profit',
 
   '/master-data/products': 'nav.product',
   '/master-data/production': 'nav.production',
@@ -145,11 +144,6 @@ const LOGICAL_HIERARCHIES: Record<string, Array<{ path: string; labelKey: Transl
     { path: '/', labelKey: 'nav.home' },
     { path: '/hr', labelKey: 'nav.hr' },
     { path: '/finance/payroll', labelKey: 'nav.finance.payroll' },
-  ],
-  '/profit': [
-    { path: '/', labelKey: 'nav.home' },
-    { path: '/report', labelKey: 'nav.reports' },
-    { path: '/profit', labelKey: 'nav.report.profit' },
   ],
 };
 
