@@ -1,5 +1,5 @@
 import { AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip } from 'antd';
-import { ChevronDown, ChevronUp, TicketPercent, UserCheck, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronUp, Sparkles, TicketPercent, UserCheck, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { Contact, MembershipSetting, Promo } from '@/types';
@@ -87,21 +87,27 @@ export default function MembershipCheckoutPanel({
   };
 
   return (
-    <div className="mb-3 overflow-hidden rounded-lg border border-gray-200 bg-white">
-      <div className="flex items-center justify-between gap-2 p-3">
+    <div className="mb-3 overflow-hidden rounded-xl border border-blue-100 bg-white shadow-md shadow-blue-900/5 ring-1 ring-blue-50 lg:rounded-lg lg:border-gray-200 lg:shadow-none lg:ring-0">
+      <div className="flex items-center justify-between gap-2 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 p-3 text-white lg:bg-none lg:text-gray-900">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left transition-colors hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-100"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left transition-colors hover:text-blue-50 focus:outline-none focus:ring-2 focus:ring-white/30 lg:hover:text-gray-900 lg:focus:ring-green-100"
           onClick={() => setIsExpanded((current) => !current)}
           aria-expanded={isPanelExpanded}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-700">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white ring-1 ring-inset ring-white/20 lg:rounded-md lg:bg-gray-100 lg:text-gray-700 lg:ring-0">
             <TicketPercent size={16} />
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-semibold text-gray-900">Member & Voucher</span>
-            <span className="block truncate text-xs font-normal text-gray-500">{panelSummary}</span>
+            <span className="block text-sm font-black text-white lg:font-semibold lg:text-gray-900">Member & Voucher</span>
+            <span className="block truncate text-xs font-semibold text-blue-100 lg:font-normal lg:text-gray-500">{panelSummary}</span>
           </span>
+          {discountTotal > 0 ? (
+            <span className="ml-auto hidden shrink-0 items-center gap-1.5 rounded-md bg-emerald-300/20 px-2 py-1 text-[11px] font-black text-emerald-50 ring-1 ring-inset ring-emerald-200/30 sm:flex lg:hidden">
+              <Sparkles size={11} />
+              Hemat Rp {formatCurrency(discountTotal)}
+            </span>
+          ) : null}
         </button>
         <div className="flex shrink-0 items-center">
           <Tooltip title={isPanelExpanded ? 'Sembunyikan' : 'Tampilkan'}>
@@ -111,14 +117,14 @@ export default function MembershipCheckoutPanel({
               icon={isPanelExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               onClick={() => setIsExpanded((current) => !current)}
               aria-label={isPanelExpanded ? 'Sembunyikan member dan voucher' : 'Tampilkan member dan voucher'}
-              className="text-gray-600"
+              className="!text-white hover:!bg-white/15 lg:!text-gray-600 lg:hover:!bg-gray-100"
             />
           </Tooltip>
         </div>
       </div>
 
       {isPanelExpanded && (
-        <div className="space-y-3 border-t border-gray-100 p-3 pt-2">
+        <div className="space-y-3 border-t border-blue-100 bg-slate-50/70 p-3 pt-2 lg:border-gray-100 lg:bg-white">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase text-gray-500">

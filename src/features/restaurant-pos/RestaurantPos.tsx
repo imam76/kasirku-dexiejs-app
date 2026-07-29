@@ -69,6 +69,7 @@ export default function RestaurantPos() {
   const [orderDrawerOpen, setOrderDrawerOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [voucherCode, setVoucherCode] = useState('');
   const [sendingKitchen, setSendingKitchen] = useState(false);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [reconciliation, setReconciliation] = useState<RestaurantSessionReconciliation | null>(null);
@@ -109,8 +110,8 @@ export default function RestaurantPos() {
     return undefined;
   }, [orders, selectedOrderId, selectedTableId, serviceMode]);
   const promoPreview = useMemo(
-    () => evaluateRestaurantOrderPromos(activeOrder, products, promos),
-    [activeOrder, products, promos],
+    () => evaluateRestaurantOrderPromos(activeOrder, products, promos, voucherCode),
+    [activeOrder, products, promos, voucherCode],
   );
   const totalItems = activeOrder?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0;
 
@@ -119,6 +120,10 @@ export default function RestaurantPos() {
     setGuestCount(activeOrder?.guest_count ?? 1);
     setOrderType(serviceMode === 'TABLE_SERVICE' ? 'DINE_IN' : activeOrder?.order_type === 'DELIVERY' ? 'DELIVERY' : 'TAKEAWAY');
   }, [activeOrder?.customer_name, activeOrder?.guest_count, activeOrder?.id, activeOrder?.order_type, orderRequiringCustomerName, serviceMode]);
+
+  useEffect(() => {
+    setVoucherCode('');
+  }, [activeOrder?.id]);
 
   const handleOpenSession = async (values: OpenRestaurantFormValues) => {
     await openSession({
@@ -261,17 +266,18 @@ export default function RestaurantPos() {
     }
   };
 
-  const handlePayment = async (payment: {
+  const handlePayment = async (payments: Array<{
     paymentMethodId: string;
     tenderedAmount: number;
     paymentReference?: string;
-  }) => {
-    if (!activeOrder || paymentLoading) return;
+  }>) => {
+    if (!activeOrder || paymentLoading) return false;
     setPaymentLoading(true);
     try {
-      const result = await settleRestaurantOrder({ orderId: activeOrder.id, payment });
+      const result = await settleRestaurantOrder({ orderId: activeOrder.id, payments, voucherCode });
       setPaymentOpen(false);
       setOrderDrawerOpen(false);
+      setVoucherCode('');
       message.success(t('restaurantPos.paymentSuccess', { order: activeOrder.order_number }));
       ['transactions-history', 'journalEntries', 'trialBalance', 'incomeStatement', 'balanceSheet']
         .forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
@@ -284,11 +290,13 @@ export default function RestaurantPos() {
       }).catch((error) => {
         message.warning(error instanceof Error ? error.message : t('checkout.receiptPrintFailed'));
       });
+      return true;
     } catch (error) {
       modal.error({
         title: t('restaurantPos.paymentFailed'),
         content: error instanceof Error ? error.message : String(error),
       });
+      return false;
     } finally {
       setPaymentLoading(false);
     }
@@ -502,15 +510,20 @@ export default function RestaurantPos() {
         {orderPanel}
       </Drawer>
 
-      <RestaurantPaymentModal
-        open={paymentOpen}
-        order={activeOrder}
-        total={promoPreview.total_amount}
-        methods={paymentMethods}
-        loading={paymentLoading}
-        onCancel={() => setPaymentOpen(false)}
-        onConfirm={handlePayment}
-      />
+      {paymentOpen ? (
+        <RestaurantPaymentModal
+          open
+          order={activeOrder}
+          promo={promoPreview}
+          promos={promos}
+          voucherCode={voucherCode}
+          methods={paymentMethods}
+          loading={paymentLoading}
+          onVoucherCodeChange={setVoucherCode}
+          onCancel={() => setPaymentOpen(false)}
+          onConfirm={handlePayment}
+        />
+      ) : null}
 
       <Modal title={t('restaurantSession.closeTitle')} open={closeModalOpen} onCancel={() => setCloseModalOpen(false)} footer={null} destroyOnHidden>
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"><Clock3 size={16} /> {activeSession.session_number}</div>

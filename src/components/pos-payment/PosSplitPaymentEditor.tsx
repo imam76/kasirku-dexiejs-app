@@ -18,6 +18,9 @@ interface Props {
   methods: PosPaymentMethodOption[];
   preview: PosPaymentAllocationResult;
   scrollHeader?: ReactNode;
+  layout?: 'embedded' | 'dialog';
+  showSectionTitles?: boolean;
+  confirmLabel?: ReactNode;
   onAdd: () => void;
   onUpdate: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   onRemove: (clientId: string) => void;
@@ -32,6 +35,9 @@ export default function PosSplitPaymentEditor({
   methods,
   preview,
   scrollHeader,
+  layout = 'embedded',
+  showSectionTitles = false,
+  confirmLabel,
   onAdd,
   onUpdate,
   onRemove,
@@ -57,56 +63,32 @@ export default function PosSplitPaymentEditor({
   const canAdd = preview.errors.length === 0
     && preview.remainingAmount > 0
     && selectedIds.size < methods.filter((method) => method.isValid).length;
+  const isDialog = layout === 'dialog';
 
   if (methods.length === 0) {
     return <Alert type="error" showIcon message={t('payment.noMethodAvailable')} />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div
         data-testid="pos-payment-scroll-area"
-        className="space-y-4 min-[1024px]:min-h-0 min-[1024px]:flex-1 min-[1024px]:overflow-y-auto min-[1024px]:overscroll-contain min-[1024px]:pb-3 min-[1024px]:pr-1 lg:contents"
+        className={isDialog
+          ? 'min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-4 pr-1'
+          : 'space-y-4 min-[1024px]:min-h-0 min-[1024px]:flex-1 min-[1024px]:overflow-y-auto min-[1024px]:overscroll-contain min-[1024px]:pb-3 min-[1024px]:pr-1 lg:contents'}
       >
         {scrollHeader}
-        <div
-          data-testid="pos-payment-summary"
-          className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm"
-        >
-        <div className="space-y-2 border-b border-slate-200 pb-3 text-sm">
-          <div className="flex items-center justify-between gap-3 text-slate-600">
-            <span>{t('cart.total')}</span>
-            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(total)}</strong>
-          </div>
-          <div data-testid="pos-payment-discount" className="flex items-center justify-between gap-3 text-emerald-700">
-            <span>{t('cart.discount')}</span>
-            <strong className="tabular-nums">-Rp {formatCurrency(discountAmount)}</strong>
-          </div>
-          <div className="flex items-center justify-between gap-3 text-slate-600">
-            <span>{t('payment.totalPaid')}</span>
-            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(preview.totalTendered)}</strong>
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">{t('payment.remaining')}</div>
-            <div data-testid="pos-payment-remaining" className="mt-1 break-words text-base font-bold tabular-nums text-amber-950">
-              Rp {formatCurrency(preview.remainingAmount)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{t('payment.change')}</div>
-            <div data-testid="pos-payment-change" className="mt-1 break-words text-base font-bold tabular-nums text-emerald-950">
-              Rp {formatCurrency(preview.totalChange)}
-            </div>
-          </div>
-        </div>
-        </div>
-
+        {showSectionTitles && (
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('payment.methodInformation')}</p>
+        )}
         <div
           data-testid="pos-payment-method-grid"
           className={drafts.length > 1
-            ? 'space-y-4 min-[1024px]:grid min-[1024px]:grid-cols-2 min-[1024px]:gap-4 min-[1024px]:space-y-0 lg:block lg:space-y-4'
+            ? isDialog
+              ? drafts.length === 2
+                ? 'grid gap-2 min-[768px]:grid-cols-2'
+                : 'grid gap-2 min-[768px]:grid-cols-2 min-[1024px]:grid-cols-3'
+              : 'space-y-3 min-[1024px]:grid min-[1024px]:grid-cols-2 min-[1024px]:gap-3 min-[1024px]:space-y-0 lg:block lg:space-y-3'
             : undefined}
         >
           {drafts.map((draft, index) => {
@@ -122,12 +104,25 @@ export default function PosSplitPaymentEditor({
               <div
                 key={draft.clientId}
                 data-testid={`pos-payment-row-${index}`}
-                className={`rounded-xl border-2 p-3 shadow-sm ${
-                  index === 0
-                    ? 'border-blue-200 bg-blue-50/80'
-                    : 'border-violet-200 bg-violet-50/80'
-                }`}
+                className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm min-[768px]:p-2.5"
               >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                {t('payment.methodInformation')} {index + 1}
+              </span>
+              {drafts.length > 1 && (
+                <button
+                  type="button"
+                  data-testid={`pos-payment-remove-${index}`}
+                  onClick={() => onRemove(draft.clientId)}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"
+                  aria-label={t('payment.remove')}
+                  title={t('payment.remove')}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Select
                 data-testid={`pos-payment-method-${index}`}
@@ -149,18 +144,6 @@ export default function PosSplitPaymentEditor({
                   title: item.disabledReason,
                 }))}
               />
-              {drafts.length > 1 && (
-                <button
-                  type="button"
-                  data-testid={`pos-payment-remove-${index}`}
-                  onClick={() => onRemove(draft.clientId)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-300 bg-red-100 text-red-700 shadow-sm transition-colors hover:border-red-400 hover:bg-red-200 hover:text-red-800"
-                  aria-label={t('payment.remove')}
-                  title={t('payment.remove')}
-                >
-                  <Trash2 size={17} />
-                </button>
-              )}
             </div>
             {method?.requires_reference && (
               <Input
@@ -248,11 +231,50 @@ export default function PosSplitPaymentEditor({
             <Plus size={17} /> {t('payment.add')}
           </button>
         )}
+
+        {showSectionTitles && (
+          <p className="pt-1 text-xs font-bold uppercase tracking-wide text-slate-400">{t('payment.billingInformation')}</p>
+        )}
+        <div
+          data-testid="pos-payment-summary"
+          className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 min-[768px]:grid min-[768px]:grid-cols-2 min-[768px]:gap-3"
+        >
+        <div className="space-y-2 border-b border-blue-100 pb-3 text-sm min-[768px]:border-b-0 min-[768px]:border-r min-[768px]:pb-0 min-[768px]:pr-3">
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t('cart.total')}</span>
+            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(total)}</strong>
+          </div>
+          <div data-testid="pos-payment-discount" className="flex items-center justify-between gap-3 text-emerald-700">
+            <span>{t('cart.discount')}</span>
+            <strong className="tabular-nums">-Rp {formatCurrency(discountAmount)}</strong>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t('payment.totalPaid')}</span>
+            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(preview.totalTendered)}</strong>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 min-[768px]:mt-0">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+            <div className="text-[10px] font-black uppercase tracking-wide text-amber-700">{t('payment.remaining')}</div>
+            <div data-testid="pos-payment-remaining" className="mt-1 break-words text-base font-black tabular-nums text-amber-950">
+              Rp {formatCurrency(preview.remainingAmount)}
+            </div>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
+            <div className="text-[10px] font-black uppercase tracking-wide text-emerald-700">{t('payment.change')}</div>
+            <div data-testid="pos-payment-change" className="mt-1 break-words text-base font-black tabular-nums text-emerald-950">
+              Rp {formatCurrency(preview.totalChange)}
+            </div>
+          </div>
+        </div>
+        </div>
       </div>
 
       <div
         data-testid="pos-payment-actions"
-        className="sticky bottom-0 z-30 -mx-3 mt-auto grid shrink-0 grid-cols-2 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)] min-[1024px]:static lg:sticky"
+        className={isDialog
+          ? 'sticky bottom-0 z-30 mt-auto grid shrink-0 grid-cols-[1fr_2fr] gap-2 border-t border-slate-200 bg-white pb-4 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.25)]'
+          : 'sticky bottom-0 z-30 -mx-3 mt-auto grid shrink-0 grid-cols-2 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)] min-[1024px]:static lg:sticky'}
       >
         <button type="button" onClick={onCancel} className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white py-2.5 font-semibold text-gray-700 hover:bg-gray-50"><X size={16} /> {t('payment.cancel')}</button>
         <button
@@ -262,7 +284,7 @@ export default function PosSplitPaymentEditor({
           onClick={onConfirm}
           className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2.5 font-bold text-white shadow-sm hover:bg-blue-700 disabled:bg-gray-300 disabled:shadow-none"
         >
-          <CheckCircle2 size={16} /> {t('payment.confirm')}
+          <CheckCircle2 size={16} /> {confirmLabel ?? t('payment.confirm')}
         </button>
       </div>
     </div>

@@ -431,22 +431,25 @@ export const evaluateRestaurantOrderPromos = (
   order: RestaurantOrderRecord | undefined,
   products: Product[],
   promos: Promo[],
+  voucherCode?: string,
 ) => {
-  if (!order) return evaluatePromos({ cart: [], promos });
+  if (!order) return evaluatePromos({ cart: [], promos, voucherCode });
   const productById = new Map(products.map((product) => [product.id, product]));
   const cart = order.lines.flatMap((line): CartItem[] => {
     const product = productById.get(line.product_id);
     return product ? [{ product, quantity: line.quantity, unit: line.unit }] : [];
   });
-  return evaluatePromos({ cart, promos });
+  return evaluatePromos({ cart, promos, voucherCode });
 };
 
 export const settleRestaurantOrder = async ({
   orderId,
-  payment,
+  payments,
+  voucherCode,
 }: {
   orderId: string;
-  payment: CheckoutPaymentInput;
+  payments: CheckoutPaymentInput[];
+  voucherCode?: string;
 }): Promise<CheckoutResult> => {
   const order = await db.restaurantOrders.get(orderId);
   if (!order) throw new Error('Pesanan aktif tidak ditemukan.');
@@ -468,7 +471,8 @@ export const settleRestaurantOrder = async ({
         }
       : checkout({
           cart: await buildRestaurantCart(order),
-          payments: [payment],
+          payments,
+          voucherCode,
           sessionContext: getRestaurantCheckoutSessionContext(order.restaurant_session_id),
           restaurantOrderId: order.id,
         });
@@ -516,6 +520,9 @@ export const cancelRestaurantOrder = async (orderId: string) => {
     throw new Error('Pesanan aktif tidak ditemukan.');
   }
   if (order.transaction_id) throw new Error('Pesanan yang sudah dibayar tidak dapat dibatalkan dari POS Resto.');
+  if (order.lines.some((line) => line.sent_quantity > 0)) {
+    throw new Error('Pesanan yang sudah dikirim ke dapur tidak dapat dibatalkan dari POS Resto.');
+  }
 
   const now = new Date().toISOString();
   await db.transaction('rw', [db.restaurantOrders, db.restaurantTables], async () => {

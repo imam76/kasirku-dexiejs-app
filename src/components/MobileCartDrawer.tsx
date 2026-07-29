@@ -9,6 +9,9 @@ import CartSummary from './CartSummary';
 import { useI18n } from '@/hooks/useI18n';
 import type { PosPaymentDraft } from '@/store/transactionStore';
 import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+
+const TABLET_VIEWPORT_QUERY = '(min-width: 1024px) and (max-width: 1279.98px)';
 
 interface MobileCartDrawerProps {
   isOpen: boolean;
@@ -82,10 +85,12 @@ export default function MobileCartDrawer({
   handleCheckout,
 }: MobileCartDrawerProps) {
   const { t } = useI18n();
+  const isTabletViewport = useMediaQuery(TABLET_VIEWPORT_QUERY);
+  const showInlinePayment = showPayment && !isTabletViewport;
 
   return (
     <Drawer
-      title={showPayment ? t('payment.pay') : t('cart.title')}
+      title={showInlinePayment ? t('payment.pay') : t('cart.title')}
       placement="bottom"
       open={isOpen}
       onClose={onClose}
@@ -93,7 +98,7 @@ export default function MobileCartDrawer({
       rootClassName="mobile-bottom-drawer pos-cart-tablet-drawer"
       className="lg:hidden"
       extra={
-        cart.length > 0 && !showPayment ? (
+        cart.length > 0 && !showInlinePayment ? (
           <Button
             danger
             size="small"
@@ -111,11 +116,11 @@ export default function MobileCartDrawer({
         header: { padding: '16px 20px' },
       }}
     >
-      <div className={`flex h-full min-h-0 flex-col ${showPayment
+      <div className={`flex h-full min-h-0 flex-col ${showInlinePayment
         ? ''
         : 'min-[1024px]:grid min-[1024px]:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]'}`}
       >
-        <section className={`${showPayment ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col bg-slate-50/70`}>
+        <section className={`${showInlinePayment ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col bg-slate-50/70`}>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3" data-testid="pos-cart-items-scroll-panel">
             {cart.length === 0 ? (
               <p className="py-8 text-center text-gray-500">{t('cart.empty')}</p>
@@ -136,13 +141,13 @@ export default function MobileCartDrawer({
         </section>
 
         {cart.length > 0 && (
-          <div className={`${showPayment
+          <div className={`${showInlinePayment
             ? 'min-h-0 flex-1 overflow-y-auto px-3 pb-0 pt-4 min-[1024px]:overflow-hidden min-[1024px]:pt-0'
             : 'border-t border-blue-100 px-4 pb-8 pt-4 min-[1024px]:overflow-hidden min-[1024px]:pb-0 min-[1024px]:pt-3'} bg-white min-[1024px]:h-full min-[1024px]:min-h-0 min-[1024px]:overscroll-contain min-[1024px]:border-l min-[1024px]:border-t-0 min-[1024px]:px-3`}
           >
             <CartSummary
               total={total}
-              showPayment={showPayment}
+              showPayment={showInlinePayment}
               paymentDrafts={paymentDrafts}
               paymentPreview={paymentPreview}
               paymentMethods={paymentMethods}

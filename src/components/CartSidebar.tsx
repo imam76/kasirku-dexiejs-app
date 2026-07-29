@@ -5,6 +5,7 @@ import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
+import PosPaymentModal from './pos-payment/PosPaymentModal';
 import { useI18n } from '@/hooks/useI18n';
 import type { PosPaymentDraft } from '@/store/transactionStore';
 import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
@@ -42,6 +43,7 @@ interface CartSidebarProps {
   createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
   isCreatingMember: boolean;
   handleCheckout: () => Promise<boolean>;
+  onCheckoutSuccess?: () => void;
 }
 
 export default function CartSidebar({
@@ -77,6 +79,7 @@ export default function CartSidebar({
   createMember,
   isCreatingMember,
   handleCheckout,
+  onCheckoutSuccess,
 }: CartSidebarProps) {
   const { t } = useI18n();
 
@@ -130,10 +133,10 @@ export default function CartSidebar({
           <div className="shrink-0 border-b border-blue-50 p-3">
             <h3 className="text-lg font-bold text-gray-900">{t('payment.pay')}</h3>
           </div>
-          <div className={`min-h-0 flex-1 overflow-y-auto px-3 pt-3 ${showPayment ? 'pb-0' : 'pb-3'}`}>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-3">
             <CartSummary
               total={total}
-              showPayment={showPayment}
+              showPayment={false}
               paymentDrafts={paymentDrafts}
               paymentPreview={paymentPreview}
               paymentMethods={paymentMethods}
@@ -160,6 +163,26 @@ export default function CartSidebar({
           </div>
         </div>
       )}
+
+      <PosPaymentModal
+        open={showPayment && cart.length > 0}
+        total={total}
+        paymentDrafts={paymentDrafts}
+        paymentPreview={paymentPreview}
+        paymentMethods={paymentMethods}
+        voucherCode={voucherCode}
+        selectedMember={selectedMember}
+        membershipPreview={membershipPreview}
+        onAddPayment={handleAddPayment}
+        onUpdatePayment={updatePaymentDraft}
+        onRemovePayment={removePaymentDraft}
+        onConfirm={async () => {
+          const success = await handleCheckout();
+          if (success) onCheckoutSuccess?.();
+          return success;
+        }}
+        onClose={() => setShowPayment(false)}
+      />
     </div>
   );
 }

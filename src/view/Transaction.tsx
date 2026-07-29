@@ -653,6 +653,7 @@ export default function Transaction() {
           createMember={createMember}
           isCreatingMember={isCreatingMember}
           handleCheckout={handleCheckout}
+          onCheckoutSuccess={() => setCartOpen(false)}
         />
       </div>
 

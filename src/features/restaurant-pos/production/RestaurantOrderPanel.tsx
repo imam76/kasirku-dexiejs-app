@@ -57,6 +57,7 @@ export function RestaurantOrderPanel({
   const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   const pendingCount = lines.reduce((sum, line) => sum + getPendingKitchenQuantity(line), 0);
   const hasLines = lines.length > 0;
+  const hasSentItems = lines.some((line) => line.sent_quantity > 0);
   const orderStartTime = formatRestaurantOrderStartTime(order?.opened_at);
 
   return (
@@ -205,7 +206,7 @@ export function RestaurantOrderPanel({
           </div>
         </div>
         {order ? (
-          <Button danger type="text" block disabled={isPaying || isSending} onClick={onCancel} className="mt-2 !text-xs !font-semibold">
+          <Button danger type="text" block disabled={isPaying || isSending || hasSentItems} onClick={onCancel} className="mt-2 !text-xs !font-semibold">
             {t('restaurantPos.cancelOrder')}
           </Button>
         ) : null}
