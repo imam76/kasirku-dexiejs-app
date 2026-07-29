@@ -5,6 +5,7 @@ export interface WholesalePrice {
 }
 
 export type ProductUnit = string;
+export type ProductType = 'FINISHED_GOOD' | 'RAW_MATERIAL';
 export type SalesUnitCategory = 'discrete' | 'weighted';
 export type UnitDefinitionType = 'measurement' | 'count' | 'package' | 'time';
 export type ProductCategory =
@@ -58,6 +59,8 @@ export interface Product {
   purchase_price: number; // Harga per purchase_unit
   selling_price: number;  // Harga per selling_unit (bisa disimpan per kg tapi nanti dikonversi)
   stock: number;          // Stok selalu disimpan dalam base unit (biasanya purchase_unit)
+  product_type: ProductType;
+  is_visible_in_pos: boolean;
   sku?: string;
   wholesale_prices?: WholesalePrice[];
   sellable_units?: ProductUnit[]; // Units cashier can select when selling (defaults to [selling_unit])
@@ -77,6 +80,14 @@ export type ReceiptPrintStatus = 'pending' | 'printed' | 'print_failed';
 export type TransactionStatus = 'COMPLETED' | 'VOIDED';
 export type CashierSessionStatus = 'OPEN' | 'CLOSED';
 export type CashierSessionBalanceStatus = 'BALANCED' | 'NON_BALANCED';
+export type RestaurantSessionStatus = 'OPEN' | 'CLOSED';
+export type RestaurantSessionBalanceStatus = 'BALANCED' | 'NON_BALANCED';
+export type RestaurantServiceMode = 'TABLE_SERVICE' | 'COUNTER_SERVICE';
+export type RestaurantOrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
+export type RestaurantTableStatus = 'AVAILABLE' | 'OCCUPIED';
+export type RestaurantTableType = 'REGULAR' | 'VIP';
+export type RestaurantOrderStatus = 'DRAFT' | 'SENT_TO_KITCHEN' | 'PAID' | 'CANCELLED';
+export type RestaurantKitchenTicketStatus = 'NEW' | 'PREPARING' | 'READY' | 'COMPLETED';
 export type CooperativeFieldCashSessionStatus = 'OPEN' | 'CLOSED';
 export type CooperativeFieldCashSessionBalanceStatus = 'BALANCED' | 'NON_BALANCED';
 export type CooperativeFieldCashMovementKind =
@@ -185,6 +196,10 @@ export type Permission =
   | 'PAYMENT_METHOD_MANAGE'
   | 'CURRENCY_MANAGE'
   | 'AREA_MANAGE'
+  | 'RESTAURANT_TABLE_VIEW'
+  | 'RESTAURANT_TABLE_CREATE'
+  | 'RESTAURANT_TABLE_UPDATE'
+  | 'RESTAURANT_TABLE_DELETE'
   | 'EMPLOYEE_MANAGE'
   | 'DEPARTMENT_MANAGE'
   | 'hr.employee.view'
@@ -510,6 +525,7 @@ export type OpeningBalanceBatchSyncStatus = EntitySyncStatus;
 export type OpeningBalanceLineSyncStatus = EntitySyncStatus;
 export type AuthUserSyncStatus = EntitySyncStatus;
 export type CashierSessionSyncStatus = EntitySyncStatus;
+export type RestaurantSessionSyncStatus = EntitySyncStatus;
 export type ContactSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;
@@ -1979,6 +1995,9 @@ export interface Transaction {
   transaction_number: string;
   cashier_session_id?: string;
   cashier_session_number?: string;
+  restaurant_session_id?: string;
+  restaurant_session_number?: string;
+  restaurant_order_id?: string;
   cashier_user_id?: string;
   cashier_user_name?: string;
   member_contact_id?: string;
@@ -2064,6 +2083,107 @@ export interface CashierSession {
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
+}
+
+export interface RestaurantSession {
+  id: string;
+  session_number: string;
+  status: RestaurantSessionStatus;
+  operator_user_id: string;
+  operator_user_name: string;
+  opened_at: string;
+  opening_cash_amount: number;
+  opening_note?: string;
+  closed_at?: string;
+  closed_by_user_id?: string;
+  closed_by_user_name?: string;
+  closing_cash_amount?: number;
+  closing_note?: string;
+  expected_cash_amount?: number;
+  cash_sales_amount?: number;
+  non_cash_sales_amount?: number;
+  total_sales_amount?: number;
+  voided_sales_amount?: number;
+  transaction_count?: number;
+  voided_transaction_count?: number;
+  cash_difference_amount?: number;
+  balance_status?: RestaurantSessionBalanceStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RestaurantTableRecord {
+  id: string;
+  area_id: string;
+  area_name: string;
+  name: string;
+  normalized_name: string;
+  capacity: number;
+  type: RestaurantTableType;
+  status: RestaurantTableStatus;
+  is_active: boolean;
+  active_order_id?: string;
+  occupied_since?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RestaurantOrderLineRecord {
+  id: string;
+  product_id: string;
+  product_name: string;
+  product_sku?: string;
+  product_category?: ProductCategory;
+  unit: ProductUnit;
+  price: number;
+  quantity: number;
+  sent_quantity: number;
+  note: string;
+}
+
+export interface RestaurantOrderRecord {
+  id: string;
+  order_number: string;
+  restaurant_session_id: string;
+  operator_user_id: string;
+  operator_user_name: string;
+  mode: RestaurantServiceMode;
+  order_type: RestaurantOrderType;
+  customer_name: string;
+  table_id?: string;
+  table_name?: string;
+  guest_count: number;
+  status: RestaurantOrderStatus;
+  transaction_id?: string;
+  opened_at: string;
+  paid_at?: string;
+  created_at: string;
+  updated_at: string;
+  lines: RestaurantOrderLineRecord[];
+}
+
+export interface RestaurantKitchenTicketLineRecord {
+  order_line_id: string;
+  product_id: string;
+  name: string;
+  quantity: number;
+  note: string;
+}
+
+export interface RestaurantKitchenTicketRecord {
+  id: string;
+  restaurant_session_id: string;
+  order_id: string;
+  order_number: string;
+  customer_name: string;
+  order_type: RestaurantOrderType;
+  table_name?: string;
+  destination_label: string;
+  status: RestaurantKitchenTicketStatus;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+  lines: RestaurantKitchenTicketLineRecord[];
 }
 
 export interface CooperativeFieldCashSession {

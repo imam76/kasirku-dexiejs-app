@@ -21,6 +21,8 @@ type SortDirection = 'asc' | 'desc';
 type StockStatusFilter = 'all' | 'out' | 'low' | 'safe';
 type SkuStatusFilter = 'all' | 'with' | 'without';
 type WholesaleStatusFilter = 'all' | 'with' | 'without';
+type ProductTypeFilter = 'all' | Product['product_type'];
+type PosVisibilityFilter = 'all' | 'visible' | 'hidden';
 
 export default function StockTable({ products, onEdit, onDelete, onOpeningStock }: StockTableProps) {
   const { t } = useI18n();
@@ -36,6 +38,8 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
   const [minPurchasePrice, setMinPurchasePrice] = useState<number | null>(null);
   const [maxPurchasePrice, setMaxPurchasePrice] = useState<number | null>(null);
   const [wholesaleStatus, setWholesaleStatus] = useState<WholesaleStatusFilter>('all');
+  const [productType, setProductType] = useState<ProductTypeFilter>('all');
+  const [posVisibility, setPosVisibility] = useState<PosVisibilityFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortField, setSortField] = useState<SortField>('name');
@@ -68,6 +72,8 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
     minSellingPrice !== null || maxSellingPrice !== null,
     minPurchasePrice !== null || maxPurchasePrice !== null,
     wholesaleStatus !== 'all',
+    productType !== 'all',
+    posVisibility !== 'all',
   ].filter(Boolean).length;
 
   const isStockStatusMatch = useCallback((product: Product) => {
@@ -95,6 +101,8 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
     setMinPurchasePrice(null);
     setMaxPurchasePrice(null);
     setWholesaleStatus('all');
+    setProductType('all');
+    setPosVisibility('all');
     setCurrentPage(1);
   };
 
@@ -162,6 +170,10 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
         return false;
       }
 
+      if (productType !== 'all' && (product.product_type ?? 'FINISHED_GOOD') !== productType) return false;
+      if (posVisibility === 'visible' && product.is_visible_in_pos === false) return false;
+      if (posVisibility === 'hidden' && product.is_visible_in_pos !== false) return false;
+
       return true;
     });
   }, [
@@ -176,6 +188,8 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
     minPurchasePrice,
     maxPurchasePrice,
     wholesaleStatus,
+    productType,
+    posVisibility,
     isStockStatusMatch,
   ]);
 
@@ -284,6 +298,26 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
           setCurrentPage(1);
         }}
         options={wholesaleStatusOptions}
+      />
+
+      <Select
+        value={productType}
+        onChange={(value) => { setProductType(value); setCurrentPage(1); }}
+        options={[
+          { value: 'all', label: 'Semua tipe' },
+          { value: 'FINISHED_GOOD', label: 'Barang Jadi' },
+          { value: 'RAW_MATERIAL', label: 'Bahan Baku' },
+        ]}
+      />
+
+      <Select
+        value={posVisibility}
+        onChange={(value) => { setPosVisibility(value); setCurrentPage(1); }}
+        options={[
+          { value: 'all', label: 'Semua' },
+          { value: 'visible', label: 'Tampil di POS' },
+          { value: 'hidden', label: 'Tidak tampil di POS' },
+        ]}
       />
 
       <div className="grid grid-cols-2 gap-2">
@@ -439,6 +473,10 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
                     <p className="text-sm font-bold text-gray-900">{product.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">SKU: {product.sku || '-'}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{getProductCategoryLabel(product.category || 'non_consumable', t)}</p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{product.product_type === 'RAW_MATERIAL' ? 'Bahan Baku' : 'Barang Jadi'}</span>
+                      <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${product.is_visible_in_pos === false ? 'bg-gray-100 text-gray-500' : 'bg-blue-50 text-blue-700'}`}>{product.is_visible_in_pos === false ? 'Tidak tampil di POS' : 'Tampil di POS'}</span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${getStockStatusClass(product.stock)}`}>
@@ -497,6 +535,8 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
                 <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {t('stock.category')}
                 </th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe</th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status POS</th>
                 <th
                   onClick={() => handleSort('purchase_price')}
                   className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
@@ -556,6 +596,8 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {getProductCategoryLabel(product.category || 'non_consumable', t)}
                     </td>
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.product_type === 'RAW_MATERIAL' ? 'Bahan Baku' : 'Barang Jadi'}</td>
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${product.is_visible_in_pos === false ? 'bg-gray-100 text-gray-600' : 'bg-blue-50 text-blue-700'}`}>{product.is_visible_in_pos === false ? 'Tidak tampil di POS' : 'Tampil di POS'}</span></td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       Rp {formatCurrency(product.purchase_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
                     </td>

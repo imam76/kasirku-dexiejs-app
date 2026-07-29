@@ -231,6 +231,7 @@ const RootLayout = () => {
     { to: '/', label: t('nav.home'), icon: Home },
     { to: '/transaction', label: t('nav.transaction'), icon: ShoppingCart },
     { to: '/pos-resto', label: t('nav.posRestaurant'), icon: UtensilsCrossed },
+    { to: '/pos-resto-prototype', label: t('nav.posRestaurant'), icon: UtensilsCrossed },
     { to: '/sales', label: t('nav.sales'), icon: FileText },
     { to: '/purchases', label: t('nav.purchases'), icon: ShoppingBag },
     { to: '/master-data', label: t('nav.masterData'), icon: Database },
@@ -338,7 +339,7 @@ const RootLayout = () => {
   const requiredPermission = getRequiredPermissionForPath(location.pathname)
   const canOpenCurrentPath = canAccessPermissionRule(currentUser ?? undefined, requiredPermission, { currentRole, permissionSet })
   const isModuleActive = isRouteEnabled(location.pathname)
-  const useFixedPosWorkspace = location.pathname === '/transaction'
+  const useFixedPosWorkspace = location.pathname === '/transaction' || location.pathname === '/pos-resto'
 
   const safeAreaTop = 'env(safe-area-inset-top, 0px)'
   const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`

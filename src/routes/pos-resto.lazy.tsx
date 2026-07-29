@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from '@tanstack/react-router';
-import RestaurantPosPrototype from '@/features/restaurant-pos/RestaurantPosPrototype';
+import RestaurantPos from '@/features/restaurant-pos/RestaurantPos';
 
 export const Route = createLazyFileRoute('/pos-resto')({
-  component: RestaurantPosPrototype,
+  component: RestaurantPos,
 });

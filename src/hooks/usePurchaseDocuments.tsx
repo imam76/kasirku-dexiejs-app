@@ -117,6 +117,8 @@ export const usePurchaseDocuments = () => {
       purchase_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,
       selling_price: Number.isFinite(purchasePrice) ? purchasePrice : 0,
       stock: 0,
+      product_type: 'FINISHED_GOOD',
+      is_visible_in_pos: true,
       created_at: now,
       updated_at: now,
       sync_status: 'pending',

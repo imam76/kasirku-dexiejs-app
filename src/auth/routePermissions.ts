@@ -13,6 +13,7 @@ type RoutePermissionRule = Permission | Permission[];
 
 const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/transaction': 'CASHIER_ACCESS',
+  '/pos-resto': 'CASHIER_ACCESS',
   '/history': 'CASHIER_ACCESS',
   '/master-data': [
     'PRODUCT_MANAGE',
@@ -31,6 +32,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
     'FIXED_ASSET_MANAGE',
     'TAX_MANAGE',
     'UNIT_MANAGE',
+    'RESTAURANT_TABLE_VIEW',
   ],
   '/master-data/products': 'PRODUCT_MANAGE',
   '/master-data/production': 'PRODUCTION_MANAGE',
@@ -42,6 +44,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/payment-methods': 'PAYMENT_METHOD_MANAGE',
   '/master-data/currencies': 'CURRENCY_MANAGE',
   '/master-data/areas': 'AREA_MANAGE',
+  '/master-data/restaurant-tables': 'RESTAURANT_TABLE_VIEW',
   '/master-data/employees': ['EMPLOYEE_MANAGE', 'hr.employee.view'],
   '/master-data/users': 'USER_MANAGE',
   '/master-data/roles': 'USER_MANAGE',

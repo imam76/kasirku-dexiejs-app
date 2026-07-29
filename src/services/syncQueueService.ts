@@ -1099,6 +1099,8 @@ const mapProductToRemoteDto = (product: Product): RemoteProductDto => ({
   selling_price: normalizeRemoteNumber(product.selling_price),
   stock: normalizeRemoteNumber(product.stock),
   sku: product.sku,
+  product_type: product.product_type ?? 'FINISHED_GOOD',
+  is_visible_in_pos: product.is_visible_in_pos ?? true,
   wholesale_prices: product.wholesale_prices,
   sellable_units: product.sellable_units,
   unit_mappings: product.unit_mappings,
@@ -2545,6 +2547,8 @@ const isRemoteProductDto = (payload: unknown): payload is RemoteProductDto => {
     typeof candidate.purchase_price === 'number' &&
     typeof candidate.selling_price === 'number' &&
     typeof candidate.stock === 'number' &&
+    (candidate.product_type === 'FINISHED_GOOD' || candidate.product_type === 'RAW_MATERIAL') &&
+    typeof candidate.is_visible_in_pos === 'boolean' &&
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'
   );

@@ -89,6 +89,10 @@ import type {
   FixedAsset,
   FixedAssetDepreciationRun,
   FixedAssetDepreciationRunLine,
+  RestaurantSession,
+  RestaurantTableRecord,
+  RestaurantOrderRecord,
+  RestaurantKitchenTicketRecord,
   HrPosition,
   EmploymentContract,
   SalaryComponent,
@@ -198,6 +202,10 @@ export class KasirkuDB extends Dexie {
   fixedAssets!: Table<FixedAsset>;
   fixedAssetDepreciationRuns!: Table<FixedAssetDepreciationRun>;
   fixedAssetDepreciationRunLines!: Table<FixedAssetDepreciationRunLine>;
+  restaurantSessions!: Table<RestaurantSession>;
+  restaurantTables!: Table<RestaurantTableRecord>;
+  restaurantOrders!: Table<RestaurantOrderRecord>;
+  restaurantKitchenTickets!: Table<RestaurantKitchenTicketRecord>;
   hrPositions!: Table<HrPosition>;
   employmentContracts!: Table<EmploymentContract>;
   salaryComponents!: Table<SalaryComponent>;

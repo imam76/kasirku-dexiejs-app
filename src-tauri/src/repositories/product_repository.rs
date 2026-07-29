@@ -14,6 +14,8 @@ pub async fn list_products(pool: &PgPool) -> Result<Vec<ProductDto>, sqlx::Error
             selling_price,
             stock,
             sku,
+            product_type,
+            is_visible_in_pos,
             wholesale_prices,
             sellable_units,
             unit_mappings,
@@ -42,6 +44,8 @@ pub async fn get_product(pool: &PgPool, id: String) -> Result<Option<ProductDto>
             selling_price,
             stock,
             sku,
+            product_type,
+            is_visible_in_pos,
             wholesale_prices,
             sellable_units,
             unit_mappings,
@@ -73,6 +77,8 @@ async fn get_product_including_deleted(
             selling_price,
             stock,
             sku,
+            product_type,
+            is_visible_in_pos,
             wholesale_prices,
             sellable_units,
             unit_mappings,
@@ -102,6 +108,8 @@ pub async fn upsert_product(pool: &PgPool, input: ProductDto) -> Result<ProductD
             selling_price,
             stock,
             sku,
+            product_type,
+            is_visible_in_pos,
             wholesale_prices,
             sellable_units,
             unit_mappings,
@@ -109,7 +117,7 @@ pub async fn upsert_product(pool: &PgPool, input: ProductDto) -> Result<ProductD
             updated_at,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::JSONB, $11::JSONB, $12::JSONB, $13::TIMESTAMPTZ, $14::TIMESTAMPTZ, $15::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::JSONB, $13::JSONB, $14::JSONB, $15::TIMESTAMPTZ, $16::TIMESTAMPTZ, $17::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             category = EXCLUDED.category,
@@ -119,6 +127,8 @@ pub async fn upsert_product(pool: &PgPool, input: ProductDto) -> Result<ProductD
             selling_price = EXCLUDED.selling_price,
             stock = EXCLUDED.stock,
             sku = EXCLUDED.sku,
+            product_type = EXCLUDED.product_type,
+            is_visible_in_pos = EXCLUDED.is_visible_in_pos,
             wholesale_prices = EXCLUDED.wholesale_prices,
             sellable_units = EXCLUDED.sellable_units,
             unit_mappings = EXCLUDED.unit_mappings,
@@ -135,6 +145,8 @@ pub async fn upsert_product(pool: &PgPool, input: ProductDto) -> Result<ProductD
             selling_price,
             stock,
             sku,
+            product_type,
+            is_visible_in_pos,
             wholesale_prices,
             sellable_units,
             unit_mappings,
@@ -152,6 +164,8 @@ pub async fn upsert_product(pool: &PgPool, input: ProductDto) -> Result<ProductD
     .bind(input.selling_price)
     .bind(input.stock)
     .bind(input.sku)
+    .bind(input.product_type)
+    .bind(input.is_visible_in_pos)
     .bind(input.wholesale_prices)
     .bind(input.sellable_units)
     .bind(input.unit_mappings)
@@ -188,6 +202,8 @@ pub async fn delete_product(pool: &PgPool, id: String) -> Result<Option<ProductD
             selling_price,
             stock,
             sku,
+            product_type,
+            is_visible_in_pos,
             wholesale_prices,
             sellable_units,
             unit_mappings,

@@ -1,6 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, Contact, FinanceTransaction, PosTransactionPayment, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
+import type { CartItem, CashierSession, Contact, FinanceTransaction, PosTransactionPayment, RestaurantSession, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
@@ -19,6 +19,7 @@ import { createStockMutation, enqueueStockMutations } from '@/services/stockMuta
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
 import { getOpenCashierSessionForCurrentUser } from '@/services/cashierSessionService';
+import { getOpenRestaurantSessionForCurrentUser } from '@/services/restaurantSessionService';
 import {
   ensureMembershipSetting,
   evaluateMembershipCheckout,
@@ -27,12 +28,18 @@ import {
 } from '@/services/membershipService';
 import { enqueueContactSync } from '@/services/syncQueueService';
 
-interface CheckoutInput {
+export type PosCheckoutSessionContext =
+  | { kind: 'CASHIER' }
+  | { kind: 'RESTAURANT'; sessionId: string };
+
+export interface CheckoutInput {
   cart: CartItem[];
   payments: CheckoutPaymentInput[];
   voucherCode?: string;
   memberContactId?: string;
   redeemPoints?: number;
+  sessionContext?: PosCheckoutSessionContext;
+  restaurantOrderId?: string;
 }
 
 export interface CheckoutResult {
@@ -41,6 +48,24 @@ export interface CheckoutResult {
   payments: PosTransactionPayment[];
   warnings?: string[];
 }
+
+export const buildCheckoutSessionSnapshot = (
+  cashierSession: CashierSession | null,
+  restaurantSession: RestaurantSession | null,
+) => {
+  if (cashierSession && restaurantSession) {
+    throw new Error('Transaksi hanya boleh terhubung ke satu jenis sesi.');
+  }
+  if (!cashierSession && !restaurantSession) {
+    throw new Error('Sesi POS belum dibuka.');
+  }
+  return {
+    cashier_session_id: cashierSession?.id,
+    cashier_session_number: cashierSession?.session_number,
+    restaurant_session_id: restaurantSession?.id,
+    restaurant_session_number: restaurantSession?.session_number,
+  };
+};
 
 interface CreateTransactionItemsResult {
   items: TransactionItem[];
@@ -276,13 +301,30 @@ export const checkout = async ({
   voucherCode,
   memberContactId,
   redeemPoints,
+  sessionContext = { kind: 'CASHIER' },
+  restaurantOrderId,
 }: CheckoutInput): Promise<CheckoutResult> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'CASHIER_ACCESS');
-  const cashierSession = await getOpenCashierSessionForCurrentUser();
+  const cashierSession = sessionContext.kind === 'CASHIER'
+    ? await getOpenCashierSessionForCurrentUser()
+    : null;
+  const restaurantSession = sessionContext.kind === 'RESTAURANT'
+    ? await getOpenRestaurantSessionForCurrentUser()
+    : null;
 
-  if (!cashierSession) {
+  if (sessionContext.kind === 'CASHIER' && !cashierSession) {
     throw new Error('Sesi kasir belum dibuka.');
+  }
+  if (
+    sessionContext.kind === 'RESTAURANT'
+    && (!restaurantSession || restaurantSession.id !== sessionContext.sessionId)
+  ) {
+    throw new Error('Sesi Resto belum dibuka atau bukan milik user aktif.');
+  }
+  const sessionSnapshot = buildCheckoutSessionSnapshot(cashierSession, restaurantSession);
+  if (restaurantOrderId && sessionContext.kind !== 'RESTAURANT') {
+    throw new Error('Order Resto hanya dapat dipakai dengan sesi Resto.');
   }
 
   const now = new Date();
@@ -371,8 +413,8 @@ export const checkout = async ({
       const transaction: Transaction = {
         id: transactionId,
         transaction_number: transactionNumber,
-        cashier_session_id: cashierSession.id,
-        cashier_session_number: cashierSession.session_number,
+        ...sessionSnapshot,
+        restaurant_order_id: restaurantOrderId,
         cashier_user_id: currentUser?.id,
         cashier_user_name: currentUser?.name,
         member_contact_id: membershipEvaluation.member?.id,

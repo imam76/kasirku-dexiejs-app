@@ -21,6 +21,7 @@ import {
   type QuickCreateMemberInput,
 } from '@/services/membershipService';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
+import { isProductVisibleInPos } from '@/utils/productAvailability';
 
 const TRANSACTION_PRODUCT_PAGE_SIZE = 12;
 const EMPTY_TRANSACTION_PRODUCT_PAGE = {
@@ -98,7 +99,7 @@ export const useTransaction = (draftScope?: string) => {
       if (productSearchTerm) {
         const matchedProducts = await db.products
           .orderBy('name')
-          .filter((product) => matchesProductSearch(product, productSearchTerm))
+          .filter((product) => isProductVisibleInPos(product) && matchesProductSearch(product, productSearchTerm))
           .toArray();
 
         return {
@@ -108,15 +109,12 @@ export const useTransaction = (draftScope?: string) => {
         };
       }
 
-      const total = await db.products.count();
+      const visibleProducts = await db.products.orderBy('name').filter(isProductVisibleInPos).toArray();
+      const total = visibleProducts.length;
       const lastPage = Math.max(1, Math.ceil(total / TRANSACTION_PRODUCT_PAGE_SIZE));
       const currentPage = Math.min(productPage, lastPage);
       const offset = (currentPage - 1) * TRANSACTION_PRODUCT_PAGE_SIZE;
-      const pageProducts = await db.products
-        .orderBy('name')
-        .offset(offset)
-        .limit(TRANSACTION_PRODUCT_PAGE_SIZE)
-        .toArray();
+      const pageProducts = visibleProducts.slice(offset, offset + TRANSACTION_PRODUCT_PAGE_SIZE);
 
       return {
         products: pageProducts,
@@ -240,6 +238,12 @@ export const useTransaction = (draftScope?: string) => {
   }, [addPaymentDraft, paymentDrafts.length, paymentPreview, validMethods.length]);
 
   const getTransactionErrorContent = (error: TransactionError) => {
+    if (error.code === 'PRODUCT_HIDDEN_IN_POS') {
+      return {
+        title: 'Produk tidak tersedia di POS',
+        content: 'Produk ini dinonaktifkan dari katalog POS di Master Produk.',
+      };
+    }
     if (error.code === 'OUT_OF_STOCK') {
       return {
         title: t('transactionError.outOfStockTitle'),
@@ -299,7 +303,7 @@ export const useTransaction = (draftScope?: string) => {
     if (!normalizedScanCode) return undefined;
 
     return db.products
-      .filter((product) => (product.sku || '').trim().toLowerCase() === normalizedScanCode)
+      .filter((product) => isProductVisibleInPos(product) && (product.sku || '').trim().toLowerCase() === normalizedScanCode)
       .first();
   }, []);
 

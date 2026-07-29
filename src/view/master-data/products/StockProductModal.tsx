@@ -1,17 +1,18 @@
 import {
-  DEFAULT_UNITS,
   inferUnitCategory,
   inferUnitDefinitionType,
   isGlobalConvertibleUnitType,
   normalizeUnitKey,
 } from '@/constants/units';
 import type { StockFormData } from '@/hooks/useStockManagement';
+import type { UnitDefinition, UnitDefinitionType } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryOptions } from '@/i18n/stock';
 import { db } from '@/lib/db';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { Alert, Badge, Button, Grid, Input, InputNumber, Modal, Select, Tabs } from 'antd';
+import { Alert, Badge, Button, Grid, Input, InputNumber, Modal, Select, Switch, Tabs } from 'antd';
 import { AlertTriangle, ExternalLink, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -104,27 +105,29 @@ export default function StockProductModal({ open, editingId, control, errors, se
     queryFn: () => db.unitConversions.toArray(),
   });
 
-  const { data: unitDefinitions = [] } = useQuery({
-    queryKey: ['units'],
-    queryFn: () => db.units.toArray(),
-  });
+  const unitDefinitions = useLiveQuery(
+    () => db.units.orderBy('name').toArray(),
+    [],
+    [],
+  );
 
   const availableUnits = useMemo(() => {
-    const units = new Set<string>(DEFAULT_UNITS.map((unit) => unit.id));
+    const units = new Set<string>();
     unitDefinitions.forEach((unit) => {
       units.add(normalizeUnitKey(unit.id));
     });
-    conversions.forEach((conversion) => {
-      units.add(normalizeUnitKey(conversion.fromUnit));
-      units.add(normalizeUnitKey(conversion.toUnit));
+    [purchaseUnit, sellingUnit, ...sellableUnits].forEach((unit) => units.add(normalizeUnitKey(unit)));
+    unitMappings.forEach((mapping) => {
+      units.add(normalizeUnitKey(mapping.unit));
+      units.add(normalizeUnitKey(mapping.base_unit));
     });
     return Array.from(units).filter(Boolean).sort();
-  }, [conversions, unitDefinitions]);
+  }, [purchaseUnit, sellableUnits, sellingUnit, unitDefinitions, unitMappings]);
 
   const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
 
   const unitDefinitionById = useMemo(() => {
-    const map = new Map(DEFAULT_UNITS.map((unit) => [unit.id, unit]));
+    const map = new Map<string, UnitDefinition>();
     unitDefinitions.forEach((unit) => {
       map.set(normalizeUnitKey(unit.id), {
         ...unit,
@@ -135,7 +138,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
   }, [unitDefinitions]);
 
   const unitTypeById = useMemo(() => {
-    const map = new Map(DEFAULT_UNITS.map((unit) => [unit.id, unit.type]));
+    const map = new Map<string, UnitDefinitionType>();
     unitDefinitions.forEach((unit) => {
       map.set(normalizeUnitKey(unit.id), unit.type);
     });
@@ -179,7 +182,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
           const definition = unitDefinitionById.get(normalizedUnit);
           return definition?.canBeBaseUnit ?? (inferUnitDefinitionType(normalizedUnit) !== 'package');
         })
-        .map((unit) => ({ value: unit, label: unit })),
+        .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
     [availableUnits, unitDefinitionById],
   );
 
@@ -232,7 +235,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
           return normalizedUnit === normalizeUnitKey(purchaseUnit) || (canBeConversionUnit && isSellableUnitCompatible(unit));
         })
-        .map((unit) => ({ value: unit, label: unit })),
+        .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
     [availableUnits, getUnitType, isSellableUnitCompatible, purchaseUnit, unitDefinitionById],
   );
 
@@ -252,7 +255,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
           return canBeConversionUnit && category === 'package' && purchaseCategory === 'count';
         })
-        .map((unit) => ({ value: unit, label: unit })),
+        .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
     [availableUnits, purchaseUnit, unitDefinitionById, getUnitType, getUnitCategory],
   );
 
@@ -582,6 +585,32 @@ export default function StockProductModal({ open, editingId, control, errors, se
                           )}
                         />
                       </FieldContainer>
+
+                      <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+                        <FieldContainer label="Tipe Produk" error={errors.product_type}>
+                          <Controller
+                            name="product_type"
+                            control={control}
+                            render={({ field }) => (
+                              <Select {...field} className="w-full" options={[
+                                { value: 'FINISHED_GOOD', label: 'Barang Jadi' },
+                                { value: 'RAW_MATERIAL', label: 'Bahan Baku' },
+                              ]} />
+                            )}
+                          />
+                        </FieldContainer>
+                        <FieldContainer
+                          label="Tampil di POS"
+                          error={errors.is_visible_in_pos}
+                          help="Jika dinonaktifkan, produk tetap tersimpan tetapi tidak muncul di katalog POS."
+                        >
+                          <Controller
+                            name="is_visible_in_pos"
+                            control={control}
+                            render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />}
+                          />
+                        </FieldContainer>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">

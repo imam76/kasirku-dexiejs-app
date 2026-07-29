@@ -5,6 +5,8 @@ import { navigationMessages } from './navigationMessages';
 import { stockMessages } from './stockMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
 import { fixedAssetMessages } from './fixedAssetMessages';
+import { restaurantPosMessages } from './restaurantPosMessages';
+import { restaurantTableMessages } from './restaurantTableMessages';
 
 export const messages = {
   id: {
@@ -15,6 +17,8 @@ export const messages = {
     ...stockOpnameMessages.id,
     ...cooperativeMessages.id,
     ...fixedAssetMessages.id,
+    ...restaurantPosMessages.id,
+    ...restaurantTableMessages.id,
 
     'transaction.title': 'Transaksi',
     'transaction.searchPlaceholder': 'Cari produk (nama atau SKU)...',
@@ -2006,6 +2010,8 @@ export const messages = {
     ...stockOpnameMessages.en,
     ...cooperativeMessages.en,
     ...fixedAssetMessages.en,
+    ...restaurantPosMessages.en,
+    ...restaurantTableMessages.en,
 
     'transaction.title': 'Transaction',
     'transaction.searchPlaceholder': 'Search products (name or SKU)...',
