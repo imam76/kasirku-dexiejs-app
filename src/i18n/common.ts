@@ -24,6 +24,8 @@ export const commonMessages = {
     'common.to': 'Hingga',
     'common.unknownError': 'Unknown error',
     'common.toggleTheme': 'Ganti tema',
+    'common.useDarkTheme': 'Gunakan tema gelap',
+    'common.useLightTheme': 'Gunakan tema terang',
 
     'documents.currency': 'Mata uang',
     'documents.exchangeRate': 'Kurs ke IDR',
@@ -65,6 +67,8 @@ export const commonMessages = {
     'common.to': 'End',
     'common.unknownError': 'Unknown error',
     'common.toggleTheme': 'Toggle theme',
+    'common.useDarkTheme': 'Use dark theme',
+    'common.useLightTheme': 'Use light theme',
 
     'documents.currency': 'Currency',
     'documents.exchangeRate': 'Rate to IDR',

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { App, Avatar, Button, Divider, Form, Input, Modal, Popover, Space, Tag, Typography } from 'antd';
-import { ChevronDown, KeyRound, LogOut, Mail, ShieldCheck } from 'lucide-react';
+import { ChevronDown, KeyRound, LogOut, Mail, Moon, Settings, ShieldCheck, Sun } from 'lucide-react';
 import { changeCurrentUserPin } from '@/auth/authService';
 import { AUTH_PIN_LENGTH, AUTH_PIN_VALIDATION_MESSAGE } from '@/auth/pinPolicy';
 import { useI18n } from '@/hooks/useI18n';
@@ -12,6 +12,10 @@ const { Text } = Typography;
 interface LoginProfileProps {
   currentUser: AuthUser | null;
   currentRole: Role | null;
+  canAccessSettings: boolean;
+  isDark: boolean;
+  onOpenSettings: () => void;
+  onToggleTheme: () => void;
   onLogout: () => void;
   onPinChanged: () => Promise<unknown>;
 }
@@ -25,6 +29,10 @@ interface ChangePinFormValues {
 export default function LoginProfile({
   currentUser,
   currentRole,
+  canAccessSettings,
+  isDark,
+  onOpenSettings,
+  onToggleTheme,
   onLogout,
   onPinChanged,
 }: LoginProfileProps) {
@@ -46,6 +54,11 @@ export default function LoginProfile({
   const handleLogout = () => {
     setOpen(false);
     onLogout();
+  };
+
+  const handleOpenSettings = () => {
+    setOpen(false);
+    onOpenSettings();
   };
 
   const openPinModal = () => {
@@ -132,12 +145,26 @@ export default function LoginProfile({
 
       <Divider className="my-3" />
 
-      <Button block icon={<KeyRound size={16} />} onClick={openPinModal}>
-        {t('root.profile.changePin')}
-      </Button>
-      <Button danger block className="mt-2" icon={<LogOut size={16} />} onClick={handleLogout}>
-        {t('root.logout')}
-      </Button>
+      <div className="space-y-2">
+        <Button
+          block
+          icon={isDark ? <Sun size={16} /> : <Moon size={16} />}
+          onClick={onToggleTheme}
+        >
+          {isDark ? t('common.useLightTheme') : t('common.useDarkTheme')}
+        </Button>
+        {canAccessSettings && (
+          <Button block icon={<Settings size={16} />} onClick={handleOpenSettings}>
+            {t('root.openSettings')}
+          </Button>
+        )}
+        <Button block icon={<KeyRound size={16} />} onClick={openPinModal}>
+          {t('root.profile.changePin')}
+        </Button>
+        <Button danger block icon={<LogOut size={16} />} onClick={handleLogout}>
+          {t('root.logout')}
+        </Button>
+      </div>
     </div>
   );
 

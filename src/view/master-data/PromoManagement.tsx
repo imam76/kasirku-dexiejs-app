@@ -4,7 +4,8 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { BadgePercent, Edit2, Plus, Trash2 } from 'lucide-react';
+import { BadgePercent, Edit2, Plus, Star, Trash2 } from 'lucide-react';
+import MembershipSettingsModal from '@/components/MembershipSettingsModal';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
@@ -97,6 +98,7 @@ export default function PromoManagement() {
   const queryClient = useQueryClient();
   const [form] = Form.useForm<PromoFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMembershipModalOpen, setIsMembershipModalOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Promo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const appliesTo = Form.useWatch('applies_to', form) ?? 'all';
@@ -278,15 +280,19 @@ export default function PromoManagement() {
       title={(
         <div className="flex items-center gap-2">
           <BadgePercent className="h-5 w-5" />
-          Promo dan Diskon
+          Diskon dan Promo
         </div>
       )}
-      extra={(
+    >
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button icon={<Star size={16} />} onClick={() => setIsMembershipModalOpen(true)}>
+          Membership Retail
+        </Button>
         <Button type="primary" icon={<Plus size={16} />} onClick={handleAdd}>
           Tambah Promo
         </Button>
-      )}
-    >
+      </div>
+
       <Table
         dataSource={promos}
         columns={columns}
@@ -396,6 +402,11 @@ export default function PromoManagement() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <MembershipSettingsModal
+        open={isMembershipModalOpen}
+        onClose={() => setIsMembershipModalOpen(false)}
+      />
     </Card>
   );
 }

@@ -35,6 +35,7 @@ const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
 const SettingsLazyRouteImport = createFileRoute('/settings')()
 const PosRestoLazyRouteImport = createFileRoute('/pos-resto')()
 const HistoryLazyRouteImport = createFileRoute('/history')()
+const ActivityLogLazyRouteImport = createFileRoute('/activity-log')()
 const SplatLazyRouteImport = createFileRoute('/$')()
 const ReportTransactionDetailReportLazyRouteImport = createFileRoute(
   '/report/transaction-detail-report',
@@ -329,6 +330,11 @@ const HistoryLazyRoute = HistoryLazyRouteImport.update({
   path: '/history',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/history.lazy').then((d) => d.Route))
+const ActivityLogLazyRoute = ActivityLogLazyRouteImport.update({
+  id: '/activity-log',
+  path: '/activity-log',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/activity-log.lazy').then((d) => d.Route))
 const SplatLazyRoute = SplatLazyRouteImport.update({
   id: '/$',
   path: '/$',
@@ -1271,6 +1277,7 @@ const FinancePurchasesDocumentTypeDocumentIdReconcileLazyRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
+  '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
   '/settings': typeof SettingsLazyRoute
@@ -1401,6 +1408,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
+  '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
   '/settings': typeof SettingsLazyRoute
@@ -1532,6 +1540,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatLazyRoute
+  '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
   '/settings': typeof SettingsLazyRoute
@@ -1664,6 +1673,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$'
+    | '/activity-log'
     | '/history'
     | '/pos-resto'
     | '/settings'
@@ -1794,6 +1804,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/$'
+    | '/activity-log'
     | '/history'
     | '/pos-resto'
     | '/settings'
@@ -1924,6 +1935,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$'
+    | '/activity-log'
     | '/history'
     | '/pos-resto'
     | '/settings'
@@ -2055,6 +2067,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatLazyRoute: typeof SplatLazyRoute
+  ActivityLogLazyRoute: typeof ActivityLogLazyRoute
   HistoryLazyRoute: typeof HistoryLazyRoute
   PosRestoLazyRoute: typeof PosRestoLazyRoute
   SettingsLazyRoute: typeof SettingsLazyRoute
@@ -2215,6 +2228,13 @@ declare module '@tanstack/react-router' {
       path: '/history'
       fullPath: '/history'
       preLoaderRoute: typeof HistoryLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activity-log': {
+      id: '/activity-log'
+      path: '/activity-log'
+      fullPath: '/activity-log'
+      preLoaderRoute: typeof ActivityLogLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$': {
@@ -3177,6 +3197,7 @@ const FinancePurchasesDocumentTypeDocumentIdLazyRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatLazyRoute: SplatLazyRoute,
+  ActivityLogLazyRoute: ActivityLogLazyRoute,
   HistoryLazyRoute: HistoryLazyRoute,
   PosRestoLazyRoute: PosRestoLazyRoute,
   SettingsLazyRoute: SettingsLazyRoute,

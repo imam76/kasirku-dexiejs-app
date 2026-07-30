@@ -7,11 +7,8 @@ import { useNavigate } from '@tanstack/react-router'
 import PrinterSettingsCard from '@/components/PrinterSettingsCard'
 import UsbPrinterCard from '@/components/UsbPrinterCard'
 import CompanyProfileSettingsCard from '@/components/CompanyProfileSettingsCard'
-import MembershipSettingsCard from '@/components/MembershipSettingsCard'
 import AccountingDateSettingsCard from '@/components/AccountingDateSettingsCard'
 import { useI18n } from '@/hooks/useI18n'
-import { useAuth } from '@/auth/useAuth'
-import { ActivityLogViewer } from '@/view/auth/ActivityLogViewer'
 import { useSalesDocumentMarginSettings } from '@/hooks/useSalesDocumentMarginSettings'
 import type { SalesDocumentMarginBasis } from '@/types'
 
@@ -25,7 +22,6 @@ function Settings() {
   const { message, modal } = App.useApp()
   const navigate = useNavigate()
   const { t } = useI18n()
-  const { can } = useAuth()
   const { marginBasis, setMarginBasis } = useSalesDocumentMarginSettings()
   const [loading, setLoading] = useState(false)
 
@@ -101,10 +97,6 @@ function Settings() {
         <AccountingDateSettingsCard />
       </div>
 
-      <div className="mb-6">
-        <MembershipSettingsCard />
-      </div>
-
       <Row gutter={[16, 16]} className="mb-6">
         <Col xs={24} xl={12} className="min-w-0">
           <PrinterSettingsCard />
@@ -141,12 +133,6 @@ function Settings() {
           </div>
         </Card>
       </div>
-
-      {can('ACTIVITY_LOG_VIEW') && (
-        <div className="mb-6">
-          <ActivityLogViewer />
-        </div>
-      )}
 
       <Row gutter={[16, 16]}>
         {/* Backup Section */}

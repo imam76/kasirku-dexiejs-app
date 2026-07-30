@@ -106,6 +106,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/marketplace': 'MARKETPLACE_VIEW',
   '/marketplace/shopee': 'MARKETPLACE_VIEW',
   '/sync-db': 'SETTINGS_ACCESS',
+  '/activity-log': 'ACTIVITY_LOG_VIEW',
   '/settings': 'SETTINGS_ACCESS',
   '/report': GENERAL_REPORT_PERMISSION_LIST,
 };

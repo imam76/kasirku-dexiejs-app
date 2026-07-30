@@ -9,6 +9,10 @@ describe('auth user access policy', () => {
     expect(getModuleCodesForPath('/master-data/users')).toEqual(['ROLE_PERMISSION']);
   });
 
+  test('protects activity log with ACTIVITY_LOG_VIEW', () => {
+    expect(getRequiredPermissionForPath('/activity-log')).toBe('ACTIVITY_LOG_VIEW');
+  });
+
   test('requires exactly six numeric digits for newly written PINs', () => {
     expect(AUTH_PIN_LENGTH).toBe(6);
     expect(isValidAuthPin('123456')).toBeTrue();

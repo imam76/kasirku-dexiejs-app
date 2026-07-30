@@ -1,4 +1,4 @@
-import { getCurrentSessionUser, requireUserPermission, requireRolePermission, writeActivityLog } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { contactSchema } from '@/lib/validations/contact';
 import type { PromoEvaluationResult } from '@/services/promoService';
@@ -100,7 +100,7 @@ export const getMembershipSetting = async (): Promise<MembershipSetting> => ensu
 
 export const saveMembershipSetting = async (input: MembershipSettingInput): Promise<MembershipSetting> => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'SETTINGS_ACCESS');
+  await requireUserPermission(currentUser, 'PROMO_MANAGE');
 
   const current = await ensureMembershipSetting();
   const now = new Date().toISOString();

@@ -25,22 +25,20 @@ import type { MenuProps } from 'antd'
 import {
   Banknote,
   Building2,
+  ClipboardList,
   Database,
   FileText,
   History,
   // HelpCircle,
   Home,
   Languages,
-  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
   Settings,
-  SettingsIcon,
   ShoppingBag,
   ShoppingCart,
   Store,
-  Sun,
   Users,
   UtensilsCrossed,
   type LucideIcon
@@ -263,6 +261,7 @@ const RootLayout = () => {
     },
     { to: '/report', label: t('nav.reports'), icon: FileText },
     { to: '/sync-db', label: t('nav.syncDb'), icon: RefreshCw },
+    { to: '/activity-log', label: t('nav.activityLog'), icon: ClipboardList },
     { to: '/settings', label: t('nav.settings'), icon: Settings },
   ]
 
@@ -392,16 +391,9 @@ const RootLayout = () => {
               />
             </div>
 
-            {/* Theme Toggle & Settings */}
+            {/* Navbar actions */}
             <div className="flex items-center gap-1">
               <SyncStatusIndicator />
-              <button
-                onClick={toggle}
-                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
-                aria-label={t('common.toggleTheme')}
-              >
-                {isDark ? <Moon size={20} /> : <Sun size={20} />}
-              </button>
               <button
                 onClick={toggleLocale}
                 className="flex items-center gap-1 rounded-full px-2 py-2 text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-100 focus:outline-none dark:hover:bg-gray-700"
@@ -423,19 +415,13 @@ const RootLayout = () => {
                 </button>
               )}
             </AppWorkflowTour> */}
-              {can('SETTINGS_ACCESS') && (
-                <button
-                  onClick={() => navigate({ to: '/settings' })}
-                  className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none"
-                  aria-label={t('root.openSettings')}
-                  title={t('root.openSettings')}
-                >
-                  <SettingsIcon size={20} />
-                </button>
-              )}
               <LoginProfile
                 currentUser={currentUser}
                 currentRole={currentRole}
+                canAccessSettings={can('SETTINGS_ACCESS')}
+                isDark={isDark}
+                onOpenSettings={() => navigate({ to: '/settings' })}
+                onToggleTheme={toggle}
                 onLogout={handleLogoutClick}
                 onPinChanged={refreshCurrentUser}
               />

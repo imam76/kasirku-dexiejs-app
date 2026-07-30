@@ -42,6 +42,7 @@ const STATIC_LABEL_KEYS: Record<string, TranslationKey> = {
   '/marketplace/shopee': 'nav.marketplace.shopee',
   '/report': 'nav.reports',
   '/sync-db': 'nav.syncDb',
+  '/activity-log': 'nav.activityLog',
   '/settings': 'nav.settings',
 
   '/master-data/products': 'nav.product',
