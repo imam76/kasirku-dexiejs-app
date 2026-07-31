@@ -1,0 +1,150 @@
+import { describe, expect, test } from 'bun:test';
+import type { Product } from '@/types';
+import {
+  buildProductCsvImportItems,
+  createProductCsvExportRows,
+} from '@/utils/productsCsv';
+import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
+
+const existingProduct: Product = {
+  id: 'product-a',
+  sku: 'A',
+  name: 'Produk A Lama',
+  category: 'non_consumable',
+  purchase_unit: 'pcs',
+  selling_unit: 'pcs',
+  purchase_price: 12_000,
+  selling_price: 15_000,
+  stock: 17,
+  wholesale_prices: [],
+  sellable_units: ['pcs'],
+  unit_mappings: [],
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+};
+
+describe('product master CSV import safety', () => {
+  test('preserves existing prices and stock when CSV fields are blank', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_price,selling_price,stock,purchase_quantity',
+      'A,Produk A,,,,',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.ignoredOperationalColumns).toEqual({
+      stock: 'stock',
+      purchase_quantity: 'purchase_quantity',
+    });
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0].purchase_price).toBeUndefined();
+    expect(parsed.items[0].selling_price).toBeUndefined();
+    expect('stock' in parsed.items[0]).toBe(false);
+    expect('purchase_quantity' in parsed.items[0]).toBe(false);
+
+    const plan = buildProductMasterImportPlan({
+      items: parsed.items,
+      existingProducts: [existingProduct],
+      now: '2026-07-31T00:00:00.000Z',
+      createId: () => 'unused',
+    });
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.updatedCount).toBe(1);
+    expect(plan.items[0].product).toMatchObject({
+      id: existingProduct.id,
+      name: 'Produk A',
+      purchase_price: 12_000,
+      selling_price: 15_000,
+      stock: 17,
+    });
+  });
+
+  test('accepts explicit zero prices but ignores legacy stock and purchase quantity values', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_price,selling_price,stock,purchase_quantity',
+      'B,Produk B,0,0,99,10',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items[0]).toMatchObject({
+      sku: 'B',
+      purchase_price: 0,
+      selling_price: 0,
+    });
+
+    const plan = buildProductMasterImportPlan({
+      items: parsed.items,
+      existingProducts: [],
+      now: '2026-07-31T00:00:00.000Z',
+      createId: () => 'product-b',
+    });
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.createdCount).toBe(1);
+    expect(plan.items[0].product).toMatchObject({
+      id: 'product-b',
+      purchase_price: 0,
+      selling_price: 0,
+      stock: 0,
+    });
+  });
+
+  test('returns no importable items when any row has a blocking error', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_price,selling_price',
+      'A,Produk A,12000,15000',
+      'B,,invalid,20000',
+    ].join('\n'));
+
+    expect(parsed.errors.length).toBeGreaterThan(0);
+    expect(parsed.validRowCount).toBe(1);
+    expect(parsed.items).toEqual([]);
+  });
+
+  test('rejects non-numeric and negative price values instead of silently coercing them', () => {
+    const invalidText = buildProductCsvImportItems([
+      'sku,name,purchase_price',
+      'A,Produk A,123abc',
+    ].join('\n'));
+    const negative = buildProductCsvImportItems([
+      'sku,name,selling_price',
+      'A,Produk A,-1',
+    ].join('\n'));
+
+    expect(invalidText.errors[0]).toContain('purchase_price/harga_beli');
+    expect(invalidText.items).toEqual([]);
+    expect(negative.errors[0]).toContain('selling_price/harga_jual');
+    expect(negative.items).toEqual([]);
+  });
+
+  test('rejects conflicting product id and SKU matches', () => {
+    const parsed = buildProductCsvImportItems([
+      'id,sku,name',
+      'product-a,B,Produk Konflik',
+    ].join('\n'));
+    const otherProduct: Product = {
+      ...existingProduct,
+      id: 'product-b',
+      sku: 'B',
+      name: 'Produk B',
+    };
+
+    const plan = buildProductMasterImportPlan({
+      items: parsed.items,
+      existingProducts: [existingProduct, otherProduct],
+      now: '2026-07-31T00:00:00.000Z',
+      createId: () => 'unused',
+    });
+
+    expect(plan.items).toEqual([]);
+    expect(plan.errors[0]).toContain('menunjuk produk yang berbeda');
+  });
+
+  test('keeps current stock as export information but removes purchase quantity from export', () => {
+    const [headers, row] = createProductCsvExportRows([existingProduct]);
+
+    expect(headers).toContain('stock');
+    expect(headers).not.toContain('purchase_quantity');
+    expect(row[headers.indexOf('stock')]).toBe(17);
+  });
+});

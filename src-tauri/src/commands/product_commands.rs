@@ -1,6 +1,6 @@
 use crate::{
     db::{PostgresCommandResult, PostgresState},
-    models::product::ProductDto,
+    models::product::{ProductDto, ProductUpsertInputDto},
     repositories::product_repository,
 };
 use tauri::State;
@@ -25,10 +25,10 @@ pub async fn postgres_get_product(
 #[tauri::command]
 pub async fn postgres_upsert_product(
     state: State<'_, PostgresState>,
-    input: ProductDto,
+    input: ProductUpsertInputDto,
 ) -> PostgresCommandResult<ProductDto> {
     let pool = state.pool()?;
-    Ok(product_repository::upsert_product(&pool, input).await?)
+    Ok(product_repository::upsert_product(&pool, input.product, input.preserve_stock).await?)
 }
 
 #[tauri::command]

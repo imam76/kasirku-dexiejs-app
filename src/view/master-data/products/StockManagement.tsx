@@ -1,4 +1,4 @@
-import { App, Button, Card, Drawer, Dropdown, InputNumber, Modal } from 'antd';
+import { Alert, App, Button, Card, Drawer, Dropdown, InputNumber, Modal } from 'antd';
 import type { MenuProps } from 'antd';
 import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
@@ -114,47 +114,92 @@ export default function StockManagement() {
 
     try {
       const text = await file.text();
-      const { items, errors: parseErrors } = buildProductCsvImportItems(text);
+      const {
+        items,
+        errors: parseErrors,
+        validRowCount,
+        ignoredOperationalColumns,
+      } = buildProductCsvImportItems(text);
 
-      if (items.length === 0) {
-        message.error(parseErrors[0] ?? t('stock.noValidImportData'));
+      if (parseErrors.length > 0) {
+        modal.error({
+          title: t('stock.importBlockedTitle'),
+          content: (
+            <div className="space-y-3">
+              <div className="text-sm text-gray-700">
+                {t('stock.importBlockedDescription', { count: parseErrors.length })}
+              </div>
+              <div className="text-xs text-red-600">
+                {parseErrors.slice(0, 5).map((errorText) => (
+                  <div key={errorText}>{errorText}</div>
+                ))}
+                {parseErrors.length > 5 ? (
+                  <div>{t('stock.moreErrors', { count: parseErrors.length - 5 })}</div>
+                ) : null}
+              </div>
+              {validRowCount > 0 ? (
+                <div className="text-xs text-gray-500">
+                  {t('stock.validRowsNotImported', { count: validRowCount })}
+                </div>
+              ) : null}
+            </div>
+          ),
+        });
         return;
       }
+
+      if (items.length === 0) {
+        message.error(t('stock.noValidImportData'));
+        return;
+      }
+
+      const ignoredColumnWarnings = [
+        ignoredOperationalColumns.stock
+          ? t('stock.stockColumnIgnored', { column: ignoredOperationalColumns.stock })
+          : undefined,
+        ignoredOperationalColumns.purchase_quantity
+          ? t('stock.purchaseQuantityColumnIgnored', {
+            column: ignoredOperationalColumns.purchase_quantity,
+          })
+          : undefined,
+      ].filter((warning): warning is string => Boolean(warning));
 
       modal.confirm({
         title: t('stock.importTitle'),
         content: (
-          <div className="space-y-2">
+          <div className="space-y-3">
+            <Alert
+              type="info"
+              showIcon
+              message={t('stock.masterImportNotice')}
+            />
             <div className="text-sm text-gray-700">
               {t('stock.file')}: <span className="font-medium">{file.name}</span>
             </div>
             <div className="text-sm text-gray-700">
               {t('stock.validRows')}: <span className="font-medium">{items.length}</span>
-              {parseErrors.length > 0 ? (
-                <>
-                  {' '}
-                  • {t('stock.errorCount')}: <span className="font-medium">{parseErrors.length}</span>
-                </>
-              ) : null}
             </div>
             <div className="text-xs text-gray-500">
               {t('stock.supportedColumns')}
             </div>
-            {parseErrors.length > 0 ? (
-              <div className="text-xs text-red-600">
-                {parseErrors.slice(0, 5).map((errorText) => (
-                  <div key={errorText}>{errorText}</div>
-                ))}
-                {parseErrors.length > 5 ? <div>{t('stock.moreErrors', { count: parseErrors.length - 5 })}</div> : null}
-              </div>
-            ) : null}
+            {ignoredColumnWarnings.map((warning) => (
+              <Alert key={warning} type="warning" showIcon message={warning} />
+            ))}
           </div>
         ),
         okText: t('stock.importCsv'),
         cancelText: t('stock.form.cancel'),
         okButtonProps: { disabled: isImporting },
         onOk: async () => {
-          await importProductsFromCsv(items);
+          try {
+            await importProductsFromCsv(items);
+          } catch (error) {
+            const errorMessage = error instanceof Error
+              ? error.message
+              : t('stock.importFailed');
+            message.error(errorMessage);
+            throw error;
+          }
         },
       });
     } catch (error) {

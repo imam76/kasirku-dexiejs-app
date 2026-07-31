@@ -10,11 +10,12 @@ import { enqueueProductSync } from '@/services/syncQueueService';
 import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
-import type { FinanceTransaction, Product, ProductUnit } from '@/types';
+import type { FinanceTransaction, Product } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
+import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
 
 export type { StockFormData };
 
@@ -306,134 +307,38 @@ export const useStockManagement = () => {
       const currentUser = await getCurrentSessionUser();
       await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
       const now = new Date().toISOString();
-      let createdCount = 0;
-      let updatedCount = 0;
-      const productsToSync: Array<{ product: Product; operation: 'create' | 'update' }> = [];
-      const financeTransactionsToSync: FinanceTransaction[] = [];
+      let importPlan: ReturnType<typeof buildProductMasterImportPlan> | undefined;
 
-      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
-        for (const item of items) {
-          let existing = null;
-          if (item.sku) {
-            existing = await db.products.where('sku').equals(item.sku).first();
-          }
-          if (!existing && item.id) {
-            existing = await db.products.get(item.id);
-          }
-
-          const purchaseUnit = (item.purchase_unit || existing?.purchase_unit || 'pcs') as ProductUnit;
-          const sellingUnit = (item.selling_unit || existing?.selling_unit || 'pcs') as ProductUnit;
-          const unitMappings = normalizeProductUnitMappings({
-            purchase_unit: purchaseUnit,
-            selling_unit: sellingUnit,
-            sellable_units: item.sellable_units || existing?.sellable_units || [],
-            unit_mappings: item.unit_mappings || existing?.unit_mappings || [],
-          });
-
-          const cleanData = {
-            name: item.name,
-            category: item.category || existing?.category || 'non_consumable',
-            purchase_unit: purchaseUnit,
-            selling_unit: sellingUnit,
-            purchase_price: item.purchase_price ?? 0,
-            selling_price: item.selling_price ?? 0,
-            stock: item.stock ?? 0,
-            sku: item.sku || existing?.sku || '',
-            wholesale_prices: (item.wholesale_prices || existing?.wholesale_prices || []).map((p) => ({
-              min_quantity: Number(p.min_quantity),
-              price: Number(p.price),
-              price_type: p.price_type || 'unit',
-            })),
-            unit_mappings: unitMappings,
-            sellable_units: buildSellableUnitsFromMappings({
-              purchase_unit: purchaseUnit,
-              selling_unit: sellingUnit,
-              sellable_units: item.sellable_units && item.sellable_units.length > 0
-                ? item.sellable_units
-                : existing?.sellable_units || [],
-              unit_mappings: unitMappings,
-            }),
-          };
-
-          const purchase_quantity = item.purchase_quantity || 0;
-
-          if (existing) {
-            updatedCount += 1;
-            const updatedProduct: Product = withPendingSync({
-              ...existing,
-              ...cleanData,
-              updated_at: now,
-            });
-            await db.products.put(updatedProduct);
-            productsToSync.push({ product: updatedProduct, operation: 'update' });
-
-            if (purchase_quantity > 0) {
-              const totalCost = cleanData.purchase_price * purchase_quantity;
-              const purchaseResult = await recordStockPurchase({
-                productId: existing.id,
-                productName: cleanData.name,
-                sku: cleanData.sku,
-                quantity: purchase_quantity,
-                costPerUnit: cleanData.purchase_price,
-                totalCost,
-                description: t('stock.importPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
-                createdAt: now,
-                actor: currentUser,
-              });
-              financeTransactionsToSync.push(purchaseResult.financeTransaction);
-            }
-          } else {
-            createdCount += 1;
-            const newId = item.id && item.id.length > 0 ? item.id : crypto.randomUUID();
-            const newProduct: Product = withPendingSync({
-              id: newId,
-              ...cleanData,
-              created_at: now,
-              updated_at: now,
-            });
-
-            await db.products.add(newProduct);
-            productsToSync.push({ product: newProduct, operation: 'create' });
-
-            if (purchase_quantity > 0) {
-              const totalCost = cleanData.purchase_price * purchase_quantity;
-              const purchaseResult = await recordStockPurchase({
-                productId: newId,
-                productName: cleanData.name,
-                sku: cleanData.sku,
-                quantity: purchase_quantity,
-                costPerUnit: cleanData.purchase_price,
-                totalCost,
-                description: t('stock.importInitialPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
-                createdAt: now,
-                actor: currentUser,
-              });
-              financeTransactionsToSync.push(purchaseResult.financeTransaction);
-            }
-          }
+      await db.transaction('rw', db.products, async () => {
+        importPlan = buildProductMasterImportPlan({
+          items,
+          existingProducts: await db.products.toArray(),
+          now,
+        });
+        if (importPlan.errors.length > 0) {
+          throw new Error(importPlan.errors.join('\n'));
         }
+        await db.products.bulkPut(importPlan.items.map((item) => item.product));
       });
+
+      if (!importPlan) {
+        throw new Error('Rencana import master produk gagal dibuat.');
+      }
 
       await writeActivityLog({
         user: currentUser,
         action: 'PRODUCT_CSV_IMPORTED',
         entity: 'products',
-        description: `${currentUser?.name ?? 'User'} mengimpor ${items.length} baris produk dari CSV. Produk baru: ${createdCount}, diperbarui: ${updatedCount}.`,
+        description: `${currentUser?.name ?? 'User'} mengimpor ${items.length} baris master produk dari CSV tanpa mengubah stok atau kas. Produk baru: ${importPlan.createdCount}, diperbarui: ${importPlan.updatedCount}.`,
       });
-      for (const { product, operation } of productsToSync) {
-        await enqueueProductSync(product, operation);
-      }
-      if (financeTransactionsToSync.length > 0) {
-        await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
+      for (const { product, operation } of importPlan.items) {
+        await enqueueProductSync(product, operation, {
+          preserveStock: operation === 'update',
+        });
       }
     },
     onSuccess: (_data, items) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
-      queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
-      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
-      queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
-      queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
-      queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
       message.success(t('stock.importSuccess', { count: items.length }));
     },
   });

@@ -19,3 +19,11 @@ pub struct ProductDto {
     pub updated_at: String,
     pub deleted_at: Option<String>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProductUpsertInputDto {
+    #[serde(flatten)]
+    pub product: ProductDto,
+    #[serde(default)]
+    pub preserve_stock: bool,
+}

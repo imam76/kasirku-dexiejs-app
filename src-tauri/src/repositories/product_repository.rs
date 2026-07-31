@@ -88,7 +88,11 @@ async fn get_product_including_deleted(
     .await
 }
 
-pub async fn upsert_product(pool: &PgPool, input: ProductDto) -> Result<ProductDto, sqlx::Error> {
+pub async fn upsert_product(
+    pool: &PgPool,
+    input: ProductDto,
+    preserve_stock: bool,
+) -> Result<ProductDto, sqlx::Error> {
     let product_id = input.id.clone();
     let upserted_product = sqlx::query_as::<_, ProductDto>(
         r#"
@@ -117,7 +121,7 @@ pub async fn upsert_product(pool: &PgPool, input: ProductDto) -> Result<ProductD
             selling_unit = EXCLUDED.selling_unit,
             purchase_price = EXCLUDED.purchase_price,
             selling_price = EXCLUDED.selling_price,
-            stock = EXCLUDED.stock,
+            stock = CASE WHEN $16 THEN products.stock ELSE EXCLUDED.stock END,
             sku = EXCLUDED.sku,
             wholesale_prices = EXCLUDED.wholesale_prices,
             sellable_units = EXCLUDED.sellable_units,
@@ -158,6 +162,7 @@ pub async fn upsert_product(pool: &PgPool, input: ProductDto) -> Result<ProductD
     .bind(input.created_at)
     .bind(input.updated_at)
     .bind(input.deleted_at)
+    .bind(preserve_stock)
     .fetch_optional(pool)
     .await?;
 

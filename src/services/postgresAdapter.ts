@@ -712,6 +712,7 @@ export interface RemoteProductDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+  preserve_stock?: boolean;
 }
 
 export interface RemoteStockMutationDto {

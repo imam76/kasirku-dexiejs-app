@@ -9,14 +9,24 @@ export type ProductCsvImportItem = {
   category?: string;
   purchase_unit?: string;
   selling_unit?: string;
-  purchase_price: number;
-  selling_price: number;
-  stock: number;
-  purchase_quantity?: number;
+  purchase_price?: number;
+  selling_price?: number;
   wholesale_prices?: Product['wholesale_prices'];
   sellable_units?: string[];
   unit_mappings?: Product['unit_mappings'];
 };
+
+export interface ProductCsvIgnoredOperationalColumns {
+  stock?: string;
+  purchase_quantity?: string;
+}
+
+export interface ProductCsvImportResult {
+  items: ProductCsvImportItem[];
+  errors: string[];
+  validRowCount: number;
+  ignoredOperationalColumns: ProductCsvIgnoredOperationalColumns;
+}
 
 const normalizeHeaderName = (value: string) =>
   value
@@ -43,7 +53,7 @@ const parseNumberFlexible = (value: string | undefined) => {
     cleaned = cleaned.replace(/,/g, '');
   }
 
-  const parsed = Number.parseFloat(cleaned);
+  const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
@@ -162,13 +172,19 @@ const parseCsv = (text: string) => {
   return rows;
 };
 
-export const buildProductCsvImportItems = (csvText: string): { items: ProductCsvImportItem[]; errors: string[] } => {
+export const buildProductCsvImportItems = (csvText: string): ProductCsvImportResult => {
   const rows = parseCsv(csvText);
   if (rows.length === 0) {
-    return { items: [], errors: ['CSV kosong.'] };
+    return {
+      items: [],
+      errors: ['CSV kosong.'],
+      validRowCount: 0,
+      ignoredOperationalColumns: {},
+    };
   }
 
-  const headerRow = rows[0].map((h) => normalizeHeaderName(h));
+  const rawHeaderRow = rows[0].map((header) => header.trim());
+  const headerRow = rawHeaderRow.map((h) => normalizeHeaderName(h));
   const indexByHeader = new Map<string, number>();
   headerRow.forEach((h, idx) => {
     if (h && !indexByHeader.has(h)) indexByHeader.set(h, idx);
@@ -195,17 +211,46 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
   const idxWholesalePrices = pickIndex(['wholesale_prices', 'harga_grosir']);
   const idxSellableUnits = pickIndex(['sellable_units', 'satuan_bisa_dijual']);
   const idxUnitMappings = pickIndex(['unit_mappings', 'konversi_satuan_produk', 'product_unit_mappings']);
+  const ignoredOperationalColumns: ProductCsvIgnoredOperationalColumns = {
+    stock: idxStock === undefined ? undefined : rawHeaderRow[idxStock],
+    purchase_quantity: idxPurchaseQty === undefined ? undefined : rawHeaderRow[idxPurchaseQty],
+  };
 
   const errors: string[] = [];
   if (idxName === undefined) errors.push('Kolom "name" (atau "nama") tidak ditemukan.');
-  if (errors.length > 0) return { items: [], errors };
+  if (errors.length > 0) {
+    return {
+      items: [],
+      errors,
+      validRowCount: 0,
+      ignoredOperationalColumns,
+    };
+  }
 
   const items: ProductCsvImportItem[] = [];
   const seenSku = new Set<string>();
+  const seenId = new Set<string>();
+
+  const parseOptionalNonNegativeNumber = (
+    rawValue: string | undefined,
+    fieldLabel: string,
+    rowNumber: number,
+  ) => {
+    if (!(rawValue ?? '').trim()) return undefined;
+
+    const value = parseNumberFlexible(rawValue);
+    if (value === undefined || value < 0) {
+      errors.push(`Baris ${rowNumber}: ${fieldLabel} harus berupa angka 0 atau lebih.`);
+      return undefined;
+    }
+
+    return value;
+  };
 
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const rowNumber = r + 1;
+    const errorCountBeforeRow = errors.length;
     const sku = idxSku !== undefined ? (row[idxSku] ?? '').trim() : '';
     const name = (row[idxName!] ?? '').trim();
 
@@ -220,16 +265,32 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
     if (sku) seenSku.add(sku);
 
     const id = idxId !== undefined ? (row[idxId] ?? '').trim() : undefined;
-    const purchase_price = parseNumberFlexible(idxPurchase !== undefined ? row[idxPurchase] : undefined) ?? 0;
-    const selling_price = parseNumberFlexible(idxSelling !== undefined ? row[idxSelling] : undefined) ?? 0;
-    const stock = parseNumberFlexible(idxStock !== undefined ? row[idxStock] : undefined) ?? 0;
-    const purchase_quantity = parseNumberFlexible(idxPurchaseQty !== undefined ? row[idxPurchaseQty] : undefined) ?? undefined;
+    if (id && seenId.has(id)) {
+      errors.push(`Baris ${rowNumber}: id duplikat di file (id: ${id}).`);
+      continue;
+    }
+    if (id) seenId.add(id);
+
+    const purchase_price = parseOptionalNonNegativeNumber(
+      idxPurchase !== undefined ? row[idxPurchase] : undefined,
+      'purchase_price/harga_beli',
+      rowNumber,
+    );
+    const selling_price = parseOptionalNonNegativeNumber(
+      idxSelling !== undefined ? row[idxSelling] : undefined,
+      'selling_price/harga_jual',
+      rowNumber,
+    );
     const category = idxCategory !== undefined ? (row[idxCategory] ?? '').trim() : undefined;
     const purchase_unit = idxPurchaseUnit !== undefined ? (row[idxPurchaseUnit] ?? '').trim() : undefined;
     const selling_unit = idxSellingUnit !== undefined ? (row[idxSellingUnit] ?? '').trim() : undefined;
     const wholesale_prices = normalizeWholesalePrices(idxWholesalePrices !== undefined ? row[idxWholesalePrices] : undefined);
     const sellable_units = parseDelimitedList(idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined);
     const unit_mappings = normalizeUnitMappings(idxUnitMappings !== undefined ? row[idxUnitMappings] : undefined);
+
+    if (errors.length > errorCountBeforeRow) {
+      continue;
+    }
 
     items.push({
       id: id || undefined,
@@ -240,15 +301,18 @@ export const buildProductCsvImportItems = (csvText: string): { items: ProductCsv
       selling_unit: selling_unit || undefined,
       purchase_price,
       selling_price,
-      stock,
-      purchase_quantity,
       wholesale_prices,
       sellable_units,
       unit_mappings,
     });
   }
 
-  return { items, errors };
+  return {
+    items: errors.length > 0 ? [] : items,
+    errors,
+    validRowCount: items.length,
+    ignoredOperationalColumns,
+  };
 };
 
 export const createProductCsvExportRows = (products: Product[]) => {
@@ -262,7 +326,6 @@ export const createProductCsvExportRows = (products: Product[]) => {
     'purchase_price',
     'selling_price',
     'stock',
-    'purchase_quantity',
     'wholesale_prices',
     'sellable_units',
     'unit_mappings',
@@ -282,7 +345,6 @@ export const createProductCsvExportRows = (products: Product[]) => {
         product.purchase_price,
         product.selling_price,
         product.stock,
-        '',
         product.wholesale_prices && product.wholesale_prices.length > 0 ? JSON.stringify(product.wholesale_prices) : '',
         product.sellable_units && product.sellable_units.length > 0 ? JSON.stringify(product.sellable_units) : '',
         product.unit_mappings && product.unit_mappings.length > 0 ? JSON.stringify(product.unit_mappings) : '',

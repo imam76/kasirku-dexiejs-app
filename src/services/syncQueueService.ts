@@ -1089,7 +1089,10 @@ const mapFixedAssetRunBundleToRemoteDto = (
   return { run: remoteRun, lines };
 };
 
-const mapProductToRemoteDto = (product: Product): RemoteProductDto => ({
+const mapProductToRemoteDto = (
+  product: Product,
+  options: { preserveStock?: boolean } = {},
+): RemoteProductDto => ({
   id: product.id,
   name: product.name,
   category: product.category,
@@ -1104,6 +1107,7 @@ const mapProductToRemoteDto = (product: Product): RemoteProductDto => ({
   unit_mappings: product.unit_mappings,
   created_at: product.created_at,
   updated_at: product.updated_at,
+  preserve_stock: options.preserveStock || undefined,
 });
 
 const mapStockMutationToRemoteDto = (mutation: StockMutation): RemoteStockMutationDto => ({
@@ -7405,6 +7409,7 @@ export const enqueueProjectSync = async (
 export const enqueueProductSync = async (
   product: Product,
   operation: SyncQueueOperation,
+  options: { preserveStock?: boolean } = {},
 ) => {
   const now = new Date().toISOString();
   const queueItem: SyncQueueItem = {
@@ -7412,7 +7417,7 @@ export const enqueueProductSync = async (
     entity: PRODUCT_ENTITY,
     entity_id: product.id,
     operation,
-    payload: mapProductToRemoteDto(product),
+    payload: mapProductToRemoteDto(product, options),
     status: 'pending',
     attempts: 0,
     created_at: now,
