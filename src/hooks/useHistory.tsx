@@ -87,6 +87,7 @@ export const useHistory = () => {
       queryClient.invalidateQueries({ queryKey: ['posSalesReport'] });
       queryClient.invalidateQueries({ queryKey: ['transactionDetailReport'] });
       queryClient.invalidateQueries({ queryKey: ['expenseReport'] });
+      queryClient.invalidateQueries({ queryKey: ['expenseCategories'] });
     },
   });
 

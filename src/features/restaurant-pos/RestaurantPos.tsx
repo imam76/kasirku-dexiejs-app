@@ -15,12 +15,14 @@ import {
   evaluateRestaurantOrderPromos,
   sendRestaurantOrderToKitchen,
   settleRestaurantOrder,
+  settleRestaurantOrderAsExpense,
+  updateRestaurantOrderLineFulfillmentType,
   updateRestaurantOrderLineNote,
   updateRestaurantOrderLineQuantity,
   updateRestaurantOrderInfo,
 } from '@/services/restaurantPosService';
 import type { RestaurantSessionReconciliation } from '@/services/restaurantSessionService';
-import type { Product, RestaurantOrderType, RestaurantServiceMode } from '@/types';
+import type { Product, RestaurantOrderLineFulfillmentType, RestaurantOrderType, RestaurantServiceMode } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { RestaurantFloorPanel } from './production/RestaurantFloorPanel';
@@ -62,7 +64,7 @@ export default function RestaurantPos() {
   const [selectedTableId, setSelectedTableId] = useState<string>();
   const [selectedOrderId, setSelectedOrderId] = useState<string>();
   const [customerName, setCustomerName] = useState('');
-  const [guestCount, setGuestCount] = useState(1);
+  const [guestCount, setGuestCount] = useState<number | null>(null);
   const [orderType, setOrderType] = useState<RestaurantOrderType>('DINE_IN');
   const [orderRequiringCustomerName, setOrderRequiringCustomerName] = useState<string>();
   const [updatingOrderInfo, setUpdatingOrderInfo] = useState(false);
@@ -109,6 +111,10 @@ export default function RestaurantPos() {
     if (serviceMode === 'TABLE_SERVICE') return orders.find((order) => order.table_id === selectedTableId);
     return undefined;
   }, [orders, selectedOrderId, selectedTableId, serviceMode]);
+  const selectedTable = useMemo(
+    () => tables.find((table) => table.id === selectedTableId),
+    [selectedTableId, tables],
+  );
   const promoPreview = useMemo(
     () => evaluateRestaurantOrderPromos(activeOrder, products, promos, voucherCode),
     [activeOrder, products, promos, voucherCode],
@@ -117,9 +123,11 @@ export default function RestaurantPos() {
 
   useEffect(() => {
     setCustomerName(activeOrder?.id === orderRequiringCustomerName ? '' : activeOrder?.customer_name ?? '');
-    setGuestCount(activeOrder?.guest_count ?? 1);
+    setGuestCount(activeOrder
+      ? activeOrder.guest_count ?? null
+      : serviceMode === 'TABLE_SERVICE' ? selectedTable?.capacity ?? null : null);
     setOrderType(serviceMode === 'TABLE_SERVICE' ? 'DINE_IN' : activeOrder?.order_type === 'DELIVERY' ? 'DELIVERY' : 'TAKEAWAY');
-  }, [activeOrder?.customer_name, activeOrder?.guest_count, activeOrder?.id, activeOrder?.order_type, orderRequiringCustomerName, serviceMode]);
+  }, [activeOrder, orderRequiringCustomerName, selectedTable?.capacity, serviceMode]);
 
   useEffect(() => {
     setVoucherCode('');
@@ -145,7 +153,7 @@ export default function RestaurantPos() {
         tableId: activeOrder?.table_id ?? selectedTableId,
         orderId: activeOrder?.id,
         customerName: customerName.trim() || (table ? `Pelanggan ${table.name}` : 'Pelanggan Counter'),
-        guestCount,
+        guestCount: guestCount ?? undefined,
         orderType: serviceMode === 'TABLE_SERVICE' ? 'DINE_IN' : orderType,
         product,
       });
@@ -169,7 +177,7 @@ export default function RestaurantPos() {
     try {
       await updateRestaurantOrderInfo(activeOrder.id, {
         customerName: nextCustomerName,
-        guestCount,
+        guestCount: guestCount ?? undefined,
         orderType: serviceMode === 'TABLE_SERVICE' ? 'DINE_IN' : orderType,
         tableId: selectedTableId,
       });
@@ -184,8 +192,10 @@ export default function RestaurantPos() {
 
   const handleGuestCountBlur = async () => {
     if (!activeOrder) return;
-    const nextGuestCount = Math.max(1, Math.floor(Number(guestCount) || 1));
-    setGuestCount(nextGuestCount);
+    const nextGuestCount = guestCount === null
+      ? undefined
+      : Math.max(1, Math.floor(Number(guestCount)));
+    setGuestCount(nextGuestCount ?? null);
     if (nextGuestCount === activeOrder.guest_count) return;
     setUpdatingOrderInfo(true);
     try {
@@ -196,7 +206,7 @@ export default function RestaurantPos() {
         tableId: selectedTableId,
       });
     } catch (error) {
-      setGuestCount(activeOrder.guest_count);
+      setGuestCount(activeOrder.guest_count ?? null);
       message.error(error instanceof Error ? error.message : String(error));
     } finally {
       setUpdatingOrderInfo(false);
@@ -212,7 +222,7 @@ export default function RestaurantPos() {
     try {
       await updateRestaurantOrderInfo(activeOrder.id, {
         customerName: customerName.trim() || activeOrder.customer_name,
-        guestCount,
+        guestCount: guestCount ?? undefined,
         orderType: counterOrderType,
         tableId: selectedTableId,
       });
@@ -239,6 +249,18 @@ export default function RestaurantPos() {
       await updateRestaurantOrderLineNote(activeOrder.id, lineId, note);
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleFulfillmentTypeChange = async (
+    lineId: string,
+    fulfillmentType: RestaurantOrderLineFulfillmentType,
+  ) => {
+    if (!activeOrder) return;
+    try {
+      await updateRestaurantOrderLineFulfillmentType(activeOrder.id, lineId, fulfillmentType);
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -301,6 +323,53 @@ export default function RestaurantPos() {
       setPaymentLoading(false);
     }
   };
+
+  const handleRecordExpense = async () => new Promise<boolean>((resolve) => {
+    if (!activeOrder || paymentLoading) {
+      resolve(false);
+      return;
+    }
+
+    modal.confirm({
+      title: 'Catat sebagai Pengeluaran (Beban)?',
+      content: 'Order akan diselesaikan tanpa penjualan atau penerimaan kas. Stok tetap berkurang dan beban dicatat berdasarkan HPP/FIFO.',
+      okText: 'Catat Pengeluaran',
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onCancel: () => resolve(false),
+      onOk: async () => {
+        setPaymentLoading(true);
+        try {
+          const result = await settleRestaurantOrderAsExpense(activeOrder.id);
+          setPaymentOpen(false);
+          setOrderDrawerOpen(false);
+          setVoucherCode('');
+          result.warnings?.forEach((warning) => message.warning(warning));
+          [
+            'transactions-history',
+            'expenseReport',
+            'expenseCategories',
+            'journalEntries',
+            'trialBalance',
+            'incomeStatement',
+            'balanceSheet',
+          ].forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+          message.success(
+            `Order ${activeOrder.order_number} tercatat sebagai pengeluaran sebesar Rp ${formatCurrency(result.transaction.total_amount)}.`,
+          );
+          resolve(true);
+        } catch (error) {
+          modal.error({
+            title: 'Gagal mencatat pengeluaran',
+            content: error instanceof Error ? error.message : String(error),
+          });
+          resolve(false);
+        } finally {
+          setPaymentLoading(false);
+        }
+      },
+    });
+  });
 
   const handleCancelOrder = () => {
     if (!activeOrder) return;
@@ -407,6 +476,7 @@ export default function RestaurantPos() {
       onOrderTypeChange={handleOrderTypeChange}
       onQuantityChange={handleQuantityChange}
       onNoteChange={handleNoteChange}
+      onFulfillmentTypeChange={handleFulfillmentTypeChange}
       onSendKitchen={handleSendKitchen}
       onPay={() => setPaymentOpen(true)}
       onCancel={handleCancelOrder}
@@ -522,6 +592,7 @@ export default function RestaurantPos() {
           onVoucherCodeChange={setVoucherCode}
           onCancel={() => setPaymentOpen(false)}
           onConfirm={handlePayment}
+          onRecordExpense={handleRecordExpense}
         />
       ) : null}
 

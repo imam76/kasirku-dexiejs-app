@@ -6,6 +6,7 @@ import type {
   Transaction,
 } from '@/types';
 import { getTransactionPaymentSnapshot, normalizePaymentMethodCode } from '@/utils/posPaymentMethod';
+import { isTransactionExpense } from '@/utils/transactions';
 
 export type PosPaymentModeFilter = PosPaymentMode | 'SEMUA';
 
@@ -76,6 +77,7 @@ export const buildPosPaymentMethodFilterOptions = (
     });
 
   transactions.forEach((transaction, index) => {
+    if (isTransactionExpense(transaction)) return;
     const snapshot = getTransactionPaymentSnapshot(transaction);
     const value = normalizePaymentMethodCode(snapshot.code);
     if (!value || isReservedPaymentModeCode(value) || optionByCode.has(value)) return;

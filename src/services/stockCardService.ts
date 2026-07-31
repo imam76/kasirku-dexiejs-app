@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
+import { isTransactionExpense } from '@/utils/transactions';
 
 export interface StockCardRow {
   id: string;
@@ -123,9 +124,9 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
 
     if (quantityInBaseUnit > 0) {
       allMutations.push({
-        id: `pos_sale_${item.id}`,
+        id: `${isTransactionExpense(transaction) ? 'pos_expense' : 'pos_sale'}_${item.id}`,
         date: transaction.created_at,
-        sourceType: 'POS_SALE',
+        sourceType: isTransactionExpense(transaction) ? 'POS_EXPENSE' : 'POS_SALE',
         sourceNumber: transaction.transaction_number,
         qtyIn: 0,
         qtyOut: quantityInBaseUnit,

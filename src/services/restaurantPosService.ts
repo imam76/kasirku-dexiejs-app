@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { checkout, type CheckoutResult } from '@/services/checkoutService';
+import { checkout, recordPosExpense, type CheckoutResult } from '@/services/checkoutService';
 import type { CheckoutPaymentInput } from '@/services/posTransactionPaymentService';
 import type {
   CartItem,
@@ -7,6 +7,7 @@ import type {
   Promo,
   RestaurantKitchenTicketRecord,
   RestaurantKitchenTicketStatus,
+  RestaurantOrderLineFulfillmentType,
   RestaurantOrderLineRecord,
   RestaurantOrderRecord,
   RestaurantOrderType,
@@ -74,6 +75,13 @@ export const getPendingKitchenQuantity = (
   line: Pick<RestaurantOrderLineRecord, 'quantity' | 'sent_quantity'>,
 ) => Math.max(0, Number(line.quantity) - Number(line.sent_quantity));
 
+export const getRestaurantOrderLineFulfillmentType = (
+  line: Pick<RestaurantOrderLineRecord, 'fulfillment_type'>,
+  orderType: RestaurantOrderType,
+): RestaurantOrderLineFulfillmentType => (
+  line.fulfillment_type ?? (orderType === 'DINE_IN' ? 'DINE_IN' : 'TAKEAWAY')
+);
+
 export const filterRestaurantTables = (
   tables: RestaurantTableRecord[],
   status: 'ALL' | RestaurantTableStatus,
@@ -93,8 +101,10 @@ export const normalizeRestaurantOrderInput = (input: {
 }) => {
   const customerName = input.customerName.trim().slice(0, 100);
   if (!customerName) throw new Error('Pesanan atas nama wajib diisi.');
-  const guestCount = Math.floor(Number(input.guestCount ?? 1));
-  if (!Number.isFinite(guestCount) || guestCount < 1) {
+  const guestCount = input.guestCount === undefined
+    ? undefined
+    : Math.floor(Number(input.guestCount));
+  if (guestCount !== undefined && (!Number.isFinite(guestCount) || guestCount < 1)) {
     throw new Error('Jumlah tamu minimal 1.');
   }
   const orderType: RestaurantOrderType = input.mode === 'TABLE_SERVICE'
@@ -130,7 +140,7 @@ export const createRestaurantOrder = async ({
   mode: RestaurantServiceMode;
   table?: RestaurantTableRecord;
   customerName: string;
-  guestCount: number;
+  guestCount?: number;
   orderType: RestaurantOrderType;
 }) => {
   const normalized = normalizeRestaurantOrderInput({ customerName, guestCount, orderType, mode, tableId: table?.id });
@@ -166,7 +176,7 @@ export const createRestaurantOrder = async ({
     customer_name: normalizedCustomerName,
     table_id: normalizedOrderType === 'DINE_IN' ? table?.id : undefined,
     table_name: normalizedOrderType === 'DINE_IN' ? table?.name : undefined,
-    guest_count: normalizedGuestCount,
+    ...(normalizedGuestCount === undefined ? {} : { guest_count: normalizedGuestCount }),
     status: 'DRAFT',
     opened_at: now,
     created_at: now,
@@ -227,17 +237,22 @@ export const addProductToRestaurantOrder = async ({
     mode,
     table,
     customerName: customerName ?? '',
-    guestCount: guestCount ?? 1,
+    guestCount,
     orderType: orderType ?? 'DINE_IN',
   });
-  const existingLine = order.lines.find((line) => line.product_id === product.id && line.unit === product.selling_unit);
+  const defaultFulfillmentType = getRestaurantOrderLineFulfillmentType({}, order.order_type);
+  const existingLine = order.lines.find((line) => (
+    line.product_id === product.id
+    && line.unit === product.selling_unit
+    && line.sent_quantity === 0
+    && getRestaurantOrderLineFulfillmentType(line, order.order_type) === defaultFulfillmentType
+  ));
   const nextQuantity = (existingLine?.quantity ?? 0) + 1;
-  const nextQuantityInStockUnit = konversiSatuanProduk(
-    nextQuantity,
-    product,
-    existingLine?.unit ?? product.selling_unit,
-    product.purchase_unit,
-  );
+  const nextQuantityInStockUnit = order.lines.reduce((total, line) => (
+    line.product_id === product.id
+      ? total + konversiSatuanProduk(line.quantity, product, line.unit, product.purchase_unit)
+      : total
+  ), konversiSatuanProduk(1, product, product.selling_unit, product.purchase_unit));
   if (nextQuantityInStockUnit > product.stock) {
     throw new Error(`Stok ${product.name} hanya ${product.stock} ${product.purchase_unit}.`);
   }
@@ -254,6 +269,7 @@ export const addProductToRestaurantOrder = async ({
         price: getPrice(product, 1),
         quantity: 1,
         sent_quantity: 0,
+        fulfillment_type: defaultFulfillmentType,
         note: '',
       }];
   const now = new Date().toISOString();
@@ -269,7 +285,7 @@ export const addProductToRestaurantOrder = async ({
 
 export const updateRestaurantOrderInfo = async (
   orderId: string,
-  input: { customerName: string; guestCount: number; orderType: RestaurantOrderType; tableId?: string },
+  input: { customerName: string; guestCount?: number; orderType: RestaurantOrderType; tableId?: string },
 ) => {
   const order = await db.restaurantOrders.get(orderId);
   if (!order || !OPEN_ORDER_STATUSES.has(order.status)) throw new Error('Pesanan aktif tidak ditemukan.');
@@ -283,6 +299,12 @@ export const updateRestaurantOrderInfo = async (
   const customerName = normalized.customerName;
   const guestCount = normalized.guestCount;
   const orderType = normalized.orderType;
+  const lines = order.mode === 'COUNTER_SERVICE' && orderType !== order.order_type
+    ? order.lines.map((line) => ({
+        ...line,
+        fulfillment_type: getRestaurantOrderLineFulfillmentType({}, orderType),
+      }))
+    : order.lines;
   const nextTable = input.tableId ? await db.restaurantTables.get(input.tableId) : undefined;
   if (order.mode === 'TABLE_SERVICE' && !nextTable) {
     throw new Error('Pilih meja untuk pesanan Dine In.');
@@ -304,6 +326,7 @@ export const updateRestaurantOrderInfo = async (
       customer_name: customerName,
       guest_count: guestCount,
       order_type: orderType,
+      lines,
       table_id: orderType === 'DINE_IN' ? nextTable?.id : undefined,
       table_name: orderType === 'DINE_IN' ? nextTable?.name : undefined,
       updated_at: now,
@@ -325,20 +348,60 @@ export const updateRestaurantOrderLineQuantity = async (
   }
   const product = await db.products.get(line.product_id);
   if (!product) throw new Error(`Produk ${line.product_name} tidak ditemukan.`);
-  const requestedInStockUnit = konversiSatuanProduk(
-    requestedQuantity,
-    product,
-    line.unit,
-    product.purchase_unit,
-  );
+  const requestedInStockUnit = order.lines.reduce((total, item) => (
+    item.product_id === product.id
+      ? total + konversiSatuanProduk(
+          item.id === lineId ? requestedQuantity : item.quantity,
+          product,
+          item.unit,
+          product.purchase_unit,
+        )
+      : total
+  ), 0);
   if (requestedInStockUnit > product.stock) {
     throw new Error(`Stok ${product.name} hanya ${product.stock} ${product.purchase_unit}.`);
+  }
+
+  if (line.sent_quantity > 0 && requestedQuantity > line.quantity) {
+    const pendingLine: RestaurantOrderLineRecord = {
+      ...line,
+      id: crypto.randomUUID(),
+      quantity: requestedQuantity - line.quantity,
+      sent_quantity: 0,
+      fulfillment_type: getRestaurantOrderLineFulfillmentType(line, order.order_type),
+    };
+    await db.restaurantOrders.update(order.id, {
+      lines: [...order.lines, pendingLine],
+      updated_at: new Date().toISOString(),
+    });
+    return;
   }
 
   const quantity = Math.max(0, requestedQuantity);
   const lines = order.lines
     .map((item) => item.id === lineId ? { ...item, quantity } : item)
     .filter((item) => item.quantity > 0 || item.sent_quantity > 0);
+  await db.restaurantOrders.update(order.id, { lines, updated_at: new Date().toISOString() });
+};
+
+export const updateRestaurantOrderLineFulfillmentType = async (
+  orderId: string,
+  lineId: string,
+  fulfillmentType: RestaurantOrderLineFulfillmentType,
+) => {
+  const order = await db.restaurantOrders.get(orderId);
+  if (!order || !OPEN_ORDER_STATUSES.has(order.status)) throw new Error('Pesanan aktif tidak ditemukan.');
+  const line = order.lines.find((item) => item.id === lineId);
+  if (!line) throw new Error('Item pesanan tidak ditemukan.');
+  if (line.sent_quantity > 0) {
+    throw new Error('Fulfillment item yang sudah dikirim ke dapur tidak dapat diubah.');
+  }
+  if (fulfillmentType !== 'DINE_IN' && fulfillmentType !== 'TAKEAWAY') {
+    throw new Error('Fulfillment item tidak valid.');
+  }
+  const lines = order.lines.map((item) => item.id === lineId
+    ? { ...item, fulfillment_type: fulfillmentType }
+    : item);
   await db.restaurantOrders.update(order.id, { lines, updated_at: new Date().toISOString() });
 };
 
@@ -363,6 +426,7 @@ const buildPendingKitchenTicket = (
       product_id: line.product_id,
       name: line.product_name,
       quantity: pendingQuantity,
+      fulfillment_type: getRestaurantOrderLineFulfillmentType(line, order.order_type),
       note: line.note,
     }] : [];
   });
@@ -511,6 +575,68 @@ export const settleRestaurantOrder = async ({
 
   const result = await resolveCheckoutResult();
   await finalizePaidOrder(result);
+  return result;
+};
+
+export const settleRestaurantOrderAsExpense = async (orderId: string): Promise<CheckoutResult> => {
+  const order = await db.restaurantOrders.get(orderId);
+  if (!order) throw new Error('Pesanan aktif tidak ditemukan.');
+  if (order.transaction_id) throw new Error('Pesanan ini sudah diselesaikan.');
+  if (!OPEN_ORDER_STATUSES.has(order.status) || order.lines.length === 0) {
+    throw new Error('Pesanan belum siap dicatat sebagai pengeluaran.');
+  }
+
+  const resolveExpenseResult = async () => {
+    const existingTransaction = await db.transactions
+      .where('restaurant_order_id')
+      .equals(order.id)
+      .first();
+    return existingTransaction
+      ? {
+          transaction: existingTransaction,
+          items: await db.transactionItems.where('transaction_id').equals(existingTransaction.id).toArray(),
+          payments: await db.posTransactionPayments.where('transaction_id').equals(existingTransaction.id).toArray(),
+        }
+      : recordPosExpense({
+          cart: await buildRestaurantCart(order),
+          sessionContext: getRestaurantCheckoutSessionContext(order.restaurant_session_id),
+          restaurantOrderId: order.id,
+        });
+  };
+
+  const finalizeExpenseOrder = async (result: CheckoutResult) => {
+    const pendingTicket = buildPendingKitchenTicket(order);
+    const now = new Date().toISOString();
+    await db.transaction(
+      'rw',
+      [db.restaurantOrders, db.restaurantTables, db.restaurantKitchenTickets],
+      async () => {
+        const latest = await db.restaurantOrders.get(order.id);
+        if (latest?.transaction_id) return;
+        if (pendingTicket) await db.restaurantKitchenTickets.add(pendingTicket);
+        await db.restaurantOrders.update(order.id, {
+          status: 'PAID',
+          transaction_id: result.transaction.id,
+          paid_at: now,
+          updated_at: now,
+          lines: order.lines.map((line) => ({ ...line, sent_quantity: line.quantity })),
+        });
+        if (order.table_id) {
+          const table = await db.restaurantTables.get(order.table_id);
+          if (table?.active_order_id === order.id) {
+            await db.restaurantTables.update(table.id, releaseRestaurantTable(table, now));
+          }
+        }
+      },
+    );
+  };
+
+  if (order.mode === 'COUNTER_SERVICE') {
+    return runCounterServicePaymentThenKitchen(resolveExpenseResult, finalizeExpenseOrder);
+  }
+
+  const result = await resolveExpenseResult();
+  await finalizeExpenseOrder(result);
   return result;
 };
 

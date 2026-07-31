@@ -5,7 +5,7 @@ import {
   type PosSalesReportData,
 } from '@/services/posSalesReportAggregator';
 import type { PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
-import { filterActiveTransactions } from '@/utils/transactions';
+import { filterActiveSaleTransactions } from '@/utils/transactions';
 
 export interface PosSalesReportFilters {
   startDate?: string;
@@ -52,7 +52,7 @@ export const getPosSalesReportData = async ({
   topProductsLimit,
 }: PosSalesReportFilters = {}): Promise<PosSalesReportData> => {
   const transactions = await getTransactionsForDateRange(startDate, endDate);
-  const activeTransactionIds = filterActiveTransactions(transactions).map((transaction) => transaction.id);
+  const activeTransactionIds = filterActiveSaleTransactions(transactions).map((transaction) => transaction.id);
 
   if (activeTransactionIds.length === 0) {
     return buildPosSalesReportData({

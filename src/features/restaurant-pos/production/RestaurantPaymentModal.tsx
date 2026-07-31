@@ -1,5 +1,5 @@
 import { AutoComplete, Button, Input, InputNumber, Modal } from 'antd';
-import { Armchair, Banknote, CheckCircle2, CreditCard, Hash, Plus, QrCode, TicketPercent, Trash2, UserRound, X } from 'lucide-react';
+import { Armchair, Banknote, CheckCircle2, CreditCard, Hash, NotebookPen, Plus, QrCode, TicketPercent, Trash2, UserRound, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
@@ -22,6 +22,7 @@ interface RestaurantPaymentModalProps {
   onVoucherCodeChange: (value: string) => void;
   onCancel: () => void;
   onConfirm: (payments: CheckoutPaymentInput[]) => Promise<boolean>;
+  onRecordExpense: () => Promise<boolean>;
 }
 
 const getMethodIcon = (category: PaymentMethodCategory) => {
@@ -41,6 +42,7 @@ export function RestaurantPaymentModal({
   onVoucherCodeChange,
   onCancel,
   onConfirm,
+  onRecordExpense,
 }: RestaurantPaymentModalProps) {
   const { t } = useI18n();
   const validMethods = useMemo(() => methods.filter((option) => option.isValid), [methods]);
@@ -319,6 +321,15 @@ export function RestaurantPaymentModal({
         </div>
 
         <div data-testid="restaurant-payment-actions" className="sticky bottom-0 z-20 grid shrink-0 grid-cols-[1fr_2fr] gap-2 border-t border-slate-200 bg-white pb-4 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.25)]">
+          <Button
+            size="large"
+            icon={<NotebookPen size={16} />}
+            disabled={loading}
+            onClick={() => void onRecordExpense()}
+            className="!col-span-2 !border-amber-300 !bg-amber-50 !font-bold !text-amber-800 hover:!bg-amber-100"
+          >
+            Catat sebagai Pengeluaran (Beban)
+          </Button>
           <Button size="large" icon={<X size={16} />} disabled={loading} onClick={onCancel}>{t('common.cancel')}</Button>
           <Button
             type="primary"

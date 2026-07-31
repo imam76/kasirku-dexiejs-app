@@ -17,6 +17,7 @@ import {
 } from '@/utils/printer/usbSerialPrinter';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import { getTransactionPaymentsOrLegacyFallback } from '@/utils/posSplitPayment';
+import { isTransactionExpense } from '@/utils/transactions';
 
 const DEFAULT_MERCHANT_NAME = 'Frayukti';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
@@ -85,6 +86,13 @@ export const buildReceiptPayload = (transaction: TransactionReceiptInput): Recei
 export const printReceiptAfterTransaction = async (
   transaction: TransactionReceiptInput
 ): Promise<ReceiptPrintResult> => {
+  if (isTransactionExpense(transaction)) {
+    return {
+      success: false,
+      status: 'print_failed',
+      error: 'Pengeluaran internal tidak memiliki struk penjualan.',
+    };
+  }
   const receipt = buildReceiptPayload(transaction);
 
   // Try USB printer first, then fall back to Bluetooth

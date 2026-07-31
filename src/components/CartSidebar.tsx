@@ -1,14 +1,14 @@
-import { ShoppingBag, Trash2 } from 'lucide-react';
+import { DollarSign, ShoppingBag, Trash2 } from 'lucide-react';
 import { CartItem as CartItemType, Contact, MembershipSetting, Promo } from '@/types';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import CartItem from './CartItem';
-import CartSummary from './CartSummary';
 import PosPaymentModal from './pos-payment/PosPaymentModal';
 import { useI18n } from '@/hooks/useI18n';
 import type { PosPaymentDraft } from '@/store/transactionStore';
 import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
+import { formatCurrency } from '@/utils/formatters';
 
 interface CartSidebarProps {
   cart: CartItemType[];
@@ -43,6 +43,7 @@ interface CartSidebarProps {
   createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
   isCreatingMember: boolean;
   handleCheckout: () => Promise<boolean>;
+  handleRecordExpense: () => Promise<boolean>;
   onCheckoutSuccess?: () => void;
 }
 
@@ -62,23 +63,18 @@ export default function CartSidebar({
   paymentMethods,
   voucherCode,
   memberContactId,
-  redeemPoints,
   promoPreview,
   membershipPreview,
   activePromos,
   activeMembers,
-  selectedMember,
-  membershipSetting,
   setShowPayment,
   updatePaymentDraft,
   removePaymentDraft,
   handleAddPayment,
   setVoucherCode,
   setMemberContactId,
-  setRedeemPoints,
-  createMember,
-  isCreatingMember,
   handleCheckout,
+  handleRecordExpense,
   onCheckoutSuccess,
 }: CartSidebarProps) {
   const { t } = useI18n();
@@ -104,7 +100,7 @@ export default function CartSidebar({
           )}
         </div>
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3" data-testid="pos-desktop-cart-items-scroll-panel">
           {cart.map((item) => (
             <CartItem
               key={item.product.id}
@@ -126,43 +122,28 @@ export default function CartSidebar({
             </div>
           )}
         </div>
-      </div>
 
-      {cart.length > 0 && (
-        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
-          <div className="shrink-0 border-b border-blue-50 p-3">
-            <h3 className="text-lg font-bold text-gray-900">{t('payment.pay')}</h3>
+        {cart.length > 0 && (
+          <div className="shrink-0 border-t border-blue-100 bg-white p-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.35)]">
+            <div className="mb-3 flex items-end justify-between gap-3 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">{t('cart.total')}</p>
+                <p className="mt-1 text-xs font-medium text-slate-500">{cart.length} item belanja</p>
+              </div>
+              <p className="text-right text-2xl font-black tabular-nums text-slate-950">
+                Rp {formatCurrency(total)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPayment(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-base font-bold text-white shadow-md shadow-blue-200/60 transition-colors hover:bg-blue-700"
+            >
+              <DollarSign size={20} /> {t('payment.pay')} Rp {formatCurrency(total)}
+            </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-3">
-            <CartSummary
-              total={total}
-              showPayment={false}
-              paymentDrafts={paymentDrafts}
-              paymentPreview={paymentPreview}
-              paymentMethods={paymentMethods}
-              voucherCode={voucherCode}
-              memberContactId={memberContactId}
-              redeemPoints={redeemPoints}
-              promoPreview={promoPreview}
-              membershipPreview={membershipPreview}
-              activePromos={activePromos}
-              activeMembers={activeMembers}
-              selectedMember={selectedMember}
-              membershipSetting={membershipSetting}
-              setShowPayment={setShowPayment}
-              updatePaymentDraft={updatePaymentDraft}
-              removePaymentDraft={removePaymentDraft}
-              handleAddPayment={handleAddPayment}
-              setVoucherCode={setVoucherCode}
-              setMemberContactId={setMemberContactId}
-              setRedeemPoints={setRedeemPoints}
-              createMember={createMember}
-              isCreatingMember={isCreatingMember}
-              handleCheckout={handleCheckout}
-            />
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <PosPaymentModal
         open={showPayment && cart.length > 0}
@@ -171,8 +152,13 @@ export default function CartSidebar({
         paymentPreview={paymentPreview}
         paymentMethods={paymentMethods}
         voucherCode={voucherCode}
-        selectedMember={selectedMember}
+        memberContactId={memberContactId}
+        activePromos={activePromos}
+        activeMembers={activeMembers}
+        promoPreview={promoPreview}
         membershipPreview={membershipPreview}
+        onVoucherCodeChange={setVoucherCode}
+        onMemberChange={setMemberContactId}
         onAddPayment={handleAddPayment}
         onUpdatePayment={updatePaymentDraft}
         onRemovePayment={removePaymentDraft}
@@ -181,6 +167,7 @@ export default function CartSidebar({
           if (success) onCheckoutSuccess?.();
           return success;
         }}
+        onRecordExpense={handleRecordExpense}
         onClose={() => setShowPayment(false)}
       />
     </div>

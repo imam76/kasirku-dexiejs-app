@@ -37,6 +37,7 @@ export interface CartSummaryProps {
   createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
   isCreatingMember: boolean;
   handleCheckout: () => Promise<boolean>;
+  handleRecordExpense: () => Promise<boolean>;
   onCancel?: () => void;
   compactCheckoutDetailsOnTablet?: boolean;
   stickyPayButtonOnTablet?: boolean;
@@ -163,6 +164,7 @@ export default function CartSummary(props: CartSummaryProps) {
             onUpdate={props.updatePaymentDraft}
             onRemove={props.removePaymentDraft}
             onConfirm={props.handleCheckout}
+            onRecordExpense={props.handleRecordExpense}
             onCancel={() => { props.setShowPayment(false); props.onCancel?.(); }}
           />
         </>

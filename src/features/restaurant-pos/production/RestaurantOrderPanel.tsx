@@ -1,9 +1,9 @@
-import { Button, Input, InputNumber, Segmented } from 'antd';
+import { Button, Checkbox, Input, InputNumber, Segmented } from 'antd';
 import { ChefHat, Clock3, CupSoda, Minus, Plus, ReceiptText, ShoppingBag, Utensils } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { PromoEvaluationResult } from '@/services/promoService';
-import { getPendingKitchenQuantity, getRestaurantProductKind } from '@/services/restaurantPosService';
-import type { RestaurantOrderRecord, RestaurantOrderType, RestaurantServiceMode } from '@/types';
+import { getPendingKitchenQuantity, getRestaurantOrderLineFulfillmentType, getRestaurantProductKind } from '@/services/restaurantPosService';
+import type { RestaurantOrderLineFulfillmentType, RestaurantOrderRecord, RestaurantOrderType, RestaurantServiceMode } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { formatRestaurantOrderStartTime } from './restaurantOrderTime';
 
@@ -16,15 +16,16 @@ interface RestaurantOrderPanelProps {
   isUpdatingInfo?: boolean;
   isOrderInfoComplete: boolean;
   customerName: string;
-  guestCount: number;
+  guestCount: number | null;
   orderType: RestaurantOrderType;
   onCustomerNameChange: (value: string) => void;
   onCustomerNameBlur: () => void;
-  onGuestCountChange: (value: number) => void;
+  onGuestCountChange: (value: number | null) => void;
   onGuestCountBlur: () => void;
   onOrderTypeChange: (value: RestaurantOrderType) => void;
   onQuantityChange: (lineId: string, quantity: number) => void;
   onNoteChange: (lineId: string, note: string) => void;
+  onFulfillmentTypeChange: (lineId: string, fulfillmentType: RestaurantOrderLineFulfillmentType) => void;
   onSendKitchen: () => void;
   onPay: () => void;
   onCancel: () => void;
@@ -48,6 +49,7 @@ export function RestaurantOrderPanel({
   onOrderTypeChange,
   onQuantityChange,
   onNoteChange,
+  onFulfillmentTypeChange,
   onSendKitchen,
   onPay,
   onCancel,
@@ -123,7 +125,7 @@ export function RestaurantOrderPanel({
                   precision={0}
                   value={guestCount}
                   disabled={!order || isUpdatingInfo}
-                  onChange={(value) => onGuestCountChange(value ?? 1)}
+                  onChange={onGuestCountChange}
                   onBlur={onGuestCountBlur}
                 />
               </div>
@@ -145,6 +147,7 @@ export function RestaurantOrderPanel({
           <div className="space-y-2.5">
             {lines.map((line) => {
               const Icon = getRestaurantProductKind({ category: line.product_category }) === 'DRINK' ? CupSoda : Utensils;
+              const fulfillmentType = getRestaurantOrderLineFulfillmentType(line, order?.order_type ?? orderType);
               return (
                 <article key={line.id} className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
                   <div className="flex gap-2.5">
@@ -188,7 +191,20 @@ export function RestaurantOrderPanel({
                       </button>
                     </div>
                   </div>
-                  <p className="mt-2 text-right text-xs font-black text-slate-700">Rp {formatCurrency(line.price * line.quantity)}</p>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <Checkbox
+                      checked={fulfillmentType === 'TAKEAWAY'}
+                      disabled={mode !== 'TABLE_SERVICE' || line.sent_quantity > 0}
+                      onChange={(event) => onFulfillmentTypeChange(
+                        line.id,
+                        event.target.checked ? 'TAKEAWAY' : 'DINE_IN',
+                      )}
+                      className="!text-xs !font-semibold !text-amber-700"
+                    >
+                      Takeaway
+                    </Checkbox>
+                    <p className="text-right text-xs font-black text-slate-700">Rp {formatCurrency(line.price * line.quantity)}</p>
+                  </div>
                 </article>
               );
             })}

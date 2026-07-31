@@ -84,6 +84,7 @@ export type RestaurantSessionStatus = 'OPEN' | 'CLOSED';
 export type RestaurantSessionBalanceStatus = 'BALANCED' | 'NON_BALANCED';
 export type RestaurantServiceMode = 'TABLE_SERVICE' | 'COUNTER_SERVICE';
 export type RestaurantOrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
+export type RestaurantOrderLineFulfillmentType = 'DINE_IN' | 'TAKEAWAY';
 export type RestaurantTableStatus = 'AVAILABLE' | 'OCCUPIED';
 export type RestaurantTableType = 'REGULAR' | 'VIP';
 export type RestaurantOrderStatus = 'DRAFT' | 'SENT_TO_KITCHEN' | 'PAID' | 'CANCELLED';
@@ -1993,6 +1994,7 @@ export interface AppliedPromoSnapshot {
 export interface Transaction {
   id: string;
   transaction_number: string;
+  business_type?: 'SALE' | 'EXPENSE';
   cashier_session_id?: string;
   cashier_session_number?: string;
   restaurant_session_id?: string;
@@ -2138,6 +2140,7 @@ export interface RestaurantOrderLineRecord {
   price: number;
   quantity: number;
   sent_quantity: number;
+  fulfillment_type?: RestaurantOrderLineFulfillmentType;
   note: string;
 }
 
@@ -2152,7 +2155,7 @@ export interface RestaurantOrderRecord {
   customer_name: string;
   table_id?: string;
   table_name?: string;
-  guest_count: number;
+  guest_count?: number;
   status: RestaurantOrderStatus;
   transaction_id?: string;
   opened_at: string;
@@ -2167,6 +2170,7 @@ export interface RestaurantKitchenTicketLineRecord {
   product_id: string;
   name: string;
   quantity: number;
+  fulfillment_type?: RestaurantOrderLineFulfillmentType;
   note: string;
 }
 

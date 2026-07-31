@@ -8,7 +8,7 @@ import { Contact, MembershipSetting, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getCartItemPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
-import { checkout } from '@/services/checkoutService';
+import { checkout, recordPosExpense } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
 import { usePosPaymentMethods } from '@/hooks/usePosPaymentMethods';
 import { allocatePosPayments } from '@/utils/posSplitPayment';
@@ -425,6 +425,43 @@ export const useTransaction = (draftScope?: string) => {
     }
   };
 
+  const handleRecordExpense = async () => new Promise<boolean>((resolve) => {
+    modal.confirm({
+      title: 'Catat sebagai Pengeluaran (Beban)?',
+      content: 'Stok akan berkurang sebesar item di keranjang dan beban dicatat berdasarkan HPP/FIFO. Tidak ada penjualan atau penerimaan kas yang dibuat.',
+      okText: 'Catat Pengeluaran',
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onCancel: () => resolve(false),
+      onOk: async () => {
+        try {
+          const result = await recordPosExpense({ cart });
+          result.warnings?.forEach((warning) => message.warning(warning));
+          reset();
+          [
+            'transactions-history',
+            'expenseReport',
+            'expenseCategories',
+            'journalEntries',
+            'trialBalance',
+            'incomeStatement',
+            'balanceSheet',
+          ].forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+          message.success(
+            `Pengeluaran ${result.transaction.transaction_number} tercatat sebesar Rp ${formatCurrency(result.transaction.total_amount)}.`,
+          );
+          resolve(true);
+        } catch (error) {
+          modal.error({
+            title: 'Gagal mencatat pengeluaran',
+            content: error instanceof Error ? error.message : String(error),
+          });
+          resolve(false);
+        }
+      },
+    });
+  });
+
   return {
     products,
     cart,
@@ -455,6 +492,7 @@ export const useTransaction = (draftScope?: string) => {
     calculateSubtotal,
     calculateTotal,
     handleCheckout,
+    handleRecordExpense,
     handleAddPayment,
     clearCart: reset,
     setSearchTerm,

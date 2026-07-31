@@ -54,6 +54,7 @@ const JOURNAL_TOLERANCE = 0.01;
 
 const SOURCE_EVENTS = {
   POS_SALE_POSTED: 'POS_SALE_POSTED',
+  POS_EXPENSE_POSTED: 'POS_EXPENSE_POSTED',
   STOCK_PURCHASE_POSTED: 'STOCK_PURCHASE_POSTED',
   SALES_INVOICE_ISSUED: 'SALES_INVOICE_ISSUED',
   SALES_INVOICE_PAYMENT_POSTED: 'SALES_INVOICE_PAYMENT_POSTED',
@@ -291,6 +292,10 @@ const ACCOUNT_CANDIDATES = {
   employeeCashAdvanceReceivable: { ids: ['employee-cash-advance-receivable'], codes: ['1130'] },
   salaryExpense: { ids: ['salary-expense', 'template-salary-expense'], codes: ['6110', '6010'] },
   otherExpense: { ids: ['other-expense', 'template-other-expense'], codes: ['6900'] },
+  internalConsumptionExpense: {
+    ids: ['supplies-expense', 'template-supplies-expense', 'other-expense', 'template-other-expense'],
+    codes: ['6070', '6900'],
+  },
   cogs: { ids: ['cogs', 'template-cogs'], codes: ['5000', '5010'] },
   retainedEarnings: {
     ids: ['retained-earning', 'shu-belum-dibagikan', 'template-retained-earning'],
@@ -1300,6 +1305,52 @@ export const reversePosSaleJournal = async (
   });
 };
 
+export const postPosExpenseJournal = async (
+  transaction: Transaction,
+  items: TransactionItem[] = [],
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => {
+  if (transaction.status === 'VOIDED') return undefined;
+  if (!await isGeneralLedgerPostingEnabled(transaction.created_at)) return undefined;
+
+  const amount = roundCurrency(items.reduce((sum, item) => sum + amountOrZero(item.subtotal), 0));
+  if (amount <= 0) return undefined;
+
+  const accounts = await db.chartOfAccounts.toArray();
+  const expenseAccount = getPostableAccount(
+    accounts,
+    ACCOUNT_CANDIDATES.internalConsumptionExpense,
+    'Beban Pemakaian Internal',
+  );
+  const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+
+  return postBalancedJournalEntry({
+    source_type: 'POS_TRANSACTION',
+    source_id: transaction.id,
+    source_number: transaction.transaction_number,
+    source_event: SOURCE_EVENTS.POS_EXPENSE_POSTED,
+    entry_date: transaction.created_at,
+    description: `Pemakaian internal POS ${transaction.transaction_number}`,
+    lines: [
+      createDebitLine(expenseAccount, amount, 'Beban pemakaian internal dari persediaan'),
+      createCreditLine(inventoryAccount, amount, 'Persediaan keluar untuk pemakaian internal'),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+  });
+};
+
+export const reversePosExpenseJournal = async (
+  transaction: Transaction,
+  reason: string,
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+) => reverseJournalEntriesForSource({
+  source_type: 'POS_TRANSACTION',
+  source_id: transaction.id,
+  source_event: SOURCE_EVENTS.POS_EXPENSE_POSTED,
+  reason,
+  actor,
+});
+
 export const postStockPurchaseJournal = async (
   purchase: StockPurchase,
   actor?: Pick<AuthUser, 'id' | 'name'> | null,
@@ -1950,27 +2001,41 @@ export const reverseCashBankReconciliationAdjustmentJournal = async (
 export const postPurchaseCostReconciliationJournal = async (
   reconciliation: PurchaseCostReconciliation,
   actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  internalConsumptionVarianceAmount = 0,
 ) => {
   const entryDate = reconciliation.supplier_invoice_date || reconciliation.created_at;
   if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
 
   const soldVariance = amountOrZero(reconciliation.sold_cost_variance_amount);
+  const internalConsumptionVariance = amountOrZero(internalConsumptionVarianceAmount);
+  const salesCostVariance = roundCurrency(soldVariance - internalConsumptionVariance);
   const remainingVariance = amountOrZero(reconciliation.remaining_stock_variance_amount);
   const payableVariance = roundCurrency(soldVariance + remainingVariance);
   if (Math.abs(soldVariance) + Math.abs(remainingVariance) <= JOURNAL_TOLERANCE) return undefined;
 
   const accounts = await db.chartOfAccounts.toArray();
   const cogsAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cogs, 'HPP');
+  const internalConsumptionExpenseAccount = Math.abs(internalConsumptionVariance) > JOURNAL_TOLERANCE
+    ? getPostableAccount(accounts, ACCOUNT_CANDIDATES.internalConsumptionExpense, 'Beban Pemakaian Internal')
+    : undefined;
   const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
   const payableAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.accountsPayable, 'Hutang Usaha');
 
   const lines = [
     createSignedLine(
       cogsAccount,
-      soldVariance,
+      salesCostVariance,
       'Koreksi HPP barang terjual dari rekonsiliasi biaya pembelian',
       'Pembalikan HPP barang terjual dari rekonsiliasi biaya pembelian',
     ),
+    internalConsumptionExpenseAccount
+      ? createSignedLine(
+          internalConsumptionExpenseAccount,
+          internalConsumptionVariance,
+          'Koreksi beban pemakaian internal dari rekonsiliasi biaya pembelian',
+          'Pembalikan beban pemakaian internal dari rekonsiliasi biaya pembelian',
+        )
+      : undefined,
     createSignedLine(
       inventoryAccount,
       remainingVariance,

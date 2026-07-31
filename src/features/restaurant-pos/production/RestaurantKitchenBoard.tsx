@@ -1,5 +1,5 @@
 import { Button } from 'antd';
-import { CheckCheck, ChefHat, Clock3, Flame, TimerReset } from 'lucide-react';
+import { CheckCheck, ChefHat, Clock3, Flame, Package, TimerReset } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { RestaurantKitchenTicketRecord, RestaurantKitchenTicketStatus } from '@/types';
 
@@ -51,7 +51,17 @@ export function RestaurantKitchenBoard({ tickets, onAdvance }: RestaurantKitchen
                       {ticket.lines.map((line) => (
                         <div key={`${ticket.id}-${line.order_line_id}`} className="flex gap-2 text-sm">
                           <span className="grid h-6 min-w-6 place-items-center rounded-md bg-blue-600 px-1 text-xs font-black text-white">{line.quantity}×</span>
-                          <div><p className="font-bold text-slate-800">{line.name}</p>{line.note ? <p className="text-[11px] font-semibold text-rose-500">↳ {line.note}</p> : null}</div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="font-bold text-slate-800">{line.name}</p>
+                              {line.fulfillment_type === 'TAKEAWAY' ? (
+                                <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800">
+                                  <Package size={10} /> Takeaway
+                                </span>
+                              ) : null}
+                            </div>
+                            {line.note ? <p className="text-[11px] font-semibold text-rose-500">↳ {line.note}</p> : null}
+                          </div>
                         </div>
                       ))}
                     </div>

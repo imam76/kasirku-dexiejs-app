@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
 import { Transaction, StockPurchase, FinanceTransaction, TransactionItem, Product, PurchaseCostStatus, PurchaseDocument, PurchaseDocumentItem, PaymentMethodCategory } from '@/types';
-import { isExpenseReportFinanceTransaction, isIncomeReportFinanceTransaction } from '@/constants/finance';
+import { FINANCE_CATEGORIES, isExpenseReportFinanceTransaction, isIncomeReportFinanceTransaction } from '@/constants/finance';
 import { PRODUCT_CATEGORIES } from '@/constants/categories';
 import { getIssuedPurchaseReturnCreditByInvoiceId } from '@/services/accountsPayableService';
 import { getIssuedReturnSummaryForSource } from '@/services/salesReturnReadService';
@@ -13,7 +13,7 @@ import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
 import { getSalesInvoicePaymentAllocatedAmount } from '@/utils/accountsReceivable/paymentAmounts';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
-import { filterActiveTransactions } from '@/utils/transactions';
+import { filterActiveSaleTransactions, isTransactionActive, isTransactionExpense } from '@/utils/transactions';
 import type {
   AccountsPayableRow,
   AccountsReceivableRow,
@@ -416,7 +416,7 @@ export const useTransactionDetailReport = (
           .reverse();
       }
 
-      const baseTransactions = filterActiveTransactions(await collection.toArray());
+      const baseTransactions = filterActiveSaleTransactions(await collection.toArray());
       const candidateIds = baseTransactions.map((transaction) => transaction.id);
       const allPayments = candidateIds.length > 0
         ? await db.posTransactionPayments.where('transaction_id').anyOf(candidateIds).toArray()
@@ -645,6 +645,24 @@ export const useExpenseReport = (startDate?: string, endDate?: string, categorie
       let transactions = (await collection.toArray())
         .filter(isExpenseReportFinanceTransaction);
 
+      const startISO = startDate ? dayjs.tz(startDate).startOf('day').toISOString() : undefined;
+      const endISO = endDate ? dayjs.tz(endDate).endOf('day').toISOString() : undefined;
+      const posExpenseTransactions: FinanceTransaction[] = (await db.transactions.toArray())
+        .filter((transaction) => isTransactionActive(transaction) && isTransactionExpense(transaction))
+        .filter((transaction) => !startISO || transaction.created_at >= startISO)
+        .filter((transaction) => !endISO || transaction.created_at <= endISO)
+        .map((transaction) => ({
+          id: `pos-expense-${transaction.id}`,
+          type: 'EXPENSE',
+          category: FINANCE_CATEGORIES.OPERATIONAL,
+          amount: transaction.total_amount,
+          description: `Pemakaian internal POS ${transaction.transaction_number}`,
+          created_at: transaction.created_at,
+          reference_id: transaction.id,
+        }));
+      transactions = [...transactions, ...posExpenseTransactions]
+        .sort((left, right) => right.created_at.localeCompare(left.created_at));
+
       // Filter by category if provided
       if (categories && categories.length > 0) {
         transactions = transactions.filter((t) => categories.includes(t.category));
@@ -726,7 +744,12 @@ export const useExpenseCategories = () => {
     queryFn: async () => {
       const transactions = (await db.financeTransactions.where('type').equals('EXPENSE').toArray())
         .filter(isExpenseReportFinanceTransaction);
-      const categories = [...new Set(transactions.map((t) => t.category))];
+      const hasPosExpense = (await db.transactions.toArray())
+        .some((transaction) => isTransactionActive(transaction) && isTransactionExpense(transaction));
+      const categories = [...new Set([
+        ...transactions.map((transaction) => transaction.category),
+        ...(hasPosExpense ? [FINANCE_CATEGORIES.OPERATIONAL] : []),
+      ])];
       return categories.sort();
     },
   });
