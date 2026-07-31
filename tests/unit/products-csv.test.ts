@@ -1,10 +1,16 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import type { Product } from '@/types';
 import {
   buildProductCsvImportItems,
   createProductCsvExportRows,
 } from '@/utils/productsCsv';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
+
+const stockManagementHookSource = readFileSync(
+  new URL('../../src/hooks/useStockManagement.tsx', import.meta.url),
+  'utf8',
+);
 
 const existingProduct: Product = {
   id: 'product-a',
@@ -146,5 +152,23 @@ describe('product master CSV import safety', () => {
     expect(headers).toContain('stock');
     expect(headers).not.toContain('purchase_quantity');
     expect(row[headers.indexOf('stock')]).toBe(17);
+  });
+
+  test('queues every master-import row with remote stock preservation', () => {
+    const importStart = stockManagementHookSource.indexOf(
+      'const importCsvMutation',
+    );
+    const importEnd = stockManagementHookSource.indexOf(
+      '\n  const onSubmit',
+      importStart,
+    );
+    const importSource = stockManagementHookSource.slice(importStart, importEnd);
+
+    expect(importStart).toBeGreaterThan(-1);
+    expect(importSource).toContain('db.syncQueue.bulkAdd');
+    expect(importSource).toContain('preserveStock: true');
+    expect(importSource).not.toContain(
+      "preserveStock: operation === 'update'",
+    );
   });
 });

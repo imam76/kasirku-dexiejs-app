@@ -1,5 +1,6 @@
-import { Alert, App, Button, Card, Drawer, Dropdown, InputNumber, Modal } from 'antd';
+import { Alert, App, Button, Card, Drawer, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
+import { useNavigate } from '@tanstack/react-router';
 import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
@@ -25,19 +26,16 @@ export default function StockManagement() {
     handleSubmit,
     handleEdit,
     handleDelete,
-    recordOpeningStock,
-    isRecordingOpeningStock,
     resetForm,
     errors,
     setValue,
     importProductsFromCsv,
     isImporting,
   } = useStockManagement();
+  const navigate = useNavigate();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isActionDrawerOpen, setIsActionDrawerOpen] = useState(false);
-  const [openingStockProduct, setOpeningStockProduct] = useState<Product | null>(null);
-  const [openingStockQuantity, setOpeningStockQuantity] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleModalCancel = () => {
@@ -55,27 +53,8 @@ export default function StockManagement() {
     setIsModalOpen(true);
   };
 
-  const handleOpeningStockClick = (product: Product) => {
-    setOpeningStockProduct(product);
-    setOpeningStockQuantity(null);
-  };
-
-  const handleOpeningStockCancel = () => {
-    setOpeningStockProduct(null);
-    setOpeningStockQuantity(null);
-  };
-
-  const handleOpeningStockSubmit = async () => {
-    if (!openingStockProduct || !openingStockQuantity || openingStockQuantity <= 0) {
-      message.error(t('stock.openingStockInvalid'));
-      return;
-    }
-
-    await recordOpeningStock({
-      productId: openingStockProduct.id,
-      quantity: openingStockQuantity,
-    });
-    handleOpeningStockCancel();
+  const handleOpeningStockClick = () => {
+    void navigate({ to: '/finance/opening-balances/inventory' });
   };
 
   const handleExportCsv = async (target: ExportTarget = 'auto') => {
@@ -360,48 +339,6 @@ export default function StockManagement() {
         onDelete={handleDelete}
         onOpeningStock={handleOpeningStockClick}
       />
-
-      <Modal
-        title={t('stock.openingStockTitle')}
-        open={Boolean(openingStockProduct)}
-        onCancel={handleOpeningStockCancel}
-        onOk={handleOpeningStockSubmit}
-        okText={t('stock.openingStockAction')}
-        cancelText={t('stock.form.cancel')}
-        confirmLoading={isRecordingOpeningStock}
-        okButtonProps={{ disabled: !openingStockQuantity || openingStockQuantity <= 0 }}
-        destroyOnHidden
-      >
-        {openingStockProduct ? (
-          <div className="space-y-4 pt-2">
-            <div className="rounded-md border border-gray-100 bg-gray-50 p-3">
-              <div className="text-sm font-semibold text-gray-900">{openingStockProduct.name}</div>
-              <div className="mt-1 text-xs text-gray-500">
-                {t('stock.openingStockCurrent', {
-                  stock: openingStockProduct.stock,
-                  unit: openingStockProduct.purchase_unit,
-                })}
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                {t('stock.openingStockQuantity')}
-              </label>
-              <InputNumber
-                inputMode="decimal"
-                min={0}
-                step={1}
-                value={openingStockQuantity}
-                onChange={(value) => setOpeningStockQuantity(value === null ? null : Number(value))}
-                placeholder={t('stock.openingStockPlaceholder')}
-                className="w-full"
-                addonAfter={openingStockProduct.purchase_unit}
-              />
-            </div>
-          </div>
-        ) : null}
-      </Modal>
     </Card>
   );
 }

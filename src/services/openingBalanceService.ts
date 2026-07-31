@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import {
   getCurrentSessionUser,
   requireRolePermission,
+  requireUserPermission,
   writeActivityLog,
 } from '@/auth/authService';
 import { enqueueGeneralLedgerSettingSync, enqueueOpeningBalanceBundleSync } from '@/services/syncQueueService';
@@ -92,7 +93,7 @@ export interface AccountOpeningBalancePreviewLine {
 }
 
 export interface PostOpeningBalanceDetailBatchInput {
-  module: Exclude<OpeningBalanceModule, 'ACCOUNT'>;
+  module: Exclude<OpeningBalanceModule, 'ACCOUNT' | 'INVENTORY'>;
   lines: OpeningBalanceSourceLineInput[];
   notes?: string;
   idempotencyKey?: string;
@@ -100,6 +101,7 @@ export interface PostOpeningBalanceDetailBatchInput {
 
 const MODULE_ORDER: OpeningBalanceModule[] = [
   'ACCOUNT',
+  'INVENTORY',
   'RECEIVABLE',
   'PAYABLE',
   'ADVANCE_RECEIVED',
@@ -128,6 +130,17 @@ export const OPENING_BALANCE_MODULE_DEFINITIONS: OpeningBalanceModuleDefinition[
     shortTitleKey: 'openingBalances.modules.account.short',
     descriptionKey: 'openingBalances.modules.account.description',
     sourceEvent: 'ACCOUNT_OPENING_BALANCE_POSTED',
+  },
+  {
+    module: 'INVENTORY',
+    route: '/finance/opening-balances/inventory',
+    titleKey: 'openingBalances.modules.inventory.title',
+    shortTitleKey: 'openingBalances.modules.inventory.short',
+    descriptionKey: 'openingBalances.modules.inventory.description',
+    sourceEvent: 'INVENTORY_OPENING_BALANCE_POSTED',
+    debitCandidate: { ids: ['inventory', 'template-inventory'], codes: ['1200'] },
+    creditCandidate: EQUITY_CANDIDATE,
+    targetSide: 'DEBIT',
   },
   {
     module: 'RECEIVABLE',
@@ -187,6 +200,11 @@ const MANAGED_ACCOUNT_CANDIDATES: Array<{
   candidate: AccountCandidate;
   label: string;
 }> = [
+  {
+    module: 'INVENTORY',
+    candidate: { ids: ['inventory', 'template-inventory'], codes: ['1200'] },
+    label: 'Persediaan',
+  },
   {
     module: 'RECEIVABLE',
     candidate: { ids: ['accounts-receivable', 'template-accounts-receivable'], codes: ['1100'] },
@@ -422,7 +440,7 @@ const normalizeAccountOpeningLines = (
 };
 
 const normalizeDetailOpeningBalanceInputs = async (
-  module: Exclude<OpeningBalanceModule, 'ACCOUNT'>,
+  module: Exclude<OpeningBalanceModule, 'ACCOUNT' | 'INVENTORY'>,
   lines: OpeningBalanceSourceLineInput[],
 ) => {
   const [baseCurrency, currencies] = await Promise.all([
@@ -512,7 +530,14 @@ const getManagedAccountBlocks = async (
 
   return MANAGED_ACCOUNT_CANDIDATES.flatMap((item) => {
     const batch = batchById.get(getOpeningBalanceBatchId(item.module, cutoffDate));
-    if (!batch || (!isOpeningBalanceBatchPosted(batch) && batch.status !== 'SKIPPED')) return [];
+    // Persediaan selalu dikelola submodule khusus agar akun 1200 tidak dapat
+    // dijurnal dua kali lewat Saldo Awal Akun lalu Saldo Awal Persediaan.
+    if (
+      item.module !== 'INVENTORY' &&
+      (!batch || (!isOpeningBalanceBatchPosted(batch) && batch.status !== 'SKIPPED'))
+    ) {
+      return [];
+    }
 
     const account = findAccountCandidate(accounts, item.candidate);
     return account
@@ -520,7 +545,7 @@ const getManagedAccountBlocks = async (
         module: item.module,
         account,
         label: item.label,
-        status: batch.status,
+        status: batch?.status ?? 'DRAFT',
       }]
       : [];
   });
@@ -889,21 +914,23 @@ const buildReadyGeneralLedgerSetting = ({
   setting,
   cutoffDate,
   inventoryPolicy,
+  isReady = true,
   openingBalanceJournalId,
   now,
 }: {
   setting?: GeneralLedgerSetting;
   cutoffDate: string;
   inventoryPolicy: InventoryAccountingPolicy;
+  isReady?: boolean;
   openingBalanceJournalId?: string;
   now: string;
 }): GeneralLedgerSetting => ({
   id: 'default',
-  is_ready: true,
+  is_ready: isReady,
   cutoff_date: normalizeStartOfDay(cutoffDate),
   inventory_policy: inventoryPolicy,
   opening_balance_journal_id: openingBalanceJournalId ?? setting?.opening_balance_journal_id,
-  activated_at: setting?.activated_at ?? now,
+  activated_at: isReady ? (setting?.activated_at ?? now) : setting?.activated_at,
   created_at: setting?.created_at ?? now,
   updated_at: now,
   sync_status: 'pending',
@@ -915,9 +942,9 @@ export const markOpeningBalanceModuleSkipped = async (
   notes?: string,
 ) => {
   const currentUser = await getCurrentSessionUser();
-  requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
+  await requireUserPermission(currentUser, 'FINANCE_ACCESS');
 
-  const { cutoffDate, inventoryPolicy, setting } = await requireCutoff();
+  const { cutoffDate } = await requireCutoff();
   const batchId = getOpeningBalanceBatchId(module, cutoffDate);
   const existingBatch = await db.openingBalanceBatches.get(batchId);
   if (isOpeningBalanceBatchPosted(existingBatch)) {
@@ -931,7 +958,9 @@ export const markOpeningBalanceModuleSkipped = async (
   }
 
   const now = new Date().toISOString();
-  const batch = await buildSkippedBatch({ existingBatch, module, cutoffDate, notes, now, currentUser });
+  let batch: OpeningBalanceBatch | undefined;
+  let queueOperation: 'create' | 'update' = existingBatch ? 'update' : 'create';
+  let alreadySkipped = false;
   let updatedGeneralLedger: GeneralLedgerSetting | undefined;
 
   await db.transaction('rw', [
@@ -939,35 +968,136 @@ export const markOpeningBalanceModuleSkipped = async (
     db.companyProfileSetting,
     db.openingBalanceBatches,
     db.openingBalanceLines,
+    db.products,
+    db.inventoryLots,
+    db.inventoryLotConsumptions,
+    db.transactionItems,
+    db.stockPurchases,
     db.generalLedgerSetting,
     db.activityLogs,
   ], async () => {
-    await db.openingBalanceBatches.put(batch);
-    await db.openingBalanceLines.where('batch_id').equals(batch.id).delete();
+    const currentEffectiveSetting = await requireCutoff();
+    if (toDateOnly(currentEffectiveSetting.cutoffDate) !== toDateOnly(cutoffDate)) {
+      throw new Error('Tanggal cutoff berubah. Muat ulang halaman sebelum menandai saldo awal dilewati.');
+    }
+
+    const currentBatch = await db.openingBalanceBatches.get(batchId);
+    if (isOpeningBalanceBatchPosted(currentBatch)) {
+      throw new Error('Saldo awal sudah posted dan tidak bisa ditandai dilewati.');
+    }
+    if (currentBatch?.status === 'SKIPPED') {
+      batch = currentBatch;
+      alreadySkipped = true;
+      return;
+    }
+    if (!isOpeningBalanceBatchEditable(currentBatch)) {
+      throw new Error('Saldo awal sudah terkunci dan tidak bisa ditandai dilewati.');
+    }
+
+    const skippedBatch = await buildSkippedBatch({
+      existingBatch: currentBatch,
+      module,
+      cutoffDate,
+      notes,
+      now,
+      currentUser,
+    });
+    batch = skippedBatch;
+    queueOperation = currentBatch ? 'update' : 'create';
+
+    if (module === 'INVENTORY') {
+      const [
+        productWithStock,
+        lotWithRemainingQuantity,
+        laterLot,
+        laterConsumption,
+        laterSale,
+        laterPurchase,
+      ] = await Promise.all([
+        db.products
+          .filter((product) => Math.abs(Number(product.stock || 0)) > 1e-6)
+          .first(),
+        db.inventoryLots
+          .filter((lot) => Math.abs(Number(lot.quantity_remaining || 0)) > 1e-6)
+          .first(),
+        db.inventoryLots
+          .filter((lot) => toDateOnly(lot.received_at) > toDateOnly(cutoffDate))
+          .first(),
+        db.inventoryLotConsumptions
+          .filter((consumption) => toDateOnly(consumption.created_at) > toDateOnly(cutoffDate))
+          .first(),
+        db.transactionItems
+          .filter((item) => toDateOnly(item.created_at) > toDateOnly(cutoffDate))
+          .first(),
+        db.stockPurchases
+          .filter((purchase) => toDateOnly(purchase.created_at) > toDateOnly(cutoffDate))
+          .first(),
+      ]);
+      if (productWithStock || lotWithRemainingQuantity) {
+        throw new Error(
+          'Saldo awal persediaan tidak dapat dilewati karena masih ada saldo stok. Posting saldo awal persediaan atau lakukan rekonsiliasi stok terlebih dahulu.',
+        );
+      }
+      if (laterLot || laterConsumption || laterSale || laterPurchase) {
+        throw new Error(
+          'Saldo awal persediaan tidak dapat dilewati karena sudah ada pergerakan stok setelah cutoff. Rekonsiliasi saldo awal dan transaksi berjalan terlebih dahulu.',
+        );
+      }
+    }
+
+    await db.openingBalanceBatches.put(skippedBatch);
+    await db.openingBalanceLines.where('batch_id').equals(skippedBatch.id).delete();
 
     if (module === 'ACCOUNT') {
+      const inventoryBatch = await db.openingBalanceBatches.get(
+        getOpeningBalanceBatchId('INVENTORY', cutoffDate),
+      );
+      const inventoryOpeningComplete = (
+        currentEffectiveSetting.inventoryPolicy !== 'PERPETUAL_INVENTORY'
+        || isOpeningBalanceBatchPosted(inventoryBatch)
+        || inventoryBatch?.status === 'SKIPPED'
+      );
       updatedGeneralLedger = buildReadyGeneralLedgerSetting({
-        setting,
+        setting: currentEffectiveSetting.setting,
         cutoffDate,
-        inventoryPolicy,
+        inventoryPolicy: currentEffectiveSetting.inventoryPolicy,
+        isReady: inventoryOpeningComplete,
         now,
       });
       await db.generalLedgerSetting.put(updatedGeneralLedger);
+    } else if (module === 'INVENTORY') {
+      const accountBatch = await db.openingBalanceBatches.get(
+        getOpeningBalanceBatchId('ACCOUNT', cutoffDate),
+      );
+      if (isOpeningBalanceBatchPosted(accountBatch) || accountBatch?.status === 'SKIPPED') {
+        updatedGeneralLedger = buildReadyGeneralLedgerSetting({
+          setting: currentEffectiveSetting.setting,
+          cutoffDate,
+          inventoryPolicy: currentEffectiveSetting.inventoryPolicy,
+          now,
+        });
+        await db.generalLedgerSetting.put(updatedGeneralLedger);
+      }
     }
 
     await writeActivityLog({
       user: currentUser,
       action: 'OPENING_BALANCE_MODULE_SKIPPED',
       entity: 'openingBalanceBatches',
-      entity_id: batch.id,
+      entity_id: skippedBatch.id,
       description: `${currentUser?.name ?? 'User'} menandai saldo awal ${module} sebagai dilewati.`,
     });
   });
 
+  if (!batch) {
+    throw new Error('Batch saldo awal gagal ditandai dilewati.');
+  }
+  if (alreadySkipped) return batch;
+
+  await enqueueOpeningBalanceBatchForSync(batch, queueOperation);
   if (updatedGeneralLedger) {
     await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
   }
-  await enqueueOpeningBalanceBatchForSync(batch, existingBatch ? 'update' : 'create');
 
   return batch;
 };
@@ -1228,10 +1358,19 @@ export const postAccountOpeningBalanceBatch = async ({
       currentUser,
     });
 
+    const inventoryBatch = await db.openingBalanceBatches.get(
+      getOpeningBalanceBatchId('INVENTORY', cutoffDate),
+    );
+    const inventoryOpeningComplete = (
+      inventoryPolicy !== 'PERPETUAL_INVENTORY'
+      || isOpeningBalanceBatchPosted(inventoryBatch)
+      || inventoryBatch?.status === 'SKIPPED'
+    );
     updatedGeneralLedger = buildReadyGeneralLedgerSetting({
       setting,
       cutoffDate,
       inventoryPolicy,
+      isReady: inventoryOpeningComplete,
       openingBalanceJournalId: journalEntry.id,
       now,
     });
@@ -1249,13 +1388,13 @@ export const postAccountOpeningBalanceBatch = async ({
   if (!batch) {
     throw new Error('Batch saldo awal akun gagal dibuat.');
   }
-  if (updatedGeneralLedger) {
-    await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
-  }
   if (createdFinanceTransactions.length > 0) {
     await enqueueFinanceTransactionsSync(createdFinanceTransactions, 'create');
   }
   await enqueueOpeningBalanceBatchForSync(batch, existingBatch ? 'update' : 'create');
+  if (updatedGeneralLedger) {
+    await enqueueGeneralLedgerSettingSync(updatedGeneralLedger, 'update');
+  }
 
   return batch;
 };
@@ -1637,6 +1776,11 @@ export const reverseOpeningBalanceBatchToDraft = async ({
   const existingBatch = await db.openingBalanceBatches.get(batchId);
   if (!existingBatch || !isOpeningBalanceBatchPosted(existingBatch)) {
     throw new Error('Hanya saldo awal yang sudah posted yang dapat di-unpost/reverse.');
+  }
+  if (existingBatch.module === 'INVENTORY') {
+    throw new Error(
+      'Saldo awal persediaan tidak dapat di-unpost lewat reversal saldo awal umum karena stok dan lot FIFO ikut terdampak. Gunakan koreksi persediaan pada periode berjalan.',
+    );
   }
 
   const lines = await db.openingBalanceLines.where('batch_id').equals(batchId).toArray();

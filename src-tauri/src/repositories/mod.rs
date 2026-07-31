@@ -18,6 +18,7 @@ pub mod finance_transaction_repository;
 pub mod fiscal_year_closing_run_repository;
 pub mod fixed_asset_repository;
 pub mod hr_repository;
+pub mod inventory_opening_balance_repository;
 pub mod journal_entry_repository;
 pub mod marketplace_repository;
 pub mod opening_balance_repository;

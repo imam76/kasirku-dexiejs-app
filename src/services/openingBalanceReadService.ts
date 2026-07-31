@@ -8,6 +8,7 @@ import {
   type RemoteOpeningBalanceLineDto,
 } from '@/services/postgresAdapter';
 import type {
+  InventoryLot,
   OpeningBalanceBatch,
   OpeningBalanceBatchStatus,
   OpeningBalanceLine,
@@ -37,6 +38,7 @@ const VALID_OPENING_BALANCE_MODULES: OpeningBalanceModule[] = [
   'PAYABLE',
   'ADVANCE_RECEIVED',
   'ADVANCE_PAID',
+  'INVENTORY',
 ];
 const VALID_OPENING_BALANCE_BATCH_STATUSES: OpeningBalanceBatchStatus[] = [
   'DRAFT',
@@ -132,6 +134,13 @@ const mapRemoteOpeningBalanceLineToLocal = (
   batch_id: remoteLine.batch_id,
   module: isOpeningBalanceModule(remoteLine.module) ? remoteLine.module : 'ACCOUNT',
   line_number: Math.trunc(numberOrZero(remoteLine.line_number)),
+  product_id: optionalString(remoteLine.product_id),
+  product_sku: optionalString(remoteLine.product_sku),
+  product_name: optionalString(remoteLine.product_name),
+  quantity: optionalNumber(remoteLine.quantity),
+  unit: optionalString(remoteLine.unit),
+  unit_cost: optionalNumber(remoteLine.unit_cost),
+  inventory_lot_id: optionalString(remoteLine.inventory_lot_id),
   contact_id: optionalString(remoteLine.contact_id),
   party_name: optionalString(remoteLine.party_name),
   document_number: optionalString(remoteLine.document_number),
@@ -247,6 +256,90 @@ const canReadFromPostgres = () => (
   (typeof navigator === 'undefined' || navigator.onLine)
 );
 
+const restoreInventoryOpeningLots = async (
+  batch: OpeningBalanceBatch,
+  lines: OpeningBalanceLine[],
+  syncedAt: string,
+) => {
+  if (
+    batch.module !== 'INVENTORY'
+    || (batch.status !== 'POSTED' && batch.status !== 'LOCKED')
+  ) {
+    return;
+  }
+
+  const [existingLots, consumptions] = await Promise.all([
+    db.inventoryLots.toArray(),
+    db.inventoryLotConsumptions.toArray(),
+  ]);
+  const existingLotIds = new Set(existingLots.map((lot) => lot.id));
+  const lotsByProductId = new Map<string, InventoryLot[]>();
+  const consumedProductIds = new Set(
+    consumptions.map((consumption) => consumption.product_id),
+  );
+  for (const lot of existingLots) {
+    const productLots = lotsByProductId.get(lot.product_id) ?? [];
+    productLots.push(lot);
+    lotsByProductId.set(lot.product_id, productLots);
+  }
+
+  const lotsToPut = new Map<string, InventoryLot>();
+  for (const line of lines) {
+    const productId = line.product_id;
+    const quantity = numberOrZero(line.quantity);
+    const unitCost = numberOrZero(line.unit_cost);
+    if (!productId || !line.product_name || quantity <= 0 || unitCost < 0) continue;
+
+    const lotId = line.inventory_lot_id ?? `${batch.id}:lot:${productId}`;
+    if (existingLotIds.has(lotId) || lotsToPut.has(lotId)) continue;
+    const productLots = lotsByProductId.get(productId) ?? [];
+
+    // A fresh device has no lots yet. A migrated device can have legacy OPENING
+    // lots; replace those only while they have never been consumed. Operational
+    // lots are deliberately left untouched to avoid rewriting FIFO history.
+    if (
+      consumedProductIds.has(productId)
+      || productLots.some((lot) => lot.source_type !== 'OPENING')
+    ) {
+      continue;
+    }
+    for (const lot of productLots) {
+      lotsToPut.set(lot.id, {
+        ...lot,
+        quantity_remaining: 0,
+        updated_at: syncedAt,
+      });
+    }
+
+    const receivedAt = batch.cutoff_date.includes('T')
+      ? batch.cutoff_date
+      : `${batch.cutoff_date.slice(0, 10)}T23:59:59.999`;
+    const lot: InventoryLot = {
+      id: lotId,
+      product_id: productId,
+      product_name: line.product_name,
+      sku: line.product_sku,
+      source_type: 'OPENING',
+      source_id: batch.id,
+      source_line_id: line.id,
+      quantity_received: quantity,
+      quantity_remaining: quantity,
+      cost_per_unit: unitCost,
+      cost_status: 'FINAL',
+      final_cost_per_unit: unitCost,
+      cost_finalized_at: batch.posted_at ?? syncedAt,
+      received_at: receivedAt,
+      created_at: line.created_at || syncedAt,
+      updated_at: syncedAt,
+    };
+    lotsToPut.set(lot.id, lot);
+  }
+
+  if (lotsToPut.size > 0) {
+    await db.inventoryLots.bulkPut([...lotsToPut.values()]);
+  }
+};
+
 export const mergeRemoteOpeningBalanceBundlesIntoDexie = async (
   remoteBundles: RemoteOpeningBalanceBundleDto[],
   syncedAt = new Date().toISOString(),
@@ -257,39 +350,50 @@ export const mergeRemoteOpeningBalanceBundlesIntoDexie = async (
   };
   if (remoteBundles.length === 0) return result;
 
-  await db.transaction('rw', db.openingBalanceBatches, db.openingBalanceLines, async () => {
-    for (const remoteBundle of remoteBundles) {
-      const localBatch = await db.openingBalanceBatches.get(remoteBundle.batch.id);
-      if (!shouldApplyRemoteOpeningBalanceBatch(localBatch, remoteBundle.batch)) {
-        result.skipped += 1;
-        continue;
-      }
-
-      if (remoteBundle.batch.deleted_at) {
-        if (localBatch) {
-          await db.openingBalanceBatches.delete(remoteBundle.batch.id);
-          await db.openingBalanceLines.where('batch_id').equals(remoteBundle.batch.id).delete();
-          result.deleted += 1;
-        } else {
+  await db.transaction(
+    'rw',
+    [
+      db.openingBalanceBatches,
+      db.openingBalanceLines,
+      db.inventoryLots,
+      db.inventoryLotConsumptions,
+    ],
+    async () => {
+      for (const remoteBundle of remoteBundles) {
+        const localBatch = await db.openingBalanceBatches.get(remoteBundle.batch.id);
+        if (!shouldApplyRemoteOpeningBalanceBatch(localBatch, remoteBundle.batch)) {
           result.skipped += 1;
+          continue;
         }
-        continue;
-      }
 
-      await db.openingBalanceBatches.put(mapRemoteOpeningBalanceBatchToLocal(remoteBundle.batch, syncedAt));
-      await db.openingBalanceLines.where('batch_id').equals(remoteBundle.batch.id).delete();
-      const localLines = remoteBundle.lines.map((line) => mapRemoteOpeningBalanceLineToLocal(line, syncedAt));
-      if (localLines.length > 0) {
-        await db.openingBalanceLines.bulkPut(localLines);
-      }
+        if (remoteBundle.batch.deleted_at) {
+          if (localBatch) {
+            await db.openingBalanceBatches.delete(remoteBundle.batch.id);
+            await db.openingBalanceLines.where('batch_id').equals(remoteBundle.batch.id).delete();
+            result.deleted += 1;
+          } else {
+            result.skipped += 1;
+          }
+          continue;
+        }
 
-      if (localBatch) {
-        result.updated += 1;
-      } else {
-        result.inserted += 1;
+        const localMappedBatch = mapRemoteOpeningBalanceBatchToLocal(remoteBundle.batch, syncedAt);
+        await db.openingBalanceBatches.put(localMappedBatch);
+        await db.openingBalanceLines.where('batch_id').equals(remoteBundle.batch.id).delete();
+        const localLines = remoteBundle.lines.map((line) => mapRemoteOpeningBalanceLineToLocal(line, syncedAt));
+        if (localLines.length > 0) {
+          await db.openingBalanceLines.bulkPut(localLines);
+        }
+        await restoreInventoryOpeningLots(localMappedBatch, localLines, syncedAt);
+
+        if (localBatch) {
+          result.updated += 1;
+        } else {
+          result.inserted += 1;
+        }
       }
-    }
-  });
+    },
+  );
 
   return result;
 };

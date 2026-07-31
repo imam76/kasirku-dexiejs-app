@@ -1403,6 +1403,13 @@ export interface RemoteOpeningBalanceLineDto {
   batch_id: string;
   module: OpeningBalanceModule;
   line_number: number;
+  product_id?: string | null;
+  product_sku?: string | null;
+  product_name?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  unit_cost?: number | null;
+  inventory_lot_id?: string | null;
   contact_id?: string | null;
   party_name?: string | null;
   document_number?: string | null;
@@ -1435,6 +1442,13 @@ export interface RemoteOpeningBalanceLineDto {
 export interface RemoteOpeningBalanceBundleDto {
   batch: RemoteOpeningBalanceBatchDto;
   lines: RemoteOpeningBalanceLineDto[];
+}
+
+export interface RemoteInventoryOpeningBalancePostingBundleDto {
+  opening_balance: RemoteOpeningBalanceBundleDto;
+  journal_entry: RemoteJournalEntryBundleDto;
+  stock_snapshots: RemoteStockMutationDto[];
+  general_ledger_setting?: RemoteGeneralLedgerSettingDto | null;
 }
 
 export interface RemoteCooperativeMemberDto {
@@ -2734,6 +2748,16 @@ export const openingBalancePostgresAdapter = {
   async upsert(input: RemoteOpeningBalanceBundleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteOpeningBalanceBundleDto>('postgres_upsert_opening_balance_bundle', { input });
+  },
+};
+
+export const inventoryOpeningBalancePostgresAdapter = {
+  async post(input: RemoteInventoryOpeningBalancePostingBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteInventoryOpeningBalancePostingBundleDto>(
+      'postgres_post_inventory_opening_balance_bundle',
+      { input },
+    );
   },
 };
 

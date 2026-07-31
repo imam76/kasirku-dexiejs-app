@@ -48,6 +48,7 @@ import type {
   FinanceAccountMapping,
   GeneralLedgerSetting,
   InventoryAccountingPolicy,
+  OpeningBalanceBatch,
 } from '@/types';
 import { isTauriRuntime } from '@/utils/export/platform';
 
@@ -119,6 +120,63 @@ const ACCOUNTING_TRIGGER_MODULES = new Set([
 const toDateOnly = (value: string) => value.slice(0, 10);
 const toStartOfDay = (value: string) => `${toDateOnly(value)}T00:00:00.000`;
 const normalizeCurrencyCode = (value: string) => value.trim().toUpperCase();
+
+export interface AccountingBaselineLockCheckInput {
+  existingSetup?: Pick<AccountingInitialSetupSetting, 'cutoff_date' | 'inventory_policy'>;
+  existingLedger?: Pick<
+    GeneralLedgerSetting,
+    'is_ready' | 'activated_at' | 'cutoff_date' | 'inventory_policy' | 'opening_balance_journal_id'
+  >;
+  lockedOpeningBatch?: Pick<OpeningBalanceBatch, 'module' | 'cutoff_date' | 'status'>;
+  requestedCutoffDate: string;
+  requestedInventoryPolicy: InventoryAccountingPolicy;
+}
+
+export const getAccountingBaselineLockViolation = ({
+  existingSetup,
+  existingLedger,
+  lockedOpeningBatch,
+  requestedCutoffDate,
+  requestedInventoryPolicy,
+}: AccountingBaselineLockCheckInput) => {
+  const hasLockedOpeningBatch = (
+    lockedOpeningBatch?.status === 'POSTED' ||
+    lockedOpeningBatch?.status === 'LOCKED'
+  );
+  const isBaselineLocked = Boolean(
+    existingLedger?.is_ready ||
+    existingLedger?.activated_at ||
+    existingLedger?.opening_balance_journal_id ||
+    hasLockedOpeningBatch
+  );
+  if (!isBaselineLocked) return undefined;
+
+  const lockReason = hasLockedOpeningBatch
+    ? `saldo awal ${lockedOpeningBatch.module} sudah ${lockedOpeningBatch.status}`
+    : existingLedger?.opening_balance_journal_id
+      ? 'saldo awal General Ledger sudah diposting'
+      : 'General Ledger sudah ready/aktif';
+  const existingCutoffDate = existingSetup?.cutoff_date
+    ?? existingLedger?.cutoff_date
+    ?? lockedOpeningBatch?.cutoff_date;
+  if (
+    existingCutoffDate &&
+    toDateOnly(existingCutoffDate) !== toDateOnly(requestedCutoffDate)
+  ) {
+    return `Cutoff sudah terkunci karena ${lockReason}. Cutoff tidak bisa diubah dari setup akuntansi awal.`;
+  }
+
+  const existingInventoryPolicy = existingSetup?.inventory_policy
+    ?? existingLedger?.inventory_policy;
+  if (
+    existingInventoryPolicy &&
+    existingInventoryPolicy !== requestedInventoryPolicy
+  ) {
+    return `Policy persediaan sudah terkunci karena ${lockReason}. Jenis bisnis tidak bisa mengubah policy.`;
+  }
+
+  return undefined;
+};
 
 export const requiresAccountingBaselineForModules = (enabledModules: string[]) => (
   enabledModules.some((moduleCode) => (
@@ -450,22 +508,19 @@ const upsertGeneralLedgerSetting = async (
   input: {
     cutoffDate: string;
     inventoryPolicy: InventoryAccountingPolicy;
-    selectedSetupModules: string[];
     now: string;
   },
 ) => {
   const existingSetting = await db.generalLedgerSetting.get('default');
   const nextSetting: GeneralLedgerSetting = {
     id: 'default',
-    is_ready: input.selectedSetupModules.includes('GENERAL_LEDGER')
-      ? true
-      : existingSetting?.is_ready ?? false,
+    // Enabling the module only makes the feature available. The ledger becomes
+    // ready after the required opening-balance modules reach a terminal state.
+    is_ready: existingSetting?.is_ready ?? false,
     cutoff_date: toStartOfDay(input.cutoffDate),
     inventory_policy: input.inventoryPolicy,
     opening_balance_journal_id: existingSetting?.opening_balance_journal_id,
-    activated_at: input.selectedSetupModules.includes('GENERAL_LEDGER')
-      ? existingSetting?.activated_at ?? input.now
-      : existingSetting?.activated_at,
+    activated_at: existingSetting?.activated_at,
     created_at: existingSetting?.created_at ?? input.now,
     updated_at: input.now,
     sync_status: 'pending',
@@ -694,40 +749,37 @@ const assertLockedFieldsCanChange = async (
   templateDefinition: typeof ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[AccountingBusinessTemplateCode],
   operationalSignals: OperationalSignalResult,
 ) => {
-  const [existingSetup, existingLedger] = await Promise.all([
+  const [existingSetup, existingLedger, lockedOpeningBatch] = await Promise.all([
     db.accountingInitialSetupSetting.get('default'),
     db.generalLedgerSetting.get('default'),
+    db.openingBalanceBatches
+      .where('status')
+      .anyOf(['POSTED', 'LOCKED'])
+      .first(),
   ]);
 
-  if (
-    existingLedger?.opening_balance_journal_id &&
-    existingLedger.cutoff_date &&
-    toDateOnly(existingLedger.cutoff_date) !== toDateOnly(input.cutoff_date)
-  ) {
-    throw new Error('Cutoff sudah dipakai opening balance. Cutoff tidak bisa diubah dari setup akuntansi awal.');
+  if (operationalSignals.hasSignal && existingSetup) {
+    const signalText = operationalSignals.labels.slice(0, 4).join(', ');
+    if (existingSetup.business_template_code !== input.business_template_code) {
+      throw new Error(`Jenis bisnis sudah terkunci karena sudah ada ${signalText}.`);
+    }
+    if (existingSetup.template_id !== templateDefinition.template_id) {
+      throw new Error(`Template COA sudah terkunci karena sudah ada ${signalText}.`);
+    }
+    if (existingSetup.base_currency_code !== normalizeCurrencyCode(input.base_currency_code)) {
+      throw new Error(`Base currency sudah terkunci karena sudah ada ${signalText}.`);
+    }
   }
 
-  if (
-    existingLedger?.opening_balance_journal_id &&
-    existingLedger.inventory_policy &&
-    existingLedger.inventory_policy !== templateDefinition.default_inventory_policy
-  ) {
-    throw new Error('Policy persediaan sudah dipakai opening balance. Jenis bisnis tidak bisa mengubah policy.');
-  }
-
-  if (!operationalSignals.hasSignal || !existingSetup) {
-    return { existingSetup, existingLedger };
-  }
-
-  const signalText = operationalSignals.labels.slice(0, 4).join(', ');
-  if (existingSetup.business_template_code !== input.business_template_code) {
-    throw new Error(`Jenis bisnis sudah terkunci karena sudah ada ${signalText}.`);
-  }
-  if (existingSetup.template_id !== templateDefinition.template_id) {
-    throw new Error(`Template COA sudah terkunci karena sudah ada ${signalText}.`);
-  }
-  if (existingSetup.base_currency_code !== normalizeCurrencyCode(input.base_currency_code)) {
-    throw new Error(`Base currency sudah terkunci karena sudah ada ${signalText}.`);
+  const baselineLockViolation = getAccountingBaselineLockViolation({
+    existingSetup,
+    existingLedger,
+    lockedOpeningBatch,
+    requestedCutoffDate: input.cutoff_date,
+    requestedInventoryPolicy: templateDefinition.default_inventory_policy,
+  });
+  if (baselineLockViolation) {
+    throw new Error(baselineLockViolation);
   }
 
   return { existingSetup, existingLedger };
@@ -827,7 +879,6 @@ export const saveInitialAccountingSetup = async (
       const updatedLedger = await upsertGeneralLedgerSetting({
         cutoffDate: dates.cutoffDate,
         inventoryPolicy: templateDefinition.default_inventory_policy,
-        selectedSetupModules: effectiveEnabledModules,
         now,
       });
       if (updatedLedger) {

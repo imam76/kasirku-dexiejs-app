@@ -5,6 +5,7 @@ import { navigationMessages } from './navigationMessages';
 import { stockMessages } from './stockMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
 import { fixedAssetMessages } from './fixedAssetMessages';
+import { openingInventoryMessages } from './openingInventoryMessages';
 
 export const messages = {
   id: {
@@ -15,6 +16,7 @@ export const messages = {
     ...stockOpnameMessages.id,
     ...cooperativeMessages.id,
     ...fixedAssetMessages.id,
+    ...openingInventoryMessages.id,
 
     'transaction.title': 'Transaksi',
     'transaction.searchPlaceholder': 'Cari produk (nama atau SKU)...',
@@ -112,10 +114,10 @@ export const messages = {
     'finance.index.receivablesDesc': 'Pantau outstanding invoice, aging piutang, dan histori pembayaran',
     'finance.index.payablesDesc': 'Pantau hutang supplier, aging, return credit, dan pembayaran',
     'finance.index.payrollDesc': 'Buat run gaji karyawan dan posting pembayaran ke Cash & Bank',
-    'finance.index.openingBalancesDesc': 'Kelola saldo awal akun, piutang, hutang, dan uang muka per cutoff',
+    'finance.index.openingBalancesDesc': 'Kelola saldo awal akun, persediaan, piutang, hutang, dan uang muka per cutoff',
     'finance.index.empty': 'Tidak ada menu keuangan yang tersedia untuk role ini.',
     'openingBalances.title': 'Saldo Awal',
-    'openingBalances.subtitle': 'Pisahkan saldo awal akun, piutang, hutang, dan uang muka sebelum General Ledger dipakai.',
+    'openingBalances.subtitle': 'Pisahkan saldo awal akun, persediaan, piutang, hutang, dan uang muka sebelum General Ledger dipakai.',
     'openingBalances.module': 'Module',
     'openingBalances.status': 'Status',
     'openingBalances.openModule': 'Buka',
@@ -2006,6 +2008,7 @@ export const messages = {
     ...stockOpnameMessages.en,
     ...cooperativeMessages.en,
     ...fixedAssetMessages.en,
+    ...openingInventoryMessages.en,
 
     'transaction.title': 'Transaction',
     'transaction.searchPlaceholder': 'Search products (name or SKU)...',
@@ -2103,10 +2106,10 @@ export const messages = {
     'finance.index.receivablesDesc': 'Track invoice outstanding balances, receivable aging, and payment history',
     'finance.index.payablesDesc': 'Track supplier payables, aging, return credits, and payment history',
     'finance.index.payrollDesc': 'Create employee payroll runs and post payments into Cash & Bank',
-    'finance.index.openingBalancesDesc': 'Manage account, receivable, payable, and advance opening balances per cutoff',
+    'finance.index.openingBalancesDesc': 'Manage account, inventory, receivable, payable, and advance opening balances per cutoff',
     'finance.index.empty': 'No finance menu is available for this role.',
     'openingBalances.title': 'Opening Balances',
-    'openingBalances.subtitle': 'Separate account, receivable, payable, and advance opening balances before using the General Ledger.',
+    'openingBalances.subtitle': 'Separate account, inventory, receivable, payable, and advance opening balances before using the General Ledger.',
     'openingBalances.module': 'Module',
     'openingBalances.status': 'Status',
     'openingBalances.openModule': 'Open',

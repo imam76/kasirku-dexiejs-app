@@ -133,6 +133,7 @@ interface OpeningBalanceLineInput {
 }
 
 interface CreateJournalEntryInput {
+  entry_id?: string;
   source_type: JournalSourceType;
   source_id?: string;
   source_number?: string;
@@ -142,6 +143,7 @@ interface CreateJournalEntryInput {
   reversed_entry_id?: string;
   lines: NormalizedJournalLine[];
   actor?: Pick<AuthUser, 'id' | 'name'> | null;
+  scheduleSync?: boolean;
 }
 
 export interface JournalEntryWithLines extends JournalEntry {
@@ -654,6 +656,7 @@ const getJournalSignature = (lines: Array<Pick<NormalizedJournalLine | JournalEn
 };
 
 const createPostedJournalEntry = async ({
+  entry_id,
   source_type,
   source_id,
   source_number,
@@ -663,10 +666,11 @@ const createPostedJournalEntry = async ({
   reversed_entry_id,
   lines,
   actor,
+  scheduleSync = true,
 }: CreateJournalEntryInput): Promise<JournalEntry> => {
   const { totalDebit, totalCredit } = assertBalancedLines(lines);
   const now = new Date().toISOString();
-  const entryId = crypto.randomUUID();
+  const entryId = entry_id ?? crypto.randomUUID();
   const entry: JournalEntry = withPendingJournalEntrySync({
     id: entryId,
     entry_number: await createJournalEntryNumber(entry_date),
@@ -693,7 +697,9 @@ const createPostedJournalEntry = async ({
 
   await db.journalEntries.add(entry);
   await db.journalEntryLines.bulkAdd(entryLines);
-  scheduleJournalEntryBundleSync(entry.id, 'create');
+  if (scheduleSync) {
+    scheduleJournalEntryBundleSync(entry.id, 'create');
+  }
 
   return entry;
 };
@@ -913,6 +919,7 @@ const getOpeningBalanceJournalDate = async (fallbackDate: string) => {
 };
 
 export const postOpeningBalanceSourceJournal = async ({
+  entry_id,
   source_id,
   source_number,
   source_event,
@@ -920,7 +927,9 @@ export const postOpeningBalanceSourceJournal = async ({
   description,
   lines,
   actor,
+  scheduleSync = true,
 }: {
+  entry_id?: string;
   source_id: string;
   source_number?: string;
   source_event: JournalSourceEvent | string;
@@ -928,6 +937,7 @@ export const postOpeningBalanceSourceJournal = async ({
   description: string;
   lines: JournalLineDraft[];
   actor?: Pick<AuthUser, 'id' | 'name'> | null;
+  scheduleSync?: boolean;
 }) => {
   const normalizedLines = normalizeLines(lines);
   const existingEntry = await getPostedJournalEntryForSource('OPENING_BALANCE', source_id, source_event);
@@ -951,6 +961,7 @@ export const postOpeningBalanceSourceJournal = async ({
   }
 
   return createPostedJournalEntry({
+    entry_id,
     source_type: 'OPENING_BALANCE',
     source_id,
     source_number,
@@ -959,6 +970,7 @@ export const postOpeningBalanceSourceJournal = async ({
     description,
     lines: normalizedLines,
     actor,
+    scheduleSync,
   });
 };
 

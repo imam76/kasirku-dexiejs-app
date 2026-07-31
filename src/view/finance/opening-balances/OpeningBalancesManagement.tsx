@@ -108,7 +108,7 @@ const moneyFactory = (symbol: string) => (value?: number) => (
 );
 
 const getContactTypesForOpeningBalanceModule = (
-  module: Exclude<OpeningBalanceModule, 'ACCOUNT'>,
+  module: Exclude<OpeningBalanceModule, 'ACCOUNT' | 'INVENTORY'>,
 ): ContactType[] => {
   if (module === 'PAYABLE') return ['SUPPLIER', 'CUSTOMER_SUPPLIER'];
   if (module === 'ADVANCE_PAID') return ['SUPPLIER', 'CUSTOMER_SUPPLIER', 'OTHER'];
@@ -343,7 +343,11 @@ export function OpeningBalanceAccountsPage() {
   );
 }
 
-export function OpeningBalanceDetailPage({ module }: { module: Exclude<OpeningBalanceModule, 'ACCOUNT'> }) {
+export function OpeningBalanceDetailPage({
+  module,
+}: {
+  module: Exclude<OpeningBalanceModule, 'ACCOUNT' | 'INVENTORY'>;
+}) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { message } = App.useApp();

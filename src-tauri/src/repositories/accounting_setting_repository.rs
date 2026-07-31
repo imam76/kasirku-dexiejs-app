@@ -2,11 +2,19 @@ use crate::models::accounting_setting::{
     AccountingInitialSetupSettingDto, AccountingProfileSettingDto, EnabledModuleDto,
     FinanceAccountMappingDto, GeneralLedgerSettingDto,
 };
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 
 const ACCOUNTING_INITIAL_SETUP_SETTING_ID: &str = "default";
 const ACCOUNTING_PROFILE_SETTING_ID: &str = "default";
 const GENERAL_LEDGER_SETTING_ID: &str = "default";
+
+fn protocol_error(message: impl Into<String>) -> sqlx::Error {
+    sqlx::Error::Protocol(message.into())
+}
+
+fn cutoff_date_key(value: Option<&str>) -> Option<&str> {
+    value.and_then(|date| date.get(0..10))
+}
 
 // ---- Finance account mappings ----
 
@@ -273,6 +281,111 @@ pub async fn upsert_general_ledger_setting(
     pool: &PgPool,
     input: GeneralLedgerSettingDto,
 ) -> Result<GeneralLedgerSettingDto, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let result = upsert_general_ledger_setting_in_tx(&mut tx, input).await?;
+    tx.commit().await?;
+    Ok(result)
+}
+
+async fn assert_terminal_perpetual_opening_modules_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    cutoff_date: &str,
+) -> Result<(), sqlx::Error> {
+    let module_rows = sqlx::query_as::<_, (String, String)>(
+        r#"
+        SELECT module, status
+        FROM opening_balance_batches
+        WHERE module IN ('ACCOUNT', 'INVENTORY')
+          AND cutoff_date::DATE = $1::TIMESTAMPTZ::DATE
+          AND deleted_at IS NULL
+        ORDER BY
+            module ASC,
+            revision_number DESC NULLS LAST,
+            version DESC,
+            updated_at DESC,
+            id ASC
+        FOR UPDATE
+        "#,
+    )
+    .bind(cutoff_date)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    let mut account_status: Option<&str> = None;
+    let mut inventory_status: Option<&str> = None;
+    for (module, status) in &module_rows {
+        match module.as_str() {
+            "ACCOUNT" if account_status.is_none() => account_status = Some(status),
+            "INVENTORY" if inventory_status.is_none() => inventory_status = Some(status),
+            _ => {}
+        }
+    }
+
+    let is_terminal =
+        |status: Option<&str>| matches!(status, Some("POSTED" | "LOCKED" | "SKIPPED"));
+    if !is_terminal(account_status) || !is_terminal(inventory_status) {
+        return Err(protocol_error(
+            "General Ledger perpetual belum dapat diaktifkan: batch ACCOUNT dan INVENTORY pada cutoff yang sama harus terminal di server.",
+        ));
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn upsert_general_ledger_setting_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    input: GeneralLedgerSettingDto,
+) -> Result<GeneralLedgerSettingDto, sqlx::Error> {
+    if input.id != GENERAL_LEDGER_SETTING_ID {
+        return Err(protocol_error("ID setting General Ledger tidak valid."));
+    }
+
+    if input.is_ready && input.inventory_policy == "PERPETUAL_INVENTORY" {
+        let cutoff_date = input
+            .cutoff_date
+            .as_deref()
+            .filter(|date| !date.trim().is_empty())
+            .ok_or_else(|| {
+                protocol_error("Aktivasi General Ledger perpetual wajib memiliki tanggal cutoff.")
+            })?;
+        assert_terminal_perpetual_opening_modules_in_tx(tx, cutoff_date).await?;
+    }
+
+    // Lock the singleton after the opening-balance prerequisite rows. The
+    // composite posting takes locks in the same order, avoiding lock inversion.
+    let existing_setting = sqlx::query_as::<_, GeneralLedgerSettingDto>(
+        r#"
+        SELECT
+            id,
+            is_ready,
+            cutoff_date,
+            inventory_policy,
+            opening_balance_journal_id,
+            activated_at,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at
+        FROM general_ledger_setting
+        WHERE id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(GENERAL_LEDGER_SETTING_ID)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    if input.is_ready
+        && existing_setting.as_ref().is_some_and(|existing| {
+            existing.is_ready
+                && (existing.inventory_policy != input.inventory_policy
+                    || cutoff_date_key(existing.cutoff_date.as_deref())
+                        != cutoff_date_key(input.cutoff_date.as_deref()))
+        })
+    {
+        return Err(protocol_error(
+            "General Ledger sudah aktif dengan cutoff atau kebijakan persediaan yang berbeda.",
+        ));
+    }
+
     let upserted = sqlx::query_as::<_, GeneralLedgerSettingDto>(
         r#"
         INSERT INTO general_ledger_setting (
@@ -281,13 +394,48 @@ pub async fn upsert_general_ledger_setting(
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7::TIMESTAMPTZ, $8::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
-            is_ready = EXCLUDED.is_ready,
-            cutoff_date = EXCLUDED.cutoff_date,
-            inventory_policy = EXCLUDED.inventory_policy,
-            opening_balance_journal_id = EXCLUDED.opening_balance_journal_id,
-            activated_at = EXCLUDED.activated_at,
-            updated_at = EXCLUDED.updated_at
-        WHERE EXCLUDED.updated_at >= general_ledger_setting.updated_at
+            -- Readiness is a one-way activation. A stale device must never
+            -- deactivate an already-live ledger, while an activation command
+            -- must not be rejected only because its local clock is behind.
+            is_ready = general_ledger_setting.is_ready OR EXCLUDED.is_ready,
+            cutoff_date = CASE
+                WHEN general_ledger_setting.is_ready
+                    THEN general_ledger_setting.cutoff_date
+                ELSE EXCLUDED.cutoff_date
+            END,
+            inventory_policy = CASE
+                WHEN general_ledger_setting.is_ready
+                    THEN general_ledger_setting.inventory_policy
+                ELSE EXCLUDED.inventory_policy
+            END,
+            opening_balance_journal_id = CASE
+                WHEN general_ledger_setting.is_ready
+                    THEN COALESCE(
+                        general_ledger_setting.opening_balance_journal_id,
+                        EXCLUDED.opening_balance_journal_id
+                    )
+                ELSE EXCLUDED.opening_balance_journal_id
+            END,
+            activated_at = CASE
+                WHEN general_ledger_setting.is_ready
+                    THEN COALESCE(
+                        general_ledger_setting.activated_at,
+                        EXCLUDED.activated_at
+                    )
+                WHEN EXCLUDED.is_ready
+                    THEN COALESCE(
+                        EXCLUDED.activated_at,
+                        general_ledger_setting.activated_at
+                    )
+                ELSE EXCLUDED.activated_at
+            END,
+            updated_at = GREATEST(
+                general_ledger_setting.updated_at,
+                EXCLUDED.updated_at
+            )
+        WHERE
+            EXCLUDED.is_ready
+            OR EXCLUDED.updated_at >= general_ledger_setting.updated_at
         RETURNING
             id, is_ready, cutoff_date, inventory_policy,
             opening_balance_journal_id, activated_at,
@@ -303,16 +451,32 @@ pub async fn upsert_general_ledger_setting(
     .bind(input.activated_at)
     .bind(input.created_at)
     .bind(input.updated_at)
-    .fetch_optional(pool)
+    .fetch_optional(&mut **tx)
     .await?;
 
     if let Some(setting) = upserted {
         return Ok(setting);
     }
 
-    get_general_ledger_setting(pool)
-        .await?
-        .ok_or(sqlx::Error::RowNotFound)
+    sqlx::query_as::<_, GeneralLedgerSettingDto>(
+        r#"
+        SELECT
+            id,
+            is_ready,
+            cutoff_date,
+            inventory_policy,
+            opening_balance_journal_id,
+            activated_at,
+            created_at::TEXT AS created_at,
+            updated_at::TEXT AS updated_at
+        FROM general_ledger_setting
+        WHERE id = $1
+        "#,
+    )
+    .bind(GENERAL_LEDGER_SETTING_ID)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(sqlx::Error::RowNotFound)
 }
 
 // ---- Accounting initial setup setting (singleton) ----

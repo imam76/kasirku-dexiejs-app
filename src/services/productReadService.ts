@@ -119,6 +119,7 @@ const canReadFromPostgres = () => (
 export const mergeRemoteProductsIntoDexie = async (
   remoteProducts: RemoteProductDto[],
   syncedAt = new Date().toISOString(),
+  options: { preserveLocalStock?: boolean } = {},
 ): Promise<ProductReadSyncResult> => {
   const result: ProductReadSyncResult = {
     ...EMPTY_PRODUCT_READ_SYNC_RESULT,
@@ -146,7 +147,12 @@ export const mergeRemoteProductsIntoDexie = async (
         continue;
       }
 
-      productsToPut.push(mapRemoteProductToLocal(remoteProduct, syncedAt));
+      const mappedProduct = mapRemoteProductToLocal(remoteProduct, syncedAt);
+      productsToPut.push(
+        options.preserveLocalStock && localProduct
+          ? { ...mappedProduct, stock: localProduct.stock }
+          : mappedProduct,
+      );
       if (localProduct) {
         result.updated += 1;
       } else {

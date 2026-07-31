@@ -91,6 +91,7 @@ import {
   financeTransactionPostgresAdapter,
   isTauriRuntime,
   hrPositionPostgresAdapter,
+  inventoryOpeningBalancePostgresAdapter,
   journalEntryPostgresAdapter,
   openingBalancePostgresAdapter,
   paymentMethodPostgresAdapter,
@@ -147,6 +148,7 @@ import {
   type RemoteFinanceTransactionDto,
   type RemoteFiscalYearClosingRunDto,
   type RemoteHrPositionDto,
+  type RemoteInventoryOpeningBalancePostingBundleDto,
   type RemoteJournalEntryBundleDto,
   type RemoteJournalEntryDto,
   type RemoteJournalEntryLineDto,
@@ -235,6 +237,7 @@ const EMPLOYEE_CASH_ADVANCE_ENTITY = 'employeeCashAdvances';
 const EMPLOYEE_COLLECTION_SCHEDULE_ENTITY = 'employeeCollectionSchedules';
 const LEAVE_WORKFLOW_ENTITY = 'leaveWorkflows';
 const FINANCE_TRANSACTION_ENTITY = 'financeTransactions';
+const INVENTORY_OPENING_BALANCE_POSTING_ENTITY = 'inventoryOpeningBalancePostings';
 const JOURNAL_ENTRY_ENTITY = 'journalEntries';
 const OPENING_BALANCE_ENTITY = 'openingBalanceBatches';
 const PAYROLL_RUN_ENTITY = 'payrollRuns';
@@ -252,6 +255,7 @@ const STOCK_MUTATION_ENTITY = 'stockMutations';
 const TAX_ENTITY = 'taxes';
 const WAREHOUSE_ENTITY = 'warehouses';
 const PAYMENT_METHOD_ENTITY = 'paymentMethods';
+const INVENTORY_OPENING_BALANCE_SOURCE_EVENT = 'INVENTORY_OPENING_BALANCE_POSTED';
 
 let isProcessingSyncQueue = false;
 
@@ -1540,6 +1544,13 @@ const mapOpeningBalanceLineToRemoteDto = (
   batch_id: line.batch_id,
   module: line.module,
   line_number: Math.trunc(normalizeRemoteNumber(line.line_number)),
+  product_id: line.product_id ?? null,
+  product_sku: line.product_sku ?? null,
+  product_name: line.product_name ?? null,
+  quantity: line.quantity ?? null,
+  unit: line.unit ?? null,
+  unit_cost: line.unit_cost ?? null,
+  inventory_lot_id: line.inventory_lot_id ?? null,
   contact_id: line.contact_id ?? null,
   party_name: line.party_name ?? null,
   document_number: line.document_number ?? null,
@@ -1575,6 +1586,29 @@ const mapOpeningBalanceBundleToRemoteDto = (
 ): RemoteOpeningBalanceBundleDto => ({
   batch: mapOpeningBalanceBatchToRemoteDto(batch),
   lines: lines.map(mapOpeningBalanceLineToRemoteDto),
+});
+
+const mapInventoryOpeningBalancePostingBundleToRemoteDto = ({
+  batch,
+  openingLines,
+  journalEntry,
+  journalLines,
+  stockSnapshots,
+  generalLedgerSetting,
+}: {
+  batch: OpeningBalanceBatch;
+  openingLines: OpeningBalanceLine[];
+  journalEntry: JournalEntry;
+  journalLines: JournalEntryLine[];
+  stockSnapshots: StockMutation[];
+  generalLedgerSetting?: GeneralLedgerSetting;
+}): RemoteInventoryOpeningBalancePostingBundleDto => ({
+  opening_balance: mapOpeningBalanceBundleToRemoteDto(batch, openingLines),
+  journal_entry: mapJournalEntryBundleToRemoteDto(journalEntry, journalLines),
+  stock_snapshots: stockSnapshots.map(mapStockMutationToRemoteDto),
+  general_ledger_setting: generalLedgerSetting
+    ? mapGeneralLedgerSettingToRemoteDto(generalLedgerSetting)
+    : null,
 });
 
 const mapSalesDocumentToRemoteDto = (document: SalesDocument): RemoteSalesDocumentDto => ({
@@ -2899,6 +2933,25 @@ const isRemoteOpeningBalanceBundleDto = (
   );
 };
 
+const isRemoteInventoryOpeningBalancePostingBundleDto = (
+  payload: unknown,
+): payload is RemoteInventoryOpeningBalancePostingBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteInventoryOpeningBalancePostingBundleDto>;
+  return (
+    isRemoteOpeningBalanceBundleDto(candidate.opening_balance) &&
+    isRemoteJournalEntryBundleDto(candidate.journal_entry) &&
+    Array.isArray(candidate.stock_snapshots) &&
+    candidate.stock_snapshots.every(isRemoteStockMutationDto) &&
+    (
+      candidate.general_ledger_setting === undefined ||
+      candidate.general_ledger_setting === null ||
+      isRemoteGeneralLedgerSettingDto(candidate.general_ledger_setting)
+    )
+  );
+};
+
 const isRemoteSalesDocumentDto = (payload: unknown): payload is RemoteSalesDocumentDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3903,6 +3956,38 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (
+    queueItem.entity === INVENTORY_OPENING_BALANCE_POSTING_ENTITY &&
+    isRemoteInventoryOpeningBalancePostingBundleDto(queueItem.payload)
+  ) {
+    await updateOpeningBalanceBundleSyncMetadata(
+      queueItem.entity_id,
+      queueItem.payload.opening_balance.batch.updated_at,
+      {
+        sync_status: 'failed',
+        sync_error: errorMessage,
+      },
+    );
+    await updateJournalEntrySyncMetadata(
+      queueItem.payload.journal_entry.entry.id,
+      queueItem.payload.journal_entry.entry.updated_at,
+      {
+        sync_status: 'failed',
+        sync_error: errorMessage,
+      },
+    );
+    if (queueItem.payload.general_ledger_setting) {
+      await updateGeneralLedgerSettingSyncMetadata(
+        queueItem.payload.general_ledger_setting.id,
+        queueItem.payload.general_ledger_setting.updated_at,
+        {
+          sync_status: 'failed',
+          sync_error: errorMessage,
+        },
+      );
+    }
+  }
+
   if (queueItem.entity === JOURNAL_ENTRY_ENTITY && isRemoteJournalEntryBundleDto(queueItem.payload)) {
     await updateJournalEntrySyncMetadata(queueItem.entity_id, queueItem.payload.entry.updated_at, {
       sync_status: 'failed',
@@ -4427,6 +4512,20 @@ const processOpeningBalanceQueueItem = async (queueItem: SyncQueueItem) => {
   return openingBalancePostgresAdapter.upsert(queueItem.payload);
 };
 
+const processInventoryOpeningBalancePostingQueueItem = async (
+  queueItem: SyncQueueItem,
+) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Posting saldo awal persediaan sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteInventoryOpeningBalancePostingBundleDto(queueItem.payload)) {
+    throw new Error('Payload posting saldo awal persediaan sync queue tidak valid.');
+  }
+
+  return inventoryOpeningBalancePostgresAdapter.post(queueItem.payload);
+};
+
 const processProjectQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     return projectPostgresAdapter.delete(queueItem.entity_id);
@@ -4654,6 +4753,9 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteAccountingFiscalYear: RemoteAccountingFiscalYearDto | null = null;
     let remoteClosingRun: RemoteClosingRunDto | null = null;
     let remoteFiscalYearClosingRun: RemoteFiscalYearClosingRunDto | null = null;
+    let remoteInventoryOpeningBalancePosting:
+      | RemoteInventoryOpeningBalancePostingBundleDto
+      | null = null;
     let remoteJournalEntryBundle: RemoteJournalEntryBundleDto | null = null;
     let remoteOpeningBalanceBundle: RemoteOpeningBalanceBundleDto | null = null;
     let remotePayrollRunBundle: RemotePayrollRunBundleDto | null = null;
@@ -4743,6 +4845,9 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteClosingRun = await processClosingRunQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FISCAL_YEAR_CLOSING_RUN_ENTITY) {
       remoteFiscalYearClosingRun = await processFiscalYearClosingRunQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === INVENTORY_OPENING_BALANCE_POSTING_ENTITY) {
+      remoteInventoryOpeningBalancePosting =
+        await processInventoryOpeningBalancePostingQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === JOURNAL_ENTRY_ENTITY) {
       remoteJournalEntryBundle = await processJournalEntryQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === OPENING_BALANCE_ENTITY) {
@@ -5420,6 +5525,67 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       return;
     }
 
+    if (
+      remoteInventoryOpeningBalancePosting &&
+      isRemoteInventoryOpeningBalancePostingBundleDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateOpeningBalanceBundleSyncMetadata(
+        currentQueueItem.entity_id,
+        currentQueueItem.payload.opening_balance.batch.updated_at,
+        {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at:
+            remoteInventoryOpeningBalancePosting.opening_balance.batch.updated_at,
+        },
+      );
+      await updateJournalEntrySyncMetadata(
+        currentQueueItem.payload.journal_entry.entry.id,
+        currentQueueItem.payload.journal_entry.entry.updated_at,
+        {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at:
+            remoteInventoryOpeningBalancePosting.journal_entry.entry.updated_at,
+        },
+      );
+      if (
+        currentQueueItem.payload.general_ledger_setting &&
+        remoteInventoryOpeningBalancePosting.general_ledger_setting
+      ) {
+        await updateGeneralLedgerSettingSyncMetadata(
+          currentQueueItem.payload.general_ledger_setting.id,
+          currentQueueItem.payload.general_ledger_setting.updated_at,
+          {
+            sync_status: 'synced',
+            sync_error: undefined,
+            last_synced_at: syncedAt,
+            remote_updated_at:
+              remoteInventoryOpeningBalancePosting.general_ledger_setting.updated_at,
+          },
+        );
+      }
+
+      await mergeRemoteJournalEntryBundlesIntoDexie(
+        [remoteInventoryOpeningBalancePosting.journal_entry],
+        syncedAt,
+      );
+      await mergeRemoteOpeningBalanceBundlesIntoDexie(
+        [remoteInventoryOpeningBalancePosting.opening_balance],
+        syncedAt,
+      );
+      if (remoteInventoryOpeningBalancePosting.general_ledger_setting) {
+        await mergeRemoteGeneralLedgerSettingIntoDexie(
+          remoteInventoryOpeningBalancePosting.general_ledger_setting,
+          syncedAt,
+        );
+      }
+      return;
+    }
+
     if (remoteJournalEntryBundle && isRemoteJournalEntryBundleDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateJournalEntrySyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.entry.updated_at, {
@@ -5452,7 +5618,11 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         last_synced_at: syncedAt,
         remote_updated_at: remoteProduct.updated_at,
       });
-      await mergeRemoteProductsIntoDexie([remoteProduct], syncedAt);
+      await mergeRemoteProductsIntoDexie(
+        [remoteProduct],
+        syncedAt,
+        { preserveLocalStock: currentQueueItem.payload.preserve_stock === true },
+      );
       return;
     }
 
@@ -5618,13 +5788,27 @@ export const processPendingSyncQueue = async (limit = SYNC_QUEUE_BATCH_SIZE) => 
     const isPostgresAvailable = await isPostgresAvailableForSync();
     if (!isPostgresAvailable) return;
 
-    const pendingQueueItems = (await db.syncQueue
+    const pendingQueueItems = await db.syncQueue
       .where('status')
       .equals('pending')
-      .sortBy('created_at'))
-      .slice(0, limit);
+      .sortBy('created_at');
+    const getQueuePriority = (queueItem: SyncQueueItem) => {
+      if (queueItem.entity === PRODUCT_ENTITY) return 0;
+      if (
+        queueItem.entity === JOURNAL_ENTRY_ENTITY
+        || queueItem.entity === OPENING_BALANCE_ENTITY
+      ) {
+        return 1;
+      }
+      if (queueItem.entity === INVENTORY_OPENING_BALANCE_POSTING_ENTITY) return 2;
+      if (queueItem.entity === GENERAL_LEDGER_SETTING_ENTITY) return 3;
+      return 1;
+    };
+    pendingQueueItems.sort((left, right) => (
+      getQueuePriority(left) - getQueuePriority(right)
+    ));
 
-    for (const queueItem of pendingQueueItems) {
+    for (const queueItem of pendingQueueItems.slice(0, limit)) {
       await processSyncQueueItem(queueItem);
     }
   } finally {
@@ -6415,13 +6599,20 @@ export const enqueuePendingAccountingSettingsForSync = async () => {
     initialSetupQueueItems,
     moduleQueueItems,
     glQueueItems,
+    inventoryOpeningBatches,
   ] = await Promise.all([
     db.syncQueue.where('entity').equals(FINANCE_ACCOUNT_MAPPING_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(ACCOUNTING_PROFILE_SETTING_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(ACCOUNTING_INITIAL_SETUP_SETTING_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(ENABLED_MODULE_ENTITY).toArray(),
     db.syncQueue.where('entity').equals(GENERAL_LEDGER_SETTING_ENTITY).toArray(),
+    db.openingBalanceBatches.toArray(),
   ]);
+  const hasPendingInventoryOpeningPosting = inventoryOpeningBatches.some((batch) => (
+    batch.module === 'INVENTORY'
+    && (batch.status === 'POSTED' || batch.status === 'LOCKED')
+    && (batch.sync_status === 'pending' || batch.sync_status === 'failed')
+  ));
 
   const mappings = (await db.financeAccountMappings.toArray())
     .filter((mapping) => mapping.sync_status === 'pending' || mapping.sync_status === 'failed');
@@ -6474,6 +6665,9 @@ export const enqueuePendingAccountingSettingsForSync = async () => {
   const glSettings = (await db.generalLedgerSetting.toArray())
     .filter((setting) => setting.sync_status === 'pending' || setting.sync_status === 'failed');
   for (const setting of glSettings) {
+    if (setting.is_ready && hasPendingInventoryOpeningPosting) {
+      continue;
+    }
     const existing = glQueueItems.find((queueItem) => (
       queueItem.entity_id === setting.id &&
       queueItem.status !== 'synced' &&
@@ -7335,7 +7529,13 @@ export const enqueueOpeningBalanceBundleSync = async (
 
 export const enqueuePendingJournalEntriesForSync = async () => {
   const journalEntries = (await db.journalEntries.toArray())
-    .filter((entry) => entry.sync_status === 'pending' || entry.sync_status === 'failed');
+    .filter((entry) => (
+      (entry.sync_status === 'pending' || entry.sync_status === 'failed')
+      && !(
+        entry.source_type === 'OPENING_BALANCE'
+        && entry.source_event === 'INVENTORY_OPENING_BALANCE_POSTED'
+      )
+    ));
 
   const journalEntryQueueItems = await db.syncQueue
     .where('entity')
@@ -7358,9 +7558,192 @@ export const enqueuePendingJournalEntriesForSync = async () => {
   }
 };
 
+const buildInventoryOpeningStockSnapshot = (
+  batch: OpeningBalanceBatch,
+  line: OpeningBalanceLine,
+): StockMutation | undefined => {
+  const productId = line.product_id?.trim();
+  const productName = line.product_name?.trim();
+  const unit = line.unit?.trim() as StockMutation['stock_unit'] | undefined;
+  const quantity = Number(line.quantity);
+  if (
+    !productId
+    || !productName
+    || !unit
+    || !Number.isFinite(quantity)
+    || quantity <= 0
+  ) {
+    return undefined;
+  }
+
+  const cutoffTimestamp = batch.cutoff_date.includes('T')
+    ? batch.cutoff_date
+    : `${batch.cutoff_date.slice(0, 10)}T23:59:59.999`;
+
+  return {
+    id: `OPENING_BALANCE:${batch.id}:${line.id}`,
+    product_id: productId,
+    product_name: productName,
+    sku: line.product_sku,
+    source_type: 'OPENING_BALANCE',
+    source_id: batch.id,
+    source_number: `OB-INVENTORY-${batch.cutoff_date.slice(0, 10)}`,
+    source_line_id: line.id,
+    // OPENING_BALANCE is an absolute snapshot on the server. A zero delta makes
+    // this record safely reconstructable after a crash without knowing the
+    // product's pre-posting stock.
+    quantity_delta: 0,
+    unit,
+    stock_unit: unit,
+    source_quantity: quantity,
+    source_unit: unit,
+    reason: `Pemulihan saldo awal persediaan per ${batch.cutoff_date.slice(0, 10)}`,
+    actor_user_id: batch.posted_by ?? batch.updated_by,
+    actor_user_name: batch.posted_by_name ?? batch.updated_by_name,
+    occurred_at: cutoffTimestamp,
+    created_at: cutoffTimestamp,
+  };
+};
+
+export const enqueueInventoryOpeningBalancePostingSync = async (
+  batch: OpeningBalanceBatch,
+  openingLines: OpeningBalanceLine[],
+  options: {
+    journalEntry?: JournalEntry;
+    journalLines?: JournalEntryLine[];
+    generalLedgerSetting?: GeneralLedgerSetting;
+    deferProcessing?: boolean;
+  } = {},
+) => {
+  if (
+    batch.module !== 'INVENTORY'
+    || (batch.status !== 'POSTED' && batch.status !== 'LOCKED')
+  ) {
+    throw new Error('Queue komposit hanya dapat dibuat untuk saldo awal persediaan yang sudah diposting.');
+  }
+
+  const journalEntryId = batch.journal_entry_id ?? `${batch.id}:journal`;
+  const journalEntry = options.journalEntry
+    ?? await db.journalEntries.get(journalEntryId);
+  if (
+    !journalEntry
+    || journalEntry.status !== 'POSTED'
+    || journalEntry.source_type !== 'OPENING_BALANCE'
+    || journalEntry.source_id !== batch.id
+    || journalEntry.source_event !== INVENTORY_OPENING_BALANCE_SOURCE_EVENT
+  ) {
+    throw new Error('Jurnal saldo awal persediaan belum lengkap untuk membentuk queue komposit.');
+  }
+
+  const journalLines = options.journalLines
+    ?? await db.journalEntryLines
+      .where('journal_entry_id')
+      .equals(journalEntry.id)
+      .toArray();
+  if (journalLines.length === 0) {
+    throw new Error('Baris jurnal saldo awal persediaan belum tersedia.');
+  }
+
+  const stockSnapshots = openingLines
+    .map((line) => buildInventoryOpeningStockSnapshot(batch, line))
+    .filter((mutation): mutation is StockMutation => Boolean(mutation));
+  if (stockSnapshots.length === 0 || stockSnapshots.length !== openingLines.length) {
+    throw new Error('Snapshot stok saldo awal persediaan tidak lengkap.');
+  }
+
+  const currentGeneralLedgerSetting = options.generalLedgerSetting
+    ?? await db.generalLedgerSetting.get('default');
+  const generalLedgerSetting = currentGeneralLedgerSetting?.is_ready
+    ? currentGeneralLedgerSetting
+    : undefined;
+  const now = new Date().toISOString();
+  const payload = mapInventoryOpeningBalancePostingBundleToRemoteDto({
+    batch,
+    openingLines,
+    journalEntry,
+    journalLines,
+    stockSnapshots,
+    generalLedgerSetting,
+  });
+  const existingQueueItem = (await db.syncQueue
+    .where('entity')
+    .equals(INVENTORY_OPENING_BALANCE_POSTING_ENTITY)
+    .toArray())
+    .find((queueItem) => (
+      queueItem.entity_id === batch.id
+      && queueItem.status !== 'synced'
+    ));
+
+  let queueItem: SyncQueueItem;
+  if (existingQueueItem) {
+    queueItem = {
+      ...existingQueueItem,
+      operation: 'create',
+      payload,
+      status: 'pending',
+      attempts: 0,
+      error_message: undefined,
+      updated_at: now,
+    };
+    await db.syncQueue.put(queueItem);
+  } else {
+    queueItem = {
+      id: crypto.randomUUID(),
+      entity: INVENTORY_OPENING_BALANCE_POSTING_ENTITY,
+      entity_id: batch.id,
+      operation: 'create',
+      payload,
+      status: 'pending',
+      attempts: 0,
+      created_at: now,
+      updated_at: now,
+    };
+    await db.syncQueue.add(queueItem);
+  }
+
+  if (!options.deferProcessing) {
+    void processPendingSyncQueue();
+  }
+  return queueItem;
+};
+
 export const enqueuePendingOpeningBalancesForSync = async () => {
-  const batches = (await db.openingBalanceBatches.toArray())
-    .filter((batch) => batch.sync_status === 'pending' || batch.sync_status === 'failed');
+  const [allBatches, journalEntries, generalLedgerSetting] = await Promise.all([
+    db.openingBalanceBatches.toArray(),
+    db.journalEntries.toArray(),
+    db.generalLedgerSetting.get('default'),
+  ]);
+  const journalEntryById = new Map(
+    journalEntries.map((entry) => [entry.id, entry]),
+  );
+  const batches = allBatches.filter((batch) => {
+    if (batch.sync_status === 'pending' || batch.sync_status === 'failed') {
+      return true;
+    }
+    if (
+      batch.module !== 'INVENTORY'
+      || (batch.status !== 'POSTED' && batch.status !== 'LOCKED')
+    ) {
+      return false;
+    }
+
+    const journalEntry = journalEntryById.get(
+      batch.journal_entry_id ?? `${batch.id}:journal`,
+    );
+    const journalNeedsRecovery = (
+      journalEntry?.sync_status === 'pending'
+      || journalEntry?.sync_status === 'failed'
+    );
+    const ledgerNeedsRecovery = Boolean(
+      generalLedgerSetting?.is_ready
+      && generalLedgerSetting.cutoff_date?.slice(0, 10) === batch.cutoff_date.slice(0, 10)
+      && (
+        generalLedgerSetting.sync_status === 'pending'
+        || generalLedgerSetting.sync_status === 'failed'
+      ),
+    );
+    return journalNeedsRecovery || ledgerNeedsRecovery;
+  });
 
   const openingBalanceQueueItems = await db.syncQueue
     .where('entity')
@@ -7368,6 +7751,27 @@ export const enqueuePendingOpeningBalancesForSync = async () => {
     .toArray();
 
   for (const batch of batches) {
+    const lines = await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray();
+    if (
+      batch.module === 'INVENTORY'
+      && (batch.status === 'POSTED' || batch.status === 'LOCKED')
+    ) {
+      await enqueuePendingProductsForSync(
+        new Set(
+          lines
+            .map((line) => line.product_id)
+            .filter((productId): productId is string => Boolean(productId)),
+        ),
+        { deferProcessing: true, preserveStock: true },
+      );
+      await enqueueInventoryOpeningBalancePostingSync(
+        batch,
+        lines,
+        { deferProcessing: true },
+      );
+      continue;
+    }
+
     const existingQueueItem = openingBalanceQueueItems.find((queueItem) => (
       queueItem.entity_id === batch.id &&
       queueItem.status !== 'synced' &&
@@ -7377,10 +7781,11 @@ export const enqueuePendingOpeningBalancesForSync = async () => {
     ));
 
     if (!existingQueueItem) {
-      const lines = await db.openingBalanceLines.where('batch_id').equals(batch.id).toArray();
       await enqueueOpeningBalanceBundleSync(batch, lines, 'update');
     }
   }
+
+  void processPendingSyncQueue();
 };
 
 export const enqueueProjectSync = async (
@@ -7406,13 +7811,16 @@ export const enqueueProjectSync = async (
   return queueItem;
 };
 
-export const enqueueProductSync = async (
+export const buildProductSyncQueueItem = (
   product: Product,
   operation: SyncQueueOperation,
-  options: { preserveStock?: boolean } = {},
-) => {
-  const now = new Date().toISOString();
-  const queueItem: SyncQueueItem = {
+  options: {
+    preserveStock?: boolean;
+    createdAt?: string;
+  } = {},
+): SyncQueueItem => {
+  const now = options.createdAt ?? new Date().toISOString();
+  return {
     id: crypto.randomUUID(),
     entity: PRODUCT_ENTITY,
     entity_id: product.id,
@@ -7423,11 +7831,91 @@ export const enqueueProductSync = async (
     created_at: now,
     updated_at: now,
   };
+};
+
+export const enqueueProductSync = async (
+  product: Product,
+  operation: SyncQueueOperation,
+  options: {
+    preserveStock?: boolean;
+    deferProcessing?: boolean;
+  } = {},
+) => {
+  const queueItem = buildProductSyncQueueItem(product, operation, {
+    preserveStock: options.preserveStock,
+  });
 
   await db.syncQueue.add(queueItem);
-  void processPendingSyncQueue();
+  if (!options.deferProcessing) {
+    void processPendingSyncQueue();
+  }
 
   return queueItem;
+};
+
+export const enqueuePendingProductsForSync = async (
+  productIds?: ReadonlySet<string>,
+  options: {
+    deferProcessing?: boolean;
+    preserveStock?: boolean;
+  } = {},
+) => {
+  const products = (await db.products.toArray())
+    .filter((product) => (
+      (product.sync_status === 'pending' || product.sync_status === 'failed')
+      && (!productIds || productIds.has(product.id))
+    ));
+  if (products.length === 0) return 0;
+
+  const productQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(PRODUCT_ENTITY)
+    .toArray();
+  let enqueued = 0;
+
+  for (const product of products) {
+    const existingQueueItem = productQueueItems.find((queueItem) => (
+      queueItem.entity_id === product.id
+      && queueItem.status !== 'synced'
+      && isRemoteProductDto(queueItem.payload)
+      && queueItem.payload.updated_at === product.updated_at
+    ));
+    if (existingQueueItem) {
+      if (
+        existingQueueItem.status === 'failed'
+        || (
+          options.preserveStock
+          && existingQueueItem.status === 'pending'
+          && isRemoteProductDto(existingQueueItem.payload)
+          && existingQueueItem.payload.preserve_stock !== true
+        )
+      ) {
+        await db.syncQueue.update(existingQueueItem.id, {
+          operation: 'update',
+          payload: mapProductToRemoteDto(product, {
+            preserveStock: options.preserveStock,
+          }),
+          status: 'pending',
+          attempts: 0,
+          error_message: undefined,
+          updated_at: new Date().toISOString(),
+        });
+        enqueued += 1;
+      }
+      continue;
+    }
+
+    await enqueueProductSync(product, 'update', {
+      preserveStock: options.preserveStock,
+      deferProcessing: true,
+    });
+    enqueued += 1;
+  }
+
+  if (enqueued > 0 && !options.deferProcessing) {
+    void processPendingSyncQueue();
+  }
+  return enqueued;
 };
 
 export const enqueueSalesDocumentBundleSync = async (

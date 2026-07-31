@@ -6,7 +6,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
-import { enqueueProductSync } from '@/services/syncQueueService';
+import {
+  buildProductSyncQueueItem,
+  enqueueProductSync,
+  processPendingSyncQueue,
+} from '@/services/syncQueueService';
 import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
@@ -14,7 +18,6 @@ import type { FinanceTransaction, Product } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
-import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
 
 export type { StockFormData };
@@ -241,67 +244,6 @@ export const useStockManagement = () => {
     },
   });
 
-  const openingStockMutation = useMutation({
-    mutationFn: async ({ productId, quantity }: { productId: string; quantity: number }) => {
-      const currentUser = await getCurrentSessionUser();
-      await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
-
-      const normalizedQuantity = Number(quantity);
-      if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
-        throw new Error(t('stock.openingStockInvalid'));
-      }
-
-      const now = new Date().toISOString();
-
-      await db.transaction('rw', [db.products, db.inventoryLots], async () => {
-        const product = await db.products.get(productId);
-        if (!product) {
-          throw new Error('Produk tidak ditemukan.');
-        }
-
-        const updatedProduct = withPendingSync({
-          ...product,
-          stock: Number(product.stock || 0) + normalizedQuantity,
-          updated_at: now,
-        });
-
-        await db.products.put(updatedProduct);
-        await addInventoryLot({
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          sourceType: 'OPENING',
-          sourceId: product.id,
-          sourceLineId: crypto.randomUUID(),
-          quantityReceived: normalizedQuantity,
-          costPerUnit: Number(product.purchase_price || 0),
-          receivedAt: now,
-        });
-      });
-
-      const updatedProduct = await db.products.get(productId);
-      if (!updatedProduct) {
-        throw new Error('Saldo awal stok gagal disimpan.');
-      }
-
-      await enqueueProductSync(updatedProduct, 'update');
-      await writeActivityLog({
-        user: currentUser,
-        action: 'PRODUCT_OPENING_STOCK_CREATED',
-        entity: 'products',
-        entity_id: productId,
-        description: `${currentUser?.name ?? 'User'} menambahkan saldo awal stok ${updatedProduct.name}: ${normalizedQuantity} ${updatedProduct.purchase_unit}.`,
-      });
-
-      return updatedProduct;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      queryClient.invalidateQueries({ queryKey: ['stockCard'] });
-      message.success(t('stock.openingStockSaved'));
-    },
-  });
-
   const importCsvMutation = useMutation({
     mutationFn: async (items: ProductCsvImportItem[]) => {
       const currentUser = await getCurrentSessionUser();
@@ -309,7 +251,7 @@ export const useStockManagement = () => {
       const now = new Date().toISOString();
       let importPlan: ReturnType<typeof buildProductMasterImportPlan> | undefined;
 
-      await db.transaction('rw', db.products, async () => {
+      await db.transaction('rw', [db.products, db.syncQueue], async () => {
         importPlan = buildProductMasterImportPlan({
           items,
           existingProducts: await db.products.toArray(),
@@ -319,6 +261,15 @@ export const useStockManagement = () => {
           throw new Error(importPlan.errors.join('\n'));
         }
         await db.products.bulkPut(importPlan.items.map((item) => item.product));
+        await db.syncQueue.bulkAdd(importPlan.items.map(({ product, operation }) => (
+          buildProductSyncQueueItem(product, operation, {
+            // A row that is new on this device can still collide with an
+            // existing remote ID. Master import must preserve remote stock in
+            // both create and update cases.
+            preserveStock: true,
+            createdAt: now,
+          })
+        )));
       });
 
       if (!importPlan) {
@@ -331,11 +282,7 @@ export const useStockManagement = () => {
         entity: 'products',
         description: `${currentUser?.name ?? 'User'} mengimpor ${items.length} baris master produk dari CSV tanpa mengubah stok atau kas. Produk baru: ${importPlan.createdCount}, diperbarui: ${importPlan.updatedCount}.`,
       });
-      for (const { product, operation } of importPlan.items) {
-        await enqueueProductSync(product, operation, {
-          preserveStock: operation === 'update',
-        });
-      }
+      void processPendingSyncQueue();
     },
     onSuccess: (_data, items) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -426,9 +373,6 @@ export const useStockManagement = () => {
     setValue,
     isSubmitting: upsertMutation.isPending,
     isDeleting: deleteMutation.isPending,
-    recordOpeningStock: (input: Parameters<typeof openingStockMutation.mutateAsync>[0]) =>
-      openingStockMutation.mutateAsync(input),
-    isRecordingOpeningStock: openingStockMutation.isPending,
     importProductsFromCsv: (items: Parameters<typeof importCsvMutation.mutateAsync>[0]) =>
       importCsvMutation.mutateAsync(items),
     isImporting: importCsvMutation.isPending,

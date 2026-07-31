@@ -4,6 +4,49 @@ use crate::models::opening_balance::{
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
 
+const OPENING_BALANCE_AMOUNT_TOLERANCE: f64 = 0.005;
+
+fn inventory_line_signature(lines: &[OpeningBalanceLineDto]) -> Vec<String> {
+    let mut signature = lines
+        .iter()
+        .map(|line| {
+            format!(
+                "{}:{:.6}:{:.6}:{:.2}:{:.2}:{:.2}:{}:{}",
+                line.product_id.as_deref().unwrap_or_default(),
+                line.quantity.unwrap_or_default(),
+                line.unit_cost.unwrap_or_default(),
+                line.base_amount,
+                line.debit,
+                line.credit,
+                line.account_id.as_deref().unwrap_or_default(),
+                line.counter_account_id.as_deref().unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>();
+    signature.sort();
+    signature
+}
+
+fn posted_inventory_bundle_matches(
+    existing_batch: &OpeningBalanceBatchDto,
+    existing_lines: &[OpeningBalanceLineDto],
+    incoming: &OpeningBalanceBundleDto,
+) -> bool {
+    (existing_batch.total_debit - incoming.batch.total_debit).abs()
+        <= OPENING_BALANCE_AMOUNT_TOLERANCE
+        && (existing_batch.total_credit - incoming.batch.total_credit).abs()
+            <= OPENING_BALANCE_AMOUNT_TOLERANCE
+        && existing_batch.journal_entry_id == incoming.batch.journal_entry_id
+        && inventory_line_signature(existing_lines) == inventory_line_signature(&incoming.lines)
+}
+
+fn is_terminal_inventory_status(status: &str) -> bool {
+    matches!(
+        status,
+        "POSTED" | "LOCKED" | "REVERSED" | "SKIPPED" | "VOIDED"
+    )
+}
+
 const OPENING_BALANCE_BATCH_HARDENING_COLUMNS_SQL: &str = r#"
 ALTER TABLE opening_balance_batches
     ADD COLUMN IF NOT EXISTS batch_number TEXT,
@@ -77,6 +120,13 @@ macro_rules! opening_balance_line_select {
             batch_id,
             module,
             line_number,
+            product_id,
+            product_sku,
+            product_name,
+            quantity,
+            unit,
+            unit_cost,
+            inventory_lot_id,
             contact_id,
             party_name,
             document_number,
@@ -179,22 +229,78 @@ pub async fn upsert_opening_balance_bundle(
     input: OpeningBalanceBundleDto,
 ) -> Result<OpeningBalanceBundleDto, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    ensure_opening_balance_batch_hardening_columns_in_tx(&mut tx).await?;
+    let result = upsert_opening_balance_bundle_in_tx(&mut tx, input).await?;
+    tx.commit().await?;
+    Ok(result)
+}
+
+pub(crate) async fn upsert_opening_balance_bundle_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    input: OpeningBalanceBundleDto,
+) -> Result<OpeningBalanceBundleDto, sqlx::Error> {
+    let mut input = input;
+    ensure_opening_balance_batch_hardening_columns_in_tx(tx).await?;
     let batch_id = input.batch.id.clone();
 
-    let upserted_batch = upsert_opening_balance_batch(&mut tx, input.batch).await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&batch_id)
+        .execute(&mut **tx)
+        .await?;
+
+    let existing_batch = sqlx::query_as::<_, OpeningBalanceBatchDto>(concat!(
+        opening_balance_batch_select!(),
+        " WHERE id = $1 FOR UPDATE"
+    ))
+    .bind(&batch_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    if let Some(existing_batch) = existing_batch {
+        if existing_batch.module != input.batch.module {
+            return Err(sqlx::Error::Protocol(
+                "ID batch saldo awal sudah dipakai oleh modul yang berbeda.".into(),
+            ));
+        }
+
+        if existing_batch.module == "INVENTORY"
+            && is_terminal_inventory_status(&existing_batch.status)
+        {
+            let existing_lines = list_opening_balance_lines_in_tx(tx, &existing_batch.id).await?;
+            if (input.batch.status == "POSTED" || input.batch.status == "LOCKED")
+                && !posted_inventory_bundle_matches(&existing_batch, &existing_lines, &input)
+            {
+                return Err(sqlx::Error::Protocol(
+                    "Saldo awal persediaan sudah diposting dengan payload yang berbeda.".into(),
+                ));
+            }
+
+            return Ok(OpeningBalanceBundleDto {
+                batch: existing_batch,
+                lines: existing_lines,
+            });
+        }
+
+        // Posting/skip is a one-way transition. A device may still hold an
+        // older local version than a frequently-saved remote draft, so promote
+        // the terminal command above the locked server version atomically
+        // instead of silently returning the draft as a successful upload.
+        if existing_batch.module == "INVENTORY" && is_terminal_inventory_status(&input.batch.status)
+        {
+            input.batch.version = input.batch.version.max(existing_batch.version + 1);
+        }
+    }
+
+    let upserted_batch = upsert_opening_balance_batch(tx, input.batch).await?;
     if let Some(batch) = upserted_batch {
-        replace_opening_balance_lines(&mut tx, &batch.id, input.lines).await?;
-        let lines = list_opening_balance_lines_in_tx(&mut tx, &batch.id).await?;
-        tx.commit().await?;
+        replace_opening_balance_lines(tx, &batch.id, input.lines).await?;
+        let lines = list_opening_balance_lines_in_tx(tx, &batch.id).await?;
         return Ok(OpeningBalanceBundleDto { batch, lines });
     }
 
-    let batch = get_opening_balance_batch_in_tx(&mut tx, &batch_id)
+    let batch = get_opening_balance_batch_in_tx(tx, &batch_id)
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
-    let lines = list_opening_balance_lines_in_tx(&mut tx, &batch.id).await?;
-    tx.commit().await?;
+    let lines = list_opening_balance_lines_in_tx(tx, &batch.id).await?;
 
     Ok(OpeningBalanceBundleDto { batch, lines })
 }
@@ -488,6 +594,13 @@ async fn replace_opening_balance_lines(
                 batch_id,
                 module,
                 line_number,
+                product_id,
+                product_sku,
+                product_name,
+                quantity,
+                unit,
+                unit_cost,
+                inventory_lot_id,
                 contact_id,
                 party_name,
                 document_number,
@@ -524,30 +637,37 @@ async fn replace_opening_balance_lines(
                 $5,
                 $6,
                 $7,
-                $8::TIMESTAMPTZ,
-                $9::TIMESTAMPTZ,
+                $8,
+                $9,
                 $10,
                 $11,
                 $12,
                 $13,
                 $14,
-                $15,
-                $16,
+                $15::TIMESTAMPTZ,
+                $16::TIMESTAMPTZ,
                 $17,
                 $18,
                 $19,
-                $20::TIMESTAMPTZ,
+                $20,
                 $21,
                 $22,
                 $23,
                 $24,
                 $25,
                 $26,
-                $27,
+                $27::TIMESTAMPTZ,
                 $28,
                 $29,
-                $30::TIMESTAMPTZ,
-                $31::TIMESTAMPTZ
+                $30,
+                $31,
+                $32,
+                $33,
+                $34,
+                $35,
+                $36,
+                $37::TIMESTAMPTZ,
+                $38::TIMESTAMPTZ
             )
             "#,
         )
@@ -555,6 +675,13 @@ async fn replace_opening_balance_lines(
         .bind(line.batch_id)
         .bind(line.module)
         .bind(line.line_number)
+        .bind(line.product_id)
+        .bind(line.product_sku)
+        .bind(line.product_name)
+        .bind(line.quantity)
+        .bind(line.unit)
+        .bind(line.unit_cost)
+        .bind(line.inventory_lot_id)
         .bind(line.contact_id)
         .bind(line.party_name)
         .bind(line.document_number)

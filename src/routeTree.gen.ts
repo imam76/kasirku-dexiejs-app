@@ -244,6 +244,9 @@ const FinanceOpeningBalancesReceivablesLazyRouteImport = createFileRoute(
 const FinanceOpeningBalancesPayablesLazyRouteImport = createFileRoute(
   '/finance/opening-balances/payables',
 )()
+const FinanceOpeningBalancesInventoryLazyRouteImport = createFileRoute(
+  '/finance/opening-balances/inventory',
+)()
 const FinanceOpeningBalancesAdvanceReceivedLazyRouteImport = createFileRoute(
   '/finance/opening-balances/advance-received',
 )()
@@ -1071,6 +1074,16 @@ const FinanceOpeningBalancesPayablesLazyRoute =
       (d) => d.Route,
     ),
   )
+const FinanceOpeningBalancesInventoryLazyRoute =
+  FinanceOpeningBalancesInventoryLazyRouteImport.update({
+    id: '/inventory',
+    path: '/inventory',
+    getParentRoute: () => FinanceOpeningBalancesLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/finance/opening-balances/inventory.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const FinanceOpeningBalancesAdvanceReceivedLazyRoute =
   FinanceOpeningBalancesAdvanceReceivedLazyRouteImport.update({
     id: '/advance-received',
@@ -1355,6 +1368,7 @@ export interface FileRoutesByFullPath {
   '/finance/opening-balances/accounts': typeof FinanceOpeningBalancesAccountsLazyRoute
   '/finance/opening-balances/advance-paid': typeof FinanceOpeningBalancesAdvancePaidLazyRoute
   '/finance/opening-balances/advance-received': typeof FinanceOpeningBalancesAdvanceReceivedLazyRoute
+  '/finance/opening-balances/inventory': typeof FinanceOpeningBalancesInventoryLazyRoute
   '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
@@ -1486,6 +1500,7 @@ export interface FileRoutesByTo {
   '/finance/opening-balances/accounts': typeof FinanceOpeningBalancesAccountsLazyRoute
   '/finance/opening-balances/advance-paid': typeof FinanceOpeningBalancesAdvancePaidLazyRoute
   '/finance/opening-balances/advance-received': typeof FinanceOpeningBalancesAdvanceReceivedLazyRoute
+  '/finance/opening-balances/inventory': typeof FinanceOpeningBalancesInventoryLazyRoute
   '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
@@ -1618,6 +1633,7 @@ export interface FileRoutesById {
   '/finance/opening-balances/accounts': typeof FinanceOpeningBalancesAccountsLazyRoute
   '/finance/opening-balances/advance-paid': typeof FinanceOpeningBalancesAdvancePaidLazyRoute
   '/finance/opening-balances/advance-received': typeof FinanceOpeningBalancesAdvanceReceivedLazyRoute
+  '/finance/opening-balances/inventory': typeof FinanceOpeningBalancesInventoryLazyRoute
   '/finance/opening-balances/payables': typeof FinanceOpeningBalancesPayablesLazyRoute
   '/finance/opening-balances/receivables': typeof FinanceOpeningBalancesReceivablesLazyRoute
   '/finance/purchases/pending-costs': typeof FinancePurchasesPendingCostsLazyRoute
@@ -1751,6 +1767,7 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/accounts'
     | '/finance/opening-balances/advance-paid'
     | '/finance/opening-balances/advance-received'
+    | '/finance/opening-balances/inventory'
     | '/finance/opening-balances/payables'
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
@@ -1882,6 +1899,7 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/accounts'
     | '/finance/opening-balances/advance-paid'
     | '/finance/opening-balances/advance-received'
+    | '/finance/opening-balances/inventory'
     | '/finance/opening-balances/payables'
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
@@ -2013,6 +2031,7 @@ export interface FileRouteTypes {
     | '/finance/opening-balances/accounts'
     | '/finance/opening-balances/advance-paid'
     | '/finance/opening-balances/advance-received'
+    | '/finance/opening-balances/inventory'
     | '/finance/opening-balances/payables'
     | '/finance/opening-balances/receivables'
     | '/finance/purchases/pending-costs'
@@ -2937,6 +2956,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceOpeningBalancesPayablesLazyRouteImport
       parentRoute: typeof FinanceOpeningBalancesLazyRoute
     }
+    '/finance/opening-balances/inventory': {
+      id: '/finance/opening-balances/inventory'
+      path: '/inventory'
+      fullPath: '/finance/opening-balances/inventory'
+      preLoaderRoute: typeof FinanceOpeningBalancesInventoryLazyRouteImport
+      parentRoute: typeof FinanceOpeningBalancesLazyRoute
+    }
     '/finance/opening-balances/advance-received': {
       id: '/finance/opening-balances/advance-received'
       path: '/advance-received'
@@ -3112,6 +3138,7 @@ interface FinanceOpeningBalancesLazyRouteChildren {
   FinanceOpeningBalancesAccountsLazyRoute: typeof FinanceOpeningBalancesAccountsLazyRoute
   FinanceOpeningBalancesAdvancePaidLazyRoute: typeof FinanceOpeningBalancesAdvancePaidLazyRoute
   FinanceOpeningBalancesAdvanceReceivedLazyRoute: typeof FinanceOpeningBalancesAdvanceReceivedLazyRoute
+  FinanceOpeningBalancesInventoryLazyRoute: typeof FinanceOpeningBalancesInventoryLazyRoute
   FinanceOpeningBalancesPayablesLazyRoute: typeof FinanceOpeningBalancesPayablesLazyRoute
   FinanceOpeningBalancesReceivablesLazyRoute: typeof FinanceOpeningBalancesReceivablesLazyRoute
 }
@@ -3124,6 +3151,8 @@ const FinanceOpeningBalancesLazyRouteChildren: FinanceOpeningBalancesLazyRouteCh
       FinanceOpeningBalancesAdvancePaidLazyRoute,
     FinanceOpeningBalancesAdvanceReceivedLazyRoute:
       FinanceOpeningBalancesAdvanceReceivedLazyRoute,
+    FinanceOpeningBalancesInventoryLazyRoute:
+      FinanceOpeningBalancesInventoryLazyRoute,
     FinanceOpeningBalancesPayablesLazyRoute:
       FinanceOpeningBalancesPayablesLazyRoute,
     FinanceOpeningBalancesReceivablesLazyRoute:

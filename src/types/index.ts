@@ -2301,6 +2301,7 @@ export type StockMutationSourceType =
   | 'SALES_RETURN'
   | 'SALES_RETURN_VOID'
   | 'STOCK_OPNAME'
+  | 'OPENING_BALANCE'
   | 'PRODUCTION_CONSUMPTION'
   | 'PRODUCTION_OUTPUT'
   | 'PRODUCTION_VOID'
@@ -2835,6 +2836,7 @@ export type FixedAssetDerivedStatus =
 
 export type OpeningBalanceModule =
   | 'ACCOUNT'
+  | 'INVENTORY'
   | 'RECEIVABLE'
   | 'PAYABLE'
   | 'ADVANCE_RECEIVED'
@@ -3113,6 +3115,13 @@ export interface OpeningBalanceLine {
   batch_id: string;
   module: OpeningBalanceModule;
   line_number: number;
+  product_id?: string;
+  product_sku?: string;
+  product_name?: string;
+  quantity?: number;
+  unit?: string;
+  unit_cost?: number;
+  inventory_lot_id?: string;
   contact_id?: string;
   party_name?: string;
   document_number?: string;

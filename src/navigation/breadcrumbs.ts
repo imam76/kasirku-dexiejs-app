@@ -72,6 +72,7 @@ const STATIC_LABEL_KEYS: Record<string, TranslationKey> = {
   '/finance/chart-of-accounts': 'nav.finance.chartOfAccounts',
   '/finance/opening-balances': 'nav.finance.openingBalances',
   '/finance/opening-balances/accounts': 'openingBalances.modules.account.short',
+  '/finance/opening-balances/inventory': 'openingBalances.modules.inventory.short',
   '/finance/opening-balances/receivables': 'openingBalances.modules.receivable.short',
   '/finance/opening-balances/payables': 'openingBalances.modules.payable.short',
   '/finance/opening-balances/advance-received': 'openingBalances.modules.advanceReceived.short',

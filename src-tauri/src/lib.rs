@@ -170,6 +170,7 @@ pub fn run() {
             commands::opening_balance_commands::postgres_list_opening_balance_bundles,
             commands::opening_balance_commands::postgres_get_opening_balance_bundle,
             commands::opening_balance_commands::postgres_upsert_opening_balance_bundle,
+            commands::opening_balance_commands::postgres_post_inventory_opening_balance_bundle,
             commands::cooperative_commands::postgres_list_cooperative_areas,
             commands::cooperative_commands::postgres_get_cooperative_area,
             commands::cooperative_commands::postgres_upsert_cooperative_area,

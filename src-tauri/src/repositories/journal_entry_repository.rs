@@ -2,6 +2,39 @@ use crate::models::journal_entry::{JournalEntryBundleDto, JournalEntryDto, Journ
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
 
+const JOURNAL_AMOUNT_TOLERANCE: f64 = 0.005;
+
+fn journal_line_signature(lines: &[JournalEntryLineDto]) -> Vec<String> {
+    let mut signature = lines
+        .iter()
+        .map(|line| {
+            format!(
+                "{}:{:.2}:{:.2}:{}:{}",
+                line.account_id,
+                line.debit,
+                line.credit,
+                line.department_id.as_deref().unwrap_or_default(),
+                line.project_id.as_deref().unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>();
+    signature.sort();
+    signature
+}
+
+fn posted_opening_journal_matches(
+    existing: &JournalEntryDto,
+    existing_lines: &[JournalEntryLineDto],
+    incoming: &JournalEntryDto,
+    incoming_lines: &[JournalEntryLineDto],
+) -> bool {
+    existing.source_id == incoming.source_id
+        && existing.source_event == incoming.source_event
+        && (existing.total_debit - incoming.total_debit).abs() <= JOURNAL_AMOUNT_TOLERANCE
+        && (existing.total_credit - incoming.total_credit).abs() <= JOURNAL_AMOUNT_TOLERANCE
+        && journal_line_signature(existing_lines) == journal_line_signature(incoming_lines)
+}
+
 macro_rules! journal_entry_select {
     () => {
         r#"
@@ -118,21 +151,105 @@ pub async fn upsert_journal_entry_bundle(
     input: JournalEntryBundleDto,
 ) -> Result<JournalEntryBundleDto, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let entry_id = input.entry.id.clone();
+    let result = upsert_journal_entry_bundle_in_tx(&mut tx, input).await?;
+    tx.commit().await?;
+    Ok(result)
+}
 
-    let upserted_entry = upsert_journal_entry(&mut tx, input.entry).await?;
+pub(crate) async fn upsert_journal_entry_bundle_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    input: JournalEntryBundleDto,
+) -> Result<JournalEntryBundleDto, sqlx::Error> {
+    let entry_id = input.entry.id.clone();
+    let lock_key = if input.entry.source_type == "OPENING_BALANCE" {
+        format!(
+            "OPENING_BALANCE|{}|{}",
+            input.entry.source_id.as_deref().unwrap_or_default(),
+            input.entry.source_event.as_deref().unwrap_or_default(),
+        )
+    } else {
+        entry_id.clone()
+    };
+
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&lock_key)
+        .execute(&mut **tx)
+        .await?;
+
+    let existing_entry = if input.entry.source_type == "OPENING_BALANCE" {
+        sqlx::query_as::<_, JournalEntryDto>(concat!(
+            journal_entry_select!(),
+            r#"
+            WHERE source_type = 'OPENING_BALANCE'
+              AND source_id IS NOT DISTINCT FROM $1
+              AND source_event IS NOT DISTINCT FROM $2
+              AND status IN ('POSTED', 'REVERSED')
+              AND deleted_at IS NULL
+            ORDER BY posted_at DESC NULLS LAST, created_at ASC
+            LIMIT 1
+            FOR UPDATE
+            "#
+        ))
+        .bind(&input.entry.source_id)
+        .bind(&input.entry.source_event)
+        .fetch_optional(&mut **tx)
+        .await?
+    } else {
+        sqlx::query_as::<_, JournalEntryDto>(concat!(
+            journal_entry_select!(),
+            " WHERE id = $1 FOR UPDATE"
+        ))
+        .bind(&entry_id)
+        .fetch_optional(&mut **tx)
+        .await?
+    };
+
+    if let Some(existing_entry) = existing_entry {
+        if existing_entry.source_type == "OPENING_BALANCE"
+            && existing_entry.status == "POSTED"
+            && input.entry.status == "POSTED"
+        {
+            let existing_lines = list_journal_entry_lines_in_tx(tx, &existing_entry.id).await?;
+            if !posted_opening_journal_matches(
+                &existing_entry,
+                &existing_lines,
+                &input.entry,
+                &input.lines,
+            ) {
+                return Err(sqlx::Error::Protocol(
+                    "Jurnal saldo awal sudah diposting dengan payload yang berbeda.".into(),
+                ));
+            }
+
+            return Ok(JournalEntryBundleDto {
+                entry: existing_entry,
+                lines: existing_lines,
+            });
+        }
+
+        if existing_entry.source_type == "OPENING_BALANCE"
+            && existing_entry.status == "REVERSED"
+            && input.entry.status == "POSTED"
+        {
+            let existing_lines = list_journal_entry_lines_in_tx(tx, &existing_entry.id).await?;
+            return Ok(JournalEntryBundleDto {
+                entry: existing_entry,
+                lines: existing_lines,
+            });
+        }
+    }
+
+    let upserted_entry = upsert_journal_entry(tx, input.entry).await?;
     if let Some(entry) = upserted_entry {
-        replace_journal_entry_lines(&mut tx, &entry.id, input.lines).await?;
-        let lines = list_journal_entry_lines_in_tx(&mut tx, &entry.id).await?;
-        tx.commit().await?;
+        replace_journal_entry_lines(tx, &entry.id, input.lines).await?;
+        let lines = list_journal_entry_lines_in_tx(tx, &entry.id).await?;
         return Ok(JournalEntryBundleDto { entry, lines });
     }
 
-    let entry = get_journal_entry_in_tx(&mut tx, &entry_id)
+    let entry = get_journal_entry_in_tx(tx, &entry_id)
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
-    let lines = list_journal_entry_lines_in_tx(&mut tx, &entry.id).await?;
-    tx.commit().await?;
+    let lines = list_journal_entry_lines_in_tx(tx, &entry.id).await?;
 
     Ok(JournalEntryBundleDto { entry, lines })
 }

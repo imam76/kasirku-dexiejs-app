@@ -61,7 +61,7 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
   }
 
   const baseUnit = product.purchase_unit;
-  const allMutations: StockCardMovement[] = [];
+  let allMutations: StockCardMovement[] = [];
 
   // 1. Manual opening stock entries. Migration-generated opening lots do not
   // have source_id/source_line_id and are skipped to avoid double counting.
@@ -78,8 +78,12 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
     allMutations.push({
       id: `opening_stock_${lot.id}`,
       date: lot.received_at,
-      sourceType: 'OPENING_STOCK',
-      sourceNumber: '-',
+      sourceType: lot.source_id?.startsWith('opening-balance-inventory-')
+        ? 'INVENTORY_OPENING_BALANCE'
+        : 'OPENING_STOCK',
+      sourceNumber: lot.source_id?.startsWith('opening-balance-inventory-')
+        ? lot.source_id
+        : '-',
       qtyIn: quantity,
       qtyOut: 0,
       unit: baseUnit,
@@ -370,6 +374,19 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
         });
       }
     }
+  }
+
+  // Saldo awal persediaan resmi adalah snapshot pada cutoff, bukan penerimaan
+  // tambahan. Riwayat stok sebelum snapshot tidak dibawa ke saldo berjalan agar
+  // kartu stok tidak menghitung stok lama dan snapshot dua kali.
+  const authoritativeOpening = allMutations
+    .filter((movement) => movement.sourceType === 'INVENTORY_OPENING_BALANCE')
+    .sort((left, right) => getMovementTime(right) - getMovementTime(left))[0];
+  if (authoritativeOpening) {
+    const openingTime = getMovementTime(authoritativeOpening);
+    allMutations = allMutations.filter((movement) => (
+      movement.id === authoritativeOpening.id || getMovementTime(movement) > openingTime
+    ));
   }
 
   // 9. Sort by date ASC

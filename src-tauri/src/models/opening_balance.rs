@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+use crate::models::{
+    accounting_setting::GeneralLedgerSettingDto, journal_entry::JournalEntryBundleDto,
+    stock_mutation::StockMutationDto,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct OpeningBalanceBatchDto {
     pub id: String,
@@ -45,6 +50,13 @@ pub struct OpeningBalanceLineDto {
     pub batch_id: String,
     pub module: String,
     pub line_number: i32,
+    pub product_id: Option<String>,
+    pub product_sku: Option<String>,
+    pub product_name: Option<String>,
+    pub quantity: Option<f64>,
+    pub unit: Option<String>,
+    pub unit_cost: Option<f64>,
+    pub inventory_lot_id: Option<String>,
     pub contact_id: Option<String>,
     pub party_name: Option<String>,
     pub document_number: Option<String>,
@@ -78,4 +90,12 @@ pub struct OpeningBalanceLineDto {
 pub struct OpeningBalanceBundleDto {
     pub batch: OpeningBalanceBatchDto,
     pub lines: Vec<OpeningBalanceLineDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryOpeningBalancePostingBundleDto {
+    pub opening_balance: OpeningBalanceBundleDto,
+    pub journal_entry: JournalEntryBundleDto,
+    pub stock_snapshots: Vec<StockMutationDto>,
+    pub general_ledger_setting: Option<GeneralLedgerSettingDto>,
 }

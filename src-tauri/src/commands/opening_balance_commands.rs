@@ -1,7 +1,7 @@
 use crate::{
     db::{PostgresCommandResult, PostgresState},
-    models::opening_balance::OpeningBalanceBundleDto,
-    repositories::opening_balance_repository,
+    models::opening_balance::{InventoryOpeningBalancePostingBundleDto, OpeningBalanceBundleDto},
+    repositories::{inventory_opening_balance_repository, opening_balance_repository},
 };
 use tauri::State;
 
@@ -34,4 +34,16 @@ pub async fn postgres_upsert_opening_balance_bundle(
 ) -> PostgresCommandResult<OpeningBalanceBundleDto> {
     let pool = state.pool()?;
     Ok(opening_balance_repository::upsert_opening_balance_bundle(&pool, input).await?)
+}
+
+#[tauri::command]
+pub async fn postgres_post_inventory_opening_balance_bundle(
+    state: State<'_, PostgresState>,
+    input: InventoryOpeningBalancePostingBundleDto,
+) -> PostgresCommandResult<InventoryOpeningBalancePostingBundleDto> {
+    let pool = state.pool()?;
+    Ok(
+        inventory_opening_balance_repository::post_inventory_opening_balance_bundle(&pool, input)
+            .await?,
+    )
 }
