@@ -1,7 +1,8 @@
-import { AutoComplete, Button, Input, InputNumber, Modal } from 'antd';
-import { Armchair, Banknote, CheckCircle2, CreditCard, Hash, NotebookPen, Plus, QrCode, TicketPercent, Trash2, UserRound, X } from 'lucide-react';
+import { AutoComplete, Button, Dropdown, Input, InputNumber, Modal } from 'antd';
+import { Armchair, Banknote, CheckCircle2, ChevronDown, CreditCard, Hash, NotebookPen, Plus, QrCode, TicketPercent, Trash2, UserRound, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { CheckoutPaymentInput } from '@/services/posTransactionPaymentService';
 import type { PromoEvaluationResult } from '@/services/promoService';
@@ -10,6 +11,9 @@ import type { PaymentMethodCategory, Promo, RestaurantOrderRecord } from '@/type
 import { formatCurrency } from '@/utils/formatters';
 import { allocatePosPayments } from '@/utils/posSplitPayment';
 import { buildPosVoucherOptions, isAppliedPosVoucher } from '@/utils/posVoucher';
+import PosPaymentSummary from '@/components/pos-payment/PosPaymentSummary';
+
+const DESKTOP_VIEWPORT_QUERY = '(min-width: 1280px)';
 
 interface RestaurantPaymentModalProps {
   open: boolean;
@@ -45,6 +49,7 @@ export function RestaurantPaymentModal({
   onRecordExpense,
 }: RestaurantPaymentModalProps) {
   const { t } = useI18n();
+  const isDesktopViewport = useMediaQuery(DESKTOP_VIEWPORT_QUERY);
   const validMethods = useMemo(() => methods.filter((option) => option.isValid), [methods]);
   const voucherOptions = useMemo(() => buildPosVoucherOptions(promos), [promos]);
   const defaultMethod = validMethods.find((option) => option.method.code.toUpperCase() === 'TUNAI')
@@ -94,12 +99,14 @@ export function RestaurantPaymentModal({
     const method = validMethods.find((option) => option.method.id === draft.paymentMethodId)?.method;
     return Boolean(method && (!method.requires_reference || draft.reference.trim()));
   });
-  const canStartSplit = effectivePaymentDrafts.length === 1
-    && Boolean(effectivePaymentDrafts[0]?.isAmountAutoFilled)
-    && paymentPreview.errors.length === 0
-    && paymentPreview.isComplete;
+  const hasStartedPayment = effectivePaymentDrafts.some((draft) => {
+    const amount = Number(draft.amount);
+    return Number.isFinite(amount) && amount > 0;
+  });
   const canAddPayment = effectivePaymentDrafts.length < validMethods.length
-    && (canStartSplit || (paymentPreview.errors.length === 0 && paymentPreview.remainingAmount > 0));
+    && hasStartedPayment
+    && paymentPreview.errors.length === 0
+    && paymentPreview.remainingAmount > 0;
   const isValid = total > 0
     && paymentPreview.errors.length === 0
     && paymentPreview.isComplete
@@ -113,23 +120,26 @@ export function RestaurantPaymentModal({
 
   const addPaymentDraft = () => {
     if (!canAddPayment) return;
-    setPaymentDrafts((current) => {
-      const shouldOpenInitialSplit = current.length === 1 && current[0]?.isAmountAutoFilled;
-      const preceding = shouldOpenInitialSplit
-        ? current.map((draft) => ({ ...draft, amount: '', isAmountAutoFilled: false }))
-        : current;
-      return [...preceding, {
-        clientId: crypto.randomUUID(),
-        paymentMethodId: undefined,
-        amount: String(shouldOpenInitialSplit ? total : paymentPreview.remainingAmount),
-        reference: '',
-        isAmountAutoFilled: true,
-      }];
-    });
+    setPaymentDrafts((current) => [...current, {
+      clientId: crypto.randomUUID(),
+      paymentMethodId: undefined,
+      amount: String(paymentPreview.remainingAmount),
+      reference: '',
+      isAmountAutoFilled: true,
+    }]);
   };
 
   const removePaymentDraft = (clientId: string) => {
     setPaymentDrafts((current) => current.filter((draft) => draft.clientId !== clientId));
+  };
+
+  const submitPayment = () => {
+    if (!isValid || loading) return;
+    void onConfirm(effectivePaymentDrafts.map((draft) => ({
+      paymentMethodId: draft.paymentMethodId ?? '',
+      tenderedAmount: Number(draft.amount),
+      paymentReference: draft.reference.trim() || undefined,
+    })));
   };
 
   return (
@@ -262,14 +272,14 @@ export function RestaurantPaymentModal({
                       );
                     })}
                   </div>
-                  <div className="mt-3 flex items-center justify-between gap-4">
-                    <label className="text-sm font-bold text-slate-700">{t('payment.amountPlaceholder')}</label>
+                  <div className="mt-3 space-y-1.5">
+                    <label className="block text-sm font-bold text-slate-700">{t('payment.amountPlaceholder')}</label>
                     <InputNumber<number>
                       min={0}
                       value={draft.amount === '' ? null : Number(draft.amount)}
                       prefix="Rp"
                       status={line?.error?.startsWith('Nominal pembayaran ') ? 'error' : undefined}
-                      className="w-48"
+                      className="w-full"
                       formatter={(value) => formatCurrency(Number(value ?? 0))}
                       parser={(value) => Number(String(value ?? '').replace(/\D/g, ''))}
                       onChange={(value) => updatePaymentDraft(draft.clientId, {
@@ -301,56 +311,93 @@ export function RestaurantPaymentModal({
           </div>
         )}
 
-        <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 min-[768px]:grid min-[768px]:grid-cols-2 min-[768px]:gap-3">
-          <div className="space-y-2 border-b border-blue-100 pb-3 text-sm min-[768px]:border-b-0 min-[768px]:border-r min-[768px]:pb-0 min-[768px]:pr-3">
-            <div className="flex justify-between"><span className="text-slate-500">{t('restaurantPos.total')}</span><span className="font-black text-slate-900">Rp {formatCurrency(total)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">{t('restaurantPos.discount')}</span><span className="font-bold text-emerald-700">-Rp {formatCurrency(promo.discount_amount)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">{t('payment.totalPaid')}</span><span className="font-bold text-slate-900">Rp {formatCurrency(paymentPreview.totalTendered)}</span></div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 min-[768px]:mt-0">
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
-              <p className="text-[10px] font-black uppercase tracking-wide text-amber-700">{t('payment.remaining')}</p>
-              <p className="mt-1 truncate text-base font-black tabular-nums text-amber-950">Rp {formatCurrency(paymentPreview.remainingAmount)}</p>
-            </div>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
-              <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">{t('restaurantPos.change')}</p>
-              <p className="mt-1 truncate text-base font-black tabular-nums text-emerald-950">Rp {formatCurrency(paymentPreview.totalChange)}</p>
-            </div>
-          </div>
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('payment.billingInformation')}</p>
+          <PosPaymentSummary
+            total={total}
+            discountAmount={promo.discount_amount}
+            totalPaid={paymentPreview.totalTendered}
+            remainingAmount={paymentPreview.remainingAmount}
+            changeAmount={paymentPreview.totalChange}
+          />
         </div>
         </div>
 
-        <div data-testid="restaurant-payment-actions" className="sticky bottom-0 z-20 grid shrink-0 grid-cols-[1fr_2fr] gap-2 border-t border-slate-200 bg-white pb-4 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.25)]">
-          <Button
-            size="large"
-            icon={<NotebookPen size={16} />}
-            disabled={loading}
-            onClick={() => void onRecordExpense()}
-            className="!col-span-2 !border-amber-300 !bg-amber-50 !font-bold !text-amber-800 hover:!bg-amber-100"
-          >
-            Catat sebagai Pengeluaran (Beban)
-          </Button>
+        <div
+          data-testid="restaurant-payment-actions"
+          className={`sticky bottom-0 z-20 grid shrink-0 gap-2 border-t border-slate-200 bg-white pb-4 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.25)] ${isDesktopViewport
+            ? 'grid-cols-[1fr_2fr]'
+            : 'grid-cols-[auto_minmax(5rem,1fr)_minmax(0,2fr)]'}`}
+        >
+          {!isDesktopViewport ? (
+            <Button
+              size="large"
+              type="text"
+              icon={<NotebookPen size={16} />}
+              disabled={loading}
+              onClick={() => void onRecordExpense()}
+              title={t('payment.recordExpense')}
+              aria-label={t('payment.recordExpense')}
+              className="!px-2 !font-semibold !text-amber-700 hover:!bg-amber-50"
+            >
+              <span className="hidden whitespace-nowrap sm:inline">{t('payment.recordExpense')}</span>
+              <span className="whitespace-nowrap sm:hidden">{t('payment.expense')}</span>
+            </Button>
+          ) : null}
           <Button size="large" icon={<X size={16} />} disabled={loading} onClick={onCancel}>{t('common.cancel')}</Button>
-          <Button
-            type="primary"
-            size="large"
-            icon={<CheckCircle2 size={16} />}
-            disabled={!isValid}
-            loading={loading}
-            onClick={() => {
-              if (!isValid) return;
-              void onConfirm(effectivePaymentDrafts.map((draft) => ({
-                paymentMethodId: draft.paymentMethodId ?? '',
-                tenderedAmount: Number(draft.amount),
-                paymentReference: draft.reference.trim() || undefined,
-              })));
-            }}
-            className={isValid
-              ? '!border-blue-600 !bg-blue-600 !font-bold !text-white hover:!border-blue-700 hover:!bg-blue-700'
-              : '!cursor-not-allowed !border-slate-300 !bg-slate-200 !font-bold !text-slate-500 !shadow-none'}
-          >
-            {t('restaurantPos.confirmPayment')}
-          </Button>
+          <div className="flex min-w-0">
+            <Button
+              type="primary"
+              size="large"
+              icon={<CheckCircle2 size={16} />}
+              disabled={!isValid}
+              loading={loading}
+              onClick={submitPayment}
+              className={`${isValid
+                ? '!border-blue-600 !bg-blue-600 !text-white hover:!border-blue-700 hover:!bg-blue-700'
+                : '!cursor-not-allowed !border-slate-300 !bg-slate-200 !text-slate-500 !shadow-none'} !min-w-0 !flex-1 !font-bold ${isDesktopViewport ? '!rounded-r-none' : ''}`}
+            >
+              <span className="truncate">{t('restaurantPos.confirmPayment')}</span>
+            </Button>
+            {isDesktopViewport ? (
+              <Dropdown
+              trigger={['click']}
+              placement="topRight"
+              overlayStyle={{ zIndex: 1200 }}
+              menu={{
+                items: [
+                  {
+                    key: 'confirm-payment',
+                    icon: <CheckCircle2 size={15} />,
+                    label: t('restaurantPos.confirmPayment'),
+                    disabled: !isValid || loading,
+                  },
+                  { type: 'divider' },
+                  {
+                    key: 'record-expense',
+                    icon: <NotebookPen size={15} className="text-amber-600" />,
+                    label: t('payment.recordExpense'),
+                    disabled: loading,
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'confirm-payment') submitPayment();
+                  if (key === 'record-expense' && !loading) void onRecordExpense();
+                },
+              }}
+            >
+              <Button
+                type="primary"
+                size="large"
+                icon={<ChevronDown size={17} />}
+                disabled={loading}
+                title={t('payment.moreActions')}
+                aria-label={t('payment.moreActions')}
+                className="!rounded-l-none !border-l-blue-500 !px-3"
+              />
+              </Dropdown>
+            ) : null}
+          </div>
         </div>
       </div>
     </Modal>

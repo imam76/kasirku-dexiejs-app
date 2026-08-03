@@ -1,14 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Input, InputNumber, Select, Switch } from 'antd';
-import { Banknote, CheckCircle2, CreditCard, DollarSign, NotebookPen, Plus, QrCode, Trash2, X } from 'lucide-react';
+import { Alert, Dropdown, Input, InputNumber, Select, Switch } from 'antd';
+import { Banknote, CheckCircle2, ChevronDown, CreditCard, DollarSign, NotebookPen, Plus, QrCode, Trash2, X } from 'lucide-react';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PosPaymentDraft } from '@/store/transactionStore';
 import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
 import { formatCurrency } from '@/utils/formatters';
 import { useI18n } from '@/hooks/useI18n';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { PaymentMethodCategory } from '@/types';
+import PosPaymentSummary from './PosPaymentSummary';
 
 const PAYMENT_SHORTCUTS_STORAGE_KEY = 'frayukti-show-payment-shortcuts';
+const DESKTOP_VIEWPORT_QUERY = '(min-width: 1280px)';
 const QUICK_AMOUNTS = [5000, 10000, 20000, 50000, 100000];
 const PAYMENT_SHORTCUT_CLASS = 'flex min-h-9 items-center justify-center gap-1 rounded-lg border border-blue-100 bg-white px-1.5 py-2 text-xs font-semibold tabular-nums text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700';
 
@@ -54,6 +57,7 @@ export default function PosSplitPaymentEditor({
   onCancel,
 }: Props) {
   const { t } = useI18n();
+  const isDesktopViewport = useMediaQuery(DESKTOP_VIEWPORT_QUERY);
   const [showPaymentShortcuts, setShowPaymentShortcuts] = useState(() => {
     const saved = localStorage.getItem(PAYMENT_SHORTCUTS_STORAGE_KEY);
     return saved === null ? true : saved === 'true';
@@ -65,16 +69,33 @@ export default function PosSplitPaymentEditor({
   }, [showPaymentShortcuts]);
 
   const selectedIds = new Set(drafts.map((draft) => draft.paymentMethodId).filter(Boolean));
+  const validMethodCount = methods.filter((method) => method.isValid).length;
+  const hasStartedPayment = drafts.some((draft) => {
+    const amount = Number(draft.amount);
+    return Number.isFinite(amount) && amount > 0;
+  });
   const referencesValid = drafts.every((draft) => {
     const option = methods.find((item) => item.method.id === draft.paymentMethodId);
     return Boolean(option?.isValid && (!option.method.requires_reference || draft.reference.trim()));
   });
   const canConfirm = preview.errors.length === 0 && preview.isComplete && referencesValid;
-  const canAdd = preview.errors.length === 0
+  const canAdd = hasStartedPayment
+    && preview.errors.length === 0
     && preview.remainingAmount > 0
-    && selectedIds.size < methods.filter((method) => method.isValid).length;
+    && drafts.length < validMethodCount;
   const isDialog = layout === 'dialog';
   const hasValidPaymentMethod = methods.some((method) => method.isValid);
+  const useSplitAction = isDesktopViewport && Boolean(onRecordExpense);
+
+  const handleRecordExpense = async () => {
+    if (!onRecordExpense || isRecordingExpense) return;
+    setIsRecordingExpense(true);
+    try {
+      await onRecordExpense();
+    } finally {
+      setIsRecordingExpense(false);
+    }
+  };
 
   if (!hasValidPaymentMethod && !onRecordExpense) {
     return <Alert type="error" showIcon message={t('payment.noMethodAvailable')} />;
@@ -201,14 +222,14 @@ export default function PosSplitPaymentEditor({
               />
             )}
             {isDialog ? (
-              <div className="mt-3 flex items-center justify-between gap-4">
-                <label className="text-sm font-bold text-slate-700">{t('payment.amountPlaceholder')}</label>
+              <div className="mt-3 space-y-1.5">
+                <label className="block text-sm font-bold text-slate-700">{t('payment.amountPlaceholder')}</label>
                 <InputNumber<number>
                   min={0}
                   value={draft.amount === '' ? null : Number(draft.amount)}
                   prefix="Rp"
                   status={line?.error?.startsWith('Nominal pembayaran ') ? 'error' : undefined}
-                  className="w-48"
+                  className="w-full"
                   formatter={(value) => formatCurrency(Number(value ?? 0))}
                   parser={(value) => Number(String(value ?? '').replace(/\D/g, ''))}
                   onChange={(value) => onUpdate(draft.clientId, {
@@ -283,13 +304,12 @@ export default function PosSplitPaymentEditor({
           })}
         </div>
 
-        {(isDialog ? canAdd : drafts.length === 1) && (
+        {canAdd && (
           <button
             type="button"
             data-testid="pos-add-payment"
-            disabled={!canAdd}
             onClick={onAdd}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 py-2 font-semibold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 py-2 font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50"
           >
             <Plus size={17} /> {t('payment.add')}
           </button>
@@ -298,76 +318,90 @@ export default function PosSplitPaymentEditor({
         {showSectionTitles && (
           <p className="pt-1 text-xs font-bold uppercase tracking-wide text-slate-400">{t('payment.billingInformation')}</p>
         )}
-        <div
-          data-testid="pos-payment-summary"
-          className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 min-[768px]:grid min-[768px]:grid-cols-2 min-[768px]:gap-3"
-        >
-        <div className="space-y-2 border-b border-blue-100 pb-3 text-sm min-[768px]:border-b-0 min-[768px]:border-r min-[768px]:pb-0 min-[768px]:pr-3">
-          <div className="flex items-center justify-between gap-3 text-slate-600">
-            <span>{t('cart.total')}</span>
-            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(total)}</strong>
-          </div>
-          <div data-testid="pos-payment-discount" className="flex items-center justify-between gap-3 text-emerald-700">
-            <span>{t('cart.discount')}</span>
-            <strong className="tabular-nums">-Rp {formatCurrency(discountAmount)}</strong>
-          </div>
-          <div className="flex items-center justify-between gap-3 text-slate-600">
-            <span>{t('payment.totalPaid')}</span>
-            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(preview.totalTendered)}</strong>
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 min-[768px]:mt-0">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
-            <div className="text-[10px] font-black uppercase tracking-wide text-amber-700">{t('payment.remaining')}</div>
-            <div data-testid="pos-payment-remaining" className="mt-1 break-words text-base font-black tabular-nums text-amber-950">
-              Rp {formatCurrency(preview.remainingAmount)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
-            <div className="text-[10px] font-black uppercase tracking-wide text-emerald-700">{t('payment.change')}</div>
-            <div data-testid="pos-payment-change" className="mt-1 break-words text-base font-black tabular-nums text-emerald-950">
-              Rp {formatCurrency(preview.totalChange)}
-            </div>
-          </div>
-        </div>
-        </div>
+        <PosPaymentSummary
+          total={total}
+          discountAmount={discountAmount}
+          totalPaid={preview.totalTendered}
+          remainingAmount={preview.remainingAmount}
+          changeAmount={preview.totalChange}
+        />
       </div>
 
       <div
         data-testid="pos-payment-actions"
-        className={isDialog
-          ? 'sticky bottom-0 z-30 mt-auto grid shrink-0 grid-cols-[1fr_2fr] gap-2 border-t border-slate-200 bg-white pb-4 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.25)]'
-          : 'sticky bottom-0 z-30 -mx-3 mt-auto grid shrink-0 grid-cols-2 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)] min-[1024px]:static lg:sticky'}
+        className={`${isDialog
+          ? 'sticky bottom-0 z-30 mt-auto grid shrink-0 gap-2 border-t border-slate-200 bg-white pb-4 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.25)]'
+          : 'sticky bottom-0 z-30 -mx-3 mt-auto grid shrink-0 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)] min-[1024px]:static lg:sticky'} ${useSplitAction || !onRecordExpense
+          ? 'grid-cols-[1fr_2fr]'
+          : 'grid-cols-[auto_minmax(5rem,1fr)_minmax(0,2fr)]'}`}
       >
-        {onRecordExpense ? (
+        {!useSplitAction && onRecordExpense ? (
           <button
             type="button"
             data-testid="pos-record-expense"
             disabled={isRecordingExpense}
-            onClick={async () => {
-              setIsRecordingExpense(true);
-              try {
-                await onRecordExpense();
-              } finally {
-                setIsRecordingExpense(false);
-              }
-            }}
-            className="col-span-2 flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 py-2.5 font-bold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
+            onClick={() => void handleRecordExpense()}
+            className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-wait disabled:opacity-60"
+            title={t('payment.recordExpense')}
+            aria-label={t('payment.recordExpense')}
           >
-            <NotebookPen size={16} />
-            {isRecordingExpense ? 'Mencatat Pengeluaran...' : 'Catat sebagai Pengeluaran (Beban)'}
+            <NotebookPen size={16} className="shrink-0" />
+            <span className="hidden whitespace-nowrap sm:inline">
+              {isRecordingExpense ? t('payment.recordingExpense') : t('payment.recordExpense')}
+            </span>
+            <span className="whitespace-nowrap sm:hidden">{t('payment.expense')}</span>
           </button>
         ) : null}
         <button type="button" onClick={onCancel} className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white py-2.5 font-semibold text-gray-700 hover:bg-gray-50"><X size={16} /> {t('payment.cancel')}</button>
-        <button
-          type="button"
-          data-testid="pos-confirm-payment"
-          disabled={!canConfirm}
-          onClick={onConfirm}
-          className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2.5 font-bold text-white shadow-sm hover:bg-blue-700 disabled:bg-gray-300 disabled:shadow-none"
-        >
-          <CheckCircle2 size={16} /> {confirmLabel ?? t('payment.confirm')}
-        </button>
+        <div className="flex min-w-0">
+          <button
+            type="button"
+            data-testid="pos-confirm-payment"
+            disabled={!canConfirm}
+            onClick={() => void onConfirm()}
+            className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 py-2.5 font-bold text-white shadow-sm ${useSplitAction ? 'rounded-l-lg' : 'rounded-lg'} bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:shadow-none`}
+          >
+            <CheckCircle2 size={16} className="shrink-0" />
+            <span className="truncate">{confirmLabel ?? t('payment.confirmPayment')}</span>
+          </button>
+          {useSplitAction ? (
+            <Dropdown
+              trigger={['click']}
+              placement="topRight"
+              overlayStyle={{ zIndex: 1200 }}
+              menu={{
+                items: [
+                  {
+                    key: 'confirm-payment',
+                    icon: <CheckCircle2 size={15} />,
+                    label: confirmLabel ?? t('payment.confirmPayment'),
+                    disabled: !canConfirm,
+                  },
+                  { type: 'divider' },
+                  {
+                    key: 'record-expense',
+                    icon: <NotebookPen size={15} className="text-amber-600" />,
+                    label: isRecordingExpense ? t('payment.recordingExpense') : t('payment.recordExpense'),
+                    disabled: isRecordingExpense,
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'confirm-payment' && canConfirm) void onConfirm();
+                  if (key === 'record-expense') void handleRecordExpense();
+                },
+              }}
+            >
+              <button
+                type="button"
+                className="grid w-11 shrink-0 place-items-center rounded-r-lg border-l border-blue-500 bg-blue-600 text-white shadow-sm transition hover:bg-blue-700"
+                title={t('payment.moreActions')}
+                aria-label={t('payment.moreActions')}
+              >
+                <ChevronDown size={17} />
+              </button>
+            </Dropdown>
+          ) : null}
+        </div>
       </div>
     </div>
   );
