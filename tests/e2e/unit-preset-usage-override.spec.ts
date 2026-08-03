@@ -53,18 +53,20 @@ test('default unit usage can be overridden and is reflected in the product form'
   const productDialog = page.getByRole('dialog', { name: 'Tambah Produk Baru' });
   const baseUnitSelect = productDialog.getByTestId('stock-product-base-unit');
   await baseUnitSelect.click();
-  await page.keyboard.type('box');
-  await page.getByRole('option', { name: 'box', exact: true }).click();
+  await baseUnitSelect.getByRole('combobox').fill('box');
+  await expect(page.getByRole('option', { name: 'box', exact: true })).toBeAttached();
+  await page.keyboard.press('Enter');
   await expect(baseUnitSelect).toContainText('box');
 
   await baseUnitSelect.click();
-  await page.keyboard.type('pcs');
-  await page.getByRole('option', { name: 'pcs', exact: true }).click();
+  await baseUnitSelect.getByRole('combobox').fill('pcs');
+  await page.keyboard.press('Enter');
   await expect(baseUnitSelect).toContainText('pcs');
 
   await productDialog.getByRole('tab', { name: /Multi Unit/ }).click();
-  await productDialog.getByTestId('stock-product-sellable-units').click();
-  await page.keyboard.type('box');
+  const sellableUnitSelect = productDialog.getByTestId('stock-product-sellable-units');
+  await sellableUnitSelect.click();
+  await sellableUnitSelect.getByRole('combobox').fill('box');
   await expect(page.getByRole('option', { name: 'box', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
