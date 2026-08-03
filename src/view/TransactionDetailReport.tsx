@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
 import { usePosPaymentMethodFilterOptions } from '@/hooks/usePosPaymentMethodFilterOptions';
 import type { PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
+import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 
 const { Text, Title } = Typography;
 
@@ -39,6 +40,7 @@ const profitStatusLabel = {
 export default function TransactionDetailReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
+  const { profile } = useCompanyProfileSetting();
   const isMobile = useIsMobile();
   const { can } = useAuth();
   const canViewProfit = can('PROFIT_VIEW');
@@ -359,7 +361,7 @@ export default function TransactionDetailReport() {
         build: (doc) => {
           doc.setFontSize(16);
           doc.setFont('helvetica', 'bold');
-          doc.text('Frayukti', 105, 16, { align: 'center' });
+          doc.text(profile?.company_name?.trim() || 'Frayukti', 105, 16, { align: 'center' });
           doc.setFontSize(13);
           doc.text(t('report.detail.title'), 105, 27, { align: 'center' });
           doc.setFontSize(9);

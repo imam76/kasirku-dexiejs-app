@@ -21,12 +21,14 @@ import { usePosPaymentMethodFilterOptions } from '@/hooks/usePosPaymentMethodFil
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import { formatPosPaymentSummary } from '@/utils/posSplitPayment';
 import type { PosPaymentModeFilter } from '@/utils/posPaymentMethodFilter';
+import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 
 const { Title, Text } = Typography;
 
 export default function PosSalesReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
+  const { profile } = useCompanyProfileSetting();
   const { can } = useAuth();
   const canViewProfit = can('PROFIT_VIEW');
   const isMobile = useIsMobile();
@@ -66,7 +68,7 @@ export default function PosSalesReport() {
 
           doc.setFontSize(16);
           doc.setFont('helvetica', 'bold');
-          doc.text('Frayukti', 105, 18, { align: 'center' });
+          doc.text(profile?.company_name?.trim() || 'Frayukti', 105, 18, { align: 'center' });
           doc.setFontSize(13);
           doc.text(t('report.posSales.title'), 105, 30, { align: 'center' });
           doc.setFontSize(11);

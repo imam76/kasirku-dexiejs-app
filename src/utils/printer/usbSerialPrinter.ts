@@ -8,6 +8,7 @@ import {
 } from '@/types';
 import { normalizePrinterError } from '@/utils/printer/bluetoothPrinter';
 import { isNativeTauri } from '@/utils/printer/bluetoothPrinter';
+import { getReceiptPaperCharacterWidth } from '@/utils/printer/receiptPaperSize';
 
 export type { SelectedUsbPrinter, UsbSerialPrinterDevice };
 
@@ -94,52 +95,86 @@ const currencyFormat = (amount: number) =>
   new Intl.NumberFormat('id-ID').format(Math.round(amount));
 
 const padLine = (left: string, right: string, total = 32): string => {
-  const spaces = total - left.length - right.length;
-  return left + ' '.repeat(Math.max(1, spaces)) + right;
+  const safeRight = right.slice(0, total);
+  const maxLeftWidth = Math.max(1, total - safeRight.length - 1);
+  const safeLeft = left.slice(0, maxLeftWidth);
+  const spaces = total - safeLeft.length - safeRight.length;
+  return safeLeft + ' '.repeat(Math.max(1, spaces)) + safeRight;
+};
+
+const wrapText = (value: string, width: number): string[] => {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [''];
+
+  const lines: string[] = [];
+  let currentLine = '';
+  words.forEach((word) => {
+    if (word.length > width) {
+      if (currentLine) lines.push(currentLine);
+      for (let index = 0; index < word.length; index += width) {
+        lines.push(word.slice(index, index + width));
+      }
+      currentLine = '';
+      return;
+    }
+
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (candidate.length <= width) {
+      currentLine = candidate;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  });
+  if (currentLine) lines.push(currentLine);
+  return lines;
 };
 
 const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
   const parts: Uint8Array[] = [];
+  const paperWidth = getReceiptPaperCharacterWidth(receipt.paperSize);
 
   const push = (...chunks: Uint8Array[]) => parts.push(...chunks);
 
   push(INIT);
-  push(ALIGN_CENTER, BOLD_ON, text(receipt.merchantName), BOLD_OFF);
+  push(ALIGN_CENTER, BOLD_ON);
+  wrapText(receipt.merchantName, paperWidth).forEach((merchantLine) => push(text(merchantLine)));
+  push(BOLD_OFF);
   push(text(`#${receipt.transactionNumber}`));
   push(text(new Date(receipt.createdAt).toLocaleString('id-ID')));
   if (receipt.memberName) {
-    push(text(padLine('Member', receipt.memberNumber ? `${receipt.memberNumber}` : receipt.memberName)));
+    push(text(padLine('Member', receipt.memberNumber ? `${receipt.memberNumber}` : receipt.memberName, paperWidth)));
     if (receipt.memberNumber) {
       push(text(`  ${receipt.memberName}`));
     }
   }
-  push(ALIGN_LEFT, line());
+  push(ALIGN_LEFT, line('-', paperWidth));
 
   for (const item of receipt.items) {
-    push(text(item.name));
+    wrapText(item.name, paperWidth).forEach((itemLine) => push(text(itemLine)));
     const qty = `${item.quantity} ${item.unit}`;
     const price = `Rp ${currencyFormat(item.price)}`;
-    push(text(padLine(`  ${qty}`, price)));
+    push(text(padLine(`  ${qty}`, price, paperWidth)));
     if ((item.discountAmount ?? 0) > 0) {
-      push(text(padLine('  Diskon', `-Rp ${currencyFormat(item.discountAmount!)}`)));
+      push(text(padLine('  Diskon', `-Rp ${currencyFormat(item.discountAmount!)}`, paperWidth)));
     }
-    push(text(padLine('  Subtotal', `Rp ${currencyFormat(item.subtotal)}`)));
+    push(text(padLine('  Subtotal', `Rp ${currencyFormat(item.subtotal)}`, paperWidth)));
   }
 
-  push(line());
+  push(line('-', paperWidth));
 
   if ((receipt.subtotalAmount ?? 0) > 0 && receipt.subtotalAmount !== receipt.totalAmount) {
-    push(text(padLine('Subtotal', `Rp ${currencyFormat(receipt.subtotalAmount!)}`)));
+    push(text(padLine('Subtotal', `Rp ${currencyFormat(receipt.subtotalAmount!)}`, paperWidth)));
   }
   if ((receipt.discountAmount ?? 0) > 0) {
-    push(text(padLine('Diskon', `-Rp ${currencyFormat(receipt.discountAmount!)}`)));
+    push(text(padLine('Diskon', `-Rp ${currencyFormat(receipt.discountAmount!)}`, paperWidth)));
   }
 
-  push(BOLD_ON, text(padLine('TOTAL', `Rp ${currencyFormat(receipt.totalAmount)}`)), BOLD_OFF);
+  push(BOLD_ON, text(padLine('TOTAL', `Rp ${currencyFormat(receipt.totalAmount)}`, paperWidth)), BOLD_OFF);
   if (receipt.payments && receipt.payments.length > 0) {
     push(BOLD_ON, text('PEMBAYARAN'), BOLD_OFF);
     receipt.payments.forEach((payment) => {
-      push(text(padLine(payment.methodName, `Rp ${currencyFormat(payment.tenderedAmount)}`)));
+      push(text(padLine(payment.methodName, `Rp ${currencyFormat(payment.tenderedAmount)}`, paperWidth)));
       if (payment.reference) push(text(`  Ref: ${payment.reference}`));
     });
   } else {
@@ -147,28 +182,28 @@ const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
       && receipt.paymentMethodCode.toUpperCase() !== receipt.paymentMethod.toUpperCase()
       ? `${receipt.paymentMethod} [${receipt.paymentMethodCode}]`
       : receipt.paymentMethod;
-    push(text(padLine('Metode', paymentMethodLabel)));
-    if (receipt.paymentReference) push(text(padLine('Referensi', receipt.paymentReference)));
+    push(text(padLine('Metode', paymentMethodLabel, paperWidth)));
+    if (receipt.paymentReference) push(text(padLine('Referensi', receipt.paymentReference, paperWidth)));
   }
-  push(text(padLine('Bayar', `Rp ${currencyFormat(receipt.paymentAmount)}`)));
-  push(text(padLine('Kembali', `Rp ${currencyFormat(receipt.changeAmount)}`)));
+  push(text(padLine('Bayar', `Rp ${currencyFormat(receipt.paymentAmount)}`, paperWidth)));
+  push(text(padLine('Kembali', `Rp ${currencyFormat(receipt.changeAmount)}`, paperWidth)));
   if (
     (receipt.membershipPointsEarned ?? 0) > 0 ||
     (receipt.membershipPointsRedeemed ?? 0) > 0
   ) {
-    push(line());
+    push(line('-', paperWidth));
     if ((receipt.membershipPointsRedeemed ?? 0) > 0) {
-      push(text(padLine('Poin dipakai', `${receipt.membershipPointsRedeemed}`)));
+      push(text(padLine('Poin dipakai', `${receipt.membershipPointsRedeemed}`, paperWidth)));
     }
     if ((receipt.membershipPointsEarned ?? 0) > 0) {
-      push(text(padLine('Poin didapat', `${receipt.membershipPointsEarned}`)));
+      push(text(padLine('Poin didapat', `${receipt.membershipPointsEarned}`, paperWidth)));
     }
     if (receipt.membershipPointsBalanceAfter !== undefined) {
-      push(text(padLine('Saldo poin', `${receipt.membershipPointsBalanceAfter}`)));
+      push(text(padLine('Saldo poin', `${receipt.membershipPointsBalanceAfter}`, paperWidth)));
     }
   }
 
-  push(line());
+  push(line('-', paperWidth));
   push(ALIGN_CENTER, text(receipt.footer ?? 'Terima kasih'), ALIGN_LEFT);
   push(new Uint8Array([LF, LF, LF]));
   push(CUT);

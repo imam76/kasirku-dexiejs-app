@@ -95,6 +95,8 @@ pub struct ReceiptPayload {
     transaction_id: String,
     transaction_number: String,
     merchant_name: String,
+    #[serde(default = "default_receipt_paper_size")]
+    paper_size: String,
     created_at: String,
     payment_method: String,
     #[serde(default)]
@@ -116,6 +118,10 @@ pub struct ReceiptPayload {
     payment_amount: f64,
     change_amount: f64,
     footer: Option<String>,
+}
+
+fn default_receipt_paper_size() -> String {
+    "58mm".to_string()
 }
 
 #[derive(Clone, Debug, Serialize)]

@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import type { CompanyProfileSetting } from '@/types';
 import {
   companyProfileSettingPostgresAdapter,
+  isPostgresUnavailableError,
   isTauriRuntime,
   type RemoteCompanyProfileSettingDto,
 } from './postgresAdapter';
@@ -151,7 +152,21 @@ const syncSavedCompanyProfileSettingToPostgres = async (
     return syncedSetting;
   } catch (error) {
     console.error('Failed to sync company profile setting to PostgreSQL:', error);
-    const reason = error instanceof Error ? error.message : 'Unknown error';
+
+    // The local IndexedDB write above is the source of truth while the desktop
+    // database is offline. getCompanyProfileSetting() will push this newer local
+    // value when PostgreSQL is available again.
+    if (isPostgresUnavailableError(error)) return setting;
+
+    const reason = error instanceof Error
+      ? error.message
+      : (
+          error &&
+          typeof error === 'object' &&
+          typeof (error as { message?: unknown }).message === 'string'
+        )
+        ? (error as { message: string }).message
+        : 'Unknown error';
     throw new Error(`Identitas tersimpan lokal, tetapi gagal disimpan ke database: ${reason}`);
   }
 };

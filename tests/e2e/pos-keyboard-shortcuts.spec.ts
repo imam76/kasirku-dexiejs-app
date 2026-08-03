@@ -160,3 +160,33 @@ test('POS regular supports the one-hand numpad item flow', async ({ page }) => {
   await expect(unitSelect).toContainText('pcs');
   await closeCashierDialog.getByRole('button', { name: 'Batal', exact: true }).click();
 });
+
+test('USB keyboard-wedge scans increment qty without adding another cart line', async ({ page }) => {
+  await preparePosKeyboardFixture(page);
+
+  const search = page.getByPlaceholder('Cari produk (nama atau SKU)...');
+  await search.focus();
+  await search.evaluate((input) => {
+    input.dataset.scannerInputEvents = '0';
+    input.addEventListener('input', () => {
+      input.dataset.scannerInputEvents = String(Number(input.dataset.scannerInputEvents || 0) + 1);
+    });
+  });
+  await page.keyboard.type('POS-BOX', { delay: 5 });
+  await page.keyboard.press('Enter');
+
+  const cartItems = page.locator(`[data-pos-cart-item-id="${PRODUCT_WITH_UNITS_ID}"]:visible`);
+  const quantityInput = cartItems.getByTestId(`pos-cart-quantity-${PRODUCT_WITH_UNITS_ID}`);
+  await expect(search).toHaveAttribute('data-scanner-input-events', '0');
+  await expect(search).toHaveValue('');
+  await expect(cartItems).toHaveCount(1);
+  await expect(quantityInput).toHaveValue('1');
+
+  await page.keyboard.type('POS-BOX', { delay: 5 });
+  await page.keyboard.press('Enter');
+
+  await expect(search).toHaveAttribute('data-scanner-input-events', '0');
+  await expect(search).toHaveValue('');
+  await expect(cartItems).toHaveCount(1);
+  await expect(quantityInput).toHaveValue('2');
+});

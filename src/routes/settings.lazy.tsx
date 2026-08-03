@@ -8,6 +8,7 @@ import PrinterSettingsCard from '@/components/PrinterSettingsCard'
 import UsbPrinterCard from '@/components/UsbPrinterCard'
 import CompanyProfileSettingsCard from '@/components/CompanyProfileSettingsCard'
 import AccountingDateSettingsCard from '@/components/AccountingDateSettingsCard'
+import ReceiptPrintSettingsCard from '@/components/ReceiptPrintSettingsCard'
 import { useI18n } from '@/hooks/useI18n'
 import { useSalesDocumentMarginSettings } from '@/hooks/useSalesDocumentMarginSettings'
 import type { SalesDocumentMarginBasis } from '@/types'
@@ -95,6 +96,10 @@ function Settings() {
 
       <div className="mb-6">
         <AccountingDateSettingsCard />
+      </div>
+
+      <div className="mb-6">
+        <ReceiptPrintSettingsCard />
       </div>
 
       <Row gutter={[16, 16]} className="mb-6">

@@ -371,6 +371,8 @@ export const useStockManagement = () => {
     errors,
     watch,
     setValue,
+    getValues,
+    reset,
     isSubmitting: upsertMutation.isPending,
     isDeleting: deleteMutation.isPending,
     importProductsFromCsv: (items: Parameters<typeof importCsvMutation.mutateAsync>[0]) =>

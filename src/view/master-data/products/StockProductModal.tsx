@@ -12,6 +12,7 @@ import { db } from '@/lib/db';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Alert, Badge, Button, Grid, Input, InputNumber, Modal, Select, Tabs } from 'antd';
+import type { InputRef } from 'antd';
 import { AlertTriangle, ExternalLink, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -19,10 +20,18 @@ import {
   Controller,
   type FieldError,
   type FieldErrors,
+  type UseFormGetValues,
+  type UseFormReset,
   type UseFormSetValue,
   useFieldArray,
   useWatch,
 } from 'react-hook-form';
+import {
+  appendKeyboardBarcodeCharacter,
+  finishKeyboardBarcodeScan,
+  isKeyboardBarcodeBufferActive,
+  type KeyboardBarcodeBuffer,
+} from '@/utils/keyboardBarcodeScanner';
 
 const { useBreakpoint } = Grid;
 
@@ -46,6 +55,8 @@ type Props = {
   control: Control<StockFormData>;
   errors: FieldErrors<StockFormData>;
   setValue: UseFormSetValue<StockFormData>;
+  getValues: UseFormGetValues<StockFormData>;
+  reset: UseFormReset<StockFormData>;
   onCancel: () => void;
   onSave: () => void | Promise<void>;
   setIsModalOpen: (open: boolean) => void;
@@ -78,7 +89,17 @@ function FieldContainer({ label, error, help, required, requiredLabel, children 
   );
 }
 
-export default function StockProductModal({ open, editingId, control, errors, setValue, onCancel, onSave }: Props) {
+export default function StockProductModal({
+  open,
+  editingId,
+  control,
+  errors,
+  setValue,
+  getValues,
+  reset,
+  onCancel,
+  onSave,
+}: Props) {
   const { t } = useI18n();
   const screens = useBreakpoint();
   const [activeTab, setActiveTab] = useState('product');
@@ -410,8 +431,12 @@ export default function StockProductModal({ open, editingId, control, errors, se
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const skuInputRef = useRef<InputRef>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   const lastScannedRef = useRef<{ text: string; at: number } | null>(null);
+  const keyboardScannerBufferRef = useRef<KeyboardBarcodeBuffer | null>(null);
+  const keyboardScannerFormSnapshotRef = useRef<StockFormData | null>(null);
+  const shouldRestoreFormAfterScanRef = useRef(false);
   const beepUrl = new URL('../../assets/beep.mp3', import.meta.url).href;
   const beepAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -424,6 +449,109 @@ export default function StockProductModal({ open, editingId, control, errors, se
   useEffect(() => {
     beepAudioRef.current = new Audio(beepUrl);
   }, [beepUrl]);
+
+  const applyScannedSku = useCallback((text: string) => {
+    const normalizedSku = text.trim();
+    if (!normalizedSku) return;
+
+    setActiveTab('product');
+    setValue('sku', normalizedSku, { shouldDirty: true, shouldValidate: true });
+    void beepAudioRef.current?.play().catch(() => { });
+
+    window.requestAnimationFrame(() => {
+      skuInputRef.current?.focus();
+      skuInputRef.current?.select();
+    });
+  }, [setValue]);
+
+  useEffect(() => {
+    if (!open || scannerOpen) {
+      keyboardScannerBufferRef.current = null;
+      keyboardScannerFormSnapshotRef.current = null;
+      shouldRestoreFormAfterScanRef.current = false;
+      return;
+    }
+
+    const handleHardwareScannerKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented
+        || event.ctrlKey
+        || event.metaKey
+        || event.altKey
+        || event.repeat
+      ) return;
+
+      const isTerminator = event.code === 'Enter'
+        || event.code === 'NumpadEnter'
+        || event.key === 'Tab';
+
+      if (isTerminator) {
+        const scannedCode = finishKeyboardBarcodeScan(
+          keyboardScannerBufferRef.current,
+          event.timeStamp,
+        );
+        keyboardScannerBufferRef.current = null;
+
+        if (scannedCode) {
+          event.preventDefault();
+
+          const snapshot = keyboardScannerFormSnapshotRef.current;
+          if (snapshot && shouldRestoreFormAfterScanRef.current) {
+            reset(snapshot, {
+              keepDirty: true,
+              keepErrors: true,
+              keepTouched: true,
+            });
+          }
+
+          applyScannedSku(scannedCode);
+        }
+
+        keyboardScannerFormSnapshotRef.current = null;
+        shouldRestoreFormAfterScanRef.current = false;
+        return;
+      }
+
+      const isModifierKey = event.key === 'Shift'
+        || event.key === 'Control'
+        || event.key === 'Alt'
+        || event.key === 'AltGraph'
+        || event.key === 'CapsLock';
+
+      if (event.key.length !== 1) {
+        if (!isModifierKey) {
+          keyboardScannerBufferRef.current = null;
+          keyboardScannerFormSnapshotRef.current = null;
+          shouldRestoreFormAfterScanRef.current = false;
+        }
+        return;
+      }
+
+      const isActiveSequence = isKeyboardBarcodeBufferActive(
+        keyboardScannerBufferRef.current,
+        event.timeStamp,
+      );
+      if (!isActiveSequence) {
+        keyboardScannerFormSnapshotRef.current = structuredClone(getValues());
+        const target = event.target;
+        shouldRestoreFormAfterScanRef.current = target instanceof HTMLElement && (
+          target.isContentEditable
+          || target.tagName === 'INPUT'
+          || target.tagName === 'TEXTAREA'
+          || target.tagName === 'SELECT'
+        );
+      }
+
+      keyboardScannerBufferRef.current = appendKeyboardBarcodeCharacter(
+        keyboardScannerBufferRef.current,
+        event.key,
+        event.timeStamp,
+      );
+    };
+
+    window.addEventListener('keydown', handleHardwareScannerKeyDown, true);
+    return () => window.removeEventListener('keydown', handleHardwareScannerKeyDown, true);
+  }, [applyScannedSku, getValues, open, reset, scannerOpen]);
 
   const stopScanner = useCallback(() => {
     controlsRef.current?.stop();
@@ -470,8 +598,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
             if (last && last.text === text && now - last.at < 1500) return;
 
             lastScannedRef.current = { text, at: now };
-            setValue('sku', text);
-            void beepAudioRef.current?.play().catch(() => { });
+            applyScannedSku(text);
             setScannerOpen(false);
           },
         );
@@ -491,7 +618,7 @@ export default function StockProductModal({ open, editingId, control, errors, se
       cancelled = true;
       stopScanner();
     };
-  }, [scannerOpen, setValue, stopScanner]);
+  }, [applyScannedSku, scannerOpen, stopScanner]);
 
   return (
     <>
@@ -557,12 +684,23 @@ export default function StockProductModal({ open, editingId, control, errors, se
                         />
                       </FieldContainer>
 
-                      <FieldContainer label="SKU" error={errors.sku}>
+                      <FieldContainer
+                        label="SKU"
+                        error={errors.sku}
+                        help={t('stock.form.hardwareScannerHint')}
+                      >
                         <div className="flex gap-2">
                           <Controller
                             name="sku"
                             control={control}
-                            render={({ field }) => <Input {...field} className="flex-1" />}
+                            render={({ field }) => (
+                              <Input
+                                {...field}
+                                ref={skuInputRef}
+                                data-testid="stock-product-sku"
+                                className="flex-1"
+                              />
+                            )}
                           />
                           <Button type="default" icon={<ScanLine size={16} />} onClick={() => setScannerOpen(true)} />
                         </div>

@@ -18,6 +18,7 @@ import { Loading } from '@/components/Loading';
 import type { CashierSession } from '@/types';
 import { useDateFilter } from '@/hooks/useDateFilter';
 import { useExportCsv, useExportPdf } from '@/hooks/useExport';
+import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 
 const { Title, Text } = Typography;
 
@@ -29,6 +30,7 @@ type JsPdfWithAutoTable = {
 
 export default function DepositReport() {
   const { t } = useI18n();
+  const { profile } = useCompanyProfileSetting();
   const isMobile = useIsMobile();
 
   // Date States & Filter Handlers
@@ -66,7 +68,7 @@ export default function DepositReport() {
 
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
-        doc.text('Frayukti', 105, 18, { align: 'center' });
+        doc.text(profile?.company_name?.trim() || 'Frayukti', 105, 18, { align: 'center' });
         doc.setFontSize(13);
         doc.text(t('report.deposit.title'), 105, 30, { align: 'center' });
         doc.setFontSize(11);

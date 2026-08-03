@@ -142,6 +142,7 @@ export const stockMessages = {
         'stock.form.save': 'Simpan',
         'stock.form.scanBarcode': 'Scan Barcode',
         'stock.form.scanBarcodeDescription': 'Arahkan kamera ke barcode produk',
+        'stock.form.hardwareScannerHint': 'Scanner USB aktif selama form ini terbuka; tidak perlu fokus ke field SKU.',
 
         'stock.category.bumbu': 'Bumbu & Bahan Masak',
         'stock.category.sembako': 'Sembako Inti',
@@ -319,6 +320,7 @@ export const stockMessages = {
         'stock.form.save': 'Save',
         'stock.form.scanBarcode': 'Scan Barcode',
         'stock.form.scanBarcodeDescription': 'Point the camera at the product barcode',
+        'stock.form.hardwareScannerHint': 'The USB scanner stays active while this form is open; the SKU field does not need focus.',
 
         'stock.category.bumbu': 'Spices & Cooking Ingredients',
         'stock.category.sembako': 'Staple Goods',

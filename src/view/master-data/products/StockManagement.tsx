@@ -29,6 +29,8 @@ export default function StockManagement() {
     resetForm,
     errors,
     setValue,
+    getValues,
+    reset,
     importProductsFromCsv,
     isImporting,
   } = useStockManagement();
@@ -318,6 +320,8 @@ export default function StockManagement() {
         control={control}
         errors={errors}
         setValue={setValue}
+        getValues={getValues}
+        reset={reset}
         onCancel={handleModalCancel}
         setIsModalOpen={setIsModalOpen}
         onSave={async () => {

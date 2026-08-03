@@ -75,7 +75,7 @@ function CompanyProfileSettingsCardContent({
       message.success(t('settings.companyProfile.saveSuccess'));
     } catch (error) {
       console.error(error);
-      message.error(t('settings.companyProfile.saveFailed'));
+      message.error(error instanceof Error ? error.message : t('settings.companyProfile.saveFailed'));
     }
   };
 

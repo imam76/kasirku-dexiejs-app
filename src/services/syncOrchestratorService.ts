@@ -19,6 +19,7 @@ import {
   refreshFiscalYearClosingRunsFromPostgres,
 } from '@/services/fiscalYearReadService';
 import { refreshChartOfAccountsFromPostgres } from '@/services/chartOfAccountReadService';
+import { getCompanyProfileSetting } from '@/services/companyProfileSettingService';
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
@@ -128,6 +129,7 @@ export const refreshAllDataFromPostgres = async () => {
     authUsers: await refreshAuthUsersFromPostgres(),
     activityLogs: await refreshActivityLogsFromPostgres(),
     appSetupConfig: await reconcileSetupConfigWithRemote(),
+    companyProfileSetting: await getCompanyProfileSetting(),
     departments: await refreshDepartmentsFromPostgres(),
     chartOfAccounts: await refreshChartOfAccountsFromPostgres(),
     financeAccountMappings: await refreshFinanceAccountMappingsFromPostgres(),

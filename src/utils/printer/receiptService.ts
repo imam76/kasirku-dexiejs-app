@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import {
   PrinterError,
   ReceiptPayload,
+  ReceiptPaperSize,
   ReceiptPrintResult,
   ReceiptPrintStatus,
   TransactionReceiptInput,
@@ -17,6 +18,7 @@ import {
 } from '@/utils/printer/usbSerialPrinter';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import { getTransactionPaymentsOrLegacyFallback } from '@/utils/posSplitPayment';
+import { getStoredReceiptPaperSize } from '@/utils/printer/receiptPaperSize';
 
 const DEFAULT_MERCHANT_NAME = 'Frayukti';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
@@ -37,13 +39,18 @@ const updateReceiptStatus = async (
   }
 };
 
-export const buildReceiptPayload = (transaction: TransactionReceiptInput): ReceiptPayload => {
+export const buildReceiptPayload = (
+  transaction: TransactionReceiptInput,
+  merchantName = DEFAULT_MERCHANT_NAME,
+  paperSize: ReceiptPaperSize = getStoredReceiptPaperSize(),
+): ReceiptPayload => {
   const payment = getTransactionPaymentSnapshot(transaction);
   const payments = getTransactionPaymentsOrLegacyFallback(transaction, transaction.payments);
   return {
     transactionId: transaction.id,
     transactionNumber: transaction.transaction_number,
-    merchantName: DEFAULT_MERCHANT_NAME,
+    merchantName: merchantName.trim() || DEFAULT_MERCHANT_NAME,
+    paperSize,
     createdAt: transaction.created_at,
     paymentMethod: payments.length > 1 ? 'Split Payment' : payment.name,
     paymentMethodCode: payments.length > 1 ? 'SPLIT' : payment.code,
@@ -85,7 +92,8 @@ export const buildReceiptPayload = (transaction: TransactionReceiptInput): Recei
 export const printReceiptAfterTransaction = async (
   transaction: TransactionReceiptInput
 ): Promise<ReceiptPrintResult> => {
-  const receipt = buildReceiptPayload(transaction);
+  const companyProfile = await db.companyProfileSetting.get('default');
+  const receipt = buildReceiptPayload(transaction, companyProfile?.company_name);
 
   // Try USB printer first, then fall back to Bluetooth
   const usbPrinter = getStoredUsbPrinter();

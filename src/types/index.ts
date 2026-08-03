@@ -2375,10 +2375,13 @@ export interface ReceiptLineItem {
   subtotal: number;
 }
 
+export type ReceiptPaperSize = '58mm' | '80mm';
+
 export interface ReceiptPayload {
   transactionId: string;
   transactionNumber: string;
   merchantName: string;
+  paperSize: ReceiptPaperSize;
   createdAt: string;
   paymentMethod: string;
   paymentMethodCode?: string;

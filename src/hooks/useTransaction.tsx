@@ -128,6 +128,23 @@ export const useTransaction = (draftScope?: string) => {
     EMPTY_TRANSACTION_PRODUCT_PAGE,
   );
   const productTotal = productPageResult.total;
+  const skuLookupProducts = useLiveQuery(
+    () => db.products.toArray(),
+    [],
+    [] as Product[],
+  );
+  const productBySku = useMemo(() => {
+    const lookup = new Map<string, Product>();
+
+    skuLookupProducts.forEach((product) => {
+      const normalizedSku = (product.sku || '').trim().toLowerCase();
+      if (normalizedSku && !lookup.has(normalizedSku)) {
+        lookup.set(normalizedSku, product);
+      }
+    });
+
+    return lookup;
+  }, [skuLookupProducts]);
 
   useEffect(() => {
     setProducts(productPageResult.products);
@@ -294,12 +311,20 @@ export const useTransaction = (draftScope?: string) => {
     return result.success;
   };
 
-  const findProductByScannedCode = useCallback(async (scanCode: string) => {
+  const findProductByScannedCode = useCallback((scanCode: string) => {
     const normalizedScanCode = scanCode.trim().toLowerCase();
     if (!normalizedScanCode) return undefined;
 
+    return productBySku.get(normalizedScanCode);
+  }, [productBySku]);
+
+  const findFirstProductBySearchTerm = useCallback(async (search: string) => {
+    const normalizedSearch = normalizeProductSearchTerm(search);
+    if (!normalizedSearch) return undefined;
+
     return db.products
-      .filter((product) => (product.sku || '').trim().toLowerCase() === normalizedScanCode)
+      .orderBy('name')
+      .filter((product) => matchesProductSearch(product, normalizedSearch))
       .first();
   }, []);
 
@@ -447,6 +472,7 @@ export const useTransaction = (draftScope?: string) => {
     updateQuantity,
     updateUnit,
     findProductByScannedCode,
+    findFirstProductBySearchTerm,
     removeFromCart,
     calculateSubtotal,
     calculateTotal,

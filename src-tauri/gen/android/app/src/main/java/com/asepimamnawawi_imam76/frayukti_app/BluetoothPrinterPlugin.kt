@@ -62,6 +62,7 @@ class ReceiptPayloadArg {
   var transactionId: String = ""
   var transactionNumber: String = ""
   var merchantName: String = ""
+  var paperSize: String = "58mm"
   var createdAt: String = ""
   var paymentMethod: String = ""
   var paymentMethodCode: String = ""
@@ -348,7 +349,8 @@ class BluetoothPrinterPlugin(private val activity: Activity) : Plugin(activity) 
 }
 
 object EscPosReceiptRenderer {
-  private const val PAPER_WIDTH = 32
+  private const val PAPER_WIDTH_58_MM = 32
+  private const val PAPER_WIDTH_80_MM = 48
   private val printerCharset: Charset = Charset.forName("CP437")
   private val indonesianLocale: Locale = Locale.forLanguageTag("id-ID")
 
@@ -375,17 +377,22 @@ object EscPosReceiptRenderer {
 
   fun renderReceipt(receipt: ReceiptPayloadArg): ByteArray {
     val output = ByteArrayOutputStream()
+    val paperWidth = if (receipt.paperSize.equals("80mm", ignoreCase = true)) {
+      PAPER_WIDTH_80_MM
+    } else {
+      PAPER_WIDTH_58_MM
+    }
     output.writeCommand(0x1B, 0x40)
     output.writeCommand(0x1B, 0x74, 0x00)
     output.writeCommand(0x1B, 0x61, 0x01)
     output.writeCommand(0x1B, 0x45, 0x01)
-    output.writeLine(receipt.merchantName.ifBlank { "Frayukti" }.fit(PAPER_WIDTH))
+    wrap(receipt.merchantName.ifBlank { "Frayukti" }, paperWidth).forEach { output.writeLine(it) }
     output.writeCommand(0x1B, 0x45, 0x00)
     output.writeLine("STRUK PEMBAYARAN")
     output.writeCommand(0x1B, 0x61, 0x00)
-    output.writeLine(separator())
-    output.writeLine(twoColumns("No", receipt.transactionNumber))
-    output.writeLine(twoColumns("Tanggal", formatIsoReceiptDate(receipt.createdAt)))
+    output.writeLine(separator(paperWidth))
+    output.writeLine(twoColumns("No", receipt.transactionNumber, paperWidth))
+    output.writeLine(twoColumns("Tanggal", formatIsoReceiptDate(receipt.createdAt), paperWidth))
     val paymentMethodLabel = if (
       receipt.paymentMethodCode.isNotBlank() &&
       !receipt.paymentMethodCode.equals(receipt.paymentMethod, ignoreCase = true)
@@ -395,52 +402,52 @@ object EscPosReceiptRenderer {
       receipt.paymentMethod
     }
     if (receipt.payments.isEmpty()) {
-      output.writeLine(twoColumns("Metode", paymentMethodLabel))
-      if (receipt.paymentReference.isNotBlank()) output.writeLine(twoColumns("Referensi", receipt.paymentReference))
+      output.writeLine(twoColumns("Metode", paymentMethodLabel, paperWidth))
+      if (receipt.paymentReference.isNotBlank()) output.writeLine(twoColumns("Referensi", receipt.paymentReference, paperWidth))
     }
     if (receipt.memberName.isNotBlank()) {
-      output.writeLine(twoColumns("Member", receipt.memberNumber.ifBlank { receipt.memberName }))
+      output.writeLine(twoColumns("Member", receipt.memberNumber.ifBlank { receipt.memberName }, paperWidth))
       if (receipt.memberNumber.isNotBlank()) {
-        wrap(receipt.memberName, PAPER_WIDTH).forEach { output.writeLine(it) }
+        wrap(receipt.memberName, paperWidth).forEach { output.writeLine(it) }
       }
     }
-    output.writeLine(separator())
+    output.writeLine(separator(paperWidth))
 
     receipt.items.forEach { item ->
-      wrap(item.name.ifBlank { "Item" }, PAPER_WIDTH).forEach { output.writeLine(it) }
+      wrap(item.name.ifBlank { "Item" }, paperWidth).forEach { output.writeLine(it) }
       val quantity = "${formatQuantity(item.quantity)} ${item.unit}".trim()
-      output.writeLine(twoColumns("$quantity x ${formatCurrency(item.price)}", formatCurrency(item.subtotal)))
+      output.writeLine(twoColumns("$quantity x ${formatCurrency(item.price)}", formatCurrency(item.subtotal), paperWidth))
     }
 
-    output.writeLine(separator())
+    output.writeLine(separator(paperWidth))
     if (receipt.discountAmount > 0.0) {
       val subtotal = if (receipt.subtotalAmount > 0.0) receipt.subtotalAmount else receipt.totalAmount + receipt.discountAmount
-      output.writeLine(twoColumns("SUBTOTAL", formatCurrency(subtotal)))
-      output.writeLine(twoColumns("DISKON", "-${formatCurrency(receipt.discountAmount)}"))
+      output.writeLine(twoColumns("SUBTOTAL", formatCurrency(subtotal), paperWidth))
+      output.writeLine(twoColumns("DISKON", "-${formatCurrency(receipt.discountAmount)}", paperWidth))
     }
     output.writeCommand(0x1B, 0x45, 0x01)
-    output.writeLine(twoColumns("TOTAL", formatCurrency(receipt.totalAmount)))
+    output.writeLine(twoColumns("TOTAL", formatCurrency(receipt.totalAmount), paperWidth))
     output.writeCommand(0x1B, 0x45, 0x00)
     if (receipt.payments.isNotEmpty()) {
       output.writeLine("PEMBAYARAN")
       receipt.payments.forEach { payment ->
-        output.writeLine(twoColumns(payment.methodName, formatCurrency(payment.tenderedAmount)))
-        if (payment.reference.isNotBlank()) output.writeLine("  Ref: ${payment.reference}".fit(PAPER_WIDTH))
+        output.writeLine(twoColumns(payment.methodName, formatCurrency(payment.tenderedAmount), paperWidth))
+        if (payment.reference.isNotBlank()) output.writeLine("  Ref: ${payment.reference}".fit(paperWidth))
       }
     }
-    output.writeLine(twoColumns("BAYAR", formatCurrency(receipt.paymentAmount)))
-    output.writeLine(twoColumns("KEMBALI", formatCurrency(receipt.changeAmount)))
+    output.writeLine(twoColumns("BAYAR", formatCurrency(receipt.paymentAmount), paperWidth))
+    output.writeLine(twoColumns("KEMBALI", formatCurrency(receipt.changeAmount), paperWidth))
     if (receipt.membershipPointsEarned > 0.0 || receipt.membershipPointsRedeemed > 0.0) {
-      output.writeLine(separator())
+      output.writeLine(separator(paperWidth))
       if (receipt.membershipPointsRedeemed > 0.0) {
-        output.writeLine(twoColumns("POIN DIPAKAI", formatQuantity(receipt.membershipPointsRedeemed)))
+        output.writeLine(twoColumns("POIN DIPAKAI", formatQuantity(receipt.membershipPointsRedeemed), paperWidth))
       }
       if (receipt.membershipPointsEarned > 0.0) {
-        output.writeLine(twoColumns("POIN DIDAPAT", formatQuantity(receipt.membershipPointsEarned)))
+        output.writeLine(twoColumns("POIN DIDAPAT", formatQuantity(receipt.membershipPointsEarned), paperWidth))
       }
-      output.writeLine(twoColumns("SALDO POIN", formatQuantity(receipt.membershipPointsBalanceAfter)))
+      output.writeLine(twoColumns("SALDO POIN", formatQuantity(receipt.membershipPointsBalanceAfter), paperWidth))
     }
-    output.writeLine(separator())
+    output.writeLine(separator(paperWidth))
     output.writeCommand(0x1B, 0x61, 0x01)
     output.writeLine(receipt.footer?.ifBlank { "Terima kasih" } ?: "Terima kasih")
     output.writeLine("")
@@ -459,13 +466,13 @@ object EscPosReceiptRenderer {
     write(0x0A)
   }
 
-  private fun separator() = "-".repeat(PAPER_WIDTH)
+  private fun separator(paperWidth: Int) = "-".repeat(paperWidth)
 
-  private fun twoColumns(left: String, right: String): String {
-    val safeRight = right.fit(PAPER_WIDTH)
-    val maxLeftWidth = (PAPER_WIDTH - safeRight.length - 1).coerceAtLeast(1)
+  private fun twoColumns(left: String, right: String, paperWidth: Int): String {
+    val safeRight = right.fit(paperWidth)
+    val maxLeftWidth = (paperWidth - safeRight.length - 1).coerceAtLeast(1)
     val safeLeft = left.fit(maxLeftWidth)
-    val spaces = (PAPER_WIDTH - safeLeft.length - safeRight.length).coerceAtLeast(1)
+    val spaces = (paperWidth - safeLeft.length - safeRight.length).coerceAtLeast(1)
     return safeLeft + " ".repeat(spaces) + safeRight
   }
 

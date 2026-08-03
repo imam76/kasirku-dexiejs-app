@@ -1,7 +1,7 @@
 import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Banknote, Clock, Keyboard, LockKeyhole, PlayCircle, ScanLine } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { useCashierSession } from '@/hooks/useCashierSession';
@@ -16,6 +16,23 @@ import type { CashierSessionReconciliation } from '@/services/cashierSessionServ
 import { getPosProcessDraftScope } from '@/store/transactionStore';
 import { getAdjacentProductSellableUnit, getProductSellableUnits } from '@/utils/productUnits';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
+import {
+  appendKeyboardBarcodeCharacter,
+  finishKeyboardBarcodeScan,
+  isKeyboardBarcodeBufferActive,
+  KEYBOARD_BARCODE_MIN_LENGTH,
+  type KeyboardBarcodeBuffer,
+} from '@/utils/keyboardBarcodeScanner';
+
+const SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS = 80;
+const SEARCH_INPUT_MANUAL_FLUSH_DELAY_MS = SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS + 20;
+
+interface PendingSearchKeySequence {
+  barcodeBuffer: KeyboardBarcodeBuffer;
+  baseValue: string;
+  selectionStart: number;
+  selectionEnd: number;
+}
 
 interface OpenCashierFormValues {
   opening_cash_amount: number;
@@ -163,6 +180,7 @@ export default function Transaction() {
     updateQuantity,
     updateUnit,
     findProductByScannedCode,
+    findFirstProductBySearchTerm,
     removeFromCart,
     calculateTotal,
     handleCheckout,
@@ -185,6 +203,11 @@ export default function Transaction() {
   const searchInputRef = useRef<InputRef>(null);
   const quantityInputRefs = useRef(new Map<string, HTMLInputElement>());
   const addFromSearchInFlightRef = useRef(false);
+  const keyboardScannerBufferRef = useRef<KeyboardBarcodeBuffer | null>(null);
+  const pendingSearchKeySequenceRef = useRef<PendingSearchKeySequence | null>(null);
+  const pendingSearchFlushTimeoutRef = useRef<number | null>(null);
+  const searchTermRef = useRef(searchTerm);
+  searchTermRef.current = searchTerm;
   const [activeCartItemId, setActiveCartItemId] = useState<string>();
 
   // Scanner state
@@ -199,10 +222,20 @@ export default function Transaction() {
     { keys: ['Esc'], label: t('transaction.shortcut.clearSearch') },
   ];
 
+  const resetPendingSearchKeySequence = useCallback(() => {
+    if (pendingSearchFlushTimeoutRef.current !== null) {
+      window.clearTimeout(pendingSearchFlushTimeoutRef.current);
+      pendingSearchFlushTimeoutRef.current = null;
+    }
+    pendingSearchKeySequenceRef.current = null;
+  }, []);
+
   const clearSearch = useCallback(() => {
+    resetPendingSearchKeySequence();
+    searchTermRef.current = '';
     setSearchTerm('');
     searchInputRef.current?.focus();
-  }, [setSearchTerm]);
+  }, [resetPendingSearchKeySequence, setSearchTerm]);
 
   const focusSearch = useCallback(() => {
     searchInputRef.current?.focus();
@@ -302,17 +335,19 @@ export default function Transaction() {
     });
   }, [activeCartItemId, cart, message, t, updateUnit]);
 
-  const addProductFromSearch = useCallback(async () => {
-    const normalizedSearchTerm = normalizeProductSearchTerm(searchTerm);
+  const addProductFromSearch = useCallback(async (inputSearchTerm = searchTerm) => {
+    const normalizedSearchTerm = normalizeProductSearchTerm(inputSearchTerm);
     if (!normalizedSearchTerm || addFromSearchInFlightRef.current) return;
 
     addFromSearchInFlightRef.current = true;
     try {
-      const exactSkuMatch = await findProductByScannedCode(searchTerm);
-      const firstMatchingProduct = filteredProducts.find((product) => (
+      const exactSkuMatch = findProductByScannedCode(inputSearchTerm);
+      const visibleMatchingProduct = filteredProducts.find((product) => (
         matchesProductSearch(product, normalizedSearchTerm)
       ));
-      const product = exactSkuMatch ?? firstMatchingProduct;
+      const product = exactSkuMatch
+        ?? visibleMatchingProduct
+        ?? await findFirstProductBySearchTerm(inputSearchTerm);
 
       if (!product) {
         message.open({
@@ -333,6 +368,7 @@ export default function Transaction() {
   }, [
     filteredProducts,
     findProductByScannedCode,
+    findFirstProductBySearchTerm,
     focusSearch,
     handleAddProduct,
     message,
@@ -340,6 +376,181 @@ export default function Transaction() {
     setSearchTerm,
     t,
   ]);
+
+  const handleScan = useCallback((text: string) => {
+    const match = findProductByScannedCode(text);
+
+    if (match) {
+      if (handleAddProduct(match)) {
+        searchTermRef.current = '';
+        setSearchTerm('');
+        message.success(t('transaction.addedToCart', { name: match.name }));
+      }
+    } else {
+      message.error(t('transaction.productNotFound', { code: text }));
+    }
+  }, [findProductByScannedCode, handleAddProduct, message, setSearchTerm, t]);
+
+  const flushPendingSearchInput = useCallback((restoreFocus: boolean) => {
+    const pending = pendingSearchKeySequenceRef.current;
+    if (!pending) return searchTermRef.current;
+
+    resetPendingSearchKeySequence();
+    const nextSearchTerm = [
+      pending.baseValue.slice(0, pending.selectionStart),
+      pending.barcodeBuffer.value,
+      pending.baseValue.slice(pending.selectionEnd),
+    ].join('');
+    const nextCaretPosition = pending.selectionStart + pending.barcodeBuffer.value.length;
+
+    searchTermRef.current = nextSearchTerm;
+    setSearchTerm(nextSearchTerm);
+
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => {
+        const input = searchInputRef.current?.input;
+        input?.focus();
+        input?.setSelectionRange(nextCaretPosition, nextCaretPosition);
+      });
+    }
+
+    return nextSearchTerm;
+  }, [resetPendingSearchKeySequence, setSearchTerm]);
+
+  const schedulePendingSearchInputFlush = useCallback(() => {
+    if (pendingSearchFlushTimeoutRef.current !== null) {
+      window.clearTimeout(pendingSearchFlushTimeoutRef.current);
+    }
+
+    pendingSearchFlushTimeoutRef.current = window.setTimeout(() => {
+      pendingSearchFlushTimeoutRef.current = null;
+      flushPendingSearchInput(true);
+    }, SEARCH_INPUT_MANUAL_FLUSH_DELAY_MS);
+  }, [flushPendingSearchInput]);
+
+  const handleSearchKeyDownCapture = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (
+      event.nativeEvent.isComposing
+      || event.ctrlKey
+      || event.metaKey
+      || event.altKey
+      || event.repeat
+    ) return;
+
+    const keyAt = event.timeStamp;
+    const pending = pendingSearchKeySequenceRef.current;
+    const isModifierKey = event.key === 'Shift'
+      || event.key === 'Control'
+      || event.key === 'Alt'
+      || event.key === 'AltGraph'
+      || event.key === 'CapsLock';
+    if (isModifierKey) return;
+
+    const isTerminator = event.code === 'Enter'
+      || event.code === 'NumpadEnter'
+      || event.key === 'Tab';
+
+    if (isTerminator) {
+      const scannedCode = finishKeyboardBarcodeScan(
+        pending?.barcodeBuffer ?? null,
+        keyAt,
+        KEYBOARD_BARCODE_MIN_LENGTH,
+        SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS,
+      );
+
+      if (scannedCode) {
+        event.preventDefault();
+        event.stopPropagation();
+        resetPendingSearchKeySequence();
+        handleScan(scannedCode);
+        return;
+      }
+
+      if (pending && (event.code === 'Enter' || event.code === 'NumpadEnter')) {
+        event.preventDefault();
+        event.stopPropagation();
+        const nextSearchTerm = flushPendingSearchInput(false);
+        void addProductFromSearch(nextSearchTerm);
+        return;
+      }
+
+      if (pending) flushPendingSearchInput(false);
+      return;
+    }
+
+    if (event.key === 'Escape' && pending) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearSearch();
+      return;
+    }
+
+    if (event.key === 'Backspace' && pending) {
+      event.preventDefault();
+      event.stopPropagation();
+      const nextBufferedValue = pending.barcodeBuffer.value.slice(0, -1);
+
+      if (!nextBufferedValue) {
+        resetPendingSearchKeySequence();
+        return;
+      }
+
+      pending.barcodeBuffer = {
+        value: nextBufferedValue,
+        lastKeyAt: keyAt,
+      };
+      schedulePendingSearchInputFlush();
+      return;
+    }
+
+    if (event.key.length !== 1) {
+      if (pending) flushPendingSearchInput(false);
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const input = event.currentTarget;
+    const isActiveSequence = isKeyboardBarcodeBufferActive(
+      pending?.barcodeBuffer ?? null,
+      keyAt,
+      SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS,
+    );
+
+    if (!pending || !isActiveSequence) {
+      resetPendingSearchKeySequence();
+      pendingSearchKeySequenceRef.current = {
+        barcodeBuffer: appendKeyboardBarcodeCharacter(
+          null,
+          event.key,
+          keyAt,
+          SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS,
+        ),
+        baseValue: searchTermRef.current,
+        selectionStart: input.selectionStart ?? searchTermRef.current.length,
+        selectionEnd: input.selectionEnd ?? searchTermRef.current.length,
+      };
+    } else {
+      pending.barcodeBuffer = appendKeyboardBarcodeCharacter(
+        pending.barcodeBuffer,
+        event.key,
+        keyAt,
+        SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS,
+      );
+    }
+
+    schedulePendingSearchInputFlush();
+  }, [
+    addProductFromSearch,
+    clearSearch,
+    flushPendingSearchInput,
+    handleScan,
+    resetPendingSearchKeySequence,
+    schedulePendingSearchInputFlush,
+  ]);
+
+  useEffect(() => resetPendingSearchKeySequence, [resetPendingSearchKeySequence]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -353,7 +564,10 @@ export default function Transaction() {
         || closeModalOpen
         || cartOpen
         || hasVisiblePosShortcutBlocker()
-      ) return;
+      ) {
+        keyboardScannerBufferRef.current = null;
+        return;
+      }
 
       const target = event.target;
       const searchInput = searchInputRef.current?.input;
@@ -363,6 +577,54 @@ export default function Transaction() {
       const isSearchTarget = target === searchInput;
       const isActiveQuantityTarget = target === activeQuantityInput;
       const isUnrelatedTypingTarget = isTypingTarget(target) && !isSearchTarget && !isActiveQuantityTarget;
+      const isScannerCaptureTarget = !isTypingTarget(target);
+      const isScannerTerminator = event.code === 'Enter'
+        || event.code === 'NumpadEnter'
+        || event.key === 'Tab';
+
+      if (isScannerCaptureTarget && isScannerTerminator) {
+        const scannedCode = finishKeyboardBarcodeScan(
+          keyboardScannerBufferRef.current,
+          event.timeStamp,
+        );
+        keyboardScannerBufferRef.current = null;
+
+        if (scannedCode) {
+          event.preventDefault();
+          void handleScan(scannedCode);
+          window.requestAnimationFrame(focusSearch);
+          return;
+        }
+      }
+
+      const isModifierKey = event.key === 'Shift'
+        || event.key === 'Control'
+        || event.key === 'Alt'
+        || event.key === 'AltGraph'
+        || event.key === 'CapsLock';
+      const hasActiveScannerSequence = isKeyboardBarcodeBufferActive(
+        keyboardScannerBufferRef.current,
+        event.timeStamp,
+      );
+      const isShortcutStart = !hasActiveScannerSequence && (
+        event.key === '/'
+        || event.code === 'NumpadDivide'
+        || event.code === 'NumpadMultiply'
+        || event.code === 'NumpadAdd'
+        || event.code === 'NumpadSubtract'
+      );
+
+      if (isScannerCaptureTarget && event.key.length === 1 && !isShortcutStart) {
+        keyboardScannerBufferRef.current = appendKeyboardBarcodeCharacter(
+          keyboardScannerBufferRef.current,
+          event.key,
+          event.timeStamp,
+        );
+        event.preventDefault();
+        return;
+      }
+
+      if (!isModifierKey) keyboardScannerBufferRef.current = null;
 
       if (event.code === 'NumpadDivide') {
         if (isUnrelatedTypingTarget) return;
@@ -422,21 +684,10 @@ export default function Transaction() {
     cycleActiveUnit,
     focusActiveQuantity,
     focusSearch,
+    handleScan,
     scannerOpen,
     searchTerm,
   ]);
-
-  const handleScan = useCallback(async (text: string) => {
-    const match = await findProductByScannedCode(text);
-
-    if (match) {
-      if (handleAddProduct(match)) {
-        message.success(t('transaction.addedToCart', { name: match.name }));
-      }
-    } else {
-      message.error(t('transaction.productNotFound', { code: text }));
-    }
-  }, [findProductByScannedCode, handleAddProduct, message, t]);
 
   const handleOpenSession = async (values: OpenCashierFormValues) => {
     await openSession({
@@ -558,7 +809,12 @@ export default function Transaction() {
                 prefix={<SearchOutlined className="text-gray-400" />}
                 placeholder={t('transaction.searchPlaceholder')}
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onKeyDownCapture={handleSearchKeyDownCapture}
+                onChange={(event) => {
+                  resetPendingSearchKeySequence();
+                  searchTermRef.current = event.target.value;
+                  setSearchTerm(event.target.value);
+                }}
                 className="rounded-lg"
               />
               <Button
