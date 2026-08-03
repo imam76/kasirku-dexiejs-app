@@ -6,34 +6,15 @@ import type { SetupModuleGroup } from '@/types/setup';
  */
 export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
   {
-    key: 'master-data',
-    label: 'Data Master',
-    iconName: 'Database',
-    modules: [
-      { code: 'PRODUCT', label: 'Product', description: 'Manajemen produk, stok, & harga' },
-      { code: 'PRODUCTION', label: 'Produksi', description: 'Resep dan proses produksi barang' },
-      { code: 'STOCK_OPNAME', label: 'Stock Opname', description: 'Perhitungan dan penyesuaian stok fisik' },
-      { code: 'CONTACT', label: 'Contact', description: 'Pelanggan & supplier' },
-      { code: 'WAREHOUSE', label: 'Warehouse', description: 'Gudang & lokasi stok' },
-      { code: 'PAYMENT_METHOD', label: 'Metode Pembayaran', description: 'Master metode pembayaran dan mapping akun penerimaan' },
-      { code: 'AREA', label: 'Area', description: 'Wilayah operasional dan penagihan' },
-      { code: 'EMPLOYEE', label: 'Karyawan', description: 'Data karyawan dan penugasan' },
-      { code: 'DEPARTMENT', label: 'Department', description: 'Departemen organisasi' },
-      { code: 'PROJECT', label: 'Project', description: 'Proyek & cost center' },
-      { code: 'FIXED_ASSET', label: 'Aset Tetap', description: 'Register dan penyusutan aset tetap' },
-      { code: 'TAX', label: 'Tax', description: 'Pajak & tarif perpajakan' },
-      { code: 'PROMO', label: 'Promo', description: 'Diskon & promosi' },
-      { code: 'UNIT', label: 'Unit', description: 'Satuan & konversi unit' },
-      { code: 'CURRENCY', label: 'Currency', description: 'Mata uang & kurs' },
-      { code: 'ROLE_PERMISSION', label: 'Peran & Izin', description: 'Manajemen peran dan izin akun pengguna' },
-    ],
-  },
-  {
     key: 'pos',
     label: 'POS / Kasir',
     iconName: 'ShoppingCart',
     modules: [
-      { code: 'POS_TRANSACTION', label: 'Transaction (POS)', description: 'Penjualan langsung di kasir' },
+      {
+        code: 'POS_TRANSACTION',
+        label: 'POS & Pos Resto',
+        description: 'Penjualan kasir, meja restoran, dan riwayat transaksi',
+      },
     ],
   },
   {
@@ -62,20 +43,89 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
     ],
   },
   {
+    key: 'master-data',
+    label: 'Master Data',
+    iconName: 'Database',
+    modules: [
+      { code: 'PRODUCT', label: 'Product', description: 'Manajemen produk, stok, & harga' },
+      { code: 'PRODUCTION', label: 'Produksi', description: 'Resep dan proses produksi barang' },
+      { code: 'STOCK_OPNAME', label: 'Stock Opname', description: 'Perhitungan dan penyesuaian stok fisik' },
+      { code: 'PROMO', label: 'Promo', description: 'Diskon & promosi' },
+      { code: 'CONTACT', label: 'Contact', description: 'Pelanggan & supplier' },
+      { code: 'WAREHOUSE', label: 'Warehouse', description: 'Gudang & lokasi stok' },
+      { code: 'PAYMENT_METHOD', label: 'Metode Pembayaran', description: 'Master metode pembayaran dan mapping akun penerimaan' },
+      { code: 'CURRENCY', label: 'Mata Uang', description: 'Mata uang & kurs' },
+      { code: 'ROLE_PERMISSION', label: 'Akun Pengguna, Peran & Izin', description: 'Manajemen akun pengguna, peran, dan izin akses' },
+      { code: 'PROJECT', label: 'Project', description: 'Proyek & cost center' },
+      { code: 'FIXED_ASSET', label: 'Aset Tetap', description: 'Register dan penyusutan aset tetap' },
+      { code: 'TAX', label: 'Tax', description: 'Pajak & tarif perpajakan' },
+      { code: 'UNIT', label: 'Unit, Satuan & Konversi', description: 'Master unit beserta konversi satuan' },
+    ],
+  },
+  {
     key: 'finance',
-    label: 'Finance',
+    label: 'Keuangan',
     iconName: 'Banknote',
     modules: [
-      { code: 'CASH_FLOW', label: 'Cash Flow', description: 'Arus kas masuk & keluar' },
+      { code: 'CASH_FLOW', label: 'Cash & Bank', description: 'Arus kas, rekonsiliasi cash/bank, dan payroll' },
       { code: 'RECEIVABLES', label: 'Receivables (Piutang)', description: 'Piutang usaha' },
       { code: 'PAYABLES', label: 'Payables (Hutang)', description: 'Hutang usaha' },
       { code: 'CHART_OF_ACCOUNTS', label: 'Chart of Accounts', description: 'Daftar akun keuangan' },
-      { code: 'GENERAL_LEDGER', label: 'General Ledger', description: 'Buku besar & jurnal' },
+      { code: 'GENERAL_LEDGER', label: 'General Ledger', description: 'Buku besar, jurnal, saldo awal, dan tutup buku' },
+    ],
+  },
+  {
+    key: 'hr',
+    label: 'HR',
+    iconName: 'Users',
+    modules: [
+      {
+        code: 'EMPLOYEE',
+        label: 'Dashboard & Karyawan',
+        description: 'Data karyawan, kontrak, jadwal kerja, cuti, dan komponen gaji',
+      },
+      { code: 'DEPARTMENT', label: 'Departemen & Jabatan', description: 'Struktur departemen, jabatan, dan garis pelaporan' },
+      { code: 'AREA', label: 'Area', description: 'Wilayah operasional dan penugasan karyawan' },
+    ],
+  },
+  {
+    key: 'koperasi',
+    label: 'Koperasi',
+    iconName: 'Landmark',
+    modules: [
+      { code: 'KOPERASI_ANGGOTA', label: 'Anggota', description: 'Data anggota koperasi' },
+      { code: 'KOPERASI_SIMPANAN_POKOK', label: 'Simpanan Pokok', description: 'Simpanan wajib saat pendaftaran' },
+      { code: 'KOPERASI_SIMPANAN_WAJIB', label: 'Simpanan Wajib', description: 'Simpanan rutin bulanan anggota' },
+      { code: 'KOPERASI_SIMPANAN_SUKARELA', label: 'Simpanan Sukarela', description: 'Tabungan sukarela anggota' },
+      { code: 'KOPERASI_PINJAMAN', label: 'Pinjaman', description: 'Pengajuan & pencairan pinjaman' },
+      { code: 'KOPERASI_ANGSURAN', label: 'Angsuran', description: 'Cicilan & pembayaran pinjaman' },
+      { code: 'KOPERASI_PENAGIHAN', label: 'Penagihan', description: 'Tagihan, penugasan petugas, dan coverage penagihan' },
+      { code: 'KOPERASI_KAS_PETUGAS', label: 'Kas Petugas', description: 'Sesi, dropping, storting, dan setor kas petugas lapangan' },
+      { code: 'KOPERASI_SHU', label: 'Overview & SHU', description: 'Ringkasan laporan dan Sisa Hasil Usaha' },
+      { code: 'KOPERASI_REPORT_CASH', label: 'Laporan Tunai', description: 'Laporan arus tunai petugas koperasi' },
+      { code: 'KOPERASI_REPORT_DAILY_TARGET', label: 'Target Harian', description: 'Laporan target penagihan harian' },
+      { code: 'KOPERASI_REPORT_DAILY_FIELD_CASH', label: 'Kas Harian PDL', description: 'Rekap harian kas per petugas lapangan' },
+      { code: 'KOPERASI_REPORT_DAILY_STORTING', label: 'Storting Harian', description: 'Laporan storting harian petugas' },
+      { code: 'KOPERASI_REPORT_DAILY_DROP', label: 'Drop Harian', description: 'Laporan drop pinjaman harian' },
+      { code: 'KOPERASI_REPORT_WEEKLY_DROP', label: 'Drop Mingguan', description: 'Laporan drop pinjaman mingguan' },
+      { code: 'KOPERASI_REPORT_RESORT_DEVELOPMENT', label: 'Perkembangan Resort', description: 'Laporan perkembangan resort/karyawan PDL' },
+      { code: 'KOPERASI_REPORT_IPTW', label: 'Laporan IPTW', description: 'Laporan pembayaran IPTW anggota per karyawan' },
+      { code: 'KOPERASI_REPORT_MEMBER_REGISTER', label: 'Induk Anggota', description: 'Laporan register induk anggota' },
+      { code: 'KOPERASI_REPORT_INSTALLMENT_BOOK', label: 'Buku Angsuran', description: 'Laporan buku angsuran anggota' },
+      { code: 'KOPERASI_REPORT_CASH_FLOW', label: 'Arus Kas Koperasi', description: 'Laporan arus kas koperasi' },
+    ],
+  },
+  {
+    key: 'marketplace',
+    label: 'Marketplace',
+    iconName: 'Store',
+    modules: [
+      { code: 'MARKETPLACE', label: 'Shopee', description: 'Koneksi toko dan sinkronisasi pesanan marketplace' },
     ],
   },
   {
     key: 'reports',
-    label: 'Reports',
+    label: 'Laporan',
     iconName: 'BarChart3',
     modules: [
       { code: 'REPORT_POS_SALES', label: 'POS Sales Report', description: 'Laporan penjualan POS' },
@@ -92,56 +142,12 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'REPORT_BALANCE_SHEET', label: 'Balance Sheet Report', description: 'Laporan neraca dari General Ledger' },
     ],
   },
-  {
-    key: 'marketplace',
-    label: 'Marketplace',
-    iconName: 'Store',
-    modules: [
-      { code: 'MARKETPLACE', label: 'Marketplace', description: 'Koneksi toko dan sinkronisasi pesanan marketplace' },
-    ],
-  },
-  {
-    key: 'koperasi',
-    label: 'Koperasi',
-    iconName: 'Landmark',
-    modules: [
-      { code: 'KOPERASI_ANGGOTA', label: 'Anggota', description: 'Data anggota koperasi' },
-      { code: 'KOPERASI_SIMPANAN_POKOK', label: 'Simpanan Pokok', description: 'Simpanan wajib saat pendaftaran' },
-      { code: 'KOPERASI_SIMPANAN_WAJIB', label: 'Simpanan Wajib', description: 'Simpanan rutin bulanan anggota' },
-      { code: 'KOPERASI_SIMPANAN_SUKARELA', label: 'Simpanan Sukarela', description: 'Tabungan sukarela anggota' },
-      { code: 'KOPERASI_PINJAMAN', label: 'Pinjaman', description: 'Pengajuan & pencairan pinjaman' },
-      { code: 'KOPERASI_ANGSURAN', label: 'Angsuran', description: 'Cicilan & pembayaran pinjaman' },
-      { code: 'KOPERASI_PENAGIHAN', label: 'Penagihan', description: 'Daftar tagihan jatuh tempo & tunggakan anggota' },
-      { code: 'KOPERASI_KAS_PETUGAS', label: 'Kas Petugas', description: 'Sesi, dropping, storting, dan setor kas petugas lapangan' },
-      { code: 'KOPERASI_SHU', label: 'Overview & SHU', description: 'Ringkasan laporan dan Sisa Hasil Usaha' },
-      { code: 'KOPERASI_REPORT_CASH', label: 'Laporan Tunai', description: 'Laporan arus tunai petugas koperasi' },
-      { code: 'KOPERASI_REPORT_DAILY_TARGET', label: 'Target Harian', description: 'Laporan target penagihan harian' },
-      { code: 'KOPERASI_REPORT_DAILY_STORTING', label: 'Storting Harian', description: 'Laporan storting harian petugas' },
-      { code: 'KOPERASI_REPORT_DAILY_DROP', label: 'Drop Harian', description: 'Laporan drop pinjaman harian' },
-      { code: 'KOPERASI_REPORT_WEEKLY_DROP', label: 'Drop Mingguan', description: 'Laporan drop pinjaman mingguan' },
-      { code: 'KOPERASI_REPORT_RESORT_DEVELOPMENT', label: 'Perkembangan Resort', description: 'Laporan perkembangan resort/karyawan PDL' },
-      { code: 'KOPERASI_REPORT_IPTW', label: 'Laporan IPTW', description: 'Laporan pembayaran IPTW anggota per karyawan' },
-      { code: 'KOPERASI_REPORT_MEMBER_REGISTER', label: 'Induk Anggota', description: 'Laporan register induk anggota' },
-      { code: 'KOPERASI_REPORT_INSTALLMENT_BOOK', label: 'Buku Angsuran', description: 'Laporan buku angsuran anggota' },
-      { code: 'KOPERASI_REPORT_CASH_FLOW', label: 'Arus Kas Koperasi', description: 'Laporan arus kas koperasi' },
-    ],
-  },
 ];
 
 /**
  * Default modules that are pre-selected for a new installation.
  */
 export const DEFAULT_SELECTED_MODULES: string[] = [
-  // Data Master essentials
-  'PRODUCT',
-  'PRODUCTION',
-  'STOCK_OPNAME',
-  'CONTACT',
-  'AREA',
-  'EMPLOYEE',
-  'ROLE_PERMISSION',
-  'PAYMENT_METHOD',
-  'FIXED_ASSET',
   // POS
   'POS_TRANSACTION',
   // Sales core flow
@@ -153,10 +159,21 @@ export const DEFAULT_SELECTED_MODULES: string[] = [
   'PURCHASE_RFQ',
   'PURCHASE_ORDER',
   'PURCHASE_INVOICE',
+  // Master Data essentials
+  'PRODUCT',
+  'PRODUCTION',
+  'STOCK_OPNAME',
+  'CONTACT',
+  'ROLE_PERMISSION',
+  'PAYMENT_METHOD',
+  'FIXED_ASSET',
   // Finance essentials
   'CASH_FLOW',
   'CHART_OF_ACCOUNTS',
   'GENERAL_LEDGER',
+  // Human Resources
+  'EMPLOYEE',
+  'AREA',
   // Marketplace
   'MARKETPLACE',
   // Reports

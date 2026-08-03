@@ -34,6 +34,7 @@ import {
   ShoppingCart,
   Store,
   Unlock,
+  Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DEFAULT_SELECTED_MODULES, SETUP_MODULE_GROUPS } from '@/constants/setupModules';
@@ -63,6 +64,7 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
   BarChart3,
   Landmark,
   Store,
+  Users,
 };
 
 const WIZARD_BODY_HEIGHT = 'calc(100vh - 182px)';
