@@ -297,6 +297,10 @@ async fn repair_compatible_migration_mismatch(
         return execute_current_migration_and_replace_row(pool, migrator, version).await;
     }
 
+    if repair_legacy_opening_inventory_migration_number(pool, migrator, version).await? {
+        return Ok(());
+    }
+
     if repair_legacy_migration_numbering(pool, migrator, version).await? {
         return Ok(());
     }
@@ -340,6 +344,52 @@ async fn repair_line_ending_only_migration_checksum(
     }
 
     update_applied_migration_checksum(pool, migrator, version).await?;
+    Ok(true)
+}
+
+async fn repair_legacy_opening_inventory_migration_number(
+    pool: &PgPool,
+    migrator: &Migrator,
+    version: i64,
+) -> Result<bool, MigrateError> {
+    if version != 67 {
+        return Ok(false);
+    }
+
+    // A merged build briefly contained both the restaurant and opening-inventory
+    // migrations as version 67. If opening inventory ran first, move its tracking
+    // row to the corrected version so the restaurant migration can still run.
+    let opening_inventory_migration = migration_for_version(migrator, 71)?;
+    if !applied_migration_checksum_matches(pool, 67, opening_inventory_migration.checksum.as_ref())
+        .await?
+    {
+        return Ok(false);
+    }
+
+    let has_current_opening_inventory_row =
+        applied_migration_checksum_matches(pool, 71, opening_inventory_migration.checksum.as_ref())
+            .await?;
+    let mut tx = pool.begin().await?;
+
+    if has_current_opening_inventory_row {
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 67")
+            .execute(&mut *tx)
+            .await?;
+    } else {
+        sqlx::query(
+            r#"
+            UPDATE _sqlx_migrations
+            SET version = 71, description = $1, checksum = $2, success = TRUE
+            WHERE version = 67
+            "#,
+        )
+        .bind(opening_inventory_migration.description.as_ref())
+        .bind(opening_inventory_migration.checksum.as_ref())
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
     Ok(true)
 }
 
@@ -1219,5 +1269,57 @@ fn app_config_dir() -> Option<PathBuf> {
                     .map(|home| home.join(".config"))
             })
             .map(|config_dir| config_dir.join("frayukti"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "requires an empty PostgreSQL database in KASIRKU_MIGRATION_TEST_DATABASE_URL"]
+    async fn applies_workforce_migration_and_repairs_legacy_duplicate_version_67() {
+        let database_url = env::var("KASIRKU_MIGRATION_TEST_DATABASE_URL")
+            .expect("KASIRKU_MIGRATION_TEST_DATABASE_URL must point to an empty test database");
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url)
+            .await
+            .expect("test database must be reachable");
+        let mut migrator = sqlx::migrate!("./migrations");
+        normalize_migration_checksums(&mut migrator);
+        migrator.set_locking(false);
+
+        migrator
+            .run_to(66, &pool)
+            .await
+            .expect("migrations through version 66 must apply");
+
+        let opening_inventory_migration =
+            migration_for_version(&migrator, 71).expect("opening inventory migration must exist");
+        pool.execute(opening_inventory_migration.sql.clone())
+            .await
+            .expect("legacy opening inventory SQL must apply");
+        sqlx::query(
+            r#"
+            INSERT INTO _sqlx_migrations
+                (version, description, success, checksum, execution_time)
+            VALUES (67, $1, TRUE, $2, -1)
+            "#,
+        )
+        .bind(opening_inventory_migration.description.as_ref())
+        .bind(opening_inventory_migration.checksum.as_ref())
+        .execute(&pool)
+        .await
+        .expect("legacy version 67 row must be recorded");
+        pool.close().await;
+
+        let state = create_postgres_state_from_database_url(&database_url).await;
+        let health = state.health();
+        assert!(
+            health.available,
+            "migration runner did not recover: {:?} {:?}",
+            health.status, health.message
+        );
     }
 }

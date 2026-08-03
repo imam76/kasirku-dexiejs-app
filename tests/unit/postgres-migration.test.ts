@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 const hrisMigration = readFileSync(
   new URL('../../src-tauri/migrations/0063_hris_mvp.sql', import.meta.url),
@@ -42,6 +42,15 @@ const dailyTargetManagement = readFileSync(
 );
 
 describe('PostgreSQL HRIS migration', () => {
+  test('uses a unique version number for every PostgreSQL migration', () => {
+    const migrationFiles = readdirSync(
+      new URL('../../src-tauri/migrations', import.meta.url),
+    ).filter((file) => /^\d+_.+\.sql$/.test(file));
+    const versions = migrationFiles.map((file) => file.split('_', 1)[0]);
+
+    expect(new Set(versions).size).toBe(versions.length);
+  });
+
   test('deduplicates overlapping legacy permission mappings before upsert', () => {
     const permissionGrantStart = hrisMigration.indexOf('WITH permission_grants AS');
     const permissionGrantEnd = hrisMigration.indexOf(
@@ -111,6 +120,24 @@ describe('PostgreSQL HRIS migration', () => {
     expect(workforceMigration).toContain('collection_assignment_needs_review = TRUE');
     expect(workforceMigration).toContain('employee_work_schedule_assignments_no_overlap');
     expect(workforceMigration).toContain('ON CONFLICT (id) DO UPDATE');
+  });
+
+  test('backfills member collection assignments with valid PostgreSQL references', () => {
+    const backfillStart = workforceMigration.indexOf('WITH latest_loan_schedule AS');
+    const backfillEnd = workforceMigration.indexOf(
+      'UPDATE cooperative_members\nSET collection_assignment_needs_review = TRUE',
+      backfillStart,
+    );
+    const backfillSql = workforceMigration.slice(backfillStart, backfillEnd);
+
+    expect(backfillStart).toBeGreaterThan(-1);
+    expect(backfillEnd).toBeGreaterThan(backfillStart);
+    expect(backfillSql).toContain('member_schedule_resolution AS');
+    expect(backfillSql).toMatch(
+      /FROM cooperative_members member\s+JOIN unique_employee_area_schedule candidate[\s\S]+LEFT JOIN latest_loan_schedule latest ON latest\.member_id = member\.id/,
+    );
+    expect(backfillSql).toContain('FROM member_schedule_resolution resolution');
+    expect(workforceMigration).not.toContain('member.deleted_at');
   });
 
   test('keeps legacy employee indexes available after the workforce Dexie migration', () => {

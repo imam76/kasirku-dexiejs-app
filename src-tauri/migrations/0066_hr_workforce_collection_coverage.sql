@@ -177,28 +177,34 @@ unique_employee_area_schedule AS (
     FROM employee_collection_schedules
     WHERE deleted_at IS NULL AND is_active = TRUE
     GROUP BY employee_id, area_id
-)
-UPDATE cooperative_members member
-SET collection_schedule_id = COALESCE(
-        latest.collection_schedule_id,
-        CASE WHEN candidate.schedule_count = 1 THEN candidate.collection_schedule_id END
-    ),
-    collection_weekday = COALESCE(
-        latest.collection_weekday,
-        CASE WHEN candidate.schedule_count = 1 THEN candidate.collection_weekday END
-    ),
-    collection_assignment_needs_review = (
+),
+member_schedule_resolution AS (
+    SELECT
+        member.id AS member_id,
         COALESCE(
             latest.collection_schedule_id,
             CASE WHEN candidate.schedule_count = 1 THEN candidate.collection_schedule_id END
-        ) IS NULL
+        ) AS collection_schedule_id,
+        COALESCE(
+            latest.collection_weekday,
+            CASE WHEN candidate.schedule_count = 1 THEN candidate.collection_weekday END
+        ) AS collection_weekday
+    FROM cooperative_members member
+    JOIN unique_employee_area_schedule candidate
+      ON candidate.employee_id = member.officer_id
+     AND candidate.area_id = member.area_id
+    LEFT JOIN latest_loan_schedule latest ON latest.member_id = member.id
+    WHERE member.collection_schedule_id IS NULL
+)
+UPDATE cooperative_members member
+SET collection_schedule_id = resolution.collection_schedule_id,
+    collection_weekday = resolution.collection_weekday,
+    collection_assignment_needs_review = (
+        resolution.collection_schedule_id IS NULL
         AND member.status = 'ACTIVE'
     )
-FROM unique_employee_area_schedule candidate
-LEFT JOIN latest_loan_schedule latest ON latest.member_id = member.id
-WHERE candidate.employee_id = member.officer_id
-  AND candidate.area_id = member.area_id
-  AND member.collection_schedule_id IS NULL;
+FROM member_schedule_resolution resolution
+WHERE resolution.member_id = member.id;
 
 UPDATE cooperative_members
 SET collection_assignment_needs_review = TRUE
@@ -220,7 +226,6 @@ SELECT
     NOW()
 FROM cooperative_members member
 WHERE member.collection_assignment_needs_review = TRUE
-  AND member.deleted_at IS NULL
 ON CONFLICT (id) DO UPDATE
 SET payload = EXCLUDED.payload,
     summary = EXCLUDED.summary,
