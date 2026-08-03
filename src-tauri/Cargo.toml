@@ -1,6 +1,6 @@
 [package]
 name = "frayukti"
-version = "1.0.51"
+version = "1.0.52"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -49,3 +49,4 @@ tracing-appender = "0.2"
 serialport = { version = "4", default-features = false }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-autostart = "2"
