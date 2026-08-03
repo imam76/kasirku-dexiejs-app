@@ -5,7 +5,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import type { Product } from '@/types';
 import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
-import { getPrice } from '@/utils/pricing';
+import { getProductDisplayPricing } from '@/utils/pricing';
 import { Edit2, PackagePlus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -605,7 +605,7 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
                       Rp {formatCurrency(product.selling_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
                       {product.selling_unit !== product.purchase_unit && (
                         <div className="text-[10px] text-gray-400">
-                          (≈ Rp {formatCurrency(getPrice(product, 1))} / {product.selling_unit})
+                          (≈ Rp {formatCurrency(getProductDisplayPricing(product).basePrice)} / {product.selling_unit})
                         </div>
                       )}
                     </td>

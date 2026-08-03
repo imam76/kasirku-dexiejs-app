@@ -129,7 +129,7 @@ pub async fn upsert_product(
             selling_unit = EXCLUDED.selling_unit,
             purchase_price = EXCLUDED.purchase_price,
             selling_price = EXCLUDED.selling_price,
-            stock = CASE WHEN $16 THEN products.stock ELSE EXCLUDED.stock END,
+            stock = CASE WHEN $18 THEN products.stock ELSE EXCLUDED.stock END,
             sku = EXCLUDED.sku,
             product_type = EXCLUDED.product_type,
             is_visible_in_pos = EXCLUDED.is_visible_in_pos,

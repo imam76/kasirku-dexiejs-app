@@ -1,5 +1,6 @@
 export interface WholesalePrice {
   min_quantity: number;
+  unit?: ProductUnit; // Unit used by min_quantity and price; legacy rows keep their historical fallback
   price: number;
   price_type?: 'unit' | 'bundle'; // 'unit' = price per item, 'bundle' = price for min_quantity items
 }
@@ -44,11 +45,30 @@ export interface UnitConversion {
   isDeprecated?: boolean;
 }
 
+/**
+ * An explicit product-specific unit equation.
+ *
+ * Example: 1 box = 10 ikat is stored as
+ * `{ from_quantity: 1, from_unit: 'box', to_quantity: 10, to_unit: 'ikat' }`.
+ */
 export interface ProductUnitMapping {
+  from_quantity: number;
+  from_unit: ProductUnit;
+  to_quantity: number;
+  to_unit: ProductUnit;
+}
+
+/**
+ * Previous persisted shape. Keep accepting it while existing local/remote rows
+ * are normalized to ProductUnitMapping at application boundaries.
+ */
+export interface LegacyProductUnitMapping {
   unit: ProductUnit;
   base_unit: ProductUnit;
   ratio: number; // 1 unit = ratio base_unit
 }
+
+export type ProductUnitMappingInput = ProductUnitMapping | LegacyProductUnitMapping;
 
 export interface Product {
   id: string;
@@ -64,7 +84,7 @@ export interface Product {
   sku?: string;
   wholesale_prices?: WholesalePrice[];
   sellable_units?: ProductUnit[]; // Units cashier can select when selling (defaults to [selling_unit])
-  unit_mappings?: ProductUnitMapping[]; // Product-specific conversions, e.g. 1 dus = 24 pcs
+  unit_mappings?: ProductUnitMapping[]; // Canonical product-specific conversion equations
   created_at: string;
   updated_at: string;
   sync_status?: ProductSyncStatus;

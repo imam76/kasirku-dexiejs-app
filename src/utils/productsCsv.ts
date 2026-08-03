@@ -1,4 +1,9 @@
-import type { Product } from '@/types';
+import type { Product, ProductUnitMapping } from '@/types';
+import {
+  getLegacyProductMappingUnits,
+  normalizeProductUnitMapping,
+  normalizeProductUnitMappings,
+} from '@/utils/productUnits';
 
 type ProductWholesalePrice = NonNullable<Product['wholesale_prices']>[number];
 
@@ -99,6 +104,7 @@ const normalizeWholesalePrices = (value: string | undefined): Product['wholesale
   const prices = parsed
     .map((price) => ({
       min_quantity: Number(price?.min_quantity),
+      unit: typeof price?.unit === 'string' && price.unit.trim() ? price.unit.trim() : undefined,
       price: Number(price?.price),
       price_type: price?.price_type === 'bundle' ? 'bundle' as const : 'unit' as const,
     }))
@@ -107,19 +113,22 @@ const normalizeWholesalePrices = (value: string | undefined): Product['wholesale
   return prices.length > 0 ? prices : undefined;
 };
 
-const normalizeUnitMappings = (value: string | undefined): Product['unit_mappings'] | undefined => {
-  const parsed = parseJsonArray<NonNullable<Product['unit_mappings']>[number]>(value);
-  if (!parsed) return undefined;
+const normalizeUnitMappings = (
+  value: string | undefined,
+  fallbackBaseUnit: string,
+): { mappings?: Product['unit_mappings']; legacySellableUnits: string[] } => {
+  const parsed = parseJsonArray<unknown>(value);
+  if (!parsed) return { legacySellableUnits: [] };
 
-  const mappings = parsed
-    .map((mapping) => ({
-      unit: String(mapping?.unit || '').trim(),
-      base_unit: String(mapping?.base_unit || '').trim(),
-      ratio: Number(mapping?.ratio),
-    }))
-    .filter((mapping) => mapping.unit && mapping.base_unit && Number.isFinite(mapping.ratio) && mapping.ratio > 0);
+  const validEntries = parsed
+    .map((raw) => ({ raw, mapping: normalizeProductUnitMapping(raw, fallbackBaseUnit) }))
+    .filter((entry): entry is { raw: unknown; mapping: ProductUnitMapping } => Boolean(entry.mapping));
+  const mappings = validEntries.map((entry) => entry.mapping);
 
-  return mappings.length > 0 ? mappings : undefined;
+  return {
+    mappings: mappings.length > 0 ? mappings : undefined,
+    legacySellableUnits: getLegacyProductMappingUnits(validEntries.map((entry) => entry.raw)),
+  };
 };
 
 const parseCsv = (text: string) => {
@@ -297,8 +306,19 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
     const purchase_unit = idxPurchaseUnit !== undefined ? (row[idxPurchaseUnit] ?? '').trim() : undefined;
     const selling_unit = idxSellingUnit !== undefined ? (row[idxSellingUnit] ?? '').trim() : undefined;
     const wholesale_prices = normalizeWholesalePrices(idxWholesalePrices !== undefined ? row[idxWholesalePrices] : undefined);
-    const sellable_units = parseDelimitedList(idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined);
-    const unit_mappings = normalizeUnitMappings(idxUnitMappings !== undefined ? row[idxUnitMappings] : undefined);
+    const parsedSellableUnits = parseDelimitedList(idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined);
+    const normalizedUnitMappings = normalizeUnitMappings(
+      idxUnitMappings !== undefined ? row[idxUnitMappings] : undefined,
+      purchase_unit || 'pcs',
+    );
+    const unit_mappings = normalizedUnitMappings.mappings;
+    const sellable_units = normalizedUnitMappings.legacySellableUnits.length > 0
+      ? Array.from(new Set([
+          selling_unit || purchase_unit || 'pcs',
+          ...(parsedSellableUnits || []),
+          ...normalizedUnitMappings.legacySellableUnits,
+        ]))
+      : parsedSellableUnits;
     const rawProductType = idxProductType !== undefined ? (row[idxProductType] ?? '').trim().toUpperCase() : '';
     let product_type: Product['product_type'] | undefined = undefined;
     if (rawProductType === 'RAW_MATERIAL' || rawProductType === 'BAHAN BAKU') {
@@ -378,7 +398,9 @@ export const createProductCsvExportRows = (products: Product[]) => {
         product.stock,
         product.wholesale_prices && product.wholesale_prices.length > 0 ? JSON.stringify(product.wholesale_prices) : '',
         product.sellable_units && product.sellable_units.length > 0 ? JSON.stringify(product.sellable_units) : '',
-        product.unit_mappings && product.unit_mappings.length > 0 ? JSON.stringify(product.unit_mappings) : '',
+        product.unit_mappings && product.unit_mappings.length > 0
+          ? JSON.stringify(normalizeProductUnitMappings(product))
+          : '',
         product.product_type ?? 'FINISHED_GOOD',
         product.is_visible_in_pos !== false,
         product.created_at,

@@ -100,6 +100,13 @@ test('default unit usage can be overridden and is reflected in the product form'
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content', { hasText: /^kg$/ }).click();
   await expect(restoredBaseUnitSelect).toContainText('kg');
 
+  const purchasePriceInput = restoredProductDialog.getByTestId('stock-product-purchase-price');
+  const sellingPriceInput = restoredProductDialog.getByTestId('stock-product-selling-price');
+  await purchasePriceInput.fill('1250000');
+  await sellingPriceInput.fill('1500000');
+  await expect(purchasePriceInput).toHaveValue('1.250.000');
+  await expect(sellingPriceInput).toHaveValue('1.500.000');
+
   await restoredProductDialog.getByRole('tab', { name: /Multi Unit/ }).click();
   const restoredSellableUnitSelect = restoredProductDialog.getByTestId('stock-product-sellable-units');
   await restoredSellableUnitSelect.click();
@@ -114,7 +121,57 @@ test('default unit usage can be overridden and is reflected in the product form'
   await expect(restoredSellableUnitSelect).toContainText('box');
   await expect(restoredProductDialog.getByText('Konversi Produk Belum Ada')).toBeVisible();
 
-  const productRatioInput = restoredProductDialog.getByTestId('stock-product-unit-mapping-ratio-0');
-  await productRatioInput.fill('5');
+  const productQuantityInput = restoredProductDialog.getByTestId('stock-product-unit-mapping-quantity-0');
+  const productSourceUnitSelect = restoredProductDialog.getByTestId('stock-product-unit-mapping-source-unit-0');
+  const productTargetUnitSelect = restoredProductDialog.getByTestId('stock-product-unit-mapping-target-unit-0');
+  const productValueInput = restoredProductDialog.getByTestId('stock-product-unit-mapping-value-0');
+
+  await expect(productQuantityInput).toBeDisabled();
+  await expect(productQuantityInput).toHaveValue('1');
+  await expect(productSourceUnitSelect).not.toHaveClass(/ant-select-disabled/);
+  await expect(productSourceUnitSelect).toContainText('kg');
+  await expect(productTargetUnitSelect).toContainText('box');
+  await productValueInput.fill('5');
   await expect(restoredProductDialog.getByText('Konversi Produk Belum Ada')).toHaveCount(0);
+
+  await restoredProductDialog.getByRole('tab', { name: 'Harga Grosir' }).click();
+  await restoredProductDialog.getByRole('button', { name: 'Tambah Harga' }).click();
+  await expect(restoredProductDialog.getByText('Min. Qty', { exact: true })).toBeVisible();
+
+  const wholesaleUnitSelect = restoredProductDialog.getByTestId('stock-product-wholesale-unit-0');
+  await expect(wholesaleUnitSelect).toContainText('kg');
+  await wholesaleUnitSelect.click();
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content', { hasText: /^box$/ }).last().click();
+  await expect(wholesaleUnitSelect).toContainText('box');
+  await expect(restoredProductDialog.getByText('Per box', { exact: true })).toBeVisible();
+
+  const wholesalePriceInput = restoredProductDialog.getByTestId('stock-product-wholesale-price-0');
+  await wholesalePriceInput.fill('1200000');
+  await expect(wholesalePriceInput).toHaveValue('1.200.000');
+
+  await restoredProductDialog.getByRole('tab', { name: 'Produk' }).click();
+  await restoredProductDialog.getByTestId('stock-product-name').fill('Produk Konversi Eksplisit');
+  await restoredProductDialog.getByRole('button', { name: 'Simpan', exact: true }).click();
+  await expect(restoredProductDialog).toBeHidden();
+
+  const savedProduct = await page.evaluate(async () => {
+    const { db } = await import('/src/lib/db.ts');
+    return db.products.where('name').equals('Produk Konversi Eksplisit').first();
+  });
+  expect(savedProduct).toMatchObject({
+    purchase_unit: 'kg',
+    sellable_units: ['kg', 'box'],
+    unit_mappings: [{
+      from_quantity: 1,
+      from_unit: 'kg',
+      to_quantity: 5,
+      to_unit: 'box',
+    }],
+    wholesale_prices: [{
+      min_quantity: 2,
+      unit: 'box',
+      price: 1_200_000,
+      price_type: 'unit',
+    }],
+  });
 });

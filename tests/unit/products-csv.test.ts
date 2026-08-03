@@ -30,6 +30,83 @@ const existingProduct: Product = {
 };
 
 describe('product master CSV import safety', () => {
+  test('preserves the wholesale tier unit through CSV export and import', () => {
+    const product: Product = {
+      ...existingProduct,
+      wholesale_prices: [{
+        min_quantity: 2,
+        unit: 'dus',
+        price: 216_000,
+        price_type: 'bundle',
+      }],
+      sellable_units: ['pcs', 'dus'],
+      unit_mappings: [{
+        from_quantity: 1,
+        from_unit: 'dus',
+        to_quantity: 12,
+        to_unit: 'pcs',
+      }],
+    };
+    const rows = createProductCsvExportRows([product]);
+    const csv = rows
+      .map((row) => row.map((cell) => {
+        const value = String(cell ?? '');
+        return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+      }).join(','))
+      .join('\n');
+
+    const imported = buildProductCsvImportItems(csv);
+
+    expect(imported.errors).toEqual([]);
+    expect(imported.items).toHaveLength(1);
+    expect(imported.items[0].wholesale_prices).toEqual(product.wholesale_prices);
+    expect(imported.items[0].unit_mappings).toEqual(product.unit_mappings);
+  });
+
+  test('imports a legacy unit mapping as a canonical explicit equation', () => {
+    const legacyMapping = JSON.stringify([{ unit: 'dus', base_unit: 'pcs', ratio: 12 }]);
+    const csv = [
+      'sku,name,purchase_unit,selling_unit,unit_mappings',
+      `LEGACY-1,Produk Legacy,pcs,dus,"${legacyMapping.replaceAll('"', '""')}"`,
+    ].join('\n');
+
+    const imported = buildProductCsvImportItems(csv);
+
+    expect(imported.errors).toEqual([]);
+    expect(imported.items[0].unit_mappings).toEqual([{
+      from_quantity: 1,
+      from_unit: 'dus',
+      to_quantity: 12,
+      to_unit: 'pcs',
+    }]);
+    expect(imported.items[0].sellable_units).toEqual(['dus']);
+  });
+
+  test('blocks a master import whose sellable unit has an invalid equation', () => {
+    const invalidMapping = JSON.stringify([{
+      from_quantity: 1,
+      from_unit: 'box',
+      to_quantity: 0,
+      to_unit: 'ikat',
+    }]);
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,selling_unit,sellable_units,unit_mappings',
+      `INVALID-UNIT,Produk Invalid,box,box,box|ikat,"${invalidMapping.replaceAll('"', '""')}"`,
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    const plan = buildProductMasterImportPlan({
+      items: parsed.items,
+      existingProducts: [],
+      now: '2026-08-04T00:00:00.000Z',
+      createId: () => 'invalid-unit-product',
+      globalConversions: [],
+    });
+
+    expect(plan.items).toEqual([]);
+    expect(plan.errors).toContainEqual(expect.stringContaining('konversi satuan ikat ke box'));
+  });
+
   test('preserves existing prices and stock when CSV fields are blank', () => {
     const parsed = buildProductCsvImportItems([
       'sku,name,purchase_price,selling_price,stock,purchase_quantity',

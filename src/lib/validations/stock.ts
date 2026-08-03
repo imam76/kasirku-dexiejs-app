@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { DEFAULT_CONVERSIONS, normalizeUnitKey } from '@/constants/units';
 import { defaultLocale, translate, type TranslationKey } from '@/i18n/messages';
 import type { UnitConversion } from '@/types';
+import { resolveProductUnitRatio } from '@/utils/productUnits';
 
 type StockValidationTranslator = (
   key: TranslationKey,
@@ -11,7 +12,7 @@ type StockValidationTranslator = (
 const defaultT: StockValidationTranslator = (key, params) => translate(defaultLocale, key, params);
 
 type StockValidationOptions = {
-  globalConversions?: ReadonlyArray<Pick<UnitConversion, 'fromUnit' | 'toUnit'>>;
+  globalConversions?: ReadonlyArray<Pick<UnitConversion, 'fromUnit' | 'toUnit' | 'ratio'>>;
 };
 
 export const createStockSchema = (
@@ -31,41 +32,64 @@ export const createStockSchema = (
   purchase_quantity: z.number().min(0).optional().or(z.literal(0)),
   wholesale_prices: z.array(z.object({
     min_quantity: z.number().min(1, t('stock.validation.minQty')),
+    unit: z.string().min(1, t('stock.validation.unitRequired')),
     price: z.number().min(0, t('stock.validation.priceMin')),
     price_type: z.enum(['unit', 'bundle']).optional(),
   })),
   sellable_units: z.array(z.string()).min(1, t('stock.validation.sellableUnitsRequired')),
   unit_mappings: z.array(z.object({
-    unit: z.string().min(1, t('stock.validation.unitRequired')),
-    base_unit: z.string().min(1, t('stock.validation.baseUnitRequired')),
-    ratio: z.number().min(0.000001, t('stock.validation.ratioMin')),
+    from_quantity: z.number().min(0.000001, t('stock.validation.quantityMin')),
+    from_unit: z.string().min(1, t('stock.validation.unitRequired')),
+    to_quantity: z.number().min(0.000001, t('stock.validation.quantityMin')),
+    to_unit: z.string().min(1, t('stock.validation.unitRequired')),
   })),
 }).superRefine((data, ctx) => {
   const seen = new Set<string>();
+  let hasReportedInconsistentConversion = false;
   const sellableUnits = Array.from(new Set([data.selling_unit, ...data.sellable_units].filter(Boolean)));
+  const normalizedSellableUnits = new Set(sellableUnits.map(normalizeUnitKey));
+
+  data.wholesale_prices.forEach((price, index) => {
+    if (!normalizedSellableUnits.has(normalizeUnitKey(price.unit))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['wholesale_prices', index, 'unit'],
+        message: t('stock.validation.wholesaleUnitNotSellable', { unit: price.unit }),
+      });
+    }
+
+    // Tier yang mulai dari 1 satuan jual berlaku di setiap kuantitas, jadi harga
+    // jual tidak pernah terpakai lagi. Threshold 1 pada satuan lain (mis. 1 dus
+    // saat produk dijual per pcs) tetap sah karena itu memang pembelian borongan.
+    if (
+      price.min_quantity <= 1 &&
+      normalizeUnitKey(price.unit) === normalizeUnitKey(data.selling_unit)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['wholesale_prices', index, 'min_quantity'],
+        message: t('stock.validation.wholesaleMinQtyOverridesBase', { unit: price.unit }),
+      });
+    }
+  });
 
   data.unit_mappings.forEach((mapping, index) => {
-    if (mapping.base_unit !== data.purchase_unit) {
+    const normalizedFromUnit = normalizeUnitKey(mapping.from_unit);
+    const normalizedToUnit = normalizeUnitKey(mapping.to_unit);
+
+    if (normalizedFromUnit === normalizedToUnit) {
       ctx.addIssue({
         code: 'custom',
-        path: ['unit_mappings', index, 'base_unit'],
-        message: t('stock.validation.baseUnitMustMatch'),
+        path: ['unit_mappings', index, 'to_unit'],
+        message: t('stock.validation.sameConversionUnit'),
       });
     }
 
-    if (mapping.unit === data.purchase_unit) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['unit_mappings', index, 'unit'],
-        message: t('stock.validation.unitAlreadyBase'),
-      });
-    }
-
-    const key = `${mapping.unit}:${mapping.base_unit}`;
+    const key = [normalizedFromUnit, normalizedToUnit].sort().join(':');
     if (seen.has(key)) {
       ctx.addIssue({
         code: 'custom',
-        path: ['unit_mappings', index, 'unit'],
+        path: ['unit_mappings', index, 'to_unit'],
         message: t('stock.validation.duplicateUnitConversion'),
       });
     }
@@ -77,23 +101,27 @@ export const createStockSchema = (
 
     const normalizedUnit = normalizeUnitKey(unit);
     const normalizedPurchaseUnit = normalizeUnitKey(data.purchase_unit);
-    const hasGlobalConversion = globalConversions.some((conversion) => {
-      const fromUnit = normalizeUnitKey(conversion.fromUnit);
-      const toUnit = normalizeUnitKey(conversion.toUnit);
 
-      return (
-        (fromUnit === normalizedUnit && toUnit === normalizedPurchaseUnit) ||
-        (fromUnit === normalizedPurchaseUnit && toUnit === normalizedUnit)
-      );
-    });
+    const productResolution = resolveProductUnitRatio({
+      purchase_unit: data.purchase_unit,
+      selling_unit: data.selling_unit,
+      sellable_units: data.sellable_units,
+      unit_mappings: data.unit_mappings,
+    }, normalizedUnit, normalizedPurchaseUnit, { globalConversions });
 
-    if (hasGlobalConversion) return;
+    if (productResolution.status === 'inconsistent') {
+      if (!hasReportedInconsistentConversion) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['unit_mappings'],
+          message: t('stock.validation.inconsistentUnitConversion'),
+        });
+        hasReportedInconsistentConversion = true;
+      }
+      return;
+    }
 
-    const hasProductMapping = data.unit_mappings.some(
-      (mapping) => mapping.unit === unit && mapping.base_unit === data.purchase_unit,
-    );
-
-    if (!hasProductMapping) {
+    if (productResolution.status === 'disconnected') {
       ctx.addIssue({
         code: 'custom',
         path: ['sellable_units'],

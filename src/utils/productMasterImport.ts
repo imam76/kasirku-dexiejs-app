@@ -1,8 +1,11 @@
-import type { Product, ProductUnit } from '@/types';
+import type { Product, ProductUnit, UnitConversion } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
+import { DEFAULT_CONVERSIONS, normalizeUnitKey } from '@/constants/units';
 import {
   buildSellableUnitsFromMappings,
+  getProductSellableUnits,
   normalizeProductUnitMappings,
+  resolveProductUnitRatio,
 } from '@/utils/productUnits';
 
 export interface ProductMasterImportPlanItem {
@@ -22,12 +25,14 @@ interface BuildProductMasterImportPlanInput {
   existingProducts: Product[];
   now: string;
   createId?: () => string;
+  globalConversions?: ReadonlyArray<Pick<UnitConversion, 'fromUnit' | 'toUnit' | 'ratio'>>;
 }
 
 const normalizeImportedWholesalePrices = (
   prices: Product['wholesale_prices'] | undefined,
 ) => (prices || []).map((price) => ({
   min_quantity: Number(price.min_quantity),
+  unit: price.unit,
   price: Number(price.price),
   price_type: price.price_type || 'unit',
 }));
@@ -45,10 +50,11 @@ const buildImportedProduct = ({
 }): Product => {
   const purchaseUnit = (item.purchase_unit || existing?.purchase_unit || 'pcs') as ProductUnit;
   const sellingUnit = (item.selling_unit || existing?.selling_unit || 'pcs') as ProductUnit;
+  const existingSellableUnits = existing ? getProductSellableUnits(existing) : [];
   const unitMappings = normalizeProductUnitMappings({
     purchase_unit: purchaseUnit,
     selling_unit: sellingUnit,
-    sellable_units: item.sellable_units ?? existing?.sellable_units ?? [],
+    sellable_units: item.sellable_units ?? existingSellableUnits,
     unit_mappings: item.unit_mappings ?? existing?.unit_mappings ?? [],
   });
 
@@ -75,7 +81,7 @@ const buildImportedProduct = ({
       selling_unit: sellingUnit,
       sellable_units: item.sellable_units && item.sellable_units.length > 0
         ? item.sellable_units
-        : existing?.sellable_units ?? [],
+        : existingSellableUnits,
       unit_mappings: unitMappings,
     }),
     created_at: existing?.created_at ?? now,
@@ -90,6 +96,7 @@ export const buildProductMasterImportPlan = ({
   existingProducts,
   now,
   createId = () => crypto.randomUUID(),
+  globalConversions = DEFAULT_CONVERSIONS,
 }: BuildProductMasterImportPlanInput): ProductMasterImportPlan => {
   const existingById = new Map(existingProducts.map((product) => [product.id, product]));
   const existingBySku = new Map<string, Product[]>();
@@ -137,13 +144,25 @@ export const buildProductMasterImportPlan = ({
     }
     plannedProductIds.add(productId);
 
+    const product = buildImportedProduct({
+      item,
+      existing,
+      productId,
+      now,
+    });
+    const invalidUnit = getProductSellableUnits(product).find((unit) => {
+      if (normalizeUnitKey(unit) === normalizeUnitKey(product.purchase_unit)) return false;
+      return resolveProductUnitRatio(product, unit, product.purchase_unit, {
+        globalConversions,
+      }).status !== 'resolved';
+    });
+    if (invalidUnit) {
+      errors.push(`Baris ${rowNumber}: konversi satuan ${invalidUnit} ke ${product.purchase_unit} tidak ada atau saling bertentangan.`);
+      return;
+    }
+
     plannedItems.push({
-      product: buildImportedProduct({
-        item,
-        existing,
-        productId,
-        now,
-      }),
+      product,
       operation: existing ? 'update' : 'create',
     });
   });

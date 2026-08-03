@@ -16,10 +16,15 @@ import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import type { FinanceTransaction, Product } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
-import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
+import {
+  buildSellableUnitsFromMappings,
+  getProductSellableUnits,
+  normalizeProductUnitMappings,
+} from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
 import { DEFAULT_CONVERSIONS } from '@/constants/units';
+import { materializeWholesalePriceUnits } from '@/utils/pricing';
 
 export type { StockFormData };
 
@@ -115,6 +120,7 @@ export const useStockManagement = () => {
         is_visible_in_pos: productData.is_visible_in_pos ?? true,
         wholesale_prices: (productData.wholesale_prices || []).map((p) => ({
           min_quantity: Number(p.min_quantity),
+          unit: p.unit || productData.selling_unit || productData.purchase_unit || 'pcs',
           price: Number(p.price),
           price_type: p.price_type || 'unit',
         })),
@@ -268,6 +274,7 @@ export const useStockManagement = () => {
           items,
           existingProducts: await db.products.toArray(),
           now,
+          globalConversions: unitConversions,
         });
         if (importPlan.errors.length > 0) {
           throw new Error(importPlan.errors.join('\n'));
@@ -348,12 +355,13 @@ export const useStockManagement = () => {
     setValue('product_type', product.product_type ?? 'FINISHED_GOOD');
     setValue('is_visible_in_pos', product.is_visible_in_pos ?? true);
     setValue('purchase_quantity', 0);
-    setValue('wholesale_prices', (product.wholesale_prices || []).map(p => ({
+    setValue('wholesale_prices', materializeWholesalePriceUnits(product, unitConversions).map(p => ({
       min_quantity: p.min_quantity,
+      unit: p.unit || product.selling_unit || product.purchase_unit,
       price: p.price,
-      price_type: p.price_type
+      price_type: p.price_type,
     })));
-    setValue('sellable_units', product.sellable_units || [product.selling_unit]);
+    setValue('sellable_units', getProductSellableUnits(product));
     setValue('unit_mappings', normalizeProductUnitMappings(product));
   };
 

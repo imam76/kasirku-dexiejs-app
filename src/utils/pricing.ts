@@ -4,8 +4,8 @@ import {
   isLegacyGlobalPackageConversion,
   normalizeUnitKey,
 } from '@/constants/units';
-import type { CartItem, Product, ProductUnit, UnitConversion } from '@/types';
-import { getProductUnitRatio } from '@/utils/productUnits';
+import type { CartItem, Product, ProductUnit, UnitConversion, WholesalePrice } from '@/types';
+import { resolveProductUnitRatio } from '@/utils/productUnits';
 
 // Global registry for unit conversions
 let conversionRegistry: UnitConversion[] = DEFAULT_CONVERSIONS;
@@ -59,20 +59,19 @@ export const getConversionRatio = (from: ProductUnit, ke: ProductUnit): number =
 };
 
 export const getConversionRatioForProduct = (product: Product, from: ProductUnit, ke: ProductUnit): number => {
-  const unitType = inferConversionUnitType(from, ke);
-  const globalRatio = findConversionRatio(from, ke);
-
-  if (unitType !== 'package' && globalRatio !== undefined) {
-    return globalRatio;
+  const resolution = resolveProductUnitRatio(product, from, ke, {
+    globalConversions: conversionRegistry,
+  });
+  if (resolution.status === 'inconsistent') {
+    throw new Error(`Konversi satuan produk ${product.name} saling bertentangan.`);
   }
-
-  return getProductUnitRatio(product, from, ke) ?? (unitType !== 'package' ? globalRatio : undefined) ?? 1;
+  return resolution.status === 'resolved' ? resolution.ratio : 1;
 };
 
 export const hasConversionRatioForProduct = (product: Product, from: ProductUnit, ke: ProductUnit): boolean => {
-  const unitType = inferConversionUnitType(from, ke);
-  if (unitType !== 'package' && hasConversionRatio(from, ke)) return true;
-  return getProductUnitRatio(product, from, ke) !== undefined;
+  return resolveProductUnitRatio(product, from, ke, {
+    globalConversions: conversionRegistry,
+  }).status === 'resolved';
 };
 
 /**
@@ -128,38 +127,150 @@ export const hitungHargaJual = (product: Product, quantity: number, unit?: Produ
   return pricePerUnit * quantity;
 };
 
+/** Satuan yang dipakai oleh min_quantity sebuah tier grosir. */
+const getTierUnit = (product: Product, tier: WholesalePrice): ProductUnit => (
+  tier.unit || product.selling_unit
+);
+
+/**
+ * Satuan yang dipakai oleh nominal harga tier. Tier baru memakai unit yang
+ * dipilih. Baris lama tanpa unit tetap dibaca sebagai harga per purchase_unit
+ * agar data historis tidak berubah arti, kecuali bundle yang sejak dulu memakai
+ * selling_unit.
+ */
+const getTierPriceUnit = (product: Product, tier: WholesalePrice): ProductUnit => (
+  (tier.unit || tier.price_type === 'bundle') ? getTierUnit(product, tier) : product.purchase_unit
+);
+
+/**
+ * Tier yang satuannya tidak punya persamaan konversi ke satuan target tidak bisa
+ * dihargai. Memakainya berarti diam-diam menganggap 1 pcs = 1 box, jadi tier
+ * seperti itu diabaikan dan harga jatuh ke harga dasar.
+ */
+const getUsableTiers = (product: Product, targetUnit: ProductUnit): WholesalePrice[] => (
+  (product.wholesale_prices || []).filter((tier) => (
+    hasConversionRatioForProduct(product, getTierUnit(product, tier), targetUnit) &&
+    hasConversionRatioForProduct(product, getTierPriceUnit(product, tier), targetUnit)
+  ))
+);
+
+/** Harga satuan sebuah tier, dinormalisasi ke satuan target. */
+const getTierPricePerUnit = (product: Product, tier: WholesalePrice, targetUnit: ProductUnit): number => {
+  const priceUnit = getTierPriceUnit(product, tier);
+  const pricePerTierUnit = tier.price_type === 'bundle'
+    ? tier.price / tier.min_quantity
+    : tier.price;
+
+  return normalisasiHargaProduk(pricePerTierUnit, product, priceUnit, targetUnit);
+};
+
+/** Harga jual dasar per satuan target, tanpa memperhitungkan tier grosir. */
+export const getBasePrice = (product: Product, unit?: ProductUnit): number => {
+  const targetUnit = unit || product.selling_unit;
+  return normalisasiHargaProduk(product.selling_price, product, product.purchase_unit, targetUnit);
+};
+
 export const getPrice = (product: Product, quantity: number, unit?: ProductUnit): number => {
   const targetUnit = unit || product.selling_unit;
-  
-  // 1. Tentukan harga dasar per SELLING_UNIT
-  // Default: ambil dari selling_price (per purchase_unit) lalu normalisasi ke selling_unit
-  let priceInSellingUnit = normalisasiHargaProduk(product.selling_price, product, product.purchase_unit, product.selling_unit);
+  const usableTiers = getUsableTiers(product, targetUnit);
 
-  if (product.wholesale_prices && product.wholesale_prices.length > 0) {
-    // Untuk cek tier grosir, konversi quantity ke selling_unit
-    const quantityInSellingUnit = konversiSatuanProduk(quantity, product, targetUnit, product.selling_unit);
-    
-    const sortedPrices = [...product.wholesale_prices].sort((a, b) => b.min_quantity - a.min_quantity);
-    const match = sortedPrices.find(p => quantityInSellingUnit >= p.min_quantity);
+  if (usableTiers.length > 0) {
+    const sortedTiers = [...usableTiers].sort((a, b) => {
+      const thresholdA = konversiSatuanProduk(a.min_quantity, product, getTierUnit(product, a), targetUnit);
+      const thresholdB = konversiSatuanProduk(b.min_quantity, product, getTierUnit(product, b), targetUnit);
 
-    if (match) {
-      if (match.price_type === 'bundle') {
-        // Jika paket, harga di DB adalah total untuk min_quantity. Jadi harga per selling_unit = total / qty
-        priceInSellingUnit = match.price / match.min_quantity;
-      } else {
-        // Jika unit, harga di DB adalah per purchase_unit. Normalisasi ke selling_unit
-        priceInSellingUnit = normalisasiHargaProduk(match.price, product, product.purchase_unit, product.selling_unit);
-      }
-    }
+      return thresholdB - thresholdA;
+    });
+    const match = sortedTiers.find((tier) => {
+      const quantityInTierUnit = konversiSatuanProduk(
+        quantity,
+        product,
+        targetUnit,
+        getTierUnit(product, tier),
+      );
+
+      return quantityInTierUnit >= tier.min_quantity;
+    });
+
+    if (match) return getTierPricePerUnit(product, match, targetUnit);
   }
-  
-  // 2. Normalisasi dari selling_unit ke target unit (jika berbeda, misal dari gram ke ons)
-  return normalisasiHargaProduk(priceInSellingUnit, product, product.selling_unit, targetUnit);
+
+  return getBasePrice(product, targetUnit);
+};
+
+/** Harga grosir termurah per satuan target, untuk petunjuk "grosir mulai Rp X". */
+export const getLowestWholesalePrice = (product: Product, unit?: ProductUnit): number | undefined => {
+  const targetUnit = unit || product.selling_unit;
+  const tierPrices = getUsableTiers(product, targetUnit)
+    .map((tier) => getTierPricePerUnit(product, tier, targetUnit))
+    .filter((price) => Number.isFinite(price));
+
+  return tierPrices.length > 0 ? Math.min(...tierPrices) : undefined;
+};
+
+export type ProductDisplayPricing = {
+  /** Harga jual dasar per satuan jual — nominal yang sama dengan Master Data. */
+  basePrice: number;
+  /** Harga tier termurah, hanya diisi bila benar-benar lebih murah dari basePrice. */
+  wholesaleFromPrice?: number;
+};
+
+/**
+ * Harga untuk katalog. Persamaan konversi yang saling bertentangan tidak boleh
+ * menjatuhkan seluruh halaman, jadi kembalikan harga jual apa adanya dan biarkan
+ * form produk yang melaporkan konfliknya.
+ */
+export const getProductDisplayPricing = (product: Product, unit?: ProductUnit): ProductDisplayPricing => {
+  try {
+    const basePrice = getBasePrice(product, unit);
+    const wholesaleFromPrice = getLowestWholesalePrice(product, unit);
+
+    return wholesaleFromPrice !== undefined && wholesaleFromPrice < basePrice
+      ? { basePrice, wholesaleFromPrice }
+      : { basePrice };
+  } catch {
+    return { basePrice: product.selling_price };
+  }
 };
 
 export const getPurchasePrice = (product: Product, unit?: ProductUnit): number => {
   const targetUnit = unit || product.purchase_unit;
   return normalisasiHargaProduk(product.purchase_price, product, product.purchase_unit, targetUnit);
+};
+
+/**
+ * Materialize the implicit unit used by wholesale rows written before tiers
+ * stored their own unit. Legacy unit-price rows stored a price per purchase
+ * unit while their threshold used the selling unit, so the price must be
+ * converted before the unit is persisted explicitly.
+ */
+export const materializeWholesalePriceUnits = (
+  product: Product,
+  globalConversions: ReadonlyArray<Pick<UnitConversion, 'fromUnit' | 'toUnit' | 'ratio'>> = conversionRegistry,
+): NonNullable<Product['wholesale_prices']> => {
+  return (product.wholesale_prices || []).map((price) => {
+    if (price.unit) return { ...price };
+
+    const unit = product.selling_unit || product.purchase_unit;
+    const priceType = price.price_type || 'unit';
+    if (priceType === 'bundle') {
+      return { ...price, unit, price_type: priceType };
+    }
+
+    const resolution = resolveProductUnitRatio(product, product.purchase_unit, unit, {
+      globalConversions,
+    });
+    const normalizedPrice = resolution.status === 'resolved'
+      ? price.price / resolution.ratio
+      : price.price;
+
+    return {
+      ...price,
+      unit,
+      price: normalizedPrice,
+      price_type: priceType,
+    };
+  });
 };
 
 export const getCartItemOriginalPrice = (item: CartItem): number => {

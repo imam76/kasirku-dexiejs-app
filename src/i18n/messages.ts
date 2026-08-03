@@ -42,6 +42,7 @@ export const messages = {
     'transaction.activeItem': 'Aktif',
 
     'product.wholesale': 'Grosir',
+    'product.wholesaleFrom': 'Grosir mulai Rp {price}',
     'product.stock': 'Stok',
 
     'finance.title': 'Cash & Bank',
@@ -2046,6 +2047,7 @@ export const messages = {
     'transaction.activeItem': 'Active',
 
     'product.wholesale': 'Wholesale',
+    'product.wholesaleFrom': 'Wholesale from Rp {price}',
     'product.stock': 'Stock',
 
     'finance.title': 'Cash & Bank',

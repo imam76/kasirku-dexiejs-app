@@ -30,6 +30,8 @@ import {
   isKeyboardBarcodeBufferActive,
   type KeyboardBarcodeBuffer,
 } from '@/utils/keyboardBarcodeScanner';
+import { formatCurrencyInput, parseCurrencyInput } from '@/utils/formatters';
+import { resolveProductUnitRatio } from '@/utils/productUnits';
 
 const { useBreakpoint } = Grid;
 
@@ -114,9 +116,12 @@ export default function StockProductModal({
   const sellingUnit = useWatch({ control, name: 'selling_unit' }) || 'pcs';
   const watchedSellableUnits = useWatch({ control, name: 'sellable_units' });
   const watchedUnitMappings = useWatch({ control, name: 'unit_mappings' });
+  const watchedWholesalePrices = useWatch({ control, name: 'wholesale_prices' });
   const sellableUnits = useMemo(() => watchedSellableUnits || [], [watchedSellableUnits]);
   const unitMappings = useMemo(() => watchedUnitMappings || [], [watchedUnitMappings]);
+  const wholesalePrices = useMemo(() => watchedWholesalePrices || [], [watchedWholesalePrices]);
   const previousPurchaseUnitRef = useRef<string | null>(null);
+  const pendingAutoMappingUnitsRef = useRef(new Set<string>());
 
   const { data: conversions = [] } = useQuery({
     queryKey: ['unitConversions'],
@@ -136,8 +141,8 @@ export default function StockProductModal({
     });
     [purchaseUnit, sellingUnit, ...sellableUnits].forEach((unit) => units.add(normalizeUnitKey(unit)));
     unitMappings.forEach((mapping) => {
-      units.add(normalizeUnitKey(mapping.unit));
-      units.add(normalizeUnitKey(mapping.base_unit));
+      units.add(normalizeUnitKey(mapping.from_unit));
+      units.add(normalizeUnitKey(mapping.to_unit));
     });
     return Array.from(units).filter(Boolean).sort();
   }, [purchaseUnit, sellableUnits, sellingUnit, unitDefinitions, unitMappings]);
@@ -168,6 +173,14 @@ export default function StockProductModal({
       });
   }, [sellableUnits]);
 
+  const wholesaleUnitOptions = useMemo(
+    () => selectedSellableUnits.map((unit) => ({
+      value: unit,
+      label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit,
+    })),
+    [selectedSellableUnits, unitDefinitionById],
+  );
+
   const baseUnitOptions = useMemo(
     () =>
       availableUnits
@@ -179,24 +192,6 @@ export default function StockProductModal({
         .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
     [availableUnits, unitDefinitionById],
   );
-
-  const hasGlobalConversion = useCallback((fromUnit: string, toUnit: string) => {
-    const normalizedFromUnit = normalizeUnitKey(fromUnit);
-    const normalizedToUnit = normalizeUnitKey(toUnit);
-
-    if (normalizedFromUnit === normalizedToUnit) return true;
-    return conversions.some(
-      (conversion) => {
-        const conversionFromUnit = normalizeUnitKey(conversion.fromUnit);
-        const conversionToUnit = normalizeUnitKey(conversion.toUnit);
-
-        return (
-          (conversionFromUnit === normalizedFromUnit && conversionToUnit === normalizedToUnit) ||
-          (conversionFromUnit === normalizedToUnit && conversionToUnit === normalizedFromUnit)
-        );
-      },
-    );
-  }, [conversions]);
 
   const canUseAsConversionUnit = useCallback((unit: string) => {
     const normalizedUnit = normalizeUnitKey(unit);
@@ -223,46 +218,54 @@ export default function StockProductModal({
   const unitMappingOptions = useMemo(
     () =>
       availableUnits
-        .filter((unit) => {
-          const normalizedUnit = normalizeUnitKey(unit);
-          const normalizedPurchaseUnit = normalizeUnitKey(purchaseUnit);
-          if (normalizedUnit === normalizedPurchaseUnit) return false;
-
-          return canUseAsConversionUnit(unit);
-        })
         .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
-    [availableUnits, purchaseUnit, unitDefinitionById, canUseAsConversionUnit],
+    [availableUnits, unitDefinitionById],
   );
 
-  const needsProductMapping = useCallback(
-    (unit: string) => {
-      if (unit === purchaseUnit) return false;
-      return !hasGlobalConversion(unit, purchaseUnit);
-    },
-    [purchaseUnit, hasGlobalConversion],
-  );
+  const nextUnitMappingTarget = useMemo(() => unitMappingOptions.find((option) => {
+    const targetUnit = normalizeUnitKey(option.value);
+    const baseUnit = normalizeUnitKey(purchaseUnit);
+    if (!targetUnit || targetUnit === baseUnit) return false;
+
+    return !unitMappings.some((mapping) => {
+      const fromUnit = normalizeUnitKey(mapping.from_unit);
+      const toUnit = normalizeUnitKey(mapping.to_unit);
+      return (
+        (fromUnit === baseUnit && toUnit === targetUnit) ||
+        (fromUnit === targetUnit && toUnit === baseUnit)
+      );
+    });
+  })?.value || '', [purchaseUnit, unitMappingOptions, unitMappings]);
+
+  const resolveSelectedUnit = useCallback((unit: string) => resolveProductUnitRatio({
+    purchase_unit: purchaseUnit,
+    selling_unit: sellingUnit,
+    sellable_units: selectedSellableUnits,
+    unit_mappings: unitMappings,
+  }, unit, purchaseUnit, { globalConversions: conversions }), [
+    conversions,
+    purchaseUnit,
+    selectedSellableUnits,
+    sellingUnit,
+    unitMappings,
+  ]);
 
   const missingProductMappingUnits = useMemo(() => {
     return selectedSellableUnits.filter((unit) => {
-      if (!canUseAsConversionUnit(unit)) return false;
-      if (!needsProductMapping(unit)) return false;
-      return !unitMappings.some((mapping) => mapping.unit === unit && mapping.base_unit === purchaseUnit);
+      if (resolveSelectedUnit(unit).status !== 'disconnected') return false;
+      const normalizedUnit = normalizeUnitKey(unit);
+      return !unitMappings.some((mapping) => (
+        normalizeUnitKey(mapping.from_unit) === normalizedUnit ||
+        normalizeUnitKey(mapping.to_unit) === normalizedUnit
+      ));
     });
-  }, [selectedSellableUnits, canUseAsConversionUnit, needsProductMapping, unitMappings, purchaseUnit]);
+  }, [selectedSellableUnits, resolveSelectedUnit, unitMappings]);
 
   const incompleteProductMappingUnits = useMemo(() => {
     return selectedSellableUnits.filter((unit) => {
-      if (!canUseAsConversionUnit(unit)) return false;
-      if (!needsProductMapping(unit)) return false;
-      return !unitMappings.some(
-        (mapping) =>
-          mapping.unit === unit &&
-          mapping.base_unit === purchaseUnit &&
-          Number.isFinite(Number(mapping.ratio)) &&
-          Number(mapping.ratio) > 0,
-      );
+      return resolveSelectedUnit(unit).status !== 'resolved';
     });
-  }, [selectedSellableUnits, canUseAsConversionUnit, needsProductMapping, unitMappings, purchaseUnit]);
+  }, [selectedSellableUnits, resolveSelectedUnit]);
 
   const hasUnitConversion = incompleteProductMappingUnits.length === 0;
   const unitConversionAttentionCount = incompleteProductMappingUnits.length;
@@ -284,12 +287,6 @@ export default function StockProductModal({
   }, [hasUnitConversion, purchaseUnit, incompleteProductMappingUnits, t]);
 
   useEffect(() => {
-    unitMappingFields.forEach((_, index) => {
-      setValue(`unit_mappings.${index}.base_unit`, purchaseUnit, { shouldDirty: true });
-    });
-  }, [purchaseUnit, setValue, unitMappingFields]);
-
-  useEffect(() => {
     const nextSellingUnit = selectedSellableUnits[0] || '';
     if (nextSellingUnit && nextSellingUnit !== sellingUnit) {
       setValue('selling_unit', nextSellingUnit, { shouldDirty: true, shouldValidate: true });
@@ -297,13 +294,34 @@ export default function StockProductModal({
   }, [selectedSellableUnits, sellingUnit, setValue]);
 
   useEffect(() => {
+    if (!open) {
+      pendingAutoMappingUnitsRef.current.clear();
+      return;
+    }
+
+    unitMappings.forEach((mapping) => {
+      pendingAutoMappingUnitsRef.current.delete(normalizeUnitKey(mapping.from_unit));
+      pendingAutoMappingUnitsRef.current.delete(normalizeUnitKey(mapping.to_unit));
+    });
+  }, [open, unitMappings]);
+
+  useEffect(() => {
     if (!open || missingProductMappingUnits.length === 0) return;
+    const previousPurchaseUnit = previousPurchaseUnitRef.current;
+    if (
+      previousPurchaseUnit !== null &&
+      normalizeUnitKey(previousPurchaseUnit) !== normalizeUnitKey(purchaseUnit)
+    ) return;
 
     missingProductMappingUnits.forEach((unit) => {
+      const normalizedUnit = normalizeUnitKey(unit);
+      if (pendingAutoMappingUnitsRef.current.has(normalizedUnit)) return;
+      pendingAutoMappingUnitsRef.current.add(normalizedUnit);
       appendUnitMapping({
-        unit,
-        base_unit: purchaseUnit,
-        ratio: 0,
+        from_quantity: 1,
+        from_unit: purchaseUnit,
+        to_quantity: 0,
+        to_unit: unit,
       });
     });
   }, [open, missingProductMappingUnits, purchaseUnit, appendUnitMapping]);
@@ -322,7 +340,9 @@ export default function StockProductModal({
       return;
     }
 
-    const remainingUnits = selectedSellableUnits.slice(1).filter(canUseAsConversionUnit);
+    const remainingUnits = selectedSellableUnits.filter(
+      (unit) => normalizeUnitKey(unit) !== normalizeUnitKey(previousPurchaseUnit),
+    );
     const nextSellableUnits = buildSellableUnitsWithDefault(normalizedPurchaseUnit, remainingUnits);
     const hasChanged =
       nextSellableUnits.length !== selectedSellableUnits.length ||
@@ -335,10 +355,26 @@ export default function StockProductModal({
     if (sellingUnit !== normalizedPurchaseUnit) {
       setValue('selling_unit', normalizedPurchaseUnit, { shouldDirty: true, shouldValidate: true });
     }
-  }, [open, purchaseUnit, selectedSellableUnits, sellingUnit, setValue, canUseAsConversionUnit]);
+
+  }, [open, purchaseUnit, selectedSellableUnits, sellingUnit, setValue]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (errors.wholesale_prices) {
+      setActiveTab('wholesale');
+      return;
+    }
+
+    if (errors.unit_mappings || errors.sellable_units || errors.selling_unit) {
+      setActiveTab('multi-unit');
+    }
+  }, [errors.sellable_units, errors.selling_unit, errors.unit_mappings, errors.wholesale_prices, open]);
 
   const handleSave = () => {
-    if (!hasUnitConversion || errors.unit_mappings || errors.sellable_units || errors.selling_unit) {
+    if (errors.wholesale_prices) {
+      setActiveTab('wholesale');
+    } else if (!hasUnitConversion || errors.unit_mappings || errors.sellable_units || errors.selling_unit) {
       setActiveTab('multi-unit');
     }
 
@@ -598,7 +634,9 @@ export default function StockProductModal({
                         <Controller
                           name="name"
                           control={control}
-                          render={({ field }) => <Input {...field} className="w-full" />}
+                          render={({ field }) => (
+                            <Input {...field} data-testid="stock-product-name" className="w-full" />
+                          )}
                         />
                       </FieldContainer>
 
@@ -698,12 +736,16 @@ export default function StockProductModal({
                           control={control}
                           render={({ field }) => (
                             <InputNumber
+                              data-testid="stock-product-purchase-price"
                               inputMode="decimal"
                               value={field.value}
                               onBlur={field.onBlur}
                               onChange={(value) => field.onChange(value ?? 0)}
                               className="w-full"
                               placeholder={t('stock.form.purchasePricePlaceholder', { unit: purchaseUnit })}
+                              prefix="Rp"
+                              formatter={formatCurrencyInput}
+                              parser={parseCurrencyInput}
                               step={0.01}
                               min={0}
                             />
@@ -722,12 +764,16 @@ export default function StockProductModal({
                           control={control}
                           render={({ field }) => (
                             <InputNumber
+                              data-testid="stock-product-selling-price"
                               inputMode="decimal"
                               value={field.value}
                               onBlur={field.onBlur}
                               onChange={(value) => field.onChange(value ?? 0)}
                               className="w-full"
                               placeholder={t('stock.form.sellingPricePlaceholder', { unit: purchaseUnit })}
+                              prefix="Rp"
+                              formatter={formatCurrencyInput}
+                              parser={parseCurrencyInput}
                               step={0.01}
                               min={0}
                             />
@@ -806,9 +852,10 @@ export default function StockProductModal({
                         <Button
                           type="dashed"
                           onClick={() => appendUnitMapping({
-                            unit: unitMappingOptions[0]?.value || '',
-                            base_unit: purchaseUnit,
-                            ratio: 0,
+                            from_quantity: 1,
+                            from_unit: purchaseUnit,
+                            to_quantity: 0,
+                            to_unit: nextUnitMappingTarget,
                           })}
                           icon={<Plus size={16} />}
                           className="flex items-center gap-1"
@@ -824,49 +871,21 @@ export default function StockProductModal({
                             className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3"
                           >
                             <div className="grid flex-1 grid-cols-12 gap-2">
-                              <div className="col-span-5">
+                              <div className="col-span-2">
                                 <FieldContainer
-                                  label={t('stock.form.unit')}
-                                  error={errors.unit_mappings?.[index]?.unit as FieldError | undefined}
-                                  required
-                                  requiredLabel={t('stock.form.requiredLabel')}
+                                  label={t('stock.form.qty')}
+                                  error={errors.unit_mappings?.[index]?.from_quantity as FieldError | undefined}
                                 >
                                   <Controller
-                                    name={`unit_mappings.${index}.unit`}
-                                    control={control}
-                                    render={({ field: itemField }) => (
-                                      <Select
-                                        value={itemField.value}
-                                        onChange={itemField.onChange}
-                                        className="w-full"
-                                        placeholder={t('stock.form.unitPlaceholder')}
-                                        options={unitMappingOptions}
-                                      />
-                                    )}
-                                  />
-                                </FieldContainer>
-                              </div>
-
-                              <div className="col-span-4">
-                                <FieldContainer
-                                  label={t('stock.form.contentPer', { unit: purchaseUnit })}
-                                  error={errors.unit_mappings?.[index]?.ratio as FieldError | undefined}
-                                  required
-                                  requiredLabel={t('stock.form.requiredLabel')}
-                                >
-                                  <Controller
-                                    name={`unit_mappings.${index}.ratio`}
+                                    name={`unit_mappings.${index}.from_quantity`}
                                     control={control}
                                     render={({ field: itemField }) => (
                                       <InputNumber
-                                        data-testid={`stock-product-unit-mapping-ratio-${index}`}
-                                        inputMode="decimal"
-                                        value={itemField.value}
-                                        onBlur={itemField.onBlur}
-                                        onChange={(value) => itemField.onChange(value ?? 1)}
+                                        {...itemField}
+                                        data-testid={`stock-product-unit-mapping-quantity-${index}`}
+                                        disabled
+                                        controls={false}
                                         className="w-full"
-                                        min={0.000001}
-                                        step={0.01}
                                       />
                                     )}
                                   />
@@ -875,14 +894,77 @@ export default function StockProductModal({
 
                               <div className="col-span-3">
                                 <FieldContainer
-                                  label={t('stock.form.base')}
-                                  error={errors.unit_mappings?.[index]?.base_unit as FieldError | undefined}
+                                  label={t('stock.form.unit')}
+                                  error={errors.unit_mappings?.[index]?.from_unit as FieldError | undefined}
+                                  required
+                                  requiredLabel={t('stock.form.requiredLabel')}
                                 >
                                   <Controller
-                                    name={`unit_mappings.${index}.base_unit`}
+                                    name={`unit_mappings.${index}.from_unit`}
                                     control={control}
                                     render={({ field: itemField }) => (
-                                      <Input {...itemField} disabled className="w-full" />
+                                      <Select
+                                        data-testid={`stock-product-unit-mapping-source-unit-${index}`}
+                                        value={itemField.value}
+                                        onChange={itemField.onChange}
+                                        className="w-full"
+                                        placeholder={t('stock.form.unitPlaceholder')}
+                                        options={unitMappingOptions.filter(
+                                          (option) => normalizeUnitKey(option.value) !== normalizeUnitKey(unitMappings[index]?.to_unit),
+                                        )}
+                                      />
+                                    )}
+                                  />
+                                </FieldContainer>
+                              </div>
+
+                              <div className="col-span-3">
+                                <FieldContainer
+                                  label={t('stock.form.value')}
+                                  error={errors.unit_mappings?.[index]?.to_quantity as FieldError | undefined}
+                                  required
+                                  requiredLabel={t('stock.form.requiredLabel')}
+                                >
+                                  <Controller
+                                    name={`unit_mappings.${index}.to_quantity`}
+                                    control={control}
+                                    render={({ field: itemField }) => (
+                                      <InputNumber
+                                        data-testid={`stock-product-unit-mapping-value-${index}`}
+                                        inputMode="decimal"
+                                        value={itemField.value}
+                                        onBlur={itemField.onBlur}
+                                        onChange={(value) => itemField.onChange(value ?? 0)}
+                                        className="w-full"
+                                        min={0.000001}
+                                        step={1}
+                                      />
+                                    )}
+                                  />
+                                </FieldContainer>
+                              </div>
+
+                              <div className="col-span-4">
+                                <FieldContainer
+                                  label={t('stock.form.unit')}
+                                  error={errors.unit_mappings?.[index]?.to_unit as FieldError | undefined}
+                                  required
+                                  requiredLabel={t('stock.form.requiredLabel')}
+                                >
+                                  <Controller
+                                    name={`unit_mappings.${index}.to_unit`}
+                                    control={control}
+                                    render={({ field: itemField }) => (
+                                      <Select
+                                        data-testid={`stock-product-unit-mapping-target-unit-${index}`}
+                                        value={itemField.value}
+                                        onChange={itemField.onChange}
+                                        className="w-full"
+                                        placeholder={t('stock.form.unitPlaceholder')}
+                                        options={unitMappingOptions.filter(
+                                          (option) => normalizeUnitKey(option.value) !== normalizeUnitKey(unitMappings[index]?.from_unit),
+                                        )}
+                                      />
                                     )}
                                   />
                                 </FieldContainer>
@@ -915,7 +997,12 @@ export default function StockProductModal({
                       <h3 className="font-medium text-gray-700">{t('stock.form.wholesaleTitle')}</h3>
                       <Button
                         type="dashed"
-                        onClick={() => appendWholesale({ min_quantity: 2, price: 0, price_type: 'unit' })}
+                        onClick={() => appendWholesale({
+                          min_quantity: 2,
+                          unit: purchaseUnit,
+                          price: 0,
+                          price_type: 'unit',
+                        })}
                         icon={<Plus size={16} />}
                         className="flex items-center gap-1"
                       >
@@ -932,7 +1019,7 @@ export default function StockProductModal({
                           <div className="grid flex-1 grid-cols-12 gap-2">
                             <div className="col-span-3">
                               <FieldContainer
-                                label={t('stock.form.minQty', { unit: sellingUnit })}
+                                label={t('stock.form.minQty')}
                                 error={errors.wholesale_prices?.[index]?.min_quantity}
                                 required
                                 requiredLabel={t('stock.form.requiredLabel')}
@@ -942,6 +1029,7 @@ export default function StockProductModal({
                                   control={control}
                                   render={({ field: itemField }) => (
                                     <InputNumber
+                                      data-testid={`stock-product-wholesale-min-quantity-${index}`}
                                       inputMode="decimal"
                                       value={itemField.value}
                                       onBlur={itemField.onBlur}
@@ -955,7 +1043,31 @@ export default function StockProductModal({
                               </FieldContainer>
                             </div>
 
-                            <div className="col-span-4">
+                            <div className="col-span-3">
+                              <FieldContainer
+                                label={t('stock.form.unit')}
+                                error={errors.wholesale_prices?.[index]?.unit}
+                                required
+                                requiredLabel={t('stock.form.requiredLabel')}
+                              >
+                                <Controller
+                                  name={`wholesale_prices.${index}.unit`}
+                                  control={control}
+                                  render={({ field: itemField }) => (
+                                    <Select
+                                      data-testid={`stock-product-wholesale-unit-${index}`}
+                                      value={itemField.value}
+                                      onChange={itemField.onChange}
+                                      className="w-full"
+                                      placeholder={t('stock.form.unitPlaceholder')}
+                                      options={wholesaleUnitOptions}
+                                    />
+                                  )}
+                                />
+                              </FieldContainer>
+                            </div>
+
+                            <div className="col-span-3">
                               <FieldContainer label={t('stock.form.type')}>
                                 <Controller
                                   name={`wholesale_prices.${index}.price_type`}
@@ -966,7 +1078,12 @@ export default function StockProductModal({
                                       onChange={itemField.onChange}
                                       className="w-full"
                                       options={[
-                                        { value: 'unit', label: t('stock.form.perUnit', { unit: purchaseUnit }) },
+                                        {
+                                          value: 'unit',
+                                          label: t('stock.form.perUnit', {
+                                            unit: wholesalePrices[index]?.unit || purchaseUnit,
+                                          }),
+                                        },
                                         { value: 'bundle', label: t('stock.form.bundle') },
                                       ]}
                                     />
@@ -975,7 +1092,7 @@ export default function StockProductModal({
                               </FieldContainer>
                             </div>
 
-                            <div className="col-span-5">
+                            <div className="col-span-3">
                               <FieldContainer
                                 label={t('stock.form.price')}
                                 error={errors.wholesale_prices?.[index]?.price}
@@ -987,18 +1104,17 @@ export default function StockProductModal({
                                   control={control}
                                   render={({ field: itemField }) => (
                                     <InputNumber
+                                      data-testid={`stock-product-wholesale-price-${index}`}
+                                      inputMode="decimal"
                                       value={itemField.value}
                                       onBlur={itemField.onBlur}
                                       onChange={(value) => itemField.onChange(value ?? 0)}
                                       className="w-full"
                                       placeholder={t('stock.form.nominalPlaceholder')}
+                                      prefix="Rp"
                                       min={0}
-                                      formatter={(value) =>
-                                        value !== undefined && value !== null
-                                          ? `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                                          : ''
-                                      }
-                                      parser={(value) => (value ? Number(value.replace(/Rp\s?|,/g, '')) : 0)}
+                                      formatter={formatCurrencyInput}
+                                      parser={parseCurrencyInput}
                                     />
                                   )}
                                 />
