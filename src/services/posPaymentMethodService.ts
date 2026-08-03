@@ -6,6 +6,7 @@ import type {
   PaymentMethodMaster,
   Transaction,
 } from '@/types';
+import { isTransactionSale } from '@/utils/transactions';
 
 export interface ResolvePosPaymentMethodInput {
   paymentMethodId: string;
@@ -86,7 +87,7 @@ export const backfillLegacyPosPaymentSnapshots = async (): Promise<number> => {
     db.paymentMethods.toArray(),
   ]);
   const missing = transactions.filter((transaction) => (
-    !transaction.payment_method_id && !transaction.payment_method_code
+    isTransactionSale(transaction) && !transaction.payment_method_id && !transaction.payment_method_code
   ));
   if (missing.length === 0) return 0;
 

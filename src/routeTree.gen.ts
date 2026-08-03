@@ -33,6 +33,9 @@ const TransactionLazyRouteImport = createFileRoute('/transaction')()
 const SyncDbLazyRouteImport = createFileRoute('/sync-db')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
 const SettingsLazyRouteImport = createFileRoute('/settings')()
+const PosRestoPrototypeLazyRouteImport = createFileRoute(
+  '/pos-resto-prototype',
+)()
 const PosRestoLazyRouteImport = createFileRoute('/pos-resto')()
 const HistoryLazyRouteImport = createFileRoute('/history')()
 const ActivityLogLazyRouteImport = createFileRoute('/activity-log')()
@@ -88,6 +91,9 @@ const MasterDataStockOpnameLazyRouteImport = createFileRoute(
   '/master-data/stock-opname',
 )()
 const MasterDataRolesLazyRouteImport = createFileRoute('/master-data/roles')()
+const MasterDataRestaurantTablesLazyRouteImport = createFileRoute(
+  '/master-data/restaurant-tables',
+)()
 const MasterDataPromosLazyRouteImport = createFileRoute('/master-data/promos')()
 const MasterDataProjectsLazyRouteImport = createFileRoute(
   '/master-data/projects',
@@ -323,6 +329,13 @@ const SettingsLazyRoute = SettingsLazyRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/settings.lazy').then((d) => d.Route))
+const PosRestoPrototypeLazyRoute = PosRestoPrototypeLazyRouteImport.update({
+  id: '/pos-resto-prototype',
+  path: '/pos-resto-prototype',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/pos-resto-prototype.lazy').then((d) => d.Route),
+)
 const PosRestoLazyRoute = PosRestoLazyRouteImport.update({
   id: '/pos-resto',
   path: '/pos-resto',
@@ -541,6 +554,14 @@ const MasterDataRolesLazyRoute = MasterDataRolesLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/master-data/roles.lazy').then((d) => d.Route),
 )
+const MasterDataRestaurantTablesLazyRoute =
+  MasterDataRestaurantTablesLazyRouteImport.update({
+    id: '/master-data/restaurant-tables',
+    path: '/master-data/restaurant-tables',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/master-data/restaurant-tables.lazy').then((d) => d.Route),
+  )
 const MasterDataPromosLazyRoute = MasterDataPromosLazyRouteImport.update({
   id: '/master-data/promos',
   path: '/master-data/promos',
@@ -1293,6 +1314,7 @@ export interface FileRoutesByFullPath {
   '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
+  '/pos-resto-prototype': typeof PosRestoPrototypeLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1336,6 +1358,7 @@ export interface FileRoutesByFullPath {
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/restaurant-tables': typeof MasterDataRestaurantTablesLazyRoute
   '/master-data/roles': typeof MasterDataRolesLazyRoute
   '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
@@ -1425,6 +1448,7 @@ export interface FileRoutesByTo {
   '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
+  '/pos-resto-prototype': typeof PosRestoPrototypeLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1468,6 +1492,7 @@ export interface FileRoutesByTo {
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/restaurant-tables': typeof MasterDataRestaurantTablesLazyRoute
   '/master-data/roles': typeof MasterDataRolesLazyRoute
   '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
@@ -1558,6 +1583,7 @@ export interface FileRoutesById {
   '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
+  '/pos-resto-prototype': typeof PosRestoPrototypeLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1601,6 +1627,7 @@ export interface FileRoutesById {
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
   '/master-data/promos': typeof MasterDataPromosLazyRoute
+  '/master-data/restaurant-tables': typeof MasterDataRestaurantTablesLazyRoute
   '/master-data/roles': typeof MasterDataRolesLazyRoute
   '/master-data/stock-opname': typeof MasterDataStockOpnameLazyRoute
   '/master-data/taxes': typeof MasterDataTaxesLazyRoute
@@ -1692,6 +1719,7 @@ export interface FileRouteTypes {
     | '/activity-log'
     | '/history'
     | '/pos-resto'
+    | '/pos-resto-prototype'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -1735,6 +1763,7 @@ export interface FileRouteTypes {
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/restaurant-tables'
     | '/master-data/roles'
     | '/master-data/stock-opname'
     | '/master-data/taxes'
@@ -1824,6 +1853,7 @@ export interface FileRouteTypes {
     | '/activity-log'
     | '/history'
     | '/pos-resto'
+    | '/pos-resto-prototype'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -1867,6 +1897,7 @@ export interface FileRouteTypes {
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/restaurant-tables'
     | '/master-data/roles'
     | '/master-data/stock-opname'
     | '/master-data/taxes'
@@ -1956,6 +1987,7 @@ export interface FileRouteTypes {
     | '/activity-log'
     | '/history'
     | '/pos-resto'
+    | '/pos-resto-prototype'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -1999,6 +2031,7 @@ export interface FileRouteTypes {
     | '/master-data/products'
     | '/master-data/projects'
     | '/master-data/promos'
+    | '/master-data/restaurant-tables'
     | '/master-data/roles'
     | '/master-data/stock-opname'
     | '/master-data/taxes'
@@ -2089,6 +2122,7 @@ export interface RootRouteChildren {
   ActivityLogLazyRoute: typeof ActivityLogLazyRoute
   HistoryLazyRoute: typeof HistoryLazyRoute
   PosRestoLazyRoute: typeof PosRestoLazyRoute
+  PosRestoPrototypeLazyRoute: typeof PosRestoPrototypeLazyRoute
   SettingsLazyRoute: typeof SettingsLazyRoute
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
   SyncDbLazyRoute: typeof SyncDbLazyRoute
@@ -2132,6 +2166,7 @@ export interface RootRouteChildren {
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
   MasterDataProjectsLazyRoute: typeof MasterDataProjectsLazyRoute
   MasterDataPromosLazyRoute: typeof MasterDataPromosLazyRoute
+  MasterDataRestaurantTablesLazyRoute: typeof MasterDataRestaurantTablesLazyRoute
   MasterDataRolesLazyRoute: typeof MasterDataRolesLazyRoute
   MasterDataStockOpnameLazyRoute: typeof MasterDataStockOpnameLazyRoute
   MasterDataTaxesLazyRoute: typeof MasterDataTaxesLazyRoute
@@ -2233,6 +2268,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pos-resto-prototype': {
+      id: '/pos-resto-prototype'
+      path: '/pos-resto-prototype'
+      fullPath: '/pos-resto-prototype'
+      preLoaderRoute: typeof PosRestoPrototypeLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pos-resto': {
@@ -2464,6 +2506,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data/roles'
       fullPath: '/master-data/roles'
       preLoaderRoute: typeof MasterDataRolesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/master-data/restaurant-tables': {
+      id: '/master-data/restaurant-tables'
+      path: '/master-data/restaurant-tables'
+      fullPath: '/master-data/restaurant-tables'
+      preLoaderRoute: typeof MasterDataRestaurantTablesLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/master-data/promos': {
@@ -3229,6 +3278,7 @@ const rootRouteChildren: RootRouteChildren = {
   ActivityLogLazyRoute: ActivityLogLazyRoute,
   HistoryLazyRoute: HistoryLazyRoute,
   PosRestoLazyRoute: PosRestoLazyRoute,
+  PosRestoPrototypeLazyRoute: PosRestoPrototypeLazyRoute,
   SettingsLazyRoute: SettingsLazyRoute,
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
   SyncDbLazyRoute: SyncDbLazyRoute,
@@ -3274,6 +3324,7 @@ const rootRouteChildren: RootRouteChildren = {
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
   MasterDataProjectsLazyRoute: MasterDataProjectsLazyRoute,
   MasterDataPromosLazyRoute: MasterDataPromosLazyRoute,
+  MasterDataRestaurantTablesLazyRoute: MasterDataRestaurantTablesLazyRoute,
   MasterDataRolesLazyRoute: MasterDataRolesLazyRoute,
   MasterDataStockOpnameLazyRoute: MasterDataStockOpnameLazyRoute,
   MasterDataTaxesLazyRoute: MasterDataTaxesLazyRoute,

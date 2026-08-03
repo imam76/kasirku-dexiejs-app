@@ -2,8 +2,10 @@ import { create } from 'zustand';
 import { Product, CartItem } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { getProductSellableUnits } from '@/utils/productUnits';
+import { isProductVisibleInPos } from '@/utils/productAvailability';
 
 export type TransactionError =
+  | { code: 'PRODUCT_HIDDEN_IN_POS' }
   | { code: 'OUT_OF_STOCK' }
   | { code: 'INSUFFICIENT_STOCK'; stock: number; unit: string }
   | { code: 'INVALID_UNIT'; unit: string };
@@ -104,7 +106,7 @@ const readProcessDraft = (scope: string): PosProcessDraftSnapshot => {
       productPage: Number.isInteger(draft.productPage) && Number(draft.productPage) > 0
         ? Number(draft.productPage)
         : 1,
-      cart: Array.isArray(draft.cart) ? draft.cart : [],
+      cart: Array.isArray(draft.cart) ? draft.cart.filter((item) => isProductVisibleInPos(item.product)) : [],
       searchTerm: typeof draft.searchTerm === 'string' ? draft.searchTerm : '',
       paymentDrafts: Array.isArray(draft.paymentDrafts) ? draft.paymentDrafts : [],
       voucherCode: typeof draft.voucherCode === 'string' ? draft.voucherCode : '',
@@ -180,6 +182,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   addToCart: (product) => {
     const { cart } = get();
+    if (!isProductVisibleInPos(product)) {
+      return { success: false, error: { code: 'PRODUCT_HIDDEN_IN_POS' } };
+    }
     // Untuk produk curah (gram/ons), stok mungkin kecil tapi bisa dijual. 
     // Kita cek stok dalam base unit.
     if (product.stock <= 0) {

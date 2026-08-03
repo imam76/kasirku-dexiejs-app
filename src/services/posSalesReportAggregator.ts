@@ -6,7 +6,7 @@ import {
   resolveTransactionItemUnit,
   type SoldItemSummary,
 } from '@/utils/salesUnits';
-import { filterActiveTransactions } from '@/utils/transactions';
+import { filterActiveSaleTransactions } from '@/utils/transactions';
 import {
   getTransactionPaymentsOrLegacyFallback,
   groupPosPaymentsByTransaction,
@@ -85,7 +85,7 @@ export const buildDailySalesBuckets = (
   startDate?: string,
   endDate?: string,
 ): DailySalesBucket[] => {
-  const activeTransactions = filterActiveTransactions(transactions);
+  const activeTransactions = filterActiveSaleTransactions(transactions);
   const [start, end] = createDateRange(startDate, endDate, activeTransactions);
   const buckets = new Map<string, DailySalesBucket>();
 
@@ -123,7 +123,7 @@ export const buildPosSalesReportData = ({
   categories,
   topProductsLimit = 10,
 }: BuildPosSalesReportInput): PosSalesReportData => {
-  const activeTransactions = filterActiveTransactions(rawTransactions);
+  const activeTransactions = filterActiveSaleTransactions(rawTransactions);
   const paymentsByTransaction = groupPosPaymentsByTransaction(payments);
   let transactions: PosTransactionWithPayments[] = activeTransactions.map((transaction) => ({
     ...transaction,

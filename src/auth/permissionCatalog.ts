@@ -110,6 +110,31 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['AREA'],
   },
   {
+    code: 'RESTAURANT_TABLE_VIEW',
+    label: 'Lihat Meja Resto',
+    group: 'Data Master',
+    moduleCodes: ['POS_TRANSACTION'],
+  },
+  {
+    code: 'RESTAURANT_TABLE_CREATE',
+    label: 'Tambah Meja Resto',
+    group: 'Data Master',
+    moduleCodes: ['POS_TRANSACTION'],
+  },
+  {
+    code: 'RESTAURANT_TABLE_UPDATE',
+    label: 'Ubah Meja Resto',
+    group: 'Data Master',
+    moduleCodes: ['POS_TRANSACTION'],
+  },
+  {
+    code: 'RESTAURANT_TABLE_DELETE',
+    label: 'Hapus Meja Resto',
+    group: 'Data Master',
+    moduleCodes: ['POS_TRANSACTION'],
+    isSensitive: true,
+  },
+  {
     code: 'EMPLOYEE_MANAGE',
     label: 'Kelola Karyawan',
     group: 'Data Master',

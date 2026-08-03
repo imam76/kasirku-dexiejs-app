@@ -1,6 +1,6 @@
 import dayjs from '@/lib/dayjs'
 import { db } from '@/lib/db'
-import { filterActiveTransactions } from '@/utils/transactions'
+import { filterActiveSaleTransactions } from '@/utils/transactions'
 
 const STORAGE_KEYS = {
   INSTALL_DATE: 'app_install_date',
@@ -30,7 +30,7 @@ export const incrementSessionCount = () => {
 export const getFeedbackStats = async () => {
   const installDate = localStorage.getItem(STORAGE_KEYS.INSTALL_DATE)
   const sessionCount = parseInt(localStorage.getItem(STORAGE_KEYS.SESSION_COUNT) || '0')
-  const transactionCount = filterActiveTransactions(await db.transactions.toArray()).length
+  const transactionCount = filterActiveSaleTransactions(await db.transactions.toArray()).length
   const daysActive = installDate ? dayjs().diff(dayjs(installDate), 'day') : 0
 
   return {

@@ -5,6 +5,7 @@ import type {
   OpeningBalanceBatch,
   Product,
 } from '@/types';
+import type { Transaction as DexieTransaction } from 'dexie';
 import type { KasirkuDB } from '../../KasirkuDB';
 
 export const LEGACY_INVENTORY_OPENING_BALANCE_SKIP_NOTE = [
@@ -61,38 +62,42 @@ export const buildLegacyInventoryOpeningBalanceSkipBatch = ({
   };
 };
 
+export const applyLegacyInventoryOpeningBalanceCompatibility = async (
+  transaction: DexieTransaction,
+) => {
+  const ledger = await transaction
+    .table<GeneralLedgerSetting, string>('generalLedgerSetting')
+    .get('default');
+  if (!ledger?.is_ready && !ledger?.activated_at) return;
+
+  const batchTable = transaction.table<OpeningBalanceBatch, string>('openingBalanceBatches');
+  const [setup, existingInventoryBatch, productWithStock, lotWithBalance] = await Promise.all([
+    transaction
+      .table<AccountingInitialSetupSetting, string>('accountingInitialSetupSetting')
+      .get('default'),
+    batchTable.where('module').equals('INVENTORY').first(),
+    transaction
+      .table<Product, string>('products')
+      .filter((product) => Math.abs(Number(product.stock || 0)) > 1e-6)
+      .first(),
+    transaction
+      .table<InventoryLot, string>('inventoryLots')
+      .filter((lot) => Math.abs(Number(lot.quantity_remaining || 0)) > 1e-6)
+      .first(),
+  ]);
+  const batch = buildLegacyInventoryOpeningBalanceSkipBatch({
+    ledger,
+    setup,
+    hasInventoryBatch: Boolean(existingInventoryBatch),
+    hasInventoryBalance: Boolean(productWithStock || lotWithBalance),
+    now: new Date().toISOString(),
+  });
+
+  if (batch) await batchTable.put(batch);
+};
+
 export function registerMigrationV106(db: KasirkuDB) {
   // Dexie menjalankan callback upgrade hanya untuk database yang sudah ada.
   // Database baru di v106 tidak menerima batch SKIPPED kompatibilitas ini.
-  db.version(106).stores({}).upgrade(async (transaction) => {
-    const ledger = await transaction
-      .table<GeneralLedgerSetting, string>('generalLedgerSetting')
-      .get('default');
-    if (!ledger?.is_ready && !ledger?.activated_at) return;
-
-    const batchTable = transaction.table<OpeningBalanceBatch, string>('openingBalanceBatches');
-    const [setup, existingInventoryBatch, productWithStock, lotWithBalance] = await Promise.all([
-      transaction
-        .table<AccountingInitialSetupSetting, string>('accountingInitialSetupSetting')
-        .get('default'),
-      batchTable.where('module').equals('INVENTORY').first(),
-      transaction
-        .table<Product, string>('products')
-        .filter((product) => Math.abs(Number(product.stock || 0)) > 1e-6)
-        .first(),
-      transaction
-        .table<InventoryLot, string>('inventoryLots')
-        .filter((lot) => Math.abs(Number(lot.quantity_remaining || 0)) > 1e-6)
-        .first(),
-    ]);
-    const batch = buildLegacyInventoryOpeningBalanceSkipBatch({
-      ledger,
-      setup,
-      hasInventoryBatch: Boolean(existingInventoryBatch),
-      hasInventoryBalance: Boolean(productWithStock || lotWithBalance),
-      now: new Date().toISOString(),
-    });
-
-    if (batch) await batchTable.put(batch);
-  });
+  db.version(106).stores({}).upgrade(applyLegacyInventoryOpeningBalanceCompatibility);
 }

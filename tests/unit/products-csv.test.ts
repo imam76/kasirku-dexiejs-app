@@ -95,6 +95,48 @@ describe('product master CSV import safety', () => {
     });
   });
 
+  test('imports POS visibility fields without overwriting them when the columns are blank', () => {
+    const explicit = buildProductCsvImportItems([
+      'sku,name,product_type,is_visible_in_pos',
+      'A,Produk A,RAW_MATERIAL,false',
+    ].join('\n'));
+    const blank = buildProductCsvImportItems([
+      'sku,name,product_type,is_visible_in_pos',
+      'A,Produk A,,',
+    ].join('\n'));
+
+    expect(explicit.errors).toEqual([]);
+    expect(explicit.items[0]).toMatchObject({
+      product_type: 'RAW_MATERIAL',
+      is_visible_in_pos: false,
+    });
+
+    const preservedPlan = buildProductMasterImportPlan({
+      items: blank.items,
+      existingProducts: [{
+        ...existingProduct,
+        product_type: 'RAW_MATERIAL',
+        is_visible_in_pos: false,
+      }],
+      now: '2026-07-31T00:00:00.000Z',
+    });
+    expect(preservedPlan.items[0].product).toMatchObject({
+      product_type: 'RAW_MATERIAL',
+      is_visible_in_pos: false,
+    });
+  });
+
+  test('rejects invalid POS visibility field values', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,product_type,is_visible_in_pos',
+      'A,Produk A,SERVICE,mungkin',
+    ].join('\n'));
+
+    expect(parsed.items).toEqual([]);
+    expect(parsed.errors.join(' ')).toContain('product_type');
+    expect(parsed.errors.join(' ')).toContain('is_visible_in_pos');
+  });
+
   test('returns no importable items when any row has a blocking error', () => {
     const parsed = buildProductCsvImportItems([
       'sku,name,purchase_price,selling_price',

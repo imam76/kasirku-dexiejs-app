@@ -19,6 +19,7 @@ import {
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import { getTransactionPaymentsOrLegacyFallback } from '@/utils/posSplitPayment';
 import { getStoredReceiptPaperSize } from '@/utils/printer/receiptPaperSize';
+import { isTransactionExpense } from '@/utils/transactions';
 
 const DEFAULT_MERCHANT_NAME = 'Frayukti';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
@@ -92,6 +93,13 @@ export const buildReceiptPayload = (
 export const printReceiptAfterTransaction = async (
   transaction: TransactionReceiptInput
 ): Promise<ReceiptPrintResult> => {
+  if (isTransactionExpense(transaction)) {
+    return {
+      success: false,
+      status: 'print_failed',
+      error: 'Pengeluaran internal tidak memiliki struk penjualan.',
+    };
+  }
   const companyProfile = await db.companyProfileSetting.get('default');
   const receipt = buildReceiptPayload(transaction, companyProfile?.company_name);
 

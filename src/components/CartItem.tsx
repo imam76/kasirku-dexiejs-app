@@ -54,7 +54,7 @@ export default function CartItem({
         data-pos-cart-item-id={item.product.id}
         data-pos-active={isActive ? 'true' : 'false'}
         onClick={onActivate}
-        className={`hidden rounded-xl border bg-blue-50/40 p-2.5 min-[1024px]:block lg:hidden ${
+        className={`hidden rounded-xl border bg-blue-50/40 p-2.5 min-[1024px]:block ${
           isActive
             ? 'border-blue-500 shadow-md shadow-blue-100 ring-2 ring-blue-200'
             : 'border-blue-100'
@@ -94,6 +94,8 @@ export default function CartItem({
             </button>
 
             <InputNumber
+              ref={quantityInputRef}
+              data-testid={`pos-cart-quantity-${item.product.id}`}
               inputMode='decimal'
               min={0}
               value={item.quantity}
@@ -134,7 +136,7 @@ export default function CartItem({
         data-pos-cart-item-id={item.product.id}
         data-pos-active={isActive ? 'true' : 'false'}
         onClick={onActivate}
-        className={`rounded-2xl border bg-blue-50/40 p-3 min-[1024px]:hidden lg:block ${
+        className={`rounded-2xl border bg-blue-50/40 p-3 min-[1024px]:hidden ${
           isActive
             ? 'border-blue-500 shadow-md shadow-blue-100 ring-2 ring-blue-200'
             : 'border-blue-100'

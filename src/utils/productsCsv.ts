@@ -14,6 +14,16 @@ export type ProductCsvImportItem = {
   wholesale_prices?: Product['wholesale_prices'];
   sellable_units?: string[];
   unit_mappings?: Product['unit_mappings'];
+  product_type?: Product['product_type'];
+  is_visible_in_pos?: boolean;
+};
+
+const parseBoolean = (value: string | undefined) => {
+  const normalized = (value ?? '').trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (['true', '1', 'yes', 'ya', 'tampil'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'tidak', 'tidak tampil'].includes(normalized)) return false;
+  return undefined;
 };
 
 export interface ProductCsvIgnoredOperationalColumns {
@@ -215,6 +225,8 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
     stock: idxStock === undefined ? undefined : rawHeaderRow[idxStock],
     purchase_quantity: idxPurchaseQty === undefined ? undefined : rawHeaderRow[idxPurchaseQty],
   };
+  const idxProductType = pickIndex(['product_type', 'tipe_produk']);
+  const idxVisibleInPos = pickIndex(['is_visible_in_pos', 'tampil_di_pos']);
 
   const errors: string[] = [];
   if (idxName === undefined) errors.push('Kolom "name" (atau "nama") tidak ditemukan.');
@@ -287,6 +299,21 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
     const wholesale_prices = normalizeWholesalePrices(idxWholesalePrices !== undefined ? row[idxWholesalePrices] : undefined);
     const sellable_units = parseDelimitedList(idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined);
     const unit_mappings = normalizeUnitMappings(idxUnitMappings !== undefined ? row[idxUnitMappings] : undefined);
+    const rawProductType = idxProductType !== undefined ? (row[idxProductType] ?? '').trim().toUpperCase() : '';
+    let product_type: Product['product_type'] | undefined = undefined;
+    if (rawProductType === 'RAW_MATERIAL' || rawProductType === 'BAHAN BAKU') {
+      product_type = 'RAW_MATERIAL';
+    } else if (rawProductType === 'FINISHED_GOOD' || rawProductType === 'BARANG JADI') {
+      product_type = 'FINISHED_GOOD';
+    } else if (rawProductType) {
+      errors.push(`Baris ${rowNumber}: product_type/tipe_produk harus FINISHED_GOOD atau RAW_MATERIAL.`);
+    }
+
+    const rawVisibleInPos = idxVisibleInPos !== undefined ? row[idxVisibleInPos] : undefined;
+    const is_visible_in_pos = parseBoolean(rawVisibleInPos);
+    if ((rawVisibleInPos ?? '').trim() && is_visible_in_pos === undefined) {
+      errors.push(`Baris ${rowNumber}: is_visible_in_pos/tampil_di_pos harus true atau false.`);
+    }
 
     if (errors.length > errorCountBeforeRow) {
       continue;
@@ -304,6 +331,8 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
       wholesale_prices,
       sellable_units,
       unit_mappings,
+      product_type,
+      is_visible_in_pos,
     });
   }
 
@@ -329,6 +358,8 @@ export const createProductCsvExportRows = (products: Product[]) => {
     'wholesale_prices',
     'sellable_units',
     'unit_mappings',
+    'product_type',
+    'is_visible_in_pos',
     'created_at',
     'updated_at',
   ];
@@ -348,6 +379,8 @@ export const createProductCsvExportRows = (products: Product[]) => {
         product.wholesale_prices && product.wholesale_prices.length > 0 ? JSON.stringify(product.wholesale_prices) : '',
         product.sellable_units && product.sellable_units.length > 0 ? JSON.stringify(product.sellable_units) : '',
         product.unit_mappings && product.unit_mappings.length > 0 ? JSON.stringify(product.unit_mappings) : '',
+        product.product_type ?? 'FINISHED_GOOD',
+        product.is_visible_in_pos !== false,
         product.created_at,
         product.updated_at,
       ];

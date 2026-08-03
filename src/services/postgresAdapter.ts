@@ -38,6 +38,7 @@ import type {
   PayrollRunStatus,
   Permission,
   ProductUnit,
+  ProductType,
   ProductUnitMapping,
   PromoType,
   ProductionOrderStatus,
@@ -706,6 +707,8 @@ export interface RemoteProductDto {
   selling_price: number;
   stock: number;
   sku?: string | null;
+  product_type: ProductType;
+  is_visible_in_pos: boolean;
   wholesale_prices?: WholesalePrice[] | null;
   sellable_units?: ProductUnit[] | null;
   unit_mappings?: ProductUnitMapping[] | null;

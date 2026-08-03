@@ -64,6 +64,8 @@ const buildImportedProduct = ({
     // Import master data must never create or overwrite an operational stock balance.
     stock: existing?.stock ?? 0,
     sku: item.sku || existing?.sku || '',
+    product_type: item.product_type ?? existing?.product_type ?? 'FINISHED_GOOD',
+    is_visible_in_pos: item.is_visible_in_pos ?? existing?.is_visible_in_pos ?? true,
     wholesale_prices: normalizeImportedWholesalePrices(
       item.wholesale_prices ?? existing?.wholesale_prices,
     ),

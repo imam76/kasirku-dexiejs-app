@@ -54,6 +54,7 @@ const STATIC_LABEL_KEYS: Record<string, TranslationKey> = {
   '/master-data/payment-methods': 'nav.paymentMethods',
   '/master-data/currencies': 'nav.currencies',
   '/master-data/areas': 'nav.areas',
+  '/master-data/restaurant-tables': 'nav.restaurantTables',
   '/master-data/employees': 'nav.employees',
   '/master-data/users': 'nav.users',
   '/master-data/roles': 'nav.roles',

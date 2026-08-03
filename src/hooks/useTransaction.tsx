@@ -8,7 +8,7 @@ import { Contact, MembershipSetting, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getCartItemPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
-import { checkout } from '@/services/checkoutService';
+import { checkout, recordPosExpense } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
 import { usePosPaymentMethods } from '@/hooks/usePosPaymentMethods';
 import { allocatePosPayments } from '@/utils/posSplitPayment';
@@ -21,6 +21,7 @@ import {
   type QuickCreateMemberInput,
 } from '@/services/membershipService';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
+import { isProductVisibleInPos } from '@/utils/productAvailability';
 
 const TRANSACTION_PRODUCT_PAGE_SIZE = 12;
 const EMPTY_TRANSACTION_PRODUCT_PAGE = {
@@ -98,7 +99,7 @@ export const useTransaction = (draftScope?: string) => {
       if (productSearchTerm) {
         const matchedProducts = await db.products
           .orderBy('name')
-          .filter((product) => matchesProductSearch(product, productSearchTerm))
+          .filter((product) => isProductVisibleInPos(product) && matchesProductSearch(product, productSearchTerm))
           .toArray();
 
         return {
@@ -108,15 +109,12 @@ export const useTransaction = (draftScope?: string) => {
         };
       }
 
-      const total = await db.products.count();
+      const visibleProducts = await db.products.orderBy('name').filter(isProductVisibleInPos).toArray();
+      const total = visibleProducts.length;
       const lastPage = Math.max(1, Math.ceil(total / TRANSACTION_PRODUCT_PAGE_SIZE));
       const currentPage = Math.min(productPage, lastPage);
       const offset = (currentPage - 1) * TRANSACTION_PRODUCT_PAGE_SIZE;
-      const pageProducts = await db.products
-        .orderBy('name')
-        .offset(offset)
-        .limit(TRANSACTION_PRODUCT_PAGE_SIZE)
-        .toArray();
+      const pageProducts = visibleProducts.slice(offset, offset + TRANSACTION_PRODUCT_PAGE_SIZE);
 
       return {
         products: pageProducts,
@@ -137,6 +135,7 @@ export const useTransaction = (draftScope?: string) => {
     const lookup = new Map<string, Product>();
 
     skuLookupProducts.forEach((product) => {
+      if (!isProductVisibleInPos(product)) return;
       const normalizedSku = (product.sku || '').trim().toLowerCase();
       if (normalizedSku && !lookup.has(normalizedSku)) {
         lookup.set(normalizedSku, product);
@@ -257,6 +256,12 @@ export const useTransaction = (draftScope?: string) => {
   }, [addPaymentDraft, paymentDrafts.length, paymentPreview, validMethods.length]);
 
   const getTransactionErrorContent = (error: TransactionError) => {
+    if (error.code === 'PRODUCT_HIDDEN_IN_POS') {
+      return {
+        title: 'Produk tidak tersedia di POS',
+        content: 'Produk ini dinonaktifkan dari katalog POS di Master Produk.',
+      };
+    }
     if (error.code === 'OUT_OF_STOCK') {
       return {
         title: t('transactionError.outOfStockTitle'),
@@ -324,7 +329,9 @@ export const useTransaction = (draftScope?: string) => {
 
     return db.products
       .orderBy('name')
-      .filter((product) => matchesProductSearch(product, normalizedSearch))
+      .filter((product) => (
+        isProductVisibleInPos(product) && matchesProductSearch(product, normalizedSearch)
+      ))
       .first();
   }, []);
 
@@ -446,6 +453,43 @@ export const useTransaction = (draftScope?: string) => {
     }
   };
 
+  const handleRecordExpense = async () => new Promise<boolean>((resolve) => {
+    modal.confirm({
+      title: 'Catat sebagai Pengeluaran (Beban)?',
+      content: 'Stok akan berkurang sebesar item di keranjang dan beban dicatat berdasarkan HPP/FIFO. Tidak ada penjualan atau penerimaan kas yang dibuat.',
+      okText: 'Catat Pengeluaran',
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true },
+      onCancel: () => resolve(false),
+      onOk: async () => {
+        try {
+          const result = await recordPosExpense({ cart });
+          result.warnings?.forEach((warning) => message.warning(warning));
+          reset();
+          [
+            'transactions-history',
+            'expenseReport',
+            'expenseCategories',
+            'journalEntries',
+            'trialBalance',
+            'incomeStatement',
+            'balanceSheet',
+          ].forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+          message.success(
+            `Pengeluaran ${result.transaction.transaction_number} tercatat sebesar Rp ${formatCurrency(result.transaction.total_amount)}.`,
+          );
+          resolve(true);
+        } catch (error) {
+          modal.error({
+            title: 'Gagal mencatat pengeluaran',
+            content: error instanceof Error ? error.message : String(error),
+          });
+          resolve(false);
+        }
+      },
+    });
+  });
+
   return {
     products,
     cart,
@@ -477,6 +521,7 @@ export const useTransaction = (draftScope?: string) => {
     calculateSubtotal,
     calculateTotal,
     handleCheckout,
+    handleRecordExpense,
     handleAddPayment,
     clearCart: reset,
     setSearchTerm,

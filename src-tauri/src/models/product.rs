@@ -12,6 +12,8 @@ pub struct ProductDto {
     pub selling_price: f64,
     pub stock: f64,
     pub sku: Option<String>,
+    pub product_type: String,
+    pub is_visible_in_pos: bool,
     pub wholesale_prices: Option<Value>,
     pub sellable_units: Option<Value>,
     pub unit_mappings: Option<Value>,

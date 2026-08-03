@@ -3,8 +3,8 @@ import type { Contact, FinanceTransaction, Product, StockMutation, TransactionIt
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
-import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
-import { reversePosSaleJournal } from '@/services/generalLedgerService';
+import { getTransactionProfit, isTransactionExpense, isTransactionVoided } from '@/utils/transactions';
+import { reversePosExpenseJournal, reversePosSaleJournal } from '@/services/generalLedgerService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
@@ -214,30 +214,32 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         });
       }
 
-      const currentFinanceBalance = await db.financeBalance.get('current');
-      const nextFinanceBalance = (currentFinanceBalance?.amount || 0) - transaction.total_amount;
+      if (!isTransactionExpense(transaction)) {
+        const currentFinanceBalance = await db.financeBalance.get('current');
+        const nextFinanceBalance = (currentFinanceBalance?.amount || 0) - transaction.total_amount;
+        const financeTransactionsToDelete = await db.financeTransactions
+          .where('reference_id')
+          .equals(transaction.id)
+          .toArray();
 
-      const financeTransactionsToDelete = await db.financeTransactions
-        .where('reference_id')
-        .equals(transaction.id)
-        .toArray();
+        if (financeTransactionsToDelete.length > 0) {
+          deletedFinanceTransactions.push(
+            ...financeTransactionsToDelete.map((financeTransaction) => (
+              withDeletedFinanceTransactionSync(financeTransaction, currentUser, now)
+            )),
+          );
+          await db.financeTransactions.bulkDelete(financeTransactionsToDelete.map((financeTransaction) => financeTransaction.id));
+        }
 
-      if (financeTransactionsToDelete.length > 0) {
-        deletedFinanceTransactions.push(
-          ...financeTransactionsToDelete.map((financeTransaction) => (
-            withDeletedFinanceTransactionSync(financeTransaction, currentUser, now)
-          )),
-        );
-        await db.financeTransactions.bulkDelete(financeTransactionsToDelete.map((financeTransaction) => financeTransaction.id));
+        await db.financeBalance.put({
+          id: 'current',
+          amount: nextFinanceBalance,
+          updated_at: now,
+        });
+        await reversePosSaleJournal(transaction, `Pembalikan jurnal POS ${transaction.transaction_number}: ${normalizedReason}`, currentUser);
+      } else {
+        await reversePosExpenseJournal(transaction, `Pembalikan pengeluaran POS ${transaction.transaction_number}: ${normalizedReason}`, currentUser);
       }
-
-      await db.financeBalance.put({
-        id: 'current',
-        amount: nextFinanceBalance,
-        updated_at: now,
-      });
-
-      await reversePosSaleJournal(transaction, `Pembalikan jurnal POS ${transaction.transaction_number}: ${normalizedReason}`, currentUser);
     },
   );
 

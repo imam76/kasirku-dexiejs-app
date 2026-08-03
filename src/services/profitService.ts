@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import type { FinanceTransaction, ProfitLog, Transaction } from '@/types';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
-import { isTransactionVoided } from '@/utils/transactions';
+import { isTransactionExpense, isTransactionVoided } from '@/utils/transactions';
 
 interface WithdrawProfitInput {
   amount: number;
@@ -153,10 +153,12 @@ export const recalculateProfit = async () => {
           newLogs.push({
             id: crypto.randomUUID(),
             transaction_id: transaction.id,
-            amount: profit,
-            type: 'IN',
-            category: 'SALES',
-            description: `Keuntungan dari transaksi ${transaction.transaction_number}`,
+            amount: Math.abs(profit),
+            type: profit >= 0 ? 'IN' : 'OUT',
+            category: isTransactionExpense(transaction) ? 'OPERATIONAL' : 'SALES',
+            description: isTransactionExpense(transaction)
+              ? `Beban pemakaian internal ${transaction.transaction_number}`
+              : `Keuntungan dari transaksi ${transaction.transaction_number}`,
             created_at: transaction.created_at,
             balance_after: runningBalance,
           });

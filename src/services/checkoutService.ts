@@ -1,12 +1,12 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, Contact, FinanceTransaction, PosTransactionPayment, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
+import type { CartItem, CashierSession, Contact, FinanceTransaction, PosTransactionPayment, RestaurantSession, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
-import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
-import { postPosSaleJournal } from '@/services/generalLedgerService';
+import { postPosExpenseJournal, postPosSaleJournal } from '@/services/generalLedgerService';
 import {
   buildPosPaymentSnapshot,
 } from '@/services/posPaymentMethodService';
@@ -19,6 +19,7 @@ import { createStockMutation, enqueueStockMutations } from '@/services/stockMuta
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
 import { getOpenCashierSessionForCurrentUser } from '@/services/cashierSessionService';
+import { getOpenRestaurantSessionForCurrentUser } from '@/services/restaurantSessionService';
 import {
   ensureMembershipSetting,
   evaluateMembershipCheckout,
@@ -27,12 +28,18 @@ import {
 } from '@/services/membershipService';
 import { enqueueContactSync } from '@/services/syncQueueService';
 
-interface CheckoutInput {
+export type PosCheckoutSessionContext =
+  | { kind: 'CASHIER' }
+  | { kind: 'RESTAURANT'; sessionId: string };
+
+export interface CheckoutInput {
   cart: CartItem[];
   payments: CheckoutPaymentInput[];
   voucherCode?: string;
   memberContactId?: string;
   redeemPoints?: number;
+  sessionContext?: PosCheckoutSessionContext;
+  restaurantOrderId?: string;
 }
 
 export interface CheckoutResult {
@@ -41,6 +48,30 @@ export interface CheckoutResult {
   payments: PosTransactionPayment[];
   warnings?: string[];
 }
+
+export interface RecordPosExpenseInput {
+  cart: CartItem[];
+  sessionContext?: PosCheckoutSessionContext;
+  restaurantOrderId?: string;
+}
+
+export const buildCheckoutSessionSnapshot = (
+  cashierSession: CashierSession | null,
+  restaurantSession: RestaurantSession | null,
+) => {
+  if (cashierSession && restaurantSession) {
+    throw new Error('Transaksi hanya boleh terhubung ke satu jenis sesi.');
+  }
+  if (!cashierSession && !restaurantSession) {
+    throw new Error('Sesi POS belum dibuka.');
+  }
+  return {
+    cashier_session_id: cashierSession?.id,
+    cashier_session_number: cashierSession?.session_number,
+    restaurant_session_id: restaurantSession?.id,
+    restaurant_session_number: restaurantSession?.session_number,
+  };
+};
 
 interface CreateTransactionItemsResult {
   items: TransactionItem[];
@@ -160,6 +191,75 @@ const createTransactionItems = async (
   return { items, warnings };
 };
 
+const createExpenseTransactionItems = async (
+  cart: CartItem[],
+  transactionId: string,
+  createdAt: string,
+): Promise<CreateTransactionItemsResult> => {
+  const items: TransactionItem[] = [];
+  const warnings: string[] = [];
+
+  for (const item of cart) {
+    const transactionItemId = crypto.randomUUID();
+    const quantityInStockUnit = konversiSatuanProduk(
+      item.quantity,
+      item.product,
+      item.unit,
+      item.product.purchase_unit,
+    );
+    const fifoResult = await consumeFifoLots(
+      item.product.id,
+      quantityInStockUnit,
+      {
+        sourceType: 'POS_TRANSACTION',
+        sourceId: transactionId,
+        sourceLineId: transactionItemId,
+        createdAt,
+      },
+    );
+    const hasEstimatedCost = fifoResult.consumedLots.some((lot) => lot.costStatus !== 'FINAL');
+    if (hasEstimatedCost) {
+      warnings.push(`HPP ${item.product.name} masih memakai harga sementara.`);
+    }
+
+    const totalCost = Math.round((fifoResult.totalCost + Number.EPSILON) * 100) / 100;
+    const costPerSaleUnit = item.quantity > 0
+      ? Math.round((totalCost / item.quantity + Number.EPSILON) * 100) / 100
+      : 0;
+    const normalizedPurchasePrice = normalisasiHargaProduk(
+      fifoResult.weightedAvgCostPerUnit,
+      item.product,
+      item.product.purchase_unit,
+      item.unit,
+    );
+    const unitSnapshot = createSalesUnitSnapshot(item.unit, item.product);
+
+    items.push({
+      id: transactionItemId,
+      transaction_id: transactionId,
+      product_id: item.product.id,
+      product_name: item.product.name,
+      price: costPerSaleUnit,
+      selling_price: costPerSaleUnit,
+      is_price_edited: false,
+      purchase_price: normalizedPurchasePrice,
+      unit: item.unit,
+      ...unitSnapshot,
+      quantity: item.quantity,
+      price_before_discount: costPerSaleUnit,
+      subtotal_before_discount: totalCost,
+      discount_amount: 0,
+      subtotal: totalCost,
+      profit: -totalCost,
+      hpp_status: hasEstimatedCost ? 'ESTIMATED' : 'FINAL',
+      profit_status: hasEstimatedCost ? 'ESTIMATED' : 'FINAL',
+      created_at: createdAt,
+    });
+  }
+
+  return { items, warnings };
+};
+
 const recordProfit = async (
   transaction: Transaction,
   items: TransactionItem[],
@@ -178,10 +278,12 @@ const recordProfit = async (
   await db.profitLogs.add({
     id: crypto.randomUUID(),
     transaction_id: transaction.id,
-    amount: totalProfit,
-    type: 'IN',
-    category: 'SALES',
-    description: `Keuntungan dari transaksi ${transaction.transaction_number}`,
+    amount: Math.abs(totalProfit),
+    type: totalProfit >= 0 ? 'IN' : 'OUT',
+    category: transaction.business_type === 'EXPENSE' ? 'OPERATIONAL' : 'SALES',
+    description: transaction.business_type === 'EXPENSE'
+      ? `Beban pemakaian internal ${transaction.transaction_number}`
+      : `Keuntungan dari transaksi ${transaction.transaction_number}`,
     created_at: createdAt,
     balance_after: newBalance,
   });
@@ -276,13 +378,30 @@ export const checkout = async ({
   voucherCode,
   memberContactId,
   redeemPoints,
+  sessionContext = { kind: 'CASHIER' },
+  restaurantOrderId,
 }: CheckoutInput): Promise<CheckoutResult> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'CASHIER_ACCESS');
-  const cashierSession = await getOpenCashierSessionForCurrentUser();
+  const cashierSession = sessionContext.kind === 'CASHIER'
+    ? await getOpenCashierSessionForCurrentUser()
+    : null;
+  const restaurantSession = sessionContext.kind === 'RESTAURANT'
+    ? await getOpenRestaurantSessionForCurrentUser()
+    : null;
 
-  if (!cashierSession) {
+  if (sessionContext.kind === 'CASHIER' && !cashierSession) {
     throw new Error('Sesi kasir belum dibuka.');
+  }
+  if (
+    sessionContext.kind === 'RESTAURANT'
+    && (!restaurantSession || restaurantSession.id !== sessionContext.sessionId)
+  ) {
+    throw new Error('Sesi Resto belum dibuka atau bukan milik user aktif.');
+  }
+  const sessionSnapshot = buildCheckoutSessionSnapshot(cashierSession, restaurantSession);
+  if (restaurantOrderId && sessionContext.kind !== 'RESTAURANT') {
+    throw new Error('Order Resto hanya dapat dipakai dengan sesi Resto.');
   }
 
   const now = new Date();
@@ -371,8 +490,9 @@ export const checkout = async ({
       const transaction: Transaction = {
         id: transactionId,
         transaction_number: transactionNumber,
-        cashier_session_id: cashierSession.id,
-        cashier_session_number: cashierSession.session_number,
+        business_type: 'SALE',
+        ...sessionSnapshot,
+        restaurant_order_id: restaurantOrderId,
         cashier_user_id: currentUser?.id,
         cashier_user_name: currentUser?.name,
         member_contact_id: membershipEvaluation.member?.id,
@@ -472,5 +592,104 @@ export const checkout = async ({
     await enqueueContactSync(updatedMemberForSync, 'update');
   }
 
+  return result;
+};
+
+export const recordPosExpense = async ({
+  cart,
+  sessionContext = { kind: 'CASHIER' },
+  restaurantOrderId,
+}: RecordPosExpenseInput): Promise<CheckoutResult> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'CASHIER_ACCESS');
+  if (cart.length === 0) throw new Error('Keranjang masih kosong.');
+
+  const cashierSession = sessionContext.kind === 'CASHIER'
+    ? await getOpenCashierSessionForCurrentUser()
+    : null;
+  const restaurantSession = sessionContext.kind === 'RESTAURANT'
+    ? await getOpenRestaurantSessionForCurrentUser()
+    : null;
+
+  if (sessionContext.kind === 'CASHIER' && !cashierSession) {
+    throw new Error('Sesi kasir belum dibuka.');
+  }
+  if (
+    sessionContext.kind === 'RESTAURANT'
+    && (!restaurantSession || restaurantSession.id !== sessionContext.sessionId)
+  ) {
+    throw new Error('Sesi Resto belum dibuka atau bukan milik user aktif.');
+  }
+  if (restaurantOrderId && sessionContext.kind !== 'RESTAURANT') {
+    throw new Error('Order Resto hanya dapat dipakai dengan sesi Resto.');
+  }
+
+  const sessionSnapshot = buildCheckoutSessionSnapshot(cashierSession, restaurantSession);
+  const transactionId = crypto.randomUUID();
+  const transactionNumber = `EXP-${Date.now()}`;
+  const createdAt = new Date().toISOString();
+  let stockMutations: StockMutation[] = [];
+
+  const result = await db.transaction(
+    'rw',
+    [
+      db.transactions,
+      db.transactionItems,
+      db.products,
+      db.profitLogs,
+      db.profitBalance,
+      db.chartOfAccounts,
+      db.enabledModules,
+      db.generalLedgerSetting,
+      db.accountingPeriods,
+      db.journalEntries,
+      db.journalEntryLines,
+      db.inventoryLots,
+      db.inventoryLotConsumptions,
+      db.cashierSessions,
+    ],
+    async () => {
+      const { items, warnings } = await createExpenseTransactionItems(cart, transactionId, createdAt);
+      const totalExpense = Math.round((items.reduce((sum, item) => sum + item.subtotal, 0) + Number.EPSILON) * 100) / 100;
+      const transaction: Transaction = {
+        id: transactionId,
+        transaction_number: transactionNumber,
+        business_type: 'EXPENSE',
+        ...sessionSnapshot,
+        restaurant_order_id: restaurantOrderId,
+        cashier_user_id: currentUser?.id,
+        cashier_user_name: currentUser?.name,
+        subtotal_amount: totalExpense,
+        discount_amount: 0,
+        total_amount: totalExpense,
+        payment_amount: 0,
+        change_amount: 0,
+        payment_mode: 'SINGLE',
+        payment_method: 'TUNAI',
+        payment_method_code: 'EXPENSE',
+        payment_method_name: 'Pengeluaran (Beban)',
+        payment_method_category: 'OTHER',
+        status: 'COMPLETED',
+        created_at: createdAt,
+      };
+
+      await db.transactions.add(transaction);
+      await db.transactionItems.bulkAdd(items);
+      await recordProfit(transaction, items, createdAt);
+      await postPosExpenseJournal(transaction, items, currentUser);
+      stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
+
+      return { transaction, items, payments: [], warnings };
+    },
+  );
+
+  await enqueueStockMutations(stockMutations);
+  await writeActivityLog({
+    user: currentUser,
+    action: 'POS_EXPENSE_RECORDED',
+    entity: 'transactions',
+    entity_id: result.transaction.id,
+    description: `${currentUser?.name ?? 'User'} mencatat ${result.transaction.transaction_number} sebagai pengeluaran sebesar ${result.transaction.total_amount}.`,
+  });
   return result;
 };

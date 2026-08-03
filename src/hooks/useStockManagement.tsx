@@ -50,6 +50,8 @@ export const useStockManagement = () => {
       selling_price: undefined,
       stock: undefined,
       sku: '',
+      product_type: 'FINISHED_GOOD',
+      is_visible_in_pos: true,
       purchase_quantity: 0,
       wholesale_prices: [],
       sellable_units: ['pcs'],
@@ -101,6 +103,8 @@ export const useStockManagement = () => {
         purchase_price: productData.purchase_price ?? undefined,
         selling_price: productData.selling_price ?? undefined,
         sku: productData.sku,
+        product_type: productData.product_type ?? 'FINISHED_GOOD',
+        is_visible_in_pos: productData.is_visible_in_pos ?? true,
         wholesale_prices: (productData.wholesale_prices || []).map((p) => ({
           min_quantity: Number(p.min_quantity),
           price: Number(p.price),
@@ -304,6 +308,8 @@ export const useStockManagement = () => {
       purchase_price: data.purchase_price,
       selling_price: data.selling_price,
       sku: data.sku || '',
+      product_type: data.product_type,
+      is_visible_in_pos: data.is_visible_in_pos,
       purchase_quantity: data.purchase_quantity || 0,
       wholesale_prices: data.wholesale_prices || [],
       sellable_units: sellableUnits,
@@ -331,6 +337,8 @@ export const useStockManagement = () => {
     setValue('purchase_price', product.purchase_price);
     setValue('selling_price', product.selling_price);
     setValue('sku', product.sku || '');
+    setValue('product_type', product.product_type ?? 'FINISHED_GOOD');
+    setValue('is_visible_in_pos', product.is_visible_in_pos ?? true);
     setValue('purchase_quantity', 0);
     setValue('wholesale_prices', (product.wholesale_prices || []).map(p => ({
       min_quantity: p.min_quantity,

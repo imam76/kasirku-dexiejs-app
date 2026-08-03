@@ -1,15 +1,22 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Input, Select, Switch } from 'antd';
-import { CheckCircle2, DollarSign, Plus, Trash2, X } from 'lucide-react';
+import { Alert, Input, InputNumber, Select, Switch } from 'antd';
+import { Banknote, CheckCircle2, CreditCard, DollarSign, NotebookPen, Plus, QrCode, Trash2, X } from 'lucide-react';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PosPaymentDraft } from '@/store/transactionStore';
 import type { PosPaymentAllocationResult } from '@/utils/posSplitPayment';
 import { formatCurrency } from '@/utils/formatters';
 import { useI18n } from '@/hooks/useI18n';
+import type { PaymentMethodCategory } from '@/types';
 
 const PAYMENT_SHORTCUTS_STORAGE_KEY = 'frayukti-show-payment-shortcuts';
 const QUICK_AMOUNTS = [5000, 10000, 20000, 50000, 100000];
-const PAYMENT_SHORTCUT_CLASS = 'flex min-h-9 items-center justify-center gap-1 rounded-lg border border-blue-100 bg-white px-1.5 py-2 text-[10px] font-semibold tabular-nums text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700';
+const PAYMENT_SHORTCUT_CLASS = 'flex min-h-9 items-center justify-center gap-1 rounded-lg border border-blue-100 bg-white px-1.5 py-2 text-xs font-semibold tabular-nums text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700';
+
+const getMethodIcon = (category: PaymentMethodCategory) => {
+  if (category === 'CASH') return Banknote;
+  if (category === 'QRIS') return QrCode;
+  return CreditCard;
+};
 
 interface Props {
   total: number;
@@ -18,10 +25,14 @@ interface Props {
   methods: PosPaymentMethodOption[];
   preview: PosPaymentAllocationResult;
   scrollHeader?: ReactNode;
+  layout?: 'embedded' | 'dialog';
+  showSectionTitles?: boolean;
+  confirmLabel?: ReactNode;
   onAdd: () => void;
   onUpdate: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   onRemove: (clientId: string) => void;
   onConfirm: () => Promise<boolean>;
+  onRecordExpense?: () => Promise<boolean>;
   onCancel: () => void;
 }
 
@@ -32,10 +43,14 @@ export default function PosSplitPaymentEditor({
   methods,
   preview,
   scrollHeader,
+  layout = 'embedded',
+  showSectionTitles = false,
+  confirmLabel,
   onAdd,
   onUpdate,
   onRemove,
   onConfirm,
+  onRecordExpense,
   onCancel,
 }: Props) {
   const { t } = useI18n();
@@ -43,6 +58,7 @@ export default function PosSplitPaymentEditor({
     const saved = localStorage.getItem(PAYMENT_SHORTCUTS_STORAGE_KEY);
     return saved === null ? true : saved === 'true';
   });
+  const [isRecordingExpense, setIsRecordingExpense] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(PAYMENT_SHORTCUTS_STORAGE_KEY, String(showPaymentShortcuts));
@@ -57,56 +73,36 @@ export default function PosSplitPaymentEditor({
   const canAdd = preview.errors.length === 0
     && preview.remainingAmount > 0
     && selectedIds.size < methods.filter((method) => method.isValid).length;
+  const isDialog = layout === 'dialog';
+  const hasValidPaymentMethod = methods.some((method) => method.isValid);
 
-  if (methods.length === 0) {
+  if (!hasValidPaymentMethod && !onRecordExpense) {
     return <Alert type="error" showIcon message={t('payment.noMethodAvailable')} />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div
         data-testid="pos-payment-scroll-area"
-        className="space-y-4 min-[1024px]:min-h-0 min-[1024px]:flex-1 min-[1024px]:overflow-y-auto min-[1024px]:overscroll-contain min-[1024px]:pb-3 min-[1024px]:pr-1 lg:contents"
+        className={isDialog
+          ? 'min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-4 pr-1'
+          : 'space-y-4 min-[1024px]:min-h-0 min-[1024px]:flex-1 min-[1024px]:overflow-y-auto min-[1024px]:overscroll-contain min-[1024px]:pb-3 min-[1024px]:pr-1 lg:contents'}
       >
         {scrollHeader}
-        <div
-          data-testid="pos-payment-summary"
-          className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm"
-        >
-        <div className="space-y-2 border-b border-slate-200 pb-3 text-sm">
-          <div className="flex items-center justify-between gap-3 text-slate-600">
-            <span>{t('cart.total')}</span>
-            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(total)}</strong>
-          </div>
-          <div data-testid="pos-payment-discount" className="flex items-center justify-between gap-3 text-emerald-700">
-            <span>{t('cart.discount')}</span>
-            <strong className="tabular-nums">-Rp {formatCurrency(discountAmount)}</strong>
-          </div>
-          <div className="flex items-center justify-between gap-3 text-slate-600">
-            <span>{t('payment.totalPaid')}</span>
-            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(preview.totalTendered)}</strong>
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">{t('payment.remaining')}</div>
-            <div data-testid="pos-payment-remaining" className="mt-1 break-words text-base font-bold tabular-nums text-amber-950">
-              Rp {formatCurrency(preview.remainingAmount)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{t('payment.change')}</div>
-            <div data-testid="pos-payment-change" className="mt-1 break-words text-base font-bold tabular-nums text-emerald-950">
-              Rp {formatCurrency(preview.totalChange)}
-            </div>
-          </div>
-        </div>
-        </div>
-
+        {!hasValidPaymentMethod ? (
+          <Alert type="warning" showIcon message={t('payment.noMethodAvailable')} />
+        ) : null}
+        {showSectionTitles && (
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('payment.methodInformation')}</p>
+        )}
         <div
           data-testid="pos-payment-method-grid"
           className={drafts.length > 1
-            ? 'space-y-4 min-[1024px]:grid min-[1024px]:grid-cols-2 min-[1024px]:gap-4 min-[1024px]:space-y-0 lg:block lg:space-y-4'
+            ? isDialog
+              ? drafts.length === 2
+                ? 'grid gap-2 min-[768px]:grid-cols-2'
+                : 'grid gap-2 min-[768px]:grid-cols-2 min-[1024px]:grid-cols-3'
+              : 'space-y-3 min-[1024px]:grid min-[1024px]:grid-cols-2 min-[1024px]:gap-3 min-[1024px]:space-y-0 lg:block lg:space-y-3'
             : undefined}
         >
           {drafts.map((draft, index) => {
@@ -122,46 +118,77 @@ export default function PosSplitPaymentEditor({
               <div
                 key={draft.clientId}
                 data-testid={`pos-payment-row-${index}`}
-                className={`rounded-xl border-2 p-3 shadow-sm ${
-                  index === 0
-                    ? 'border-blue-200 bg-blue-50/80'
-                    : 'border-violet-200 bg-violet-50/80'
-                }`}
+                className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm min-[768px]:p-2.5"
               >
-            <div className="flex items-center gap-2">
-              <Select
-                data-testid={`pos-payment-method-${index}`}
-                className="min-w-0 flex-1"
-                styles={{ popup: { root: { zIndex: 1200 } } }}
-                value={draft.paymentMethodId}
-                placeholder={t('report.paymentMethod')}
-                onChange={(paymentMethodId) => {
-                  const next = methods.find((item) => item.method.id === paymentMethodId)?.method;
-                  onUpdate(draft.clientId, {
-                    paymentMethodId,
-                    reference: next?.requires_reference ? draft.reference : '',
-                  });
-                }}
-                options={methods.map((item) => ({
-                  value: item.method.id,
-                  label: item.method.name,
-                  disabled: !item.isValid || (selectedIds.has(item.method.id) && item.method.id !== draft.paymentMethodId),
-                  title: item.disabledReason,
-                }))}
-              />
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                {isDialog ? t('payment.line', { number: index + 1 }) : `${t('payment.methodInformation')} ${index + 1}`}
+              </span>
               {drafts.length > 1 && (
                 <button
                   type="button"
                   data-testid={`pos-payment-remove-${index}`}
                   onClick={() => onRemove(draft.clientId)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-300 bg-red-100 text-red-700 shadow-sm transition-colors hover:border-red-400 hover:bg-red-200 hover:text-red-800"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"
                   aria-label={t('payment.remove')}
                   title={t('payment.remove')}
                 >
-                  <Trash2 size={17} />
+                  <Trash2 size={14} />
                 </button>
               )}
             </div>
+            {isDialog ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {methods.filter((item) => item.isValid).map((item) => {
+                  const paymentMethod = item.method;
+                  const Icon = getMethodIcon(paymentMethod.category);
+                  const active = paymentMethod.id === draft.paymentMethodId;
+                  const usedByAnotherPayment = selectedIds.has(paymentMethod.id) && !active;
+                  return (
+                    <button
+                      key={paymentMethod.id}
+                      type="button"
+                      data-testid={`pos-payment-method-${index}-${paymentMethod.id}`}
+                      aria-pressed={active}
+                      disabled={usedByAnotherPayment}
+                      onClick={() => onUpdate(draft.clientId, {
+                        paymentMethodId: paymentMethod.id,
+                        reference: paymentMethod.requires_reference ? draft.reference : '',
+                      })}
+                      className={`flex min-h-10 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-35 ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300'}`}
+                    >
+                      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                        <Icon size={14} />
+                      </span>
+                      <span className="min-w-0 truncate text-xs font-black text-slate-900">{paymentMethod.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Select
+                  data-testid={`pos-payment-method-${index}`}
+                  className="min-w-0 flex-1"
+                  styles={{ popup: { root: { zIndex: 1200 } } }}
+                  value={draft.paymentMethodId}
+                  placeholder={t('report.paymentMethod')}
+                  onChange={(paymentMethodId) => {
+                    const next = methods.find((item) => item.method.id === paymentMethodId)?.method;
+                    onUpdate(draft.clientId, {
+                      paymentMethodId,
+                      reference: next?.requires_reference ? draft.reference : '',
+                    });
+                  }}
+                  options={methods.map((item) => ({
+                    value: item.method.id,
+                    label: item.method.name,
+                    disabled: !item.isValid || (selectedIds.has(item.method.id) && item.method.id !== draft.paymentMethodId),
+                    title: item.disabledReason,
+                  }))}
+                />
+              </div>
+            )}
             {method?.requires_reference && (
               <Input
                 data-testid={`pos-payment-reference-${index}`}
@@ -173,28 +200,47 @@ export default function PosSplitPaymentEditor({
                 onChange={(event) => onUpdate(draft.clientId, { reference: event.target.value })}
               />
             )}
-            <div className="mt-2 flex items-stretch gap-2">
-              <input
-                data-testid={`pos-payment-amount-${index}`}
-                type="number"
-                min="0"
-                value={draft.amount}
-                placeholder={t('payment.amountPlaceholder')}
-                onChange={(event) => onUpdate(draft.clientId, { amount: event.target.value, isAmountAutoFilled: false })}
-                className={`min-w-0 flex-1 rounded-lg border px-3 py-2 ${visibleLineError ? 'border-red-400' : 'border-gray-300'}`}
-              />
-              {method?.category === 'CASH' && (
-                <button
-                  type="button"
-                  onClick={() => onUpdate(draft.clientId, { amount: '', isAmountAutoFilled: false })}
-                  className="grid w-10 shrink-0 place-items-center rounded-lg border border-red-200 bg-white text-red-600 transition hover:border-red-400 hover:bg-red-50"
-                  aria-label={t('cart.clear')}
-                  title={t('cart.clear')}
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-            </div>
+            {isDialog ? (
+              <div className="mt-3 flex items-center justify-between gap-4">
+                <label className="text-sm font-bold text-slate-700">{t('payment.amountPlaceholder')}</label>
+                <InputNumber<number>
+                  min={0}
+                  value={draft.amount === '' ? null : Number(draft.amount)}
+                  prefix="Rp"
+                  status={line?.error?.startsWith('Nominal pembayaran ') ? 'error' : undefined}
+                  className="w-48"
+                  formatter={(value) => formatCurrency(Number(value ?? 0))}
+                  parser={(value) => Number(String(value ?? '').replace(/\D/g, ''))}
+                  onChange={(value) => onUpdate(draft.clientId, {
+                    amount: value === null ? '' : String(value),
+                    isAmountAutoFilled: false,
+                  })}
+                />
+              </div>
+            ) : (
+              <div className="mt-2 flex items-stretch gap-2">
+                <input
+                  data-testid={`pos-payment-amount-${index}`}
+                  type="number"
+                  min="0"
+                  value={draft.amount}
+                  placeholder={t('payment.amountPlaceholder')}
+                  onChange={(event) => onUpdate(draft.clientId, { amount: event.target.value, isAmountAutoFilled: false })}
+                  className={`min-w-0 flex-1 rounded-lg border px-3 py-2 ${visibleLineError ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {method?.category === 'CASH' && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdate(draft.clientId, { amount: '', isAmountAutoFilled: false })}
+                    className="grid w-10 shrink-0 place-items-center rounded-lg border border-red-200 bg-white text-red-600 transition hover:border-red-400 hover:bg-red-50"
+                    aria-label={t('cart.clear')}
+                    title={t('cart.clear')}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            )}
             {method?.category === 'CASH' && (
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between">
@@ -237,7 +283,7 @@ export default function PosSplitPaymentEditor({
           })}
         </div>
 
-        {drafts.length === 1 && (
+        {(isDialog ? canAdd : drafts.length === 1) && (
           <button
             type="button"
             data-testid="pos-add-payment"
@@ -248,12 +294,70 @@ export default function PosSplitPaymentEditor({
             <Plus size={17} /> {t('payment.add')}
           </button>
         )}
+
+        {showSectionTitles && (
+          <p className="pt-1 text-xs font-bold uppercase tracking-wide text-slate-400">{t('payment.billingInformation')}</p>
+        )}
+        <div
+          data-testid="pos-payment-summary"
+          className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 min-[768px]:grid min-[768px]:grid-cols-2 min-[768px]:gap-3"
+        >
+        <div className="space-y-2 border-b border-blue-100 pb-3 text-sm min-[768px]:border-b-0 min-[768px]:border-r min-[768px]:pb-0 min-[768px]:pr-3">
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t('cart.total')}</span>
+            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(total)}</strong>
+          </div>
+          <div data-testid="pos-payment-discount" className="flex items-center justify-between gap-3 text-emerald-700">
+            <span>{t('cart.discount')}</span>
+            <strong className="tabular-nums">-Rp {formatCurrency(discountAmount)}</strong>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t('payment.totalPaid')}</span>
+            <strong className="tabular-nums text-slate-950">Rp {formatCurrency(preview.totalTendered)}</strong>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 min-[768px]:mt-0">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+            <div className="text-[10px] font-black uppercase tracking-wide text-amber-700">{t('payment.remaining')}</div>
+            <div data-testid="pos-payment-remaining" className="mt-1 break-words text-base font-black tabular-nums text-amber-950">
+              Rp {formatCurrency(preview.remainingAmount)}
+            </div>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5">
+            <div className="text-[10px] font-black uppercase tracking-wide text-emerald-700">{t('payment.change')}</div>
+            <div data-testid="pos-payment-change" className="mt-1 break-words text-base font-black tabular-nums text-emerald-950">
+              Rp {formatCurrency(preview.totalChange)}
+            </div>
+          </div>
+        </div>
+        </div>
       </div>
 
       <div
         data-testid="pos-payment-actions"
-        className="sticky bottom-0 z-30 -mx-3 mt-auto grid shrink-0 grid-cols-2 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)] min-[1024px]:static lg:sticky"
+        className={isDialog
+          ? 'sticky bottom-0 z-30 mt-auto grid shrink-0 grid-cols-[1fr_2fr] gap-2 border-t border-slate-200 bg-white pb-4 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.25)]'
+          : 'sticky bottom-0 z-30 -mx-3 mt-auto grid shrink-0 grid-cols-2 gap-2 border-t border-gray-200 bg-white px-3 pb-3 pt-3 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.45)] min-[1024px]:static lg:sticky'}
       >
+        {onRecordExpense ? (
+          <button
+            type="button"
+            data-testid="pos-record-expense"
+            disabled={isRecordingExpense}
+            onClick={async () => {
+              setIsRecordingExpense(true);
+              try {
+                await onRecordExpense();
+              } finally {
+                setIsRecordingExpense(false);
+              }
+            }}
+            className="col-span-2 flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 py-2.5 font-bold text-amber-800 transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
+          >
+            <NotebookPen size={16} />
+            {isRecordingExpense ? 'Mencatat Pengeluaran...' : 'Catat sebagai Pengeluaran (Beban)'}
+          </button>
+        ) : null}
         <button type="button" onClick={onCancel} className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white py-2.5 font-semibold text-gray-700 hover:bg-gray-50"><X size={16} /> {t('payment.cancel')}</button>
         <button
           type="button"
@@ -262,7 +366,7 @@ export default function PosSplitPaymentEditor({
           onClick={onConfirm}
           className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2.5 font-bold text-white shadow-sm hover:bg-blue-700 disabled:bg-gray-300 disabled:shadow-none"
         >
-          <CheckCircle2 size={16} /> {t('payment.confirm')}
+          <CheckCircle2 size={16} /> {confirmLabel ?? t('payment.confirm')}
         </button>
       </div>
     </div>

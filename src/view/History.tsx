@@ -8,7 +8,7 @@ import { useAuth } from '@/auth/useAuth';
 import { formatDate, formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
-import { getTransactionProfit, isTransactionVoided } from '@/utils/transactions';
+import { getTransactionProfit, isTransactionExpense, isTransactionVoided } from '@/utils/transactions';
 import { PosTransactionPayment, Transaction, TransactionItem, TransactionReceiptInput } from '@/types';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
@@ -83,6 +83,10 @@ export default function History() {
   }, [expandedId, rowVirtualizer]);
 
   const handleReprint = async (transaction: TransactionWithItems) => {
+    if (isTransactionExpense(transaction)) {
+      message.warning('Pengeluaran internal tidak memiliki struk penjualan.');
+      return;
+    }
     if (isTransactionVoided(transaction)) {
       message.warning(t('history.voidedPrintBlocked'));
       return;
@@ -210,6 +214,7 @@ export default function History() {
                 const transaction = transactions[virtualItem.index];
                 if (!transaction) return null;
                 const isVoided = isTransactionVoided(transaction);
+                const isExpense = isTransactionExpense(transaction);
                 const transactionDiscount = transaction.discount_amount ?? 0;
                 const paymentSnapshot = getTransactionPaymentSnapshot(transaction);
                 const transactionPayments = getTransactionPaymentsOrLegacyFallback(transaction, transaction.payments);
@@ -249,24 +254,30 @@ export default function History() {
                                   {t('history.voidedBadge')}
                                 </span>
                               )}
-                              <PaymentMethodBadge
-                                name={paymentSnapshot.name}
-                                category={paymentSnapshot.category}
-                                className="uppercase"
-                              />
-                              {transaction.receipt_status === 'printed' && (
+                              {isExpense ? (
+                                <span className="rounded bg-amber-100 px-2 py-1 text-xs font-semibold uppercase text-amber-800">
+                                  Pengeluaran (Beban)
+                                </span>
+                              ) : (
+                                <PaymentMethodBadge
+                                  name={paymentSnapshot.name}
+                                  category={paymentSnapshot.category}
+                                  className="uppercase"
+                                />
+                              )}
+                              {!isExpense && transaction.receipt_status === 'printed' && (
                                 <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-emerald-100 text-emerald-700">
                                   <CheckCircle2 size={12} />
                                   {t('history.receiptPrintedBadge')}
                                 </span>
                               )}
-                              {transaction.receipt_status === 'print_failed' && (
+                              {!isExpense && transaction.receipt_status === 'print_failed' && (
                                 <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-red-100 text-red-700">
                                   <AlertCircle size={12} />
                                   {t('history.printFailedBadge')}
                                 </span>
                               )}
-                              {transaction.receipt_status === 'pending' && (
+                              {!isExpense && transaction.receipt_status === 'pending' && (
                                 <span className="text-xs px-2 py-1 rounded flex items-center gap-1 font-semibold bg-yellow-100 text-yellow-700">
                                   <Printer size={12} />
                                   {t('history.printPendingBadge')}
@@ -283,25 +294,25 @@ export default function History() {
                               {formatDate(transaction.created_at)}
                             </p>
                             {/* Summary: 2 col di mobile, 4 col di sm+ */}
-                            <div className={`grid grid-cols-2 gap-x-4 gap-y-2 ${canViewProfit ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+                            <div className={`grid grid-cols-2 gap-x-4 gap-y-2 ${isExpense ? (canViewProfit ? 'sm:grid-cols-2' : 'sm:grid-cols-1') : (canViewProfit ? 'sm:grid-cols-4' : 'sm:grid-cols-3')}`}>
                               <div>
                                 <p className="text-xs text-gray-500">{t('common.total')}</p>
                                 <p className={`font-bold ${isVoided ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
                                   Rp {formatCurrency(transaction.total_amount)}
                                 </p>
                               </div>
-                              <div>
-                                <p className="text-xs text-gray-500">{t('history.paid')}</p>
-                                <p className="font-semibold text-gray-700">
-                                  Rp {formatCurrency(transaction.payment_amount)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500">{t('history.change')}</p>
-                                <p className="font-semibold text-gray-700">
-                                  Rp {formatCurrency(transaction.change_amount)}
-                                </p>
-                              </div>
+                              {!isExpense && (
+                                <>
+                                  <div>
+                                    <p className="text-xs text-gray-500">{t('history.paid')}</p>
+                                    <p className="font-semibold text-gray-700">Rp {formatCurrency(transaction.payment_amount)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">{t('history.change')}</p>
+                                    <p className="font-semibold text-gray-700">Rp {formatCurrency(transaction.change_amount)}</p>
+                                  </div>
+                                </>
+                              )}
                               {canViewProfit && (
                                 <div>
                                   <p className="text-xs text-gray-500">Profit</p>
@@ -370,7 +381,7 @@ export default function History() {
                               </div>
                             </div>
                           )}
-                          <div className="mb-3 space-y-2 rounded-lg border border-gray-200 bg-white p-3 text-sm">
+                          {!isExpense && <div className="mb-3 space-y-2 rounded-lg border border-gray-200 bg-white p-3 text-sm">
                             {transactionPayments.map((payment) => (
                               <div key={payment.id} className="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                                 <div className="flex justify-between gap-3"><b>{payment.payment_method_name}</b><b>Rp {formatCurrency(payment.tendered_amount)}</b></div>
@@ -381,7 +392,7 @@ export default function History() {
                                 {payment.change_amount > 0 && <div className="text-xs text-green-700">{t('payment.change')}: Rp {formatCurrency(payment.change_amount)}</div>}
                               </div>
                             ))}
-                          </div>
+                          </div>}
                           <div className="space-y-2">
                             {transaction.items.map((item) => {
                               const lineDiscount = item.discount_amount ?? 0;
@@ -420,7 +431,7 @@ export default function History() {
                                       </div>
                                     )}
                                     <div>
-                                      <p className="text-gray-500">{t('history.sell')}</p>
+                                      <p className="text-gray-500">{isExpense ? 'HPP Beban' : t('history.sell')}</p>
                                       <p className="font-semibold text-gray-700">Rp {formatCurrency(item.price)}</p>
                                     </div>
                                     {canViewProfit && (
@@ -436,7 +447,7 @@ export default function History() {
                               );
                             })}
                           </div>
-                          <div className={`mt-4 rounded-lg border p-3 ${
+                          {!isExpense && <div className={`mt-4 rounded-lg border p-3 ${
                             isVoided
                               ? 'border-red-200 bg-red-50'
                               : transaction.receipt_status === 'print_failed'
@@ -486,7 +497,7 @@ export default function History() {
                                 </button>
                               )}
                             </div>
-                          </div>
+                          </div>}
                           {!isVoided && can('TRANSACTION_VOID') && (
                             <div className="mt-3 flex justify-end">
                               <button

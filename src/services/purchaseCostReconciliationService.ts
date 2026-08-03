@@ -13,6 +13,7 @@ import type {
   TransactionItem,
 } from '@/types';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
+import { isTransactionExpense } from '@/utils/transactions';
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const sameQuantity = (a: number, b: number) => Math.abs(a - b) < 0.000001;
@@ -139,10 +140,13 @@ const rebuildTransactionItemCosts = async (
   reconciledAt: string,
 ) => {
   let totalProfitDelta = 0;
+  const affectedExpenseTransactionIds = new Set<string>();
 
   for (const transactionItemId of transactionItemIds) {
     const item = await db.transactionItems.get(transactionItemId);
     if (!item) continue;
+    const transaction = await db.transactions.get(item.transaction_id);
+    const isExpense = Boolean(transaction && isTransactionExpense(transaction));
 
     const product = await db.products.get(item.product_id);
     if (!product) continue;
@@ -168,7 +172,9 @@ const rebuildTransactionItemCosts = async (
     if (!hasReconciledLot) continue;
 
     const consumedQuantity = consumptions.reduce((sum, consumption) => sum + Number(consumption.quantity || 0), 0);
-    const oldTotalCost = roundCurrency(Number(item.subtotal || 0) - Number(item.profit || 0));
+    const oldTotalCost = isExpense
+      ? roundCurrency(Math.abs(Number(item.profit || 0)) || Number(item.subtotal || 0))
+      : roundCurrency(Number(item.subtotal || 0) - Number(item.profit || 0));
     const finalTotalCostRounded = roundCurrency(finalTotalCost);
     const weightedFinalCostPerStockUnit = consumedQuantity > 0
       ? roundCurrency(finalTotalCostRounded / consumedQuantity)
@@ -179,18 +185,37 @@ const rebuildTransactionItemCosts = async (
       product.purchase_unit,
       item.unit,
     );
-    const nextProfit = roundCurrency(Number(item.subtotal || 0) - finalTotalCostRounded);
+    const nextProfit = isExpense
+      ? -finalTotalCostRounded
+      : roundCurrency(Number(item.subtotal || 0) - finalTotalCostRounded);
     const profitDelta = roundCurrency(nextProfit - Number(item.profit || 0));
     totalProfitDelta += profitDelta;
 
     await db.transactionItems.update(item.id, {
       purchase_price: finalPurchasePrice,
+      ...(isExpense ? {
+        price: item.quantity > 0 ? roundCurrency(finalTotalCostRounded / item.quantity) : 0,
+        selling_price: item.quantity > 0 ? roundCurrency(finalTotalCostRounded / item.quantity) : 0,
+        price_before_discount: item.quantity > 0 ? roundCurrency(finalTotalCostRounded / item.quantity) : 0,
+        subtotal_before_discount: finalTotalCostRounded,
+        subtotal: finalTotalCostRounded,
+      } : {}),
       profit: nextProfit,
       hpp_status: 'FINAL',
       profit_status: 'RECONCILED',
       hpp_variance_amount: roundCurrency(finalTotalCostRounded - oldTotalCost),
       hpp_reconciled_at: reconciledAt,
     } satisfies Partial<TransactionItem>);
+    if (isExpense) affectedExpenseTransactionIds.add(item.transaction_id);
+  }
+
+  for (const transactionId of affectedExpenseTransactionIds) {
+    const items = await db.transactionItems.where('transaction_id').equals(transactionId).toArray();
+    const totalExpense = roundCurrency(items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0));
+    await db.transactions.update(transactionId, {
+      subtotal_amount: totalExpense,
+      total_amount: totalExpense,
+    });
   }
 
   return roundCurrency(totalProfitDelta);
@@ -303,6 +328,7 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
       let totalEstimatedCost = 0;
       let totalFinalCost = 0;
       let soldCostVarianceAmount = 0;
+      let internalConsumptionCostVarianceAmount = 0;
       let remainingStockVarianceAmount = 0;
 
       for (const inputItem of inputItems) {
@@ -352,6 +378,17 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
         const itemRemainingVariance = roundCurrency(remainingQuantityStock * variancePerStockUnit);
 
         soldCostVarianceAmount += itemSoldVariance;
+        for (const consumption of consumptions) {
+          const transactionItem = await db.transactionItems.get(consumption.source_line_id);
+          const transaction = transactionItem
+            ? await db.transactions.get(transactionItem.transaction_id)
+            : undefined;
+          if (transaction && isTransactionExpense(transaction)) {
+            internalConsumptionCostVarianceAmount += roundCurrency(
+              Number(consumption.quantity || 0) * variancePerStockUnit,
+            );
+          }
+        }
         remainingStockVarianceAmount += itemRemainingVariance;
         totalEstimatedCost += roundCurrency(receivedQuantity * estimatedPrice);
         totalFinalCost += roundCurrency(receivedQuantity * finalLandedCostPerUnit);
@@ -482,7 +519,11 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
       if (reconciliationItems.length > 0) {
         await db.purchaseCostReconciliationItems.bulkAdd(reconciliationItems);
       }
-      await postPurchaseCostReconciliationJournal(reconciliation, currentUser);
+      await postPurchaseCostReconciliationJournal(
+        reconciliation,
+        currentUser,
+        roundCurrency(internalConsumptionCostVarianceAmount),
+      );
 
       await writeActivityLog({
         user: currentUser,

@@ -1,5 +1,6 @@
 import type { PaymentMethodCategory, PosTransactionPayment, Transaction } from '@/types';
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
+import { isTransactionExpense } from '@/utils/transactions';
 
 export interface PosPaymentAllocationInput {
   key: string;
@@ -145,9 +146,12 @@ export const buildLegacyPosTransactionPayment = (transaction: Transaction): PosT
 export const getTransactionPaymentsOrLegacyFallback = (
   transaction: Transaction,
   payments?: PosTransactionPayment[],
-) => payments && payments.length > 0
-  ? [...payments].sort((left, right) => left.sequence - right.sequence)
-  : [buildLegacyPosTransactionPayment(transaction)];
+) => {
+  if (isTransactionExpense(transaction)) return [];
+  return payments && payments.length > 0
+    ? [...payments].sort((left, right) => left.sequence - right.sequence)
+    : [buildLegacyPosTransactionPayment(transaction)];
+};
 
 export const formatPosPaymentSummary = (payments: PosTransactionPayment[]) => (
   payments.map((payment) => `${payment.payment_method_name} ${payment.applied_amount.toLocaleString('id-ID')}`).join(' + ')

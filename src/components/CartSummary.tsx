@@ -9,6 +9,7 @@ import { DollarSign } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import MembershipCheckoutPanel from './MembershipCheckoutPanel';
 import PosSplitPaymentEditor from './pos-payment/PosSplitPaymentEditor';
+import PosCheckoutDetailsSummary from './pos-payment/PosCheckoutDetailsSummary';
 import { calculatePosDiscountTotal, isAppliedPosVoucher } from '@/utils/posVoucher';
 
 export interface CartSummaryProps {
@@ -36,6 +37,7 @@ export interface CartSummaryProps {
   createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
   isCreatingMember: boolean;
   handleCheckout: () => Promise<boolean>;
+  handleRecordExpense: () => Promise<boolean>;
   onCancel?: () => void;
   compactCheckoutDetailsOnTablet?: boolean;
   stickyPayButtonOnTablet?: boolean;
@@ -70,31 +72,15 @@ export default function CartSummary(props: CartSummaryProps) {
   );
 
   const compactTabletDetails = (
-    <div
-      data-testid="pos-tablet-payment-checkout-details"
-      className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-3 min-[1024px]:mt-3 min-[1024px]:grid lg:hidden"
-    >
-      <div className="min-w-0">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Member</div>
-        <div className="truncate text-sm font-bold text-slate-900" title={props.selectedMember?.name ?? '-'}>
-          {props.selectedMember?.name ?? '-'}
-        </div>
-      </div>
-      <div className="min-w-0 border-l border-blue-100 pl-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Voucher</div>
-        <div className="truncate text-sm font-bold text-slate-900" title={props.voucherCode.trim() || '-'}>
-          {props.voucherCode.trim() || '-'}
-        </div>
-      </div>
-      <button
-        type="button"
-        data-testid="pos-tablet-edit-checkout-details"
-        onClick={() => props.setShowPayment(false)}
-        className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-700 transition-colors hover:bg-blue-100"
-      >
-        Ubah
-      </button>
-    </div>
+    <PosCheckoutDetailsSummary
+      selectedMember={props.selectedMember}
+      voucherCode={props.voucherCode}
+      discountAmount={calculatePosDiscountTotal(props.membershipPreview.discount_breakdown)}
+      onEdit={() => props.setShowPayment(false)}
+      className="hidden min-[1024px]:mt-3 min-[1024px]:flex lg:hidden"
+      testId="pos-tablet-payment-checkout-details"
+      editButtonTestId="pos-tablet-edit-checkout-details"
+    />
   );
 
   const totalCard = (
@@ -178,6 +164,7 @@ export default function CartSummary(props: CartSummaryProps) {
             onUpdate={props.updatePaymentDraft}
             onRemove={props.removePaymentDraft}
             onConfirm={props.handleCheckout}
+            onRecordExpense={props.handleRecordExpense}
             onCancel={() => { props.setShowPayment(false); props.onCancel?.(); }}
           />
         </>

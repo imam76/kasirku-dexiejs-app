@@ -184,6 +184,7 @@ export default function Transaction() {
     removeFromCart,
     calculateTotal,
     handleCheckout,
+    handleRecordExpense,
     handleAddPayment,
     clearCart,
     setSearchTerm,
@@ -797,7 +798,7 @@ export default function Transaction() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50/60 p-2 sm:p-3 min-[1024px]:px-3 min-[1024px]:pb-3 min-[1024px]:pt-0">
       <CashierSessionStatusBar session={activeSession} onClose={openCloseModal} isClosing={isClosingSession} />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_270px_270px] xl:grid-cols-[minmax(0,1fr)_300px_300px] 2xl:grid-cols-[minmax(0,1fr)_320px_320px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div id="product-list" className="flex min-h-0 min-w-0 flex-col overflow-hidden">
           <div className="sticky top-0 z-20 mb-2 shrink-0 rounded-2xl border border-blue-100 bg-white p-3 shadow-sm">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -909,6 +910,8 @@ export default function Transaction() {
           createMember={createMember}
           isCreatingMember={isCreatingMember}
           handleCheckout={handleCheckout}
+          handleRecordExpense={handleRecordExpense}
+          onCheckoutSuccess={() => setCartOpen(false)}
         />
       </div>
 
@@ -966,6 +969,7 @@ export default function Transaction() {
         createMember={createMember}
         isCreatingMember={isCreatingMember}
         handleCheckout={handleCheckout}
+        handleRecordExpense={handleRecordExpense}
       />
 
       {scannerOpen && (

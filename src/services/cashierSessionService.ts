@@ -2,7 +2,7 @@ import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import { enqueueCashierSessionSync } from '@/services/syncQueueService';
 import type { CashierSession, CashierSessionBalanceStatus, PaymentMethodCategory, PosTransactionPayment, Transaction } from '@/types';
-import { isTransactionActive, isTransactionVoided } from '@/utils/transactions';
+import { isTransactionActive, isTransactionSale, isTransactionVoided } from '@/utils/transactions';
 import { getTransactionPaymentsOrLegacyFallback, groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
 
 export interface OpenCashierSessionInput {
@@ -116,8 +116,9 @@ export const openCashierSession = async (input: OpenCashierSessionInput): Promis
 };
 
 export const summarizeSessionTransactions = (transactions: Transaction[], payments: PosTransactionPayment[] = []) => {
-  const activeTransactions = transactions.filter(isTransactionActive);
-  const voidedTransactions = transactions.filter(isTransactionVoided);
+  const saleTransactions = transactions.filter(isTransactionSale);
+  const activeTransactions = saleTransactions.filter(isTransactionActive);
+  const voidedTransactions = saleTransactions.filter(isTransactionVoided);
   const paymentsByTransaction = groupPosPaymentsByTransaction(payments);
   const paymentBreakdownMap = new Map<string, CashierSessionPaymentBreakdown>();
   activeTransactions.forEach((transaction) => {

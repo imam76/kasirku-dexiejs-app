@@ -1,7 +1,7 @@
 export const navigationMessages = {
   id: {
     'nav.transaction': 'POS',
-    'nav.posRestaurant': 'POS Resto',
+    'nav.posRestaurant': 'Pos Resto',
     'nav.home': 'Home',
     'nav.masterData': 'Master Data',
     'nav.product': 'Produk',
@@ -13,6 +13,7 @@ export const navigationMessages = {
     'nav.paymentMethods': 'Metode Pembayaran',
     'nav.currencies': 'Mata Uang',
     'nav.areas': 'Area',
+    'nav.restaurantTables': 'Meja',
     'nav.employees': 'Karyawan',
     'nav.users': 'Akun Pengguna',
     'nav.roles': 'Peran & Izin',
@@ -103,6 +104,7 @@ export const navigationMessages = {
     'nav.paymentMethods': 'Payment Methods',
     'nav.currencies': 'Currencies',
     'nav.areas': 'Areas',
+    'nav.restaurantTables': 'Tables',
     'nav.employees': 'Employees',
     'nav.users': 'User Accounts',
     'nav.roles': 'Roles & Permissions',

@@ -73,6 +73,8 @@ const mapRemoteProductToLocal = (
   selling_price: remoteProduct.selling_price,
   stock: remoteProduct.stock,
   sku: remoteProduct.sku ?? undefined,
+  product_type: remoteProduct.product_type ?? 'FINISHED_GOOD',
+  is_visible_in_pos: remoteProduct.is_visible_in_pos ?? true,
   wholesale_prices: mapWholesalePrices(remoteProduct.wholesale_prices),
   sellable_units: mapProductUnits(remoteProduct.sellable_units, remoteProduct.selling_unit),
   unit_mappings: mapUnitMappings(remoteProduct.unit_mappings),

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import type { PosTransactionPayment, Transaction } from '@/types';
+import { isTransactionSale } from '@/utils/transactions';
 import { resolvePosPaymentMethod, type ResolvedPosPaymentMethod } from '@/services/posPaymentMethodService';
 import {
   allocatePosPayments,
@@ -75,7 +76,9 @@ export const backfillMissingPosTransactionPayments = async (): Promise<number> =
     db.posTransactionPayments.toArray(),
   ]);
   const grouped = groupPosPaymentsByTransaction(existingPayments);
-  const missing = transactions.filter((transaction) => !grouped.has(transaction.id));
+  const missing = transactions.filter((transaction) => (
+    isTransactionSale(transaction) && !grouped.has(transaction.id)
+  ));
   if (missing.length === 0) return 0;
 
   await db.transaction('rw', [db.transactions, db.posTransactionPayments], async () => {

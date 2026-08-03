@@ -18,7 +18,7 @@ import type {
 } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { konversiSatuanProduk } from '@/utils/pricing';
-import { isTransactionActive } from '@/utils/transactions';
+import { isTransactionActive, isTransactionExpense } from '@/utils/transactions';
 import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
 import { recalculateSalesInvoicePaymentStatus } from '@/services/salesDocumentService';
 import {
@@ -206,6 +206,10 @@ export const getReturnableSource = async (
 
   const transaction = await db.transactions.get(sourceId);
   if (!transaction) throw new Error('Transaksi POS tidak ditemukan.');
+
+  if (isTransactionExpense(transaction)) {
+    throw new Error('Pengeluaran internal bukan transaksi penjualan dan tidak dapat diretur. Gunakan void transaksi.');
+  }
 
   if (!isTransactionActive(transaction)) {
     throw new Error('Transaksi POS yang sudah void tidak bisa diretur.');

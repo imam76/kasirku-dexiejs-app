@@ -14,6 +14,7 @@ import {
   TeamOutlined,
   UserOutlined,
   BankOutlined,
+  TableOutlined,
 } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
@@ -46,6 +47,7 @@ function MasterData() {
     { to: '/master-data/contacts', label: t('nav.contacts'), icon: ContactsOutlined, color: 'text-amber-600', desc: t('home.contactsDesc') },
     { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: ShopOutlined, color: 'text-teal-600', desc: t('home.warehousesDesc') },
     { to: '/master-data/payment-methods', label: t('nav.paymentMethods'), icon: CreditCardOutlined, color: 'text-blue-600', desc: t('home.paymentMethodsDesc') },
+    { to: '/master-data/restaurant-tables', label: t('nav.restaurantTables'), icon: TableOutlined, color: 'text-orange-600', desc: t('restaurantTables.homeDescription') },
     { to: '/master-data/currencies', label: t('nav.currencies'), icon: MoneyCollectOutlined, color: 'text-emerald-600', desc: t('home.currenciesDesc') },
     { to: '/master-data/users', label: t('nav.users'), icon: UserOutlined, color: 'text-blue-700', desc: t('home.usersDesc') },
     { to: '/master-data/roles', label: t('nav.roles'), icon: TeamOutlined, color: 'text-fuchsia-600', desc: t('home.rolesDesc') },

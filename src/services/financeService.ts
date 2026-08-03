@@ -15,7 +15,7 @@ import {
 } from '@/services/financeTransactionSyncService';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { resolveFinanceTransactionAccountSnapshot } from '@/utils/chartOfAccounts/resolveFinanceTransactionAccountSnapshot';
-import { isTransactionActive } from '@/utils/transactions';
+import { isTransactionActive, isTransactionSale } from '@/utils/transactions';
 
 interface AddFinanceTransactionInput {
   type: FinanceTransactionType;
@@ -167,7 +167,8 @@ export const recalculateFinance = async () => {
       await db.financeTransactions.bulkDelete(existingAutoTransactions.map((transaction) => transaction.id));
     }
 
-    const posTransactions = (await db.transactions.toArray()).filter(isTransactionActive);
+    const posTransactions = (await db.transactions.toArray())
+      .filter((transaction) => isTransactionActive(transaction) && isTransactionSale(transaction));
     const stockPurchases = await db.stockPurchases.toArray();
     const purchaseInvoicePayments = (await db.purchaseInvoicePayments.toArray())
       .filter((payment) => payment.status === 'ACTIVE');

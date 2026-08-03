@@ -6,6 +6,8 @@ import { stockMessages } from './stockMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
 import { fixedAssetMessages } from './fixedAssetMessages';
 import { openingInventoryMessages } from './openingInventoryMessages';
+import { restaurantPosMessages } from './restaurantPosMessages';
+import { restaurantTableMessages } from './restaurantTableMessages';
 
 export const messages = {
   id: {
@@ -17,6 +19,8 @@ export const messages = {
     ...cooperativeMessages.id,
     ...fixedAssetMessages.id,
     ...openingInventoryMessages.id,
+    ...restaurantPosMessages.id,
+    ...restaurantTableMessages.id,
 
     'transaction.title': 'Transaksi',
     'transaction.searchPlaceholder': 'Cari produk (nama atau SKU)...',
@@ -1929,6 +1933,7 @@ export const messages = {
     'cart.remove': 'Hapus item',
 
     'payment.pay': 'Bayar',
+    'payment.title': 'Pembayaran',
     'payment.cash': 'Tunai',
     'payment.nonCash': 'Non-Tunai',
     'payment.amountPlaceholder': 'Jumlah pembayaran',
@@ -1937,6 +1942,9 @@ export const messages = {
     'payment.change': 'Kembalian',
     'payment.cancel': 'Batal',
     'payment.confirm': 'Konfirmasi',
+    'payment.confirmPayment': 'Konfirmasi Pembayaran',
+    'payment.billingInformation': 'Informasi Tagihan',
+    'payment.methodInformation': 'Metode Pembayaran',
     'payment.invalidTitle': 'Pembayaran Tidak Valid',
     'payment.invalidContent': 'Jumlah pembayaran tidak valid atau kurang!',
     'payment.noMethodAvailable': 'Tidak ada metode pembayaran aktif yang valid.',
@@ -2009,6 +2017,8 @@ export const messages = {
     ...cooperativeMessages.en,
     ...fixedAssetMessages.en,
     ...openingInventoryMessages.en,
+    ...restaurantPosMessages.en,
+    ...restaurantTableMessages.en,
 
     'transaction.title': 'Transaction',
     'transaction.searchPlaceholder': 'Search products (name or SKU)...',
@@ -3921,6 +3931,7 @@ export const messages = {
     'cart.remove': 'Remove item',
 
     'payment.pay': 'Pay',
+    'payment.title': 'Payment',
     'payment.cash': 'Cash',
     'payment.nonCash': 'Non-Cash',
     'payment.amountPlaceholder': 'Payment amount',
@@ -3929,6 +3940,9 @@ export const messages = {
     'payment.change': 'Change',
     'payment.cancel': 'Cancel',
     'payment.confirm': 'Confirm',
+    'payment.confirmPayment': 'Confirm Payment',
+    'payment.billingInformation': 'Billing Information',
+    'payment.methodInformation': 'Payment Method',
     'payment.invalidTitle': 'Invalid Payment',
     'payment.invalidContent': 'Payment amount is invalid or too low!',
     'payment.noMethodAvailable': 'No valid active payment method is available.',
