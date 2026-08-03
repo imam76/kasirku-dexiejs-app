@@ -39,6 +39,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { DEFAULT_SELECTED_MODULES, SETUP_MODULE_GROUPS } from '@/constants/setupModules';
 import {
+  CURRENT_MODULE_CATALOG_VERSION,
   getLicenseFingerprint,
   getSetupConfig,
   saveSetupConfigForRuntime,
@@ -390,6 +391,7 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
         enabledModules: selectedModules,
         configuredAt: new Date().toISOString(),
         configuredBy: licenseFingerprint,
+        moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
       });
 
       message.success('Konfigurasi module berhasil disimpan!');

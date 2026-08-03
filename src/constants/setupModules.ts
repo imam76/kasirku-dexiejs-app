@@ -12,8 +12,13 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
     modules: [
       {
         code: 'POS_TRANSACTION',
-        label: 'POS & Pos Resto',
-        description: 'Penjualan kasir, meja restoran, dan riwayat transaksi',
+        label: 'POS Kasir',
+        description: 'Penjualan kasir retail dan riwayat transaksi',
+      },
+      {
+        code: 'POS_RESTAURANT',
+        label: 'POS Resto',
+        description: 'Penjualan restoran, meja, dapur, dan sesi kasir resto',
       },
     ],
   },
@@ -150,6 +155,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
 export const DEFAULT_SELECTED_MODULES: string[] = [
   // POS
   'POS_TRANSACTION',
+  'POS_RESTAURANT',
   // Sales core flow
   'SALES_QUOTATION',
   'SALES_ORDER',

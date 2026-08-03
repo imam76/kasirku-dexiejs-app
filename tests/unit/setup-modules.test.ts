@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { PERMISSION_CATALOG } from '@/auth/permissionCatalog';
-import { ROUTE_MODULE_MAP } from '@/auth/moduleAccess';
+import { ROUTE_MODULE_MAP, isRouteEnabledForModules } from '@/auth/moduleAccess';
 import {
   COOPERATIVE_REPORT_ACCESS,
   GENERAL_REPORT_ACCESS,
@@ -41,6 +41,8 @@ describe('developer setup module catalog', () => {
 
     expect(SETUP_MODULE_GROUPS.find((group) => group.key === 'hr')?.modules.map((module) => module.code))
       .toEqual(['EMPLOYEE', 'DEPARTMENT', 'AREA']);
+    expect(SETUP_MODULE_GROUPS.find((group) => group.key === 'pos')?.modules.map((module) => module.code))
+      .toEqual(['POS_TRANSACTION', 'POS_RESTAURANT']);
   });
 
   test('keeps group keys and module codes unique', () => {
@@ -72,5 +74,44 @@ describe('developer setup module catalog', () => {
 
     expect(config.moduleCatalogVersion).toBe(CURRENT_MODULE_CATALOG_VERSION);
     expect(config.enabledModules).toContain('KOPERASI_REPORT_DAILY_FIELD_CASH');
+  });
+
+  test('migrates the legacy combined POS entitlement without removing existing access', () => {
+    const config = normalizeSetupConfig({
+      enabledModules: ['POS_TRANSACTION'],
+      configuredAt: '2026-01-01T00:00:00.000Z',
+      configuredBy: 'test',
+      moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION - 1,
+    });
+
+    expect(config.enabledModules).toContain('POS_TRANSACTION');
+    expect(config.enabledModules).toContain('POS_RESTAURANT');
+  });
+
+  test('keeps POS Kasir and POS Resto independent for current catalog configs', () => {
+    const baseConfig = {
+      configuredAt: '2026-08-03T00:00:00.000Z',
+      configuredBy: 'test',
+      moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
+    };
+    const cashierConfig = normalizeSetupConfig({
+      ...baseConfig,
+      enabledModules: ['POS_TRANSACTION'],
+    });
+    const restaurantConfig = normalizeSetupConfig({
+      ...baseConfig,
+      enabledModules: ['POS_RESTAURANT'],
+    });
+
+    expect(cashierConfig.enabledModules).not.toContain('POS_RESTAURANT');
+    expect(restaurantConfig.enabledModules).not.toContain('POS_TRANSACTION');
+    expect(isRouteEnabledForModules('/transaction', cashierConfig.enabledModules)).toBe(true);
+    expect(isRouteEnabledForModules('/pos-resto', cashierConfig.enabledModules)).toBe(false);
+    expect(isRouteEnabledForModules('/master-data/restaurant-tables', cashierConfig.enabledModules)).toBe(false);
+    expect(isRouteEnabledForModules('/transaction', restaurantConfig.enabledModules)).toBe(false);
+    expect(isRouteEnabledForModules('/pos-resto', restaurantConfig.enabledModules)).toBe(true);
+    expect(isRouteEnabledForModules('/master-data/restaurant-tables', restaurantConfig.enabledModules)).toBe(true);
+    expect(isRouteEnabledForModules('/history', cashierConfig.enabledModules)).toBe(true);
+    expect(isRouteEnabledForModules('/history', restaurantConfig.enabledModules)).toBe(true);
   });
 });
