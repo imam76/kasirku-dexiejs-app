@@ -13,6 +13,11 @@
     "windows": [
       {
         "title": "frayukti",
+        "fullscreen": false,
+        "maximized": true,
+        "resizable": true,
+        "minimizable": true,
+        "maximizable": true,
         "width": 800,
         "height": 600
       }

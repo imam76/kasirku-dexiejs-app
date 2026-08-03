@@ -351,6 +351,10 @@ class BluetoothPrinterPlugin(private val activity: Activity) : Plugin(activity) 
 object EscPosReceiptRenderer {
   private const val PAPER_WIDTH_58_MM = 32
   private const val PAPER_WIDTH_80_MM = 48
+  private const val ITEM_NAME_WIDTH = 13
+  private const val ITEM_PRICE_WIDTH = 12
+  private const val ITEM_QUANTITY_WIDTH = 7
+  private const val ITEM_SUBTOTAL_WIDTH = 13
   private val printerCharset: Charset = Charset.forName("CP437")
   private val indonesianLocale: Locale = Locale.forLanguageTag("id-ID")
 
@@ -413,10 +417,30 @@ object EscPosReceiptRenderer {
     }
     output.writeLine(separator(paperWidth))
 
-    receipt.items.forEach { item ->
-      wrap(item.name.ifBlank { "Item" }, paperWidth).forEach { output.writeLine(it) }
-      val quantity = "${formatQuantity(item.quantity)} ${item.unit}".trim()
-      output.writeLine(twoColumns("$quantity x ${formatCurrency(item.price)}", formatCurrency(item.subtotal), paperWidth))
+    if (paperWidth == PAPER_WIDTH_80_MM) {
+      output.writeLine(itemTableRow("Nama Produk", "Harga", "Jumlah", "Subtotal"))
+      output.writeLine(separator(paperWidth))
+      receipt.items.forEach { item ->
+        val nameLines = wrap(item.name.ifBlank { "Item" }, ITEM_NAME_WIDTH)
+        val quantity = "${formatQuantity(item.quantity)} ${item.unit}".trim()
+        output.writeLine(
+          itemTableRow(
+            nameLines.first(),
+            formatCurrency(item.price),
+            quantity,
+            formatCurrency(item.subtotal),
+          ),
+        )
+        nameLines.drop(1).forEach { nameLine ->
+          output.writeLine(itemTableRow(nameLine, "", "", ""))
+        }
+      }
+    } else {
+      receipt.items.forEach { item ->
+        wrap(item.name.ifBlank { "Item" }, paperWidth).forEach { output.writeLine(it) }
+        val quantity = "${formatQuantity(item.quantity)} ${item.unit}".trim()
+        output.writeLine(twoColumns("$quantity x ${formatCurrency(item.price)}", formatCurrency(item.subtotal), paperWidth))
+      }
     }
 
     output.writeLine(separator(paperWidth))
@@ -449,6 +473,16 @@ object EscPosReceiptRenderer {
     }
     output.writeLine(separator(paperWidth))
     output.writeCommand(0x1B, 0x61, 0x01)
+    val transactionNumber = receipt.transactionNumber.trim()
+    if (transactionNumber.isNotBlank()) {
+      output.writeCommand(0x1B, 0x45, 0x01)
+      output.writeLine("Scan nomor transaksi")
+      output.writeCommand(0x1B, 0x45, 0x00)
+      output.writeQrCode(transactionNumber, if (paperWidth == PAPER_WIDTH_80_MM) 6 else 5)
+      output.writeLine("")
+      output.writeLine("#$transactionNumber")
+      output.writeLine("")
+    }
     output.writeLine(receipt.footer?.ifBlank { "Terima kasih" } ?: "Terima kasih")
     output.writeLine("")
     output.writeLine("")
@@ -466,6 +500,27 @@ object EscPosReceiptRenderer {
     write(0x0A)
   }
 
+  private fun ByteArrayOutputStream.writeQrCode(value: String, moduleSize: Int) {
+    val data = value.toByteArray(printerCharset)
+    val storeLength = data.size + 3
+
+    writeCommand(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00)
+    writeCommand(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, moduleSize)
+    writeCommand(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31)
+    writeCommand(
+      0x1D,
+      0x28,
+      0x6B,
+      storeLength and 0xFF,
+      (storeLength shr 8) and 0xFF,
+      0x31,
+      0x50,
+      0x30,
+    )
+    write(data)
+    writeCommand(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30)
+  }
+
   private fun separator(paperWidth: Int) = "-".repeat(paperWidth)
 
   private fun twoColumns(left: String, right: String, paperWidth: Int): String {
@@ -474,6 +529,32 @@ object EscPosReceiptRenderer {
     val safeLeft = left.fit(maxLeftWidth)
     val spaces = (paperWidth - safeLeft.length - safeRight.length).coerceAtLeast(1)
     return safeLeft + " ".repeat(spaces) + safeRight
+  }
+
+  private fun itemTableRow(
+    name: String,
+    price: String,
+    quantity: String,
+    subtotal: String,
+  ): String {
+    return listOf(
+      tableCell(name, ITEM_NAME_WIDTH),
+      tableCell(price, ITEM_PRICE_WIDTH, alignRight = true),
+      tableCell(quantity, ITEM_QUANTITY_WIDTH, alignRight = true),
+      tableCell(subtotal, ITEM_SUBTOTAL_WIDTH, alignRight = true),
+    ).joinToString(" ")
+  }
+
+  private fun tableCell(value: String, width: Int, alignRight: Boolean = false): String {
+    val safeValue = if (value.length <= width) {
+      value
+    } else if (alignRight) {
+      value.takeLast(width)
+    } else {
+      value.take(width)
+    }
+
+    return if (alignRight) safeValue.padStart(width) else safeValue.padEnd(width)
   }
 
   private fun wrap(value: String, width: Int): List<String> {

@@ -1,9 +1,13 @@
-import { useState, useMemo } from 'react';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { PosTransactionPayment, Transaction, TransactionItem } from '../types';
 import { groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
 import { voidTransaction as voidTransactionService } from '@/services/transactionVoidService';
+import {
+  filterTransactionHistory,
+  normalizeTransactionHistorySearch,
+} from '@/utils/transactionHistorySearch';
 
 interface TransactionWithItems extends Transaction {
   items?: TransactionItem[];
@@ -15,29 +19,51 @@ const PAGE_SIZE = 10;
 export const useHistory = () => {
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [page, setPageState] = useState(1);
+  const [searchTerm, setSearchTermState] = useState('');
+  const normalizedSearchTerm = normalizeTransactionHistorySearch(searchTerm);
 
   const {
     data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
     isLoading,
     isError,
     error,
     refetch,
-  } = useInfiniteQuery({
-    queryKey: ['transactions-history'],
-    queryFn: async ({ pageParam = 0 }) => {
-      const from = pageParam * PAGE_SIZE;
+  } = useQuery({
+    queryKey: ['transactions-history', page, normalizedSearchTerm],
+    queryFn: async () => {
+      let transactions: Transaction[];
+      let totalCount: number;
 
-      const transactions = await db.transactions
-        .orderBy('created_at')
-        .reverse()
-        .offset(from)
-        .limit(PAGE_SIZE)
-        .toArray();
-
-      const count = await db.transactions.count();
+      if (normalizedSearchTerm) {
+        const [allTransactions, allItems, products] = await Promise.all([
+          db.transactions.orderBy('created_at').reverse().toArray(),
+          db.transactionItems.toArray(),
+          db.products.toArray(),
+        ]);
+        const filteredTransactions = filterTransactionHistory(
+          allTransactions,
+          allItems,
+          products,
+          normalizedSearchTerm,
+        );
+        totalCount = filteredTransactions.length;
+        const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+        const currentPage = Math.min(page, lastPage);
+        const from = (currentPage - 1) * PAGE_SIZE;
+        transactions = filteredTransactions.slice(from, from + PAGE_SIZE);
+      } else {
+        totalCount = await db.transactions.count();
+        const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+        const currentPage = Math.min(page, lastPage);
+        const from = (currentPage - 1) * PAGE_SIZE;
+        transactions = await db.transactions
+          .orderBy('created_at')
+          .reverse()
+          .offset(from)
+          .limit(PAGE_SIZE)
+          .toArray();
+      }
 
       const ids = transactions.map((transaction) => transaction.id);
       const [items, payments] = ids.length > 0 ? await Promise.all([
@@ -55,20 +81,24 @@ export const useHistory = () => {
 
       return {
         data,
-        nextPage: data.length === PAGE_SIZE ? pageParam + 1 : undefined,
-        totalCount: count,
+        totalCount,
       };
     },
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => lastPage.nextPage,
   });
 
-  const transactions = useMemo(() => {
-    return data?.pages.flatMap((page) => page.data) ?? [];
-  }, [data]);
+  const setPage = useCallback((nextPage: number) => {
+    setExpandedId(null);
+    setPageState(Math.max(1, nextPage));
+  }, []);
+
+  const setSearchTerm = useCallback((value: string) => {
+    setExpandedId(null);
+    setPageState(1);
+    setSearchTermState(value);
+  }, []);
 
   const toggleExpand = (transactionId: string) => {
-    setExpandedId(expandedId === transactionId ? null : transactionId);
+    setExpandedId((currentId) => currentId === transactionId ? null : transactionId);
   };
 
   const voidMutation = useMutation({
@@ -92,15 +122,18 @@ export const useHistory = () => {
   });
 
   return {
-    transactions,
+    transactions: data?.data ?? [],
+    totalCount: data?.totalCount ?? 0,
+    page,
+    pageSize: PAGE_SIZE,
+    searchTerm,
     expandedId,
     isLoading,
-    isFetchingNextPage,
-    hasNextPage,
     isError,
     error,
+    setPage,
+    setSearchTerm,
     toggleExpand,
-    loadMore: fetchNextPage,
     refetch,
     voidTransaction: voidMutation.mutateAsync,
     isVoiding: voidMutation.isPending,

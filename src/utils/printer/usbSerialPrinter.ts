@@ -85,11 +85,40 @@ const BOLD_ON = new Uint8Array([ESC, 0x45, 0x01]);
 const BOLD_OFF = new Uint8Array([ESC, 0x45, 0x00]);
 const ALIGN_CENTER = new Uint8Array([ESC, 0x61, 0x01]);
 const ALIGN_LEFT = new Uint8Array([ESC, 0x61, 0x00]);
+const QR_MODEL_2 = new Uint8Array([GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]);
+const QR_ERROR_CORRECTION_M = new Uint8Array([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31]);
+const QR_PRINT = new Uint8Array([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30]);
 
 const encoder = new TextEncoder();
 
 const text = (s: string) => encoder.encode(s + '\n');
 const line = (ch = '-', len = 32) => text(ch.repeat(len));
+
+const qrCode = (value: string, moduleSize: number): Uint8Array[] => {
+  const data = encoder.encode(value);
+  const storeLength = data.length + 3;
+  const storeCommand = new Uint8Array(8 + data.length);
+
+  storeCommand.set([
+    GS,
+    0x28,
+    0x6b,
+    storeLength & 0xff,
+    (storeLength >> 8) & 0xff,
+    0x31,
+    0x50,
+    0x30,
+  ]);
+  storeCommand.set(data, 8);
+
+  return [
+    QR_MODEL_2,
+    new Uint8Array([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, moduleSize]),
+    QR_ERROR_CORRECTION_M,
+    storeCommand,
+    QR_PRINT,
+  ];
+};
 
 const currencyFormat = (amount: number) =>
   new Intl.NumberFormat('id-ID').format(Math.round(amount));
@@ -130,7 +159,34 @@ const wrapText = (value: string, width: number): string[] => {
   return lines;
 };
 
-const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
+const ITEM_TABLE_WIDTHS = {
+  name: 13,
+  price: 12,
+  quantity: 7,
+  subtotal: 13,
+} as const;
+
+const formatTableCell = (value: string, width: number, alignRight = false): string => {
+  const safeValue = value.length > width
+    ? (alignRight ? value.slice(-width) : value.slice(0, width))
+    : value;
+
+  return alignRight ? safeValue.padStart(width) : safeValue.padEnd(width);
+};
+
+const formatItemTableRow = (
+  name: string,
+  price: string,
+  quantity: string,
+  subtotal: string
+): string => [
+  formatTableCell(name, ITEM_TABLE_WIDTHS.name),
+  formatTableCell(price, ITEM_TABLE_WIDTHS.price, true),
+  formatTableCell(quantity, ITEM_TABLE_WIDTHS.quantity, true),
+  formatTableCell(subtotal, ITEM_TABLE_WIDTHS.subtotal, true),
+].join(' ');
+
+export const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
   const parts: Uint8Array[] = [];
   const paperWidth = getReceiptPaperCharacterWidth(receipt.paperSize);
 
@@ -150,15 +206,37 @@ const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
   }
   push(ALIGN_LEFT, line('-', paperWidth));
 
-  for (const item of receipt.items) {
-    wrapText(item.name, paperWidth).forEach((itemLine) => push(text(itemLine)));
-    const qty = `${item.quantity} ${item.unit}`;
-    const price = `Rp ${currencyFormat(item.price)}`;
-    push(text(padLine(`  ${qty}`, price, paperWidth)));
-    if ((item.discountAmount ?? 0) > 0) {
-      push(text(padLine('  Diskon', `-Rp ${currencyFormat(item.discountAmount!)}`, paperWidth)));
+  if (receipt.paperSize === '80mm') {
+    push(text(formatItemTableRow('Nama Produk', 'Harga', 'Jumlah', 'Subtotal')));
+    push(line('-', paperWidth));
+
+    for (const item of receipt.items) {
+      const nameLines = wrapText(item.name, ITEM_TABLE_WIDTHS.name);
+      const qty = `${item.quantity} ${item.unit}`.trim();
+      const price = `Rp ${currencyFormat(item.price)}`;
+      const subtotal = `Rp ${currencyFormat(item.subtotal)}`;
+
+      push(text(formatItemTableRow(nameLines[0], price, qty, subtotal)));
+      nameLines.slice(1).forEach((nameLine) => {
+        push(text(formatItemTableRow(nameLine, '', '', '')));
+      });
+      if ((item.discountAmount ?? 0) > 0) {
+        push(text(formatItemTableRow('Diskon', '', '', `-Rp ${currencyFormat(item.discountAmount!)}`)));
+      }
     }
-    push(text(padLine('  Subtotal', `Rp ${currencyFormat(item.subtotal)}`, paperWidth)));
+  } else {
+    for (const item of receipt.items) {
+      wrapText(item.name, paperWidth).forEach((itemLine) => push(text(itemLine)));
+      const qty = `${item.quantity} ${item.unit}`;
+      const price = `Rp ${currencyFormat(item.price)}`;
+      const subtotal = `Rp ${currencyFormat(item.subtotal)}`;
+
+      push(text(padLine(`  ${qty}`, price, paperWidth)));
+      if ((item.discountAmount ?? 0) > 0) {
+        push(text(padLine('  Diskon', `-Rp ${currencyFormat(item.discountAmount!)}`, paperWidth)));
+      }
+      push(text(padLine('  Subtotal', subtotal, paperWidth)));
+    }
   }
 
   push(line('-', paperWidth));
@@ -204,7 +282,14 @@ const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
   }
 
   push(line('-', paperWidth));
-  push(ALIGN_CENTER, text(receipt.footer ?? 'Terima kasih'), ALIGN_LEFT);
+  push(ALIGN_CENTER);
+  const transactionNumber = receipt.transactionNumber.trim();
+  if (transactionNumber) {
+    push(BOLD_ON, text('Scan nomor transaksi'), BOLD_OFF);
+    push(...qrCode(transactionNumber, receipt.paperSize === '80mm' ? 6 : 5));
+    push(new Uint8Array([LF]), text(`#${transactionNumber}`), text(''));
+  }
+  push(text(receipt.footer ?? 'Terima kasih'), ALIGN_LEFT);
   push(new Uint8Array([LF, LF, LF]));
   push(CUT);
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { TransactionReceiptInput } from '@/types';
 import { buildReceiptPayload } from '@/utils/printer/receiptService';
+import { buildEscPosReceipt } from '@/utils/printer/usbSerialPrinter';
 import {
   getReceiptPaperCharacterWidth,
   getStoredReceiptPaperSize,
@@ -30,6 +31,14 @@ const transaction: TransactionReceiptInput = {
   }],
 };
 
+const containsByteSequence = (data: Uint8Array, sequence: number[]): boolean => {
+  for (let index = 0; index <= data.length - sequence.length; index += 1) {
+    if (sequence.every((value, offset) => data[index + offset] === value)) return true;
+  }
+
+  return false;
+};
+
 describe('receipt print settings', () => {
   test('uses 58 mm as the default and maps both supported widths', () => {
     expect(getStoredReceiptPaperSize()).toBe('58mm');
@@ -47,5 +56,57 @@ describe('receipt print settings', () => {
 
   test('falls back to the application name when the company name is empty', () => {
     expect(buildReceiptPayload(transaction, '   ').merchantName).toBe('Frayukti');
+  });
+
+  test('prints 80 mm items as a four-column table', () => {
+    const receipt = buildReceiptPayload(transaction, 'Toko Makmur', '80mm');
+    const printedLines = new TextDecoder().decode(buildEscPosReceipt(receipt)).split('\n');
+    const expectedHeader = [
+      'Nama Produk'.padEnd(13),
+      'Harga'.padStart(12),
+      'Jumlah'.padStart(7),
+      'Subtotal'.padStart(13),
+    ].join(' ');
+    const expectedItem = [
+      'Produk Uji'.padEnd(13),
+      'Rp 10.000'.padStart(12),
+      '1 pcs'.padStart(7),
+      'Rp 10.000'.padStart(13),
+    ].join(' ');
+
+    expect(printedLines).toContain(expectedHeader);
+    expect(printedLines).toContain(expectedItem);
+    expect(expectedHeader.length).toBe(48);
+    expect(expectedItem.length).toBe(48);
+  });
+
+  test('keeps the existing multi-line item layout for 58 mm paper', () => {
+    const receipt = buildReceiptPayload(transaction, 'Toko Makmur', '58mm');
+    const printedLines = new TextDecoder().decode(buildEscPosReceipt(receipt)).split('\n');
+
+    expect(printedLines.some((line) => line.startsWith('  1 pcs'))).toBe(true);
+    expect(printedLines.some((line) => line.startsWith('  Subtotal'))).toBe(true);
+    expect(printedLines.some((line) => line.startsWith('1 pcs x'))).toBe(false);
+  });
+
+  test('stores the transaction number in an ESC/POS QR code', () => {
+    const receipt = buildReceiptPayload(transaction, 'Toko Makmur', '80mm');
+    const printedData = buildEscPosReceipt(receipt);
+    const transactionNumber = new TextEncoder().encode(transaction.transaction_number);
+    const storeLength = transactionNumber.length + 3;
+    const qrStoreCommand = [
+      0x1d,
+      0x28,
+      0x6b,
+      storeLength & 0xff,
+      (storeLength >> 8) & 0xff,
+      0x31,
+      0x50,
+      0x30,
+      ...transactionNumber,
+    ];
+
+    expect(containsByteSequence(printedData, qrStoreCommand)).toBe(true);
+    expect(new TextDecoder().decode(printedData)).toContain('Scan nomor transaksi');
   });
 });

@@ -1,6 +1,6 @@
-import { useRef, useEffect, useState, useLayoutEffect } from 'react';
-import { App, Input } from 'antd';
-import { Receipt, ChevronDown, ChevronUp, Printer, AlertCircle, CheckCircle2, Ban } from 'lucide-react';
+import { useCallback, useRef, useEffect, useState, useLayoutEffect } from 'react';
+import { App, Button, Input, Pagination } from 'antd';
+import { Receipt, ChevronDown, ChevronUp, Printer, AlertCircle, CheckCircle2, Ban, ScanLine, Search } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
 import { useI18n } from '@/hooks/useI18n';
@@ -13,11 +13,28 @@ import { PosTransactionPayment, Transaction, TransactionItem, TransactionReceipt
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
 import { getTransactionPaymentsOrLegacyFallback } from '@/utils/posSplitPayment';
+import ScannerModal from '@/components/ScannerModal';
+import {
+  appendKeyboardBarcodeCharacter,
+  finishKeyboardBarcodeScan,
+  type KeyboardBarcodeBuffer,
+} from '@/utils/keyboardBarcodeScanner';
 
 interface TransactionWithItems extends Transaction {
   items?: TransactionItem[];
   payments?: PosTransactionPayment[];
 }
+
+const isTypingTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+
+  const tagName = target.tagName.toLowerCase();
+  return target.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+};
+
+const hasVisibleOverlay = () => Array.from(
+  document.querySelectorAll<HTMLElement>('.ant-modal-wrap, .ant-drawer-open .ant-drawer-content-wrapper'),
+).some((element) => element.getClientRects().length > 0);
 
 export default function History() {
   const { message, modal } = App.useApp();
@@ -26,14 +43,17 @@ export default function History() {
   const canViewProfit = can('PROFIT_VIEW');
   const {
     transactions,
+    totalCount,
+    page,
+    pageSize,
+    searchTerm,
     expandedId,
     isLoading,
-    isFetchingNextPage,
-    hasNextPage,
     isError,
     error,
+    setPage,
+    setSearchTerm,
     toggleExpand,
-    loadMore,
     refetch,
     voidTransaction,
     isVoiding,
@@ -42,6 +62,8 @@ export default function History() {
   const [scrollMargin, setScrollMargin] = useState(0);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const keyboardScannerBufferRef = useRef<KeyboardBarcodeBuffer | null>(null);
 
   useLayoutEffect(() => {
     if (parentRef.current) {
@@ -56,31 +78,80 @@ export default function History() {
     scrollMargin,
   });
 
-  // Load more when reaching the end
-  useEffect(() => {
-    const virtualItems = rowVirtualizer.getVirtualItems();
-    const lastItem = virtualItems[virtualItems.length - 1];
-    if (!lastItem) return;
-
-    if (
-      lastItem.index >= transactions.length - 1 &&
-      hasNextPage &&
-      !isFetchingNextPage
-    ) {
-      loadMore();
-    }
-  }, [
-    hasNextPage,
-    isFetchingNextPage,
-    loadMore,
-    transactions.length,
-    rowVirtualizer,
-  ]);
-
   // Re-measure when expansion state changes
   useEffect(() => {
     rowVirtualizer.measure();
   }, [expandedId, rowVirtualizer]);
+
+  const handleScan = useCallback((code: string) => {
+    keyboardScannerBufferRef.current = null;
+    setSearchTerm(code);
+    setScannerOpen(false);
+  }, [setSearchTerm]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented
+        || event.ctrlKey
+        || event.metaKey
+        || event.altKey
+        || event.repeat
+        || scannerOpen
+        || hasVisibleOverlay()
+        || isTypingTarget(event.target)
+      ) {
+        keyboardScannerBufferRef.current = null;
+        return;
+      }
+
+      const isTerminator = event.code === 'Enter'
+        || event.code === 'NumpadEnter'
+        || event.key === 'Tab';
+
+      if (isTerminator) {
+        const scannedCode = finishKeyboardBarcodeScan(
+          keyboardScannerBufferRef.current,
+          event.timeStamp,
+        );
+        keyboardScannerBufferRef.current = null;
+
+        if (scannedCode) {
+          event.preventDefault();
+          handleScan(scannedCode);
+        }
+        return;
+      }
+
+      const isModifierKey = event.key === 'Shift'
+        || event.key === 'Control'
+        || event.key === 'Alt'
+        || event.key === 'AltGraph'
+        || event.key === 'CapsLock';
+
+      if (event.key.length === 1) {
+        keyboardScannerBufferRef.current = appendKeyboardBarcodeCharacter(
+          keyboardScannerBufferRef.current,
+          event.key,
+          event.timeStamp,
+        );
+        event.preventDefault();
+        return;
+      }
+
+      if (!isModifierKey) keyboardScannerBufferRef.current = null;
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleScan, scannerOpen]);
+
+  const handlePageChange = (nextPage: number) => {
+    setPage(nextPage);
+    window.requestAnimationFrame(() => {
+      parentRef.current?.scrollIntoView({ block: 'start' });
+    });
+  };
 
   const handleReprint = async (transaction: TransactionWithItems) => {
     if (isTransactionExpense(transaction)) {
@@ -188,6 +259,30 @@ export default function History() {
       <div className="flex items-center gap-3 mb-6" data-tour="history-results">
         <Receipt size={32} className="text-blue-600" />
         <h2 className="text-2xl font-bold text-gray-800">{t('history.title')}</h2>
+      </div>
+
+      <div className="mb-4 rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            size="large"
+            allowClear
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            prefix={<Search size={18} className="text-gray-400" />}
+            placeholder={t('history.searchPlaceholder')}
+            data-testid="history-search-input"
+          />
+          <Button
+            htmlType="button"
+            size="large"
+            icon={<ScanLine size={18} />}
+            onClick={() => setScannerOpen(true)}
+            className="flex items-center justify-center gap-2 sm:shrink-0"
+          >
+            {t('history.scanBarcode')}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">{t('history.scannerHint')}</p>
       </div>
 
       <div ref={parentRef} className="w-full">
@@ -519,38 +614,33 @@ export default function History() {
               })}
             </div>
 
-            {/* Load More Indicator */}
-            {hasNextPage && (
-              <div className="mt-8 flex justify-center pb-12">
-                <button
-                  onClick={() => loadMore()}
-                  disabled={isFetchingNextPage}
-                  className="px-6 py-2 bg-white border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isFetchingNextPage ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-                      {t('history.loadingMore')}
-                    </>
-                  ) : (
-                    t('history.loadMore')
-                  )}
-                </button>
-              </div>
-            )}
-            {!hasNextPage && transactions.length > 0 && (
-              <p className="text-center text-gray-400 text-sm mt-8 pb-12">
-                {t('history.allShown')}
-              </p>
-            )}
+            <div className="mt-4 flex justify-center rounded-lg border border-gray-200 bg-white px-3 py-4 shadow-sm">
+              <Pagination
+                current={page}
+                pageSize={pageSize}
+                total={totalCount}
+                showSizeChanger={false}
+                showTotal={(total) => t('history.resultCount', { count: total })}
+                onChange={handlePageChange}
+              />
+            </div>
           </>
         ) : (
           <div className="p-12 text-center">
             <Receipt size={48} className="mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-500">{t('history.empty')}</p>
+            <p className="text-gray-500">
+              {searchTerm ? t('history.noSearchResults') : t('history.empty')}
+            </p>
           </div>
         )}
       </div>
+
+      {scannerOpen && (
+        <ScannerModal
+          onClose={() => setScannerOpen(false)}
+          onScan={handleScan}
+        />
+      )}
     </div>
   );
 }
