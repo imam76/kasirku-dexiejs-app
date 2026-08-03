@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createStockSchema, type StockFormData } from '@/lib/validations/stock';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
@@ -19,6 +19,7 @@ import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
+import { DEFAULT_CONVERSIONS } from '@/constants/units';
 
 export type { StockFormData };
 
@@ -37,7 +38,14 @@ export const useStockManagement = () => {
   const { modal, message } = App.useApp();
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const stockSchema = useMemo(() => createStockSchema(t), [t]);
+  const { data: unitConversions = DEFAULT_CONVERSIONS } = useQuery({
+    queryKey: ['unitConversions'],
+    queryFn: () => db.unitConversions.toArray(),
+  });
+  const stockSchema = useMemo(
+    () => createStockSchema(t, { globalConversions: unitConversions }),
+    [t, unitConversions],
+  );
   
   const form = useForm<StockFormData>({
     resolver: zodResolver(stockSchema),

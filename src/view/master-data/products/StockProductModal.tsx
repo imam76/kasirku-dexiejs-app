@@ -1,20 +1,17 @@
 import {
-  inferUnitCategory,
   inferUnitDefinitionType,
-  isGlobalConvertibleUnitType,
   normalizeUnitKey,
 } from '@/constants/units';
 import type { StockFormData } from '@/hooks/useStockManagement';
-import type { UnitDefinition, UnitDefinitionType } from '@/types';
+import type { UnitDefinition } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryOptions } from '@/i18n/stock';
 import { db } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { Alert, Badge, Button, Grid, Input, InputNumber, Modal, Select, Switch, Tabs } from 'antd';
 import type { InputRef } from 'antd';
-import { AlertTriangle, ExternalLink, Plus, ScanLine, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type Control,
@@ -158,30 +155,6 @@ export default function StockProductModal({
     return map;
   }, [unitDefinitions]);
 
-  const unitTypeById = useMemo(() => {
-    const map = new Map<string, UnitDefinitionType>();
-    unitDefinitions.forEach((unit) => {
-      map.set(normalizeUnitKey(unit.id), unit.type);
-    });
-    return map;
-  }, [unitDefinitions]);
-
-  const getUnitType = useCallback(
-    (unit: string) => unitTypeById.get(normalizeUnitKey(unit)) ?? inferUnitDefinitionType(unit),
-    [unitTypeById],
-  );
-
-  const getUnitCategory = useCallback((unit: string) => {
-    const normalizedUnit = normalizeUnitKey(unit);
-    const definitionType = unitDefinitionById.get(normalizedUnit)?.type;
-
-    if (definitionType === 'count' || definitionType === 'package' || definitionType === 'time') {
-      return definitionType;
-    }
-
-    return inferUnitCategory(normalizedUnit);
-  }, [unitDefinitionById]);
-
   const selectedSellableUnits = useMemo(() => {
     const seen = new Set<string>();
 
@@ -225,39 +198,26 @@ export default function StockProductModal({
     );
   }, [conversions]);
 
-  const isSellableUnitCompatible = useCallback((unit: string) => {
+  const canUseAsConversionUnit = useCallback((unit: string) => {
     const normalizedUnit = normalizeUnitKey(unit);
     const normalizedPurchaseUnit = normalizeUnitKey(purchaseUnit);
 
-    if (!normalizedUnit || normalizedUnit === normalizedPurchaseUnit) return true;
+    if (!normalizedUnit) return false;
+    if (normalizedUnit === normalizedPurchaseUnit) return true;
 
-    const unitType = getUnitType(normalizedUnit);
-    const unitCategory = getUnitCategory(normalizedUnit);
-    const purchaseCategory = getUnitCategory(normalizedPurchaseUnit);
-
-    if (unitCategory === 'package') {
-      return purchaseCategory === 'count';
-    }
-
-    if (unitCategory !== purchaseCategory) {
-      return false;
-    }
-
-    return isGlobalConvertibleUnitType(unitType);
-  }, [purchaseUnit, getUnitType, getUnitCategory]);
+    const definition = unitDefinitionById.get(normalizedUnit);
+    return definition?.canBeConversionUnit ?? (inferUnitDefinitionType(normalizedUnit) !== 'count');
+  }, [purchaseUnit, unitDefinitionById]);
 
   const sellableUnitOptions = useMemo(
     () =>
       availableUnits
         .filter((unit) => {
           const normalizedUnit = normalizeUnitKey(unit);
-          const definition = unitDefinitionById.get(normalizedUnit);
-          const canBeConversionUnit = definition?.canBeConversionUnit ?? (getUnitType(normalizedUnit) !== 'count');
-
-          return normalizedUnit === normalizeUnitKey(purchaseUnit) || (canBeConversionUnit && isSellableUnitCompatible(unit));
+          return normalizedUnit === normalizeUnitKey(purchaseUnit) || canUseAsConversionUnit(unit);
         })
         .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
-    [availableUnits, getUnitType, isSellableUnitCompatible, purchaseUnit, unitDefinitionById],
+    [availableUnits, canUseAsConversionUnit, purchaseUnit, unitDefinitionById],
   );
 
   const unitMappingOptions = useMemo(
@@ -268,43 +228,31 @@ export default function StockProductModal({
           const normalizedPurchaseUnit = normalizeUnitKey(purchaseUnit);
           if (normalizedUnit === normalizedPurchaseUnit) return false;
 
-          const definition = unitDefinitionById.get(normalizedUnit);
-          const type = getUnitType(normalizedUnit);
-          const category = getUnitCategory(normalizedUnit);
-          const purchaseCategory = getUnitCategory(normalizedPurchaseUnit);
-          const canBeConversionUnit = definition?.canBeConversionUnit ?? (type !== 'count');
-
-          return canBeConversionUnit && category === 'package' && purchaseCategory === 'count';
+          return canUseAsConversionUnit(unit);
         })
         .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
-    [availableUnits, purchaseUnit, unitDefinitionById, getUnitType, getUnitCategory],
+    [availableUnits, purchaseUnit, unitDefinitionById, canUseAsConversionUnit],
   );
 
   const needsProductMapping = useCallback(
     (unit: string) => {
       if (unit === purchaseUnit) return false;
-      const unitType = getUnitType(unit);
-      const purchaseType = getUnitType(purchaseUnit);
-      const canUseGlobalConversion =
-        unitType === purchaseType &&
-        getUnitCategory(unit) === getUnitCategory(purchaseUnit) &&
-        isGlobalConvertibleUnitType(unitType) &&
-        isGlobalConvertibleUnitType(purchaseType);
-
-      return !canUseGlobalConversion;
+      return !hasGlobalConversion(unit, purchaseUnit);
     },
-    [purchaseUnit, getUnitType, getUnitCategory],
+    [purchaseUnit, hasGlobalConversion],
   );
 
   const missingProductMappingUnits = useMemo(() => {
     return selectedSellableUnits.filter((unit) => {
+      if (!canUseAsConversionUnit(unit)) return false;
       if (!needsProductMapping(unit)) return false;
       return !unitMappings.some((mapping) => mapping.unit === unit && mapping.base_unit === purchaseUnit);
     });
-  }, [selectedSellableUnits, needsProductMapping, unitMappings, purchaseUnit]);
+  }, [selectedSellableUnits, canUseAsConversionUnit, needsProductMapping, unitMappings, purchaseUnit]);
 
   const incompleteProductMappingUnits = useMemo(() => {
     return selectedSellableUnits.filter((unit) => {
+      if (!canUseAsConversionUnit(unit)) return false;
       if (!needsProductMapping(unit)) return false;
       return !unitMappings.some(
         (mapping) =>
@@ -314,61 +262,26 @@ export default function StockProductModal({
           Number(mapping.ratio) > 0,
       );
     });
-  }, [selectedSellableUnits, needsProductMapping, unitMappings, purchaseUnit]);
+  }, [selectedSellableUnits, canUseAsConversionUnit, needsProductMapping, unitMappings, purchaseUnit]);
 
-  const missingGlobalConversionUnits = useMemo(() => {
-    return selectedSellableUnits.filter((unit) => {
-      if (unit === purchaseUnit) return false;
-      if (needsProductMapping(unit)) return false;
-      return !hasGlobalConversion(unit, purchaseUnit);
-    });
-  }, [selectedSellableUnits, purchaseUnit, needsProductMapping, hasGlobalConversion]);
-
-  const hasUnitConversion = useMemo(() => {
-    return incompleteProductMappingUnits.length === 0 && missingGlobalConversionUnits.length === 0;
-  }, [incompleteProductMappingUnits.length, missingGlobalConversionUnits.length]);
-  const unitConversionAttentionCount = incompleteProductMappingUnits.length + missingGlobalConversionUnits.length;
+  const hasUnitConversion = incompleteProductMappingUnits.length === 0;
+  const unitConversionAttentionCount = incompleteProductMappingUnits.length;
 
   const conversionWarning = useMemo(() => {
     if (hasUnitConversion) return null;
 
-    return missingGlobalConversionUnits.length > 0
-      ? {
-        title: t('stock.form.globalConversionMissingTitle'),
-        description: (
-          <div className="flex flex-col gap-2">
-            <p>
-              {t('stock.form.globalConversionMissingDescription', {
-                units: missingGlobalConversionUnits.join(', '),
-                baseUnit: purchaseUnit,
-              })}
-            </p>
-            <Link to="/master-data/units" hash="conversions">
-              <Button
-                size="small"
-                type="primary"
-                ghost
-                icon={<ExternalLink size={14} />}
-                className="flex w-fit items-center gap-1"
-              >
-                {t('stock.form.setupGlobalConversion')}
-              </Button>
-            </Link>
-          </div>
-        ),
-      }
-      : {
-        title: t('stock.form.productConversionMissingTitle'),
-        description: (
-          <p>
-            {t('stock.form.productConversionMissingDescription', {
-              units: incompleteProductMappingUnits.join(', '),
-              baseUnit: purchaseUnit,
-            })}
-          </p>
-        ),
-      };
-  }, [hasUnitConversion, purchaseUnit, missingGlobalConversionUnits, incompleteProductMappingUnits, t]);
+    return {
+      title: t('stock.form.productConversionMissingTitle'),
+      description: (
+        <p>
+          {t('stock.form.productConversionMissingDescription', {
+            units: incompleteProductMappingUnits.join(', '),
+            baseUnit: purchaseUnit,
+          })}
+        </p>
+      ),
+    };
+  }, [hasUnitConversion, purchaseUnit, incompleteProductMappingUnits, t]);
 
   useEffect(() => {
     unitMappingFields.forEach((_, index) => {
@@ -409,7 +322,7 @@ export default function StockProductModal({
       return;
     }
 
-    const remainingUnits = selectedSellableUnits.slice(1).filter(isSellableUnitCompatible);
+    const remainingUnits = selectedSellableUnits.slice(1).filter(canUseAsConversionUnit);
     const nextSellableUnits = buildSellableUnitsWithDefault(normalizedPurchaseUnit, remainingUnits);
     const hasChanged =
       nextSellableUnits.length !== selectedSellableUnits.length ||
@@ -422,12 +335,14 @@ export default function StockProductModal({
     if (sellingUnit !== normalizedPurchaseUnit) {
       setValue('selling_unit', normalizedPurchaseUnit, { shouldDirty: true, shouldValidate: true });
     }
-  }, [open, purchaseUnit, selectedSellableUnits, sellingUnit, setValue, isSellableUnitCompatible]);
+  }, [open, purchaseUnit, selectedSellableUnits, sellingUnit, setValue, canUseAsConversionUnit]);
 
   const handleSave = () => {
-    if (incompleteProductMappingUnits.length > 0 || errors.unit_mappings || errors.sellable_units || errors.selling_unit) {
+    if (!hasUnitConversion || errors.unit_mappings || errors.sellable_units || errors.selling_unit) {
       setActiveTab('multi-unit');
     }
+
+    if (!hasUnitConversion) return;
 
     onSave();
   };
@@ -852,7 +767,7 @@ export default function StockProductModal({
                             onChange={(values) => {
                               const additionalUnits = values
                                 .filter((unit) => normalizeUnitKey(unit) !== normalizeUnitKey(purchaseUnit))
-                                .filter(isSellableUnitCompatible);
+                                .filter(canUseAsConversionUnit);
                               const nextUnits = buildSellableUnitsWithDefault(purchaseUnit, additionalUnits);
                               field.onChange(nextUnits);
                               setValue('selling_unit', nextUnits[0] || '', { shouldDirty: true, shouldValidate: true });
@@ -944,6 +859,7 @@ export default function StockProductModal({
                                     control={control}
                                     render={({ field: itemField }) => (
                                       <InputNumber
+                                        data-testid={`stock-product-unit-mapping-ratio-${index}`}
                                         inputMode="decimal"
                                         value={itemField.value}
                                         onBlur={itemField.onBlur}

@@ -89,4 +89,32 @@ test('default unit usage can be overridden and is reflected in the product form'
     canBeBaseUnit: false,
     canBeConversionUnit: true,
   });
+
+  await page.goto('/master-data/products');
+  await page.locator('[data-tour="stock-add-product"]:visible').click();
+
+  const restoredProductDialog = page.getByRole('dialog', { name: 'Tambah Produk Baru' });
+  const restoredBaseUnitSelect = restoredProductDialog.getByTestId('stock-product-base-unit');
+  await restoredBaseUnitSelect.click();
+  await restoredBaseUnitSelect.getByRole('combobox').fill('kg');
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content', { hasText: /^kg$/ }).click();
+  await expect(restoredBaseUnitSelect).toContainText('kg');
+
+  await restoredProductDialog.getByRole('tab', { name: /Multi Unit/ }).click();
+  const restoredSellableUnitSelect = restoredProductDialog.getByTestId('stock-product-sellable-units');
+  await restoredSellableUnitSelect.click();
+  await restoredSellableUnitSelect.getByRole('combobox').fill('box');
+  const visibleBoxOption = page.locator(
+    '.ant-select-dropdown:visible .ant-select-item-option-content',
+    { hasText: /^box$/ },
+  );
+  await expect(visibleBoxOption).toBeVisible();
+  await visibleBoxOption.click();
+
+  await expect(restoredSellableUnitSelect).toContainText('box');
+  await expect(restoredProductDialog.getByText('Konversi Produk Belum Ada')).toBeVisible();
+
+  const productRatioInput = restoredProductDialog.getByTestId('stock-product-unit-mapping-ratio-0');
+  await productRatioInput.fill('5');
+  await expect(restoredProductDialog.getByText('Konversi Produk Belum Ada')).toHaveCount(0);
 });

@@ -1,11 +1,7 @@
 import { z } from 'zod';
-import {
-  areUnitsInSameCategory,
-  inferUnitCategory,
-  inferUnitDefinitionType,
-  isGlobalConvertibleUnitType,
-} from '@/constants/units';
+import { DEFAULT_CONVERSIONS, normalizeUnitKey } from '@/constants/units';
 import { defaultLocale, translate, type TranslationKey } from '@/i18n/messages';
+import type { UnitConversion } from '@/types';
 
 type StockValidationTranslator = (
   key: TranslationKey,
@@ -14,7 +10,14 @@ type StockValidationTranslator = (
 
 const defaultT: StockValidationTranslator = (key, params) => translate(defaultLocale, key, params);
 
-export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.object({
+type StockValidationOptions = {
+  globalConversions?: ReadonlyArray<Pick<UnitConversion, 'fromUnit' | 'toUnit'>>;
+};
+
+export const createStockSchema = (
+  t: StockValidationTranslator = defaultT,
+  { globalConversions = DEFAULT_CONVERSIONS }: StockValidationOptions = {},
+) => z.object({
   name: z.string().min(1, t('stock.validation.nameRequired')),
   category: z.string().min(1, t('stock.validation.categoryRequired')),
   purchase_unit: z.string().min(1, t('stock.validation.purchaseUnitRequired')),
@@ -42,9 +45,6 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
   const sellableUnits = Array.from(new Set([data.selling_unit, ...data.sellable_units].filter(Boolean)));
 
   data.unit_mappings.forEach((mapping, index) => {
-    const unitCategory = inferUnitCategory(mapping.unit);
-    const purchaseCategory = inferUnitCategory(data.purchase_unit);
-
     if (mapping.base_unit !== data.purchase_unit) {
       ctx.addIssue({
         code: 'custom',
@@ -58,22 +58,6 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
         code: 'custom',
         path: ['unit_mappings', index, 'unit'],
         message: t('stock.validation.unitAlreadyBase'),
-      });
-    }
-
-    if (unitCategory === 'package' && purchaseCategory !== 'count') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['unit_mappings', index, 'unit'],
-        message: t('stock.validation.incompatibleUnitCategory', { unit: mapping.unit }),
-      });
-    }
-
-    if (unitCategory !== 'package' && !areUnitsInSameCategory(mapping.unit, data.purchase_unit)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['unit_mappings', index, 'unit'],
-        message: t('stock.validation.incompatibleUnitCategory', { unit: mapping.unit }),
       });
     }
 
@@ -91,35 +75,19 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
   sellableUnits.forEach((unit) => {
     if (unit === data.purchase_unit) return;
 
-    const unitCategory = inferUnitCategory(unit);
-    const purchaseCategory = inferUnitCategory(data.purchase_unit);
+    const normalizedUnit = normalizeUnitKey(unit);
+    const normalizedPurchaseUnit = normalizeUnitKey(data.purchase_unit);
+    const hasGlobalConversion = globalConversions.some((conversion) => {
+      const fromUnit = normalizeUnitKey(conversion.fromUnit);
+      const toUnit = normalizeUnitKey(conversion.toUnit);
 
-    if (unitCategory === 'package' && purchaseCategory !== 'count') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['sellable_units'],
-        message: t('stock.validation.incompatibleUnitCategory', { unit }),
-      });
-      return;
-    }
+      return (
+        (fromUnit === normalizedUnit && toUnit === normalizedPurchaseUnit) ||
+        (fromUnit === normalizedPurchaseUnit && toUnit === normalizedUnit)
+      );
+    });
 
-    if (unitCategory !== 'package' && !areUnitsInSameCategory(unit, data.purchase_unit)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['sellable_units'],
-        message: t('stock.validation.incompatibleUnitCategory', { unit }),
-      });
-      return;
-    }
-
-    const unitType = inferUnitDefinitionType(unit);
-    const purchaseType = inferUnitDefinitionType(data.purchase_unit);
-    const canUseGlobalConversion =
-      unitType === purchaseType &&
-      isGlobalConvertibleUnitType(unitType) &&
-      isGlobalConvertibleUnitType(purchaseType);
-
-    if (canUseGlobalConversion) return;
+    if (hasGlobalConversion) return;
 
     const hasProductMapping = data.unit_mappings.some(
       (mapping) => mapping.unit === unit && mapping.base_unit === data.purchase_unit,
