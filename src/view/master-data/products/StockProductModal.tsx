@@ -762,7 +762,13 @@ export default function StockProductModal({
                           name="purchase_unit"
                           control={control}
                           render={({ field }) => (
-                            <Select {...field} className="w-full" options={baseUnitOptions} />
+                            <Select
+                              {...field}
+                              data-testid="stock-product-base-unit"
+                              showSearch={{ optionFilterProp: 'label' }}
+                              className="w-full"
+                              options={baseUnitOptions}
+                            />
                           )}
                         />
                       </FieldContainer>
@@ -841,6 +847,7 @@ export default function StockProductModal({
                         render={({ field }) => (
                           <Select
                             mode="multiple"
+                            data-testid="stock-product-sellable-units"
                             value={selectedSellableUnits}
                             onChange={(values) => {
                               const additionalUnits = values

@@ -187,8 +187,13 @@ export default function UnitManagement() {
   const upsertUnitMutation = useMutation({
     mutationFn: async (values: UnitFormValues) => {
       await requireUnitManageAccess();
-      const id = normalizeUnitKey(values.name);
-      const type = values.type ?? inferUnitDefinitionType(id);
+      const isEditingPreset = Boolean(editingUnit?.isPreset);
+      const id = isEditingPreset && editingUnit
+        ? editingUnit.id
+        : normalizeUnitKey(values.name);
+      const type = isEditingPreset && editingUnit
+        ? editingUnit.type
+        : values.type ?? inferUnitDefinitionType(id);
       const now = new Date().toISOString();
 
       if (!id) {
@@ -197,17 +202,29 @@ export default function UnitManagement() {
 
       const record: UnitDefinition = {
         id,
-        name: id,
+        name: isEditingPreset && editingUnit ? editingUnit.name : id,
         type,
         canBeBaseUnit: Boolean(values.canBeBaseUnit),
         canBeConversionUnit: Boolean(values.canBeConversionUnit),
-        isPreset: false,
+        isPreset: editingUnit?.isPreset ?? false,
         created_at: editingUnit?.created_at ?? now,
         updated_at: now,
       };
 
       if (!editingUnit) {
         await db.units.add(record);
+        return;
+      }
+
+      if (editingUnit.isPreset) {
+        await db.units.update(editingUnit.id, {
+          name: editingUnit.name,
+          type: editingUnit.type,
+          canBeBaseUnit: record.canBeBaseUnit,
+          canBeConversionUnit: record.canBeConversionUnit,
+          isPreset: true,
+          updated_at: now,
+        });
         return;
       }
 
@@ -414,8 +431,6 @@ export default function UnitManagement() {
   };
 
   const handleEditUnit = (unit: UnitDefinition) => {
-    if (unit.isPreset) return;
-
     setEditingUnit(unit);
     unitForm.setFieldsValue({
       name: unit.name,
@@ -533,7 +548,7 @@ export default function UnitManagement() {
           <Button
             type="text"
             icon={<Edit2 size={16} />}
-            disabled={record.isPreset}
+            aria-label={`${t('units.editUnitTitle')}: ${record.name}`}
             onClick={() => handleEditUnit(record)}
             className="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
           />
@@ -541,6 +556,7 @@ export default function UnitManagement() {
             danger
             type="text"
             icon={<Trash2 size={16} />}
+            aria-label={`${t('units.confirm.deleteUnitTitle')}: ${record.name}`}
             disabled={record.isPreset}
             onClick={() => handleDeleteUnit(record)}
           />
@@ -750,6 +766,16 @@ export default function UnitManagement() {
         destroyOnHidden
         forceRender
       >
+        {editingUnit?.isPreset ? (
+          <Alert
+            type="info"
+            showIcon
+            title={t('units.presetUsageOverrideTitle')}
+            description={t('units.presetUsageOverrideDescription')}
+            className="mt-4"
+          />
+        ) : null}
+
         <Form<UnitFormValues>
           form={unitForm}
           layout="vertical"
@@ -781,6 +807,7 @@ export default function UnitManagement() {
             rules={[{ required: true, message: t('units.requiredSelect') }]}
           >
             <Select
+              disabled={Boolean(editingUnit?.isPreset)}
               options={[
                 { value: 'measurement', label: t('units.type.measurement') },
                 { value: 'count', label: t('units.type.count') },
