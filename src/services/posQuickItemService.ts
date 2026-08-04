@@ -248,7 +248,10 @@ export const createPosQuickItem = async (
     selling_price: sellingPrice,
     stock: 0,
     product_type: 'FINISHED_GOOD',
-    is_visible_in_pos: false,
+    // Wajib true: is_visible_in_pos adalah saklar "boleh dijual di POS", bukan
+    // sekadar penyembunyi katalog. Keranjang, pemindaian barcode, dan POS
+    // restoran semuanya menolak produk yang saklarnya mati.
+    is_visible_in_pos: true,
     verification_status: 'UNVERIFIED',
     created_at: now,
     updated_at: now,
@@ -281,8 +284,9 @@ export const createPosQuickItem = async (
 };
 
 /**
- * Tandai produk hasil entri cepat sudah diperiksa supervisor, lalu kembalikan ke
- * katalog POS seperti produk master biasa.
+ * Tandai produk hasil entri cepat sudah diperiksa supervisor. Sengaja tidak
+ * menyentuh is_visible_in_pos supaya keputusan menampilkan/menyembunyikan produk
+ * tetap milik supervisor.
  */
 export const markProductVerified = async (productId: string): Promise<Product> => {
   const currentUser = await getCurrentSessionUser();
@@ -294,7 +298,6 @@ export const markProductVerified = async (productId: string): Promise<Product> =
   const updatedProduct: Product = {
     ...product,
     verification_status: 'VERIFIED',
-    is_visible_in_pos: true,
     updated_at: new Date().toISOString(),
     sync_status: 'pending',
     sync_error: undefined,

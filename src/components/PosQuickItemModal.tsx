@@ -21,6 +21,8 @@ interface PosQuickItemModalProps {
   open: boolean;
   initialBarcode?: string;
   initialName?: string;
+  /** Bila diisi, modal hanya menambah stok untuk produk tersebut. */
+  topUpProduct?: Product | null;
   onCancel: () => void;
   onResolved: (product: Product) => void;
 }
@@ -29,6 +31,7 @@ export const PosQuickItemModal = ({
   open,
   initialBarcode = '',
   initialName = '',
+  topUpProduct = null,
   onCancel,
   onResolved,
 }: PosQuickItemModalProps) => {
@@ -58,7 +61,7 @@ export const PosQuickItemModal = ({
   }, [open, initialBarcode, initialName]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || topUpProduct) return;
 
     let active = true;
     const timer = window.setTimeout(async () => {
@@ -70,7 +73,30 @@ export const PosQuickItemModal = ({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [name, open]);
+  }, [name, open, topUpProduct]);
+
+  const handleTopUp = async () => {
+    if (!topUpProduct) return;
+
+    setIsSubmitting(true);
+    try {
+      const result = await receiveQuickStockForProduct({
+        productId: topUpProduct.id,
+        quantity: Number(quantity || 0),
+        estimatedPurchasePrice: Number(estimatedCost || 0),
+      });
+
+      message.success(t('transaction.quickItem.stockReceived', {
+        name: result.product.name,
+        document: result.documentNumber,
+      }));
+      onResolved(result.product);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('transaction.quickItem.failed'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const estimatePreview = useMemo(
     () => resolveQuickItemEstimatedCost(Number(sellingPrice || 0), Number(estimatedCost || 0)),
@@ -136,6 +162,54 @@ export const PosQuickItemModal = ({
     }
   };
 
+  if (topUpProduct) {
+    return (
+      <Modal
+        title={t('transaction.quickItem.topUpTitle')}
+        open={open}
+        onCancel={onCancel}
+        footer={null}
+        destroyOnClose
+      >
+        <div className="flex flex-col gap-3">
+          <div className="text-sm text-gray-600">
+            {t('transaction.quickItem.topUpIntro', { name: topUpProduct.name })}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="mb-1"><Text strong>{t('transaction.quickItem.quantity')}</Text></div>
+              <InputNumber className="w-full" min={0} value={quantity} onChange={setQuantity} autoFocus />
+            </div>
+            <div>
+              <div className="mb-1">
+                <Text strong>{t('transaction.quickItem.estimatedCost')}</Text>
+                <Text type="secondary" className="ml-1 text-xs">
+                  ({t('transaction.quickItem.estimatedCostOptional')})
+                </Text>
+              </div>
+              <InputNumber className="w-full" min={0} value={estimatedCost} onChange={setEstimatedCost} />
+            </div>
+          </div>
+
+          <div className="rounded bg-gray-50 p-2 text-xs text-gray-600">
+            {t('transaction.quickItem.quantityHint')}
+          </div>
+
+          <Button
+            type="primary"
+            block
+            loading={isSubmitting}
+            disabled={!Number(quantity || 0)}
+            onClick={() => void handleTopUp()}
+          >
+            {t('transaction.quickItem.topUpSubmit')}
+          </Button>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal
       title={t('transaction.quickItem.title')}
@@ -181,7 +255,8 @@ export const PosQuickItemModal = ({
                   </div>
                   <Button
                     size="small"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || candidate.isHiddenFromPos}
+                    title={candidate.isHiddenFromPos ? t('transaction.quickItem.candidateHiddenHint') : undefined}
                     onClick={() => void handleUseCandidate(candidate)}
                   >
                     {t('transaction.quickItem.useCandidate')}
@@ -228,13 +303,16 @@ export const PosQuickItemModal = ({
           </div>
         </div>
 
-        {estimatePreview.isGuessed && Number(sellingPrice || 0) > 0 && (
-          <div className="rounded bg-gray-50 p-2 text-xs text-gray-600">
-            {t('transaction.quickItem.estimatedCostHint', {
-              price: formatCurrency(estimatePreview.price),
-            })}
-          </div>
-        )}
+        <div className="rounded bg-gray-50 p-2 text-xs text-gray-600">
+          {t('transaction.quickItem.quantityHint')}
+          {estimatePreview.isGuessed && Number(sellingPrice || 0) > 0 && (
+            <div className="mt-1">
+              {t('transaction.quickItem.estimatedCostHint', {
+                price: formatCurrency(estimatePreview.price),
+              })}
+            </div>
+          )}
+        </div>
 
         <Button
           type="primary"

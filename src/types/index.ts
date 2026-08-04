@@ -71,9 +71,10 @@ export interface LegacyProductUnitMapping {
 export type ProductUnitMappingInput = ProductUnitMapping | LegacyProductUnitMapping;
 
 /**
- * Produk yang dibuat kasir lewat entri cepat POS masuk sebagai UNVERIFIED:
- * tetap bisa dipindai barcode, tapi disembunyikan dari katalog POS sampai
- * supervisor memverifikasi nama, harga, dan memastikan bukan duplikat.
+ * Produk yang dibuat kasir lewat entri cepat POS masuk sebagai UNVERIFIED.
+ * Produknya tetap dijual normal karena barangnya memang ada, tapi ditandai di
+ * Master Produk supaya supervisor memeriksa nama, harga, dan memastikan bukan
+ * duplikat. Harga belinya sendiri sudah ditahan lewat rekonsiliasi biaya.
  */
 export type ProductVerificationStatus = 'UNVERIFIED' | 'VERIFIED';
 

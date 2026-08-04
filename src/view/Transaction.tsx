@@ -12,6 +12,7 @@ import MobileCartDrawer from '../components/MobileCartDrawer';
 import ScannerModal from '../components/ScannerModal';
 import { PosQuickItemModal } from '../components/PosQuickItemModal';
 import { useAuth } from '@/auth/useAuth';
+import { isProductUnverified } from '@/services/posQuickItemService';
 import { useI18n } from '@/hooks/useI18n';
 import type { CashierSession, Product } from '@/types';
 import type { CashierSessionReconciliation } from '@/services/cashierSessionService';
@@ -218,6 +219,7 @@ export default function Transaction() {
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
   const [quickItemDraft, setQuickItemDraft] = useState<{ barcode: string; name: string } | null>(null);
+  const [quickItemTopUp, setQuickItemTopUp] = useState<Product | null>(null);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [reconciliation, setReconciliation] = useState<CashierSessionReconciliation | null>(null);
   const desktopShortcuts = [
@@ -249,10 +251,19 @@ export default function Transaction() {
   }, []);
 
   const handleAddProduct = useCallback((product: Product) => {
+    // Barang hasil entri cepat selalu berakhir berstok nol setelah terjual, karena
+    // yang dicatat hanya jumlah yang dibeli. Tawarkan penambahan stok supaya
+    // pembeli berikutnya tidak buntu. Produk master biasa tetap tunduk pada
+    // aturan stok habis dan diselesaikan lewat stok opname.
+    if (canQuickAddItem && product.stock <= 0 && isProductUnverified(product)) {
+      setQuickItemTopUp(product);
+      return false;
+    }
+
     const added = addToCart(product);
     if (added) setActiveCartItemId(product.id);
     return added;
-  }, [addToCart]);
+  }, [addToCart, canQuickAddItem]);
 
   const registerQuantityInput = useCallback((productId: string, element: HTMLInputElement | null) => {
     if (element) {
@@ -407,6 +418,7 @@ export default function Transaction() {
 
   const handleQuickItemResolved = useCallback((product: Product) => {
     setQuickItemDraft(null);
+    setQuickItemTopUp(null);
     if (!handleAddProduct(product)) return;
 
     searchTermRef.current = '';
@@ -1002,10 +1014,14 @@ export default function Transaction() {
       )}
 
       <PosQuickItemModal
-        open={Boolean(quickItemDraft)}
+        open={Boolean(quickItemDraft) || Boolean(quickItemTopUp)}
         initialBarcode={quickItemDraft?.barcode}
         initialName={quickItemDraft?.name}
-        onCancel={() => setQuickItemDraft(null)}
+        topUpProduct={quickItemTopUp}
+        onCancel={() => {
+          setQuickItemDraft(null);
+          setQuickItemTopUp(null);
+        }}
         onResolved={handleQuickItemResolved}
       />
 
