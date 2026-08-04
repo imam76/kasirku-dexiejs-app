@@ -70,6 +70,13 @@ export interface LegacyProductUnitMapping {
 
 export type ProductUnitMappingInput = ProductUnitMapping | LegacyProductUnitMapping;
 
+/**
+ * Produk yang dibuat kasir lewat entri cepat POS masuk sebagai UNVERIFIED:
+ * tetap bisa dipindai barcode, tapi disembunyikan dari katalog POS sampai
+ * supervisor memverifikasi nama, harga, dan memastikan bukan duplikat.
+ */
+export type ProductVerificationStatus = 'UNVERIFIED' | 'VERIFIED';
+
 export interface Product {
   id: string;
   name: string;
@@ -82,6 +89,7 @@ export interface Product {
   product_type: ProductType;
   is_visible_in_pos: boolean;
   sku?: string;
+  verification_status?: ProductVerificationStatus; // Undefined = produk master normal (setara VERIFIED)
   wholesale_prices?: WholesalePrice[];
   sellable_units?: ProductUnit[]; // Units cashier can select when selling (defaults to [selling_unit])
   unit_mappings?: ProductUnitMapping[]; // Canonical product-specific conversion equations
@@ -207,6 +215,7 @@ export type Permission =
   | 'TRANSACTION_EDIT_PRICE'
   | 'PROFIT_VIEW'
   | 'CASHIER_ACCESS'
+  | 'POS_QUICK_ITEM_ENTRY'
   | 'STOCK_ACCESS'
   | 'PRODUCT_MANAGE'
   | 'PRODUCTION_MANAGE'

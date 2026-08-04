@@ -2016,14 +2016,19 @@ export const postPurchaseCostReconciliationJournal = async (
   internalConsumptionVarianceAmount = 0,
 ) => {
   const entryDate = reconciliation.supplier_invoice_date || reconciliation.created_at;
-  if (!await isGeneralLedgerPostingEnabled(entryDate)) return undefined;
-
   const soldVariance = amountOrZero(reconciliation.sold_cost_variance_amount);
   const internalConsumptionVariance = amountOrZero(internalConsumptionVarianceAmount);
   const salesCostVariance = roundCurrency(soldVariance - internalConsumptionVariance);
   const remainingVariance = amountOrZero(reconciliation.remaining_stock_variance_amount);
   const payableVariance = roundCurrency(soldVariance + remainingVariance);
   if (Math.abs(soldVariance) + Math.abs(remainingVariance) <= JOURNAL_TOLERANCE) return undefined;
+
+  // Koreksi ini wajib masuk buku besar. Bila periodenya terkunci, batalkan seluruh
+  // rekonsiliasi lewat throw agar data Dexie tidak menyimpang dari general ledger.
+  if (!await isGeneralLedgerPostingEnabled(entryDate)) {
+    await assertAccountingPeriodOpen(entryDate);
+    return undefined;
+  }
 
   const accounts = await db.chartOfAccounts.toArray();
   const cogsAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.cogs, 'HPP');
