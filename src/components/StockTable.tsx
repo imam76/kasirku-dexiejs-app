@@ -705,8 +705,8 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
                     <BadgeCheck size={22} />
                   </div>
                   <div>
-                    <span className="block font-bold text-gray-900">{t('stock.unverified')}</span>
-                    <span className="block text-xs text-gray-500 mt-0.5">{t('stock.verifyAction')}</span>
+                    <span className="block font-bold text-gray-900">{t('stock.verifyAction')}</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">{t('stock.verifyDescription')}</span>
                   </div>
                 </button>
               )}
