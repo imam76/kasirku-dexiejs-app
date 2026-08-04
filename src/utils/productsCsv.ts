@@ -364,6 +364,97 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
   };
 };
 
+/**
+ * Header set for the downloadable sample template. Deliberately excludes `id`
+ * (rows create new products, or update an existing one when the SKU matches)
+ * and the operational columns `stock`/`purchase_quantity`, which a master
+ * import always ignores.
+ */
+export const PRODUCT_CSV_TEMPLATE_HEADERS = [
+  'sku',
+  'name',
+  'category',
+  'purchase_unit',
+  'selling_unit',
+  'purchase_price',
+  'selling_price',
+  'product_type',
+  'is_visible_in_pos',
+  'sellable_units',
+  'unit_mappings',
+  'wholesale_prices',
+] as const;
+
+/**
+ * Sample rows, each demonstrating one step up in complexity:
+ * minimal row, carton conversion + wholesale tier, weight-based selling,
+ * and a raw material hidden from the POS.
+ */
+export const createProductCsvTemplateRows = () => [
+  [...PRODUCT_CSV_TEMPLATE_HEADERS],
+  [
+    'MIN-001',
+    'Air Mineral Botol 600ml',
+    'minuman',
+    'pcs',
+    'pcs',
+    2500,
+    4000,
+    'FINISHED_GOOD',
+    'true',
+    '',
+    '',
+    '',
+  ],
+  [
+    'SNK-002',
+    'Keripik Kentang 68g',
+    'snack',
+    'pcs',
+    'pcs',
+    8000,
+    12000,
+    'FINISHED_GOOD',
+    'true',
+    'pcs|dus',
+    JSON.stringify([
+      { from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' },
+    ]),
+    JSON.stringify([
+      { min_quantity: 12, unit: 'pcs', price: 11000, price_type: 'unit' },
+      { min_quantity: 1, unit: 'dus', price: 250000, price_type: 'bundle' },
+    ]),
+  ],
+  [
+    'SBK-003',
+    'Gula Pasir Curah',
+    'sembako',
+    'kg',
+    'kg',
+    14000,
+    18000,
+    'FINISHED_GOOD',
+    'true',
+    'kg|gram',
+    '',
+    '',
+  ],
+  [
+    'BHN-004',
+    'Tepung Terigu Serbaguna',
+    'sembako',
+    'kg',
+    'kg',
+    11000,
+    0,
+    'RAW_MATERIAL',
+    'false',
+    '',
+    '',
+    '',
+  ],
+];
+
 export const createProductCsvExportRows = (products: Product[]) => {
   const headers = [
     'id',

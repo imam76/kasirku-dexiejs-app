@@ -4,8 +4,10 @@ import type { Product } from '@/types';
 import {
   buildProductCsvImportItems,
   createProductCsvExportRows,
+  createProductCsvTemplateRows,
 } from '@/utils/productsCsv';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
+import { createCsvContent } from '@/utils/export/csv';
 
 const stockManagementHookSource = readFileSync(
   new URL('../../src/hooks/useStockManagement.tsx', import.meta.url),
@@ -271,6 +273,52 @@ describe('product master CSV import safety', () => {
     expect(headers).toContain('stock');
     expect(headers).not.toContain('purchase_quantity');
     expect(row[headers.indexOf('stock')]).toBe(17);
+  });
+
+  test('ships a sample template that imports without a single error', () => {
+    const csv = createCsvContent(createProductCsvTemplateRows());
+    const parsed = buildProductCsvImportItems(csv);
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items).toHaveLength(4);
+    // Master template must not carry operational columns the import would ignore.
+    expect(parsed.ignoredOperationalColumns.stock).toBeUndefined();
+    expect(parsed.ignoredOperationalColumns.purchase_quantity).toBeUndefined();
+
+    let sequence = 0;
+    const plan = buildProductMasterImportPlan({
+      items: parsed.items,
+      existingProducts: [],
+      now: '2026-08-04T00:00:00.000Z',
+      createId: () => `template-${++sequence}`,
+    });
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.createdCount).toBe(4);
+    expect(plan.updatedCount).toBe(0);
+
+    // The carton sample must survive as a usable multi-unit product.
+    const carton = plan.items.find((item) => item.product.sku === 'SNK-002')?.product;
+    expect(carton?.sellable_units).toEqual(['pcs', 'dus']);
+    expect(carton?.unit_mappings).toEqual([
+      { from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' },
+    ]);
+    expect(carton?.wholesale_prices).toHaveLength(2);
+  });
+
+  test('template rows leave every product stock at zero', () => {
+    const parsed = buildProductCsvImportItems(
+      createCsvContent(createProductCsvTemplateRows()),
+    );
+    let sequence = 0;
+    const plan = buildProductMasterImportPlan({
+      items: parsed.items,
+      existingProducts: [],
+      now: '2026-08-04T00:00:00.000Z',
+      createId: () => `template-${++sequence}`,
+    });
+
+    expect(plan.items.map((item) => item.product.stock)).toEqual([0, 0, 0, 0]);
   });
 
   test('queues every master-import row with remote stock preservation', () => {

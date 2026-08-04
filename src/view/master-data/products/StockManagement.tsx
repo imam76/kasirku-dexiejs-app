@@ -1,7 +1,7 @@
 import { Alert, App, Button, Card, Drawer, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
-import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
+import { Plus, Upload, Download, FileDown, MoreVertical, Package } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
 import type { Product } from '@/types';
@@ -10,6 +10,7 @@ import StockProductModal from './StockProductModal';
 import {
   buildProductCsvImportItems,
   createProductCsvExportRows,
+  createProductCsvTemplateRows,
 } from '@/utils/productsCsv';
 import { exportCsv, type ExportTarget } from '@/utils/export';
 import { useI18n } from '@/hooks/useI18n';
@@ -76,6 +77,21 @@ export default function StockManagement() {
     } catch (error) {
       console.error('Failed to export products CSV:', error);
       message.error(t('stock.exportFailed'));
+    }
+  };
+
+  const handleDownloadTemplate = async (target: ExportTarget = 'auto') => {
+    try {
+      const exported = await exportCsv({
+        filename: 'template_import_produk.csv',
+        rows: createProductCsvTemplateRows(),
+        target,
+      });
+      if (!exported) return;
+      message.success(t('stock.downloadTemplateSuccess'));
+    } catch (error) {
+      console.error('Failed to download product import template:', error);
+      message.error(t('stock.downloadTemplateFailed'));
     }
   };
 
@@ -203,6 +219,11 @@ export default function StockManagement() {
     void handleExportCsv(target);
   };
 
+  const handleMobileDownloadTemplate = (target: ExportTarget) => {
+    setIsActionDrawerOpen(false);
+    void handleDownloadTemplate(target);
+  };
+
   const handleMobileImportClick = () => {
     setIsActionDrawerOpen(false);
     handleImportClick();
@@ -240,6 +261,13 @@ export default function StockManagement() {
                 {t('stock.exportCsv')}
               </Button>
             </Dropdown>
+            <Button
+              icon={<FileDown size={16} />}
+              data-testid="stock-download-template"
+              onClick={() => void handleDownloadTemplate()}
+            >
+              {t('stock.downloadTemplate')}
+            </Button>
             <Button icon={<Upload size={16} />} onClick={handleImportClick} disabled={isImporting}>
               {t('stock.importCsv')}
             </Button>
@@ -296,6 +324,22 @@ export default function StockManagement() {
                 onClick={() => handleMobileExport('save')}
                 className="h-12"
               >
+                {t('stock.saveToFile')}
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <FileDown size={18} />
+              <span>{t('stock.downloadTemplate')}</span>
+            </div>
+            <div className="mb-3 text-xs text-gray-500">{t('stock.templateHint')}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="large" onClick={() => handleMobileDownloadTemplate('share')} className="h-12">
+                {t('stock.share')}
+              </Button>
+              <Button size="large" onClick={() => handleMobileDownloadTemplate('save')} className="h-12">
                 {t('stock.saveToFile')}
               </Button>
             </div>
