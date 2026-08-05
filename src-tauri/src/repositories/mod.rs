@@ -1,6 +1,7 @@
 pub mod accounting_fiscal_year_repository;
 pub mod accounting_period_repository;
 pub mod accounting_setting_repository;
+pub mod app_instance_repository;
 pub mod app_setup_config_repository;
 pub mod auth_repository;
 pub mod cash_bank_reconciliation_repository;

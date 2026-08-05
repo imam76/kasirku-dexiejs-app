@@ -27,6 +27,7 @@ import {
   Landmark,
   ListChecks,
   Lock,
+  Server,
   ServerCog,
   Settings2,
   ShieldCheck,
@@ -34,19 +35,25 @@ import {
   ShoppingCart,
   Store,
   Unlock,
+  WifiOff,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DEFAULT_SELECTED_MODULES, SETUP_MODULE_GROUPS } from '@/constants/setupModules';
 import {
   getLicenseFingerprint,
+  getRemoteSetupConfig,
   getSetupConfig,
   saveSetupConfigForRuntime,
   verifyLicenseKey,
 } from '@/services/setupKeyService';
+import type { PostgresHealth } from '@/services/postgresAdapter';
+import { setPostgresConnectionHealth, usePostgresConnectionStore } from '@/store/postgresConnectionStore';
+import { isTauriRuntime } from '@/utils/export/platform';
+import { HostDatabaseSetup, type HostDatabaseTarget } from '@/view/auth/HostDatabaseSetup';
 
 const { Text, Title, Paragraph } = Typography;
 
-type WizardStep = 0 | 1 | 2;
+type WizardStep = 0 | 1 | 2 | 3;
 
 interface SetupKeyDrawerProps {
   open: boolean;
@@ -66,6 +73,74 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
 };
 
 const WIZARD_BODY_HEIGHT = 'calc(100vh - 182px)';
+
+const SetupHostStep = ({
+  hostHealth,
+  hostTarget,
+  onConfigured,
+  onResetHost,
+}: {
+  hostHealth: PostgresHealth | null;
+  hostTarget: HostDatabaseTarget | null;
+  onConfigured: (health: PostgresHealth, target: HostDatabaseTarget) => void;
+  onResetHost: () => void;
+}) => {
+  const isConnected = Boolean(hostHealth?.available);
+
+  return (
+    <div className="space-y-4">
+      <Alert
+        type="info"
+        showIcon
+        message="Host database bersifat opsional"
+        description={
+          <span className="text-xs">
+            Aplikasi berjalan offline-first memakai database lokal, jadi langkah ini boleh dilewati.
+            Isi host hanya bila instalasi ini perlu sinkronisasi data antar perangkat. Host tetap bisa
+            diatur kapan saja lewat menu <strong>Sync Database</strong>.
+          </span>
+        }
+      />
+
+      {!isTauriRuntime() ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="Setup host hanya tersedia di aplikasi desktop"
+          description="Build web selalu berjalan lokal. Lanjutkan ke pemilihan module."
+        />
+      ) : isConnected ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white">
+              <Server size={20} />
+            </div>
+            <div>
+              <Title level={5} className="!mb-0">
+                Host database terhubung
+              </Title>
+              <Text type="secondary" className="text-xs">
+                {hostTarget
+                  ? `${hostTarget.host}:${hostTarget.port} • ${hostTarget.database}`
+                  : 'Koneksi PostgreSQL siap dipakai.'}
+              </Text>
+            </div>
+          </div>
+          <Text type="secondary" className="text-xs">
+            Konfigurasi setup akan ikut tersimpan di host sehingga perangkat lain memakai module yang sama.
+          </Text>
+          <Button className="!mt-3" size="small" onClick={onResetHost} icon={<ServerCog size={14} />}>
+            Ubah host
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <HostDatabaseSetup embedded health={null} onConfigured={onConfigured} />
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SetupModuleStep = ({
   allModuleCodes,
@@ -252,10 +327,15 @@ const SetupModuleStep = ({
 };
 
 const SetupModuleReviewStep = ({
+  hostHealth,
+  hostTarget,
   selectedModules,
 }: {
+  hostHealth: PostgresHealth | null;
+  hostTarget: HostDatabaseTarget | null;
   selectedModules: string[];
 }) => {
+  const isHostConnected = Boolean(hostHealth?.available);
   const moduleLabelsByCode = useMemo(() => (
     new Map(
       SETUP_MODULE_GROUPS.flatMap((group) => (
@@ -277,6 +357,33 @@ const SetupModuleReviewStep = ({
           message="Setup akuntansi dipindahkan ke Register Owner"
           description="Developer Setup hanya menentukan module aplikasi. Baseline akun, periode, cutoff, dan base currency akan diisi saat Owner pertama dibuat."
         />
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="mb-2 text-xs font-semibold uppercase text-slate-500">
+          Host database
+        </div>
+        <div className="flex items-center gap-3">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+              isHostConnected ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            {isHostConnected ? <Server size={16} /> : <WifiOff size={16} />}
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-800">
+              {isHostConnected ? 'Terhubung ke host' : 'Dilewati — mode offline (lokal)'}
+            </div>
+            <div className="text-xs text-slate-500">
+              {isHostConnected
+                ? hostTarget
+                  ? `${hostTarget.host}:${hostTarget.port} • ${hostTarget.database}`
+                  : 'Koneksi PostgreSQL aktif.'
+                : 'Data tersimpan di perangkat ini. Host bisa diatur nanti lewat menu Sync Database.'}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -306,7 +413,15 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
   const [selectedModules, setSelectedModules] = useState<string[]>(
     existingConfig?.enabledModules ?? DEFAULT_SELECTED_MODULES,
   );
+  // Host mungkin sudah dikonfigurasi pada instalasi sebelumnya — pakai status
+  // koneksi yang sudah ada supaya step ini langsung tampil sebagai "terhubung".
+  const [hostHealth, setHostHealth] = useState<PostgresHealth | null>(
+    () => usePostgresConnectionStore.getState().health,
+  );
+  const [hostTarget, setHostTarget] = useState<HostDatabaseTarget | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const isHostConnected = Boolean(hostHealth?.available);
 
   const allModuleCodes = useMemo(
     () => SETUP_MODULE_GROUPS.flatMap((group) => group.modules.map((module) => module.code)),
@@ -338,6 +453,31 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
     }
   }, [licenseKey, message]);
 
+  const handleHostConfigured = useCallback(
+    async (nextHealth: PostgresHealth, target: HostDatabaseTarget) => {
+      setHostHealth(nextHealth);
+      setHostTarget(target);
+      // Sinkronkan ke store supaya penyimpanan setup config ikut terdorong ke host.
+      setPostgresConnectionHealth(nextHealth);
+
+      try {
+        const remoteConfig = await getRemoteSetupConfig();
+        if (remoteConfig && remoteConfig.enabledModules.length > 0) {
+          setSelectedModules(remoteConfig.enabledModules);
+          message.info('Konfigurasi module dari host dimuat otomatis.');
+        }
+      } catch (error) {
+        console.error('Failed to load setup config from host', error);
+      }
+    },
+    [message],
+  );
+
+  const handleResetHost = useCallback(() => {
+    setHostHealth(null);
+    setHostTarget(null);
+  }, []);
+
   const handleModuleToggle = useCallback((code: string, checked: boolean) => {
     setSelectedModules((prev) => (
       checked ? Array.from(new Set([...prev, code])) : prev.filter((item) => item !== code)
@@ -364,12 +504,12 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
   }, []);
 
   const handleNext = useCallback(() => {
-    if (currentStep === 1 && selectedModules.length === 0) {
+    if (currentStep === 2 && selectedModules.length === 0) {
       message.warning('Pilih minimal satu module.');
       return;
     }
 
-    setCurrentStep((step) => Math.min(step + 1, 2) as WizardStep);
+    setCurrentStep((step) => Math.min(step + 1, 3) as WizardStep);
   }, [currentStep, message, selectedModules.length]);
 
   const handlePrevious = useCallback(() => {
@@ -413,7 +553,7 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
       <div className="border-t border-gray-200 bg-white px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
           <span>{selectedModules.length} module aktif</span>
-          <span>Akuntansi saat Register Owner</span>
+          <span>{isHostConnected ? 'Host terhubung' : 'Mode offline (lokal)'}</span>
         </div>
         <div className="flex gap-2">
           <Button
@@ -425,7 +565,7 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
           >
             Kembali
           </Button>
-          {currentStep < 2 ? (
+          {currentStep < 3 ? (
             <Button
               type="primary"
               size="large"
@@ -439,7 +579,7 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
                 fontWeight: 600,
               }}
             >
-              Lanjut
+              {currentStep === 1 && !isHostConnected ? 'Lewati & Lanjut' : 'Lanjut'}
             </Button>
           ) : (
             <Button
@@ -509,6 +649,11 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
             {
               title: 'License',
               icon: currentStep > 0 ? <Check size={14} /> : <KeyRound size={14} />,
+            },
+            {
+              title: 'Host',
+              subTitle: 'opsional',
+              icon: isHostConnected ? <Server size={14} /> : <WifiOff size={14} />,
             },
             {
               title: 'Module',
@@ -587,6 +732,20 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
 
       {currentStep === 1 && (
         <div className="flex flex-col" style={{ height: WIZARD_BODY_HEIGHT }}>
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            <SetupHostStep
+              hostHealth={hostHealth}
+              hostTarget={hostTarget}
+              onConfigured={handleHostConfigured}
+              onResetHost={handleResetHost}
+            />
+          </div>
+          {renderWizardFooter()}
+        </div>
+      )}
+
+      {currentStep === 2 && (
+        <div className="flex flex-col" style={{ height: WIZARD_BODY_HEIGHT }}>
           <SetupModuleStep
             allModuleCodes={allModuleCodes}
             existingConfig={existingConfig}
@@ -600,10 +759,14 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
         </div>
       )}
 
-      {currentStep === 2 && (
+      {currentStep === 3 && (
         <div className="flex flex-col" style={{ height: WIZARD_BODY_HEIGHT }}>
           <div className="flex-1 overflow-y-auto px-6 py-5">
-            <SetupModuleReviewStep selectedModules={selectedModules} />
+            <SetupModuleReviewStep
+              hostHealth={hostHealth}
+              hostTarget={hostTarget}
+              selectedModules={selectedModules}
+            />
           </div>
           {renderWizardFooter()}
         </div>

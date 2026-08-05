@@ -234,6 +234,8 @@ pub fn run() {
             commands::marketplace_commands::marketplace_list_integration_logs,
             commands::postgres_health::postgres_health_check,
             commands::postgres_health::set_postgres_database_url,
+            commands::postgres_health::probe_postgres_database_url,
+            commands::postgres_health::postgres_get_host_instance_id,
             bluetooth_printer::list_bluetooth_printers,
             bluetooth_printer::test_print_bluetooth,
             bluetooth_printer::print_receipt_bluetooth,

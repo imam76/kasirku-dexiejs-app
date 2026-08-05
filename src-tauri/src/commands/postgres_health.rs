@@ -1,9 +1,18 @@
 use crate::{
-    db::{self, PostgresHealth, PostgresState},
+    db::{self, PostgresCommandResult, PostgresHealth, PostgresState},
     postgres_realtime::PostgresRealtimeState,
+    repositories::app_instance_repository,
 };
+use serde::Serialize;
 use std::env;
 use tauri::{AppHandle, State};
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PostgresProbe {
+    pub health: PostgresHealth,
+    pub instance_id: Option<String>,
+}
 
 #[tauri::command]
 pub async fn postgres_health_check(
@@ -41,6 +50,45 @@ async fn reconnect_postgres_state(
     realtime_state.restart(app_handle, health.available);
 
     health
+}
+
+/// Connects to a candidate host and reads its identity without persisting the
+/// URL, so a host switch can be confirmed before it takes effect.
+#[tauri::command]
+pub async fn probe_postgres_database_url(database_url: String) -> Result<PostgresProbe, String> {
+    let trimmed = database_url.trim();
+
+    if trimmed.is_empty() {
+        return Err("Database URL is empty.".to_string());
+    }
+
+    let probed_state = db::create_postgres_state_from_database_url(trimmed).await;
+    let health = probed_state.health();
+
+    let Ok(pool) = probed_state.pool() else {
+        return Ok(PostgresProbe {
+            health,
+            instance_id: None,
+        });
+    };
+
+    let instance_id = app_instance_repository::ensure_app_instance_id(&pool)
+        .await
+        .map_err(|err| format!("Failed to read host identity: {}", err))?;
+    pool.close().await;
+
+    Ok(PostgresProbe {
+        health,
+        instance_id: Some(instance_id),
+    })
+}
+
+#[tauri::command]
+pub async fn postgres_get_host_instance_id(
+    state: State<'_, PostgresState>,
+) -> PostgresCommandResult<String> {
+    let pool = state.pool()?;
+    Ok(app_instance_repository::ensure_app_instance_id(&pool).await?)
 }
 
 #[tauri::command]

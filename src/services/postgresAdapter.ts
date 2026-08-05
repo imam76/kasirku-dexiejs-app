@@ -1847,6 +1847,11 @@ export interface PostgresHealth {
   message?: string | null;
 }
 
+export interface PostgresProbe {
+  health: PostgresHealth;
+  instanceId: string | null;
+}
+
 export interface PostgresCommandError {
   code: string;
   status?: PostgresHealthStatus | null;
@@ -1878,6 +1883,26 @@ export const postgresAdapter = {
     }
 
     return invoke<PostgresHealth>('set_postgres_database_url', { databaseUrl });
+  },
+
+  async probeDatabaseUrl(databaseUrl: string) {
+    if (!isTauriRuntime()) {
+      return {
+        health: {
+          available: false,
+          status: 'unconfigured',
+          message: 'Tauri runtime is not available.',
+        },
+        instanceId: null,
+      } satisfies PostgresProbe;
+    }
+
+    return invoke<PostgresProbe>('probe_postgres_database_url', { databaseUrl });
+  },
+
+  async getHostInstanceId() {
+    if (!isTauriRuntime()) return null;
+    return invoke<string>('postgres_get_host_instance_id');
   },
 
   async healthCheck() {
