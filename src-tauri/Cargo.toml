@@ -49,3 +49,16 @@ tracing-appender = "0.2"
 serialport = { version = "4", default-features = false }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+
+# Printer thermal USB di Windows umumnya di-bind ke usbprint.sys dan hanya muncul
+# sebagai printer spooler (port USB001), bukan sebagai COM port, sehingga tidak
+# pernah terlihat oleh serialport. Bindings di bawah dipakai untuk menutup gap itu
+# (winspool RAW) sekaligus menemukan COM port Bluetooth SPP yang sedang disconnect.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Printing",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_System_Registry",
+] }

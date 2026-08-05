@@ -7,6 +7,8 @@ mod models;
 mod postgres_realtime;
 mod repositories;
 mod usb_serial_printer;
+#[cfg(target_os = "windows")]
+mod windows_printer;
 
 use tauri::Manager;
 

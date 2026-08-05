@@ -53,6 +53,7 @@ export const useUsbPrinter = () => {
             usbId: device.usbId,
             portName: device.portName,
             baudRate: selectedPrinter?.baudRate ?? 9600,
+            transport: device.transport,
           }
         : await requestUsbSerialPrinter();
       saveStoredUsbPrinter(printer);

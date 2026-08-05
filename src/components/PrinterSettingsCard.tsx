@@ -3,8 +3,25 @@ import { Alert, App, Button, Card, List, Tag, Typography } from 'antd';
 import { Bluetooth, CheckCircle2, Printer, RefreshCw, Trash2 } from 'lucide-react';
 import { useBluetoothPrinter } from '@/hooks/useBluetoothPrinter';
 import { BluetoothPrinterDevice } from '@/types';
+import { getHostPlatform } from '@/utils/export/platform';
 
 const { Text } = Typography;
+
+/**
+ * Jalur Bluetooth native (Bluetooth Classic/SPP lewat plugin Android) hanya ada
+ * di Android. Di desktop, printer Bluetooth dipakai lewat COM port SPP yang
+ * dibuat OS saat pairing, dan itu ditangani kartu "Printer Struk".
+ */
+const PLATFORM_NOTE: Record<string, string> = {
+  windows:
+    'Di Windows, printer Bluetooth dipakai lewat COM port SPP yang dibuat otomatis saat pairing. Pair printer di Settings › Bluetooth & devices, lalu pilih port-nya di kartu "Printer Struk" — kartu ini khusus aplikasi native Android.',
+  linux:
+    'Di Linux, printer Bluetooth dipakai lewat port rfcomm hasil pairing (mis. /dev/rfcomm0), lalu dipilih di kartu "Printer Struk" — kartu ini khusus aplikasi native Android.',
+  macos:
+    'Di macOS, printer Bluetooth dipakai lewat port serial hasil pairing, lalu dipilih di kartu "Printer Struk" — kartu ini khusus aplikasi native Android.',
+  default:
+    'Auto print receipt menggunakan printer thermal Bluetooth Classic/SPP di aplikasi native Android.',
+};
 
 export default function PrinterSettingsCard() {
   const { message } = App.useApp();
@@ -58,22 +75,20 @@ export default function PrinterSettingsCard() {
     }
   };
 
+  const platformNote = PLATFORM_NOTE[getHostPlatform()] ?? PLATFORM_NOTE.default;
+
   return (
     <Card
       title={
         <div className="flex min-w-0 items-center gap-2">
           <Printer className="w-5 h-5 shrink-0" />
-          <span className="min-w-0 truncate">Printer Bluetooth</span>
+          <span className="min-w-0 truncate">Printer Bluetooth (Android)</span>
         </div>
       }
       className="h-full shadow-md hover:shadow-lg transition-shadow"
     >
       <div className="min-w-0 space-y-4">
-        <Alert
-          type="info"
-          showIcon
-          title="Auto print receipt menggunakan printer thermal Bluetooth Classic/SPP di aplikasi native Android."
-        />
+        <Alert type="info" showIcon title={platformNote} />
 
         {lastError && (
           <Alert

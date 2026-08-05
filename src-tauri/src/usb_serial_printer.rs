@@ -36,7 +36,19 @@ pub struct UsbSerialPrinterDevice {
     manufacturer: Option<String>,
     serial_number: Option<String>,
     is_usb: bool,
+    /// Cara data dikirim ke printer: `serial`, `usb-printer` (character device
+    /// `/dev/usb/lp*` di Linux), `spooler` (Windows print spooler RAW), atau
+    /// `bluetooth` (COM port SPP hasil pairing).
+    transport: String,
+    /// `false` untuk port yang terdaftar tapi belum siap dipakai — misalnya COM
+    /// port Bluetooth yang printernya sedang mati.
+    is_available: bool,
 }
+
+const TRANSPORT_SERIAL: &str = "serial";
+const TRANSPORT_USB_PRINTER: &str = "usb-printer";
+const TRANSPORT_SPOOLER: &str = "spooler";
+const TRANSPORT_BLUETOOTH: &str = "bluetooth";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -111,6 +123,8 @@ fn device_from_port(info: serialport::SerialPortInfo) -> UsbSerialPrinterDevice 
                 manufacturer: usb.manufacturer,
                 serial_number: usb.serial_number,
                 is_usb: true,
+                transport: TRANSPORT_SERIAL.to_string(),
+                is_available: true,
             }
         }
         _ => UsbSerialPrinterDevice {
@@ -120,6 +134,8 @@ fn device_from_port(info: serialport::SerialPortInfo) -> UsbSerialPrinterDevice 
             manufacturer: None,
             serial_number: None,
             is_usb: false,
+            transport: TRANSPORT_SERIAL.to_string(),
+            is_available: true,
         },
     }
 }
@@ -146,6 +162,8 @@ fn list_linux_usb_printer_devices() -> Vec<UsbSerialPrinterDevice> {
                 manufacturer: None,
                 serial_number: None,
                 is_usb: true,
+                transport: TRANSPORT_USB_PRINTER.to_string(),
+                is_available: true,
             })
         })
         .collect()
@@ -156,35 +174,190 @@ fn list_linux_usb_printer_devices() -> Vec<UsbSerialPrinterDevice> {
     Vec::new()
 }
 
+/// Padanan Windows dari `/dev/usb/lp*`: printer thermal USB di Windows di-bind ke
+/// `usbprint.sys` dan hanya terlihat sebagai printer spooler pada port `USB001`,
+/// sehingga tidak pernah muncul di `serialport::available_ports()`.
+#[cfg(target_os = "windows")]
+fn list_windows_spooler_devices() -> Vec<UsbSerialPrinterDevice> {
+    let Ok(printers) = crate::windows_printer::list_spooler_printers() else {
+        return Vec::new();
+    };
+
+    printers
+        .into_iter()
+        .map(|printer| {
+            let is_usb = printer.is_usb_port();
+            UsbSerialPrinterDevice {
+                name: printer.name.clone(),
+                port_name: format!(
+                    "{}{}",
+                    crate::windows_printer::SPOOLER_PORT_PREFIX,
+                    printer.name
+                ),
+                usb_id: printer.port.clone(),
+                manufacturer: None,
+                serial_number: None,
+                is_usb,
+                transport: TRANSPORT_SPOOLER.to_string(),
+                is_available: true,
+            }
+        })
+        .collect()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn list_windows_spooler_devices() -> Vec<UsbSerialPrinterDevice> {
+    Vec::new()
+}
+
+/// COM port Bluetooth SPP hasil pairing tetap terdaftar walau printer sedang
+/// mati, tapi membawa CM problem code sehingga dibuang `serialport`. Di sini port
+/// tersebut diambil langsung dari SetupAPI supaya tetap bisa dipilih kasir.
+#[cfg(target_os = "windows")]
+fn list_windows_bluetooth_devices() -> Vec<UsbSerialPrinterDevice> {
+    crate::windows_printer::list_serial_class_ports()
+        .into_iter()
+        .filter(|port| port.is_bluetooth())
+        .map(|port| {
+            let name = if port.friendly_name.is_empty() {
+                format!("Bluetooth Printer ({})", port.port_name)
+            } else {
+                port.friendly_name.clone()
+            };
+
+            UsbSerialPrinterDevice {
+                name,
+                usb_id: port.port_name.clone(),
+                port_name: port.port_name.clone(),
+                manufacturer: None,
+                serial_number: None,
+                is_usb: false,
+                transport: TRANSPORT_BLUETOOTH.to_string(),
+                is_available: port.is_available(),
+            }
+        })
+        .collect()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn list_windows_bluetooth_devices() -> Vec<UsbSerialPrinterDevice> {
+    Vec::new()
+}
+
+/// Urutan tampil: printer yang siap cetak lebih dulu, lalu Bluetooth, lalu port
+/// serial biasa.
+fn transport_rank(device: &UsbSerialPrinterDevice) -> u8 {
+    match device.transport.as_str() {
+        TRANSPORT_USB_PRINTER => 0,
+        TRANSPORT_SPOOLER if device.is_usb => 0,
+        TRANSPORT_SPOOLER => 3,
+        TRANSPORT_BLUETOOTH => 1,
+        _ if device.is_usb => 2,
+        _ => 3,
+    }
+}
+
+/// Kumpulkan seluruh device printer dari semua transport yang tersedia di
+/// platform ini, tanpa duplikat `port_name`.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn collect_devices() -> Result<Vec<UsbSerialPrinterDevice>, UsbSerialPrinterError> {
+    let mut devices: Vec<UsbSerialPrinterDevice> = serialport::available_ports()
+        .map_err(normalize_serial_error)?
+        .into_iter()
+        .map(device_from_port)
+        .collect();
+
+    let mut seen_ports: std::collections::HashSet<String> = devices
+        .iter()
+        .map(|device| device.port_name.clone())
+        .collect();
+
+    for device in list_linux_usb_printer_devices()
+        .into_iter()
+        .chain(list_windows_spooler_devices())
+    {
+        if seen_ports.insert(device.port_name.clone()) {
+            devices.push(device);
+        }
+    }
+
+    // COM port Bluetooth yang sedang terhubung sudah ikut terbawa `serialport`,
+    // tapi tanpa identitas Bluetooth-nya. Timpa entri itu supaya kasir tahu ini
+    // printer Bluetooth, bukan sekadar "Serial Port (COM5)".
+    for device in list_windows_bluetooth_devices() {
+        match devices
+            .iter_mut()
+            .find(|existing| existing.port_name == device.port_name)
+        {
+            Some(existing) => *existing = device,
+            None => devices.push(device),
+        }
+    }
+
+    devices.sort_by(|left, right| {
+        transport_rank(left)
+            .cmp(&transport_rank(right))
+            .then_with(|| right.is_available.cmp(&left.is_available))
+            .then_with(|| left.port_name.cmp(&right.port_name))
+    });
+
+    Ok(devices)
+}
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn find_selected_port(printer: &SelectedUsbPrinter) -> Result<String, UsbSerialPrinterError> {
     if let Some(port_name) = printer.port_name.as_ref().filter(|value| !value.is_empty()) {
         return Ok(port_name.clone());
     }
 
-    let ports = serialport::available_ports().map_err(normalize_serial_error)?;
+    let devices = collect_devices()?;
     let selected_usb_id = printer.usb_id.to_lowercase();
 
-    ports
-        .into_iter()
-        .find_map(|info| match info.port_type {
-            serialport::SerialPortType::UsbPort(usb) => {
-                let usb_id = format!("{:04x}:{:04x}", usb.vid, usb.pid);
-                if usb_id == selected_usb_id {
-                    Some(info.port_name)
-                } else {
-                    None
-                }
-            }
-            _ if info.port_name == printer.usb_id => Some(info.port_name),
-            _ => None,
+    devices
+        .iter()
+        .find(|device| device.usb_id.to_lowercase() == selected_usb_id)
+        .or_else(|| {
+            devices
+                .iter()
+                .find(|device| device.port_name == printer.usb_id)
         })
+        .map(|device| device.port_name.clone())
         .ok_or_else(|| {
             UsbSerialPrinterError::new(
                 "PRINTER_NOT_SELECTED",
                 "Port printer USB tersimpan tidak ditemukan. Muat ulang daftar port lalu pilih printer lagi.",
             )
         })
+}
+
+/// Error dari winspool tidak terpetakan ke `std::io::ErrorKind` yang berarti,
+/// jadi kode Win32-nya diterjemahkan sendiri agar kasir dapat instruksi konkret.
+#[cfg(target_os = "windows")]
+fn normalize_spooler_error(printer_name: &str, error: std::io::Error) -> UsbSerialPrinterError {
+    const ERROR_ACCESS_DENIED: i32 = 5;
+    const ERROR_INVALID_PRINTER_NAME: i32 = 1801;
+    const ERROR_PRINTER_DELETED: i32 = 1905;
+
+    match error.raw_os_error() {
+        Some(ERROR_INVALID_PRINTER_NAME) | Some(ERROR_PRINTER_DELETED) => {
+            UsbSerialPrinterError::new(
+                "PRINTER_NOT_SELECTED",
+                format!(
+                    "Printer \"{printer_name}\" tidak ada lagi di Windows. Cek Settings › Printers & scanners, lalu muat ulang daftar printer."
+                ),
+            )
+        }
+        Some(ERROR_ACCESS_DENIED) => UsbSerialPrinterError::new(
+            "PERMISSION_DENIED",
+            format!(
+                "Tidak punya izin mencetak ke \"{printer_name}\". Pastikan user Windows ini boleh memakai printer tersebut."
+            ),
+        ),
+        _ => UsbSerialPrinterError::new(
+            "WRITE_FAILED",
+            format!("Gagal mengirim data ke printer \"{printer_name}\": {error}"),
+        ),
+    }
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -200,6 +373,18 @@ fn write_blocking(printer: SelectedUsbPrinter, data: Vec<u8>) -> Result<(), UsbS
     }
 
     let port_name = find_selected_port(&printer)?;
+
+    // Printer thermal USB di Windows tidak punya COM port; datanya harus dikirim
+    // sebagai job RAW lewat print spooler.
+    #[cfg(target_os = "windows")]
+    if let Some(printer_name) =
+        port_name.strip_prefix(crate::windows_printer::SPOOLER_PORT_PREFIX)
+    {
+        return crate::windows_printer::print_raw(printer_name, &data).map_err(|error| {
+            normalize_spooler_error(printer_name, error)
+        });
+    }
+
     if port_name.starts_with("/dev/usb/lp") {
         let mut device = std::fs::OpenOptions::new()
             .write(true)
@@ -224,29 +409,7 @@ fn write_blocking(printer: SelectedUsbPrinter, data: Vec<u8>) -> Result<(), UsbS
 pub fn list_usb_serial_printers() -> Result<Vec<UsbSerialPrinterDevice>, UsbSerialPrinterError> {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        let mut devices: Vec<UsbSerialPrinterDevice> = serialport::available_ports()
-            .map_err(normalize_serial_error)?
-            .into_iter()
-            .map(device_from_port)
-            .collect();
-        let existing_ports: std::collections::HashSet<String> = devices
-            .iter()
-            .map(|device| device.port_name.clone())
-            .collect();
-        devices.extend(
-            list_linux_usb_printer_devices()
-                .into_iter()
-                .filter(|device| !existing_ports.contains(&device.port_name)),
-        );
-
-        devices.sort_by(|left, right| {
-            right
-                .is_usb
-                .cmp(&left.is_usb)
-                .then_with(|| left.port_name.cmp(&right.port_name))
-        });
-
-        Ok(devices)
+        collect_devices()
     }
 
     #[cfg(any(target_os = "android", target_os = "ios"))]

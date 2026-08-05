@@ -1,6 +1,13 @@
 import { Alert, App, Button, Card, Select, Tag, Typography, Divider, Tooltip } from 'antd';
 import { CheckCircle2, Plug, Printer, RefreshCw, Trash2, Info, AlertCircle } from 'lucide-react';
 import { useUsbPrinter } from '@/hooks/useUsbPrinter';
+import { UsbSerialPrinterDevice } from '@/types';
+import {
+  getDisplayPortName,
+  getPrinterTransportLabel,
+  noPrinterDetectedMessage,
+} from '@/utils/printer/usbSerialPrinter';
+import { getHostPlatform } from '@/utils/export/platform';
 
 const { Text, Title } = Typography;
 
@@ -11,6 +18,52 @@ const BAUD_RATE_OPTIONS = [
   { label: '57600 baud', value: 57600 },
   { label: '115200 baud', value: 115200 },
 ];
+
+/**
+ * Langkah pemakaian berbeda per OS karena cara printer thermal terlihat oleh OS
+ * juga berbeda: di Windows umumnya lewat print spooler (port USB001), di Linux
+ * lewat character device /dev/usb/lp*, dan di browser lewat Web Serial API.
+ */
+const USAGE_STEPS: Record<string, string[]> = {
+  windows: [
+    'Nyalakan printer dan sambungkan kabel USB, atau pair printer Bluetooth lewat Settings › Bluetooth & devices',
+    'Untuk printer USB: pastikan sudah terpasang di Settings › Printers & scanners (driver bawaan atau "Generic / Text Only")',
+    'Klik "Muat Port" untuk mendeteksi perangkat',
+    'Pilih printer dari daftar — biasanya berlabel Windows Spooler (USB001), Bluetooth SPP (COMx), atau USB Serial (CH340/CP210x)',
+    'Klik "Test Print" untuk memverifikasi koneksi',
+  ],
+  linux: [
+    'Hubungkan printer USB thermal (ESC/POS) ke komputer',
+    'Pastikan user tergabung di grup lp agar /dev/usb/lp0 bisa ditulis',
+    'Klik "Muat Port" untuk mendeteksi perangkat',
+    'Pilih printer dari daftar — biasanya berlabel USB Printer (/dev/usb/lp0) atau USB Serial (CH340/CP210x)',
+    'Klik "Test Print" untuk memverifikasi koneksi',
+  ],
+  default: [
+    'Hubungkan printer USB thermal (ESC/POS) ke komputer',
+    'Klik "Muat Port" untuk mendeteksi perangkat',
+    'Pilih printer dari daftar seperti "USB Serial Device", "CH340", atau "CP210x"',
+    'Sesuaikan Baud Rate jika diperlukan (default: 9600)',
+    'Klik "Test Print" untuk memverifikasi koneksi',
+  ],
+};
+
+const TECHNICAL_INFO: Record<string, string> = {
+  windows:
+    'Desktop (Tauri): printer thermal USB dikirim sebagai job RAW lewat Windows print spooler, printer Bluetooth lewat COM port SPP hasil pairing, dan adapter USB-serial (CH340/CP210x/FTDI) lewat COM port biasa.',
+  linux:
+    'Desktop (Tauri): akses serial native, plus tulis langsung ke /dev/usb/lp* untuk printer USB kelas printer.',
+  default:
+    'Desktop (Tauri): akses serial native. Browser: Web Serial API (Chrome, Edge, Opera).',
+};
+
+/** Label satu baris untuk dropdown pilihan port. */
+const describeDevice = (device: UsbSerialPrinterDevice): string => {
+  const port = getDisplayPortName(device.portName);
+  const transport = getPrinterTransportLabel(device.transport);
+  const status = device.isAvailable ? '' : ' — belum terhubung';
+  return `${device.name} · ${transport} (${port})${status}`;
+};
 
 export default function UsbPrinterCard() {
   const { message } = App.useApp();
@@ -32,9 +85,9 @@ export default function UsbPrinterCard() {
   const handleSelect = async () => {
     try {
       const printer = await selectPrinter();
-      message.success(`Printer USB dipilih: ${printer.name}`);
+      message.success(`Printer dipilih: ${printer.name}`);
     } catch {
-      message.warning('Gagal memilih printer USB.');
+      message.warning('Gagal memilih printer.');
     }
   };
 
@@ -42,12 +95,12 @@ export default function UsbPrinterCard() {
     try {
       const devices = await loadPrinters();
       if (devices.length === 0) {
-        message.warning('Tidak ada port serial USB terdeteksi');
+        message.warning('Tidak ada printer terdeteksi');
         return;
       }
-      message.success(`Ditemukan ${devices.length} port serial`);
+      message.success(`Ditemukan ${devices.length} perangkat printer`);
     } catch {
-      message.warning('Gagal memuat daftar port serial USB');
+      message.warning('Gagal memuat daftar printer');
     }
   };
 
@@ -57,20 +110,38 @@ export default function UsbPrinterCard() {
 
     try {
       const printer = await selectPrinter(device);
-      message.success(`Printer USB dipilih: ${printer.name}`);
+      message.success(`Printer dipilih: ${printer.name}`);
     } catch {
-      message.warning('Gagal memilih printer USB.');
+      message.warning('Gagal memilih printer.');
     }
   };
 
   const handleTestPrint = async () => {
     try {
       await testPrint();
-      message.success('Test print USB berhasil dikirim');
+      message.success('Test print berhasil dikirim');
     } catch {
-      message.warning('Test print USB gagal');
+      message.warning('Test print gagal');
     }
   };
+
+  const platform = getHostPlatform();
+  const usageSteps = USAGE_STEPS[platform] ?? USAGE_STEPS.default;
+  const technicalInfo = TECHNICAL_INFO[platform] ?? TECHNICAL_INFO.default;
+  const printerOptions = printers.map((printer) => ({
+    value: printer.portName,
+    label: describeDevice(printer),
+  }));
+
+  // Baud rate hanya relevan untuk koneksi serial; job RAW ke print spooler
+  // Windows tidak melewati UART sama sekali.
+  const showBaudRate = selectedPrinter?.transport !== 'spooler';
+  const selectedIdLabel =
+    selectedPrinter?.transport === 'spooler'
+      ? 'Port Windows'
+      : selectedPrinter?.transport === 'bluetooth'
+        ? 'COM Port'
+        : 'USB ID';
 
   return (
     <Card
@@ -79,10 +150,10 @@ export default function UsbPrinterCard() {
           <Plug className="w-5 h-5 shrink-0" />
           <div className="min-w-0">
             <Title level={5} className="!mb-0 !text-base">
-              Printer USB Serial
+              Printer Struk
             </Title>
             <Text type="secondary" className="block truncate text-xs">
-              Koneksi thermal printer via USB
+              Thermal ESC/POS via USB, serial, atau Bluetooth
             </Text>
           </div>
         </div>
@@ -96,8 +167,8 @@ export default function UsbPrinterCard() {
           <Alert
             type="warning"
             icon={<AlertCircle className="w-4 h-4" />}
-            message="Web Serial API Tidak Tersedia"
-            description="Browser/WebView Anda tidak mendukung Web Serial API. Silakan update WebView atau gunakan browser Chromium terbaru."
+            message="Cetak Langsung Tidak Tersedia di Browser Ini"
+            description="Browser ini tidak mendukung Web Serial API. Gunakan aplikasi desktop Frayukti, atau buka lewat browser berbasis Chromium terbaru (Chrome, Edge, Opera)."
             showIcon
           />
         )}
@@ -122,28 +193,36 @@ export default function UsbPrinterCard() {
                   <Text strong className="min-w-0 text-green-900">
                     {selectedPrinter.name}
                   </Text>
+                  <Tag color="green" className="m-0 shrink-0 text-xs">
+                    {getPrinterTransportLabel(selectedPrinter.transport)}
+                  </Tag>
                 </div>
                 <p className="mb-3 break-all font-mono text-xs text-green-700">
-                  USB ID: {selectedPrinter.usbId}
+                  {selectedIdLabel}: {selectedPrinter.usbId}
                 </p>
 
                 <div className="space-y-3">
-                  <div className="flex min-w-0 flex-col gap-2 rounded-md bg-white p-3 sm:flex-row sm:items-center">
-                    <Text className="shrink-0 text-xs font-medium text-gray-600 sm:w-20">
-                      Baud Rate
-                    </Text>
-                    <Select
-                      value={selectedPrinter.baudRate}
-                      options={BAUD_RATE_OPTIONS}
-                      size="small"
-                      onChange={updateBaudRate}
-                      className="w-full min-w-0 sm:max-w-36"
-                    />
-                  </div>
+                  {showBaudRate && (
+                    <div className="flex min-w-0 flex-col gap-2 rounded-md bg-white p-3 sm:flex-row sm:items-center">
+                      <Text className="shrink-0 text-xs font-medium text-gray-600 sm:w-20">
+                        Baud Rate
+                      </Text>
+                      <Select
+                        value={selectedPrinter.baudRate}
+                        options={BAUD_RATE_OPTIONS}
+                        size="small"
+                        onChange={updateBaudRate}
+                        className="w-full min-w-0 sm:max-w-36"
+                      />
+                    </div>
+                  )}
 
                   {selectedPrinter.portName && (
                     <p className="mb-0 break-all rounded-md bg-white px-3 py-2 font-mono text-xs text-green-700">
-                      Port: <span className="font-semibold">{selectedPrinter.portName}</span>
+                      Port:{' '}
+                      <span className="font-semibold">
+                        {getDisplayPortName(selectedPrinter.portName)}
+                      </span>
                     </p>
                   )}
                 </div>
@@ -169,8 +248,10 @@ export default function UsbPrinterCard() {
             <Text type="secondary" className="block text-sm">
               Belum ada printer yang terhubung
             </Text>
-            <Text type="secondary" className="block text-xs text-gray-500 mt-1">
-              Pilih printer untuk memulai
+            <Text type="secondary" className="mt-1 block text-xs text-gray-500">
+              {printers.length > 0
+                ? 'Pilih printer dari daftar di bawah untuk memulai'
+                : noPrinterDetectedMessage()}
             </Text>
           </div>
         )}
@@ -181,16 +262,13 @@ export default function UsbPrinterCard() {
             <Divider className="my-2" />
             <div className="min-w-0 space-y-2">
               <Text strong className="text-sm text-gray-700">
-                Port Serial Tersedia
+                Printer Terdeteksi
               </Text>
               <Select
                 value={undefined}
-                placeholder="Pilih port serial USB untuk terhubung"
+                placeholder="Pilih printer untuk terhubung"
                 onChange={handleSelectListedPrinter}
-                options={printers.map((printer) => ({
-                  value: printer.portName,
-                  label: `${printer.name} (${printer.portName})`,
-                }))}
+                options={printerOptions}
                 className="w-full min-w-0"
                 size="large"
               />
@@ -203,16 +281,13 @@ export default function UsbPrinterCard() {
             <Divider className="my-2" />
             <div className="min-w-0 space-y-2">
               <Text strong className="text-sm text-gray-700">
-                Port Serial Lainnya
+                Printer Lainnya
               </Text>
               <Select
                 value={selectedPrinter?.portName}
-                placeholder="Pilih port serial USB"
+                placeholder="Pilih printer"
                 onChange={handleSelectListedPrinter}
-                options={printers.map((printer) => ({
-                  value: printer.portName,
-                  label: `${printer.name} (${printer.portName})`,
-                }))}
+                options={printerOptions}
                 className="w-full min-w-0"
               />
             </div>
@@ -229,7 +304,7 @@ export default function UsbPrinterCard() {
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Tooltip
-              title={!isSupported ? 'Web Serial API tidak didukung' : ''}
+              title={!isSupported ? 'Cetak langsung tidak didukung di browser ini' : ''}
             >
               <Button
                 icon={<RefreshCw className="w-4 h-4" />}
@@ -244,7 +319,7 @@ export default function UsbPrinterCard() {
             </Tooltip>
 
             <Tooltip
-              title={!isSupported ? 'Web Serial API tidak didukung' : ''}
+              title={!isSupported ? 'Cetak langsung tidak didukung di browser ini' : ''}
             >
               <Button
                 icon={<Plug className="w-4 h-4" />}
@@ -263,7 +338,7 @@ export default function UsbPrinterCard() {
                 !selectedPrinter
                   ? 'Pilih printer terlebih dahulu'
                   : !isSupported
-                    ? 'Web Serial API tidak didukung'
+                    ? 'Cetak langsung tidak didukung di browser ini'
                     : ''
               }
             >
@@ -300,11 +375,9 @@ export default function UsbPrinterCard() {
           message="Panduan Penggunaan"
           description={
             <ol className="list-decimal space-y-1 pl-5 text-sm">
-              <li>Hubungkan printer USB thermal (ESC/POS) ke komputer</li>
-              <li>Klik "Muat Port" untuk mendeteksi perangkat</li>
-              <li>Pilih printer dari daftar seperti "USB Serial Device", "CH340", atau "CP210x"</li>
-              <li>Sesuaikan Baud Rate jika diperlukan (default: 9600)</li>
-              <li>Klik "Test Print" untuk memverifikasi koneksi</li>
+              {usageSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
             </ol>
           }
           showIcon
@@ -315,11 +388,7 @@ export default function UsbPrinterCard() {
           type="info"
           icon={<Info className="w-4 h-4" />}
           message="Informasi Teknis"
-          description={
-            <Text className="text-xs text-gray-600">
-              Desktop (Tauri): Native serial access. Browser: Web Serial API (Chrome, Edge, Opera).
-            </Text>
-          }
+          description={<Text className="text-xs text-gray-600">{technicalInfo}</Text>}
           showIcon
         />
       </div>

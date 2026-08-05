@@ -2472,6 +2472,15 @@ export interface SelectedBluetoothPrinter {
   address: string;
 }
 
+/**
+ * Cara data dikirim ke printer:
+ * - `serial`      — COM/tty serial port biasa (chip CH340, CP210x, FTDI, CDC-ACM)
+ * - `usb-printer` — character device `/dev/usb/lp*` di Linux
+ * - `spooler`     — Windows print spooler dengan datatype RAW (port USB001 dsb.)
+ * - `bluetooth`   — COM port Bluetooth SPP hasil pairing di Windows
+ */
+export type PrinterTransport = 'serial' | 'usb-printer' | 'spooler' | 'bluetooth';
+
 export interface UsbSerialPrinterDevice {
   name: string;
   portName: string;
@@ -2479,6 +2488,9 @@ export interface UsbSerialPrinterDevice {
   manufacturer?: string;
   serialNumber?: string;
   isUsb: boolean;
+  transport: PrinterTransport;
+  /** `false` untuk port yang terdaftar tapi belum siap dipakai, mis. printer Bluetooth yang sedang mati. */
+  isAvailable: boolean;
 }
 
 export interface SelectedUsbPrinter {
@@ -2486,6 +2498,7 @@ export interface SelectedUsbPrinter {
   usbId: string;
   baudRate: number;
   portName?: string;
+  transport?: PrinterTransport;
 }
 
 export interface ReceiptLineItem {

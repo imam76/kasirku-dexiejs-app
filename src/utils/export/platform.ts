@@ -42,3 +42,39 @@ export const isTauriDesktop = () => {
     return false;
   }
 };
+
+/**
+ * Sistem operasi yang sedang menjalankan aplikasi. Di luar Tauri, jatuh ke
+ * penebakan dari user agent supaya panduan di UI tetap relevan saat dibuka lewat
+ * browser.
+ */
+export type HostPlatform = 'windows' | 'macos' | 'linux' | 'android' | 'ios' | 'unknown';
+
+export const getHostPlatform = (): HostPlatform => {
+  if (isTauriRuntime()) {
+    try {
+      const osType = getOsType();
+      if (
+        osType === 'windows' ||
+        osType === 'macos' ||
+        osType === 'linux' ||
+        osType === 'android' ||
+        osType === 'ios'
+      ) {
+        return osType;
+      }
+    } catch (error) {
+      console.warn('Unable to detect Tauri OS type:', error);
+    }
+  }
+
+  if (typeof navigator === 'undefined') return 'unknown';
+
+  const agent = navigator.userAgent.toLowerCase();
+  if (agent.includes('android')) return 'android';
+  if (/iphone|ipad|ipod/.test(agent)) return 'ios';
+  if (agent.includes('windows')) return 'windows';
+  if (agent.includes('mac os')) return 'macos';
+  if (agent.includes('linux')) return 'linux';
+  return 'unknown';
+};

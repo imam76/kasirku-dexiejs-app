@@ -2,12 +2,14 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   PrinterError,
   PrinterErrorCode,
+  PrinterTransport,
   ReceiptPayload,
   SelectedUsbPrinter,
   UsbSerialPrinterDevice,
 } from '@/types';
 import { normalizePrinterError } from '@/utils/printer/bluetoothPrinter';
 import { isNativeTauri } from '@/utils/printer/bluetoothPrinter';
+import { getHostPlatform } from '@/utils/export/platform';
 import { getReceiptPaperCharacterWidth } from '@/utils/printer/receiptPaperSize';
 
 export type { SelectedUsbPrinter, UsbSerialPrinterDevice };
@@ -28,6 +30,7 @@ export const getStoredUsbPrinter = (): SelectedUsbPrinter | null => {
       usbId: parsed.usbId,
       baudRate: parsed.baudRate,
       portName: parsed.portName,
+      transport: parsed.transport,
     };
   } catch {
     return null;
@@ -52,6 +55,45 @@ const createPrinterError = (code: PrinterErrorCode, message: string): PrinterErr
   code,
   message,
 });
+
+// ─── Label & panduan per transport ────────────────────────────────────────────
+
+const TRANSPORT_LABEL: Record<PrinterTransport, string> = {
+  serial: 'USB Serial',
+  'usb-printer': 'USB Printer',
+  spooler: 'Windows Spooler',
+  bluetooth: 'Bluetooth SPP',
+};
+
+export const getPrinterTransportLabel = (transport?: PrinterTransport): string =>
+  transport ? TRANSPORT_LABEL[transport] : 'Serial';
+
+/** Harus sama dengan SPOOLER_PORT_PREFIX di src-tauri/src/windows_printer.rs. */
+export const SPOOLER_PORT_PREFIX = 'winspool:';
+
+/** Nama port untuk ditampilkan, tanpa prefix internal jalur spooler. */
+export const getDisplayPortName = (portName?: string): string => {
+  if (!portName) return '';
+  return portName.startsWith(SPOOLER_PORT_PREFIX)
+    ? portName.slice(SPOOLER_PORT_PREFIX.length)
+    : portName;
+};
+
+/**
+ * Cara printer thermal terlihat oleh OS berbeda-beda, jadi panduan saat tidak
+ * ada perangkat terdeteksi pun harus berbeda. Di Windows printer ESC/POS umumnya
+ * terpasang sebagai printer spooler (port USB001), bukan sebagai COM port.
+ */
+export const noPrinterDetectedMessage = (): string => {
+  switch (getHostPlatform()) {
+    case 'windows':
+      return 'Tidak ada printer terdeteksi. Pastikan printer menyala, lalu cek: printer thermal USB harus sudah terpasang di Windows (Settings › Printers & scanners), dan printer Bluetooth harus sudah di-pair sehingga Windows membuat COM port untuknya.';
+    case 'linux':
+      return 'Tidak ada printer terdeteksi. Pastikan printer menyala dan kabel USB tersambung. Kalau memakai /dev/usb/lp0, pastikan user tergabung di grup lp.';
+    default:
+      return 'Tidak ada printer terdeteksi. Pastikan printer menyala dan kabelnya tersambung.';
+  }
+};
 
 const assertWebSerial = () => {
   if (!isWebSerialSupported() || isNativeTauri()) {
@@ -327,10 +369,7 @@ export const requestUsbSerialPrinter = async (): Promise<SelectedUsbPrinter> => 
     const printer = printers[0];
 
     if (!printer) {
-      throw createPrinterError(
-        'PRINTER_NOT_SELECTED',
-        'Tidak ada port serial USB terdeteksi. Pastikan printer EPPOS menyala dan kabel USB tersambung.'
-      );
+      throw createPrinterError('PRINTER_NOT_SELECTED', noPrinterDetectedMessage());
     }
 
     return {
@@ -338,6 +377,7 @@ export const requestUsbSerialPrinter = async (): Promise<SelectedUsbPrinter> => 
       usbId: printer.usbId,
       portName: printer.portName,
       baudRate: 9600,
+      transport: printer.transport,
     };
   }
 
