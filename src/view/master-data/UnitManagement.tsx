@@ -79,8 +79,8 @@ const normalizeStoredUnit = (unit: UnitDefinition): UnitDefinition => {
     id,
     name: normalizeUnitKey(unit.name || id),
     type,
-    canBeBaseUnit: unit.canBeBaseUnit ?? type !== 'package',
-    canBeConversionUnit: unit.canBeConversionUnit ?? type !== 'count',
+    canBeBaseUnit: unit.canBeBaseUnit ?? true,
+    canBeConversionUnit: unit.canBeConversionUnit ?? true,
     isPreset: Boolean(unit.isPreset),
   };
 };
@@ -106,9 +106,13 @@ const buildConversionLabel = (baseUnit: string, conversionUnit: string, ratio: n
   return `1 ${conversionUnit} = ${ratio} ${baseUnit}`;
 };
 
-const getDefaultFlagsForType = (type: UnitDefinitionType) => ({
-  canBeBaseUnit: type !== 'package',
-  canBeConversionUnit: type !== 'count',
+/**
+ * Satuan baru boleh dipakai di kedua sisi. Batasannya bukan lagi tipe satuan
+ * melainkan kesepadanan kategori, yang diperiksa saat konversi produk disusun.
+ */
+const defaultUnitFlags = () => ({
+  canBeBaseUnit: true,
+  canBeConversionUnit: true,
 });
 
 const requireUnitManageAccess = async () => {
@@ -404,7 +408,7 @@ export default function UnitManagement() {
     unitForm.setFieldsValue({
       name: '',
       type: 'measurement',
-      ...getDefaultFlagsForType('measurement'),
+      ...defaultUnitFlags(),
     });
     setIsUnitModalOpen(true);
   };
@@ -758,7 +762,7 @@ export default function UnitManagement() {
           onValuesChange={(changed) => {
             const nextType = changed.type;
             if (!nextType || editingUnit) return;
-            unitForm.setFieldsValue(getDefaultFlagsForType(nextType));
+            unitForm.setFieldsValue(defaultUnitFlags());
           }}
           className="mt-4"
         >

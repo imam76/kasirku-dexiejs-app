@@ -1,4 +1,5 @@
 import type { Product } from '@/types';
+import { resolveUnitMappingPair } from '@/utils/productUnits';
 
 type ProductWholesalePrice = NonNullable<Product['wholesale_prices']>[number];
 
@@ -144,11 +145,20 @@ const normalizeUnitMappings = (value: string | undefined): Product['unit_mapping
   if (!parsed) return undefined;
 
   const mappings = parsed
-    .map((mapping) => ({
-      unit: String(mapping?.unit || '').trim(),
-      base_unit: String(mapping?.base_unit || '').trim(),
-      ratio: Number(mapping?.ratio),
-    }))
+    .map((mapping) => {
+      // Pasangan `qty`/`base_qty` menang atas `ratio` kalau keduanya ditulis,
+      // karena pasangan itulah angka asli yang diketik pengguna.
+      const qty = Number(mapping?.qty);
+      const baseQty = Number(mapping?.base_qty);
+      const hasPair = Number.isFinite(qty) && qty > 0 && Number.isFinite(baseQty) && baseQty > 0;
+
+      return {
+        unit: String(mapping?.unit || '').trim(),
+        base_unit: String(mapping?.base_unit || '').trim(),
+        ratio: hasPair ? baseQty / qty : Number(mapping?.ratio),
+        ...(hasPair ? { qty, base_qty: baseQty } : {}),
+      };
+    })
     .filter((mapping) => mapping.unit && mapping.base_unit && Number.isFinite(mapping.ratio) && mapping.ratio > 0);
 
   return mappings.length > 0 ? mappings : undefined;
@@ -156,6 +166,8 @@ const normalizeUnitMappings = (value: string | undefined): Product['unit_mapping
 
 const UNIT_NAME_COLUMN_PREFIXES = ['satuan', 'unit'];
 const UNIT_RATIO_COLUMN_PREFIXES = ['isi', 'rasio', 'ratio', 'konversi'];
+/** Sisi kiri konversi, mis. `jumlah_2=12` untuk "12 pcs = 1 pack". */
+const UNIT_QTY_COLUMN_PREFIXES = ['jumlah', 'qty'];
 const WHOLESALE_QTY_COLUMN_PREFIXES = ['grosir_qty', 'wholesale_min', 'min_qty'];
 const WHOLESALE_PRICE_COLUMN_PREFIXES = ['grosir_harga', 'wholesale_price', 'harga_grosir'];
 const WHOLESALE_TYPE_COLUMN_PREFIXES = ['grosir_tipe', 'wholesale_type'];
@@ -318,6 +330,7 @@ export const buildProductCsvImportItemsFromRows = (
 
   const unitNameColumns = collectIndexedColumns(headerRow, UNIT_NAME_COLUMN_PREFIXES);
   const unitRatioColumns = collectIndexedColumns(headerRow, UNIT_RATIO_COLUMN_PREFIXES);
+  const unitQtyColumns = collectIndexedColumns(headerRow, UNIT_QTY_COLUMN_PREFIXES);
   const unitSuffixes = sortedSuffixes(unitNameColumns, unitRatioColumns);
   const wholesaleQtyColumns = collectIndexedColumns(headerRow, WHOLESALE_QTY_COLUMN_PREFIXES);
   const wholesalePriceColumns = collectIndexedColumns(headerRow, WHOLESALE_PRICE_COLUMN_PREFIXES);
@@ -413,8 +426,8 @@ export const buildProductCsvImportItemsFromRows = (
       suffixes: unitSuffixes,
       nameColumns: unitNameColumns,
       ratioColumns: unitRatioColumns,
+      qtyColumns: unitQtyColumns,
       purchaseUnit: purchase_unit,
-      sellingUnit: selling_unit,
       messages,
     });
     const wideWholesalePrices = parseWideWholesalePrices({
@@ -505,14 +518,16 @@ interface ParseWideUnitMappingsInput {
   suffixes: number[];
   nameColumns: Map<number, number>;
   ratioColumns: Map<number, number>;
+  qtyColumns: Map<number, number>;
   purchaseUnit?: string;
-  sellingUnit?: string;
   messages: string[];
 }
 
 /**
- * Reads `satuan_N` / `isi_N` pairs. `isi_N` is how many base units fit in one
- * `satuan_N`, so `satuan_2=dus, isi_2=24` means 1 dus = 24 base units.
+ * Reads `satuan_N` / `isi_N` pairs, with an optional `jumlah_N` on the left.
+ * `jumlah_N` defaults to 1, so `satuan_2=dus, isi_2=24` still means 1 dus = 24
+ * base units, while `satuan_2=pcs, jumlah_2=12, isi_2=1` means 12 pcs = 1 base
+ * unit — the same conversion without a spreadsheet full of 0.0833.
  */
 const parseWideUnitMappings = ({
   row,
@@ -520,16 +535,19 @@ const parseWideUnitMappings = ({
   suffixes,
   nameColumns,
   ratioColumns,
+  qtyColumns,
   purchaseUnit,
-  sellingUnit,
   messages,
 }: ParseWideUnitMappingsInput): NonNullable<Product['unit_mappings']> => {
   const mappings: NonNullable<Product['unit_mappings']> = [];
   if (suffixes.length === 0) return mappings;
 
   const baseUnit = (purchaseUnit || '').trim();
+  // Hanya satuan dasar yang tidak boleh diulang. Satuan jual justru sering
+  // butuh baris sendiri: kalau satuan utamanya pack dan jualnya pcs, baris
+  // "12 pcs = 1 pack" itulah yang bikin satuan jualnya kepakai.
   const takenUnits = new Set(
-    [purchaseUnit, sellingUnit]
+    [purchaseUnit]
       .map((unit) => (unit || '').trim().toLowerCase())
       .filter(Boolean),
   );
@@ -537,8 +555,9 @@ const parseWideUnitMappings = ({
   for (const suffix of suffixes) {
     const unitName = readCell(row, nameColumns.get(suffix));
     const ratioRaw = readCell(row, ratioColumns.get(suffix));
+    const qtyRaw = readCell(row, qtyColumns.get(suffix));
 
-    if (!unitName && !ratioRaw) continue;
+    if (!unitName && !ratioRaw && !qtyRaw) continue;
 
     if (!unitName) {
       messages.push(`Baris ${rowNumber}: isi_${suffix} diisi tetapi satuan_${suffix} kosong.`);
@@ -549,9 +568,17 @@ const parseWideUnitMappings = ({
       continue;
     }
 
-    const ratio = parseNumberFlexible(ratioRaw);
-    if (ratio === undefined || ratio <= 0) {
+    const baseQty = parseNumberFlexible(ratioRaw);
+    if (baseQty === undefined || baseQty <= 0) {
       messages.push(`Baris ${rowNumber}: isi_${suffix} harus berupa angka lebih dari 0.`);
+      continue;
+    }
+
+    // Kolom `jumlah_N` boleh tidak ada sama sekali; file lama yang cuma punya
+    // satuan dan isi tetap terbaca sebagai "1 satuan = isi satuan dasar".
+    const qty = qtyRaw ? parseNumberFlexible(qtyRaw) : 1;
+    if (qty === undefined || qty <= 0) {
+      messages.push(`Baris ${rowNumber}: jumlah_${suffix} harus berupa angka lebih dari 0.`);
       continue;
     }
 
@@ -562,7 +589,14 @@ const parseWideUnitMappings = ({
     }
     takenUnits.add(unitKey);
 
-    mappings.push({ unit: unitName, base_unit: baseUnit, ratio });
+    mappings.push({
+      unit: unitName,
+      base_unit: baseUnit,
+      ratio: baseQty / qty,
+      // Pasangan hanya ikut ditulis kalau kolom `jumlah_N` memang dipakai, jadi
+      // file lama tetap pulang-pergi dengan bentuk yang sama persis.
+      ...(qtyRaw ? { qty, base_qty: baseQty } : {}),
+    });
   }
 
   return mappings;
@@ -677,7 +711,16 @@ const usesWideUnitColumns = (product: Product) => {
   return mappings.every((mapping) => normalizeUnitName(mapping.base_unit) === baseUnit);
 };
 
+const wideUnitMappingsOf = (product: Product) => (
+  usesWideUnitColumns(product) ? product.unit_mappings || [] : []
+);
+
 export const createProductCsvExportRows = (products: Product[]) => {
+  // Kolom `jumlah_N` baru muncul kalau ada konversi yang sisi kirinya bukan 1,
+  // supaya file yang isinya konversi biasa tetap sependek dulu.
+  const needsUnitQtyColumn = products.some((product) => wideUnitMappingsOf(product)
+    .some((mapping) => resolveUnitMappingPair(mapping).qty !== 1));
+
   const wideUnitCount = products.reduce(
     (max, product) => (usesWideUnitColumns(product)
       ? Math.max(max, (product.unit_mappings || []).length)
@@ -693,7 +736,9 @@ export const createProductCsvExportRows = (products: Product[]) => {
   const unitHeaders: string[] = [];
   for (let i = 0; i < wideUnitCount; i++) {
     const suffix = i + 2;
-    unitHeaders.push(`satuan_${suffix}`, `isi_${suffix}`);
+    unitHeaders.push(`satuan_${suffix}`);
+    if (needsUnitQtyColumn) unitHeaders.push(`jumlah_${suffix}`);
+    unitHeaders.push(`isi_${suffix}`);
   }
 
   const wholesaleHeaders: string[] = [];
@@ -714,11 +759,15 @@ export const createProductCsvExportRows = (products: Product[]) => {
     headers,
     ...products.map((product) => {
       const wide = usesWideUnitColumns(product);
-      const mappings = wide ? product.unit_mappings || [] : [];
+      const mappings = wideUnitMappingsOf(product);
       const unitCells: Array<string | number> = [];
       for (let i = 0; i < wideUnitCount; i++) {
         const mapping = mappings[i];
-        unitCells.push(mapping ? mapping.unit : '', mapping ? mapping.ratio : '');
+        const pair = mapping ? resolveUnitMappingPair(mapping) : undefined;
+
+        unitCells.push(mapping ? mapping.unit : '');
+        if (needsUnitQtyColumn) unitCells.push(pair ? pair.qty : '');
+        unitCells.push(pair ? pair.base_qty : '');
       }
 
       const wholesaleCells: Array<string | number> = [];
@@ -757,8 +806,9 @@ export const createProductCsvExportRows = (products: Product[]) => {
 };
 
 /**
- * A ready-to-fill template: one plain product, one multi-unit product, and one
- * product with wholesale tiers, so the shape of every column is visible.
+ * A ready-to-fill template: one plain product, one multi-unit product, one
+ * product whose extra unit is smaller than its base unit, and one with
+ * wholesale tiers, so the shape of every column is visible.
  */
 export const createProductCsvTemplateRows = () => [
   [
@@ -770,8 +820,10 @@ export const createProductCsvTemplateRows = () => [
     'purchase_price',
     'selling_price',
     'satuan_2',
+    'jumlah_2',
     'isi_2',
     'satuan_3',
+    'jumlah_3',
     'isi_3',
     'grosir_qty_1',
     'grosir_harga_1',
@@ -781,15 +833,21 @@ export const createProductCsvTemplateRows = () => [
   ],
   [
     'BRG-001', 'Air Mineral 600ml', 'minuman', 'pcs', 'pcs', 3000, 4000,
-    '', '', '', '', '', '', '', 'FINISHED_GOOD', 'true',
+    '', '', '', '', '', '', '', '', '', 'FINISHED_GOOD', 'true',
   ],
   [
     'BRG-002', 'Kopi Sachet', 'minuman', 'pcs', 'pcs', 1500, 2000,
-    'renteng', 10, 'dus', 120, '', '', '', 'FINISHED_GOOD', 'true',
+    'renteng', 1, 10, 'dus', 1, 120, '', '', '', 'FINISHED_GOOD', 'true',
+  ],
+  // Satuan jualnya lebih kecil dari satuan utama, jadi ditulis di sisi kiri:
+  // 1000 gram = 1 kg, bukan 1 gram = 0.001 kg.
+  [
+    'BRG-003', 'Beras Curah', 'sembako', 'kg', 'gram', 13000, 15,
+    'gram', 1000, 1, '', '', '', '', '', '', 'FINISHED_GOOD', 'true',
   ],
   [
-    'BRG-003', 'Gula Pasir 1kg', 'sembako', 'pcs', 'pcs', 13000, 15000,
-    '', '', '', '', 12, 14000, 'unit', 'FINISHED_GOOD', 'true',
+    'BRG-004', 'Gula Pasir 1kg', 'sembako', 'pcs', 'pcs', 13000, 15000,
+    '', '', '', '', '', '', 12, 14000, 'unit', 'FINISHED_GOOD', 'true',
   ],
 ];
 

@@ -486,13 +486,49 @@ describe('sellable units and round trip', () => {
 
     expect(parsed.fileErrors).toEqual([]);
     expect(parsed.rowErrors).toEqual([]);
-    expect(parsed.items).toHaveLength(3);
+    expect(parsed.items).toHaveLength(4);
     expect(parsed.items[1].unit_mappings).toEqual([
-      { unit: 'renteng', base_unit: 'pcs', ratio: 10 },
-      { unit: 'dus', base_unit: 'pcs', ratio: 120 },
+      { unit: 'renteng', base_unit: 'pcs', ratio: 10, qty: 1, base_qty: 10 },
+      { unit: 'dus', base_unit: 'pcs', ratio: 120, qty: 1, base_qty: 120 },
     ]);
-    expect(parsed.items[2].wholesale_prices).toEqual([
+    // Satuan yang lebih kecil dari satuan utama ditulis di sisi kiri.
+    expect(parsed.items[2].unit_mappings).toEqual([
+      { unit: 'gram', base_unit: 'kg', ratio: 0.001, qty: 1000, base_qty: 1 },
+    ]);
+    expect(parsed.items[3].wholesale_prices).toEqual([
       { min_quantity: 12, price: 14_000, price_type: 'unit' },
     ]);
+  });
+
+  test('reads a conversion written with the smaller unit on the left', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,selling_unit,satuan_2,jumlah_2,isi_2',
+      'A,Produk A,pack,pcs,pcs,12,1',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items[0].unit_mappings).toEqual([
+      { unit: 'pcs', base_unit: 'pack', ratio: 1 / 12, qty: 12, base_qty: 1 },
+    ]);
+  });
+
+  test('keeps the typed pair through an export then import round trip', () => {
+    const product: Product = {
+      ...existingProduct,
+      purchase_unit: 'pack',
+      selling_unit: 'pcs',
+      unit_mappings: [{ unit: 'pcs', base_unit: 'pack', ratio: 1 / 12, qty: 12, base_qty: 1 }],
+    };
+    const exported = createProductCsvExportRows([product]);
+
+    expect(exported[0]).toContain('jumlah_2');
+    expect(exported[0]).not.toContain('unit_mappings');
+
+    const reimported = buildProductCsvImportItemsFromRows(
+      exported.map((row) => row.map((cell) => String(cell ?? ''))),
+    );
+
+    expect(reimported.errors).toEqual([]);
+    expect(reimported.items[0].unit_mappings).toEqual(product.unit_mappings);
   });
 });

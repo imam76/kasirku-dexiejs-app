@@ -5,7 +5,7 @@ import {
   normalizeUnitKey,
 } from '@/constants/units';
 import type { CartItem, Product, ProductUnit, UnitConversion } from '@/types';
-import { getProductUnitRatio } from '@/utils/productUnits';
+import { convertProductQuantity, getProductUnitRatio } from '@/utils/productUnits';
 
 // Global registry for unit conversions
 let conversionRegistry: UnitConversion[] = DEFAULT_CONVERSIONS;
@@ -91,8 +91,17 @@ export const konversiSatuanProduk = (
   ke: ProductUnit,
 ): number => {
   if (dari === ke) return nilai;
-  const ratio = getConversionRatioForProduct(product, dari, ke);
-  return nilai * ratio;
+
+  // Konversi kemasan selalu spesifik produk, dan justru di situlah pasangan
+  // angka `qty`/`base_qty` perlu dipakai utuh: lewat ratio, 12 pcs ke satuan
+  // dasar `pack` jatuh ke 12 * (1/12) yang tidak dijamin kembali tepat 1.
+  const unitType = inferConversionUnitType(dari, ke);
+  if (unitType === 'package' || findConversionRatio(dari, ke) === undefined) {
+    const exact = convertProductQuantity(product, nilai, dari, ke);
+    if (exact !== undefined) return exact;
+  }
+
+  return nilai * getConversionRatioForProduct(product, dari, ke);
 };
 
 /**

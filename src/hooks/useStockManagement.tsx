@@ -326,8 +326,10 @@ export const useStockManagement = () => {
       category: data.category,
       purchase_unit: data.purchase_unit,
       selling_unit: defaultSellingUnit,
-      purchase_price: data.purchase_price,
-      selling_price: data.selling_price,
+      // Harga opsional di form; yang kosong tetap disimpan 0 supaya konsumen
+      // hilir (POS, HPP, ekspor) tidak perlu menangani nilai undefined.
+      purchase_price: data.purchase_price ?? 0,
+      selling_price: data.selling_price ?? 0,
       sku: data.sku || '',
       product_type: data.product_type,
       is_visible_in_pos: data.is_visible_in_pos,

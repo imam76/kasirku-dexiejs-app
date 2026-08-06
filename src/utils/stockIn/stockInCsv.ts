@@ -8,7 +8,7 @@ import {
   type ProductCsvRowError,
 } from '@/utils/productsCsv';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
-import { getProductUnitRatio, getProductUnits } from '@/utils/productUnits';
+import { convertProductQuantity, getProductUnitRatio, getProductUnits } from '@/utils/productUnits';
 
 /**
  * Which side of the cutoff a file is being read for. The routing itself belongs
@@ -337,7 +337,7 @@ export const buildStockInImport = ({
       }
     }
 
-    const baseQuantity = quantity * ratio;
+    const baseQuantity = convertProductQuantity(product, quantity, unit, product.purchase_unit) ?? quantity * ratio;
     const costPerBaseUnit = costPerUnit === undefined ? undefined : costPerUnit / ratio;
     const totalValue = costPerUnit === undefined
       ? undefined

@@ -15,6 +15,58 @@ type ProductUnitShape = {
 
 const normalizeUnit = (unit?: ProductUnit) => normalizeUnitKey(unit || 'pcs') || 'pcs';
 
+/**
+ * Ratio yang tersimpan sebagai float (mis. 0.08333333 dari 1/12) harus bisa
+ * kembali jadi angka bulat yang dulu diketik pengguna, jadi hasil pembagian
+ * yang cuma meleset di digit terakhir dibulatkan.
+ */
+const NEAR_INTEGER_TOLERANCE = 1e-6;
+
+const snapToInteger = (value: number) => {
+  const rounded = Math.round(value);
+  const scale = Math.max(1, Math.abs(value));
+  return Math.abs(value - rounded) <= NEAR_INTEGER_TOLERANCE * scale ? rounded : value;
+};
+
+export interface UnitMappingPair {
+  qty: number;
+  base_qty: number;
+  ratio: number;
+}
+
+/**
+ * Menerjemahkan satu ratio jadi pasangan angka yang enak diketik: sisi yang
+ * lebih kecil selalu dapat angka 1, jadi `ratio: 12` jadi "1 unit = 12 dasar"
+ * dan `ratio: 1/12` jadi "12 unit = 1 dasar" — bukan 0.0833.
+ */
+export const buildUnitMappingPair = (ratio: number): UnitMappingPair => {
+  if (!Number.isFinite(ratio) || ratio <= 0) return { qty: 1, base_qty: 0, ratio: 0 };
+  if (ratio >= 1) {
+    const baseQty = snapToInteger(ratio);
+    return { qty: 1, base_qty: baseQty, ratio: baseQty };
+  }
+
+  const qty = snapToInteger(1 / ratio);
+  return { qty, base_qty: 1, ratio: 1 / qty };
+};
+
+/**
+ * Sumber kebenaran satu baris konversi adalah pasangan `qty`/`base_qty` kalau
+ * ada; baris lama yang cuma menyimpan `ratio` dibaca sebagai `1 unit = ratio`.
+ */
+export const resolveUnitMappingPair = (
+  mapping: Pick<ProductUnitMapping, 'ratio' | 'qty' | 'base_qty'>,
+): UnitMappingPair => {
+  const qty = Number(mapping.qty);
+  const baseQty = Number(mapping.base_qty);
+
+  if (Number.isFinite(qty) && qty > 0 && Number.isFinite(baseQty) && baseQty > 0) {
+    return { qty, base_qty: baseQty, ratio: baseQty / qty };
+  }
+
+  return buildUnitMappingPair(Number(mapping.ratio));
+};
+
 const uniqueUnits = (units: Array<ProductUnit | undefined>) => {
   const seen = new Set<string>();
   return units
@@ -27,16 +79,25 @@ const uniqueUnits = (units: Array<ProductUnit | undefined>) => {
     });
 };
 
-export const normalizeProductUnitMappings = (product: ProductUnitShape): ProductUnitMapping[] => {
+/** Baris konversi yang pasangan angkanya sudah pasti terisi. */
+export type NormalizedProductUnitMapping = ProductUnitMapping & { qty: number; base_qty: number };
+
+export const normalizeProductUnitMappings = (product: ProductUnitShape): NormalizedProductUnitMapping[] => {
   const fallbackBaseUnit = normalizeUnit(product.purchase_unit);
   const seen = new Set<string>();
 
   return (product.unit_mappings || [])
-    .map((mapping) => ({
-      unit: normalizeUnit(mapping.unit),
-      base_unit: normalizeUnit(mapping.base_unit || fallbackBaseUnit),
-      ratio: Number(mapping.ratio),
-    }))
+    .map((mapping) => {
+      const pair = resolveUnitMappingPair(mapping);
+
+      return {
+        unit: normalizeUnit(mapping.unit),
+        base_unit: normalizeUnit(mapping.base_unit || fallbackBaseUnit),
+        ratio: pair.ratio,
+        qty: pair.qty,
+        base_qty: pair.base_qty,
+      };
+    })
     .filter((mapping) => mapping.unit && mapping.base_unit && Number.isFinite(mapping.ratio) && mapping.ratio > 0)
     .filter((mapping) => mapping.unit !== mapping.base_unit)
     .filter((mapping) => {
@@ -69,6 +130,43 @@ export const getProductUnitRatio = (
 
     if (fromRatio && toRatio) {
       return fromRatio / toRatio;
+    }
+  }
+
+  return undefined;
+};
+
+/**
+ * Konversi jumlah antar satuan produk lewat perkalian silang, bukan lewat
+ * `jumlah * ratio`. Bedanya kelihatan saat satuan dasarnya kemasan besar:
+ * `getProductUnitRatio` harus menyerahkan 1/12 sebagai float, sedangkan di sini
+ * pembagiannya cuma sekali di akhir sehingga 12 pcs kembali jadi tepat 1 pack.
+ * Mengembalikan `undefined` kalau salah satu satuan tidak punya konversi.
+ */
+export const convertProductQuantity = (
+  product: ProductUnitShape,
+  quantity: number,
+  fromUnit: ProductUnit,
+  toUnit: ProductUnit,
+): number | undefined => {
+  const from = normalizeUnit(fromUnit);
+  const to = normalizeUnit(toUnit);
+  if (from === to) return quantity;
+
+  const mappings = normalizeProductUnitMappings(product);
+  const baseUnits = uniqueUnits([product.purchase_unit, ...mappings.map((mapping) => mapping.base_unit)]);
+
+  const findPair = (unit: string, baseUnit: string): UnitMappingPair | undefined => {
+    if (unit === baseUnit) return { qty: 1, base_qty: 1, ratio: 1 };
+    return mappings.find((mapping) => mapping.unit === unit && mapping.base_unit === baseUnit);
+  };
+
+  for (const baseUnit of baseUnits) {
+    const fromPair = findPair(from, baseUnit);
+    const toPair = findPair(to, baseUnit);
+
+    if (fromPair && toPair) {
+      return (quantity * fromPair.base_qty * toPair.qty) / (fromPair.qty * toPair.base_qty);
     }
   }
 
@@ -147,7 +245,8 @@ export const buildUnitMappingsFromLegacyUnits = (
       continue;
     }
 
-    unitMappings.push({ unit, base_unit: baseUnit, ratio });
+    const pair = buildUnitMappingPair(ratio);
+    unitMappings.push({ unit, base_unit: baseUnit, ratio: pair.ratio, qty: pair.qty, base_qty: pair.base_qty });
     mappedUnits.add(unit);
   }
 

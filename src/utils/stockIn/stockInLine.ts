@@ -1,6 +1,6 @@
 import type { Product } from '@/types';
 import type { StockInLine } from '@/utils/stockIn/stockInCsv';
-import { getProductUnitRatio, getProductUnits } from '@/utils/productUnits';
+import { convertProductQuantity, getProductUnitRatio, getProductUnits } from '@/utils/productUnits';
 
 export interface ManualStockInLineInput {
   rowNumber: number;
@@ -58,7 +58,7 @@ export const buildManualStockInLine = ({
       isNewProduct,
       quantity,
       unit: resolvedUnit,
-      baseQuantity: quantity * ratio,
+      baseQuantity: convertProductQuantity(product, quantity, resolvedUnit, product.purchase_unit) ?? quantity * ratio,
       costPerUnit,
       costPerBaseUnit: costPerUnit === undefined ? undefined : costPerUnit / ratio,
       totalValue: costPerUnit === undefined ? undefined : roundCurrency(quantity * costPerUnit),

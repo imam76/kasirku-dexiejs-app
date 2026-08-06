@@ -47,7 +47,15 @@ export interface UnitConversion {
 export interface ProductUnitMapping {
   unit: ProductUnit;
   base_unit: ProductUnit;
-  ratio: number; // 1 unit = ratio base_unit
+  ratio: number; // 1 unit = ratio base_unit, turunan dari base_qty / qty
+  /**
+   * Pasangan angka apa adanya seperti yang diketik pengguna: `qty unit =
+   * base_qty base_unit`. Disimpan utuh supaya "12 pcs = 1 pack" tidak pernah
+   * berubah jadi 0.0833 saat ditampilkan ulang atau dipakai menghitung stok.
+   * Baris lama yang hanya punya `ratio` dibaca sebagai `qty: 1`.
+   */
+  qty?: number;
+  base_qty?: number;
 }
 
 export interface Product {

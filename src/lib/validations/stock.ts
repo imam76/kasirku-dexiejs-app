@@ -30,8 +30,11 @@ export const createStockSchema = (
   category: z.string().min(1, t('stock.validation.categoryRequired')),
   purchase_unit: z.string().min(1, t('stock.validation.purchaseUnitRequired')),
   selling_unit: z.string().min(1, t('stock.validation.sellingUnitRequired')),
-  purchase_price: z.number({ message: t('stock.validation.purchasePriceRequired') }).min(0, t('stock.validation.purchasePriceMin')),
-  selling_price: z.number({ message: t('stock.validation.sellingPriceRequired') }).min(0, t('stock.validation.sellingPriceMin')),
+  // Harga boleh dikosongkan dulu supaya produk bisa didaftarkan sebelum harga
+  // supplier final. Nilai kosong disimpan sebagai 0, sama seperti jalur impor
+  // CSV dan entri dasar dari dokumen pembelian.
+  purchase_price: z.number({ message: t('stock.validation.purchasePriceRequired') }).min(0, t('stock.validation.purchasePriceMin')).optional(),
+  selling_price: z.number({ message: t('stock.validation.sellingPriceRequired') }).min(0, t('stock.validation.sellingPriceMin')).optional(),
   stock: z.number().min(0, t('stock.validation.stockMin')).optional(),
   sku: z.string().optional().or(z.literal('')),
   product_type: z.enum(['FINISHED_GOOD', 'RAW_MATERIAL']),
@@ -45,7 +48,13 @@ export const createStockSchema = (
   unit_mappings: z.array(z.object({
     unit: z.string().min(1, t('stock.validation.unitRequired')),
     base_unit: z.string().min(1, t('stock.validation.baseUnitRequired')),
+    // Turunan dari pasangan di bawah, tetap divalidasi karena inilah angka yang
+    // dibaca stok, harga, dan sinkronisasi.
     ratio: z.number().min(0.000001, t('stock.validation.ratioMin')),
+    // Pasangan apa adanya dari form: `qty unit = base_qty base_unit`. Opsional
+    // supaya baris lama yang cuma punya ratio tetap lolos.
+    qty: z.number().min(0.000001, t('stock.validation.unitQtyMin')).optional(),
+    base_qty: z.number().min(0.000001, t('stock.validation.baseQtyMin')).optional(),
   })),
 }).superRefine((data, ctx) => {
   const seen = new Set<string>();
@@ -70,15 +79,13 @@ export const createStockSchema = (
       });
     }
 
-    if (unitCategory === 'package' && purchaseCategory !== 'count') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['unit_mappings', index, 'unit'],
-        message: t('stock.validation.incompatibleUnitCategory', { unit: mapping.unit }),
-      });
-    }
+    // Kemasan dan satuan hitungan sepadan ke dua arah: "1 box = 12 pcs" sama
+    // sahnya dengan "12 pcs = 1 box". Yang tidak sepadan tetap ditolak, mis.
+    // kemasan di atas satuan berat.
+    const isPackageOverCount = unitCategory === 'package' && purchaseCategory === 'count';
+    const isCountUnderPackage = unitCategory === 'count' && purchaseCategory === 'package';
 
-    if (unitCategory !== 'package' && unitCategory !== purchaseCategory) {
+    if (!isPackageOverCount && !isCountUnderPackage && unitCategory !== purchaseCategory) {
       ctx.addIssue({
         code: 'custom',
         path: ['unit_mappings', index, 'unit'],

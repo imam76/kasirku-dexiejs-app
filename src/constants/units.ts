@@ -118,8 +118,13 @@ export const createUnitDefinition = (
     id,
     name: id,
     type,
-    canBeBaseUnit: overrides.canBeBaseUnit ?? type !== 'package',
-    canBeConversionUnit: overrides.canBeConversionUnit ?? type !== 'count',
+    // Satuan apa pun boleh jadi satuan dasar maupun satuan konversi. Dulu
+    // kemasan dilarang jadi satuan dasar dan satuan hitungan dilarang jadi
+    // satuan konversi, tapi keduanya mengunci kasus nyata "satuan utama box,
+    // jual per pcs". Konsekuensinya — stok jadi pecahan — diperingatkan di
+    // form produk, bukan dilarang di sini.
+    canBeBaseUnit: overrides.canBeBaseUnit ?? true,
+    canBeConversionUnit: overrides.canBeConversionUnit ?? true,
     isPreset: overrides.isPreset ?? false,
     created_at: overrides.created_at,
     updated_at: overrides.updated_at,
@@ -154,7 +159,7 @@ export const DEFAULT_CONVERSIONS: UnitConversion[] = [
 ];
 
 export const DEFAULT_UNITS: UnitDefinition[] = [
-  createUnitDefinition('pcs', { type: 'count', canBeBaseUnit: true, canBeConversionUnit: false, isPreset: true }),
+  createUnitDefinition('pcs', { type: 'count', isPreset: true }),
   createUnitDefinition('gram', { type: 'measurement', isPreset: true }),
   createUnitDefinition('kg', { type: 'measurement', isPreset: true }),
   createUnitDefinition('ons', { type: 'measurement', isPreset: true }),
@@ -164,14 +169,14 @@ export const DEFAULT_UNITS: UnitDefinition[] = [
   createUnitDefinition('jam', { type: 'time', isPreset: true }),
   createUnitDefinition('menit', { type: 'time', isPreset: true }),
   createUnitDefinition('detik', { type: 'time', isPreset: true }),
-  createUnitDefinition('pack', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('dus', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('box', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('renteng', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('lusin', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('kodi', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('gros', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('ikat', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('bundle', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
-  createUnitDefinition('roll', { type: 'package', canBeBaseUnit: false, canBeConversionUnit: true, isPreset: true }),
+  createUnitDefinition('pack', { type: 'package', isPreset: true }),
+  createUnitDefinition('dus', { type: 'package', isPreset: true }),
+  createUnitDefinition('box', { type: 'package', isPreset: true }),
+  createUnitDefinition('renteng', { type: 'package', isPreset: true }),
+  createUnitDefinition('lusin', { type: 'package', isPreset: true }),
+  createUnitDefinition('kodi', { type: 'package', isPreset: true }),
+  createUnitDefinition('gros', { type: 'package', isPreset: true }),
+  createUnitDefinition('ikat', { type: 'package', isPreset: true }),
+  createUnitDefinition('bundle', { type: 'package', isPreset: true }),
+  createUnitDefinition('roll', { type: 'package', isPreset: true }),
 ];
