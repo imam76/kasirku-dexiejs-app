@@ -6,6 +6,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import {
   convertPurchaseDocument,
+  correctPurchaseDocument,
   createPurchaseDocument,
   issuePurchaseDocument,
   updatePurchaseDocument,
@@ -182,6 +183,14 @@ export const usePurchaseDocuments = () => {
     },
     onError: (error: Error) => modal.error({ title: t('purchaseDocuments.error.voidTitle'), content: error.message }),
   });
+  const correctMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => correctPurchaseDocument(id, reason),
+    onSuccess: () => {
+      invalidate();
+      message.success(t('purchaseDocuments.message.correctSuccess'));
+    },
+    onError: (error: Error) => modal.error({ title: t('purchaseDocuments.error.correctTitle'), content: error.message }),
+  });
 
   const getItems = (documentId: string) => db.purchaseDocumentItems.where('document_id').equals(documentId).toArray();
   const getDocument = (documentId: string): PurchaseDocument | undefined => documents.find((document) => document.id === documentId);
@@ -201,8 +210,9 @@ export const usePurchaseDocuments = () => {
     issueDocument: issueMutation.mutateAsync,
     convertDocument: convertMutation.mutateAsync,
     voidDocument: voidMutation.mutateAsync,
+    correctDocument: correctMutation.mutateAsync,
     createBasicProduct,
     isSubmitting: createMutation.isPending || updateMutation.isPending,
-    isMutating: issueMutation.isPending || convertMutation.isPending || voidMutation.isPending,
+    isMutating: issueMutation.isPending || convertMutation.isPending || voidMutation.isPending || correctMutation.isPending,
   };
 };

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
-import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { AlertTriangle, RotateCcw, Wrench } from 'lucide-react';
 import { ReceivablePaymentHistory } from '@/components/accounts-receivable/ReceivablePaymentHistory';
 import { ReceivablePaymentModal } from '@/components/accounts-receivable/ReceivablePaymentModal';
 import {
@@ -74,7 +74,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const { t } = useI18n();
   const navigate = useNavigate();
   const { can } = useAuth();
-  const { issueDocument, voidDocument, convertDocument, isMutating } = useSalesDocuments();
+  const { issueDocument, voidDocument, convertDocument, correctDocument, isMutating } = useSalesDocuments();
   const {
     getInvoicePayments,
     recordPayment,
@@ -208,6 +208,8 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const hasActiveInvoicePayments = invoicePayments.some((payment) => payment.status === 'ACTIVE');
   const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
     !(document.type === 'SALES_INVOICE' && (document.finance_transaction_id || hasActiveInvoicePayments));
+  const canCorrect = document.status === 'ISSUED' &&
+    !(document.type === 'SALES_INVOICE' && (document.finance_transaction_id || hasActiveInvoicePayments));
   const canRecordPayment = can('FINANCE_ACCESS') && Boolean(
     receivableRow &&
     config.behavior.hasPaymentStatus &&
@@ -290,6 +292,44 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     });
   };
 
+  const handleCorrect = () => {
+    let correctReason = '';
+
+    Modal.confirm({
+      title: t('salesDocuments.correctConfirmTitle'),
+      content: (
+        <div className="space-y-3">
+          <Text type="secondary">
+            {t('salesDocuments.correctConfirmContent')}
+          </Text>
+          <Input.TextArea
+            rows={3}
+            placeholder={t('salesDocuments.correctReasonPlaceholder')}
+            onChange={(event) => {
+              correctReason = event.target.value;
+            }}
+          />
+        </div>
+      ),
+      okText: t('salesDocuments.correct'),
+      onOk: async () => {
+        const normalizedReason = correctReason.trim();
+        if (!normalizedReason) {
+          throw new Error(t('salesDocuments.correctReasonRequired'));
+        }
+
+        const result = await correctDocument({ id: document.id, reason: normalizedReason });
+        navigate({
+          to: '/sales/$documentType/$documentId/edit',
+          params: {
+            documentType: getSalesDocumentTypePathSegment(result.draftDocument.type),
+            documentId: result.draftDocument.id,
+          },
+        });
+      },
+    });
+  };
+
   return (
     <div className="p-3 sm:p-4 md:p-6">
       <div className="mx-auto mb-4 flex max-w-[900px] flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -347,6 +387,11 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
               })}
             >
               {t('salesReturns.createFromSource')}
+            </Button>
+          )}
+          {canCorrect && (
+            <Button icon={<Wrench size={16} />} loading={isMutating} onClick={handleCorrect}>
+              {t('salesDocuments.correct')}
             </Button>
           )}
           {canVoid && (
@@ -703,6 +748,11 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
           <div>
             <div className="text-[10.5px] font-bold uppercase tracking-[.07em] text-gray-400">{t('salesDocuments.field.notes')}</div>
             <div className="mt-1 whitespace-pre-wrap text-[12.5px] leading-6 text-gray-500">{document.notes || '-'}</div>
+            {document.correction_source_number && (
+              <div className="mt-2 text-[12.5px] leading-6 text-gray-500">
+                {t('salesDocuments.correctedFrom', { number: document.correction_source_number })}
+              </div>
+            )}
           </div>
           <div className="text-left sm:text-right">
             {document.status === 'VOIDED' && (

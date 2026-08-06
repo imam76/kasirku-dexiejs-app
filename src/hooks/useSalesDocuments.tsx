@@ -6,6 +6,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import {
   convertSalesDocument,
+  correctSalesDocument,
   createSalesDocument,
   issueSalesDocument,
   markSalesInvoicePaid,
@@ -116,6 +117,14 @@ export const useSalesDocuments = () => {
     },
     onError: (error: Error) => modal.error({ title: t('salesDocuments.error.voidTitle'), content: error.message }),
   });
+  const correctMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => correctSalesDocument(id, reason),
+    onSuccess: () => {
+      invalidate();
+      message.success(t('salesDocuments.message.correctSuccess'));
+    },
+    onError: (error: Error) => modal.error({ title: t('salesDocuments.error.correctTitle'), content: error.message }),
+  });
   const payMutation = useMutation({
     mutationFn: ({ id, input }: { id: string; input: SalesInvoicePaymentInput }) => markSalesInvoicePaid(id, input),
     onSuccess: () => {
@@ -143,8 +152,9 @@ export const useSalesDocuments = () => {
     issueDocument: issueMutation.mutateAsync,
     convertDocument: convertMutation.mutateAsync,
     voidDocument: voidMutation.mutateAsync,
+    correctDocument: correctMutation.mutateAsync,
     payInvoice: payMutation.mutateAsync,
     isSubmitting: createMutation.isPending || updateMutation.isPending,
-    isMutating: issueMutation.isPending || convertMutation.isPending || voidMutation.isPending || payMutation.isPending,
+    isMutating: issueMutation.isPending || convertMutation.isPending || voidMutation.isPending || correctMutation.isPending || payMutation.isPending,
   };
 };

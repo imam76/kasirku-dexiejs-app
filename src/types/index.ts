@@ -1311,6 +1311,8 @@ export interface SalesDocument {
   source_document_id?: string;
   source_document_number?: string;
   source_document_type?: SalesDocumentType;
+  correction_source_id?: string;
+  correction_source_number?: string;
   currency_code?: string;
   currency_name?: string;
   currency_symbol?: string;
@@ -1611,6 +1613,8 @@ export interface PurchaseDocument {
   source_document_id?: string;
   source_document_number?: string;
   source_document_type?: PurchaseDocumentType;
+  correction_source_id?: string;
+  correction_source_number?: string;
   currency_code?: string;
   currency_name?: string;
   currency_symbol?: string;

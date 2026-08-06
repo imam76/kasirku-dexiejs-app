@@ -969,3 +969,107 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
     await recalculatePurchaseInvoicePaymentsForReturnSource(document.source_document_id);
   }
 };
+
+export const correctPurchaseDocument = async (sourceId: string, reason: string) => {
+  const currentUser = await getCurrentSessionUser();
+  const source = await db.purchaseDocuments.get(sourceId);
+  if (!source) throw new Error('Dokumen tidak ditemukan.');
+  await requireUserPermission(currentUser, getPurchaseDocumentPermission(source.type));
+  if (source.status !== 'ISSUED') {
+    throw new Error('Hanya dokumen yang sudah terbit yang bisa dikoreksi.');
+  }
+  if (source.type === 'PURCHASE_INVOICE' && (source.finance_transaction_id || Number(source.paid_amount || 0) > 0)) {
+    throw new Error('Invoice yang sudah memiliki pembayaran tidak bisa dikoreksi dari fitur ini. Void pembayarannya terlebih dahulu.');
+  }
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw new Error('Alasan koreksi wajib diisi.');
+  }
+
+  const config = getPurchaseDocumentConfig(source.type);
+  const sourceItems = await db.purchaseDocumentItems.where('document_id').equals(sourceId).toArray();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  let stockMutations: StockMutation[] = [];
+
+  const voidedDocument = withUpdatedPurchaseDocumentSync({
+    ...source,
+    status: 'VOIDED',
+    voided_at: nowIso,
+    void_reason: `Dikoreksi: ${normalizedReason}`,
+    updated_at: nowIso,
+  }, source, currentUser);
+
+  const targetId = crypto.randomUUID();
+  const documentNumber = await createPurchaseDocumentNumber(config.numberPrefix, now);
+  const sourceCurrencySnapshot = snapshotFromDocumentInput(source, undefined, source.document_date);
+  const draftItems = normalizeDocumentItems(sourceItems.map((item) => ({
+    ...item,
+    id: crypto.randomUUID(),
+    document_id: targetId,
+  })), targetId, nowIso, sourceCurrencySnapshot);
+  const draftDocument = withCreatedPurchaseDocumentSync(applyConfigBehavior({
+    ...source,
+    id: targetId,
+    document_number: documentNumber,
+    status: 'DRAFT',
+    correction_source_id: source.id,
+    correction_source_number: source.document_number,
+    finance_transaction_id: undefined,
+    payment_status: config.behavior.hasPaymentStatus ? 'UNPAID' : undefined,
+    paid_amount: config.behavior.hasPaymentStatus ? 0 : undefined,
+    paid_at: undefined,
+    issued_at: undefined,
+    voided_at: undefined,
+    void_reason: undefined,
+    sync_error: undefined,
+    last_synced_at: undefined,
+    remote_updated_at: undefined,
+    created_at: nowIso,
+    updated_at: nowIso,
+  } satisfies PurchaseDocument, config), currentUser);
+
+  await db.transaction('rw', purchaseDocumentTables, async () => {
+    if (shouldApplyPurchaseReturnStockImpact(source, config)) {
+      stockMutations = await restorePurchaseReturnStock(source, sourceItems, currentUser, nowIso, normalizedReason);
+    } else if (shouldApplyPurchaseStockInImpact(source, config)) {
+      stockMutations = await restoreReceiptStock(source, sourceItems, currentUser, nowIso, normalizedReason);
+    }
+
+    await db.purchaseDocuments.put(voidedDocument);
+    if (source.type === 'PURCHASE_INVOICE') {
+      await reversePurchaseInvoiceJournal(
+        source,
+        `Pembalikan jurnal purchase invoice ${source.document_number}: ${normalizedReason}`,
+        currentUser,
+      );
+    } else if (source.type === 'PURCHASE_RETURN') {
+      await reversePurchaseReturnJournal(
+        source,
+        `Pembalikan jurnal purchase return ${source.document_number}: ${normalizedReason}`,
+        currentUser,
+      );
+    }
+
+    await db.purchaseDocuments.add(draftDocument);
+    await db.purchaseDocumentItems.bulkAdd(draftItems);
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'PURCHASE_DOCUMENT_CORRECTED',
+      entity: 'purchaseDocuments',
+      entity_id: draftDocument.id,
+      description: `${currentUser?.name ?? 'User'} membuat koreksi ${draftDocument.document_number} dari ${source.document_number}. Alasan: ${normalizedReason}`,
+    });
+  });
+
+  await enqueueStockMutations(stockMutations);
+  await enqueuePurchaseDocumentBundleSync(voidedDocument, sourceItems, 'update');
+  await enqueuePurchaseDocumentBundleSync(draftDocument, draftItems, 'create');
+
+  if (source.type === 'PURCHASE_RETURN') {
+    await recalculatePurchaseInvoicePaymentsForReturnSource(source.source_document_id);
+  }
+
+  return { voidedDocument, draftDocument, items: draftItems };
+};

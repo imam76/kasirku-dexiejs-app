@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
-import { AlertTriangle, FileCheck2 } from 'lucide-react';
+import { AlertTriangle, FileCheck2, Wrench } from 'lucide-react';
 import { PayablePaymentHistory } from '@/components/accounts-payable/PayablePaymentHistory';
 import {
   getPurchaseDocumentConfig,
@@ -78,7 +78,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
   const { t } = useI18n();
   const navigate = useNavigate();
   const { can } = useAuth();
-  const { issueDocument, voidDocument, convertDocument, isMutating } = usePurchaseDocuments();
+  const { issueDocument, voidDocument, convertDocument, correctDocument, isMutating } = usePurchaseDocuments();
   const {
     getInvoicePayments,
     voidPayment,
@@ -138,6 +138,8 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
 
   const canEdit = document.status === 'DRAFT';
   const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
+    !(document.type === 'PURCHASE_INVOICE' && (document.finance_transaction_id || Number(document.paid_amount || 0) > 0));
+  const canCorrect = document.status === 'ISSUED' &&
     !(document.type === 'PURCHASE_INVOICE' && (document.finance_transaction_id || Number(document.paid_amount || 0) > 0));
   const canReconcileCost = can('PURCHASE_RECEIPT_MANAGE') &&
     document.type === 'PURCHASE_RECEIPT' &&
@@ -226,6 +228,44 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
     });
   };
 
+  const handleCorrect = () => {
+    let correctReason = '';
+
+    Modal.confirm({
+      title: t('purchaseDocuments.correctConfirmTitle'),
+      content: (
+        <div className="space-y-3">
+          <Text type="secondary">
+            {t('purchaseDocuments.correctConfirmContent')}
+          </Text>
+          <Input.TextArea
+            rows={3}
+            placeholder={t('purchaseDocuments.correctReasonPlaceholder')}
+            onChange={(event) => {
+              correctReason = event.target.value;
+            }}
+          />
+        </div>
+      ),
+      okText: t('purchaseDocuments.correct'),
+      onOk: async () => {
+        const normalizedReason = correctReason.trim();
+        if (!normalizedReason) {
+          throw new Error(t('purchaseDocuments.correctReasonRequired'));
+        }
+
+        const result = await correctDocument({ id: document.id, reason: normalizedReason });
+        navigate({
+          to: '/purchases/$documentType/$documentId/edit',
+          params: {
+            documentType: getPurchaseDocumentTypePathSegment(result.draftDocument.type),
+            documentId: result.draftDocument.id,
+          },
+        });
+      },
+    });
+  };
+
   return (
     <div className="p-3 sm:p-4 md:p-6">
       <div className="mx-auto mb-4 flex max-w-[900px] flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -285,6 +325,11 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
               })}
             </Button>
             ))}
+          {canCorrect && (
+            <Button icon={<Wrench size={16} />} loading={isMutating} onClick={handleCorrect}>
+              {t('purchaseDocuments.correct')}
+            </Button>
+          )}
           {canVoid && (
             <Button danger icon={<AlertTriangle size={16} />} onClick={handleVoid}>
               {t('purchaseDocuments.void')}
@@ -569,6 +614,11 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
           <div>
             <div className="text-[10.5px] font-bold uppercase tracking-[.07em] text-gray-400">{t('purchaseDocuments.field.notes')}</div>
             <div className="mt-1 whitespace-pre-wrap text-[12.5px] leading-6 text-gray-500">{document.notes || '-'}</div>
+            {document.correction_source_number && (
+              <div className="mt-2 text-[12.5px] leading-6 text-gray-500">
+                {t('purchaseDocuments.correctedFrom', { number: document.correction_source_number })}
+              </div>
+            )}
           </div>
           {(document.voided_at || document.void_reason) && (
             <div className="text-left sm:text-right">

@@ -647,6 +647,101 @@ export const voidSalesDocument = async (id: string, reason: string) => {
   await enqueueSalesDocumentBundleSync(voidedDocument, items, 'update');
 };
 
+export const correctSalesDocument = async (sourceId: string, reason: string) => {
+  const currentUser = await getCurrentSessionUser();
+  const source = await db.salesDocuments.get(sourceId);
+  if (!source) throw new Error('Dokumen tidak ditemukan.');
+  await requireUserPermission(currentUser, getSalesDocumentPermission(source.type));
+  if (source.status !== 'ISSUED') {
+    throw new Error('Hanya dokumen yang sudah terbit yang bisa dikoreksi.');
+  }
+  const activePaymentCount = source.type === 'SALES_INVOICE'
+    ? await db.salesInvoicePayments
+      .where('sales_document_id')
+      .equals(sourceId)
+      .filter((payment) => payment.status === 'ACTIVE')
+      .count()
+    : 0;
+  if (source.type === 'SALES_INVOICE' && (source.finance_transaction_id || activePaymentCount > 0)) {
+    throw new Error('Invoice yang sudah memiliki pembayaran tidak bisa dikoreksi dari fitur ini. Void pembayarannya terlebih dahulu.');
+  }
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw new Error('Alasan koreksi wajib diisi.');
+  }
+
+  const config = getSalesDocumentConfig(source.type);
+  const sourceItems = await db.salesDocumentItems.where('document_id').equals(sourceId).toArray();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  let stockMutations: StockMutation[] = [];
+
+  const voidedDocument = withUpdatedSalesDocumentSync({
+    ...source,
+    status: 'VOIDED',
+    voided_at: nowIso,
+    void_reason: `Dikoreksi: ${normalizedReason}`,
+    updated_at: nowIso,
+  }, source, currentUser);
+
+  const targetId = crypto.randomUUID();
+  const documentNumber = await createSalesDocumentNumber(config.numberPrefix, now);
+  const sourceCurrencySnapshot = snapshotFromDocumentInput(source, undefined, source.document_date);
+  const draftItems = normalizeDocumentItems(sourceItems.map((item) => ({
+    ...item,
+    id: crypto.randomUUID(),
+    document_id: targetId,
+  })), targetId, nowIso, sourceCurrencySnapshot);
+  const draftDocument = withCreatedSalesDocumentSync(applyPaymentStatusBehavior({
+    ...source,
+    id: targetId,
+    document_number: documentNumber,
+    status: 'DRAFT',
+    correction_source_id: source.id,
+    correction_source_number: source.document_number,
+    finance_transaction_id: undefined,
+    payment_status: config.behavior.hasPaymentStatus ? 'UNPAID' : undefined,
+    paid_amount: undefined,
+    paid_at: undefined,
+    issued_at: undefined,
+    voided_at: undefined,
+    void_reason: undefined,
+    sync_error: undefined,
+    last_synced_at: undefined,
+    remote_updated_at: undefined,
+    created_at: nowIso,
+    updated_at: nowIso,
+  } satisfies SalesDocument, config), currentUser);
+
+  await db.transaction('rw', salesDocumentTables, async () => {
+    if (source.type === 'SALES_DELIVERY') {
+      stockMutations = await restoreDeliveryStock(source, sourceItems, currentUser, nowIso, normalizedReason);
+    }
+
+    await db.salesDocuments.put(voidedDocument);
+    if (source.type === 'SALES_INVOICE') {
+      await reverseSalesInvoiceJournal(source, `Pembalikan jurnal invoice ${source.document_number}: ${normalizedReason}`, currentUser);
+    }
+
+    await db.salesDocuments.add(draftDocument);
+    await db.salesDocumentItems.bulkAdd(draftItems);
+
+    await writeActivityLog({
+      user: currentUser,
+      action: 'SALES_DOCUMENT_CORRECTED',
+      entity: 'salesDocuments',
+      entity_id: draftDocument.id,
+      description: `${currentUser?.name ?? 'User'} membuat koreksi ${draftDocument.document_number} dari ${source.document_number}. Alasan: ${normalizedReason}`,
+    });
+  });
+
+  await enqueueStockMutations(stockMutations);
+  await enqueueSalesDocumentBundleSync(voidedDocument, sourceItems, 'update');
+  await enqueueSalesDocumentBundleSync(draftDocument, draftItems, 'create');
+
+  return { voidedDocument, draftDocument, items: draftItems };
+};
+
 export const recalculateSalesInvoicePaymentStatus = async (invoiceId: string) => {
   await recalculateSalesInvoicePaidAmount(invoiceId);
 };
