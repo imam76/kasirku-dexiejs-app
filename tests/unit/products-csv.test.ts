@@ -456,13 +456,17 @@ describe('sellable units and round trip', () => {
     expect(plan.items[0].product.sellable_units).toEqual(['pcs', 'dus']);
   });
 
-  test('keeps an explicit sellable_units column as the override', () => {
+  test('never lets the sellable_units column narrow the derived list', () => {
     const parsed = buildProductCsvImportItems([
       'sku,name,purchase_unit,selling_unit,satuan_2,isi_2,sellable_units',
       'A,Produk A,pcs,pcs,dus,24,dus',
     ].join('\n'));
 
-    expect(parsed.items[0].sellable_units).toEqual(['dus']);
+    // Form produk tidak bisa menjual sebagian saja dari satuan yang punya
+    // konversi, jadi file pun tidak — kalau tidak, produk yang sama berubah
+    // daftar satuannya cuma karena pernah dibuka di form.
+    expect(parsed.items[0].sellable_units).toEqual(['pcs', 'dus']);
+    expect(parsed.items[0].ignored_sellable_units).toEqual(['pcs']);
   });
 
   test('survives an export then import round trip without JSON cells', () => {
@@ -486,7 +490,32 @@ describe('sellable units and round trip', () => {
     expect(reimported.items[0].wholesale_prices).toEqual(product.wholesale_prices);
   });
 
-  test('falls back to a JSON column when a mapping is not based on the purchase unit', () => {
+  test('exports a mapping written from the base unit through the wide columns too', () => {
+    // Bentuk yang ditulis form produk: "1 pcs = 0.5 dus". Kalau sisinya tidak
+    // dibalik saat ekspor, konversinya jatuh ke sel JSON dan satuan jualnya
+    // hilang begitu file yang sama diimpor lagi.
+    const product: Product = {
+      ...existingProduct,
+      purchase_unit: 'pcs',
+      unit_mappings: [{ from_quantity: 1, from_unit: 'pcs', to_quantity: 0.5, to_unit: 'dus' }],
+      sellable_units: ['pcs', 'dus'],
+    };
+    const exported = exportRowsOf(product);
+
+    expect(exported[0]).not.toContain('unit_mappings');
+    expect(exported[0]).toContain('satuan_2');
+
+    const plan = planFromRows(exported, []);
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.warnings).toEqual([]);
+    expect(plan.items[0].product.sellable_units).toEqual(['pcs', 'dus']);
+    expect(plan.items[0].product.unit_mappings).toEqual([
+      { from_quantity: 0.5, from_unit: 'dus', to_quantity: 1, to_unit: 'pcs' },
+    ]);
+  });
+
+  test('falls back to a JSON column when a mapping does not touch the purchase unit', () => {
     const product: Product = {
       ...existingProduct,
       purchase_unit: 'pcs',
@@ -496,6 +525,23 @@ describe('sellable units and round trip', () => {
 
     expect(headers).toContain('unit_mappings');
     expect(String(row[headers.indexOf('unit_mappings')])).toContain('lusin');
+  });
+
+  test('keeps sellable units that only exist in the JSON unit_mappings cell', () => {
+    const product: Product = {
+      ...existingProduct,
+      purchase_unit: 'pcs',
+      selling_unit: 'pcs',
+      unit_mappings: [
+        { from_quantity: 1, from_unit: 'dus', to_quantity: 20, to_unit: 'lusin' },
+        { from_quantity: 1, from_unit: 'lusin', to_quantity: 12, to_unit: 'pcs' },
+      ],
+      sellable_units: ['pcs', 'lusin', 'dus'],
+    };
+    const plan = planFromRows(exportRowsOf(product), []);
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.items[0].product.sellable_units).toEqual(['pcs', 'dus', 'lusin']);
   });
 
   test('ships a template that imports cleanly as-is', () => {
@@ -584,7 +630,17 @@ describe('sellable units and round trip', () => {
     ], []);
 
     expect(plan.items[0].product.sellable_units).toEqual(['pcs']);
-    expect(plan.warnings.join(' ')).toContain('sellable_units (dus) diabaikan');
+    expect(plan.warnings.join(' ')).toContain('kolom sellable_units (dus) tidak dipakai');
+  });
+
+  test('reports a sellable_units column that tries to drop a converted unit', () => {
+    const plan = planFromRows([
+      ['sku', 'name', 'purchase_unit', 'selling_unit', 'satuan_2', 'isi_2', 'sellable_units'],
+      ['B', 'Produk B', 'pcs', 'pcs', 'dus', '24', '["pcs"]'],
+    ], []);
+
+    expect(plan.items[0].product.sellable_units).toEqual(['pcs', 'dus']);
+    expect(plan.warnings.join(' ')).toContain('kolom sellable_units (dus) tidak dipakai');
   });
 
   test('reports a selling unit that is not among the product units instead of swapping it silently', () => {
@@ -599,20 +655,32 @@ describe('sellable units and round trip', () => {
     expect(plan.errors.join(' ')).toContain('dus');
   });
 
-  test('never lets a dangling equation become a sellable unit', () => {
+  test('reads sellable units from a JSON equation written between two non-base units', () => {
     const plan = planFromRows([
       ['sku', 'name', 'purchase_unit', 'selling_unit', 'unit_mappings'],
       ['B', 'Produk B', 'kg', 'kg', '[{"unit":"gram","base_unit":"ons","ratio":0.01,"qty":100,"base_qty":1}]'],
     ], []);
 
-    // Persamaan gram–ons sendiri sah, jadi tetap disimpan. Yang dijaga adalah
-    // daftar satuan jual: `gram` tidak nyambung ke `kg`, jadi ia tidak pernah
-    // ikut ke kasir dan stoknya tidak bisa tercatat salah.
+    // Sama seperti form produk: setiap satuan yang muncul di persamaan jadi
+    // satuan jual, selama ia masih nyambung ke satuan utama — gram dan ons
+    // sampai ke kg lewat konversi global.
     expect(plan.items).toHaveLength(1);
-    expect(plan.items[0].product.sellable_units).toEqual(['kg']);
+    expect(plan.items[0].product.sellable_units).toEqual(['kg', 'gram', 'ons']);
     expect(plan.items[0].product.unit_mappings).toEqual([
       { from_quantity: 100, from_unit: 'gram', to_quantity: 1, to_unit: 'ons' },
     ]);
+  });
+
+  test('never lets a dangling equation become a sellable unit', () => {
+    const plan = planFromRows([
+      ['sku', 'name', 'purchase_unit', 'selling_unit', 'unit_mappings'],
+      ['B', 'Produk B', 'pcs', 'pcs', '[{"unit":"gram","base_unit":"ons","ratio":0.01,"qty":100,"base_qty":1}]'],
+    ], []);
+
+    // gram dan ons tidak punya jalan ke pcs, jadi barisnya digugurkan — bukan
+    // diam-diam masuk kasir dengan stok yang tidak bisa dihitung.
+    expect(plan.items).toHaveLength(0);
+    expect(plan.errors.join(' ')).toContain('gram');
   });
 
   test('keeps a JSON mapping that is based on the purchase unit', () => {

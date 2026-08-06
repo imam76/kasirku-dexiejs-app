@@ -80,12 +80,13 @@ const buildImportedProduct = ({
     warnings.push('harga grosir produk ini dihapus karena kolom grosirnya ada di file tapi dikosongkan.');
   }
 
-  // Kolom satuan eksplisit menang atas kolom legacy. Kalau keduanya diisi dan
-  // yang eksplisit tidak menyebut satuannya, `sellable_units` tidak boleh
-  // diam-diam jadi penentu — pengguna harus tahu isian itu tidak terpakai.
+  // Daftar satuan jual selalu diturunkan dari konversi satuan, jadi kolom
+  // `sellable_units` tidak pernah jadi penentu — tidak untuk menambah satuan
+  // tanpa konversi, tidak juga untuk mempersempit. Isinya yang berbeda harus
+  // terbaca di layar konfirmasi supaya pengguna tahu isian itu tidak terpakai.
   if (item.ignored_sellable_units && item.ignored_sellable_units.length > 0) {
     warnings.push(
-      `kolom sellable_units (${item.ignored_sellable_units.join(', ')}) diabaikan karena kolom satuan di file yang menentukan daftarnya.`,
+      `kolom sellable_units (${item.ignored_sellable_units.join(', ')}) tidak dipakai karena daftar satuan jual mengikuti konversi satuan di file.`,
     );
   }
 

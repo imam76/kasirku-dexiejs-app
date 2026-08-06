@@ -18,9 +18,10 @@ export type ProductCsvImportItem = {
   wholesale_prices?: Product['wholesale_prices'];
   sellable_units?: string[];
   /**
-   * Satuan yang diminta kolom `sellable_units` tapi tidak punya konversi di
-   * file. Dibawa terpisah supaya rencana import bisa melaporkannya sebagai
-   * peringatan — barisnya sendiri tetap layak diimpor.
+   * Satuan yang isinya berbeda antara kolom `sellable_units` dan daftar satuan
+   * yang punya konversi di file — baik yang diminta tanpa konversi maupun yang
+   * dicoba dikeluarkan dari daftar. Dibawa terpisah supaya rencana import bisa
+   * melaporkannya sebagai peringatan; barisnya sendiri tetap layak diimpor.
    */
   ignored_sellable_units?: string[];
   unit_mappings?: Product['unit_mappings'];
@@ -489,34 +490,40 @@ export const buildProductCsvImportItemsFromRows = (
       idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined,
     );
 
-    // Kolom `satuan_N` yang ada di file menentukan satuan apa saja yang
-    // tersedia: satuan utama plus setiap satuan yang konversinya ditulis.
-    // Tanpa aturan ini, mengosongkan kolom satuan tidak pernah benar-benar
-    // menghapus satuan — `sellable_units` hasil ekspor masih menyebutnya, dan
-    // barisnya justru ditolak karena satuan itu tak lagi punya konversi.
+    // Kolom satuan yang ada di file menentukan satuan apa saja yang tersedia:
+    // satuan utama plus setiap satuan yang konversinya ditulis — dari sisi mana
+    // pun persamaannya ditulis, dan dari kolom lebar maupun sel JSON. Tanpa
+    // aturan ini, mengosongkan kolom satuan tidak pernah benar-benar menghapus
+    // satuan — `sellable_units` hasil ekspor masih menyebutnya, dan barisnya
+    // justru ditolak karena satuan itu tak lagi punya konversi.
     const baseUnit = (purchase_unit || '').trim();
-    const availableUnits = hasUnitColumns
-      ? Array.from(new Set([baseUnit, ...wideUnitMappings.map((mapping) => mapping.from_unit)].filter(Boolean)))
+    const availableUnits = hasUnitColumns && unit_mappings !== undefined
+      ? Array.from(new Set([
+        baseUnit,
+        ...unit_mappings.flatMap((mapping) => [mapping.from_unit, mapping.to_unit]),
+      ].filter(Boolean)))
       : undefined;
 
-    // Kolom `sellable_units` tetap dihormati, tapi hanya untuk mempersempit.
-    // Satuan yang diminta tanpa konversi tidak diam-diam ikut; pengguna diberi
-    // tahu supaya tahu isian itu tidak terpakai.
+    // Satu aturan di semua jalur: daftar satuan jual adalah satuan utama plus
+    // setiap satuan yang punya konversi — sama seperti form produk, yang juga
+    // tidak bisa lagi menjual satuan tanpa persamaan konversinya. Kolom
+    // `sellable_units` karena itu tidak pernah menentukan daftarnya, baik untuk
+    // menambah maupun mempersempit; isinya yang berbeda dilaporkan supaya
+    // pengguna tahu isian itu tidak terpakai.
     let sellable_units = declaredSellableUnits;
     let ignored_sellable_units: string[] | undefined;
     if (availableUnits) {
-      if (!declaredSellableUnits || declaredSellableUnits.length === 0) {
-        sellable_units = availableUnits;
-      } else {
-        const isAvailable = (unit: string) => availableUnits.some(
-          (known) => known.toLowerCase() === unit.toLowerCase(),
-        );
-        const ignored = declaredSellableUnits.filter((unit) => !isAvailable(unit));
-        if (ignored.length > 0) ignored_sellable_units = ignored;
+      const declared = declaredSellableUnits ?? [];
+      const sameUnit = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
+      const ignored = [
+        ...declared.filter((unit) => !availableUnits.some((known) => sameUnit(known, unit))),
+        ...(declared.length > 0
+          ? availableUnits.filter((unit) => !declared.some((known) => sameUnit(known, unit)))
+          : []),
+      ];
 
-        const narrowed = declaredSellableUnits.filter(isAvailable);
-        sellable_units = narrowed.length > 0 ? narrowed : availableUnits;
-      }
+      if (ignored.length > 0) ignored_sellable_units = ignored;
+      sellable_units = availableUnits;
     }
 
     const rawProductType = idxProductType !== undefined ? (row[idxProductType] ?? '').trim().toUpperCase() : '';
@@ -758,21 +765,49 @@ const TRAILING_EXPORT_HEADERS = [
 const normalizeUnitName = (unit?: string) => (unit || '').trim().toLowerCase();
 
 /**
+ * Kolom lebar selalu berbunyi `jumlah_N satuan_N = isi_N satuan_utama`, jadi
+ * baris yang ditulis dari sisi satuan utama ("1 kg = 5 box" — bentuk yang
+ * dipakai form produk) dibalik dulu. Persamaannya sama persis, cuma sisinya
+ * bertukar, jadi tidak ada konversi yang berubah arti.
+ */
+const toWideUnitMapping = (
+  mapping: NonNullable<Product['unit_mappings']>[number],
+  baseUnit: string,
+) => {
+  if (normalizeUnitName(mapping.to_unit) === baseUnit) return mapping;
+  if (normalizeUnitName(mapping.from_unit) === baseUnit) {
+    return {
+      from_quantity: mapping.to_quantity,
+      from_unit: mapping.to_unit,
+      to_quantity: mapping.from_quantity,
+      to_unit: mapping.from_unit,
+    };
+  }
+
+  return undefined;
+};
+
+/**
  * Unit mappings only survive a round trip through the wide columns when every
- * mapping is expressed against the purchase unit. Anything else keeps its JSON
- * cell so no conversion is lost on export.
+ * mapping touches the purchase unit. Anything else keeps its JSON cell so no
+ * conversion is lost on export.
  */
 const usesWideUnitColumns = (product: Product) => {
   const mappings = product.unit_mappings || [];
   if (mappings.length === 0) return true;
 
   const baseUnit = normalizeUnitName(product.purchase_unit);
-  return mappings.every((mapping) => normalizeUnitName(mapping.to_unit) === baseUnit);
+  return mappings.every((mapping) => toWideUnitMapping(mapping, baseUnit) !== undefined);
 };
 
-const wideUnitMappingsOf = (product: Product) => (
-  usesWideUnitColumns(product) ? product.unit_mappings || [] : []
-);
+const wideUnitMappingsOf = (product: Product) => {
+  if (!usesWideUnitColumns(product)) return [];
+
+  const baseUnit = normalizeUnitName(product.purchase_unit);
+  return (product.unit_mappings || [])
+    .map((mapping) => toWideUnitMapping(mapping, baseUnit))
+    .filter((mapping): mapping is NonNullable<typeof mapping> => mapping !== undefined);
+};
 
 export const createProductCsvExportRows = (products: Product[]) => {
   // Kolom `jumlah_N` baru muncul kalau ada konversi yang sisi kirinya bukan 1,
