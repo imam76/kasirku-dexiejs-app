@@ -340,7 +340,11 @@ export const useStockManagement = () => {
     const sellableUnits = data.sellable_units && data.sellable_units.length > 0
       ? data.sellable_units
       : [data.selling_unit || 'pcs'];
-    const defaultSellingUnit = sellableUnits[0] || data.selling_unit || 'pcs';
+    // Satuan jual default dipilih sendiri oleh pengguna; urutan daftar satuan
+    // hanya jadi cadangan saat pilihannya sudah tidak ada lagi di daftar.
+    const defaultSellingUnit = data.selling_unit && sellableUnits.includes(data.selling_unit)
+      ? data.selling_unit
+      : sellableUnits[0] || 'pcs';
 
     await upsertMutation.mutateAsync({
       name: data.name,

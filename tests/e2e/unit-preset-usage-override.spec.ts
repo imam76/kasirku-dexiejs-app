@@ -63,11 +63,15 @@ test('default unit usage can be overridden and is reflected in the product form'
   await page.keyboard.press('Enter');
   await expect(baseUnitSelect).toContainText('pcs');
 
+  // Satuan jual hanya lahir dari baris konversi, jadi penandaan "bukan satuan
+  // konversi" harus menutup pilihannya di baris konversi itu sendiri.
   await productDialog.getByRole('tab', { name: /Multi Unit/ }).click();
-  const sellableUnitSelect = productDialog.getByTestId('stock-product-sellable-units');
-  await sellableUnitSelect.click();
-  await sellableUnitSelect.getByRole('combobox').fill('box');
-  await expect(page.getByRole('option', { name: 'box', exact: true })).toHaveCount(0);
+  await productDialog.getByRole('button', { name: 'Tambah Unit' }).click();
+  const blockedTargetUnitSelect = productDialog.getByTestId('stock-product-unit-mapping-target-unit-0');
+  await blockedTargetUnitSelect.click();
+  await expect(
+    page.locator('.ant-select-dropdown:visible .ant-select-item-option-content', { hasText: /^box$/ }),
+  ).toHaveCount(0);
   await page.keyboard.press('Escape');
 
   await productDialog.getByRole('button', { name: 'Batal' }).click();
@@ -108,23 +112,21 @@ test('default unit usage can be overridden and is reflected in the product form'
   await expect(sellingPriceInput).toHaveValue('1.500.000');
 
   await restoredProductDialog.getByRole('tab', { name: /Multi Unit/ }).click();
-  const restoredSellableUnitSelect = restoredProductDialog.getByTestId('stock-product-sellable-units');
-  await restoredSellableUnitSelect.click();
-  await restoredSellableUnitSelect.getByRole('combobox').fill('box');
-  const visibleBoxOption = page.locator(
-    '.ant-select-dropdown:visible .ant-select-item-option-content',
-    { hasText: /^box$/ },
-  );
-  await expect(visibleBoxOption).toBeVisible();
-  await visibleBoxOption.click();
-
-  await expect(restoredSellableUnitSelect).toContainText('box');
+  await restoredProductDialog.getByRole('button', { name: 'Tambah Unit' }).click();
   await expect(restoredProductDialog.getByText('Konversi Produk Belum Ada')).toBeVisible();
 
   const productQuantityInput = restoredProductDialog.getByTestId('stock-product-unit-mapping-quantity-0');
   const productSourceUnitSelect = restoredProductDialog.getByTestId('stock-product-unit-mapping-source-unit-0');
   const productTargetUnitSelect = restoredProductDialog.getByTestId('stock-product-unit-mapping-target-unit-0');
   const productValueInput = restoredProductDialog.getByTestId('stock-product-unit-mapping-value-0');
+
+  await productTargetUnitSelect.click();
+  const visibleBoxOption = page.locator(
+    '.ant-select-dropdown:visible .ant-select-item-option-content',
+    { hasText: /^box$/ },
+  );
+  await expect(visibleBoxOption).toBeVisible();
+  await visibleBoxOption.click();
 
   await expect(productQuantityInput).toBeDisabled();
   await expect(productQuantityInput).toHaveValue('1');
@@ -133,6 +135,10 @@ test('default unit usage can be overridden and is reflected in the product form'
   await expect(productTargetUnitSelect).toContainText('box');
   await productValueInput.fill('5');
   await expect(restoredProductDialog.getByText('Konversi Produk Belum Ada')).toHaveCount(0);
+
+  // Satuan jual default baru muncul setelah produk punya lebih dari satu satuan.
+  const defaultUnitSelect = restoredProductDialog.getByTestId('stock-product-default-unit');
+  await expect(defaultUnitSelect).toContainText('kg');
 
   await restoredProductDialog.getByRole('tab', { name: 'Harga Grosir' }).click();
   await restoredProductDialog.getByRole('button', { name: 'Tambah Harga' }).click();

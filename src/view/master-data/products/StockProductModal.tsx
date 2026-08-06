@@ -35,12 +35,18 @@ import { resolveProductUnitRatio } from '@/utils/productUnits';
 
 const { useBreakpoint } = Grid;
 
-const buildSellableUnitsWithDefault = (defaultUnit: string, units: string[]) => {
-  const normalizedDefault = String(defaultUnit || '').trim();
+/** Ratio yang tersimpan sebagai float (mis. 1/12) dikembalikan ke angka bulat. */
+const snapNearInteger = (value: number) => {
+  const rounded = Math.round(value);
+  const scale = Math.max(1, Math.abs(value));
+  return Math.abs(value - rounded) <= 1e-9 * scale ? rounded : value;
+};
+
+const buildProductUnits = (baseUnit: string, units: Array<string | undefined>) => {
   const seen = new Set<string>();
 
-  return [normalizedDefault, ...units]
-    .map((unit) => String(unit || '').trim())
+  return [baseUnit, ...units]
+    .map((unit) => normalizeUnitKey(unit))
     .filter(Boolean)
     .filter((unit) => {
       if (seen.has(unit)) return false;
@@ -120,8 +126,7 @@ export default function StockProductModal({
   const sellableUnits = useMemo(() => watchedSellableUnits || [], [watchedSellableUnits]);
   const unitMappings = useMemo(() => watchedUnitMappings || [], [watchedUnitMappings]);
   const wholesalePrices = useMemo(() => watchedWholesalePrices || [], [watchedWholesalePrices]);
-  const previousPurchaseUnitRef = useRef<string | null>(null);
-  const pendingAutoMappingUnitsRef = useRef(new Set<string>());
+  const hasMaterializedStoredUnitsRef = useRef(false);
 
   const { data: conversions = [] } = useQuery({
     queryKey: ['unitConversions'],
@@ -160,25 +165,32 @@ export default function StockProductModal({
     return map;
   }, [unitDefinitions]);
 
-  const selectedSellableUnits = useMemo(() => {
-    const seen = new Set<string>();
+  const selectedSellableUnits = useMemo(
+    () => buildProductUnits('', sellableUnits),
+    [sellableUnits],
+  );
 
-    return sellableUnits
-      .map((unit) => String(unit || '').trim())
-      .filter(Boolean)
-      .filter((unit) => {
-        if (seen.has(unit)) return false;
-        seen.add(unit);
-        return true;
-      });
-  }, [sellableUnits]);
+  /**
+   * Satuan yang boleh dipakai produk ini: satuan utama plus setiap satuan yang
+   * muncul di baris konversi. Daftar inilah yang disimpan sebagai
+   * `sellable_units`, jadi tidak ada daftar terpisah yang harus disamakan
+   * manual dengan tabel konversinya — dan tidak ada satuan jual yang bisa
+   * dipilih tanpa persamaan konversinya.
+   */
+  const productUnits = useMemo(
+    () => buildProductUnits(
+      purchaseUnit,
+      unitMappings.flatMap((mapping) => [mapping.from_unit, mapping.to_unit]),
+    ),
+    [purchaseUnit, unitMappings],
+  );
 
-  const wholesaleUnitOptions = useMemo(
-    () => selectedSellableUnits.map((unit) => ({
+  const productUnitOptions = useMemo(
+    () => productUnits.map((unit) => ({
       value: unit,
-      label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit,
+      label: unitDefinitionById.get(unit)?.name ?? unit,
     })),
-    [selectedSellableUnits, unitDefinitionById],
+    [productUnits, unitDefinitionById],
   );
 
   const baseUnitOptions = useMemo(
@@ -193,6 +205,11 @@ export default function StockProductModal({
     [availableUnits, unitDefinitionById],
   );
 
+  const getUnitType = useCallback((unit: string) => {
+    const normalizedUnit = normalizeUnitKey(unit);
+    return unitDefinitionById.get(normalizedUnit)?.type ?? inferUnitDefinitionType(normalizedUnit);
+  }, [unitDefinitionById]);
+
   const canUseAsConversionUnit = useCallback((unit: string) => {
     const normalizedUnit = normalizeUnitKey(unit);
     const normalizedPurchaseUnit = normalizeUnitKey(purchaseUnit);
@@ -200,26 +217,26 @@ export default function StockProductModal({
     if (!normalizedUnit) return false;
     if (normalizedUnit === normalizedPurchaseUnit) return true;
 
+    // Satuan hitungan pernah ditandai bukan satuan konversi karena satuan utama
+    // dulu selalu hitungan. Begitu satuan utamanya kemasan, justru satuan
+    // hitungan itulah satu-satunya isi yang masuk akal, jadi penandaan lama
+    // tidak boleh mengunci pilihannya.
+    if (getUnitType(normalizedUnit) === 'count' && getUnitType(normalizedPurchaseUnit) === 'package') return true;
+
     const definition = unitDefinitionById.get(normalizedUnit);
     return definition?.canBeConversionUnit ?? (inferUnitDefinitionType(normalizedUnit) !== 'count');
-  }, [purchaseUnit, unitDefinitionById]);
+  }, [getUnitType, purchaseUnit, unitDefinitionById]);
 
-  const sellableUnitOptions = useMemo(
-    () =>
-      availableUnits
-        .filter((unit) => {
-          const normalizedUnit = normalizeUnitKey(unit);
-          return normalizedUnit === normalizeUnitKey(purchaseUnit) || canUseAsConversionUnit(unit);
-        })
-        .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
-    [availableUnits, canUseAsConversionUnit, purchaseUnit, unitDefinitionById],
-  );
-
+  /**
+   * Baris konversi jadi satu-satunya tempat satuan jual ditambahkan, jadi
+   * batasan "bisa jadi satuan konversi" dari master satuan dipasang di sini.
+   */
   const unitMappingOptions = useMemo(
     () =>
       availableUnits
+        .filter((unit) => canUseAsConversionUnit(unit))
         .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
-    [availableUnits, unitDefinitionById],
+    [availableUnits, canUseAsConversionUnit, unitDefinitionById],
   );
 
   const nextUnitMappingTarget = useMemo(() => unitMappingOptions.find((option) => {
@@ -237,35 +254,61 @@ export default function StockProductModal({
     });
   })?.value || '', [purchaseUnit, unitMappingOptions, unitMappings]);
 
-  const resolveSelectedUnit = useCallback((unit: string) => resolveProductUnitRatio({
+  const productUnitShape = useMemo(() => ({
     purchase_unit: purchaseUnit,
     selling_unit: sellingUnit,
-    sellable_units: selectedSellableUnits,
+    sellable_units: productUnits,
     unit_mappings: unitMappings,
-  }, unit, purchaseUnit, { globalConversions: conversions }), [
-    conversions,
-    purchaseUnit,
-    selectedSellableUnits,
-    sellingUnit,
-    unitMappings,
-  ]);
+  }), [productUnits, purchaseUnit, sellingUnit, unitMappings]);
 
-  const missingProductMappingUnits = useMemo(() => {
-    return selectedSellableUnits.filter((unit) => {
-      if (resolveSelectedUnit(unit).status !== 'disconnected') return false;
-      const normalizedUnit = normalizeUnitKey(unit);
-      return !unitMappings.some((mapping) => (
-        normalizeUnitKey(mapping.from_unit) === normalizedUnit ||
-        normalizeUnitKey(mapping.to_unit) === normalizedUnit
-      ));
-    });
-  }, [selectedSellableUnits, resolveSelectedUnit, unitMappings]);
+  const resolveSelectedUnit = useCallback(
+    (unit: string) => resolveProductUnitRatio(
+      productUnitShape,
+      unit,
+      purchaseUnit,
+      { globalConversions: conversions },
+    ),
+    [conversions, productUnitShape, purchaseUnit],
+  );
+
+  /**
+   * Baris konversi untuk satuan yang belum punya baris. Kalau ratio globalnya
+   * ada, angkanya langsung terisi; kalau tidak, 0 supaya barisnya terhitung
+   * belum lengkap dan pengguna diminta melengkapinya. Satuan yang lebih besar
+   * dari satuan utama ditulis terbalik ("1 box = 12 pcs") supaya angkanya tetap
+   * bulat — kolom jumlah di form terkunci di 1.
+   */
+  const buildStoredUnitMapping = useCallback((unit: string) => {
+    const resolution = resolveProductUnitRatio(
+      productUnitShape,
+      purchaseUnit,
+      unit,
+      { globalConversions: conversions },
+    );
+    const baseToUnitRatio = resolution.status === 'resolved' ? resolution.ratio : 0;
+
+    if (baseToUnitRatio > 0 && baseToUnitRatio < 1) {
+      return {
+        from_quantity: 1,
+        from_unit: unit,
+        to_quantity: snapNearInteger(1 / baseToUnitRatio),
+        to_unit: purchaseUnit,
+      };
+    }
+
+    return {
+      from_quantity: 1,
+      from_unit: purchaseUnit,
+      to_quantity: snapNearInteger(baseToUnitRatio),
+      to_unit: unit,
+    };
+  }, [conversions, productUnitShape, purchaseUnit]);
 
   const incompleteProductMappingUnits = useMemo(() => {
-    return selectedSellableUnits.filter((unit) => {
+    return productUnits.filter((unit) => {
       return resolveSelectedUnit(unit).status !== 'resolved';
     });
-  }, [selectedSellableUnits, resolveSelectedUnit]);
+  }, [productUnits, resolveSelectedUnit]);
 
   const hasUnitConversion = incompleteProductMappingUnits.length === 0;
   const unitConversionAttentionCount = incompleteProductMappingUnits.length;
@@ -286,77 +329,52 @@ export default function StockProductModal({
     };
   }, [hasUnitConversion, purchaseUnit, incompleteProductMappingUnits, t]);
 
-  useEffect(() => {
-    const nextSellingUnit = selectedSellableUnits[0] || '';
-    if (nextSellingUnit && nextSellingUnit !== sellingUnit) {
-      setValue('selling_unit', nextSellingUnit, { shouldDirty: true, shouldValidate: true });
-    }
-  }, [selectedSellableUnits, sellingUnit, setValue]);
-
-  useEffect(() => {
-    if (!open) {
-      pendingAutoMappingUnitsRef.current.clear();
-      return;
-    }
-
-    unitMappings.forEach((mapping) => {
-      pendingAutoMappingUnitsRef.current.delete(normalizeUnitKey(mapping.from_unit));
-      pendingAutoMappingUnitsRef.current.delete(normalizeUnitKey(mapping.to_unit));
-    });
-  }, [open, unitMappings]);
-
-  useEffect(() => {
-    if (!open || missingProductMappingUnits.length === 0) return;
-    const previousPurchaseUnit = previousPurchaseUnitRef.current;
-    if (
-      previousPurchaseUnit !== null &&
-      normalizeUnitKey(previousPurchaseUnit) !== normalizeUnitKey(purchaseUnit)
-    ) return;
-
-    missingProductMappingUnits.forEach((unit) => {
-      const normalizedUnit = normalizeUnitKey(unit);
-      if (pendingAutoMappingUnitsRef.current.has(normalizedUnit)) return;
-      pendingAutoMappingUnitsRef.current.add(normalizedUnit);
-      appendUnitMapping({
-        from_quantity: 1,
-        from_unit: purchaseUnit,
-        to_quantity: 0,
-        to_unit: unit,
-      });
-    });
-  }, [open, missingProductMappingUnits, purchaseUnit, appendUnitMapping]);
-
+  /**
+   * `sellable_units` selalu mengikuti baris konversi. Produk lama yang menyimpan
+   * satuan jual tanpa baris konversi dimaterialkan dulu jadi baris — kalau
+   * tidak, satuannya hilang diam-diam begitu produk disimpan ulang dari form
+   * ini. Materialisasi hanya sekali saat form dibuka; sesudah itu satuan yang
+   * tidak lagi punya baris memang harus gugur, mis. satuan utama yang lama
+   * setelah penggunanya berganti satuan utama.
+   */
   useEffect(() => {
     if (!open) {
-      previousPurchaseUnitRef.current = null;
+      hasMaterializedStoredUnitsRef.current = false;
       return;
     }
 
-    const normalizedPurchaseUnit = String(purchaseUnit || '').trim();
-    const previousPurchaseUnit = previousPurchaseUnitRef.current;
-    previousPurchaseUnitRef.current = normalizedPurchaseUnit;
+    if (!hasMaterializedStoredUnitsRef.current) {
+      hasMaterializedStoredUnitsRef.current = true;
 
-    if (!normalizedPurchaseUnit || previousPurchaseUnit === null || previousPurchaseUnit === normalizedPurchaseUnit) {
-      return;
+      const unmappedUnits = selectedSellableUnits.filter((unit) => !productUnits.includes(unit));
+      if (unmappedUnits.length > 0) {
+        unmappedUnits.forEach((unit) => appendUnitMapping(buildStoredUnitMapping(unit)));
+        return;
+      }
     }
 
-    const remainingUnits = selectedSellableUnits.filter(
-      (unit) => normalizeUnitKey(unit) !== normalizeUnitKey(previousPurchaseUnit),
-    );
-    const nextSellableUnits = buildSellableUnitsWithDefault(normalizedPurchaseUnit, remainingUnits);
-    const hasChanged =
-      nextSellableUnits.length !== selectedSellableUnits.length ||
-      nextSellableUnits.some((unit, index) => unit !== selectedSellableUnits[index]);
+    const isSynced = selectedSellableUnits.length === productUnits.length
+      && productUnits.every((unit, index) => unit === selectedSellableUnits[index]);
 
-    if (hasChanged) {
-      setValue('sellable_units', nextSellableUnits, { shouldDirty: true, shouldValidate: true });
+    if (!isSynced) {
+      setValue('sellable_units', productUnits, { shouldDirty: true, shouldValidate: true });
     }
+  }, [
+    appendUnitMapping,
+    buildStoredUnitMapping,
+    open,
+    productUnits,
+    selectedSellableUnits,
+    setValue,
+  ]);
 
-    if (sellingUnit !== normalizedPurchaseUnit) {
-      setValue('selling_unit', normalizedPurchaseUnit, { shouldDirty: true, shouldValidate: true });
-    }
+  // Satuan default harus selalu ada di daftar satuan yang dipakai transaksi.
+  useEffect(() => {
+    if (!open || productUnits.length === 0) return;
+    if (productUnits.includes(normalizeUnitKey(sellingUnit))) return;
 
-  }, [open, purchaseUnit, selectedSellableUnits, sellingUnit, setValue]);
+    setValue('selling_unit', productUnits[0], { shouldDirty: true, shouldValidate: true });
+  }, [open, productUnits, sellingUnit, setValue]);
 
   useEffect(() => {
     if (!open) return;
@@ -599,13 +617,17 @@ export default function StockProductModal({
         </div>
       ) : null}
 
+      {/*
+        Baris konversi memuat empat kolom (jumlah, satuan, setara, satuan), jadi
+        lebar bawaan 520px milik antd bikin isinya berhimpitan.
+      */}
       <Modal
         title={editingId ? t('stock.editProduct') : t('stock.newProduct')}
         open={open}
         onCancel={onCancel}
         footer={null}
         destroyOnHidden
-        width={!screens.sm ? '100%' : undefined}
+        width={!screens.sm ? '100%' : 760}
         style={!screens.sm ? { top: 0, margin: 0, padding: 0, maxWidth: '100vw', height: '100vh' } : undefined}
         styles={!screens.sm ? { body: { height: 'calc(100vh - 55px)', overflowY: 'auto' } } : undefined}
         centered={!!screens.sm}
@@ -708,6 +730,7 @@ export default function StockProductModal({
                       <FieldContainer
                         label={t('stock.form.baseStockUnit')}
                         error={errors.purchase_unit}
+                        help={t('stock.form.baseStockUnitHelp')}
                         required
                         requiredLabel={t('stock.form.requiredLabel')}
                       >
@@ -728,8 +751,7 @@ export default function StockProductModal({
                       <FieldContainer
                         label={t('stock.form.purchasePricePer', { unit: purchaseUnit })}
                         error={errors.purchase_price}
-                        required
-                        requiredLabel={t('stock.form.requiredLabel')}
+                        help={t('stock.form.priceOptionalHelp')}
                       >
                         <Controller
                           name="purchase_price"
@@ -740,7 +762,7 @@ export default function StockProductModal({
                               inputMode="decimal"
                               value={field.value}
                               onBlur={field.onBlur}
-                              onChange={(value) => field.onChange(value ?? 0)}
+                              onChange={(value) => field.onChange(value ?? undefined)}
                               className="w-full"
                               placeholder={t('stock.form.purchasePricePlaceholder', { unit: purchaseUnit })}
                               prefix="Rp"
@@ -756,8 +778,7 @@ export default function StockProductModal({
                       <FieldContainer
                         label={t('stock.form.sellingPricePer', { unit: purchaseUnit })}
                         error={errors.selling_price}
-                        required
-                        requiredLabel={t('stock.form.requiredLabel')}
+                        help={t('stock.form.priceOptionalHelp')}
                       >
                         <Controller
                           name="selling_price"
@@ -768,7 +789,7 @@ export default function StockProductModal({
                               inputMode="decimal"
                               value={field.value}
                               onBlur={field.onBlur}
-                              onChange={(value) => field.onChange(value ?? 0)}
+                              onChange={(value) => field.onChange(value ?? undefined)}
                               className="w-full"
                               placeholder={t('stock.form.sellingPricePlaceholder', { unit: purchaseUnit })}
                               prefix="Rp"
@@ -795,37 +816,6 @@ export default function StockProductModal({
                 ),
                 children: (
                   <div className="space-y-4">
-                    <FieldContainer
-                      label={t('stock.form.sellableUnits')}
-                      error={(errors.sellable_units || errors.selling_unit) as FieldError | undefined}
-                      help={t('stock.form.sellableUnitsHelp')}
-                      required
-                      requiredLabel={t('stock.form.requiredLabel')}
-                    >
-                      <Controller
-                        name="sellable_units"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            mode="multiple"
-                            data-testid="stock-product-sellable-units"
-                            value={selectedSellableUnits}
-                            onChange={(values) => {
-                              const additionalUnits = values
-                                .filter((unit) => normalizeUnitKey(unit) !== normalizeUnitKey(purchaseUnit))
-                                .filter(canUseAsConversionUnit);
-                              const nextUnits = buildSellableUnitsWithDefault(purchaseUnit, additionalUnits);
-                              field.onChange(nextUnits);
-                              setValue('selling_unit', nextUnits[0] || '', { shouldDirty: true, shouldValidate: true });
-                            }}
-                            className="w-full"
-                            placeholder={t('stock.form.sellableUnitsPlaceholder')}
-                            options={sellableUnitOptions}
-                          />
-                        )}
-                      />
-                    </FieldContainer>
-
                     <Alert
                       type="info"
                       showIcon
@@ -984,7 +974,46 @@ export default function StockProductModal({
                           <p className="text-sm italic text-gray-500">{t('stock.form.noProductConversions')}</p>
                         ) : null}
                       </div>
+
+                      {errors.sellable_units?.message ? (
+                        <p className="mt-2 text-xs text-red-600">
+                          {String((errors.sellable_units as FieldError).message)}
+                        </p>
+                      ) : null}
                     </div>
+
+                    {/*
+                      Selama produk cuma punya satuan utama, satuan default
+                      transaksi tidak punya pilihan lain selain satuan utama itu
+                      sendiri — jadi menampilkannya hanya menggandakan kolom di
+                      tab Produk. Pilihannya baru muncul setelah ada baris
+                      konversi, dan ditaruh di bawah daftar karena default cuma
+                      bisa dipilih dari satuan yang sudah didefinisikan.
+                    */}
+                    {productUnits.length > 1 ? (
+                      <FieldContainer
+                        label={t('stock.form.defaultUnit')}
+                        error={errors.selling_unit as FieldError | undefined}
+                        help={t('stock.form.defaultUnitHelp')}
+                        required
+                        requiredLabel={t('stock.form.requiredLabel')}
+                      >
+                        <Controller
+                          name="selling_unit"
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              data-testid="stock-product-default-unit"
+                              value={field.value || undefined}
+                              onChange={field.onChange}
+                              className="w-full"
+                              placeholder={t('stock.form.defaultUnitPlaceholder')}
+                              options={productUnitOptions}
+                            />
+                          )}
+                        />
+                      </FieldContainer>
+                    ) : null}
                   </div>
                 ),
               },
@@ -1060,7 +1089,7 @@ export default function StockProductModal({
                                       onChange={itemField.onChange}
                                       className="w-full"
                                       placeholder={t('stock.form.unitPlaceholder')}
-                                      options={wholesaleUnitOptions}
+                                      options={productUnitOptions}
                                     />
                                   )}
                                 />
