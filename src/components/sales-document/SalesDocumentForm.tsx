@@ -9,10 +9,12 @@ import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { buildQuickCreateDefaultValues, useProductQuickCreateForm } from '@/hooks/useProductQuickCreateForm';
+import { useProductQuickEditForm } from '@/hooks/useProductQuickEditForm';
 import { db } from '@/lib/db';
 import type { StockFormData } from '@/lib/validations/stock';
 import { DocumentCurrencyFields } from '@/components/DocumentCurrencyFields';
 import { createProductRecord } from '@/services/productCreateService';
+import { updateProductRecord } from '@/services/productUpdateService';
 import { getCachedBaseCurrency } from '@/services/baseCurrencyService';
 import type { Contact, CurrencyRate, Department, Product, Project, PromoType, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
@@ -136,6 +138,8 @@ export const SalesDocumentForm = ({
   const [newProductBarcode, setNewProductBarcode] = useState('');
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const quickCreateForm = useProductQuickCreateForm();
+  const [editProductOpen, setEditProductOpen] = useState(false);
+  const quickEditForm = useProductQuickEditForm();
   const {
     control,
     formState: { errors },
@@ -328,6 +332,47 @@ export const SalesDocumentForm = ({
       message.error(error instanceof Error ? error.message : t('productQuickCreate.failed'));
     }
   }, [quickCreateForm, handleCreateProductPersist, handleProductCreated, message, t]);
+  const handleEditProductRequest = useCallback((_lineId: string, productId: string) => {
+    const product = products.find((candidate) => candidate.id === productId);
+    if (!product) return;
+
+    quickEditForm.loadProduct(product);
+    setEditProductOpen(true);
+  }, [products, quickEditForm]);
+  const handleEditProductCancel = useCallback(() => {
+    setEditProductOpen(false);
+    quickEditForm.closeEditing();
+  }, [quickEditForm]);
+  const handleProductUpdated = useCallback((product: Product) => {
+    // Semua baris yang memakai produk ini disinkronkan, bukan cuma baris yang
+    // memicu edit — harga manual (is_price_edited) tetap dihormati.
+    const nextItems = items.map((item) => {
+      if (item.product_id !== product.id) return item;
+
+      return {
+        ...item,
+        product_name: product.name,
+        sku: product.sku,
+        ...(item.is_price_edited ? null : {
+          price: getPrice(product, item.quantity || 1, item.unit || product.selling_unit),
+        }),
+      };
+    });
+    setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
+
+    setEditProductOpen(false);
+    quickEditForm.closeEditing();
+  }, [items, quickEditForm, setValue]);
+  const handleEditProductSave = useCallback(async () => {
+    try {
+      const product = await quickEditForm.submit(updateProductRecord);
+      if (product) {
+        handleProductUpdated(product);
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('productQuickEdit.failed'));
+    }
+  }, [quickEditForm, handleProductUpdated, message, t]);
   const handleCurrencySnapshotChange = useCallback((snapshot: DocumentCurrencySnapshot, previousCurrencyCode?: string) => {
     const previousCode = normalizeCurrencyCode(previousCurrencyCode, snapshot.base_currency_code);
 
@@ -433,6 +478,7 @@ export const SalesDocumentForm = ({
         documentCurrencySnapshot={documentCurrencySnapshot}
         onChange={handleItemsChange}
         onCreateProductRequest={handleCreateProductRequest}
+        onEditProductRequest={handleEditProductRequest}
       />
       <DocumentSummary
         config={config}
@@ -464,6 +510,19 @@ export const SalesDocumentForm = ({
         setIsModalOpen={setCreateProductOpen}
         onCancel={handleCreateProductCancel}
         onSave={handleCreateProductSave}
+      />
+
+      <StockProductModal
+        open={editProductOpen}
+        editingId={quickEditForm.editingProductId}
+        control={quickEditForm.control}
+        errors={quickEditForm.formState.errors}
+        setValue={quickEditForm.setValue}
+        getValues={quickEditForm.getValues}
+        reset={quickEditForm.reset}
+        setIsModalOpen={setEditProductOpen}
+        onCancel={handleEditProductCancel}
+        onSave={handleEditProductSave}
       />
     </form>
   );

@@ -65,6 +65,7 @@ export const useTransaction = (draftScope?: string) => {
     discardDraftScope,
     addToCart: storeAddToCart,
     updateQuantity: storeUpdateQuantity,
+    updateCartProduct,
     removeFromCart,
     reset,
   } = useTransactionStore();
@@ -515,6 +516,7 @@ export const useTransaction = (draftScope?: string) => {
     addToCart,
     updateQuantity,
     updateUnit,
+    updateCartProduct,
     findProductByScannedCode,
     findFirstProductBySearchTerm,
     removeFromCart,

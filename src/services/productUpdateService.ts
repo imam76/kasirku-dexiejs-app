@@ -1,0 +1,126 @@
+import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
+import { defaultLocale, translate } from '@/i18n/messages';
+import { db } from '@/lib/db';
+import type { StockFormData } from '@/lib/validations/stock';
+import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
+import { recordStockPurchase } from '@/services/stockPurchaseService';
+import { enqueueProductSync } from '@/services/syncQueueService';
+import type { FinanceTransaction, Product } from '@/types';
+import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
+
+const withPendingSync = (product: Product): Product => ({
+  ...product,
+  sync_status: 'pending',
+  sync_error: undefined,
+});
+
+/**
+ * Memperbarui produk yang sudah ada di Dexie, dipakai oleh form Master Produk
+ * maupun quick-edit di POS/Sales/Purchase supaya keduanya menempuh jalur
+ * update yang persis sama (pencatatan pembelian stok awal, sync queue, log).
+ */
+export const updateProductRecord = async (productId: string, data: StockFormData): Promise<Product> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
+
+  const purchaseQuantity = data.purchase_quantity || 0;
+  const now = new Date().toISOString();
+
+  const sellableUnits = data.sellable_units && data.sellable_units.length > 0
+    ? data.sellable_units
+    : [data.selling_unit || 'pcs'];
+  const defaultSellingUnit = data.selling_unit && sellableUnits.includes(data.selling_unit)
+    ? data.selling_unit
+    : sellableUnits[0] || 'pcs';
+
+  const unitMappings = normalizeProductUnitMappings({
+    purchase_unit: data.purchase_unit || 'pcs',
+    selling_unit: defaultSellingUnit,
+    sellable_units: sellableUnits,
+    unit_mappings: data.unit_mappings || [],
+  });
+
+  const cleanData = {
+    name: data.name,
+    category: data.category || 'non_consumable',
+    purchase_unit: data.purchase_unit || 'pcs',
+    selling_unit: defaultSellingUnit,
+    purchase_price: data.purchase_price ?? 0,
+    selling_price: data.selling_price ?? 0,
+    sku: data.sku || '',
+    product_type: data.product_type ?? 'FINISHED_GOOD',
+    is_visible_in_pos: data.is_visible_in_pos ?? true,
+    wholesale_prices: (data.wholesale_prices || []).map((price) => ({
+      min_quantity: Number(price.min_quantity),
+      unit: price.unit || defaultSellingUnit || data.purchase_unit || 'pcs',
+      price: Number(price.price),
+      price_type: price.price_type || 'unit',
+    })),
+    unit_mappings: unitMappings,
+    sellable_units: buildSellableUnitsFromMappings({
+      purchase_unit: data.purchase_unit || 'pcs',
+      selling_unit: defaultSellingUnit,
+      sellable_units: sellableUnits,
+      unit_mappings: unitMappings,
+    }),
+  };
+
+  let syncedProduct: Product | null = null;
+  const financeTransactionsToSync: FinanceTransaction[] = [];
+
+  await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
+    const existingProduct = await db.products.get(productId);
+    if (!existingProduct) {
+      throw new Error('Produk tidak ditemukan.');
+    }
+
+    const updatedProduct: Product = withPendingSync({
+      ...existingProduct,
+      ...cleanData,
+      stock: data.stock ?? existingProduct.stock,
+      updated_at: now,
+    });
+    await db.products.put(updatedProduct);
+    syncedProduct = updatedProduct;
+
+    if (purchaseQuantity > 0) {
+      const totalCost = cleanData.purchase_price * purchaseQuantity;
+      const purchaseResult = await recordStockPurchase({
+        productId,
+        productName: cleanData.name,
+        sku: cleanData.sku,
+        quantity: purchaseQuantity,
+        costPerUnit: cleanData.purchase_price,
+        totalCost,
+        description: translate(defaultLocale, 'stock.purchaseDescription', {
+          name: cleanData.name,
+          quantity: purchaseQuantity,
+        }),
+        createdAt: now,
+        actor: currentUser,
+      });
+      financeTransactionsToSync.push(purchaseResult.financeTransaction);
+    }
+  });
+
+  if (syncedProduct) {
+    await enqueueProductSync(syncedProduct, 'update');
+  }
+  if (financeTransactionsToSync.length > 0) {
+    await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
+  }
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'PRODUCT_UPDATED',
+    entity: 'products',
+    entity_id: productId,
+    description: `${currentUser?.name ?? 'User'} memperbarui produk ${cleanData.name}.`,
+  });
+
+  if (!syncedProduct) {
+    throw new Error('Produk tidak ditemukan.');
+  }
+
+  return syncedProduct;
+};

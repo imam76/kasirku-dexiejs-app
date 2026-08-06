@@ -5,18 +5,14 @@ import {
 import type { StockFormData } from '@/hooks/useStockManagement';
 import type { UnitDefinition } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
-import { getProductCategoryOptions } from '@/i18n/stock';
 import { db } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Badge, Button, Grid, Input, InputNumber, Modal, Select, Switch, Tabs } from 'antd';
+import { Badge, Grid, Modal, Tabs } from 'antd';
 import type { InputRef } from 'antd';
-import { AlertTriangle, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type Control,
-  Controller,
-  type FieldError,
   type FieldErrors,
   type UseFormGetValues,
   type UseFormReset,
@@ -30,8 +26,11 @@ import {
   isKeyboardBarcodeBufferActive,
   type KeyboardBarcodeBuffer,
 } from '@/utils/keyboardBarcodeScanner';
-import { formatCurrencyInput, parseCurrencyInput } from '@/utils/formatters';
 import { resolveProductUnitRatio } from '@/utils/productUnits';
+import StockProductBarcodeScanner from './StockProductBarcodeScanner';
+import StockProductGeneralTab from './StockProductGeneralTab';
+import StockProductUnitConversionTab from './StockProductUnitConversionTab';
+import StockProductWholesaleTab from './StockProductWholesaleTab';
 
 const { useBreakpoint } = Grid;
 
@@ -71,33 +70,6 @@ type Props = {
   /** Konten tambahan di atas tab, mis. panel deteksi duplikat produk saat quick-create. */
   topContent?: ReactNode;
 };
-
-type FieldContainerProps = {
-  label: ReactNode;
-  error?: FieldError;
-  help?: string;
-  required?: boolean;
-  requiredLabel?: string;
-  children: ReactNode;
-};
-
-function FieldContainer({ label, error, help, required, requiredLabel, children }: FieldContainerProps) {
-  return (
-    <div className="mb-4">
-      <label className="mb-1.5 flex items-center gap-1 text-sm font-medium text-gray-700">
-        <span>{label}</span>
-        {required ? (
-          <span className="text-sm font-bold leading-none text-red-500" aria-label={requiredLabel} title={requiredLabel}>
-            *
-          </span>
-        ) : null}
-      </label>
-      {children}
-      {error?.message ? <p className="mt-1 text-xs text-red-600">{String(error.message)}</p> : null}
-      {!error?.message && help ? <p className="mt-1 text-xs text-gray-500">{help}</p> : null}
-    </div>
-  );
-}
 
 export default function StockProductModal({
   open,
@@ -158,8 +130,6 @@ export default function StockProductModal({
     });
     return Array.from(units).filter(Boolean).sort();
   }, [purchaseUnit, sellableUnits, sellingUnit, unitDefinitions, unitMappings]);
-
-  const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
 
   const unitDefinitionById = useMemo(() => {
     const map = new Map<string, UnitDefinition>();
@@ -601,28 +571,11 @@ export default function StockProductModal({
 
   return (
     <>
-      {scannerOpen ? (
-        <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black bg-opacity-80 p-4">
-          <div className="relative flex w-full max-w-md flex-col overflow-hidden rounded-lg bg-white">
-            <div className="absolute right-2 top-2 z-10">
-              <button
-                type="button"
-                onClick={() => setScannerOpen(false)}
-                className="rounded-full bg-white p-2 shadow transition-colors hover:bg-gray-100"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="relative aspect-square bg-black">
-              <video ref={videoRef} className="h-full w-full object-cover" muted autoPlay playsInline />
-            </div>
-            <div className="bg-white p-4 text-center">
-              <p className="text-lg font-bold">{t('stock.form.scanBarcode')}</p>
-              <p className="text-sm text-gray-500">{t('stock.form.scanBarcodeDescription')}</p>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <StockProductBarcodeScanner
+        open={scannerOpen}
+        videoRef={videoRef}
+        onClose={() => setScannerOpen(false)}
+      />
 
       {/*
         Baris konversi memuat empat kolom (jumlah, satuan, setara, satuan), jadi
@@ -653,189 +606,14 @@ export default function StockProductModal({
                 key: 'product',
                 label: t('stock.form.productTab'),
                 children: (
-                  <>
-                    <div className="grid grid-cols-1 gap-x-4">
-                      <FieldContainer
-                        label={t('stock.form.name')}
-                        error={errors.name}
-                        required
-                        requiredLabel={t('stock.form.requiredLabel')}
-                      >
-                        <Controller
-                          name="name"
-                          control={control}
-                          render={({ field }) => (
-                            <Input {...field} data-testid="stock-product-name" className="w-full" />
-                          )}
-                        />
-                      </FieldContainer>
-
-                      <FieldContainer
-                        label="SKU"
-                        error={errors.sku}
-                        help={t('stock.form.hardwareScannerHint')}
-                      >
-                        <div className="flex gap-2">
-                          <Controller
-                            name="sku"
-                            control={control}
-                            render={({ field }) => (
-                              <Input
-                                {...field}
-                                ref={skuInputRef}
-                                data-testid="stock-product-sku"
-                                className="flex-1"
-                              />
-                            )}
-                          />
-                          <Button type="default" icon={<ScanLine size={16} />} onClick={() => setScannerOpen(true)} />
-                        </div>
-                      </FieldContainer>
-
-                      <FieldContainer
-                        label={t('stock.category')}
-                        error={errors.category}
-                        required
-                        requiredLabel={t('stock.form.requiredLabel')}
-                      >
-                        <Controller
-                          name="category"
-                          control={control}
-                          render={({ field }) => (
-                            <Select {...field} className="w-full" options={categoryOptions} />
-                          )}
-                        />
-                      </FieldContainer>
-
-                      <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                        <FieldContainer label="Tipe Produk" error={errors.product_type}>
-                          <Controller
-                            name="product_type"
-                            control={control}
-                            render={({ field }) => (
-                              <Select {...field} className="w-full" options={[
-                                { value: 'FINISHED_GOOD', label: 'Barang Jadi' },
-                                { value: 'RAW_MATERIAL', label: 'Bahan Baku' },
-                              ]} />
-                            )}
-                          />
-                        </FieldContainer>
-                        <FieldContainer
-                          label="Tampil di POS"
-                          error={errors.is_visible_in_pos}
-                          help="Jika dinonaktifkan, produk tetap tersimpan tetapi tidak muncul di katalog POS."
-                        >
-                          <Controller
-                            name="is_visible_in_pos"
-                            control={control}
-                            render={({ field }) => <Switch checked={field.value} onChange={field.onChange} />}
-                          />
-                        </FieldContainer>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                      <FieldContainer
-                        label={t('stock.form.baseStockUnit')}
-                        error={errors.purchase_unit}
-                        help={t('stock.form.baseStockUnitHelp')}
-                        required
-                        requiredLabel={t('stock.form.requiredLabel')}
-                      >
-                        <Controller
-                          name="purchase_unit"
-                          control={control}
-                          render={({ field }) => (
-                            <Select
-                              {...field}
-                              data-testid="stock-product-base-unit"
-                              showSearch={{ optionFilterProp: 'label' }}
-                              className="w-full"
-                              options={baseUnitOptions}
-                            />
-                          )}
-                        />
-                      </FieldContainer>
-                      <FieldContainer
-                        label={t('stock.form.purchasePricePer', { unit: purchaseUnit })}
-                        error={errors.purchase_price}
-                        help={t('stock.form.priceOptionalHelp')}
-                      >
-                        <Controller
-                          name="purchase_price"
-                          control={control}
-                          render={({ field }) => (
-                            <InputNumber
-                              data-testid="stock-product-purchase-price"
-                              inputMode="decimal"
-                              value={field.value}
-                              onBlur={field.onBlur}
-                              onChange={(value) => field.onChange(value ?? undefined)}
-                              className="w-full"
-                              placeholder={t('stock.form.purchasePricePlaceholder', { unit: purchaseUnit })}
-                              prefix="Rp"
-                              formatter={formatCurrencyInput}
-                              parser={parseCurrencyInput}
-                              step={0.01}
-                              min={0}
-                            />
-                          )}
-                        />
-                      </FieldContainer>
-
-                      <FieldContainer
-                        label={t('stock.form.sellingPricePer', { unit: purchaseUnit })}
-                        error={errors.selling_price}
-                        help={t('stock.form.priceOptionalHelp')}
-                      >
-                        <Controller
-                          name="selling_price"
-                          control={control}
-                          render={({ field }) => (
-                            <InputNumber
-                              data-testid="stock-product-selling-price"
-                              inputMode="decimal"
-                              value={field.value}
-                              onBlur={field.onBlur}
-                              onChange={(value) => field.onChange(value ?? undefined)}
-                              className="w-full"
-                              placeholder={t('stock.form.sellingPricePlaceholder', { unit: purchaseUnit })}
-                              prefix="Rp"
-                              formatter={formatCurrencyInput}
-                              parser={parseCurrencyInput}
-                              step={0.01}
-                              min={0}
-                            />
-                          )}
-                        />
-                      </FieldContainer>
-
-                      <FieldContainer
-                        label={t('stock.form.purchaseQuantity')}
-                        error={errors.purchase_quantity}
-                        help={t('stock.form.priceOptionalHelp')}
-                      >
-                        <Controller
-                          name="purchase_quantity"
-                          control={control}
-                          render={({ field }) => (
-                            <InputNumber
-                              data-testid="stock-product-purchase-quantity"
-                              inputMode="decimal"
-                              value={field.value}
-                              onBlur={field.onBlur}
-                              onChange={(value) => field.onChange(value ?? undefined)}
-                              className="w-full"
-                              placeholder={t('stock.form.purchaseQuantityPlaceholder')}
-                              min={0}
-                            />
-                          )}
-                        />
-                      </FieldContainer>
-
-                    </div>
-
-                  </>
+                  <StockProductGeneralTab
+                    control={control}
+                    errors={errors}
+                    purchaseUnit={purchaseUnit}
+                    baseUnitOptions={baseUnitOptions}
+                    skuInputRef={skuInputRef}
+                    onOpenScanner={() => setScannerOpen(true)}
+                  />
                 ),
               },
               {
@@ -846,356 +624,36 @@ export default function StockProductModal({
                   </Badge>
                 ),
                 children: (
-                  <div className="space-y-4">
-                    <Alert
-                      type="info"
-                      showIcon
-                      title={t('stock.form.unitUsesGlobalManagement')}
-                      description={t('stock.form.unitUsesGlobalManagementDescription')}
-                    />
-
-                    {conversionWarning ? (
-                      <Alert
-                        title={conversionWarning.title}
-                        description={conversionWarning.description}
-                        type="warning"
-                        showIcon
-                        icon={<AlertTriangle size={20} />}
-                      />
-                    ) : null}
-
-                    <div>
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <div>
-                          <h3 className="font-medium text-gray-700">{t('stock.form.productUnitConversion')}</h3>
-                          <p className="text-xs text-gray-500">{t('stock.form.productUnitConversionFormat')}</p>
-                        </div>
-                        <Button
-                          type="dashed"
-                          onClick={() => appendUnitMapping({
-                            from_quantity: 1,
-                            from_unit: purchaseUnit,
-                            to_quantity: 0,
-                            to_unit: nextUnitMappingTarget,
-                          })}
-                          icon={<Plus size={16} />}
-                          className="flex items-center gap-1"
-                        >
-                          {t('stock.form.addUnit')}
-                        </Button>
-                      </div>
-
-                      <div className="space-y-3">
-                        {unitMappingFields.map((field, index) => (
-                          <div
-                            key={field.id}
-                            className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3"
-                          >
-                            <div className="grid flex-1 grid-cols-12 gap-2">
-                              <div className="col-span-2">
-                                <FieldContainer
-                                  label={t('stock.form.qty')}
-                                  error={errors.unit_mappings?.[index]?.from_quantity as FieldError | undefined}
-                                >
-                                  <Controller
-                                    name={`unit_mappings.${index}.from_quantity`}
-                                    control={control}
-                                    render={({ field: itemField }) => (
-                                      <InputNumber
-                                        {...itemField}
-                                        data-testid={`stock-product-unit-mapping-quantity-${index}`}
-                                        disabled
-                                        controls={false}
-                                        className="w-full"
-                                      />
-                                    )}
-                                  />
-                                </FieldContainer>
-                              </div>
-
-                              <div className="col-span-3">
-                                <FieldContainer
-                                  label={t('stock.form.unit')}
-                                  error={errors.unit_mappings?.[index]?.from_unit as FieldError | undefined}
-                                  required
-                                  requiredLabel={t('stock.form.requiredLabel')}
-                                >
-                                  <Controller
-                                    name={`unit_mappings.${index}.from_unit`}
-                                    control={control}
-                                    render={({ field: itemField }) => (
-                                      <Select
-                                        data-testid={`stock-product-unit-mapping-source-unit-${index}`}
-                                        value={itemField.value}
-                                        onChange={itemField.onChange}
-                                        className="w-full"
-                                        placeholder={t('stock.form.unitPlaceholder')}
-                                        options={unitMappingOptions.filter(
-                                          (option) => normalizeUnitKey(option.value) !== normalizeUnitKey(unitMappings[index]?.to_unit),
-                                        )}
-                                      />
-                                    )}
-                                  />
-                                </FieldContainer>
-                              </div>
-
-                              <div className="col-span-3">
-                                <FieldContainer
-                                  label={t('stock.form.value')}
-                                  error={errors.unit_mappings?.[index]?.to_quantity as FieldError | undefined}
-                                  required
-                                  requiredLabel={t('stock.form.requiredLabel')}
-                                >
-                                  <Controller
-                                    name={`unit_mappings.${index}.to_quantity`}
-                                    control={control}
-                                    render={({ field: itemField }) => (
-                                      <InputNumber
-                                        data-testid={`stock-product-unit-mapping-value-${index}`}
-                                        inputMode="decimal"
-                                        value={itemField.value}
-                                        onBlur={itemField.onBlur}
-                                        onChange={(value) => itemField.onChange(value ?? 0)}
-                                        className="w-full"
-                                        min={0.000001}
-                                        step={1}
-                                      />
-                                    )}
-                                  />
-                                </FieldContainer>
-                              </div>
-
-                              <div className="col-span-4">
-                                <FieldContainer
-                                  label={t('stock.form.unit')}
-                                  error={errors.unit_mappings?.[index]?.to_unit as FieldError | undefined}
-                                  required
-                                  requiredLabel={t('stock.form.requiredLabel')}
-                                >
-                                  <Controller
-                                    name={`unit_mappings.${index}.to_unit`}
-                                    control={control}
-                                    render={({ field: itemField }) => (
-                                      <Select
-                                        data-testid={`stock-product-unit-mapping-target-unit-${index}`}
-                                        value={itemField.value}
-                                        onChange={itemField.onChange}
-                                        className="w-full"
-                                        placeholder={t('stock.form.unitPlaceholder')}
-                                        options={unitMappingOptions.filter(
-                                          (option) => normalizeUnitKey(option.value) !== normalizeUnitKey(unitMappings[index]?.from_unit),
-                                        )}
-                                      />
-                                    )}
-                                  />
-                                </FieldContainer>
-                              </div>
-                            </div>
-
-                            <Button
-                              danger
-                              type="text"
-                              icon={<Trash2 size={16} />}
-                              onClick={() => removeUnitMapping(index)}
-                              className="mt-8"
-                            />
-                          </div>
-                        ))}
-                        {unitMappingFields.length === 0 ? (
-                          <p className="text-sm italic text-gray-500">{t('stock.form.noProductConversions')}</p>
-                        ) : null}
-                      </div>
-
-                      {errors.sellable_units?.message ? (
-                        <p className="mt-2 text-xs text-red-600">
-                          {String((errors.sellable_units as FieldError).message)}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    {/*
-                      Selama produk cuma punya satuan utama, satuan default
-                      transaksi tidak punya pilihan lain selain satuan utama itu
-                      sendiri — jadi menampilkannya hanya menggandakan kolom di
-                      tab Produk. Pilihannya baru muncul setelah ada baris
-                      konversi, dan ditaruh di bawah daftar karena default cuma
-                      bisa dipilih dari satuan yang sudah didefinisikan.
-                    */}
-                    {productUnits.length > 1 ? (
-                      <FieldContainer
-                        label={t('stock.form.defaultUnit')}
-                        error={errors.selling_unit as FieldError | undefined}
-                        help={t('stock.form.defaultUnitHelp')}
-                        required
-                        requiredLabel={t('stock.form.requiredLabel')}
-                      >
-                        <Controller
-                          name="selling_unit"
-                          control={control}
-                          render={({ field }) => (
-                            <Select
-                              data-testid="stock-product-default-unit"
-                              value={field.value || undefined}
-                              onChange={field.onChange}
-                              className="w-full"
-                              placeholder={t('stock.form.defaultUnitPlaceholder')}
-                              options={productUnitOptions}
-                            />
-                          )}
-                        />
-                      </FieldContainer>
-                    ) : null}
-                  </div>
+                  <StockProductUnitConversionTab
+                    control={control}
+                    errors={errors}
+                    conversionWarning={conversionWarning}
+                    unitMappingFields={unitMappingFields}
+                    appendUnitMapping={appendUnitMapping}
+                    removeUnitMapping={removeUnitMapping}
+                    purchaseUnit={purchaseUnit}
+                    nextUnitMappingTarget={nextUnitMappingTarget}
+                    unitMappingOptions={unitMappingOptions}
+                    unitMappings={unitMappings}
+                    productUnits={productUnits}
+                    productUnitOptions={productUnitOptions}
+                  />
                 ),
               },
               {
                 key: 'wholesale',
                 label: t('stock.form.wholesaleTab'),
                 children: (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <h3 className="font-medium text-gray-700">{t('stock.form.wholesaleTitle')}</h3>
-                      <Button
-                        type="dashed"
-                        onClick={() => appendWholesale({
-                          min_quantity: 2,
-                          unit: purchaseUnit,
-                          price: 0,
-                          price_type: 'unit',
-                        })}
-                        icon={<Plus size={16} />}
-                        className="flex items-center gap-1"
-                      >
-                        {t('stock.form.addPrice')}
-                      </Button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {wholesaleFields.map((field, index) => (
-                        <div
-                          key={field.id}
-                          className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3"
-                        >
-                          <div className="grid flex-1 grid-cols-12 gap-2">
-                            <div className="col-span-3">
-                              <FieldContainer
-                                label={t('stock.form.minQty')}
-                                error={errors.wholesale_prices?.[index]?.min_quantity}
-                                required
-                                requiredLabel={t('stock.form.requiredLabel')}
-                              >
-                                <Controller
-                                  name={`wholesale_prices.${index}.min_quantity`}
-                                  control={control}
-                                  render={({ field: itemField }) => (
-                                    <InputNumber
-                                      data-testid={`stock-product-wholesale-min-quantity-${index}`}
-                                      inputMode="decimal"
-                                      value={itemField.value}
-                                      onBlur={itemField.onBlur}
-                                      onChange={(value) => itemField.onChange(value ?? 1)}
-                                      className="w-full"
-                                      placeholder={t('stock.form.qtyPlaceholder')}
-                                      min={1}
-                                    />
-                                  )}
-                                />
-                              </FieldContainer>
-                            </div>
-
-                            <div className="col-span-3">
-                              <FieldContainer
-                                label={t('stock.form.unit')}
-                                error={errors.wholesale_prices?.[index]?.unit}
-                                required
-                                requiredLabel={t('stock.form.requiredLabel')}
-                              >
-                                <Controller
-                                  name={`wholesale_prices.${index}.unit`}
-                                  control={control}
-                                  render={({ field: itemField }) => (
-                                    <Select
-                                      data-testid={`stock-product-wholesale-unit-${index}`}
-                                      value={itemField.value}
-                                      onChange={itemField.onChange}
-                                      className="w-full"
-                                      placeholder={t('stock.form.unitPlaceholder')}
-                                      options={productUnitOptions}
-                                    />
-                                  )}
-                                />
-                              </FieldContainer>
-                            </div>
-
-                            <div className="col-span-3">
-                              <FieldContainer label={t('stock.form.type')}>
-                                <Controller
-                                  name={`wholesale_prices.${index}.price_type`}
-                                  control={control}
-                                  render={({ field: itemField }) => (
-                                    <Select
-                                      value={itemField.value}
-                                      onChange={itemField.onChange}
-                                      className="w-full"
-                                      options={[
-                                        {
-                                          value: 'unit',
-                                          label: t('stock.form.perUnit', {
-                                            unit: wholesalePrices[index]?.unit || purchaseUnit,
-                                          }),
-                                        },
-                                        { value: 'bundle', label: t('stock.form.bundle') },
-                                      ]}
-                                    />
-                                  )}
-                                />
-                              </FieldContainer>
-                            </div>
-
-                            <div className="col-span-3">
-                              <FieldContainer
-                                label={t('stock.form.price')}
-                                error={errors.wholesale_prices?.[index]?.price}
-                                required
-                                requiredLabel={t('stock.form.requiredLabel')}
-                              >
-                                <Controller
-                                  name={`wholesale_prices.${index}.price`}
-                                  control={control}
-                                  render={({ field: itemField }) => (
-                                    <InputNumber
-                                      data-testid={`stock-product-wholesale-price-${index}`}
-                                      inputMode="decimal"
-                                      value={itemField.value}
-                                      onBlur={itemField.onBlur}
-                                      onChange={(value) => itemField.onChange(value ?? 0)}
-                                      className="w-full"
-                                      placeholder={t('stock.form.nominalPlaceholder')}
-                                      prefix="Rp"
-                                      min={0}
-                                      formatter={formatCurrencyInput}
-                                      parser={parseCurrencyInput}
-                                    />
-                                  )}
-                                />
-                              </FieldContainer>
-                            </div>
-                          </div>
-
-                          <Button
-                            danger
-                            type="text"
-                            icon={<Trash2 size={16} />}
-                            onClick={() => removeWholesale(index)}
-                            className="mt-8"
-                          />
-                        </div>
-                      ))}
-                      {wholesaleFields.length === 0 ? (
-                        <p className="text-sm italic text-gray-500">{t('stock.form.noWholesalePrices')}</p>
-                      ) : null}
-                    </div>
-                  </div>
+                  <StockProductWholesaleTab
+                    control={control}
+                    errors={errors}
+                    wholesaleFields={wholesaleFields}
+                    appendWholesale={appendWholesale}
+                    removeWholesale={removeWholesale}
+                    purchaseUnit={purchaseUnit}
+                    productUnitOptions={productUnitOptions}
+                    wholesalePrices={wholesalePrices}
+                  />
                 ),
               },
             ]}

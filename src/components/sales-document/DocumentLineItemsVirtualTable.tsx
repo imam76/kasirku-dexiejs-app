@@ -29,6 +29,7 @@ interface DocumentLineItemsVirtualTableProps {
   onRemoveItem: (itemId: string) => void;
   onToggleExpanded: (itemId: string) => void;
   onCreateProductRequest?: (lineId: string, search: string) => void;
+  onEditProductRequest?: (lineId: string, productId: string) => void;
 }
 
 const COLLAPSED_ROW_ESTIMATE = 56;
@@ -53,6 +54,7 @@ export const DocumentLineItemsVirtualTable = ({
   onRemoveItem,
   onToggleExpanded,
   onCreateProductRequest,
+  onEditProductRequest,
 }: DocumentLineItemsVirtualTableProps) => {
   const { t } = useI18n();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -61,11 +63,11 @@ export const DocumentLineItemsVirtualTable = ({
     const columns = ['minmax(260px,1fr)', '120px'];
     if (isSalesDelivery) columns.push('120px');
     columns.push('120px');
-    if (hasPricing) columns.push('140px', '56px');
+    if (hasPricing) columns.push('140px', '140px', '56px');
     columns.push('56px');
     return columns.join(' ');
   }, [hasPricing, isSalesDelivery]);
-  const minWidth = isSalesDelivery ? 880 : hasPricing ? 760 : 580;
+  const minWidth = isSalesDelivery ? 1020 : hasPricing ? 900 : 580;
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -115,6 +117,7 @@ export const DocumentLineItemsVirtualTable = ({
             <div>{t(isSalesDelivery ? 'salesDocuments.field.orderedQuantity' : 'salesDocuments.field.quantity')}</div>
             {isSalesDelivery && <div>{t('salesDocuments.field.deliveredQuantity')}</div>}
             <div>{t('salesDocuments.field.unit')}</div>
+            {hasPricing && <div>{t('salesDocuments.field.price')}</div>}
             {hasPricing && <div className="text-right">{t('salesDocuments.field.subtotal')}</div>}
             {hasPricing && <div />}
             <div />
@@ -172,6 +175,7 @@ export const DocumentLineItemsVirtualTable = ({
                       onRemoveItem={onRemoveItem}
                       onToggleExpanded={onToggleExpanded}
                       onCreateProductRequest={onCreateProductRequest}
+                      onEditProductRequest={onEditProductRequest}
                     />
                   );
                 })}

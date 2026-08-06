@@ -1,4 +1,4 @@
-import { Minus, Package, Plus, Trash2 } from 'lucide-react';
+import { Minus, Package, Pencil, Plus, Trash2 } from 'lucide-react';
 import { CartItem as CartItemType } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getCartItemOriginalPrice, getCartItemPrice } from '@/utils/pricing';
@@ -11,6 +11,7 @@ interface CartItemProps {
   updateQuantity: (id: string, quantity: number) => void;
   updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
+  onEditProduct?: (item: CartItemType) => void;
   isActive?: boolean;
   onActivate?: () => void;
   quantityInputRef?: (element: HTMLInputElement | null) => void;
@@ -21,6 +22,7 @@ export default function CartItem({
   updateQuantity,
   updateUnit,
   removeFromCart,
+  onEditProduct,
   isActive = false,
   onActivate,
   quantityInputRef,
@@ -74,6 +76,20 @@ export default function CartItem({
               )}
             </div>
           </div>
+
+          {onEditProduct && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onEditProduct(item);
+              }}
+              className="grid h-8 w-7 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+              title={t('cart.editProduct')}
+            >
+              <Pencil size={14} />
+            </button>
+          )}
 
           <Select
             value={item.unit}
@@ -159,6 +175,19 @@ export default function CartItem({
               )}
             </div>
           </div>
+          {onEditProduct && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onEditProduct(item);
+              }}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+              title={t('cart.editProduct')}
+            >
+              <Pencil size={15} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => removeFromCart(item.product.id)}

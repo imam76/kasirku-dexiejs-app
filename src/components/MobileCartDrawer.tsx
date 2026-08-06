@@ -21,6 +21,7 @@ interface MobileCartDrawerProps {
   updateQuantity: (id: string, quantity: number) => void;
   updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
+  onEditProduct?: (item: CartItemType) => void;
   activeCartItemId?: string;
   onActivateCartItem: (id: string) => void;
   clearCart: () => void;
@@ -58,6 +59,7 @@ export default function MobileCartDrawer({
   updateQuantity,
   updateUnit,
   removeFromCart,
+  onEditProduct,
   activeCartItemId,
   onActivateCartItem,
   clearCart,
@@ -136,6 +138,7 @@ export default function MobileCartDrawer({
                 updateQuantity={updateQuantity}
                 updateUnit={updateUnit}
                 removeFromCart={removeFromCart}
+                onEditProduct={onEditProduct}
                 isActive={item.product.id === activeCartItemId}
                 onActivate={() => onActivateCartItem(item.product.id)}
               />

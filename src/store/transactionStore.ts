@@ -42,6 +42,8 @@ interface TransactionState {
   addToCart: (product: Product) => { success: boolean; error?: TransactionError };
   updateQuantity: (productId: string, newQuantity: number) => { success: boolean; error?: TransactionError };
   updateUnit: (productId: string, newUnit: string) => { success: boolean; error?: TransactionError };
+  /** Menyegarkan data produk (harga, dsb.) di baris keranjang yang sudah ada, mis. sesudah quick-edit. */
+  updateCartProduct: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   reset: () => void;
 }
@@ -309,6 +311,14 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       })
     });
     return { success: true };
+  },
+
+  updateCartProduct: (product) => {
+    set((state) => ({
+      cart: state.cart.map((item) => (
+        item.product.id === product.id ? { ...item, product } : item
+      )),
+    }));
   },
 
   removeFromCart: (productId) => {

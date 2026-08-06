@@ -26,6 +26,7 @@ interface DocumentLineItemsProps {
   documentCurrencySnapshot: DocumentCurrencySnapshot;
   onChange: (items: SalesDocumentItem[]) => void;
   onCreateProductRequest?: (lineId: string, search: string) => void;
+  onEditProductRequest?: (lineId: string, productId: string) => void;
 }
 
 const emptyUnitOptions: Array<{ value: string; label: string }> = [];
@@ -63,6 +64,7 @@ export const DocumentLineItems = ({
   documentCurrencySnapshot,
   onChange,
   onCreateProductRequest,
+  onEditProductRequest,
 }: DocumentLineItemsProps) => {
   const { t } = useI18n();
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
@@ -272,6 +274,7 @@ export const DocumentLineItems = ({
         onRemoveItem={removeItem}
         onToggleExpanded={toggleExpanded}
         onCreateProductRequest={onCreateProductRequest}
+        onEditProductRequest={onEditProductRequest}
       />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-gray-500">

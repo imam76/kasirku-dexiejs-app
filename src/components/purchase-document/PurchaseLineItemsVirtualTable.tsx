@@ -29,6 +29,7 @@ interface PurchaseLineItemsVirtualTableProps {
   onRemoveItem: (itemId: string) => void;
   onToggleExpanded: (itemId: string) => void;
   onCreateProductRequest?: (lineId: string, search: string) => void;
+  onEditProductRequest?: (lineId: string, productId: string) => void;
 }
 
 const COLLAPSED_ROW_ESTIMATE = 56;
@@ -53,6 +54,7 @@ export const PurchaseLineItemsVirtualTable = ({
   onRemoveItem,
   onToggleExpanded,
   onCreateProductRequest,
+  onEditProductRequest,
 }: PurchaseLineItemsVirtualTableProps) => {
   const { t } = useI18n();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -61,11 +63,11 @@ export const PurchaseLineItemsVirtualTable = ({
     const columns = ['minmax(260px,1fr)', '120px'];
     if (isPurchaseReceipt) columns.push('120px');
     columns.push('120px');
-    if (hasPricing) columns.push('140px', '56px');
+    if (hasPricing) columns.push('140px', '140px', '56px');
     columns.push('56px');
     return columns.join(' ');
   }, [hasPricing, isPurchaseReceipt]);
-  const minWidth = isPurchaseReceipt ? 880 : hasPricing ? 760 : 580;
+  const minWidth = isPurchaseReceipt ? 1020 : hasPricing ? 900 : 580;
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -115,6 +117,7 @@ export const PurchaseLineItemsVirtualTable = ({
             <div>{t('purchaseDocuments.field.quantity')}</div>
             {isPurchaseReceipt && <div>{t('purchaseDocuments.field.receivedQuantity')}</div>}
             <div>{t('purchaseDocuments.field.unit')}</div>
+            {hasPricing && <div>{t('purchaseDocuments.field.price')}</div>}
             {hasPricing && <div className="text-right">{t('purchaseDocuments.field.subtotal')}</div>}
             {hasPricing && <div />}
             <div />
@@ -172,6 +175,7 @@ export const PurchaseLineItemsVirtualTable = ({
                       onRemoveItem={onRemoveItem}
                       onToggleExpanded={onToggleExpanded}
                       onCreateProductRequest={onCreateProductRequest}
+                      onEditProductRequest={onEditProductRequest}
                     />
                   );
                 })}

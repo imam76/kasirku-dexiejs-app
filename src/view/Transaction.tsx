@@ -184,6 +184,7 @@ export default function Transaction() {
     addToCart,
     updateQuantity,
     updateUnit,
+    updateCartProduct,
     findProductByScannedCode,
     findFirstProductBySearchTerm,
     removeFromCart,
@@ -220,6 +221,7 @@ export default function Transaction() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [quickItemDraft, setQuickItemDraft] = useState<{ barcode: string; name: string } | null>(null);
   const [quickItemTopUp, setQuickItemTopUp] = useState<Product | null>(null);
+  const [editingCartProduct, setEditingCartProduct] = useState<Product | null>(null);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [reconciliation, setReconciliation] = useState<CashierSessionReconciliation | null>(null);
   const desktopShortcuts = [
@@ -425,6 +427,16 @@ export default function Transaction() {
     setSearchTerm('');
     window.requestAnimationFrame(focusSearch);
   }, [focusSearch, handleAddProduct, setSearchTerm]);
+
+  const handleEditCartProduct = useCallback((product: Product) => {
+    setEditingCartProduct(product);
+  }, []);
+
+  const handleCartProductUpdated = useCallback((product: Product) => {
+    // Baris keranjang disegarkan di tempat, bukan ditambahkan lagi.
+    updateCartProduct(product);
+    setEditingCartProduct(null);
+  }, [updateCartProduct]);
 
   const flushPendingSearchInput = useCallback((restoreFocus: boolean) => {
     const pending = pendingSearchKeySequenceRef.current;
@@ -916,6 +928,7 @@ export default function Transaction() {
           updateQuantity={updateQuantity}
           updateUnit={updateUnit}
           removeFromCart={removeFromCart}
+          onEditProduct={(item) => handleEditCartProduct(item.product)}
           activeCartItemId={activeCartItemId}
           onActivateCartItem={setActiveCartItemId}
           registerQuantityInput={registerQuantityInput}
@@ -976,6 +989,7 @@ export default function Transaction() {
         updateQuantity={updateQuantity}
         updateUnit={updateUnit}
         removeFromCart={removeFromCart}
+        onEditProduct={(item) => handleEditCartProduct(item.product)}
         activeCartItemId={activeCartItemId}
         onActivateCartItem={setActiveCartItemId}
         clearCart={clearCart}
@@ -1014,15 +1028,18 @@ export default function Transaction() {
       )}
 
       <PosQuickItemModal
-        open={Boolean(quickItemDraft) || Boolean(quickItemTopUp)}
+        open={Boolean(quickItemDraft) || Boolean(quickItemTopUp) || Boolean(editingCartProduct)}
         initialBarcode={quickItemDraft?.barcode}
         initialName={quickItemDraft?.name}
         topUpProduct={quickItemTopUp}
+        editProduct={editingCartProduct}
         onCancel={() => {
           setQuickItemDraft(null);
           setQuickItemTopUp(null);
+          setEditingCartProduct(null);
         }}
         onResolved={handleQuickItemResolved}
+        onEditResolved={handleCartProductUpdated}
       />
 
       <Modal

@@ -1,14 +1,19 @@
 import { forwardRef, memo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, InputNumber, Select } from 'antd';
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { PurchaseDocumentItem } from '@/types';
 import {
   formatDocumentCurrencyAmount,
+  isBaseCurrency,
   toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
+import {
+  formatCurrencyInput,
+  parseCurrencyInput,
+} from '@/utils/formatters';
 import { PurchaseLineItemExpandedFields } from './PurchaseLineItemExpandedFields';
 
 interface Option {
@@ -34,6 +39,7 @@ export interface PurchaseLineItemRowProps {
   onRemoveItem: (itemId: string) => void;
   onToggleExpanded: (itemId: string) => void;
   onCreateProductRequest?: (lineId: string, search: string) => void;
+  onEditProductRequest?: (lineId: string, productId: string) => void;
 }
 
 const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowProps>(
@@ -56,6 +62,7 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
       onRemoveItem,
       onToggleExpanded,
       onCreateProductRequest,
+      onEditProductRequest,
     },
     ref
   ) => {
@@ -67,6 +74,10 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
       displayedItem.subtotal,
       documentCurrencySnapshot
     );
+    const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code, documentCurrencySnapshot.base_currency_code);
+    const displayedPrice = isForeignCurrency
+      ? item.foreign_price ?? toDocumentCurrencyAmount(item.price, documentCurrencySnapshot)
+      : item.price;
 
     return (
       <div
@@ -79,39 +90,51 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
           className="grid items-center gap-2 px-3 py-2"
           style={{ gridTemplateColumns }}
         >
-          <Select
-            showSearch={{ optionFilterProp: 'label' }}
-            className="w-full min-w-0"
-            placeholder={t('purchaseDocuments.placeholder.product')}
-            value={item.product_id || undefined}
-            options={productOptions}
-            onSearch={setProductSearch}
-            searchValue={productSearch}
-            notFoundContent={
-              productSearch.trim().length > 0 ? (
-                <div className="px-2 py-2">
-                  <div className="mb-2 text-sm text-gray-600">
-                    {t('purchaseDocuments.quickCreate.notFound')}
+          <div className="flex min-w-0 items-center gap-1">
+            <Select
+              showSearch={{ optionFilterProp: 'label' }}
+              className="w-full min-w-0"
+              placeholder={t('purchaseDocuments.placeholder.product')}
+              value={item.product_id || undefined}
+              options={productOptions}
+              onSearch={setProductSearch}
+              searchValue={productSearch}
+              notFoundContent={
+                productSearch.trim().length > 0 ? (
+                  <div className="px-2 py-2">
+                    <div className="mb-2 text-sm text-gray-600">
+                      {t('purchaseDocuments.quickCreate.notFound')}
+                    </div>
+                    <Button
+                      type="primary"
+                      size="small"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        onCreateProductRequest?.(item.id, productSearch);
+                        setProductSearch('');
+                      }}
+                    >
+                      {t('purchaseDocuments.quickCreate.action')}
+                    </Button>
                   </div>
-                  <Button
-                    type="primary"
-                    size="small"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      onCreateProductRequest?.(item.id, productSearch);
-                      setProductSearch('');
-                    }}
-                  >
-                    {t('purchaseDocuments.quickCreate.action')}
-                  </Button>
-                </div>
-              ) : null
-            }
-            onChange={(productId: string) => {
-              onSelectProduct(item.id, productId);
-              setProductSearch('');
-            }}
-          />
+                ) : null
+              }
+              onChange={(productId: string) => {
+                onSelectProduct(item.id, productId);
+                setProductSearch('');
+              }}
+            />
+            {item.product_id && (
+              <Button
+                type="text"
+                size="small"
+                icon={<Pencil size={14} />}
+                onClick={() => onEditProductRequest?.(item.id, item.product_id)}
+                aria-label={t('purchaseDocuments.editProduct')}
+                title={t('purchaseDocuments.editProduct')}
+              />
+            )}
+          </div>
 
           <InputNumber
             min={0}
@@ -143,6 +166,19 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
             options={unitOptions}
             onChange={(unit: string) => onUpdateItem(item.id, { unit })}
           />
+
+          {hasPricing && (
+            <InputNumber
+              min={0}
+              className="w-full"
+              value={displayedPrice}
+              formatter={formatCurrencyInput}
+              parser={parseCurrencyInput}
+              onChange={(value) => onUpdateItem(item.id, isForeignCurrency
+                ? { foreign_price: Number(value || 0) }
+                : { price: Number(value || 0) })}
+            />
+          )}
 
           {hasPricing && (
             <div className="truncate text-right text-sm font-medium text-gray-700">
@@ -215,5 +251,6 @@ export const PurchaseLineItemRow = memo(PurchaseLineItemRowBase, (prev, next) =>
   prev.onSelectProduct === next.onSelectProduct &&
   prev.onRemoveItem === next.onRemoveItem &&
   prev.onToggleExpanded === next.onToggleExpanded &&
-  prev.onCreateProductRequest === next.onCreateProductRequest
+  prev.onCreateProductRequest === next.onCreateProductRequest &&
+  prev.onEditProductRequest === next.onEditProductRequest
 ));

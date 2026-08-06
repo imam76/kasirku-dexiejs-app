@@ -25,6 +25,7 @@ interface PurchaseDocumentLineItemsProps {
   documentCurrencySnapshot: DocumentCurrencySnapshot;
   onChange: (items: PurchaseDocumentItem[]) => void;
   onCreateProductRequest?: (lineId: string, search: string) => void;
+  onEditProductRequest?: (lineId: string, productId: string) => void;
 }
 
 const emptyUnitOptions: Array<{ value: string; label: string }> = [];
@@ -51,6 +52,7 @@ export const PurchaseDocumentLineItems = ({
   documentCurrencySnapshot,
   onChange,
   onCreateProductRequest,
+  onEditProductRequest,
 }: PurchaseDocumentLineItemsProps) => {
   const { t } = useI18n();
   const { unitOptions: masterUnitOptions } = useUnits();
@@ -252,6 +254,7 @@ export const PurchaseDocumentLineItems = ({
         onRemoveItem={removeItem}
         onToggleExpanded={toggleExpanded}
         onCreateProductRequest={onCreateProductRequest}
+        onEditProductRequest={onEditProductRequest}
       />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-gray-500">

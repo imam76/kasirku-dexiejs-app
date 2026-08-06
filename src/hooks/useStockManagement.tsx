@@ -11,14 +11,12 @@ import {
   enqueueProductSync,
   processPendingSyncQueue,
 } from '@/services/syncQueueService';
-import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
-import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { createProductRecord } from '@/services/productCreateService';
-import type { FinanceTransaction, Product } from '@/types';
+import { updateProductRecord } from '@/services/productUpdateService';
+import type { Product } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import {
-  buildSellableUnitsFromMappings,
   getProductSellableUnits,
   normalizeProductUnitMappings,
 } from '@/utils/productUnits';
@@ -28,10 +26,6 @@ import { DEFAULT_CONVERSIONS, normalizeUnitKey, resolveUnitCategory } from '@/co
 import { materializeWholesalePriceUnits } from '@/utils/pricing';
 
 export type { StockFormData };
-
-type ProductUpsertData = Omit<Product, 'id' | 'created_at' | 'updated_at' | 'stock'> & {
-  stock?: number;
-};
 
 const withPendingSync = (product: Product): Product => ({
   ...product,
@@ -104,111 +98,9 @@ export const useStockManagement = () => {
 
   // Upsert (add/update) mutation
   const upsertMutation = useMutation({
-    mutationFn: async (productData: ProductUpsertData & { purchase_quantity?: number }) => {
-      if (!editingId) {
-        return createProductRecord(productData as unknown as StockFormData);
-      }
-
-      const currentUser = await getCurrentSessionUser();
-      await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
-      const purchase_quantity = productData.purchase_quantity || 0;
-      const now = new Date().toISOString();
-      const productId = editingId;
-      let syncedProduct: Product | null = null;
-      const financeTransactionsToSync: FinanceTransaction[] = [];
-
-      const unitMappings = normalizeProductUnitMappings({
-        purchase_unit: productData.purchase_unit || 'pcs',
-        selling_unit: productData.selling_unit || 'pcs',
-        sellable_units: productData.sellable_units || [],
-        unit_mappings: productData.unit_mappings || [],
-      });
-
-      const cleanData: ProductUpsertData = {
-        name: productData.name,
-        category: productData.category || 'non_consumable',
-        purchase_unit: productData.purchase_unit || 'pcs',
-        selling_unit: productData.selling_unit || 'pcs',
-        purchase_price: productData.purchase_price ?? undefined,
-        selling_price: productData.selling_price ?? undefined,
-        sku: productData.sku,
-        product_type: productData.product_type ?? 'FINISHED_GOOD',
-        is_visible_in_pos: productData.is_visible_in_pos ?? true,
-        wholesale_prices: (productData.wholesale_prices || []).map((p) => ({
-          min_quantity: Number(p.min_quantity),
-          unit: p.unit || productData.selling_unit || productData.purchase_unit || 'pcs',
-          price: Number(p.price),
-          price_type: p.price_type || 'unit',
-        })),
-        unit_mappings: unitMappings,
-        sellable_units: buildSellableUnitsFromMappings({
-          purchase_unit: productData.purchase_unit || 'pcs',
-          selling_unit: productData.selling_unit || 'pcs',
-          sellable_units: productData.sellable_units || [],
-          unit_mappings: unitMappings,
-        }),
-      };
-
-      // Only include stock if it's explicitly provided
-      if (productData.stock !== undefined) {
-        cleanData.stock = productData.stock;
-      }
-
-      await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
-        const existingProduct = await db.products.get(productId);
-        if (!existingProduct) {
-          throw new Error('Produk tidak ditemukan.');
-        }
-
-        // Update product
-        const updatedProduct: Product = withPendingSync({
-          ...existingProduct,
-          ...cleanData,
-          stock: cleanData.stock ?? existingProduct.stock,
-          updated_at: now,
-        });
-        await db.products.put(updatedProduct);
-        syncedProduct = updatedProduct;
-
-        // Record purchase if stock was added
-        if (purchase_quantity > 0) {
-          const totalCost = cleanData.purchase_price * purchase_quantity;
-          const purchaseResult = await recordStockPurchase({
-            productId,
-            productName: cleanData.name,
-            sku: cleanData.sku,
-            quantity: purchase_quantity,
-            costPerUnit: cleanData.purchase_price,
-            totalCost,
-            description: t('stock.purchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
-            createdAt: now,
-            actor: currentUser,
-          });
-          financeTransactionsToSync.push(purchaseResult.financeTransaction);
-        }
-      });
-
-      if (syncedProduct) {
-        await enqueueProductSync(syncedProduct, 'update');
-      }
-      if (financeTransactionsToSync.length > 0) {
-        await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
-      }
-
-      await writeActivityLog({
-        user: currentUser,
-        action: 'PRODUCT_UPDATED',
-        entity: 'products',
-        entity_id: productId,
-        description: `${currentUser?.name ?? 'User'} memperbarui produk ${cleanData.name}.`,
-      });
-
-      if (!syncedProduct) {
-        throw new Error('Produk tidak ditemukan.');
-      }
-
-      return syncedProduct;
-    },
+    mutationFn: async (data: StockFormData) => (
+      editingId ? updateProductRecord(editingId, data) : createProductRecord(data)
+    ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
@@ -313,32 +205,10 @@ export const useStockManagement = () => {
   });
 
   const onSubmit = async (data: StockFormData) => {
-    const sellableUnits = data.sellable_units && data.sellable_units.length > 0
-      ? data.sellable_units
-      : [data.selling_unit || 'pcs'];
-    // Satuan jual default dipilih sendiri oleh pengguna; urutan daftar satuan
-    // hanya jadi cadangan saat pilihannya sudah tidak ada lagi di daftar.
-    const defaultSellingUnit = data.selling_unit && sellableUnits.includes(data.selling_unit)
-      ? data.selling_unit
-      : sellableUnits[0] || 'pcs';
-
-    await upsertMutation.mutateAsync({
-      name: data.name,
-      category: data.category,
-      purchase_unit: data.purchase_unit,
-      selling_unit: defaultSellingUnit,
-      // Harga opsional di form; yang kosong tetap disimpan 0 supaya konsumen
-      // hilir (POS, HPP, ekspor) tidak perlu menangani nilai undefined.
-      purchase_price: data.purchase_price ?? 0,
-      selling_price: data.selling_price ?? 0,
-      sku: data.sku || '',
-      product_type: data.product_type,
-      is_visible_in_pos: data.is_visible_in_pos,
-      purchase_quantity: data.purchase_quantity || 0,
-      wholesale_prices: data.wholesale_prices || [],
-      sellable_units: sellableUnits,
-      unit_mappings: data.unit_mappings || [],
-    });
+    // Turunan (satuan jual default, harga kosong -> 0, dst) ditangani di
+    // createProductRecord/updateProductRecord supaya jalur create dan update
+    // menempuh logika yang sama persis.
+    await upsertMutation.mutateAsync(data);
   };
 
   const submitForm = async () => {

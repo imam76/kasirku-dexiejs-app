@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useI18n } from '@/hooks/useI18n';
 import { buildQuickCreateDefaultValues, useProductQuickCreateForm } from '@/hooks/useProductQuickCreateForm';
+import { useProductQuickEditForm } from '@/hooks/useProductQuickEditForm';
 import type { StockFormData } from '@/lib/validations/stock';
 import {
   posQuickItemTopUpSchema,
@@ -18,6 +19,7 @@ import {
   resolveQuickItemEstimatedCost,
   type PosQuickItemCandidate,
 } from '@/services/posQuickItemService';
+import { updateProductRecord } from '@/services/productUpdateService';
 import type { Product, ProductCategory } from '@/types';
 import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from '@/utils/formatters';
 import StockProductModal from '@/view/master-data/products/StockProductModal';
@@ -37,8 +39,12 @@ interface PosQuickItemModalProps {
   initialName?: string;
   /** Bila diisi, modal hanya menambah stok untuk produk tersebut. */
   topUpProduct?: Product | null;
+  /** Bila diisi, modal mengedit produk ini (quick-edit dari baris keranjang). */
+  editProduct?: Product | null;
   onCancel: () => void;
   onResolved: (product: Product) => void;
+  /** Dipanggil sesudah quick-edit tersimpan; produk TIDAK ditambahkan ke keranjang lagi. */
+  onEditResolved?: (product: Product) => void;
 }
 
 const QuickItemTopUpForm = ({
@@ -128,6 +134,50 @@ const QuickItemTopUpForm = ({
         </Button>
       </form>
     </Form>
+  );
+};
+
+const QuickItemEditForm = ({
+  open,
+  product,
+  onCancel,
+  onResolved,
+}: { open: boolean; product: Product; onCancel: () => void; onResolved: (product: Product) => void }) => {
+  const { t } = useI18n();
+  const { message } = App.useApp();
+  const quickEditForm = useProductQuickEditForm();
+
+  useEffect(() => {
+    if (!open) return;
+    quickEditForm.loadProduct(product);
+    // quickEditForm.loadProduct is a stable react-hook-form-backed callback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, product]);
+
+  const handleSave = async () => {
+    try {
+      const updated = await quickEditForm.submit(updateProductRecord);
+      if (updated) {
+        onResolved(updated);
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('productQuickEdit.failed'));
+    }
+  };
+
+  return (
+    <StockProductModal
+      open={open}
+      editingId={quickEditForm.editingProductId}
+      control={quickEditForm.control}
+      errors={quickEditForm.formState.errors}
+      setValue={quickEditForm.setValue}
+      getValues={quickEditForm.getValues}
+      reset={quickEditForm.reset}
+      setIsModalOpen={() => {}}
+      onCancel={onCancel}
+      onSave={handleSave}
+    />
   );
 };
 
@@ -338,8 +388,10 @@ export const PosQuickItemModal = ({
   initialBarcode = '',
   initialName = '',
   topUpProduct = null,
+  editProduct = null,
   onCancel,
   onResolved,
+  onEditResolved,
 }: PosQuickItemModalProps) => {
   const { t } = useI18n();
 
@@ -354,6 +406,17 @@ export const PosQuickItemModal = ({
       >
         <QuickItemTopUpForm open={open} product={topUpProduct} onResolved={onResolved} />
       </Modal>
+    );
+  }
+
+  if (editProduct) {
+    return (
+      <QuickItemEditForm
+        open={open}
+        product={editProduct}
+        onCancel={onCancel}
+        onResolved={onEditResolved ?? onCancel}
+      />
     );
   }
 

@@ -3,14 +3,8 @@ import { useI18n } from '@/hooks/useI18n';
 import type { PromoType, PurchaseDocumentItem } from '@/types';
 import {
   formatBaseCurrencyAmount,
-  isBaseCurrency,
-  toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
-import {
-  formatCurrencyInput,
-  parseCurrencyInput,
-} from '@/utils/formatters';
 
 interface Option {
   value: string;
@@ -45,27 +39,10 @@ export const PurchaseLineItemExpandedFields = ({
 }: PurchaseLineItemExpandedFieldsProps) => {
   const { t } = useI18n();
   const displayedItem = calculatedItem ?? item;
-  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code, documentCurrencySnapshot.base_currency_code);
-  const displayedPrice = isForeignCurrency
-    ? item.foreign_price ?? toDocumentCurrencyAmount(item.price, documentCurrencySnapshot)
-    : item.price;
 
   return (
     <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-3">
-      <div className="grid grid-cols-4 gap-3">
-        <div>
-          <div className={expandedFieldLabelClassName}>{t('purchaseDocuments.field.price')}</div>
-          <InputNumber
-            min={0}
-            className={expandedFieldControlClassName}
-            value={displayedPrice}
-            formatter={formatCurrencyInput}
-            parser={parseCurrencyInput}
-            onChange={(value) => onUpdateItem(item.id, isForeignCurrency
-              ? { foreign_price: Number(value || 0) }
-              : { price: Number(value || 0) })}
-          />
-        </div>
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <div className={expandedFieldLabelClassName}>{t('purchaseDocuments.field.discount')}</div>
           <div className="grid grid-cols-[120px_1fr] gap-2">

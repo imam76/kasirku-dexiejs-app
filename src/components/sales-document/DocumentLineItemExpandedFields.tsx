@@ -1,17 +1,10 @@
-import { Button, InputNumber, Select } from 'antd';
+import { InputNumber, Select } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
 import type { PromoType, SalesDocumentItem } from '@/types';
 import {
   formatBaseCurrencyAmount,
-  isBaseCurrency,
-  toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
-import {
-  formatCurrency,
-  formatCurrencyInput,
-  parseCurrencyInput,
-} from '@/utils/formatters';
 
 interface Option {
   value: string;
@@ -46,45 +39,10 @@ export const DocumentLineItemExpandedFields = ({
 }: DocumentLineItemExpandedFieldsProps) => {
   const { t } = useI18n();
   const displayedItem = calculatedItem ?? item;
-  const isPriceEdited = Boolean(item.is_price_edited && item.original_price !== undefined);
-  const isForeignCurrency = !isBaseCurrency(documentCurrencySnapshot.currency_code, documentCurrencySnapshot.base_currency_code);
-  const displayedPrice = isForeignCurrency
-    ? item.foreign_price ?? toDocumentCurrencyAmount(item.price, documentCurrencySnapshot)
-    : item.price;
 
   return (
     <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-3">
-      <div className="grid grid-cols-4 gap-3">
-        <div>
-          <div className={`${expandedFieldLabelClassName} justify-between gap-2`}>
-            <span className="min-w-0 truncate">{t('salesDocuments.field.price')}</span>
-            {isPriceEdited && (
-              <Button
-                type="link"
-                size="small"
-                className="h-auto shrink-0 whitespace-nowrap p-0 text-xs leading-none"
-                onClick={() => onUpdateItem(item.id, { price: item.original_price })}
-              >
-                {t('salesDocuments.resetSystemPrice')}
-              </Button>
-            )}
-          </div>
-          <InputNumber
-            min={0}
-            className={expandedFieldControlClassName}
-            value={displayedPrice}
-            formatter={formatCurrencyInput}
-            parser={parseCurrencyInput}
-            onChange={(value) => onUpdateItem(item.id, isForeignCurrency
-              ? { foreign_price: Number(value || 0) }
-              : { price: Number(value || 0) })}
-          />
-          {isPriceEdited && (
-            <p className="mt-1 text-xs text-amber-700">
-              {t('salesDocuments.systemPrice', { price: formatCurrency(item.original_price || 0) })}
-            </p>
-          )}
-        </div>
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <div className={expandedFieldLabelClassName}>{t('salesDocuments.field.discount')}</div>
           <div className="grid grid-cols-[120px_1fr] gap-2">

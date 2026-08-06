@@ -67,6 +67,7 @@ export const messages = {
     'transaction.quickItem.failed': 'Gagal menyimpan produk',
 
     'productQuickCreate.failed': 'Gagal menyimpan produk',
+    'productQuickEdit.failed': 'Gagal memperbarui produk',
 
     'product.wholesale': 'Grosir',
     'product.wholesaleFrom': 'Grosir mulai Rp {price}',
@@ -591,6 +592,7 @@ export const messages = {
     'salesDocuments.openItemDetail': 'Buka detail item',
     'salesDocuments.closeItemDetail': 'Tutup detail item',
     'salesDocuments.deleteItem': 'Hapus item',
+    'salesDocuments.editProduct': 'Edit produk',
     'salesDocuments.quickCreate.notFound': 'Produk tidak ditemukan',
     'salesDocuments.quickCreate.action': 'Buat Produk Baru',
     'salesDocuments.voidConfirmTitle': 'Batalkan dokumen?',
@@ -720,6 +722,7 @@ export const messages = {
     'purchaseDocuments.openItemDetail': 'Buka detail item',
     'purchaseDocuments.closeItemDetail': 'Tutup detail item',
     'purchaseDocuments.deleteItem': 'Hapus',
+    'purchaseDocuments.editProduct': 'Edit produk',
     'purchaseDocuments.quickCreate.notFound': 'Produk tidak ditemukan',
     'purchaseDocuments.quickCreate.action': 'Buat Produk Baru',
     'purchaseDocuments.voidConfirmTitle': 'Batalkan dokumen?',
@@ -1980,6 +1983,7 @@ export const messages = {
     'cart.total': 'Total',
     'cart.decrease': 'Kurangi',
     'cart.increase': 'Tambah',
+    'cart.editProduct': 'Edit produk',
     'cart.remove': 'Hapus item',
 
     'payment.pay': 'Bayar',
@@ -2118,6 +2122,7 @@ export const messages = {
     'transaction.quickItem.failed': 'Failed to save the product',
 
     'productQuickCreate.failed': 'Failed to save the product',
+    'productQuickEdit.failed': 'Failed to update the product',
 
     'product.wholesale': 'Wholesale',
     'product.wholesaleFrom': 'Wholesale from Rp {price}',
@@ -2642,6 +2647,7 @@ export const messages = {
     'salesDocuments.openItemDetail': 'Open item detail',
     'salesDocuments.closeItemDetail': 'Close item detail',
     'salesDocuments.deleteItem': 'Delete item',
+    'salesDocuments.editProduct': 'Edit product',
     'salesDocuments.quickCreate.notFound': 'Product not found',
     'salesDocuments.quickCreate.action': 'Create New Product',
     'salesDocuments.voidConfirmTitle': 'Void document?',
@@ -2771,6 +2777,7 @@ export const messages = {
     'purchaseDocuments.openItemDetail': 'Open item detail',
     'purchaseDocuments.closeItemDetail': 'Close item detail',
     'purchaseDocuments.deleteItem': 'Delete',
+    'purchaseDocuments.editProduct': 'Edit product',
     'purchaseDocuments.quickCreate.notFound': 'Product not found',
     'purchaseDocuments.quickCreate.action': 'Create New Product',
     'purchaseDocuments.voidConfirmTitle': 'Void document?',
@@ -4031,6 +4038,7 @@ export const messages = {
     'cart.total': 'Total',
     'cart.decrease': 'Decrease',
     'cart.increase': 'Increase',
+    'cart.editProduct': 'Edit product',
     'cart.remove': 'Remove item',
 
     'payment.pay': 'Pay',

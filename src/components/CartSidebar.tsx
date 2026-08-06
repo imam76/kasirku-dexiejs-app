@@ -15,6 +15,7 @@ interface CartSidebarProps {
   updateQuantity: (id: string, quantity: number) => void;
   updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
+  onEditProduct?: (item: CartItemType) => void;
   activeCartItemId?: string;
   onActivateCartItem: (id: string) => void;
   registerQuantityInput: (id: string, element: HTMLInputElement | null) => void;
@@ -52,6 +53,7 @@ export default function CartSidebar({
   updateQuantity,
   updateUnit,
   removeFromCart,
+  onEditProduct,
   activeCartItemId,
   onActivateCartItem,
   registerQuantityInput,
@@ -108,6 +110,7 @@ export default function CartSidebar({
               updateQuantity={updateQuantity}
               updateUnit={updateUnit}
               removeFromCart={removeFromCart}
+              onEditProduct={onEditProduct}
               isActive={item.product.id === activeCartItemId}
               onActivate={() => onActivateCartItem(item.product.id)}
               quantityInputRef={(element) => registerQuantityInput(item.product.id, element)}
