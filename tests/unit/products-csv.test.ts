@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import type { Product } from '@/types';
 import {
   buildProductCsvImportItems,
+  buildProductCsvImportItemsFromRows,
   createProductCsvExportRows,
+  createProductCsvTemplateRows,
+  createProductImportErrorRows,
 } from '@/utils/productsCsv';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
 
@@ -22,6 +25,8 @@ const existingProduct: Product = {
   purchase_price: 12_000,
   selling_price: 15_000,
   stock: 17,
+  product_type: 'FINISHED_GOOD',
+  is_visible_in_pos: true,
   wholesale_prices: [],
   sellable_units: ['pcs'],
   unit_mappings: [],
@@ -137,18 +142,6 @@ describe('product master CSV import safety', () => {
     expect(parsed.errors.join(' ')).toContain('is_visible_in_pos');
   });
 
-  test('returns no importable items when any row has a blocking error', () => {
-    const parsed = buildProductCsvImportItems([
-      'sku,name,purchase_price,selling_price',
-      'A,Produk A,12000,15000',
-      'B,,invalid,20000',
-    ].join('\n'));
-
-    expect(parsed.errors.length).toBeGreaterThan(0);
-    expect(parsed.validRowCount).toBe(1);
-    expect(parsed.items).toEqual([]);
-  });
-
   test('rejects non-numeric and negative price values instead of silently coercing them', () => {
     const invalidText = buildProductCsvImportItems([
       'sku,name,purchase_price',
@@ -212,5 +205,294 @@ describe('product master CSV import safety', () => {
     expect(importSource).not.toContain(
       "preserveStock: operation === 'update'",
     );
+  });
+});
+
+describe('wide unit conversion columns', () => {
+  test('reads satuan/isi pairs against the purchase unit', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,selling_unit,satuan_2,isi_2,satuan_3,isi_3',
+      'A,Rokok Contoh,bungkus,bungkus,slop,10,dus,100',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items[0].unit_mappings).toEqual([
+      { unit: 'slop', base_unit: 'bungkus', ratio: 10 },
+      { unit: 'dus', base_unit: 'bungkus', ratio: 100 },
+    ]);
+  });
+
+  test('reads non-contiguous suffixes in ascending order', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,satuan_4,isi_4,satuan_2,isi_2',
+      'A,Produk A,pcs,dus,240,lusin,12',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items[0].unit_mappings).toEqual([
+      { unit: 'lusin', base_unit: 'pcs', ratio: 12 },
+      { unit: 'dus', base_unit: 'pcs', ratio: 240 },
+    ]);
+  });
+
+  test('accepts unit_N and rasio_N aliases', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,unit_2,rasio_2',
+      'A,Produk A,pcs,dus,24',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items[0].unit_mappings).toEqual([
+      { unit: 'dus', base_unit: 'pcs', ratio: 24 },
+    ]);
+  });
+
+  test('rejects an incomplete unit pair without dropping the other rows', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,satuan_2,isi_2',
+      'A,Produk A,pcs,dus,',
+      'B,Produk B,pcs,dus,24',
+    ].join('\n'));
+
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0].sku).toBe('B');
+    expect(parsed.rowErrors).toHaveLength(1);
+    expect(parsed.rowErrors[0].rowNumber).toBe(2);
+    expect(parsed.rowErrors[0].messages[0]).toContain('isi_2');
+  });
+
+  test('rejects a ratio that is zero or negative', () => {
+    const zero = buildProductCsvImportItems([
+      'sku,name,purchase_unit,satuan_2,isi_2',
+      'A,Produk A,pcs,dus,0',
+    ].join('\n'));
+    const negative = buildProductCsvImportItems([
+      'sku,name,purchase_unit,satuan_2,isi_2',
+      'A,Produk A,pcs,dus,-4',
+    ].join('\n'));
+
+    expect(zero.items).toEqual([]);
+    expect(zero.errors[0]).toContain('isi_2');
+    expect(negative.items).toEqual([]);
+    expect(negative.errors[0]).toContain('isi_2');
+  });
+
+  test('rejects a unit name that collides with the purchase unit', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,satuan_2,isi_2',
+      'A,Produk A,dus,Dus,10',
+    ].join('\n'));
+
+    expect(parsed.items).toEqual([]);
+    expect(parsed.errors[0]).toContain('dipakai lebih dari sekali');
+  });
+});
+
+describe('wide wholesale price columns', () => {
+  test('reads wholesale tiers sorted by minimum quantity with a unit default', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,grosir_qty_1,grosir_harga_1,grosir_qty_2,grosir_harga_2',
+      'A,Produk A,24,9000,12,9500',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items[0].wholesale_prices).toEqual([
+      { min_quantity: 12, price: 9500, price_type: 'unit' },
+      { min_quantity: 24, price: 9000, price_type: 'unit' },
+    ]);
+  });
+
+  test('reads an explicit bundle tier type', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,grosir_qty_1,grosir_harga_1,grosir_tipe_1',
+      'A,Produk A,6,50000,bundle',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items[0].wholesale_prices).toEqual([
+      { min_quantity: 6, price: 50_000, price_type: 'bundle' },
+    ]);
+  });
+
+  test('rejects an incomplete wholesale pair', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,grosir_qty_1,grosir_harga_1',
+      'A,Produk A,24,',
+    ].join('\n'));
+
+    expect(parsed.items).toEqual([]);
+    expect(parsed.errors[0]).toContain('berpasangan');
+  });
+});
+
+describe('legacy JSON columns', () => {
+  test('still reads unit_mappings written as JSON', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,unit_mappings',
+      'A,Produk A,pcs,"[{""unit"":""dus"",""base_unit"":""pcs"",""ratio"":24}]"',
+    ].join('\n'));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.items[0].unit_mappings).toEqual([
+      { unit: 'dus', base_unit: 'pcs', ratio: 24 },
+    ]);
+  });
+
+  test('rejects a row that fills both the JSON column and the wide columns', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,satuan_2,isi_2,unit_mappings',
+      'A,Produk A,pcs,dus,24,"[{""unit"":""lusin"",""base_unit"":""pcs"",""ratio"":12}]"',
+    ].join('\n'));
+
+    expect(parsed.items).toEqual([]);
+    expect(parsed.errors[0]).toContain('tidak boleh diisi bersamaan');
+  });
+});
+
+describe('partial import reporting', () => {
+  test('imports valid rows and collects only the broken ones', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_price',
+      'A,Produk A,1000',
+      'B,Produk B,2000',
+      'C,,3000',
+      'D,Produk D,4000',
+    ].join('\n'));
+
+    expect(parsed.items).toHaveLength(3);
+    expect(parsed.validRowCount).toBe(3);
+    expect(parsed.rowErrors).toHaveLength(1);
+    expect(parsed.rowErrors[0].rowNumber).toBe(4);
+    expect(parsed.fileErrors).toEqual([]);
+  });
+
+  test('keeps the original cells of a failed row for the downloadable report', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_price',
+      'A,Produk A,1000',
+      'B,,harga-salah',
+    ].join('\n'));
+
+    expect(parsed.rowErrors[0].rawRow).toEqual(['B', '', 'harga-salah']);
+
+    const errorRows = createProductImportErrorRows(parsed.headerRow, parsed.rowErrors);
+    expect(errorRows[0]).toEqual(['baris', 'error', 'sku', 'name', 'purchase_price']);
+    expect(errorRows[1][0]).toBe(3);
+    expect(String(errorRows[1][1])).toContain('name/nama kosong');
+    expect(errorRows[1].slice(2)).toEqual(['B', '', 'harga-salah']);
+  });
+
+  test('still blocks the whole file when the name column is missing', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,harga_beli',
+      'A,1000',
+    ].join('\n'));
+
+    expect(parsed.items).toEqual([]);
+    expect(parsed.fileErrors).toHaveLength(1);
+    expect(parsed.fileErrors[0]).toContain('name');
+  });
+
+  test('drops only the duplicated SKU row when planning against existing products', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name',
+      'A,Produk A',
+      'B,Produk B',
+    ].join('\n'));
+    const duplicateSkuProducts: Product[] = [
+      { ...existingProduct, id: 'product-a1', sku: 'A' },
+      { ...existingProduct, id: 'product-a2', sku: 'A' },
+    ];
+
+    const plan = buildProductMasterImportPlan({
+      items: parsed.items,
+      existingProducts: duplicateSkuProducts,
+      now: '2026-07-31T00:00:00.000Z',
+      createId: () => 'product-b',
+    });
+
+    expect(plan.items).toHaveLength(1);
+    expect(plan.items[0].product.sku).toBe('B');
+    expect(plan.rowErrors).toHaveLength(1);
+    expect(plan.rowErrors[0].rowNumber).toBe(2);
+    expect(plan.rowErrors[0].rawRow).toEqual(['A', 'Produk A']);
+  });
+});
+
+describe('sellable units and round trip', () => {
+  test('derives sellable units from the base unit plus every wide unit', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,selling_unit,satuan_2,isi_2',
+      'A,Produk A,pcs,pcs,dus,24',
+    ].join('\n'));
+
+    const plan = buildProductMasterImportPlan({
+      items: parsed.items,
+      existingProducts: [],
+      now: '2026-07-31T00:00:00.000Z',
+      createId: () => 'product-a',
+    });
+
+    expect(plan.items[0].product.sellable_units).toEqual(['pcs', 'dus']);
+  });
+
+  test('keeps an explicit sellable_units column as the override', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,purchase_unit,selling_unit,satuan_2,isi_2,sellable_units',
+      'A,Produk A,pcs,pcs,dus,24,dus',
+    ].join('\n'));
+
+    expect(parsed.items[0].sellable_units).toEqual(['dus']);
+  });
+
+  test('survives an export then import round trip without JSON cells', () => {
+    const product: Product = {
+      ...existingProduct,
+      unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24 }],
+      wholesale_prices: [{ min_quantity: 12, price: 11_000, price_type: 'unit' }],
+    };
+    const exported = createProductCsvExportRows([product]);
+
+    expect(exported[0]).toContain('satuan_2');
+    expect(exported[0]).toContain('grosir_qty_1');
+    expect(exported[0]).not.toContain('unit_mappings');
+
+    const reimported = buildProductCsvImportItemsFromRows(
+      exported.map((row) => row.map((cell) => String(cell ?? ''))),
+    );
+
+    expect(reimported.errors).toEqual([]);
+    expect(reimported.items[0].unit_mappings).toEqual(product.unit_mappings);
+    expect(reimported.items[0].wholesale_prices).toEqual(product.wholesale_prices);
+  });
+
+  test('falls back to a JSON column when a mapping is not based on the purchase unit', () => {
+    const product: Product = {
+      ...existingProduct,
+      purchase_unit: 'pcs',
+      unit_mappings: [{ unit: 'dus', base_unit: 'lusin', ratio: 20 }],
+    };
+    const [headers, row] = createProductCsvExportRows([product]);
+
+    expect(headers).toContain('unit_mappings');
+    expect(String(row[headers.indexOf('unit_mappings')])).toContain('lusin');
+  });
+
+  test('ships a template that imports cleanly as-is', () => {
+    const template = createProductCsvTemplateRows();
+    const parsed = buildProductCsvImportItemsFromRows(
+      template.map((row) => row.map((cell) => String(cell ?? ''))),
+    );
+
+    expect(parsed.fileErrors).toEqual([]);
+    expect(parsed.rowErrors).toEqual([]);
+    expect(parsed.items).toHaveLength(3);
+    expect(parsed.items[1].unit_mappings).toEqual([
+      { unit: 'renteng', base_unit: 'pcs', ratio: 10 },
+      { unit: 'dus', base_unit: 'pcs', ratio: 120 },
+    ]);
+    expect(parsed.items[2].wholesale_prices).toEqual([
+      { min_quantity: 12, price: 14_000, price_type: 'unit' },
+    ]);
   });
 });

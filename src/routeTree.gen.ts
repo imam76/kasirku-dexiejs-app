@@ -148,6 +148,7 @@ const KoperasiCollectionAssignmentsLazyRouteImport = createFileRoute(
 )()
 const KoperasiAngsuranLazyRouteImport = createFileRoute('/koperasi/angsuran')()
 const KoperasiAnggotaLazyRouteImport = createFileRoute('/koperasi/anggota')()
+const InventoryStockInLazyRouteImport = createFileRoute('/inventory/stock-in')()
 const HrWorkSchedulesLazyRouteImport = createFileRoute('/hr/work-schedules')()
 const HrSalaryComponentsLazyRouteImport = createFileRoute(
   '/hr/salary-components',
@@ -726,6 +727,13 @@ const KoperasiAnggotaLazyRoute = KoperasiAnggotaLazyRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
   import('./routes/koperasi/anggota.lazy').then((d) => d.Route),
+)
+const InventoryStockInLazyRoute = InventoryStockInLazyRouteImport.update({
+  id: '/inventory/stock-in',
+  path: '/inventory/stock-in',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/inventory/stock-in.lazy').then((d) => d.Route),
 )
 const HrWorkSchedulesLazyRoute = HrWorkSchedulesLazyRouteImport.update({
   id: '/hr/work-schedules',
@@ -1336,6 +1344,7 @@ export interface FileRoutesByFullPath {
   '/hr/positions': typeof HrPositionsLazyRoute
   '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
   '/hr/work-schedules': typeof HrWorkSchedulesLazyRoute
+  '/inventory/stock-in': typeof InventoryStockInLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/collection-assignments': typeof KoperasiCollectionAssignmentsLazyRoute
@@ -1470,6 +1479,7 @@ export interface FileRoutesByTo {
   '/hr/positions': typeof HrPositionsLazyRoute
   '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
   '/hr/work-schedules': typeof HrWorkSchedulesLazyRoute
+  '/inventory/stock-in': typeof InventoryStockInLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/collection-assignments': typeof KoperasiCollectionAssignmentsLazyRoute
@@ -1605,6 +1615,7 @@ export interface FileRoutesById {
   '/hr/positions': typeof HrPositionsLazyRoute
   '/hr/salary-components': typeof HrSalaryComponentsLazyRoute
   '/hr/work-schedules': typeof HrWorkSchedulesLazyRoute
+  '/inventory/stock-in': typeof InventoryStockInLazyRoute
   '/koperasi/anggota': typeof KoperasiAnggotaLazyRoute
   '/koperasi/angsuran': typeof KoperasiAngsuranLazyRoute
   '/koperasi/collection-assignments': typeof KoperasiCollectionAssignmentsLazyRoute
@@ -1741,6 +1752,7 @@ export interface FileRouteTypes {
     | '/hr/positions'
     | '/hr/salary-components'
     | '/hr/work-schedules'
+    | '/inventory/stock-in'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
     | '/koperasi/collection-assignments'
@@ -1875,6 +1887,7 @@ export interface FileRouteTypes {
     | '/hr/positions'
     | '/hr/salary-components'
     | '/hr/work-schedules'
+    | '/inventory/stock-in'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
     | '/koperasi/collection-assignments'
@@ -2009,6 +2022,7 @@ export interface FileRouteTypes {
     | '/hr/positions'
     | '/hr/salary-components'
     | '/hr/work-schedules'
+    | '/inventory/stock-in'
     | '/koperasi/anggota'
     | '/koperasi/angsuran'
     | '/koperasi/collection-assignments'
@@ -2144,6 +2158,7 @@ export interface RootRouteChildren {
   HrPositionsLazyRoute: typeof HrPositionsLazyRoute
   HrSalaryComponentsLazyRoute: typeof HrSalaryComponentsLazyRoute
   HrWorkSchedulesLazyRoute: typeof HrWorkSchedulesLazyRoute
+  InventoryStockInLazyRoute: typeof InventoryStockInLazyRoute
   KoperasiAnggotaLazyRoute: typeof KoperasiAnggotaLazyRoute
   KoperasiAngsuranLazyRoute: typeof KoperasiAngsuranLazyRoute
   KoperasiCollectionAssignmentsLazyRoute: typeof KoperasiCollectionAssignmentsLazyRoute
@@ -2667,6 +2682,13 @@ declare module '@tanstack/react-router' {
       path: '/koperasi/anggota'
       fullPath: '/koperasi/anggota'
       preLoaderRoute: typeof KoperasiAnggotaLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory/stock-in': {
+      id: '/inventory/stock-in'
+      path: '/inventory/stock-in'
+      fullPath: '/inventory/stock-in'
+      preLoaderRoute: typeof InventoryStockInLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/hr/work-schedules': {
@@ -3301,6 +3323,7 @@ const rootRouteChildren: RootRouteChildren = {
   HrPositionsLazyRoute: HrPositionsLazyRoute,
   HrSalaryComponentsLazyRoute: HrSalaryComponentsLazyRoute,
   HrWorkSchedulesLazyRoute: HrWorkSchedulesLazyRoute,
+  InventoryStockInLazyRoute: InventoryStockInLazyRoute,
   KoperasiAnggotaLazyRoute: KoperasiAnggotaLazyRoute,
   KoperasiAngsuranLazyRoute: KoperasiAngsuranLazyRoute,
   KoperasiCollectionAssignmentsLazyRoute:

@@ -3,6 +3,9 @@ import type { Product } from '@/types';
 type ProductWholesalePrice = NonNullable<Product['wholesale_prices']>[number];
 
 export type ProductCsvImportItem = {
+  rowNumber: number;
+  /** Original cells, carried so a row rejected later can still be reported back. */
+  rawRow: string[];
   id?: string;
   name: string;
   sku?: string;
@@ -17,6 +20,16 @@ export type ProductCsvImportItem = {
   product_type?: Product['product_type'];
   is_visible_in_pos?: boolean;
 };
+
+/**
+ * A row that could not be imported, kept together with its original cells so the
+ * user can download only the broken rows, fix them, and upload again.
+ */
+export interface ProductCsvRowError {
+  rowNumber: number;
+  rawRow: string[];
+  messages: string[];
+}
 
 const parseBoolean = (value: string | undefined) => {
   const normalized = (value ?? '').trim().toLowerCase();
@@ -33,9 +46,28 @@ export interface ProductCsvIgnoredOperationalColumns {
 
 export interface ProductCsvImportResult {
   items: ProductCsvImportItem[];
+  /** Every message, file-level first then row-level, for compact display. */
   errors: string[];
+  /** Blocking errors only. A non-empty list means nothing can be imported. */
+  fileErrors: string[];
+  rowErrors: ProductCsvRowError[];
+  /** Header cells as written in the source file, used to rebuild the error report. */
+  headerRow: string[];
   validRowCount: number;
   ignoredOperationalColumns: ProductCsvIgnoredOperationalColumns;
+}
+
+export interface ProductCsvParseOptions {
+  /**
+   * Stock-in files identify existing products by sku, so they may legitimately
+   * arrive without a name column. Master import keeps requiring it.
+   */
+  nameOptional?: boolean;
+  /**
+   * One product may appear on several lines of a purchase document, so stock-in
+   * files opt out of the one-row-per-product rule that master import needs.
+   */
+  allowDuplicateIdentity?: boolean;
 }
 
 const normalizeHeaderName = (value: string) =>
@@ -122,6 +154,47 @@ const normalizeUnitMappings = (value: string | undefined): Product['unit_mapping
   return mappings.length > 0 ? mappings : undefined;
 };
 
+const UNIT_NAME_COLUMN_PREFIXES = ['satuan', 'unit'];
+const UNIT_RATIO_COLUMN_PREFIXES = ['isi', 'rasio', 'ratio', 'konversi'];
+const WHOLESALE_QTY_COLUMN_PREFIXES = ['grosir_qty', 'wholesale_min', 'min_qty'];
+const WHOLESALE_PRICE_COLUMN_PREFIXES = ['grosir_harga', 'wholesale_price', 'harga_grosir'];
+const WHOLESALE_TYPE_COLUMN_PREFIXES = ['grosir_tipe', 'wholesale_type'];
+
+/**
+ * Collects repeating numbered columns such as `satuan_2`, `isi_2`, `grosir_qty_1`.
+ * Returns the column index by suffix number so a spreadsheet user can add as many
+ * units or wholesale tiers as needed without ever touching JSON.
+ */
+const collectIndexedColumns = (normalizedHeaders: string[], prefixes: string[]) => {
+  const pattern = new RegExp(`^(?:${prefixes.join('|')})_(\\d+)$`);
+  const columnBySuffix = new Map<number, number>();
+
+  normalizedHeaders.forEach((header, columnIndex) => {
+    const match = header.match(pattern);
+    if (!match) return;
+
+    const suffix = Number(match[1]);
+    if (!Number.isInteger(suffix) || suffix < 1) return;
+    if (columnBySuffix.has(suffix)) return;
+
+    columnBySuffix.set(suffix, columnIndex);
+  });
+
+  return columnBySuffix;
+};
+
+const sortedSuffixes = (...maps: Array<Map<number, number>>) => {
+  const suffixes = new Set<number>();
+  for (const map of maps) {
+    for (const suffix of map.keys()) suffixes.add(suffix);
+  }
+  return Array.from(suffixes).sort((a, b) => a - b);
+};
+
+const readCell = (row: string[], columnIndex: number | undefined) => (
+  columnIndex === undefined ? '' : (row[columnIndex] ?? '').trim()
+);
+
 const parseCsv = (text: string) => {
   const input = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const firstLine = input.split('\n').find((l) => l.trim().length > 0) ?? '';
@@ -182,15 +255,30 @@ const parseCsv = (text: string) => {
   return rows;
 };
 
-export const buildProductCsvImportItems = (csvText: string): ProductCsvImportResult => {
-  const rows = parseCsv(csvText);
+const emptyResult = (fileError: string): ProductCsvImportResult => ({
+  items: [],
+  errors: [fileError],
+  fileErrors: [fileError],
+  rowErrors: [],
+  headerRow: [],
+  validRowCount: 0,
+  ignoredOperationalColumns: {},
+});
+
+/**
+ * Parses an already-tabulated sheet. The CSV and XLSX entry points both funnel
+ * here so both file types obey exactly the same rules.
+ *
+ * Rows are independent: a broken row is collected in `rowErrors` and skipped,
+ * the rest still import. That is safe because master import never writes stock
+ * or cash, so a partially imported file leaves no operational balance behind.
+ */
+export const buildProductCsvImportItemsFromRows = (
+  rows: string[][],
+  options: ProductCsvParseOptions = {},
+): ProductCsvImportResult => {
   if (rows.length === 0) {
-    return {
-      items: [],
-      errors: ['CSV kosong.'],
-      validRowCount: 0,
-      ignoredOperationalColumns: {},
-    };
+    return emptyResult('CSV kosong.');
   }
 
   const rawHeaderRow = rows[0].map((header) => header.trim());
@@ -228,18 +316,24 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
   const idxProductType = pickIndex(['product_type', 'tipe_produk']);
   const idxVisibleInPos = pickIndex(['is_visible_in_pos', 'tampil_di_pos']);
 
-  const errors: string[] = [];
-  if (idxName === undefined) errors.push('Kolom "name" (atau "nama") tidak ditemukan.');
-  if (errors.length > 0) {
+  const unitNameColumns = collectIndexedColumns(headerRow, UNIT_NAME_COLUMN_PREFIXES);
+  const unitRatioColumns = collectIndexedColumns(headerRow, UNIT_RATIO_COLUMN_PREFIXES);
+  const unitSuffixes = sortedSuffixes(unitNameColumns, unitRatioColumns);
+  const wholesaleQtyColumns = collectIndexedColumns(headerRow, WHOLESALE_QTY_COLUMN_PREFIXES);
+  const wholesalePriceColumns = collectIndexedColumns(headerRow, WHOLESALE_PRICE_COLUMN_PREFIXES);
+  const wholesaleTypeColumns = collectIndexedColumns(headerRow, WHOLESALE_TYPE_COLUMN_PREFIXES);
+  const wholesaleSuffixes = sortedSuffixes(wholesaleQtyColumns, wholesalePriceColumns);
+
+  if (idxName === undefined && !options.nameOptional) {
     return {
-      items: [],
-      errors,
-      validRowCount: 0,
+      ...emptyResult('Kolom "name" (atau "nama") tidak ditemukan.'),
+      headerRow: rawHeaderRow,
       ignoredOperationalColumns,
     };
   }
 
   const items: ProductCsvImportItem[] = [];
+  const rowErrors: ProductCsvRowError[] = [];
   const seenSku = new Set<string>();
   const seenId = new Set<string>();
 
@@ -247,12 +341,13 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
     rawValue: string | undefined,
     fieldLabel: string,
     rowNumber: number,
+    messages: string[],
   ) => {
     if (!(rawValue ?? '').trim()) return undefined;
 
     const value = parseNumberFlexible(rawValue);
     if (value === undefined || value < 0) {
-      errors.push(`Baris ${rowNumber}: ${fieldLabel} harus berupa angka 0 atau lebih.`);
+      messages.push(`Baris ${rowNumber}: ${fieldLabel} harus berupa angka 0 atau lebih.`);
       return undefined;
     }
 
@@ -262,23 +357,33 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const rowNumber = r + 1;
-    const errorCountBeforeRow = errors.length;
+    const messages: string[] = [];
     const sku = idxSku !== undefined ? (row[idxSku] ?? '').trim() : '';
-    const name = (row[idxName!] ?? '').trim();
+    const name = idxName !== undefined ? (row[idxName] ?? '').trim() : '';
 
-    if (!name) {
-      errors.push(`Baris ${rowNumber}: name/nama kosong.`);
+    // A stock-in file may name nothing and lean on sku alone; whoever consumes
+    // the item decides whether a missing name is fatal.
+    if (!name && !options.nameOptional) {
+      rowErrors.push({ rowNumber, rawRow: row, messages: [`Baris ${rowNumber}: name/nama kosong.`] });
       continue;
     }
-    if (sku && seenSku.has(sku)) {
-      errors.push(`Baris ${rowNumber}: sku duplikat di file (sku: ${sku}).`);
+    if (sku && seenSku.has(sku) && !options.allowDuplicateIdentity) {
+      rowErrors.push({
+        rowNumber,
+        rawRow: row,
+        messages: [`Baris ${rowNumber}: sku duplikat di file (sku: ${sku}).`],
+      });
       continue;
     }
     if (sku) seenSku.add(sku);
 
     const id = idxId !== undefined ? (row[idxId] ?? '').trim() : undefined;
-    if (id && seenId.has(id)) {
-      errors.push(`Baris ${rowNumber}: id duplikat di file (id: ${id}).`);
+    if (id && seenId.has(id) && !options.allowDuplicateIdentity) {
+      rowErrors.push({
+        rowNumber,
+        rawRow: row,
+        messages: [`Baris ${rowNumber}: id duplikat di file (id: ${id}).`],
+      });
       continue;
     }
     if (id) seenId.add(id);
@@ -287,18 +392,62 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
       idxPurchase !== undefined ? row[idxPurchase] : undefined,
       'purchase_price/harga_beli',
       rowNumber,
+      messages,
     );
     const selling_price = parseOptionalNonNegativeNumber(
       idxSelling !== undefined ? row[idxSelling] : undefined,
       'selling_price/harga_jual',
       rowNumber,
+      messages,
     );
     const category = idxCategory !== undefined ? (row[idxCategory] ?? '').trim() : undefined;
     const purchase_unit = idxPurchaseUnit !== undefined ? (row[idxPurchaseUnit] ?? '').trim() : undefined;
     const selling_unit = idxSellingUnit !== undefined ? (row[idxSellingUnit] ?? '').trim() : undefined;
-    const wholesale_prices = normalizeWholesalePrices(idxWholesalePrices !== undefined ? row[idxWholesalePrices] : undefined);
+
+    const rawUnitMappingsCell = idxUnitMappings !== undefined ? (row[idxUnitMappings] ?? '').trim() : '';
+    const rawWholesaleCell = idxWholesalePrices !== undefined ? (row[idxWholesalePrices] ?? '').trim() : '';
+
+    const wideUnitMappings = parseWideUnitMappings({
+      row,
+      rowNumber,
+      suffixes: unitSuffixes,
+      nameColumns: unitNameColumns,
+      ratioColumns: unitRatioColumns,
+      purchaseUnit: purchase_unit,
+      sellingUnit: selling_unit,
+      messages,
+    });
+    const wideWholesalePrices = parseWideWholesalePrices({
+      row,
+      rowNumber,
+      suffixes: wholesaleSuffixes,
+      qtyColumns: wholesaleQtyColumns,
+      priceColumns: wholesalePriceColumns,
+      typeColumns: wholesaleTypeColumns,
+      messages,
+    });
+
+    // Two sources for the same field would mean silently dropping one of them,
+    // and a dropped price tier is invisible until a customer is charged wrong.
+    if (rawUnitMappingsCell && wideUnitMappings.length > 0) {
+      messages.push(
+        `Baris ${rowNumber}: kolom unit_mappings dan kolom satuan_N tidak boleh diisi bersamaan.`,
+      );
+    }
+    if (rawWholesaleCell && wideWholesalePrices.length > 0) {
+      messages.push(
+        `Baris ${rowNumber}: kolom wholesale_prices dan kolom grosir_N tidak boleh diisi bersamaan.`,
+      );
+    }
+
+    const wholesale_prices = wideWholesalePrices.length > 0
+      ? wideWholesalePrices
+      : normalizeWholesalePrices(rawWholesaleCell);
     const sellable_units = parseDelimitedList(idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined);
-    const unit_mappings = normalizeUnitMappings(idxUnitMappings !== undefined ? row[idxUnitMappings] : undefined);
+    const unit_mappings = wideUnitMappings.length > 0
+      ? wideUnitMappings
+      : normalizeUnitMappings(rawUnitMappingsCell);
+
     const rawProductType = idxProductType !== undefined ? (row[idxProductType] ?? '').trim().toUpperCase() : '';
     let product_type: Product['product_type'] | undefined = undefined;
     if (rawProductType === 'RAW_MATERIAL' || rawProductType === 'BAHAN BAKU') {
@@ -306,20 +455,23 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
     } else if (rawProductType === 'FINISHED_GOOD' || rawProductType === 'BARANG JADI') {
       product_type = 'FINISHED_GOOD';
     } else if (rawProductType) {
-      errors.push(`Baris ${rowNumber}: product_type/tipe_produk harus FINISHED_GOOD atau RAW_MATERIAL.`);
+      messages.push(`Baris ${rowNumber}: product_type/tipe_produk harus FINISHED_GOOD atau RAW_MATERIAL.`);
     }
 
     const rawVisibleInPos = idxVisibleInPos !== undefined ? row[idxVisibleInPos] : undefined;
     const is_visible_in_pos = parseBoolean(rawVisibleInPos);
     if ((rawVisibleInPos ?? '').trim() && is_visible_in_pos === undefined) {
-      errors.push(`Baris ${rowNumber}: is_visible_in_pos/tampil_di_pos harus true atau false.`);
+      messages.push(`Baris ${rowNumber}: is_visible_in_pos/tampil_di_pos harus true atau false.`);
     }
 
-    if (errors.length > errorCountBeforeRow) {
+    if (messages.length > 0) {
+      rowErrors.push({ rowNumber, rawRow: row, messages });
       continue;
     }
 
     items.push({
+      rowNumber,
+      rawRow: row,
       id: id || undefined,
       sku,
       name,
@@ -337,35 +489,248 @@ export const buildProductCsvImportItems = (csvText: string): ProductCsvImportRes
   }
 
   return {
-    items: errors.length > 0 ? [] : items,
-    errors,
+    items,
+    errors: rowErrors.flatMap((rowError) => rowError.messages),
+    fileErrors: [],
+    rowErrors,
+    headerRow: rawHeaderRow,
     validRowCount: items.length,
     ignoredOperationalColumns,
   };
 };
 
+interface ParseWideUnitMappingsInput {
+  row: string[];
+  rowNumber: number;
+  suffixes: number[];
+  nameColumns: Map<number, number>;
+  ratioColumns: Map<number, number>;
+  purchaseUnit?: string;
+  sellingUnit?: string;
+  messages: string[];
+}
+
+/**
+ * Reads `satuan_N` / `isi_N` pairs. `isi_N` is how many base units fit in one
+ * `satuan_N`, so `satuan_2=dus, isi_2=24` means 1 dus = 24 base units.
+ */
+const parseWideUnitMappings = ({
+  row,
+  rowNumber,
+  suffixes,
+  nameColumns,
+  ratioColumns,
+  purchaseUnit,
+  sellingUnit,
+  messages,
+}: ParseWideUnitMappingsInput): NonNullable<Product['unit_mappings']> => {
+  const mappings: NonNullable<Product['unit_mappings']> = [];
+  if (suffixes.length === 0) return mappings;
+
+  const baseUnit = (purchaseUnit || '').trim();
+  const takenUnits = new Set(
+    [purchaseUnit, sellingUnit]
+      .map((unit) => (unit || '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  for (const suffix of suffixes) {
+    const unitName = readCell(row, nameColumns.get(suffix));
+    const ratioRaw = readCell(row, ratioColumns.get(suffix));
+
+    if (!unitName && !ratioRaw) continue;
+
+    if (!unitName) {
+      messages.push(`Baris ${rowNumber}: isi_${suffix} diisi tetapi satuan_${suffix} kosong.`);
+      continue;
+    }
+    if (!ratioRaw) {
+      messages.push(`Baris ${rowNumber}: satuan_${suffix} diisi tetapi isi_${suffix} kosong.`);
+      continue;
+    }
+
+    const ratio = parseNumberFlexible(ratioRaw);
+    if (ratio === undefined || ratio <= 0) {
+      messages.push(`Baris ${rowNumber}: isi_${suffix} harus berupa angka lebih dari 0.`);
+      continue;
+    }
+
+    const unitKey = unitName.toLowerCase();
+    if (takenUnits.has(unitKey)) {
+      messages.push(`Baris ${rowNumber}: satuan ${unitName} dipakai lebih dari sekali.`);
+      continue;
+    }
+    takenUnits.add(unitKey);
+
+    mappings.push({ unit: unitName, base_unit: baseUnit, ratio });
+  }
+
+  return mappings;
+};
+
+interface ParseWideWholesalePricesInput {
+  row: string[];
+  rowNumber: number;
+  suffixes: number[];
+  qtyColumns: Map<number, number>;
+  priceColumns: Map<number, number>;
+  typeColumns: Map<number, number>;
+  messages: string[];
+}
+
+/** Reads `grosir_qty_N` / `grosir_harga_N` / `grosir_tipe_N` tiers. */
+const parseWideWholesalePrices = ({
+  row,
+  rowNumber,
+  suffixes,
+  qtyColumns,
+  priceColumns,
+  typeColumns,
+  messages,
+}: ParseWideWholesalePricesInput): NonNullable<Product['wholesale_prices']> => {
+  const prices: NonNullable<Product['wholesale_prices']> = [];
+  if (suffixes.length === 0) return prices;
+
+  for (const suffix of suffixes) {
+    const qtyRaw = readCell(row, qtyColumns.get(suffix));
+    const priceRaw = readCell(row, priceColumns.get(suffix));
+    const typeRaw = readCell(row, typeColumns.get(suffix)).toLowerCase();
+
+    if (!qtyRaw && !priceRaw && !typeRaw) continue;
+
+    if (!qtyRaw || !priceRaw) {
+      messages.push(
+        `Baris ${rowNumber}: grosir_qty_${suffix} dan grosir_harga_${suffix} harus diisi berpasangan.`,
+      );
+      continue;
+    }
+
+    const minQuantity = parseNumberFlexible(qtyRaw);
+    if (minQuantity === undefined || minQuantity <= 0) {
+      messages.push(`Baris ${rowNumber}: grosir_qty_${suffix} harus berupa angka lebih dari 0.`);
+      continue;
+    }
+
+    const price = parseNumberFlexible(priceRaw);
+    if (price === undefined || price < 0) {
+      messages.push(`Baris ${rowNumber}: grosir_harga_${suffix} harus berupa angka 0 atau lebih.`);
+      continue;
+    }
+
+    if (typeRaw && typeRaw !== 'unit' && typeRaw !== 'bundle') {
+      messages.push(`Baris ${rowNumber}: grosir_tipe_${suffix} harus unit atau bundle.`);
+      continue;
+    }
+
+    prices.push({
+      min_quantity: minQuantity,
+      price,
+      price_type: typeRaw === 'bundle' ? 'bundle' : 'unit',
+    });
+  }
+
+  return prices.sort((a, b) => a.min_quantity - b.min_quantity);
+};
+
+export const buildProductCsvImportItems = (
+  csvText: string,
+  options: ProductCsvParseOptions = {},
+): ProductCsvImportResult =>
+  buildProductCsvImportItemsFromRows(parseCsv(csvText), options);
+
+export const parseCsvRows = parseCsv;
+export const normalizeCsvHeaderName = normalizeHeaderName;
+export const parseCsvNumber = parseNumberFlexible;
+
+const BASE_EXPORT_HEADERS = [
+  'id',
+  'sku',
+  'name',
+  'category',
+  'purchase_unit',
+  'selling_unit',
+  'purchase_price',
+  'selling_price',
+  'stock',
+] as const;
+
+const TRAILING_EXPORT_HEADERS = [
+  'sellable_units',
+  'product_type',
+  'is_visible_in_pos',
+  'created_at',
+  'updated_at',
+] as const;
+
+const normalizeUnitName = (unit?: string) => (unit || '').trim().toLowerCase();
+
+/**
+ * Unit mappings only survive a round trip through the wide columns when every
+ * mapping is expressed against the purchase unit. Anything else keeps its JSON
+ * cell so no conversion is lost on export.
+ */
+const usesWideUnitColumns = (product: Product) => {
+  const mappings = product.unit_mappings || [];
+  if (mappings.length === 0) return true;
+
+  const baseUnit = normalizeUnitName(product.purchase_unit);
+  return mappings.every((mapping) => normalizeUnitName(mapping.base_unit) === baseUnit);
+};
+
 export const createProductCsvExportRows = (products: Product[]) => {
+  const wideUnitCount = products.reduce(
+    (max, product) => (usesWideUnitColumns(product)
+      ? Math.max(max, (product.unit_mappings || []).length)
+      : max),
+    0,
+  );
+  const wholesaleCount = products.reduce(
+    (max, product) => Math.max(max, (product.wholesale_prices || []).length),
+    0,
+  );
+  const needsUnitMappingsJson = products.some((product) => !usesWideUnitColumns(product));
+
+  const unitHeaders: string[] = [];
+  for (let i = 0; i < wideUnitCount; i++) {
+    const suffix = i + 2;
+    unitHeaders.push(`satuan_${suffix}`, `isi_${suffix}`);
+  }
+
+  const wholesaleHeaders: string[] = [];
+  for (let i = 0; i < wholesaleCount; i++) {
+    const suffix = i + 1;
+    wholesaleHeaders.push(`grosir_qty_${suffix}`, `grosir_harga_${suffix}`, `grosir_tipe_${suffix}`);
+  }
+
   const headers = [
-    'id',
-    'sku',
-    'name',
-    'category',
-    'purchase_unit',
-    'selling_unit',
-    'purchase_price',
-    'selling_price',
-    'stock',
-    'wholesale_prices',
-    'sellable_units',
-    'unit_mappings',
-    'product_type',
-    'is_visible_in_pos',
-    'created_at',
-    'updated_at',
+    ...BASE_EXPORT_HEADERS,
+    ...unitHeaders,
+    ...wholesaleHeaders,
+    ...(needsUnitMappingsJson ? ['unit_mappings'] : []),
+    ...TRAILING_EXPORT_HEADERS,
   ];
+
   return [
     headers,
     ...products.map((product) => {
+      const wide = usesWideUnitColumns(product);
+      const mappings = wide ? product.unit_mappings || [] : [];
+      const unitCells: Array<string | number> = [];
+      for (let i = 0; i < wideUnitCount; i++) {
+        const mapping = mappings[i];
+        unitCells.push(mapping ? mapping.unit : '', mapping ? mapping.ratio : '');
+      }
+
+      const wholesaleCells: Array<string | number> = [];
+      for (let i = 0; i < wholesaleCount; i++) {
+        const price = (product.wholesale_prices || [])[i];
+        wholesaleCells.push(
+          price ? price.min_quantity : '',
+          price ? price.price : '',
+          price ? price.price_type || 'unit' : '',
+        );
+      }
+
       return [
         product.id,
         product.sku || '',
@@ -376,9 +741,12 @@ export const createProductCsvExportRows = (products: Product[]) => {
         product.purchase_price,
         product.selling_price,
         product.stock,
-        product.wholesale_prices && product.wholesale_prices.length > 0 ? JSON.stringify(product.wholesale_prices) : '',
+        ...unitCells,
+        ...wholesaleCells,
+        ...(needsUnitMappingsJson
+          ? [!wide && (product.unit_mappings || []).length > 0 ? JSON.stringify(product.unit_mappings) : '']
+          : []),
         product.sellable_units && product.sellable_units.length > 0 ? JSON.stringify(product.sellable_units) : '',
-        product.unit_mappings && product.unit_mappings.length > 0 ? JSON.stringify(product.unit_mappings) : '',
         product.product_type ?? 'FINISHED_GOOD',
         product.is_visible_in_pos !== false,
         product.created_at,
@@ -387,3 +755,56 @@ export const createProductCsvExportRows = (products: Product[]) => {
     }),
   ];
 };
+
+/**
+ * A ready-to-fill template: one plain product, one multi-unit product, and one
+ * product with wholesale tiers, so the shape of every column is visible.
+ */
+export const createProductCsvTemplateRows = () => [
+  [
+    'sku',
+    'name',
+    'category',
+    'purchase_unit',
+    'selling_unit',
+    'purchase_price',
+    'selling_price',
+    'satuan_2',
+    'isi_2',
+    'satuan_3',
+    'isi_3',
+    'grosir_qty_1',
+    'grosir_harga_1',
+    'grosir_tipe_1',
+    'product_type',
+    'is_visible_in_pos',
+  ],
+  [
+    'BRG-001', 'Air Mineral 600ml', 'minuman', 'pcs', 'pcs', 3000, 4000,
+    '', '', '', '', '', '', '', 'FINISHED_GOOD', 'true',
+  ],
+  [
+    'BRG-002', 'Kopi Sachet', 'minuman', 'pcs', 'pcs', 1500, 2000,
+    'renteng', 10, 'dus', 120, '', '', '', 'FINISHED_GOOD', 'true',
+  ],
+  [
+    'BRG-003', 'Gula Pasir 1kg', 'sembako', 'pcs', 'pcs', 13000, 15000,
+    '', '', '', '', 12, 14000, 'unit', 'FINISHED_GOOD', 'true',
+  ],
+];
+
+/**
+ * Rebuilds only the rejected rows, prefixed with their row number and reason,
+ * so the user fixes a short file instead of hunting through the original one.
+ */
+export const createProductImportErrorRows = (
+  headerRow: string[],
+  rowErrors: ProductCsvRowError[],
+) => [
+  ['baris', 'error', ...headerRow],
+  ...rowErrors.map((rowError) => [
+    rowError.rowNumber,
+    rowError.messages.join(' | '),
+    ...rowError.rawRow,
+  ]),
+];

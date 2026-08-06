@@ -261,8 +261,12 @@ export const useStockManagement = () => {
           existingProducts: await db.products.toArray(),
           now,
         });
-        if (importPlan.errors.length > 0) {
-          throw new Error(importPlan.errors.join('\n'));
+        if (importPlan.items.length === 0) {
+          throw new Error(
+            importPlan.errors.length > 0
+              ? importPlan.errors.join('\n')
+              : 'Tidak ada baris yang bisa diimpor.',
+          );
         }
         await db.products.bulkPut(importPlan.items.map((item) => item.product));
         await db.syncQueue.bulkAdd(importPlan.items.map(({ product, operation }) => (
@@ -280,17 +284,25 @@ export const useStockManagement = () => {
         throw new Error('Rencana import master produk gagal dibuat.');
       }
 
+      const skippedCount = importPlan.rowErrors.length;
       await writeActivityLog({
         user: currentUser,
         action: 'PRODUCT_CSV_IMPORTED',
         entity: 'products',
-        description: `${currentUser?.name ?? 'User'} mengimpor ${items.length} baris master produk dari CSV tanpa mengubah stok atau kas. Produk baru: ${importPlan.createdCount}, diperbarui: ${importPlan.updatedCount}.`,
+        description: `${currentUser?.name ?? 'User'} mengimpor ${importPlan.items.length} dari ${items.length} baris master produk tanpa mengubah stok atau kas. Produk baru: ${importPlan.createdCount}, diperbarui: ${importPlan.updatedCount}, dilewati: ${skippedCount}.`,
       });
       void processPendingSyncQueue();
+
+      return {
+        createdCount: importPlan.createdCount,
+        updatedCount: importPlan.updatedCount,
+        importedCount: importPlan.items.length,
+        rowErrors: importPlan.rowErrors,
+      };
     },
-    onSuccess: (_data, items) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
-      message.success(t('stock.importSuccess', { count: items.length }));
+      message.success(t('stock.importSuccess', { count: result.importedCount }));
     },
   });
 

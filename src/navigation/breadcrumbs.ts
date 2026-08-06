@@ -45,6 +45,8 @@ const STATIC_LABEL_KEYS: Record<string, TranslationKey> = {
   '/activity-log': 'nav.activityLog',
   '/settings': 'nav.settings',
 
+  '/inventory/stock-in': 'stockIn.title',
+
   '/master-data/products': 'nav.product',
   '/master-data/production': 'nav.production',
   '/master-data/stock-opname': 'nav.stockOpname',

@@ -1,11 +1,12 @@
 import type { Product, ProductUnit } from '@/types';
-import type { ProductCsvImportItem } from '@/utils/productsCsv';
+import type { ProductCsvImportItem, ProductCsvRowError } from '@/utils/productsCsv';
 import {
   buildSellableUnitsFromMappings,
   normalizeProductUnitMappings,
 } from '@/utils/productUnits';
 
 export interface ProductMasterImportPlanItem {
+  rowNumber: number;
   product: Product;
   operation: 'create' | 'update';
 }
@@ -15,6 +16,8 @@ export interface ProductMasterImportPlan {
   createdCount: number;
   updatedCount: number;
   errors: string[];
+  /** Rows dropped by the plan, reported the same way parse errors are. */
+  rowErrors: ProductCsvRowError[];
 }
 
 interface BuildProductMasterImportPlanInput {
@@ -55,7 +58,9 @@ const buildImportedProduct = ({
   return {
     ...existing,
     id: existing?.id ?? productId,
-    name: item.name,
+    // A stock-in file may carry no name column at all, and a blank cell must
+    // never erase the name a product already has.
+    name: item.name || existing?.name || '',
     category: item.category || existing?.category || 'non_consumable',
     purchase_unit: purchaseUnit,
     selling_unit: sellingUnit,
@@ -102,17 +107,26 @@ export const buildProductMasterImportPlan = ({
     existingBySku.set(sku, matches);
   }
 
-  const errors: string[] = [];
+  const rowErrors: ProductCsvRowError[] = [];
   const plannedItems: ProductMasterImportPlanItem[] = [];
   const plannedProductIds = new Set<string>();
 
-  items.forEach((item, index) => {
-    const rowNumber = index + 2;
+  // A row rejected here is dropped on its own. The remaining rows still import
+  // because master data carries no stock or cash, so a partial file is safe.
+  const rejectRow = (item: ProductCsvImportItem, message: string) => {
+    rowErrors.push({
+      rowNumber: item.rowNumber,
+      rawRow: item.rawRow ?? [],
+      messages: [`Baris ${item.rowNumber}: ${message}`],
+    });
+  };
+
+  items.forEach((item) => {
     const sku = item.sku?.trim();
     const skuMatches = sku ? existingBySku.get(sku) ?? [] : [];
 
     if (skuMatches.length > 1) {
-      errors.push(`Baris ${rowNumber}: SKU ${sku} cocok dengan lebih dari satu produk.`);
+      rejectRow(item, `SKU ${sku} cocok dengan lebih dari satu produk.`);
       return;
     }
 
@@ -123,21 +137,20 @@ export const buildProductMasterImportPlan = ({
       existingByIdMatch &&
       existingBySkuMatch.id !== existingByIdMatch.id
     ) {
-      errors.push(
-        `Baris ${rowNumber}: id ${item.id} dan SKU ${sku} menunjuk produk yang berbeda.`,
-      );
+      rejectRow(item, `id ${item.id} dan SKU ${sku} menunjuk produk yang berbeda.`);
       return;
     }
 
     const existing = existingBySkuMatch ?? existingByIdMatch;
     const productId = existing?.id ?? item.id ?? createId();
     if (plannedProductIds.has(productId)) {
-      errors.push(`Baris ${rowNumber}: produk ${productId} direncanakan lebih dari satu kali.`);
+      rejectRow(item, `produk ${productId} direncanakan lebih dari satu kali.`);
       return;
     }
     plannedProductIds.add(productId);
 
     plannedItems.push({
+      rowNumber: item.rowNumber,
       product: buildImportedProduct({
         item,
         existing,
@@ -149,9 +162,10 @@ export const buildProductMasterImportPlan = ({
   });
 
   return {
-    items: errors.length > 0 ? [] : plannedItems,
+    items: plannedItems,
     createdCount: plannedItems.filter((item) => item.operation === 'create').length,
     updatedCount: plannedItems.filter((item) => item.operation === 'update').length,
-    errors,
+    errors: rowErrors.flatMap((rowError) => rowError.messages),
+    rowErrors,
   };
 };

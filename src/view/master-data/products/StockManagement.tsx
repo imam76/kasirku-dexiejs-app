@@ -9,12 +9,28 @@ import StockTable from '@/components/StockTable';
 import StockProductModal from './StockProductModal';
 import {
   buildProductCsvImportItems,
+  buildProductCsvImportItemsFromRows,
   createProductCsvExportRows,
+  createProductCsvTemplateRows,
+  createProductImportErrorRows,
+  type ProductCsvRowError,
 } from '@/utils/productsCsv';
+import {
+  isSupportedProductImportFile,
+  isWorkbookFile,
+  readWorkbookRows,
+} from '@/utils/productsWorkbook';
+import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
 import { exportCsv, type ExportTarget } from '@/utils/export';
 import { useI18n } from '@/hooks/useI18n';
 
 const STOCK_SAVED_EVENT = 'frayukti-workflow-tour-stock-saved';
+
+const buildFileTimestamp = () => {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+};
 
 export default function StockManagement() {
   const { modal, message } = App.useApp();
@@ -83,54 +99,85 @@ export default function StockManagement() {
     fileInputRef.current?.click();
   };
 
+  const handleDownloadErrorRows = async (
+    headerRow: string[],
+    rowErrors: ProductCsvRowError[],
+  ) => {
+    try {
+      const exported = await exportCsv({
+        filename: `import-produk-gagal-${buildFileTimestamp()}.csv`,
+        rows: createProductImportErrorRows(headerRow, rowErrors),
+      });
+      if (!exported) return;
+      message.success(t('stock.errorRowsDownloaded'));
+    } catch (error) {
+      console.error('Failed to export failed import rows:', error);
+      message.error(t('stock.exportFailed'));
+    }
+  };
+
   const handleImportSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      message.error(t('stock.csvOnly'));
+    if (!isSupportedProductImportFile(file.name)) {
+      message.error(t('stock.unsupportedImportFile'));
       return;
     }
 
     try {
-      const text = await file.text();
-      const {
-        items,
-        errors: parseErrors,
-        validRowCount,
-        ignoredOperationalColumns,
-      } = buildProductCsvImportItems(text);
+      const parsed = isWorkbookFile(file.name)
+        ? buildProductCsvImportItemsFromRows(await readWorkbookRows(file))
+        : buildProductCsvImportItems(await file.text());
+      const { items, fileErrors, headerRow, ignoredOperationalColumns } = parsed;
 
-      if (parseErrors.length > 0) {
+      if (fileErrors.length > 0) {
         modal.error({
           title: t('stock.importBlockedTitle'),
           content: (
             <div className="space-y-3">
               <div className="text-sm text-gray-700">
-                {t('stock.importBlockedDescription', { count: parseErrors.length })}
+                {t('stock.importBlockedDescription', { count: fileErrors.length })}
               </div>
               <div className="text-xs text-red-600">
-                {parseErrors.slice(0, 5).map((errorText) => (
+                {fileErrors.map((errorText) => (
                   <div key={errorText}>{errorText}</div>
                 ))}
-                {parseErrors.length > 5 ? (
-                  <div>{t('stock.moreErrors', { count: parseErrors.length - 5 })}</div>
-                ) : null}
               </div>
-              {validRowCount > 0 ? (
-                <div className="text-xs text-gray-500">
-                  {t('stock.validRowsNotImported', { count: validRowCount })}
-                </div>
-              ) : null}
             </div>
           ),
         });
         return;
       }
 
-      if (items.length === 0) {
-        message.error(t('stock.noValidImportData'));
+      // Preview only. The mutation rebuilds this plan inside its transaction, so
+      // what is shown here can never drift into being what actually gets written.
+      const previewPlan = buildProductMasterImportPlan({
+        items,
+        existingProducts: products,
+        now: new Date().toISOString(),
+      });
+      const rowErrors = [...parsed.rowErrors, ...previewPlan.rowErrors]
+        .sort((a, b) => a.rowNumber - b.rowNumber);
+
+      if (previewPlan.items.length === 0) {
+        modal.error({
+          title: t('stock.importBlockedTitle'),
+          content: (
+            <div className="space-y-3">
+              <div className="text-sm text-gray-700">{t('stock.noValidImportData')}</div>
+              {rowErrors.length > 0 ? (
+                <Button
+                  icon={<Download size={16} />}
+                  onClick={() => void handleDownloadErrorRows(headerRow, rowErrors)}
+                >
+                  {t('stock.downloadErrorRows', { count: rowErrors.length })}
+                </Button>
+              ) : null}
+            </div>
+          ),
+        });
         return;
       }
 
@@ -158,8 +205,27 @@ export default function StockManagement() {
               {t('stock.file')}: <span className="font-medium">{file.name}</span>
             </div>
             <div className="text-sm text-gray-700">
-              {t('stock.validRows')}: <span className="font-medium">{items.length}</span>
+              {t('stock.newProducts')}: <span className="font-medium">{previewPlan.createdCount}</span>
             </div>
+            <div className="text-sm text-gray-700">
+              {t('stock.updatedProducts')}: <span className="font-medium">{previewPlan.updatedCount}</span>
+            </div>
+            {rowErrors.length > 0 ? (
+              <div className="space-y-2">
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={t('stock.skippedRows', { count: rowErrors.length })}
+                />
+                <Button
+                  size="small"
+                  icon={<Download size={14} />}
+                  onClick={() => void handleDownloadErrorRows(headerRow, rowErrors)}
+                >
+                  {t('stock.downloadErrorRows', { count: rowErrors.length })}
+                </Button>
+              </div>
+            ) : null}
             <div className="text-xs text-gray-500">
               {t('stock.supportedColumns')}
             </div>
@@ -184,17 +250,38 @@ export default function StockManagement() {
         },
       });
     } catch (error) {
-      console.error('Failed to import CSV:', error);
+      console.error('Failed to import products file:', error);
       message.error(t('stock.readCsvFailed'));
+    }
+  };
+
+  const handleDownloadTemplate = async (target: ExportTarget = 'auto') => {
+    try {
+      const exported = await exportCsv({
+        filename: 'template-import-produk.csv',
+        rows: createProductCsvTemplateRows(),
+        target,
+      });
+      if (!exported) return;
+      message.success(t('stock.templateDownloaded'));
+    } catch (error) {
+      console.error('Failed to export product import template:', error);
+      message.error(t('stock.exportFailed'));
     }
   };
 
   const exportMenuItems: MenuProps['items'] = [
     { key: 'share', label: t('stock.share') },
     { key: 'save', label: t('stock.saveToFile') },
+    { type: 'divider' },
+    { key: 'template', label: t('stock.downloadTemplate') },
   ];
 
   const handleExportMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
+    if (key === 'template') {
+      void handleDownloadTemplate();
+      return;
+    }
     void handleExportCsv(key as ExportTarget);
   };
 
@@ -206,6 +293,11 @@ export default function StockManagement() {
   const handleMobileImportClick = () => {
     setIsActionDrawerOpen(false);
     handleImportClick();
+  };
+
+  const handleMobileTemplateDownload = () => {
+    setIsActionDrawerOpen(false);
+    void handleDownloadTemplate();
   };
 
   return (
@@ -258,7 +350,7 @@ export default function StockManagement() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,text/csv"
+        accept=".csv,.xlsx,.xls,text/csv"
         className="hidden"
         onChange={handleImportSelected}
       />
@@ -310,6 +402,16 @@ export default function StockManagement() {
             className="flex h-14 items-center justify-start font-semibold"
           >
             {t('stock.importCsv')}
+          </Button>
+
+          <Button
+            block
+            size="large"
+            icon={<Download size={20} />}
+            onClick={handleMobileTemplateDownload}
+            className="flex h-14 items-center justify-start font-semibold"
+          >
+            {t('stock.downloadTemplate')}
           </Button>
         </div>
       </Drawer>

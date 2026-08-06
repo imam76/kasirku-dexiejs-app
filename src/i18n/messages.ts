@@ -3,6 +3,7 @@ import { commonMessages } from './common';
 import { cooperativeMessages } from './cooperativeMessages';
 import { navigationMessages } from './navigationMessages';
 import { stockMessages } from './stockMessages';
+import { stockInMessages } from './stockInMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
 import { fixedAssetMessages } from './fixedAssetMessages';
 import { openingInventoryMessages } from './openingInventoryMessages';
@@ -15,6 +16,7 @@ export const messages = {
     ...navigationMessages.id,
     ...appMessages.id,
     ...stockMessages.id,
+    ...stockInMessages.id,
     ...stockOpnameMessages.id,
     ...cooperativeMessages.id,
     ...fixedAssetMessages.id,
@@ -2019,6 +2021,7 @@ export const messages = {
     ...navigationMessages.en,
     ...appMessages.en,
     ...stockMessages.en,
+    ...stockInMessages.en,
     ...stockOpnameMessages.en,
     ...cooperativeMessages.en,
     ...fixedAssetMessages.en,
