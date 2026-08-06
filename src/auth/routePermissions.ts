@@ -14,6 +14,7 @@ type RoutePermissionRule = Permission | Permission[];
 const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/transaction': 'CASHIER_ACCESS',
   '/pos-resto': 'CASHIER_ACCESS',
+  '/pos-resto-prototype': 'CASHIER_ACCESS',
   '/history': 'CASHIER_ACCESS',
   '/master-data': [
     'PRODUCT_MANAGE',

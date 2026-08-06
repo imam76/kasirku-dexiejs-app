@@ -8,7 +8,7 @@ import {
   type ProductCsvRowError,
 } from '@/utils/productsCsv';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
-import { convertProductQuantity, getProductUnitRatio, getProductUnits } from '@/utils/productUnits';
+import { convertProductQuantity, getProductUnitRatio, getProductDocumentUnits } from '@/utils/productUnits';
 
 /**
  * Which side of the cutoff a file is being read for. The routing itself belongs
@@ -310,7 +310,7 @@ export const buildStockInImport = ({
     const unit = rawUnit || product.purchase_unit;
     const ratio = getProductUnitRatio(product, unit, product.purchase_unit);
     if (ratio === undefined) {
-      const knownUnits = getProductUnits(product).join(', ');
+      const knownUnits = getProductDocumentUnits(product).join(', ');
       rejectRow(
         rowNumber,
         rawRow,

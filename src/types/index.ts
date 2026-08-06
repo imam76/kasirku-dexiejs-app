@@ -1,5 +1,6 @@
 export interface WholesalePrice {
   min_quantity: number;
+  unit?: ProductUnit; // Unit used by min_quantity and price; legacy rows keep their historical fallback
   price: number;
   price_type?: 'unit' | 'bundle'; // 'unit' = price per item, 'bundle' = price for min_quantity items
 }
@@ -44,7 +45,24 @@ export interface UnitConversion {
   isDeprecated?: boolean;
 }
 
+/**
+ * An explicit product-specific unit equation.
+ *
+ * Example: 1 box = 10 ikat is stored as
+ * `{ from_quantity: 1, from_unit: 'box', to_quantity: 10, to_unit: 'ikat' }`.
+ */
 export interface ProductUnitMapping {
+  from_quantity: number;
+  from_unit: ProductUnit;
+  to_quantity: number;
+  to_unit: ProductUnit;
+}
+
+/**
+ * Previous persisted shape. Keep accepting it while existing local/remote rows
+ * are normalized to ProductUnitMapping at application boundaries.
+ */
+export interface LegacyProductUnitMapping {
   unit: ProductUnit;
   base_unit: ProductUnit;
   ratio: number; // 1 unit = ratio base_unit, turunan dari base_qty / qty
@@ -58,6 +76,16 @@ export interface ProductUnitMapping {
   base_qty?: number;
 }
 
+export type ProductUnitMappingInput = ProductUnitMapping | LegacyProductUnitMapping;
+
+/**
+ * Produk yang dibuat kasir lewat entri cepat POS masuk sebagai UNVERIFIED.
+ * Produknya tetap dijual normal karena barangnya memang ada, tapi ditandai di
+ * Master Produk supaya supervisor memeriksa nama, harga, dan memastikan bukan
+ * duplikat. Harga belinya sendiri sudah ditahan lewat rekonsiliasi biaya.
+ */
+export type ProductVerificationStatus = 'UNVERIFIED' | 'VERIFIED';
+
 export interface Product {
   id: string;
   name: string;
@@ -70,9 +98,11 @@ export interface Product {
   product_type: ProductType;
   is_visible_in_pos: boolean;
   sku?: string;
+  verification_status?: ProductVerificationStatus; // Undefined = produk master normal (setara VERIFIED)
   wholesale_prices?: WholesalePrice[];
-  sellable_units?: ProductUnit[]; // Derived mirror of purchase_unit + unit_mappings, kept for sync/export back-compat
-  unit_mappings?: ProductUnitMapping[]; // Product-specific conversions, e.g. 1 dus = 24 pcs
+  sellable_units?: ProductUnit[]; // Units cashier can select when selling (defaults to [selling_unit])
+  unit_mappings?: ProductUnitMapping[]; // Canonical product-specific conversion equations
+
   created_at: string;
   updated_at: string;
   sync_status?: ProductSyncStatus;
@@ -195,6 +225,7 @@ export type Permission =
   | 'TRANSACTION_EDIT_PRICE'
   | 'PROFIT_VIEW'
   | 'CASHIER_ACCESS'
+  | 'POS_QUICK_ITEM_ENTRY'
   | 'STOCK_ACCESS'
   | 'PRODUCT_MANAGE'
   | 'PRODUCTION_MANAGE'

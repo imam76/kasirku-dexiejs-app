@@ -1,5 +1,5 @@
 import type { Product } from '@/types';
-import { resolveUnitMappingPair } from '@/utils/productUnits';
+import { normalizeProductUnitMapping } from '@/utils/productUnits';
 
 type ProductWholesalePrice = NonNullable<Product['wholesale_prices']>[number];
 
@@ -17,6 +17,12 @@ export type ProductCsvImportItem = {
   selling_price?: number;
   wholesale_prices?: Product['wholesale_prices'];
   sellable_units?: string[];
+  /**
+   * Satuan yang diminta kolom `sellable_units` tapi tidak punya konversi di
+   * file. Dibawa terpisah supaya rencana import bisa melaporkannya sebagai
+   * peringatan — barisnya sendiri tetap layak diimpor.
+   */
+  ignored_sellable_units?: string[];
   unit_mappings?: Product['unit_mappings'];
   product_type?: Product['product_type'];
   is_visible_in_pos?: boolean;
@@ -150,26 +156,21 @@ const normalizeWholesalePrices = (value: string | undefined): Product['wholesale
   return prices.length > 0 ? prices : undefined;
 };
 
-const normalizeUnitMappings = (value: string | undefined): Product['unit_mappings'] | undefined => {
-  const parsed = parseJsonArray<NonNullable<Product['unit_mappings']>[number]>(value);
+/**
+ * Kolom JSON `unit_mappings` menerima dua bentuk: persamaan eksplisit yang
+ * dipakai sekarang, dan baris lama `{ unit, base_unit, ratio }` — termasuk yang
+ * membawa pasangan `qty`/`base_qty`. Keduanya dinormalkan lewat satu pintu.
+ */
+const normalizeUnitMappings = (
+  value: string | undefined,
+  fallbackBaseUnit: string,
+): Product['unit_mappings'] | undefined => {
+  const parsed = parseJsonArray<unknown>(value);
   if (!parsed) return undefined;
 
   const mappings = parsed
-    .map((mapping) => {
-      // Pasangan `qty`/`base_qty` menang atas `ratio` kalau keduanya ditulis,
-      // karena pasangan itulah angka asli yang diketik pengguna.
-      const qty = Number(mapping?.qty);
-      const baseQty = Number(mapping?.base_qty);
-      const hasPair = Number.isFinite(qty) && qty > 0 && Number.isFinite(baseQty) && baseQty > 0;
-
-      return {
-        unit: String(mapping?.unit || '').trim(),
-        base_unit: String(mapping?.base_unit || '').trim(),
-        ratio: hasPair ? baseQty / qty : Number(mapping?.ratio),
-        ...(hasPair ? { qty, base_qty: baseQty } : {}),
-      };
-    })
-    .filter((mapping) => mapping.unit && mapping.base_unit && Number.isFinite(mapping.ratio) && mapping.ratio > 0);
+    .map((mapping) => normalizeProductUnitMapping(mapping, fallbackBaseUnit))
+    .filter((mapping): mapping is NonNullable<Product['unit_mappings']>[number] => Boolean(mapping));
 
   return mappings.length > 0 ? mappings : undefined;
 };
@@ -479,11 +480,44 @@ export const buildProductCsvImportItemsFromRows = (
       wideWholesalePrices.length > 0 ? wideWholesalePrices : normalizeWholesalePrices(rawWholesaleCell),
       hasWholesaleColumns,
     );
-    const sellable_units = parseDelimitedList(idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined);
     const unit_mappings = emptyListWhenBlank(
-      wideUnitMappings.length > 0 ? wideUnitMappings : normalizeUnitMappings(rawUnitMappingsCell),
+      wideUnitMappings.length > 0 ? wideUnitMappings : normalizeUnitMappings(rawUnitMappingsCell, purchase_unit || 'pcs'),
       hasUnitColumns,
     );
+
+    const declaredSellableUnits = parseDelimitedList(
+      idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined,
+    );
+
+    // Kolom `satuan_N` yang ada di file menentukan satuan apa saja yang
+    // tersedia: satuan utama plus setiap satuan yang konversinya ditulis.
+    // Tanpa aturan ini, mengosongkan kolom satuan tidak pernah benar-benar
+    // menghapus satuan — `sellable_units` hasil ekspor masih menyebutnya, dan
+    // barisnya justru ditolak karena satuan itu tak lagi punya konversi.
+    const baseUnit = (purchase_unit || '').trim();
+    const availableUnits = hasUnitColumns
+      ? Array.from(new Set([baseUnit, ...wideUnitMappings.map((mapping) => mapping.from_unit)].filter(Boolean)))
+      : undefined;
+
+    // Kolom `sellable_units` tetap dihormati, tapi hanya untuk mempersempit.
+    // Satuan yang diminta tanpa konversi tidak diam-diam ikut; pengguna diberi
+    // tahu supaya tahu isian itu tidak terpakai.
+    let sellable_units = declaredSellableUnits;
+    let ignored_sellable_units: string[] | undefined;
+    if (availableUnits) {
+      if (!declaredSellableUnits || declaredSellableUnits.length === 0) {
+        sellable_units = availableUnits;
+      } else {
+        const isAvailable = (unit: string) => availableUnits.some(
+          (known) => known.toLowerCase() === unit.toLowerCase(),
+        );
+        const ignored = declaredSellableUnits.filter((unit) => !isAvailable(unit));
+        if (ignored.length > 0) ignored_sellable_units = ignored;
+
+        const narrowed = declaredSellableUnits.filter(isAvailable);
+        sellable_units = narrowed.length > 0 ? narrowed : availableUnits;
+      }
+    }
 
     const rawProductType = idxProductType !== undefined ? (row[idxProductType] ?? '').trim().toUpperCase() : '';
     let product_type: Product['product_type'] | undefined = undefined;
@@ -519,6 +553,7 @@ export const buildProductCsvImportItemsFromRows = (
       selling_price,
       wholesale_prices,
       sellable_units,
+      ignored_sellable_units,
       unit_mappings,
       product_type,
       is_visible_in_pos,
@@ -613,13 +648,13 @@ const parseWideUnitMappings = ({
     }
     takenUnits.add(unitKey);
 
+    // `jumlah_N satuan_N = isi_N satuan_utama` masuk sebagai persamaan apa
+    // adanya, jadi "12 pcs = 1 pack" tidak pernah lewat 0.0833 di tengah jalan.
     mappings.push({
-      unit: unitName,
-      base_unit: baseUnit,
-      ratio: baseQty / qty,
-      // Pasangan hanya ikut ditulis kalau kolom `jumlah_N` memang dipakai, jadi
-      // file lama tetap pulang-pergi dengan bentuk yang sama persis.
-      ...(qtyRaw ? { qty, base_qty: baseQty } : {}),
+      from_quantity: qty,
+      from_unit: unitName,
+      to_quantity: baseQty,
+      to_unit: baseUnit,
     });
   }
 
@@ -732,7 +767,7 @@ const usesWideUnitColumns = (product: Product) => {
   if (mappings.length === 0) return true;
 
   const baseUnit = normalizeUnitName(product.purchase_unit);
-  return mappings.every((mapping) => normalizeUnitName(mapping.base_unit) === baseUnit);
+  return mappings.every((mapping) => normalizeUnitName(mapping.to_unit) === baseUnit);
 };
 
 const wideUnitMappingsOf = (product: Product) => (
@@ -743,7 +778,7 @@ export const createProductCsvExportRows = (products: Product[]) => {
   // Kolom `jumlah_N` baru muncul kalau ada konversi yang sisi kirinya bukan 1,
   // supaya file yang isinya konversi biasa tetap sependek dulu.
   const needsUnitQtyColumn = products.some((product) => wideUnitMappingsOf(product)
-    .some((mapping) => resolveUnitMappingPair(mapping).qty !== 1));
+    .some((mapping) => mapping.from_quantity !== 1));
 
   const wideUnitCount = products.reduce(
     (max, product) => (usesWideUnitColumns(product)
@@ -787,11 +822,10 @@ export const createProductCsvExportRows = (products: Product[]) => {
       const unitCells: Array<string | number> = [];
       for (let i = 0; i < wideUnitCount; i++) {
         const mapping = mappings[i];
-        const pair = mapping ? resolveUnitMappingPair(mapping) : undefined;
 
-        unitCells.push(mapping ? mapping.unit : '');
-        if (needsUnitQtyColumn) unitCells.push(pair ? pair.qty : '');
-        unitCells.push(pair ? pair.base_qty : '');
+        unitCells.push(mapping ? mapping.from_unit : '');
+        if (needsUnitQtyColumn) unitCells.push(mapping ? mapping.from_quantity : '');
+        unitCells.push(mapping ? mapping.to_quantity : '');
       }
 
       const wholesaleCells: Array<string | number> = [];

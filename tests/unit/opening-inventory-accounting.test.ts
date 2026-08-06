@@ -22,7 +22,7 @@ const openingBalanceReadService = readSource('src/services/openingBalanceReadSer
 const stockManagementHook = readSource('src/hooks/useStockManagement.tsx');
 const stockManagementPage = readSource('src/view/master-data/products/StockManagement.tsx');
 const openingInventoryMigration = readSource(
-  'src-tauri/migrations/0067_opening_inventory_balances.sql',
+  'src-tauri/migrations/0071_opening_inventory_balances.sql',
 );
 const stockMutationRepository = readSource(
   'src-tauri/src/repositories/stock_mutation_repository.rs',

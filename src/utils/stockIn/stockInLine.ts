@@ -1,6 +1,6 @@
 import type { Product } from '@/types';
 import type { StockInLine } from '@/utils/stockIn/stockInCsv';
-import { convertProductQuantity, getProductUnitRatio, getProductUnits } from '@/utils/productUnits';
+import { convertProductQuantity, getProductUnitRatio, getProductDocumentUnits } from '@/utils/productUnits';
 
 export interface ManualStockInLineInput {
   rowNumber: number;
@@ -41,7 +41,7 @@ export const buildManualStockInLine = ({
   if (ratio === undefined) {
     return {
       ok: false,
-      error: `Satuan ${resolvedUnit} tidak dikenal untuk ${product.name}. Satuan yang tersedia: ${getProductUnits(product).join(', ')}.`,
+      error: `Satuan ${resolvedUnit} tidak dikenal untuk ${product.name}. Satuan yang tersedia: ${getProductDocumentUnits(product).join(', ')}.`,
     };
   }
 

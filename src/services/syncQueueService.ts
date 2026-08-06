@@ -195,6 +195,7 @@ import {
 import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
 import type { LeaveRequest } from '@/types';
+import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -1109,8 +1110,8 @@ const mapProductToRemoteDto = (
   product_type: product.product_type ?? 'FINISHED_GOOD',
   is_visible_in_pos: product.is_visible_in_pos ?? true,
   wholesale_prices: product.wholesale_prices,
-  sellable_units: product.sellable_units,
-  unit_mappings: product.unit_mappings,
+  sellable_units: getProductSellableUnits(product),
+  unit_mappings: normalizeProductUnitMappings(product),
   created_at: product.created_at,
   updated_at: product.updated_at,
   preserve_stock: options.preserveStock || undefined,

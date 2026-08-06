@@ -10,11 +10,14 @@ import ProductList from '../components/ProductList';
 import CartSidebar from '../components/CartSidebar';
 import MobileCartDrawer from '../components/MobileCartDrawer';
 import ScannerModal from '../components/ScannerModal';
+import { PosQuickItemModal } from '../components/PosQuickItemModal';
+import { useAuth } from '@/auth/useAuth';
+import { isProductUnverified } from '@/services/posQuickItemService';
 import { useI18n } from '@/hooks/useI18n';
 import type { CashierSession, Product } from '@/types';
 import type { CashierSessionReconciliation } from '@/services/cashierSessionService';
 import { getPosProcessDraftScope } from '@/store/transactionStore';
-import { getAdjacentProductUnit, getProductUnits } from '@/utils/productUnits';
+import { getAdjacentProductSellableUnit, getProductSellableUnits } from '@/utils/productUnits';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 import {
   appendKeyboardBarcodeCharacter,
@@ -141,6 +144,8 @@ const hasVisiblePosShortcutBlocker = () => {
 export default function Transaction() {
   const { message } = App.useApp();
   const { t } = useI18n();
+  const { can } = useAuth();
+  const canQuickAddItem = can('POS_QUICK_ITEM_ENTRY');
   const [openForm] = Form.useForm<OpenCashierFormValues>();
   const [closeForm] = Form.useForm<CloseCashierFormValues>();
   const {
@@ -213,6 +218,8 @@ export default function Transaction() {
 
   // Scanner state
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [quickItemDraft, setQuickItemDraft] = useState<{ barcode: string; name: string } | null>(null);
+  const [quickItemTopUp, setQuickItemTopUp] = useState<Product | null>(null);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [reconciliation, setReconciliation] = useState<CashierSessionReconciliation | null>(null);
   const desktopShortcuts = [
@@ -244,10 +251,19 @@ export default function Transaction() {
   }, []);
 
   const handleAddProduct = useCallback((product: Product) => {
+    // Barang hasil entri cepat selalu berakhir berstok nol setelah terjual, karena
+    // yang dicatat hanya jumlah yang dibeli. Tawarkan penambahan stok supaya
+    // pembeli berikutnya tidak buntu. Produk master biasa tetap tunduk pada
+    // aturan stok habis dan diselesaikan lewat stok opname.
+    if (canQuickAddItem && product.stock <= 0 && isProductUnverified(product)) {
+      setQuickItemTopUp(product);
+      return false;
+    }
+
     const added = addToCart(product);
     if (added) setActiveCartItemId(product.id);
     return added;
-  }, [addToCart]);
+  }, [addToCart, canQuickAddItem]);
 
   const registerQuantityInput = useCallback((productId: string, element: HTMLInputElement | null) => {
     if (element) {
@@ -314,7 +330,7 @@ export default function Transaction() {
       return;
     }
 
-    const productUnits = getProductUnits(activeItem.product);
+    const productUnits = getProductSellableUnits(activeItem.product);
     if (productUnits.length <= 1) {
       message.open({
         key: 'pos-numpad-shortcut',
@@ -325,7 +341,7 @@ export default function Transaction() {
       return;
     }
 
-    const nextUnit = getAdjacentProductUnit(activeItem.product, activeItem.unit, direction);
+    const nextUnit = getAdjacentProductSellableUnit(activeItem.product, activeItem.unit, direction);
     if (!updateUnit(activeItem.product.id, nextUnit)) return;
 
     message.open({
@@ -351,6 +367,11 @@ export default function Transaction() {
         ?? await findFirstProductBySearchTerm(inputSearchTerm);
 
       if (!product) {
+        if (canQuickAddItem) {
+          setQuickItemDraft({ barcode: '', name: inputSearchTerm.trim() });
+          return;
+        }
+
         message.open({
           key: 'pos-numpad-shortcut',
           type: 'warning',
@@ -367,6 +388,7 @@ export default function Transaction() {
       addFromSearchInFlightRef.current = false;
     }
   }, [
+    canQuickAddItem,
     filteredProducts,
     findProductByScannedCode,
     findFirstProductBySearchTerm,
@@ -387,10 +409,22 @@ export default function Transaction() {
         setSearchTerm('');
         message.success(t('transaction.addedToCart', { name: match.name }));
       }
+    } else if (canQuickAddItem) {
+      setQuickItemDraft({ barcode: text.trim(), name: '' });
     } else {
       message.error(t('transaction.productNotFound', { code: text }));
     }
-  }, [findProductByScannedCode, handleAddProduct, message, setSearchTerm, t]);
+  }, [canQuickAddItem, findProductByScannedCode, handleAddProduct, message, setSearchTerm, t]);
+
+  const handleQuickItemResolved = useCallback((product: Product) => {
+    setQuickItemDraft(null);
+    setQuickItemTopUp(null);
+    if (!handleAddProduct(product)) return;
+
+    searchTermRef.current = '';
+    setSearchTerm('');
+    window.requestAnimationFrame(focusSearch);
+  }, [focusSearch, handleAddProduct, setSearchTerm]);
 
   const flushPendingSearchInput = useCallback((restoreFocus: boolean) => {
     const pending = pendingSearchKeySequenceRef.current;
@@ -978,6 +1012,18 @@ export default function Transaction() {
           onScan={handleScan}
         />
       )}
+
+      <PosQuickItemModal
+        open={Boolean(quickItemDraft) || Boolean(quickItemTopUp)}
+        initialBarcode={quickItemDraft?.barcode}
+        initialName={quickItemDraft?.name}
+        topUpProduct={quickItemTopUp}
+        onCancel={() => {
+          setQuickItemDraft(null);
+          setQuickItemTopUp(null);
+        }}
+        onResolved={handleQuickItemResolved}
+      />
 
       <Modal
         title={t('cashierSession.closeTitle')}

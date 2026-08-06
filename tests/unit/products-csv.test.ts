@@ -237,8 +237,8 @@ describe('wide unit conversion columns', () => {
 
     expect(parsed.errors).toEqual([]);
     expect(parsed.items[0].unit_mappings).toEqual([
-      { unit: 'slop', base_unit: 'bungkus', ratio: 10 },
-      { unit: 'dus', base_unit: 'bungkus', ratio: 100 },
+      { from_quantity: 1, from_unit: 'slop', to_quantity: 10, to_unit: 'bungkus' },
+      { from_quantity: 1, from_unit: 'dus', to_quantity: 100, to_unit: 'bungkus' },
     ]);
   });
 
@@ -250,8 +250,8 @@ describe('wide unit conversion columns', () => {
 
     expect(parsed.errors).toEqual([]);
     expect(parsed.items[0].unit_mappings).toEqual([
-      { unit: 'lusin', base_unit: 'pcs', ratio: 12 },
-      { unit: 'dus', base_unit: 'pcs', ratio: 240 },
+      { from_quantity: 1, from_unit: 'lusin', to_quantity: 12, to_unit: 'pcs' },
+      { from_quantity: 1, from_unit: 'dus', to_quantity: 240, to_unit: 'pcs' },
     ]);
   });
 
@@ -263,7 +263,7 @@ describe('wide unit conversion columns', () => {
 
     expect(parsed.errors).toEqual([]);
     expect(parsed.items[0].unit_mappings).toEqual([
-      { unit: 'dus', base_unit: 'pcs', ratio: 24 },
+      { from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' },
     ]);
   });
 
@@ -354,7 +354,7 @@ describe('legacy JSON columns', () => {
 
     expect(parsed.errors).toEqual([]);
     expect(parsed.items[0].unit_mappings).toEqual([
-      { unit: 'dus', base_unit: 'pcs', ratio: 24 },
+      { from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' },
     ]);
   });
 
@@ -468,7 +468,7 @@ describe('sellable units and round trip', () => {
   test('survives an export then import round trip without JSON cells', () => {
     const product: Product = {
       ...existingProduct,
-      unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24 }],
+      unit_mappings: [{ from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' }],
       wholesale_prices: [{ min_quantity: 12, price: 11_000, price_type: 'unit' }],
     };
     const exported = createProductCsvExportRows([product]);
@@ -490,7 +490,7 @@ describe('sellable units and round trip', () => {
     const product: Product = {
       ...existingProduct,
       purchase_unit: 'pcs',
-      unit_mappings: [{ unit: 'dus', base_unit: 'lusin', ratio: 20 }],
+      unit_mappings: [{ from_quantity: 1, from_unit: 'dus', to_quantity: 20, to_unit: 'lusin' }],
     };
     const [headers, row] = createProductCsvExportRows([product]);
 
@@ -508,12 +508,12 @@ describe('sellable units and round trip', () => {
     expect(parsed.rowErrors).toEqual([]);
     expect(parsed.items).toHaveLength(4);
     expect(parsed.items[1].unit_mappings).toEqual([
-      { unit: 'renteng', base_unit: 'pcs', ratio: 10, qty: 1, base_qty: 10 },
-      { unit: 'dus', base_unit: 'pcs', ratio: 120, qty: 1, base_qty: 120 },
+      { from_quantity: 1, from_unit: 'renteng', to_quantity: 10, to_unit: 'pcs' },
+      { from_quantity: 1, from_unit: 'dus', to_quantity: 120, to_unit: 'pcs' },
     ]);
     // Satuan yang lebih kecil dari satuan utama ditulis di sisi kiri.
     expect(parsed.items[2].unit_mappings).toEqual([
-      { unit: 'gram', base_unit: 'kg', ratio: 0.001, qty: 1000, base_qty: 1 },
+      { from_quantity: 1000, from_unit: 'gram', to_quantity: 1, to_unit: 'kg' },
     ]);
     expect(parsed.items[3].wholesale_prices).toEqual([
       { min_quantity: 12, price: 14_000, price_type: 'unit' },
@@ -523,7 +523,7 @@ describe('sellable units and round trip', () => {
   test('deletes a unit conversion when its columns are present but blanked', () => {
     const product: Product = {
       ...existingProduct,
-      unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24, qty: 1, base_qty: 24 }],
+      unit_mappings: [{ from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' }],
       sellable_units: ['pcs', 'dus'],
     };
     const rows = blankColumns(exportRowsOf(product), ['satuan_2', 'jumlah_2', 'isi_2']);
@@ -551,7 +551,7 @@ describe('sellable units and round trip', () => {
   test('leaves collections untouched when the file carries no unit or wholesale column at all', () => {
     const product: Product = {
       ...existingProduct,
-      unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24, qty: 1, base_qty: 24 }],
+      unit_mappings: [{ from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' }],
       sellable_units: ['pcs', 'dus'],
       wholesale_prices: [{ min_quantity: 12, price: 11_000, price_type: 'unit' }],
     };
@@ -565,15 +565,16 @@ describe('sellable units and round trip', () => {
     expect(plan.warnings).toEqual([]);
   });
 
-  test('reports a legacy sellable unit that has no ratio instead of dropping it silently', () => {
+  test('reports a sellable unit that has no ratio instead of importing it silently', () => {
     const plan = planFromRows([
       ['sku', 'name', 'purchase_unit', 'selling_unit', 'sellable_units'],
       ['B', 'Produk B', 'pcs', 'pcs', '["pcs","satuan_karangan"]'],
     ], []);
 
-    expect(plan.items).toHaveLength(1);
-    expect(plan.items[0].product.sellable_units).toEqual(['pcs']);
-    expect(plan.warnings.join(' ')).toContain('satuan_karangan');
+    // Satuan tanpa konversi dulu jatuh ke ratio 1 dan bikin stok salah sejak
+    // baris pertama. Sekarang barisnya digugurkan, bukan diam-diam diterima.
+    expect(plan.items).toHaveLength(0);
+    expect(plan.errors.join(' ')).toContain('satuan_karangan');
   });
 
   test('reports that sellable_units was ignored when the unit columns decide the list', () => {
@@ -592,21 +593,26 @@ describe('sellable units and round trip', () => {
       ['B', 'Produk B', 'pcs', 'dus'],
     ], []);
 
-    expect(plan.items[0].product.selling_unit).toBe('pcs');
-    expect(plan.warnings.join(' ')).toContain('selling_unit dus tidak ada di daftar satuan produk');
+    // `dus` jadi satuan jual tapi tidak punya konversi ke `pcs`, jadi barisnya
+    // digugurkan — bukan ditukar diam-diam ke satuan utama.
+    expect(plan.items).toHaveLength(0);
+    expect(plan.errors.join(' ')).toContain('dus');
   });
 
-  test('drops a JSON mapping that cannot be converted to the purchase unit', () => {
+  test('never lets a dangling equation become a sellable unit', () => {
     const plan = planFromRows([
       ['sku', 'name', 'purchase_unit', 'selling_unit', 'unit_mappings'],
       ['B', 'Produk B', 'kg', 'kg', '[{"unit":"gram","base_unit":"ons","ratio":0.01,"qty":100,"base_qty":1}]'],
     ], []);
 
-    // `gram` hanya nyambung ke `ons`, dan `ons` tidak nyambung ke `kg`, jadi
-    // satuannya akan muncul di kasir tapi stoknya tidak bisa dihitung.
-    expect(plan.items[0].product.unit_mappings).toEqual([]);
+    // Persamaan gram–ons sendiri sah, jadi tetap disimpan. Yang dijaga adalah
+    // daftar satuan jual: `gram` tidak nyambung ke `kg`, jadi ia tidak pernah
+    // ikut ke kasir dan stoknya tidak bisa tercatat salah.
+    expect(plan.items).toHaveLength(1);
     expect(plan.items[0].product.sellable_units).toEqual(['kg']);
-    expect(plan.warnings.join(' ')).toContain('tidak nyambung ke satuan utama kg');
+    expect(plan.items[0].product.unit_mappings).toEqual([
+      { from_quantity: 100, from_unit: 'gram', to_quantity: 1, to_unit: 'ons' },
+    ]);
   });
 
   test('keeps a JSON mapping that is based on the purchase unit', () => {
@@ -616,7 +622,7 @@ describe('sellable units and round trip', () => {
     ], []);
 
     expect(plan.items[0].product.unit_mappings).toEqual([
-      { unit: 'dus', base_unit: 'pcs', ratio: 24, qty: 1, base_qty: 24 },
+      { from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' },
     ]);
     expect(plan.warnings).toEqual([]);
   });
@@ -629,14 +635,14 @@ describe('sellable units and round trip', () => {
 
     expect(parsed.errors).toEqual([]);
     expect(parsed.items[0].unit_mappings).toEqual([
-      { unit: 'pcs', base_unit: 'pack', ratio: 1 / 12, qty: 12, base_qty: 1 },
+      { from_quantity: 12, from_unit: 'pcs', to_quantity: 1, to_unit: 'pack' },
     ]);
   });
 
   test('reports nothing extra on a clean export then import round trip', () => {
     const product: Product = {
       ...existingProduct,
-      unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24, qty: 1, base_qty: 24 }],
+      unit_mappings: [{ from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' }],
       sellable_units: ['pcs', 'dus'],
       wholesale_prices: [{ min_quantity: 12, price: 11_000, price_type: 'unit' }],
     };
@@ -652,7 +658,7 @@ describe('sellable units and round trip', () => {
       ...existingProduct,
       purchase_unit: 'pack',
       selling_unit: 'pcs',
-      unit_mappings: [{ unit: 'pcs', base_unit: 'pack', ratio: 1 / 12, qty: 12, base_qty: 1 }],
+      unit_mappings: [{ from_quantity: 12, from_unit: 'pcs', to_quantity: 1, to_unit: 'pack' }],
     };
     const exported = createProductCsvExportRows([product]);
 

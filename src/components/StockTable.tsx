@@ -3,10 +3,11 @@ import type { ChangeEvent } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
+import { isProductUnverified } from '@/services/posQuickItemService';
 import type { Product } from '@/types';
 import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
-import { getPrice } from '@/utils/pricing';
-import { Edit2, PackagePlus, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { getProductDisplayPricing } from '@/utils/pricing';
+import { BadgeCheck, Edit2, PackagePlus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 interface StockTableProps {
@@ -14,6 +15,7 @@ interface StockTableProps {
   onEdit: (product: Product) => void;
   onDelete: (id: string) => void;
   onOpeningStock: (product: Product) => void;
+  onVerify?: (product: Product) => void;
 }
 
 type SortField = 'name' | 'sku' | 'purchase_price' | 'selling_price' | 'stock';
@@ -24,7 +26,7 @@ type WholesaleStatusFilter = 'all' | 'with' | 'without';
 type ProductTypeFilter = 'all' | Product['product_type'];
 type PosVisibilityFilter = 'all' | 'visible' | 'hidden';
 
-export default function StockTable({ products, onEdit, onDelete, onOpeningStock }: StockTableProps) {
+export default function StockTable({ products, onEdit, onDelete, onOpeningStock, onVerify }: StockTableProps) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState('');
@@ -476,6 +478,9 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
                     <div className="mt-2 flex flex-wrap gap-1">
                       <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{product.product_type === 'RAW_MATERIAL' ? 'Bahan Baku' : 'Barang Jadi'}</span>
                       <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${product.is_visible_in_pos === false ? 'bg-gray-100 text-gray-500' : 'bg-blue-50 text-blue-700'}`}>{product.is_visible_in_pos === false ? 'Tidak tampil di POS' : 'Tampil di POS'}</span>
+                      {isProductUnverified(product) && (
+                        <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{t('stock.unverified')}</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -592,6 +597,11 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {product.name}
+                      {isProductUnverified(product) && (
+                        <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                          {t('stock.unverified')}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {getProductCategoryLabel(product.category || 'non_consumable', t)}
@@ -605,7 +615,7 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
                       Rp {formatCurrency(product.selling_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
                       {product.selling_unit !== product.purchase_unit && (
                         <div className="text-[10px] text-gray-400">
-                          (≈ Rp {formatCurrency(getPrice(product, 1))} / {product.selling_unit})
+                          (≈ Rp {formatCurrency(getProductDisplayPricing(product).basePrice)} / {product.selling_unit})
                         </div>
                       )}
                     </td>
@@ -619,6 +629,15 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex gap-2">
+                        {onVerify && isProductUnverified(product) && (
+                          <button
+                            onClick={() => onVerify(product)}
+                            className="text-amber-600 hover:text-amber-800 transition-colors"
+                            title={t('stock.verifyAction')}
+                          >
+                            <BadgeCheck size={18} />
+                          </button>
+                        )}
                         <button
                           onClick={() => onOpeningStock(product)}
                           className="text-emerald-600 hover:text-emerald-800 transition-colors"
@@ -674,6 +693,24 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock 
             </div>
 
             <div className="space-y-3">
+              {onVerify && isProductUnverified(selectedProduct) && (
+                <button
+                  onClick={() => {
+                    onVerify(selectedProduct);
+                    setSelectedProduct(null);
+                  }}
+                  className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
+                >
+                  <div className="p-2.5 bg-amber-100 rounded-lg text-amber-600">
+                    <BadgeCheck size={22} />
+                  </div>
+                  <div>
+                    <span className="block font-bold text-gray-900">{t('stock.verifyAction')}</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">{t('stock.verifyDescription')}</span>
+                  </div>
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   onOpeningStock(selectedProduct);

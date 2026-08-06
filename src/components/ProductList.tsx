@@ -1,7 +1,7 @@
 import { Minus, Package, Plus } from 'lucide-react';
 import { CartItem, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
-import { getPrice } from '@/utils/pricing';
+import { getProductDisplayPricing } from '@/utils/pricing';
 import { useI18n } from '@/hooks/useI18n';
 import { Pagination } from 'antd';
 
@@ -77,7 +77,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1" data-testid="pos-product-scroll-panel">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           {products.map((product) => {
-            const pricePerSellingUnit = getPrice(product, 1);
+            const { basePrice, wholesaleFromPrice } = getProductDisplayPricing(product);
             const cartItem = cart.find((item) => item.product.id === product.id);
             const isInCart = Boolean(cartItem);
             const quantityStep = cartItem && ['gram', 'menit'].includes(cartItem.unit.toLowerCase()) ? 10 : 1;
@@ -126,7 +126,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                 <div className="pointer-events-none relative z-10 mt-2 flex items-end justify-between gap-2">
                   <div className="pointer-events-none min-w-0">
                     <p className="text-sm font-black text-slate-900">
-                      Rp {formatCurrency(pricePerSellingUnit)}
+                      Rp {formatCurrency(basePrice)}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span className="text-[10px] font-medium text-slate-400">/ {product.selling_unit}</span>
@@ -134,6 +134,11 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                         <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">{t('product.wholesale')}</span>
                       )}
                     </div>
+                    {wholesaleFromPrice !== undefined && (
+                      <p className="mt-0.5 text-[10px] font-semibold text-blue-600">
+                        {t('product.wholesaleFrom', { price: formatCurrency(wholesaleFromPrice) })}
+                      </p>
+                    )}
                   </div>
 
                   {cartItem ? (

@@ -10,34 +10,43 @@ export interface PermissionCatalogItem {
   isSensitive?: boolean;
 }
 
-const GENERAL_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
+const POS_MODULES = ['POS_TRANSACTION', 'POS_RESTAURANT'];
+const GENERAL_MODULES = [...POS_MODULES, 'PRODUCT', 'CASH_FLOW'];
 
 export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
   {
     code: 'CASHIER_ACCESS',
     label: 'Akses Kasir',
     group: 'POS',
-    moduleCodes: ['POS_TRANSACTION'],
+    moduleCodes: POS_MODULES,
+  },
+  {
+    code: 'POS_QUICK_ITEM_ENTRY',
+    label: 'Entri Barang Cepat di POS',
+    description: 'Kasir boleh mendaftarkan barang yang belum ada di sistem saat transaksi berlangsung. Produk masuk sebagai belum terverifikasi dan harga belinya wajib direkonsiliasi.',
+    group: 'POS',
+    moduleCodes: POS_MODULES,
+    isSensitive: true,
   },
   {
     code: 'TRANSACTION_VOID',
     label: 'Void Transaksi',
     group: 'POS',
-    moduleCodes: ['POS_TRANSACTION'],
+    moduleCodes: POS_MODULES,
     isSensitive: true,
   },
   {
     code: 'TRANSACTION_DELETE',
     label: 'Hapus Transaksi',
     group: 'POS',
-    moduleCodes: ['POS_TRANSACTION'],
+    moduleCodes: POS_MODULES,
     isSensitive: true,
   },
   {
     code: 'TRANSACTION_EDIT_PRICE',
     label: 'Ubah Harga Transaksi',
     group: 'POS',
-    moduleCodes: ['POS_TRANSACTION'],
+    moduleCodes: POS_MODULES,
     isSensitive: true,
   },
   {
@@ -113,25 +122,25 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     code: 'RESTAURANT_TABLE_VIEW',
     label: 'Lihat Meja Resto',
     group: 'Data Master',
-    moduleCodes: ['POS_TRANSACTION'],
+    moduleCodes: ['POS_RESTAURANT'],
   },
   {
     code: 'RESTAURANT_TABLE_CREATE',
     label: 'Tambah Meja Resto',
     group: 'Data Master',
-    moduleCodes: ['POS_TRANSACTION'],
+    moduleCodes: ['POS_RESTAURANT'],
   },
   {
     code: 'RESTAURANT_TABLE_UPDATE',
     label: 'Ubah Meja Resto',
     group: 'Data Master',
-    moduleCodes: ['POS_TRANSACTION'],
+    moduleCodes: ['POS_RESTAURANT'],
   },
   {
     code: 'RESTAURANT_TABLE_DELETE',
     label: 'Hapus Meja Resto',
     group: 'Data Master',
-    moduleCodes: ['POS_TRANSACTION'],
+    moduleCodes: ['POS_RESTAURANT'],
     isSensitive: true,
   },
   {

@@ -32,7 +32,7 @@ const multiUnitProduct: Product = {
   id: 'product-b',
   sku: 'B',
   name: 'Produk B',
-  unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24 }],
+  unit_mappings: [{ from_quantity: 1, from_unit: 'dus', to_quantity: 24, to_unit: 'pcs' }],
   sellable_units: ['pcs', 'dus'],
 };
 

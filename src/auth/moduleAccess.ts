@@ -27,6 +27,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
     'ROLE_PERMISSION',
     'FIXED_ASSET',
     'POS_TRANSACTION',
+    'POS_RESTAURANT',
   ],
   '/master-data/products': ['PRODUCT'],
   '/master-data/production': ['PRODUCTION'],
@@ -35,7 +36,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/master-data/warehouses': ['WAREHOUSE'],
   '/master-data/payment-methods': ['PAYMENT_METHOD'],
   '/master-data/areas': ['AREA'],
-  '/master-data/restaurant-tables': ['POS_TRANSACTION'],
+  '/master-data/restaurant-tables': ['POS_RESTAURANT'],
   '/master-data/employees': ['EMPLOYEE'],
   '/master-data/users': ['ROLE_PERMISSION'],
   '/master-data/departments': ['DEPARTMENT'],
@@ -48,8 +49,9 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/master-data/roles': ['ROLE_PERMISSION'],
   // POS
   '/transaction': ['POS_TRANSACTION'],
-  '/pos-resto': ['POS_TRANSACTION'],
-  '/history': ['POS_TRANSACTION'],
+  '/pos-resto': ['POS_RESTAURANT'],
+  '/pos-resto-prototype': ['POS_RESTAURANT'],
+  '/history': ['POS_TRANSACTION', 'POS_RESTAURANT'],
   // Legacy stock shopping route redirects to Purchase Receipt.
   '/shopping-note': ['PURCHASE_RECEIPT'],
   // Human Resources

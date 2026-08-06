@@ -6,7 +6,7 @@ import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useUnits } from '@/hooks/useUnits';
 import { getPurchasePrice } from '@/utils/pricing';
-import { getProductUnits } from '@/utils/productUnits';
+import { getProductDocumentUnits } from '@/utils/productUnits';
 import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/createEmptyPurchaseDocumentItem';
 import { mapProductToPurchaseDocumentItem } from '@/utils/purchaseDocuments/mapProductToPurchaseDocumentItem';
 import {
@@ -95,7 +95,7 @@ export const PurchaseDocumentLineItems = ({
   // tidak ada dan konversi jatuh ke 1.
   const unitOptionsByProductId = useMemo(
     () => new Map(products.map((product) => {
-      const options = getProductUnits(product).map((unitKey) => ({
+      const options = getProductDocumentUnits(product).map((unitKey) => ({
         value: unitKey,
         label: masterUnitMap.get(unitKey) || unitKey,
       }));

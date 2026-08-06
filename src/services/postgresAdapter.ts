@@ -39,7 +39,7 @@ import type {
   Permission,
   ProductUnit,
   ProductType,
-  ProductUnitMapping,
+  ProductUnitMappingInput,
   PromoType,
   ProductionOrderStatus,
   CurrencyRateBasis,
@@ -711,7 +711,7 @@ export interface RemoteProductDto {
   is_visible_in_pos: boolean;
   wholesale_prices?: WholesalePrice[] | null;
   sellable_units?: ProductUnit[] | null;
-  unit_mappings?: ProductUnitMapping[] | null;
+  unit_mappings?: ProductUnitMappingInput[] | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

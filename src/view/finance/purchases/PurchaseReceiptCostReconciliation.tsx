@@ -111,21 +111,26 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
   const handleSubmit = async () => {
     if (!document) return;
 
-    await reconcilePurchaseReceiptCost({
-      purchaseDocumentId: document.id,
-      supplierInvoiceNumber,
-      supplierInvoiceDate,
-      additionalCostTreatment,
-      additionalCostAmount,
-      supplierDiscountAmount,
-      supplierTaxAmount,
-      notes,
-      items: lines.map((line) => ({
-        purchaseDocumentItemId: line.purchaseDocumentItemId,
-        invoicedQuantity: line.receivedQuantity,
-        finalPrice: line.finalPrice,
-      })),
-    });
+    try {
+      await reconcilePurchaseReceiptCost({
+        purchaseDocumentId: document.id,
+        supplierInvoiceNumber,
+        supplierInvoiceDate,
+        additionalCostTreatment,
+        additionalCostAmount,
+        supplierDiscountAmount,
+        supplierTaxAmount,
+        notes,
+        items: lines.map((line) => ({
+          purchaseDocumentItemId: line.purchaseDocumentItemId,
+          invoicedQuantity: line.receivedQuantity,
+          finalPrice: line.finalPrice,
+        })),
+      });
+    } catch {
+      return;
+    }
+
     goBack();
   };
 

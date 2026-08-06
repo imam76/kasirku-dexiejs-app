@@ -1,13 +1,12 @@
-import { normalizeUnitKey } from '@/constants/units';
-import type { Product, ProductUnit } from '@/types';
+import type { Product, ProductUnit, UnitConversion } from '@/types';
 import type { ProductCsvImportItem, ProductCsvRowError } from '@/utils/productsCsv';
+import { DEFAULT_CONVERSIONS, normalizeUnitKey } from '@/constants/units';
 import {
-  buildUnitMappingsFromLegacyUnits,
-  getProductDefaultUnit,
-  getProductUnitRatio,
-  getProductUnits,
+  buildSellableUnitsFromMappings,
+  getProductSellableUnits,
+  normalizeProductUnitMappings,
+  resolveProductUnitRatio,
 } from '@/utils/productUnits';
-import { getConversionRatio, hasConversionRatio } from '@/utils/pricing';
 
 export interface ProductMasterImportPlanItem {
   rowNumber: number;
@@ -23,9 +22,9 @@ export interface ProductMasterImportPlan {
   /** Rows dropped by the plan, reported the same way parse errors are. */
   rowErrors: ProductCsvRowError[];
   /**
-   * Baris yang tetap diimpor tapi ada isinya yang tidak terpakai — satuan tanpa
-   * konversi, atau satuan default yang tidak ada di daftar. Dulu hal-hal ini
-   * dibuang tanpa jejak, sehingga pengguna mengira filenya masuk utuh.
+   * Rows that imported fine but carried file content the plan could not use.
+   * Kept apart from errors so they never block an import, and shaped the same
+   * way so they can be downloaded and fixed through the same flow.
    */
   rowWarnings: ProductCsvRowError[];
   warnings: string[];
@@ -36,12 +35,14 @@ interface BuildProductMasterImportPlanInput {
   existingProducts: Product[];
   now: string;
   createId?: () => string;
+  globalConversions?: ReadonlyArray<Pick<UnitConversion, 'fromUnit' | 'toUnit' | 'ratio'>>;
 }
 
 const normalizeImportedWholesalePrices = (
   prices: Product['wholesale_prices'] | undefined,
 ) => (prices || []).map((price) => ({
   min_quantity: Number(price.min_quantity),
+  unit: price.unit,
   price: Number(price.price),
   price_type: price.price_type || 'unit',
 }));
@@ -60,16 +61,15 @@ const buildImportedProduct = ({
   const warnings: string[] = [];
   const purchaseUnit = (item.purchase_unit || existing?.purchase_unit || 'pcs') as ProductUnit;
   const sellingUnit = (item.selling_unit || existing?.selling_unit || 'pcs') as ProductUnit;
-
-  // Daftar satuan yang sengaja dikosongkan di file harus benar-benar kosong.
-  // Kolom lama `selling_unit` dan `sellable_units` masih berisi satuan yang
-  // baru saja dihapus, jadi jalur legacy dilewati seluruhnya — kalau tidak,
-  // satuan yang dihapus akan hidup lagi lewat konversi global.
-  const clearsUnits = item.unit_mappings !== undefined && item.unit_mappings.length === 0;
+  const existingSellableUnits = existing ? getProductSellableUnits(existing) : [];
 
   // Menghapus itu tindakan merusak, jadi harus terbaca di layar konfirmasi
   // sebelum dijalankan — bukan baru ketahuan setelah datanya hilang.
-  if (clearsUnits && (existing?.unit_mappings?.length ?? 0) > 0) {
+  if (
+    item.unit_mappings !== undefined
+    && item.unit_mappings.length === 0
+    && (existing?.unit_mappings?.length ?? 0) > 0
+  ) {
     warnings.push('konversi satuan produk ini dihapus karena kolom satuannya ada di file tapi dikosongkan.');
   }
   if (
@@ -81,84 +81,30 @@ const buildImportedProduct = ({
   }
 
   // Kolom satuan eksplisit menang atas kolom legacy. Kalau keduanya diisi dan
-  // yang eksplisit dikosongkan, `sellable_units` tidak boleh diam-diam jadi
-  // penentu — pengguna harus tahu isian itu tidak terpakai.
-  const ignoredLegacyUnits = clearsUnits
-    ? (item.sellable_units ?? []).filter(
-      (unit) => normalizeUnitKey(unit) !== normalizeUnitKey(purchaseUnit),
-    )
-    : [];
-
-  if (ignoredLegacyUnits.length > 0) {
+  // yang eksplisit tidak menyebut satuannya, `sellable_units` tidak boleh
+  // diam-diam jadi penentu — pengguna harus tahu isian itu tidak terpakai.
+  if (item.ignored_sellable_units && item.ignored_sellable_units.length > 0) {
     warnings.push(
-      `kolom sellable_units (${ignoredLegacyUnits.join(', ')}) diabaikan karena kolom satuan di file yang menentukan daftarnya.`,
+      `kolom sellable_units (${item.ignored_sellable_units.join(', ')}) diabaikan karena kolom satuan di file yang menentukan daftarnya.`,
     );
   }
 
-  // Kolom lama `sellable_units` masih diterima, tapi hanya kalau rationya bisa
-  // ditentukan dari konversi global. Satuan tanpa ratio dibuang, bukan
-  // diam-diam dianggap 1:1.
-  const { unitMappings: resolvedMappings, droppedUnits } = clearsUnits
-    ? { unitMappings: [], droppedUnits: [] }
-    : buildUnitMappingsFromLegacyUnits(
-      {
-        purchase_unit: purchaseUnit,
-        selling_unit: sellingUnit,
-        sellable_units: item.sellable_units ?? existing?.sellable_units ?? [],
-        unit_mappings: item.unit_mappings ?? existing?.unit_mappings ?? [],
-      },
-      (unit, baseUnit) => (hasConversionRatio(unit, baseUnit) ? getConversionRatio(unit, baseUnit) : undefined),
-    );
-
-  if (droppedUnits.length > 0) {
-    warnings.push(
-      `satuan ${droppedUnits.join(', ')} dilewati karena tidak punya konversi ke ${purchaseUnit}.`,
-    );
-  }
-
-  // Baris konversi yang tidak nyambung ke satuan utama — mis. kolom JSON yang
-  // menulis `base_unit` sembarang — menghasilkan satuan yang muncul di kasir
-  // tapi stoknya tidak bisa dihitung. Form tidak pernah bisa membuat data
-  // seperti itu, jadi import pun tidak boleh membiarkannya lewat.
-  const candidate = { purchase_unit: purchaseUnit, unit_mappings: resolvedMappings };
-  const unitMappings = resolvedMappings.filter(
-    (mapping) => getProductUnitRatio(candidate, mapping.unit, purchaseUnit) !== undefined,
-  );
-  const unresolvedUnits = resolvedMappings
-    .filter((mapping) => !unitMappings.includes(mapping))
-    .map((mapping) => mapping.unit);
-
-  if (unresolvedUnits.length > 0) {
-    warnings.push(
-      `konversi satuan ${unresolvedUnits.join(', ')} dibuang karena tidak nyambung ke satuan utama ${purchaseUnit}.`,
-    );
-  }
-
-  const productUnits = getProductUnits({ purchase_unit: purchaseUnit, unit_mappings: unitMappings });
-  const defaultUnit = getProductDefaultUnit({
+  const unitMappings = normalizeProductUnitMappings({
     purchase_unit: purchaseUnit,
     selling_unit: sellingUnit,
-    unit_mappings: unitMappings,
+    sellable_units: item.sellable_units ?? existingSellableUnits,
+    unit_mappings: item.unit_mappings ?? existing?.unit_mappings ?? [],
   });
-
-  // Form memblokir satuan default yang tidak ada di daftar; import dulu
-  // diam-diam menggantinya. Sekarang penggantiannya tetap terjadi supaya baris
-  // lain tidak ikut gagal, tapi tidak lagi tanpa kabar.
-  if (item.selling_unit && normalizeUnitKey(item.selling_unit) !== normalizeUnitKey(defaultUnit)) {
-    warnings.push(
-      `selling_unit ${item.selling_unit} tidak ada di daftar satuan produk, jadi yang dipakai ${defaultUnit}.`,
-    );
-  }
 
   const product: Product = {
     ...existing,
     id: existing?.id ?? productId,
-    // A stock-in file may carry no name column at all, and a blank cell must
-    // never erase the name a product already has.
+    // File stock-in boleh datang tanpa kolom nama sama sekali; produknya sudah
+    // dikenali lewat sku, jadi namanya tidak boleh ikut terhapus.
     name: item.name || existing?.name || '',
     category: item.category || existing?.category || 'non_consumable',
     purchase_unit: purchaseUnit,
-    selling_unit: defaultUnit,
+    selling_unit: sellingUnit,
     purchase_price: item.purchase_price ?? existing?.purchase_price ?? 0,
     selling_price: item.selling_price ?? existing?.selling_price ?? 0,
     // Import master data must never create or overwrite an operational stock balance.
@@ -170,7 +116,14 @@ const buildImportedProduct = ({
       item.wholesale_prices ?? existing?.wholesale_prices,
     ),
     unit_mappings: unitMappings,
-    sellable_units: productUnits,
+    sellable_units: buildSellableUnitsFromMappings({
+      purchase_unit: purchaseUnit,
+      selling_unit: sellingUnit,
+      sellable_units: item.sellable_units && item.sellable_units.length > 0
+        ? item.sellable_units
+        : existingSellableUnits,
+      unit_mappings: unitMappings,
+    }),
     created_at: existing?.created_at ?? now,
     updated_at: now,
     sync_status: 'pending',
@@ -185,6 +138,7 @@ export const buildProductMasterImportPlan = ({
   existingProducts,
   now,
   createId = () => crypto.randomUUID(),
+  globalConversions = DEFAULT_CONVERSIONS,
 }: BuildProductMasterImportPlanInput): ProductMasterImportPlan => {
   const existingById = new Map(existingProducts.map((product) => [product.id, product]));
   const existingBySku = new Map<string, Product[]>();
@@ -246,6 +200,23 @@ export const buildProductMasterImportPlan = ({
       productId,
       now,
     });
+
+    // Satuan jual yang tidak nyambung ke satuan utama menghasilkan produk yang
+    // muncul di kasir tapi stoknya tidak bisa dihitung, jadi barisnya digugurkan
+    // — bukan diam-diam dianggap 1:1 seperti dulu.
+    const invalidUnit = getProductSellableUnits(product).find((unit) => {
+      if (normalizeUnitKey(unit) === normalizeUnitKey(product.purchase_unit)) return false;
+      return resolveProductUnitRatio(product, unit, product.purchase_unit, {
+        globalConversions,
+      }).status !== 'resolved';
+    });
+    if (invalidUnit) {
+      rejectRow(
+        item,
+        `konversi satuan ${invalidUnit} ke ${product.purchase_unit} tidak ada atau saling bertentangan.`,
+      );
+      return;
+    }
 
     // Peringatan tidak menggugurkan barisnya: produknya tetap benar, hanya ada
     // isi file yang tidak terpakai. Bentuknya sama dengan baris gagal supaya

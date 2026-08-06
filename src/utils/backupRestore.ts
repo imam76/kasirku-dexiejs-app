@@ -9,17 +9,28 @@ import { ensureMembershipSetting } from '@/services/membershipService';
 import { ensureDefaultPaymentMethods } from '@/services/paymentMethodService';
 import { backfillLegacyPosPaymentSnapshots } from '@/services/posPaymentMethodService';
 import { backfillMissingPosTransactionPayments } from '@/services/posTransactionPaymentService';
-import type { AuthUser } from '@/types';
+import type { AuthUser, Product } from '@/types';
 import { ensureFixedAssetAccountDefaults } from '@/services/fixedAssetService';
+import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 
 const hasActiveOwner = (users: AuthUser[]) => {
   return users.some((user) => user.role === 'OWNER' && user.is_active);
 };
 
+const normalizeStoredProduct = (product: Product): Product => ({
+  ...product,
+  ...(Array.isArray(product.unit_mappings)
+    ? {
+        sellable_units: getProductSellableUnits(product),
+        unit_mappings: normalizeProductUnitMappings(product),
+      }
+    : {}),
+});
+
 export const backupDatabase = async () => {
   try {
     const data = {
-      products: await db.products.toArray(),
+      products: (await db.products.toArray()).map(normalizeStoredProduct),
       transactions: await db.transactions.toArray(),
       transactionItems: await db.transactionItems.toArray(),
       posTransactionPayments: await db.posTransactionPayments.toArray(),
@@ -295,7 +306,9 @@ export const restoreDatabase = async (file: File) => {
           }
 
           // Import new data
-          if (data.products?.length) await db.products.bulkAdd(data.products);
+          if (data.products?.length) {
+            await db.products.bulkAdd(data.products.map((product: Product) => normalizeStoredProduct(product)));
+          }
           if (data.transactions?.length) await db.transactions.bulkAdd(data.transactions);
           if (data.transactionItems?.length) await db.transactionItems.bulkAdd(data.transactionItems);
           if (data.posTransactionPayments?.length) await db.posTransactionPayments.bulkAdd(data.posTransactionPayments);

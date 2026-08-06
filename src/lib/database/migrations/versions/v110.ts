@@ -1,52 +1,59 @@
-import { normalizeUnitKey } from '@/constants/units';
-import type { Product, ProductUnit, UnitConversion } from '@/types';
-import { buildUnitMappingsFromLegacyUnits, getProductDefaultUnit, getProductUnits } from '@/utils/productUnits';
+import type { Product, ProductUnit, SyncQueueItem } from '@/types';
+import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 import type { KasirkuDB } from '../../KasirkuDB';
 
-/**
- * Satuan transaksi sekarang hanya berasal dari satuan dasar plus baris
- * `unit_mappings`. Kolom lama `sellable_units` boleh memuat satuan tanpa ratio,
- * dan satuan seperti itu membuat pembelian 1 box tercatat 1 pcs karena konversi
- * jatuh ke 1. Migrasi ini mengangkat satuan lama menjadi baris konversi
- * eksplisit selama rationya bisa diambil dari konversi global, dan membuang
- * satuan yang rationya memang tidak pernah diketahui.
- */
+const normalizeMappings = (unitMappings: unknown, purchaseUnit: ProductUnit) => (
+  normalizeProductUnitMappings({
+    purchase_unit: purchaseUnit,
+    selling_unit: purchaseUnit,
+    sellable_units: [],
+    unit_mappings: unitMappings,
+  })
+);
+
+export const migrateProductUnitRecord = (product: Product): Product => {
+  if (!Array.isArray(product.unit_mappings)) return product;
+
+  return {
+    ...product,
+    sellable_units: getProductSellableUnits(product),
+    unit_mappings: normalizeMappings(product.unit_mappings, product.purchase_unit || 'pcs'),
+  };
+};
+
+export const migrateProductUnitSyncPayload = (payload: unknown): unknown => {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  const productPayload = payload as Record<string, unknown>;
+  if (!Array.isArray(productPayload.unit_mappings)) return payload;
+
+  const purchaseUnit = typeof productPayload.purchase_unit === 'string' ? productPayload.purchase_unit : 'pcs';
+  const sellingUnit = typeof productPayload.selling_unit === 'string' ? productPayload.selling_unit : purchaseUnit;
+  return {
+    ...productPayload,
+    sellable_units: getProductSellableUnits({
+      purchase_unit: purchaseUnit,
+      selling_unit: sellingUnit,
+      sellable_units: Array.isArray(productPayload.sellable_units)
+        ? productPayload.sellable_units.filter((unit): unit is string => typeof unit === 'string')
+        : [],
+      unit_mappings: productPayload.unit_mappings,
+    }),
+    unit_mappings: normalizeMappings(productPayload.unit_mappings, purchaseUnit),
+  };
+};
+
 export function registerMigrationV110(db: KasirkuDB) {
   db.version(110).stores({}).upgrade(async (transaction) => {
-    const conversions = await transaction.table<UnitConversion, string>('unitConversions').toArray();
-
-    const resolveGlobalRatio = (unit: ProductUnit, baseUnit: ProductUnit): number | undefined => {
-      const from = normalizeUnitKey(unit);
-      const to = normalizeUnitKey(baseUnit);
-      if (!from || !to) return undefined;
-      if (from === to) return 1;
-
-      const direct = conversions.find(
-        (conversion) => normalizeUnitKey(conversion.fromUnit) === from && normalizeUnitKey(conversion.toUnit) === to,
-      );
-      if (direct && Number(direct.ratio) > 0) return Number(direct.ratio);
-
-      const reverse = conversions.find(
-        (conversion) => normalizeUnitKey(conversion.fromUnit) === to && normalizeUnitKey(conversion.toUnit) === from,
-      );
-      if (reverse && Number(reverse.ratio) > 0) return 1 / Number(reverse.ratio);
-
-      return undefined;
-    };
-
     await transaction.table<Product>('products').toCollection().modify((product) => {
-      const { unitMappings } = buildUnitMappingsFromLegacyUnits(product, resolveGlobalRatio);
+      const migratedProduct = migrateProductUnitRecord(product);
+      product.sellable_units = migratedProduct.sellable_units;
+      product.unit_mappings = migratedProduct.unit_mappings;
+    });
 
-      product.unit_mappings = unitMappings;
-      product.sellable_units = getProductUnits({
-        purchase_unit: product.purchase_unit,
-        unit_mappings: unitMappings,
-      });
-      product.selling_unit = getProductDefaultUnit({
-        purchase_unit: product.purchase_unit,
-        selling_unit: product.selling_unit,
-        unit_mappings: unitMappings,
-      });
+    await transaction.table<SyncQueueItem>('syncQueue').toCollection().modify((queueItem) => {
+      if (queueItem.entity !== 'products') return;
+      queueItem.payload = migrateProductUnitSyncPayload(queueItem.payload);
     });
   });
 }

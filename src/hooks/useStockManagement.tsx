@@ -2,11 +2,10 @@ import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createStockSchema, type StockFormData } from '@/lib/validations/stock';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
-import { normalizeUnitKey, resolveUnitCategory } from '@/constants/units';
 import {
   buildProductSyncQueueItem,
   enqueueProductSync,
@@ -17,9 +16,15 @@ import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import type { FinanceTransaction, Product } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
-import { getProductDefaultUnit, getProductUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
+import {
+  buildSellableUnitsFromMappings,
+  getProductSellableUnits,
+  normalizeProductUnitMappings,
+} from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
+import { DEFAULT_CONVERSIONS, normalizeUnitKey, resolveUnitCategory } from '@/constants/units';
+import { materializeWholesalePriceUnits } from '@/utils/pricing';
 
 export type { StockFormData };
 
@@ -38,6 +43,10 @@ export const useStockManagement = () => {
   const { modal, message } = App.useApp();
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const { data: unitConversions = DEFAULT_CONVERSIONS } = useQuery({
+    queryKey: ['unitConversions'],
+    queryFn: () => db.unitConversions.toArray(),
+  });
 
   // Validasi harus menilai satuan pakai master unit, bukan hanya daftar bawaan,
   // supaya satuan kemasan buatan pengguna tidak ditolak diam-diam.
@@ -47,8 +56,11 @@ export const useStockManagement = () => {
     [unitDefinitions],
   );
   const stockSchema = useMemo(
-    () => createStockSchema(t, (unit) => resolveUnitCategory(unit, unitTypeById.get(normalizeUnitKey(unit)))),
-    [t, unitTypeById],
+    () => createStockSchema(t, {
+      globalConversions: unitConversions,
+      getUnitCategory: (unit) => resolveUnitCategory(unit, unitTypeById.get(normalizeUnitKey(unit))),
+    }),
+    [t, unitConversions, unitTypeById],
   );
 
 
@@ -67,6 +79,7 @@ export const useStockManagement = () => {
       is_visible_in_pos: true,
       purchase_quantity: 0,
       wholesale_prices: [],
+      sellable_units: ['pcs'],
       unit_mappings: [],
     },
   });
@@ -103,6 +116,7 @@ export const useStockManagement = () => {
       const unitMappings = normalizeProductUnitMappings({
         purchase_unit: productData.purchase_unit || 'pcs',
         selling_unit: productData.selling_unit || 'pcs',
+        sellable_units: productData.sellable_units || [],
         unit_mappings: productData.unit_mappings || [],
       });
 
@@ -118,15 +132,15 @@ export const useStockManagement = () => {
         is_visible_in_pos: productData.is_visible_in_pos ?? true,
         wholesale_prices: (productData.wholesale_prices || []).map((p) => ({
           min_quantity: Number(p.min_quantity),
+          unit: p.unit || productData.selling_unit || productData.purchase_unit || 'pcs',
           price: Number(p.price),
           price_type: p.price_type || 'unit',
         })),
         unit_mappings: unitMappings,
-        // Kolom lama tetap ditulis sebagai turunan supaya konsumen yang belum
-        // pindah (sync remote, export CSV) tidak melihat data kosong.
-        sellable_units: getProductUnits({
+        sellable_units: buildSellableUnitsFromMappings({
           purchase_unit: productData.purchase_unit || 'pcs',
           selling_unit: productData.selling_unit || 'pcs',
+          sellable_units: productData.sellable_units || [],
           unit_mappings: unitMappings,
         }),
       };
@@ -272,7 +286,10 @@ export const useStockManagement = () => {
           items,
           existingProducts: await db.products.toArray(),
           now,
+          globalConversions: unitConversions,
         });
+        // Baris yang gagal digugurkan satu per satu, sisanya tetap masuk. Aman
+        // karena master produk tidak membawa stok maupun kas.
         if (importPlan.items.length === 0) {
           throw new Error(
             importPlan.errors.length > 0
@@ -310,6 +327,7 @@ export const useStockManagement = () => {
         updatedCount: importPlan.updatedCount,
         importedCount: importPlan.items.length,
         rowErrors: importPlan.rowErrors,
+        rowWarnings: importPlan.rowWarnings,
       };
     },
     onSuccess: (result) => {
@@ -319,7 +337,10 @@ export const useStockManagement = () => {
   });
 
   const onSubmit = async (data: StockFormData) => {
-    const defaultSellingUnit = getProductDefaultUnit(data);
+    const sellableUnits = data.sellable_units && data.sellable_units.length > 0
+      ? data.sellable_units
+      : [data.selling_unit || 'pcs'];
+    const defaultSellingUnit = sellableUnits[0] || data.selling_unit || 'pcs';
 
     await upsertMutation.mutateAsync({
       name: data.name,
@@ -335,6 +356,7 @@ export const useStockManagement = () => {
       is_visible_in_pos: data.is_visible_in_pos,
       purchase_quantity: data.purchase_quantity || 0,
       wholesale_prices: data.wholesale_prices || [],
+      sellable_units: sellableUnits,
       unit_mappings: data.unit_mappings || [],
     });
   };
@@ -355,18 +377,20 @@ export const useStockManagement = () => {
     setValue('name', product.name);
     setValue('category', product.category || 'non_consumable');
     setValue('purchase_unit', product.purchase_unit);
-    setValue('selling_unit', getProductDefaultUnit(product));
+    setValue('selling_unit', product.selling_unit);
     setValue('purchase_price', product.purchase_price);
     setValue('selling_price', product.selling_price);
     setValue('sku', product.sku || '');
     setValue('product_type', product.product_type ?? 'FINISHED_GOOD');
     setValue('is_visible_in_pos', product.is_visible_in_pos ?? true);
     setValue('purchase_quantity', 0);
-    setValue('wholesale_prices', (product.wholesale_prices || []).map(p => ({
+    setValue('wholesale_prices', materializeWholesalePriceUnits(product, unitConversions).map(p => ({
       min_quantity: p.min_quantity,
+      unit: p.unit || product.selling_unit || product.purchase_unit,
       price: p.price,
-      price_type: p.price_type
+      price_type: p.price_type,
     })));
+    setValue('sellable_units', getProductSellableUnits(product));
     setValue('unit_mappings', normalizeProductUnitMappings(product));
   };
 

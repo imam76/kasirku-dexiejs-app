@@ -20,7 +20,11 @@ import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { getBaseCurrencyLockSignals } from '@/services/baseCurrencyService';
 import { findOrCreateAccountingFiscalYear } from '@/services/accountingFiscalYearService';
-import { saveSetupConfig, saveSetupConfigToRemote } from '@/services/setupKeyService';
+import {
+  CURRENT_MODULE_CATALOG_VERSION,
+  saveSetupConfig,
+  saveSetupConfigToRemote,
+} from '@/services/setupKeyService';
 import {
   enqueueAccountingInitialSetupSettingSync,
   enqueueAccountingFiscalYearSync,
@@ -994,6 +998,7 @@ export const saveInitialAccountingSetup = async (
       enabledModules: effectiveEnabledModules,
       configuredAt: now,
       configuredBy: input.configuredBy,
+      moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
     };
     if (isTauriRuntime()) {
       await saveSetupConfigToRemote(setupConfig);

@@ -1,71 +1,16 @@
-import { normalizeUnitKey } from '@/constants/units';
-import type { ProductUnit, ProductUnitMapping } from '@/types';
+import { inferConversionUnitType, normalizeUnitKey } from '@/constants/units';
+import type {
+  Product,
+  ProductUnit,
+  ProductUnitMapping,
+  UnitConversion,
+} from '@/types';
 
-/**
- * Satuan sebuah produk selalu berasal dari dua sumber saja: satuan dasar
- * (`purchase_unit`) dan baris konversi di `unit_mappings`. Satuan yang tidak
- * punya baris konversi tidak boleh muncul di transaksi mana pun, karena
- * rationya tidak diketahui dan stok akan tercatat salah.
- */
-type ProductUnitShape = {
-  purchase_unit?: ProductUnit;
-  selling_unit?: ProductUnit;
-  unit_mappings?: ProductUnitMapping[];
+type ProductUnitShape = Pick<Product, 'purchase_unit' | 'selling_unit' | 'sellable_units'> & {
+  unit_mappings?: unknown;
 };
 
 const normalizeUnit = (unit?: ProductUnit) => normalizeUnitKey(unit || 'pcs') || 'pcs';
-
-/**
- * Ratio yang tersimpan sebagai float (mis. 0.08333333 dari 1/12) harus bisa
- * kembali jadi angka bulat yang dulu diketik pengguna, jadi hasil pembagian
- * yang cuma meleset di digit terakhir dibulatkan.
- */
-const NEAR_INTEGER_TOLERANCE = 1e-6;
-
-const snapToInteger = (value: number) => {
-  const rounded = Math.round(value);
-  const scale = Math.max(1, Math.abs(value));
-  return Math.abs(value - rounded) <= NEAR_INTEGER_TOLERANCE * scale ? rounded : value;
-};
-
-export interface UnitMappingPair {
-  qty: number;
-  base_qty: number;
-  ratio: number;
-}
-
-/**
- * Menerjemahkan satu ratio jadi pasangan angka yang enak diketik: sisi yang
- * lebih kecil selalu dapat angka 1, jadi `ratio: 12` jadi "1 unit = 12 dasar"
- * dan `ratio: 1/12` jadi "12 unit = 1 dasar" — bukan 0.0833.
- */
-export const buildUnitMappingPair = (ratio: number): UnitMappingPair => {
-  if (!Number.isFinite(ratio) || ratio <= 0) return { qty: 1, base_qty: 0, ratio: 0 };
-  if (ratio >= 1) {
-    const baseQty = snapToInteger(ratio);
-    return { qty: 1, base_qty: baseQty, ratio: baseQty };
-  }
-
-  const qty = snapToInteger(1 / ratio);
-  return { qty, base_qty: 1, ratio: 1 / qty };
-};
-
-/**
- * Sumber kebenaran satu baris konversi adalah pasangan `qty`/`base_qty` kalau
- * ada; baris lama yang cuma menyimpan `ratio` dibaca sebagai `1 unit = ratio`.
- */
-export const resolveUnitMappingPair = (
-  mapping: Pick<ProductUnitMapping, 'ratio' | 'qty' | 'base_qty'>,
-): UnitMappingPair => {
-  const qty = Number(mapping.qty);
-  const baseQty = Number(mapping.base_qty);
-
-  if (Number.isFinite(qty) && qty > 0 && Number.isFinite(baseQty) && baseQty > 0) {
-    return { qty, base_qty: baseQty, ratio: baseQty / qty };
-  }
-
-  return buildUnitMappingPair(Number(mapping.ratio));
-};
 
 const uniqueUnits = (units: Array<ProductUnit | undefined>) => {
   const seen = new Set<string>();
@@ -79,176 +24,327 @@ const uniqueUnits = (units: Array<ProductUnit | undefined>) => {
     });
 };
 
-/** Baris konversi yang pasangan angkanya sudah pasti terisi. */
-export type NormalizedProductUnitMapping = ProductUnitMapping & { qty: number; base_qty: number };
+const isPositiveFinite = (value: number) => Number.isFinite(value) && value > 0;
 
-export const normalizeProductUnitMappings = (product: ProductUnitShape): NormalizedProductUnitMapping[] => {
-  const fallbackBaseUnit = normalizeUnit(product.purchase_unit);
-  const seen = new Set<string>();
+const parsePositiveFinite = (value: unknown) => {
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined;
+  const numeric = Number(value);
+  return isPositiveFinite(numeric) ? numeric : undefined;
+};
 
-  return (product.unit_mappings || [])
-    .map((mapping) => {
-      const pair = resolveUnitMappingPair(mapping);
+const areEquivalentRatios = (left: number, right: number) => (
+  Math.abs(left - right) <= 1e-9 * Math.max(1, Math.abs(left), Math.abs(right))
+);
 
+type ExplicitProductUnitMappingShape = {
+  from_quantity: unknown;
+  from_unit: unknown;
+  to_quantity: unknown;
+  to_unit: unknown;
+};
+
+type LegacyProductUnitMappingShape = {
+  unit: unknown;
+  base_unit: unknown;
+  ratio: unknown;
+  /**
+   * Pasangan angka apa adanya seperti yang diketik pengguna: `qty unit =
+   * base_qty base_unit`. Baris lama yang hanya punya `ratio` dibaca sebagai
+   * `qty: 1`.
+   */
+  qty?: unknown;
+  base_qty?: unknown;
+};
+
+const isExplicitProductUnitMapping = (
+  mapping: unknown,
+): mapping is ExplicitProductUnitMappingShape => {
+  if (!mapping || typeof mapping !== 'object') return false;
+
+  return (
+    'from_quantity' in mapping &&
+    'from_unit' in mapping &&
+    'to_quantity' in mapping &&
+    'to_unit' in mapping
+  );
+};
+
+const isLegacyProductUnitMapping = (
+  mapping: unknown,
+): mapping is LegacyProductUnitMappingShape => {
+  if (!mapping || typeof mapping !== 'object') return false;
+
+  return 'unit' in mapping && 'base_unit' in mapping && 'ratio' in mapping;
+};
+
+export const getLegacyProductMappingUnits = (unitMappings: unknown): ProductUnit[] => {
+  if (!Array.isArray(unitMappings)) return [];
+
+  return uniqueUnits(unitMappings.map((mapping) => {
+    if (!isLegacyProductUnitMapping(mapping) || typeof mapping.unit !== 'string') return undefined;
+    const hasPair = parsePositiveFinite(mapping.qty) !== undefined
+      && parsePositiveFinite(mapping.base_qty) !== undefined;
+    if (!hasPair && parsePositiveFinite(mapping.ratio) === undefined) return undefined;
+    return normalizeUnitKey(mapping.unit) || undefined;
+  }));
+};
+
+export const normalizeProductUnitMapping = (
+  mapping: unknown,
+  fallbackBaseUnit: ProductUnit = 'pcs',
+): ProductUnitMapping | undefined => {
+  if (isExplicitProductUnitMapping(mapping)) {
+    const fromQuantity = parsePositiveFinite(mapping.from_quantity);
+    const toQuantity = parsePositiveFinite(mapping.to_quantity);
+    if (typeof mapping.from_unit !== 'string' || typeof mapping.to_unit !== 'string') return undefined;
+
+    const fromUnit = normalizeUnitKey(mapping.from_unit);
+    const toUnit = normalizeUnitKey(mapping.to_unit);
+
+    if (fromQuantity === undefined || toQuantity === undefined || !fromUnit || !toUnit) {
+      return undefined;
+    }
+
+    return {
+      from_quantity: fromQuantity,
+      from_unit: fromUnit,
+      to_quantity: toQuantity,
+      to_unit: toUnit,
+    };
+  }
+
+  if (isLegacyProductUnitMapping(mapping)) {
+    if (typeof mapping.unit !== 'string') return undefined;
+
+    const fromUnit = normalizeUnitKey(mapping.unit);
+    const rawBaseUnit = typeof mapping.base_unit === 'string' ? mapping.base_unit : '';
+    const toUnit = normalizeUnitKey(rawBaseUnit || fallbackBaseUnit);
+
+    if (!fromUnit || !toUnit) return undefined;
+
+    // Pasangan `qty`/`base_qty` menang atas `ratio`, karena pasangan itulah
+    // angka asli yang diketik pengguna. Lewat `ratio` saja, "12 pcs = 1 pack"
+    // sudah terlanjur jadi 0.08333333 dan tidak pernah kembali bulat.
+    const qty = parsePositiveFinite(mapping.qty);
+    const baseQty = parsePositiveFinite(mapping.base_qty);
+
+    if (qty !== undefined && baseQty !== undefined) {
       return {
-        unit: normalizeUnit(mapping.unit),
-        base_unit: normalizeUnit(mapping.base_unit || fallbackBaseUnit),
-        ratio: pair.ratio,
-        qty: pair.qty,
-        base_qty: pair.base_qty,
+        from_quantity: qty,
+        from_unit: fromUnit,
+        to_quantity: baseQty,
+        to_unit: toUnit,
       };
-    })
-    .filter((mapping) => mapping.unit && mapping.base_unit && Number.isFinite(mapping.ratio) && mapping.ratio > 0)
-    .filter((mapping) => mapping.unit !== mapping.base_unit)
+    }
+
+    const ratio = parsePositiveFinite(mapping.ratio);
+    if (ratio === undefined) return undefined;
+
+    return {
+      from_quantity: 1,
+      from_unit: fromUnit,
+      to_quantity: ratio,
+      to_unit: toUnit,
+    };
+  }
+
+  return undefined;
+};
+
+export const normalizeProductUnitMappings = (product: ProductUnitShape): ProductUnitMapping[] => {
+  const fallbackBaseUnit = normalizeUnit(product.purchase_unit);
+  const seenRatios = new Map<string, number>();
+
+  const mappings = Array.isArray(product.unit_mappings) ? product.unit_mappings : [];
+
+  return mappings
+    .map((mapping) => normalizeProductUnitMapping(mapping, fallbackBaseUnit))
+    .filter((mapping): mapping is ProductUnitMapping => Boolean(mapping))
     .filter((mapping) => {
-      const key = `${mapping.unit}:${mapping.base_unit}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      if (mapping.from_unit === mapping.to_unit) return false;
+
+      const [firstUnit, secondUnit] = [mapping.from_unit, mapping.to_unit].sort();
+      const key = `${firstUnit}:${secondUnit}`;
+      const directRatio = mapping.to_quantity / mapping.from_quantity;
+      const normalizedRatio = mapping.from_unit === firstUnit ? directRatio : 1 / directRatio;
+      const seenRatio = seenRatios.get(key);
+
+      if (seenRatio !== undefined && areEquivalentRatios(seenRatio, normalizedRatio)) return false;
+      if (seenRatio === undefined) seenRatios.set(key, normalizedRatio);
       return true;
     });
+};
+
+export type ProductUnitRatioResolution =
+  | { status: 'resolved'; ratio: number }
+  | { status: 'disconnected' }
+  | { status: 'inconsistent' };
+
+type ProductUnitRatioOptions = {
+  globalConversions?: ReadonlyArray<Pick<UnitConversion, 'fromUnit' | 'toUnit' | 'ratio'>>;
+};
+
+export const resolveProductUnitRatio = (
+  product: ProductUnitShape,
+  fromUnit: ProductUnit,
+  toUnit: ProductUnit,
+  { globalConversions = [] }: ProductUnitRatioOptions = {},
+): ProductUnitRatioResolution => {
+  const from = normalizeUnit(fromUnit);
+  const to = normalizeUnit(toUnit);
+  if (from === to) return { status: 'resolved', ratio: 1 };
+
+  const mappings = normalizeProductUnitMappings(product);
+  const graph = new Map<ProductUnit, Array<{ unit: ProductUnit; ratio: number }>>();
+
+  const addEdge = (edgeFrom: ProductUnit, edgeTo: ProductUnit, ratio: number) => {
+    const edges = graph.get(edgeFrom) || [];
+    edges.push({ unit: edgeTo, ratio });
+    graph.set(edgeFrom, edges);
+  };
+
+  mappings.forEach((mapping) => {
+    const directRatio = mapping.to_quantity / mapping.from_quantity;
+    if (!isPositiveFinite(directRatio)) return;
+    addEdge(mapping.from_unit, mapping.to_unit, directRatio);
+    addEdge(mapping.to_unit, mapping.from_unit, 1 / directRatio);
+  });
+
+  globalConversions.forEach((conversion) => {
+    const globalFromUnit = normalizeUnitKey(conversion.fromUnit);
+    const globalToUnit = normalizeUnitKey(conversion.toUnit);
+    const ratio = Number(conversion.ratio);
+    if (
+      !globalFromUnit ||
+      !globalToUnit ||
+      globalFromUnit === globalToUnit ||
+      !isPositiveFinite(ratio) ||
+      inferConversionUnitType(globalFromUnit, globalToUnit) === 'package'
+    ) return;
+
+    addEdge(globalFromUnit, globalToUnit, ratio);
+    addEdge(globalToUnit, globalFromUnit, 1 / ratio);
+  });
+
+  const queue: ProductUnit[] = [from];
+  const ratios = new Map<ProductUnit, number>([[from, 1]]);
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const currentUnit = queue[index];
+    const currentRatio = ratios.get(currentUnit);
+    if (currentRatio === undefined) continue;
+
+    for (const edge of graph.get(currentUnit) || []) {
+      const candidateRatio = currentRatio * edge.ratio;
+      if (!isPositiveFinite(candidateRatio)) return { status: 'inconsistent' };
+
+      const knownRatio = ratios.get(edge.unit);
+      if (knownRatio !== undefined) {
+        // More than one path to the same unit must describe the same equation.
+        // Marking it inconsistent is safer than choosing an arbitrary price/stock ratio.
+        if (!areEquivalentRatios(knownRatio, candidateRatio)) return { status: 'inconsistent' };
+        continue;
+      }
+
+      ratios.set(edge.unit, candidateRatio);
+      queue.push(edge.unit);
+    }
+  }
+
+  const ratio = ratios.get(to);
+  return ratio === undefined
+    ? { status: 'disconnected' }
+    : { status: 'resolved', ratio };
 };
 
 export const getProductUnitRatio = (
   product: ProductUnitShape,
   fromUnit: ProductUnit,
   toUnit: ProductUnit,
+  options: ProductUnitRatioOptions = {},
 ): number | undefined => {
-  const from = normalizeUnit(fromUnit);
-  const to = normalizeUnit(toUnit);
-  if (from === to) return 1;
+  const resolution = resolveProductUnitRatio(product, fromUnit, toUnit, options);
+  return resolution.status === 'resolved' ? resolution.ratio : undefined;
+};
 
-  const mappings = normalizeProductUnitMappings(product);
-  const baseUnits = uniqueUnits([product.purchase_unit, ...mappings.map((mapping) => mapping.base_unit)]);
+export const getProductSellableUnits = (product: ProductUnitShape) => {
+  return uniqueUnits([
+    product.selling_unit,
+    ...(product.sellable_units || []),
+    ...getLegacyProductMappingUnits(product.unit_mappings),
+  ]);
+};
 
-  for (const baseUnit of baseUnits) {
-    const fromRatio = from === baseUnit
-      ? 1
-      : mappings.find((mapping) => mapping.unit === from && mapping.base_unit === baseUnit)?.ratio;
-    const toRatio = to === baseUnit
-      ? 1
-      : mappings.find((mapping) => mapping.unit === to && mapping.base_unit === baseUnit)?.ratio;
+export const getAdjacentProductSellableUnit = (
+  product: ProductUnitShape,
+  currentUnit: ProductUnit,
+  direction: 1 | -1,
+) => {
+  const sellableUnits = getProductSellableUnits(product);
+  if (sellableUnits.length <= 1) return sellableUnits[0] ?? normalizeUnit(currentUnit);
 
-    if (fromRatio && toRatio) {
-      return fromRatio / toRatio;
-    }
-  }
+  const normalizedCurrentUnit = normalizeUnit(currentUnit);
+  const currentIndex = sellableUnits.indexOf(normalizedCurrentUnit);
+  if (currentIndex === -1) return sellableUnits[0];
 
-  return undefined;
+  return sellableUnits[(currentIndex + direction + sellableUnits.length) % sellableUnits.length];
+};
+
+export const getProductDocumentUnits = (product: ProductUnitShape) => {
+  return uniqueUnits([
+    product.selling_unit,
+    product.purchase_unit,
+    ...(product.sellable_units || []),
+    ...normalizeProductUnitMappings(product).flatMap((mapping) => [mapping.from_unit, mapping.to_unit]),
+  ]);
+};
+
+/** Satuan yang terpilih otomatis saat produk masuk keranjang atau dokumen. */
+export const getProductDefaultUnit = (product: ProductUnitShape): ProductUnit => {
+  const sellableUnits = getProductSellableUnits(product);
+  const sellingUnit = normalizeUnitKey(product.selling_unit);
+
+  if (sellingUnit && sellableUnits.includes(sellingUnit)) return sellingUnit;
+  return sellableUnits[0] ?? normalizeUnit(product.purchase_unit);
 };
 
 /**
- * Konversi jumlah antar satuan produk lewat perkalian silang, bukan lewat
- * `jumlah * ratio`. Bedanya kelihatan saat satuan dasarnya kemasan besar:
- * `getProductUnitRatio` harus menyerahkan 1/12 sebagai float, sedangkan di sini
- * pembagiannya cuma sekali di akhir sehingga 12 pcs kembali jadi tepat 1 pack.
- * Mengembalikan `undefined` kalau salah satu satuan tidak punya konversi.
+ * Ratio yang tersimpan sebagai float (mis. 1/12) harus bisa kembali jadi angka
+ * bulat yang dulu diketik pengguna, jadi hasil perkalian yang cuma meleset di
+ * digit terakhir dibulatkan.
+ */
+const NEAR_INTEGER_TOLERANCE = 1e-9;
+
+const snapToInteger = (value: number) => {
+  const rounded = Math.round(value);
+  const scale = Math.max(1, Math.abs(value));
+  return Math.abs(value - rounded) <= NEAR_INTEGER_TOLERANCE * scale ? rounded : value;
+};
+
+/**
+ * Konversi jumlah antar satuan produk. Bedanya dengan `jumlah * ratio` mentah
+ * kelihatan saat satuan dasarnya kemasan: ratio pcs→pack adalah 1/12, dan 12
+ * pcs harus kembali tepat 1 pack, bukan 0.999999. Mengembalikan `undefined`
+ * kalau satuannya tidak nyambung atau konversinya saling bertentangan.
  */
 export const convertProductQuantity = (
   product: ProductUnitShape,
   quantity: number,
   fromUnit: ProductUnit,
   toUnit: ProductUnit,
+  options: ProductUnitRatioOptions = {},
 ): number | undefined => {
-  const from = normalizeUnit(fromUnit);
-  const to = normalizeUnit(toUnit);
-  if (from === to) return quantity;
+  const ratio = getProductUnitRatio(product, fromUnit, toUnit, options);
+  if (ratio === undefined) return undefined;
 
-  const mappings = normalizeProductUnitMappings(product);
-  const baseUnits = uniqueUnits([product.purchase_unit, ...mappings.map((mapping) => mapping.base_unit)]);
-
-  const findPair = (unit: string, baseUnit: string): UnitMappingPair | undefined => {
-    if (unit === baseUnit) return { qty: 1, base_qty: 1, ratio: 1 };
-    return mappings.find((mapping) => mapping.unit === unit && mapping.base_unit === baseUnit);
-  };
-
-  for (const baseUnit of baseUnits) {
-    const fromPair = findPair(from, baseUnit);
-    const toPair = findPair(to, baseUnit);
-
-    if (fromPair && toPair) {
-      return (quantity * fromPair.base_qty * toPair.qty) / (fromPair.qty * toPair.base_qty);
-    }
-  }
-
-  return undefined;
+  return snapToInteger(quantity * ratio);
 };
 
-/**
- * Satu-satunya daftar satuan yang boleh dipakai produk ini, dipakai bersama
- * oleh POS, penjualan, pembelian, dan stok masuk.
- */
-export const getProductUnits = (product: ProductUnitShape) => {
-  return uniqueUnits([
-    normalizeUnit(product.purchase_unit),
-    ...normalizeProductUnitMappings(product).map((mapping) => mapping.unit),
-  ]);
-};
-
-/** Satuan yang terpilih otomatis saat produk masuk keranjang/dokumen. */
-export const getProductDefaultUnit = (product: ProductUnitShape): ProductUnit => {
-  const units = getProductUnits(product);
-  const sellingUnit = normalizeUnitKey(product.selling_unit);
-
-  if (sellingUnit && units.includes(sellingUnit)) return sellingUnit;
-  return units[0] ?? normalizeUnit(product.purchase_unit);
-};
-
-export const getAdjacentProductUnit = (
-  product: ProductUnitShape,
-  currentUnit: ProductUnit,
-  direction: 1 | -1,
-) => {
-  const units = getProductUnits(product);
-  if (units.length <= 1) return units[0] ?? normalizeUnit(currentUnit);
-
-  const normalizedCurrentUnit = normalizeUnit(currentUnit);
-  const currentIndex = units.indexOf(normalizedCurrentUnit);
-  if (currentIndex === -1) return units[0];
-
-  return units[(currentIndex + direction + units.length) % units.length];
-};
-
-export interface LegacyUnitMappingInput extends ProductUnitShape {
-  /** Kolom lama yang menyimpan satuan tanpa ratio eksplisit. */
-  sellable_units?: ProductUnit[];
-}
-
-export interface LegacyUnitMappingResult {
-  unitMappings: ProductUnitMapping[];
-  /** Satuan lama yang rationya tidak bisa ditentukan, jadi tidak ikut dibawa. */
-  droppedUnits: ProductUnit[];
-}
-
-/**
- * Mengangkat satuan dari kolom lama `sellable_units` menjadi baris konversi
- * eksplisit. Ratio diambil dari konversi global (mis. 1 kg = 1000 gram) lewat
- * `resolveRatio`; satuan yang tidak punya ratio tidak dibawa, karena dulu ia
- * jatuh ke ratio 1 dan membuat stok tercatat salah.
- */
-export const buildUnitMappingsFromLegacyUnits = (
-  product: LegacyUnitMappingInput,
-  resolveRatio: (unit: ProductUnit, baseUnit: ProductUnit) => number | undefined,
-): LegacyUnitMappingResult => {
-  const baseUnit = normalizeUnit(product.purchase_unit);
-  const unitMappings = normalizeProductUnitMappings(product);
-  const mappedUnits = new Set(unitMappings.map((mapping) => mapping.unit));
-  const droppedUnits: ProductUnit[] = [];
-
-  const legacyUnits = uniqueUnits([product.selling_unit, ...(product.sellable_units || [])]);
-
-  for (const unit of legacyUnits) {
-    if (unit === baseUnit || mappedUnits.has(unit)) continue;
-
-    const ratio = Number(resolveRatio(unit, baseUnit));
-    if (!Number.isFinite(ratio) || ratio <= 0) {
-      droppedUnits.push(unit);
-      continue;
-    }
-
-    const pair = buildUnitMappingPair(ratio);
-    unitMappings.push({ unit, base_unit: baseUnit, ratio: pair.ratio, qty: pair.qty, base_qty: pair.base_qty });
-    mappedUnits.add(unit);
-  }
-
-  return { unitMappings, droppedUnits };
+export const buildSellableUnitsFromMappings = (product: ProductUnitShape) => {
+  return getProductSellableUnits({
+    ...product,
+    sellable_units: product.sellable_units && product.sellable_units.length > 0
+      ? product.sellable_units
+      : [product.selling_unit],
+  });
 };

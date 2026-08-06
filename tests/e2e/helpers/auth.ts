@@ -58,9 +58,15 @@ export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
   await page.getByLabel('PIN', { exact: true }).fill(pin);
   await page.getByLabel('Konfirmasi PIN').fill(pin);
   await page.getByRole('button', { name: 'Lanjut ke Pengaturan Usaha' }).click();
-  await page.getByRole('button', { name: 'Buat Owner' }).click();
 
-  await expect(page.getByLabel(/Profil login|Logged-in profile/)).toBeVisible();
+  const createOwnerButton = page.getByRole('button', { name: 'Buat Owner' });
+  const loggedInProfile = page.getByLabel(/Profil login|Logged-in profile/);
+  await expect(createOwnerButton.or(loggedInProfile)).toBeVisible();
+  if (await createOwnerButton.isVisible()) {
+    await createOwnerButton.click();
+  }
+
+  await expect(loggedInProfile).toBeVisible();
   await normalizeOwnerAccountingBaseline(page);
 }
 

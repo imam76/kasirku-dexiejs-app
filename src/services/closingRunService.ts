@@ -126,6 +126,29 @@ const hasDraftJournalInRange = async (startDate: string, endDate: string) => {
   ));
 };
 
+const countEstimatedHppItemsInRange = async (startDate: string, endDate: string) => {
+  const start = toDateOnly(startDate);
+  const end = toDateOnly(endDate);
+  const items = await db.transactionItems
+    .where('hpp_status')
+    .anyOf(['ESTIMATED', 'PENDING'])
+    .toArray();
+
+  return items.filter((item) => {
+    const date = toDateOnly(item.created_at);
+    return date >= start && date <= end;
+  }).length;
+};
+
+const countUnfinalizedInventoryLots = async (endDate: string) => {
+  const end = toDateOnly(endDate);
+  const lots = await db.inventoryLots
+    .filter((lot) => (lot.cost_status ?? 'FINAL') !== 'FINAL' && Number(lot.quantity_remaining || 0) > 0)
+    .toArray();
+
+  return lots.filter((lot) => toDateOnly(lot.received_at) <= end).length;
+};
+
 const getPeriodsWithinFiscalYear = async (fiscalYear: AccountingFiscalYear) => {
   const start = toDateOnly(fiscalYear.start_date);
   const end = toDateOnly(fiscalYear.end_date);
@@ -283,6 +306,26 @@ const buildPeriodPrechecks = async (
     ok: !draft,
     blocking: true,
     message: 'Tidak ada jurnal draft/unposted di periode ini.',
+  });
+
+  const estimatedHppCount = await countEstimatedHppItemsInRange(period.start_date, period.end_date);
+  prechecks.push({
+    key: 'no_estimated_hpp',
+    ok: estimatedHppCount === 0,
+    blocking: true,
+    message: estimatedHppCount === 0
+      ? 'Tidak ada item terjual dengan HPP sementara di periode ini.'
+      : `Masih ada ${estimatedHppCount} item terjual dengan HPP sementara. Selesaikan rekonsiliasi biaya pembelian sebelum tutup buku, karena koreksinya tidak bisa masuk setelah periode ditutup.`,
+  });
+
+  const unfinalizedLotCount = await countUnfinalizedInventoryLots(period.end_date);
+  prechecks.push({
+    key: 'no_estimated_inventory',
+    ok: unfinalizedLotCount === 0,
+    blocking: false,
+    message: unfinalizedLotCount === 0
+      ? 'Tidak ada sisa stok dengan harga beli sementara.'
+      : `Masih ada ${unfinalizedLotCount} lot stok dengan harga beli sementara; nilai persediaan akhir periode masih estimasi.`,
   });
 
   const setup = getSetupConfig();

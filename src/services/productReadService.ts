@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { isTauriRuntime, productPostgresAdapter, type RemoteProductDto } from '@/services/postgresAdapter';
-import type { Product, ProductUnitMapping, WholesalePrice } from '@/types';
-import { getProductUnits } from '@/utils/productUnits';
+import type { Product, ProductUnit, ProductUnitMapping, WholesalePrice } from '@/types';
+import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 
 export interface ProductReadSyncResult {
   fetched: number;
@@ -25,19 +25,9 @@ const isWholesalePrice = (value: unknown): value is WholesalePrice => {
   const candidate = value as Partial<WholesalePrice>;
   return (
     typeof candidate.min_quantity === 'number' &&
+    (candidate.unit === undefined || typeof candidate.unit === 'string') &&
     typeof candidate.price === 'number' &&
     (candidate.price_type === undefined || candidate.price_type === 'unit' || candidate.price_type === 'bundle')
-  );
-};
-
-const isProductUnitMapping = (value: unknown): value is ProductUnitMapping => {
-  if (!value || typeof value !== 'object') return false;
-
-  const candidate = value as Partial<ProductUnitMapping>;
-  return (
-    typeof candidate.unit === 'string' &&
-    typeof candidate.base_unit === 'string' &&
-    typeof candidate.ratio === 'number'
   );
 };
 
@@ -46,41 +36,77 @@ const mapWholesalePrices = (wholesalePrices: unknown): WholesalePrice[] | undefi
   return wholesalePrices.filter(isWholesalePrice);
 };
 
-const mapUnitMappings = (unitMappings: unknown): ProductUnitMapping[] | undefined => {
+const mapProductUnits = (
+  sellableUnits: unknown,
+  fallbackSellingUnit: ProductUnit,
+  purchaseUnit: ProductUnit,
+  unitMappings: unknown,
+): ProductUnit[] => {
+  const units = Array.isArray(sellableUnits)
+    ? sellableUnits.filter((unit): unit is ProductUnit => typeof unit === 'string')
+    : [];
+  return getProductSellableUnits({
+    purchase_unit: purchaseUnit,
+    selling_unit: fallbackSellingUnit,
+    sellable_units: units,
+    unit_mappings: unitMappings,
+  });
+};
+
+const mapUnitMappings = (
+  unitMappings: unknown,
+  purchaseUnit: ProductUnit,
+  sellingUnit: ProductUnit,
+  sellableUnits: ProductUnit[],
+): ProductUnitMapping[] | undefined => {
   if (!Array.isArray(unitMappings)) return undefined;
-  return unitMappings.filter(isProductUnitMapping);
+  return normalizeProductUnitMappings({
+    purchase_unit: purchaseUnit,
+    selling_unit: sellingUnit,
+    sellable_units: sellableUnits,
+    unit_mappings: unitMappings,
+  });
 };
 
 const mapRemoteProductToLocal = (
   remoteProduct: RemoteProductDto,
   syncedAt: string,
-): Product => ({
-  id: remoteProduct.id,
-  name: remoteProduct.name,
-  category: remoteProduct.category ?? undefined,
-  purchase_unit: remoteProduct.purchase_unit,
-  selling_unit: remoteProduct.selling_unit,
-  purchase_price: remoteProduct.purchase_price,
-  selling_price: remoteProduct.selling_price,
-  stock: remoteProduct.stock,
-  sku: remoteProduct.sku ?? undefined,
-  product_type: remoteProduct.product_type ?? 'FINISHED_GOOD',
-  is_visible_in_pos: remoteProduct.is_visible_in_pos ?? true,
-  wholesale_prices: mapWholesalePrices(remoteProduct.wholesale_prices),
-  // Satuan yang dipakai transaksi diturunkan dari unit_mappings, jadi kolom
-  // lama ini hanya cerminannya supaya data remote tetap konsisten di lokal.
-  sellable_units: getProductUnits({
+): Product => {
+  const sellableUnits = mapProductUnits(
+    remoteProduct.sellable_units,
+    remoteProduct.selling_unit,
+    remoteProduct.purchase_unit,
+    remoteProduct.unit_mappings,
+  );
+
+  return {
+    id: remoteProduct.id,
+    name: remoteProduct.name,
+    category: remoteProduct.category ?? undefined,
     purchase_unit: remoteProduct.purchase_unit,
-    unit_mappings: mapUnitMappings(remoteProduct.unit_mappings),
-  }),
-  unit_mappings: mapUnitMappings(remoteProduct.unit_mappings),
-  created_at: remoteProduct.created_at,
-  updated_at: remoteProduct.updated_at,
-  sync_status: 'synced',
-  sync_error: undefined,
-  last_synced_at: syncedAt,
-  remote_updated_at: remoteProduct.updated_at,
-});
+    selling_unit: remoteProduct.selling_unit,
+    purchase_price: remoteProduct.purchase_price,
+    selling_price: remoteProduct.selling_price,
+    stock: remoteProduct.stock,
+    sku: remoteProduct.sku ?? undefined,
+    product_type: remoteProduct.product_type ?? 'FINISHED_GOOD',
+    is_visible_in_pos: remoteProduct.is_visible_in_pos ?? true,
+    wholesale_prices: mapWholesalePrices(remoteProduct.wholesale_prices),
+    sellable_units: sellableUnits,
+    unit_mappings: mapUnitMappings(
+      remoteProduct.unit_mappings,
+      remoteProduct.purchase_unit,
+      remoteProduct.selling_unit,
+      sellableUnits,
+    ),
+    created_at: remoteProduct.created_at,
+    updated_at: remoteProduct.updated_at,
+    sync_status: 'synced',
+    sync_error: undefined,
+    last_synced_at: syncedAt,
+    remote_updated_at: remoteProduct.updated_at,
+  };
+};
 
 const hasLocalUnsyncedChanges = (product: Product) => (
   product.sync_status === 'pending' || product.sync_status === 'failed'

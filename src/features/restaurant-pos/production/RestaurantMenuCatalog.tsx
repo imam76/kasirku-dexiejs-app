@@ -9,7 +9,7 @@ import {
 } from '@/services/restaurantPosService';
 import type { Product, Promo, RestaurantOrderRecord } from '@/types';
 import { formatCategory, formatCurrency } from '@/utils/formatters';
-import { getPrice } from '@/utils/pricing';
+import { getProductDisplayPricing } from '@/utils/pricing';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 import { isProductVisibleInPos } from '@/utils/productAvailability';
 
@@ -126,7 +126,7 @@ export function RestaurantMenuCatalog({
                 <p className="mt-1 truncate text-[10px] font-medium text-slate-400">SKU · {product.sku || '-'}</p>
                 <div className="mt-3 flex items-end justify-between gap-2">
                   <div>
-                    <p className="text-sm font-black text-slate-900">Rp {formatCurrency(getPrice(product, 1))}</p>
+                    <p className="text-sm font-black text-slate-900">Rp {formatCurrency(getProductDisplayPricing(product).basePrice)}</p>
                     <p className="mt-0.5 text-[10px] text-slate-400">
                       {outOfStock ? t('restaurantPos.outOfStock') : `/ ${product.selling_unit}`}
                     </p>

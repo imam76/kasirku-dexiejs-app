@@ -7,7 +7,7 @@ import { usePostgresConnectionStore } from '@/store/postgresConnectionStore';
 import { resolveSetupConfigReconciliation } from '@/utils/setupConfigReconciliation';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
-export const CURRENT_MODULE_CATALOG_VERSION = 11;
+export const CURRENT_MODULE_CATALOG_VERSION = 13;
 const LEGACY_SETTINGS_MODULES = ['POS_TRANSACTION', 'PRODUCT', 'CASH_FLOW'];
 const ACCOUNTING_BASELINE_TRIGGER_MODULES = new Set([
   'CHART_OF_ACCOUNTS',
@@ -92,6 +92,12 @@ const migrateEnabledModules = (modules: string[]): string[] => {
     enabledModules.add('STOCK_OPNAME');
   }
   if (enabledModules.has('POS_TRANSACTION')) {
+    // POS kasir dan POS resto memakai satu entitlement sebelum catalog v13.
+    // Pertahankan akses pelanggan lama saat entitlement resto dipisahkan.
+    enabledModules.add('POS_RESTAURANT');
+    enabledModules.add('PAYMENT_METHOD');
+  }
+  if (enabledModules.has('POS_RESTAURANT')) {
     enabledModules.add('PAYMENT_METHOD');
   }
   if (LEGACY_SETTINGS_MODULES.some((moduleCode) => enabledModules.has(moduleCode))) {
@@ -119,6 +125,7 @@ const migrateEnabledModules = (modules: string[]): string[] => {
     [
       'KOPERASI_REPORT_CASH',
       'KOPERASI_REPORT_DAILY_TARGET',
+      'KOPERASI_REPORT_DAILY_FIELD_CASH',
       'KOPERASI_REPORT_DAILY_STORTING',
       'KOPERASI_REPORT_DAILY_DROP',
       'KOPERASI_REPORT_WEEKLY_DROP',

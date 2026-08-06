@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Product, CartItem } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
-import { getProductDefaultUnit, getProductUnits } from '@/utils/productUnits';
+import { getProductDefaultUnit, getProductSellableUnits } from '@/utils/productUnits';
 import { isProductVisibleInPos } from '@/utils/productAvailability';
 
 export type TransactionError =
@@ -269,7 +269,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (!item) return { success: false };
 
     // Satuan baru harus punya konversi, kalau tidak stok tercatat salah
-    const productUnits = getProductUnits(item.product);
+    const productUnits = getProductSellableUnits(item.product);
     if (!productUnits.includes(newUnit)) {
       return {
         success: false,

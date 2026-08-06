@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
+import { markProductVerified } from '@/services/posQuickItemService';
 import type { Product } from '@/types';
 import StockTable from '@/components/StockTable';
 import StockProductModal from './StockProductModal';
@@ -84,6 +85,15 @@ export default function StockManagement() {
 
   const handleOpeningStockClick = () => {
     void navigate({ to: '/finance/opening-balances/inventory' });
+  };
+
+  const handleVerifyProduct = async (product: Product) => {
+    try {
+      const verified = await markProductVerified(product.id);
+      message.success(t('stock.verifySuccess', { name: verified.name }));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('stock.verifyFailed'));
+    }
   };
 
   /** Satu tabel, dua bungkus. Bedanya cuma cara file-nya ditulis. */
@@ -573,6 +583,7 @@ export default function StockManagement() {
         onEdit={handleEditProduct}
         onDelete={handleDelete}
         onOpeningStock={handleOpeningStockClick}
+        onVerify={handleVerifyProduct}
       />
     </Card>
   );

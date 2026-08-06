@@ -1,6 +1,6 @@
 [package]
 name = "frayukti"
-version = "1.0.49"
+version = "1.0.59"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -49,6 +49,7 @@ tracing-appender = "0.2"
 serialport = { version = "4", default-features = false }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-autostart = "2"
 
 # Printer thermal USB di Windows umumnya di-bind ke usbprint.sys dan hanya muncul
 # sebagai printer spooler (port USB001), bukan sebagai COM port, sehingga tidak

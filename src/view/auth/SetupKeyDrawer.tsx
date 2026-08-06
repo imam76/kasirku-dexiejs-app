@@ -35,11 +35,13 @@ import {
   ShoppingCart,
   Store,
   Unlock,
+  Users,
   WifiOff,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DEFAULT_SELECTED_MODULES, SETUP_MODULE_GROUPS } from '@/constants/setupModules';
 import {
+  CURRENT_MODULE_CATALOG_VERSION,
   getLicenseFingerprint,
   getRemoteSetupConfig,
   getSetupConfig,
@@ -70,6 +72,7 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
   BarChart3,
   Landmark,
   Store,
+  Users,
 };
 
 const WIZARD_BODY_HEIGHT = 'calc(100vh - 182px)';
@@ -528,6 +531,7 @@ export const SetupKeyDrawer = ({ open, onClose, forceMode = false }: SetupKeyDra
         enabledModules: selectedModules,
         configuredAt: new Date().toISOString(),
         configuredBy: licenseFingerprint,
+        moduleCatalogVersion: CURRENT_MODULE_CATALOG_VERSION,
       });
 
       message.success('Konfigurasi module berhasil disimpan!');

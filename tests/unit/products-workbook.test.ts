@@ -27,7 +27,7 @@ const product: Product = {
   wholesale_prices: [{ min_quantity: 12, price: 11_000, price_type: 'bundle' }],
   sellable_units: ['pack', 'pcs'],
   // Sisi kiri bukan 1, jadi kolom `jumlah_2` ikut terbawa.
-  unit_mappings: [{ unit: 'pcs', base_unit: 'pack', ratio: 1 / 12, qty: 12, base_qty: 1 }],
+  unit_mappings: [{ from_quantity: 12, from_unit: 'pcs', to_quantity: 1, to_unit: 'pack' }],
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
 };
