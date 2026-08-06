@@ -93,6 +93,31 @@ export const createStockSchema = (
       });
     }
 
+    // Kemasan menampung satuan hitungan, tidak pernah sebaliknya. Tanpa ini
+    // form menerima "1 pcs = 12 box", yang membaca satu pcs berisi dua belas
+    // box dan bikin stok tercatat 12 kali lipat.
+    if (isPackageOverCount && mapping.ratio <= 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['unit_mappings', index, 'base_qty'],
+        message: t('stock.validation.packageMustBeLarger', {
+          packageUnit: mapping.unit,
+          countUnit: data.purchase_unit,
+        }),
+      });
+    }
+
+    if (isCountUnderPackage && mapping.ratio >= 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['unit_mappings', index, 'base_qty'],
+        message: t('stock.validation.packageMustBeLarger', {
+          packageUnit: data.purchase_unit,
+          countUnit: mapping.unit,
+        }),
+      });
+    }
+
     const key = `${mapping.unit}:${mapping.base_unit}`;
     if (seen.has(key)) {
       ctx.addIssue({

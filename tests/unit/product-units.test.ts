@@ -279,6 +279,29 @@ describe('validasi form produk', () => {
     expect(result.success).toBe(true);
   });
 
+  test('menolak kemasan yang ditulis lebih kecil dari satuan hitungan', () => {
+    const result = schema.safeParse(formData({
+      purchase_unit: 'box',
+      selling_unit: 'pcs',
+      // "1 pcs = 12 box" — kebalik, satu pcs tidak mungkin berisi 12 box.
+      unit_mappings: [{ unit: 'pcs', base_unit: 'box', ratio: 12, qty: 1, base_qty: 12 }],
+    }));
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.path.join('.') === 'unit_mappings.0.base_qty')).toBe(true);
+  });
+
+  test('menolak kemasan di atas satuan hitungan yang isinya kurang dari satu', () => {
+    const result = schema.safeParse(formData({
+      purchase_unit: 'pcs',
+      selling_unit: 'pcs',
+      unit_mappings: [{ unit: 'box', base_unit: 'pcs', ratio: 1 / 12, qty: 12, base_qty: 1 }],
+    }));
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.path.join('.') === 'unit_mappings.0.base_qty')).toBe(true);
+  });
+
   test('tetap menolak pasangan kategori yang tidak sepadan', () => {
     const result = schema.safeParse(formData({
       purchase_unit: 'kg',

@@ -331,10 +331,19 @@ export default function StockProductModal({
    */
   const buildMappingPairFor = useCallback((unit: string) => {
     const globalRatio = getGlobalRatio(unit, purchaseUnit);
-    return globalRatio === undefined
-      ? { qty: 1, base_qty: 0, ratio: 0 }
-      : buildUnitMappingPair(globalRatio);
-  }, [getGlobalRatio, purchaseUnit]);
+    if (globalRatio !== undefined) return buildUnitMappingPair(globalRatio);
+
+    // Tanpa ratio global, angka 1 ditaruh di sisi yang pasti bernilai satu:
+    // satuan hitungan selalu lebih kecil dari kemasan, jadi barisnya dimulai
+    // sebagai "__ pcs = 1 box" dan pengguna tinggal mengisi jumlah ecerannya.
+    // Sisi yang kosong sengaja 0 supaya barisnya terhitung belum lengkap.
+    const isCountUnderPackageBase = getUnitCategory(unit) === 'count'
+      && getUnitCategory(purchaseUnit) === 'package';
+
+    return isCountUnderPackageBase
+      ? { qty: 0, base_qty: 1, ratio: 0 }
+      : { qty: 1, base_qty: 0, ratio: 0 };
+  }, [getGlobalRatio, getUnitCategory, purchaseUnit]);
 
   const handleAddUnitMapping = useCallback(() => {
     const usedUnits = new Set(unitMappings.map((mapping) => normalizeUnitKey(mapping.unit)));
@@ -354,12 +363,13 @@ export default function StockProductModal({
     const normalizedUnit = normalizeUnitKey(unit);
     setValue(`unit_mappings.${index}.unit`, normalizedUnit, { shouldDirty: true, shouldValidate: true });
 
+    // Ganti satuan berarti ganti konversi, jadi angkanya ditulis ulang — juga
+    // saat ratio globalnya tidak ada, supaya sisi yang harus bernilai 1 ikut
+    // berpindah mengikuti satuan barunya.
     const pair = buildMappingPairFor(normalizedUnit);
-    if (pair.ratio > 0) {
-      setValue(`unit_mappings.${index}.qty`, pair.qty, { shouldDirty: true, shouldValidate: true });
-      setValue(`unit_mappings.${index}.base_qty`, pair.base_qty, { shouldDirty: true, shouldValidate: true });
-      setValue(`unit_mappings.${index}.ratio`, pair.ratio, { shouldDirty: true, shouldValidate: true });
-    }
+    setValue(`unit_mappings.${index}.qty`, pair.qty, { shouldDirty: true, shouldValidate: true });
+    setValue(`unit_mappings.${index}.base_qty`, pair.base_qty, { shouldDirty: true, shouldValidate: true });
+    setValue(`unit_mappings.${index}.ratio`, pair.ratio, { shouldDirty: true, shouldValidate: true });
   }, [buildMappingPairFor, setValue]);
 
   /**
@@ -829,28 +839,6 @@ export default function StockProductModal({
                 ),
                 children: (
                   <div className="space-y-4">
-                    <FieldContainer
-                      label={t('stock.form.defaultUnit')}
-                      error={errors.selling_unit as FieldError | undefined}
-                      help={t('stock.form.defaultUnitHelp')}
-                      required
-                      requiredLabel={t('stock.form.requiredLabel')}
-                    >
-                      <Controller
-                        name="selling_unit"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            value={field.value || undefined}
-                            onChange={field.onChange}
-                            className="w-full"
-                            placeholder={t('stock.form.defaultUnitPlaceholder')}
-                            options={defaultUnitOptions}
-                          />
-                        )}
-                      />
-                    </FieldContainer>
-
                     <Alert
                       type="info"
                       showIcon
@@ -1011,6 +999,38 @@ export default function StockProductModal({
                         ) : null}
                       </div>
                     </div>
+
+                    {/*
+                      Selama produk cuma punya satuan utama, satuan default
+                      transaksi tidak punya pilihan lain selain satuan utama itu
+                      sendiri — jadi menampilkannya hanya menggandakan kolom di
+                      tab Produk. Pilihannya baru muncul setelah ada baris
+                      konversi, dan ditaruh di bawah daftar karena default cuma
+                      bisa dipilih dari satuan yang sudah didefinisikan.
+                    */}
+                    {productUnits.length > 1 ? (
+                      <FieldContainer
+                        label={t('stock.form.defaultUnit')}
+                        error={errors.selling_unit as FieldError | undefined}
+                        help={t('stock.form.defaultUnitHelp')}
+                        required
+                        requiredLabel={t('stock.form.requiredLabel')}
+                      >
+                        <Controller
+                          name="selling_unit"
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              value={field.value || undefined}
+                              onChange={field.onChange}
+                              className="w-full"
+                              placeholder={t('stock.form.defaultUnitPlaceholder')}
+                              options={defaultUnitOptions}
+                            />
+                          )}
+                        />
+                      </FieldContainer>
+                    ) : null}
                   </div>
                 ),
               },
