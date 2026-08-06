@@ -3,13 +3,15 @@ import {
   isSetupConfigured,
 } from "@/services/setupKeyService";
 import { isTauriRuntime } from "@/utils/export/platform";
+import { JoinExistingHostModal } from "@/view/auth/JoinExistingHostModal";
 import { Login } from "@/view/auth/Login";
 import { SetupKeyDrawer } from "@/view/auth/SetupKeyDrawer";
 import { SetupOwner } from "@/view/auth/SetupOwner";
-import { Spin } from "antd";
+import { Button, Spin } from "antd";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   BarChart3,
+  ServerCog,
   ShieldCheck,
   Store,
   Zap,
@@ -33,7 +35,7 @@ const LoadingScreen = () => (
   </div>
 );
 
-const SetupWelcome = () => (
+const SetupWelcome = ({ onJoinHost }: { onJoinHost: () => void }) => (
   <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 p-4">
     <div className="max-w-md text-center">
       <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg">
@@ -85,6 +87,15 @@ const SetupWelcome = () => (
           </div>
         </div>
       </div>
+
+      <Button
+        className="!mt-6"
+        size="large"
+        icon={<ServerCog size={16} />}
+        onClick={onJoinHost}
+      >
+        Sudah ada host? Hubungkan perangkat ini
+      </Button>
     </div>
   </div>
 );
@@ -103,6 +114,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   // hasOwner di bawah selalu merender <Login /> sehingga nilai ini diabaikan.
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [showSetupDrawer, setShowSetupDrawer] = useState(false);
+  const [showJoinHostModal, setShowJoinHostModal] = useState(false);
   const [setupConfigured, setSetupConfigured] = useState(isSetupConfigured);
   const setupRequired = isTauri && !setupConfigured;
 
@@ -146,6 +158,12 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     setOwnerCheckRevision((current) => current + 1);
   }, []);
 
+  const handleHostJoined = useCallback(() => {
+    setShowJoinHostModal(false);
+    setSetupConfigured(isSetupConfigured());
+    setOwnerCheckRevision((current) => current + 1);
+  }, []);
+
   if (isLoading || hasOwner === null) {
     return <LoadingScreen />;
   }
@@ -157,7 +175,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
   // Unauthenticated — render Login/SetupOwner + hidden SetupKeyDrawer
   const authContent = (() => {
     if (setupRequired) {
-      return <SetupWelcome />;
+      return <SetupWelcome onJoinHost={() => setShowJoinHostModal(true)} />;
     }
 
     if (!hasOwner) {
@@ -188,6 +206,11 @@ export const AuthGate = ({ children }: AuthGateProps) => {
         open={showSetupDrawer}
         onClose={handleDrawerClose}
         forceMode={setupRequired}
+      />
+      <JoinExistingHostModal
+        open={showJoinHostModal}
+        onClose={() => setShowJoinHostModal(false)}
+        onJoined={handleHostJoined}
       />
     </>
   );
