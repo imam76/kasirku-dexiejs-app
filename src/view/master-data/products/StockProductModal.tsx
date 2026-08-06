@@ -66,6 +66,10 @@ type Props = {
   onCancel: () => void;
   onSave: () => void | Promise<void>;
   setIsModalOpen: (open: boolean) => void;
+  title?: ReactNode;
+  submitLabel?: string;
+  /** Konten tambahan di atas tab, mis. panel deteksi duplikat produk saat quick-create. */
+  topContent?: ReactNode;
 };
 
 type FieldContainerProps = {
@@ -105,6 +109,9 @@ export default function StockProductModal({
   reset,
   onCancel,
   onSave,
+  title,
+  submitLabel,
+  topContent,
 }: Props) {
   const { t } = useI18n();
   const screens = useBreakpoint();
@@ -622,7 +629,7 @@ export default function StockProductModal({
         lebar bawaan 520px milik antd bikin isinya berhimpitan.
       */}
       <Modal
-        title={editingId ? t('stock.editProduct') : t('stock.newProduct')}
+        title={title ?? (editingId ? t('stock.editProduct') : t('stock.newProduct'))}
         open={open}
         onCancel={onCancel}
         footer={null}
@@ -633,6 +640,7 @@ export default function StockProductModal({
         centered={!!screens.sm}
       >
         <form onSubmit={onSave} className="mt-6">
+          {topContent}
           <div className="mb-4 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-gray-600">
             <span className="mr-1 font-bold text-red-500">*</span>
             {t('stock.form.requiredHint')}
@@ -796,6 +804,29 @@ export default function StockProductModal({
                               formatter={formatCurrencyInput}
                               parser={parseCurrencyInput}
                               step={0.01}
+                              min={0}
+                            />
+                          )}
+                        />
+                      </FieldContainer>
+
+                      <FieldContainer
+                        label={t('stock.form.purchaseQuantity')}
+                        error={errors.purchase_quantity}
+                        help={t('stock.form.priceOptionalHelp')}
+                      >
+                        <Controller
+                          name="purchase_quantity"
+                          control={control}
+                          render={({ field }) => (
+                            <InputNumber
+                              data-testid="stock-product-purchase-quantity"
+                              inputMode="decimal"
+                              value={field.value}
+                              onBlur={field.onBlur}
+                              onChange={(value) => field.onChange(value ?? undefined)}
+                              className="w-full"
+                              placeholder={t('stock.form.purchaseQuantityPlaceholder')}
                               min={0}
                             />
                           )}
@@ -1183,7 +1214,7 @@ export default function StockProductModal({
               onClick={handleSave}
               className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm text-white transition-colors hover:bg-green-700"
             >
-              {t('stock.form.save')}
+              {submitLabel ?? t('stock.form.save')}
             </button>
           </div>
         </form>

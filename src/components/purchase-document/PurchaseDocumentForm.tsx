@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, DatePicker, Input, InputNumber, Segmented, Select, Tooltip } from 'antd';
+import { App, Button, Card, DatePicker, Input, InputNumber, Segmented, Select, Tooltip } from 'antd';
 import { Settings } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import type { DefaultValues } from 'react-hook-form';
@@ -9,17 +9,19 @@ import dayjs from '@/lib/dayjs';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
+import { buildQuickCreateDefaultValues, useProductQuickCreateForm } from '@/hooks/useProductQuickCreateForm';
 import type { TranslationKey } from '@/i18n/messages';
 import { DocumentDiscountSettingsModal } from '@/components/DocumentDiscountSettingsModal';
 import { DocumentCurrencyFields } from '@/components/DocumentCurrencyFields';
 import { db } from '@/lib/db';
+import type { StockFormData } from '@/lib/validations/stock';
+import { createProductRecord } from '@/services/productCreateService';
 import { getCachedBaseCurrency } from '@/services/baseCurrencyService';
 import type {
   Contact,
   CurrencyRate,
   Department,
   Product,
-  ProductCategory,
   Project,
   PromoType,
   PurchaseDocument,
@@ -43,7 +45,8 @@ import {
 } from '@/utils/documentCurrency';
 import { PurchaseDocumentLineItems } from './PurchaseDocumentLineItems';
 
-import { BasicProductFormModal } from '@/components/BasicProductFormModal';
+import { getPurchasePrice } from '@/utils/pricing';
+import StockProductModal from '@/view/master-data/products/StockProductModal';
 
 interface PurchaseDocumentFormProps {
   config: PurchaseDocumentConfig;
@@ -58,7 +61,6 @@ interface PurchaseDocumentFormProps {
   warehouses: Warehouse[];
   products: Product[];
   onSubmit: (input: { document: Partial<PurchaseDocument>; items: PurchaseDocumentItem[] }) => Promise<void>;
-  onCreateBasicProduct: (input: { name: string; sku?: string; category?: ProductCategory; unit: string; purchasePrice?: number }) => Product | undefined;
   onCancel?: () => void;
   submitting?: boolean;
 }
@@ -164,11 +166,11 @@ export const PurchaseDocumentForm = ({
   warehouses,
   products,
   onSubmit,
-  onCreateBasicProduct,
   onCancel,
   submitting,
 }: PurchaseDocumentFormProps) => {
   const { t } = useI18n();
+  const { message } = App.useApp();
   const { baseCurrency, baseCurrencyCode } = useBaseCurrency();
   const defaultCurrencyAppliedRef = useRef(Boolean(initialData?.document));
   const documentId = initialData?.document?.id ?? 'draft';
@@ -177,8 +179,9 @@ export const PurchaseDocumentForm = ({
 
   const [createProductOpen, setCreateProductOpen] = useState(false);
   const [newProductName, setNewProductName] = useState('');
-  const [newProductSku, setNewProductSku] = useState('');
+  const [newProductBarcode, setNewProductBarcode] = useState('');
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const quickCreateForm = useProductQuickCreateForm();
 
   const {
     control,
@@ -203,48 +206,85 @@ export const PurchaseDocumentForm = ({
   const watchedExchangeRateBasis = useWatch({ control, name: 'exchange_rate_basis' });
   const watchedExchangeRateDate = useWatch({ control, name: 'exchange_rate_date' });
 
+  const activeLineItem = useMemo(
+    () => items.find((item) => item.id === activeLineId),
+    [items, activeLineId],
+  );
+
   const handleCreateProductRequest = useCallback((lineId: string, search: string) => {
     const value = search.trim();
     const isBarcodeLike = /^\d{6,}$/.test(value);
     setNewProductName(isBarcodeLike ? '' : value);
-    setNewProductSku(isBarcodeLike ? value : '');
+    setNewProductBarcode(isBarcodeLike ? value : '');
     setActiveLineId(lineId);
     setCreateProductOpen(true);
   }, []);
 
-  const handleCreateProductOk = useCallback((name: string, sku?: string, category?: ProductCategory) => {
-    const activeItem = items.find((item) => item.id === activeLineId);
-    const unit = activeItem?.unit || 'pcs';
-    const purchasePrice = Number(activeItem?.price || 0);
+  const handleCreateProductCancel = useCallback(() => {
+    setCreateProductOpen(false);
+    setActiveLineId(null);
+  }, []);
 
-    const product = onCreateBasicProduct({
-      name,
-      sku,
-      category,
-      unit,
-      purchasePrice,
-    });
+  useEffect(() => {
+    if (!createProductOpen) return;
+    const unit = activeLineItem?.unit || 'pcs';
+    quickCreateForm.reset(buildQuickCreateDefaultValues({
+      name: newProductName,
+      sku: newProductBarcode,
+      purchase_unit: unit,
+      selling_unit: unit,
+      sellable_units: [unit],
+      purchase_price: activeLineItem?.price ? Number(activeLineItem.price) : undefined,
+    }));
+    // quickCreateForm.reset is a stable react-hook-form reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createProductOpen, newProductName, newProductBarcode, activeLineItem?.unit, activeLineItem?.price]);
 
-    if (product && activeLineId) {
-      const nextItems = items.map((item) => {
-        if (item.id === activeLineId) {
-          return {
+  const handleCreateProductPersist = useCallback(async (data: StockFormData): Promise<Product> => {
+    const sku = data.sku?.trim();
+    if (sku) {
+      const existing = products.find((product) => (product.sku || '').toLowerCase() === sku.toLowerCase());
+      if (existing) {
+        message.info('Barcode/SKU sudah terdaftar, gunakan produk yang sudah ada');
+        return existing;
+      }
+    }
+
+    return createProductRecord(data);
+  }, [products, message]);
+
+  const handleProductCreated = useCallback((product: Product) => {
+    if (activeLineId) {
+      const unit = product.purchase_unit || 'pcs';
+      const nextItems = items.map((item) => (
+        item.id === activeLineId
+          ? {
             ...item,
             product_id: product.id,
             product_name: product.name,
-            product_sku: product.sku,
-            unit: product.purchase_unit || 'pcs',
-            unit_price: product.purchase_price || 0,
-          };
-        }
-        return item;
-      });
+            sku: product.sku,
+            unit,
+            price: getPurchasePrice(product, unit),
+          }
+          : item
+      ));
       setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
     }
 
     setCreateProductOpen(false);
     setActiveLineId(null);
-  }, [onCreateBasicProduct, activeLineId, items, setValue]);
+  }, [activeLineId, items, setValue]);
+
+  const handleCreateProductSave = useCallback(async () => {
+    try {
+      const product = await quickCreateForm.submit(handleCreateProductPersist);
+      if (product) {
+        handleProductCreated(product);
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('productQuickCreate.failed'));
+    }
+  }, [quickCreateForm, handleCreateProductPersist, handleProductCreated, message, t]);
   const discountType = useWatch({ control, name: 'discount_type' }) ?? 'fixed';
   const discountValue = useWatch({ control, name: 'discount_value' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
@@ -851,13 +891,17 @@ export const PurchaseDocumentForm = ({
         </Button>
       </div>
 
-      <BasicProductFormModal
+      <StockProductModal
         open={createProductOpen}
-        onCancel={() => setCreateProductOpen(false)}
-        onOk={handleCreateProductOk}
-        initialName={newProductName}
-        initialSku={newProductSku}
-        unit={items.find((item) => item.id === activeLineId)?.unit || 'pcs'}
+        editingId={null}
+        control={quickCreateForm.control}
+        errors={quickCreateForm.formState.errors}
+        setValue={quickCreateForm.setValue}
+        getValues={quickCreateForm.getValues}
+        reset={quickCreateForm.reset}
+        setIsModalOpen={setCreateProductOpen}
+        onCancel={handleCreateProductCancel}
+        onSave={handleCreateProductSave}
       />
     </form>
   );

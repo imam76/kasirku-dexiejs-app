@@ -91,7 +91,7 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
               productSearch.trim().length > 0 ? (
                 <div className="px-2 py-2">
                   <div className="mb-2 text-sm text-gray-600">
-                    Produk tidak ditemukan
+                    {t('purchaseDocuments.quickCreate.notFound')}
                   </div>
                   <Button
                     type="primary"
@@ -102,7 +102,7 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
                       setProductSearch('');
                     }}
                   >
-                    Buat Produk Baru
+                    {t('purchaseDocuments.quickCreate.action')}
                   </Button>
                 </div>
               ) : null

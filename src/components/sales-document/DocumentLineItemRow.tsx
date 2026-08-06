@@ -1,4 +1,4 @@
-import { forwardRef, memo } from 'react';
+import { forwardRef, memo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, InputNumber, Select } from 'antd';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
@@ -33,6 +33,7 @@ export interface DocumentLineItemRowProps {
   onSelectProduct: (itemId: string, productId: string) => void;
   onRemoveItem: (itemId: string) => void;
   onToggleExpanded: (itemId: string) => void;
+  onCreateProductRequest?: (lineId: string, search: string) => void;
 }
 
 const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowProps>(({
@@ -52,8 +53,10 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
   onSelectProduct,
   onRemoveItem,
   onToggleExpanded,
+  onCreateProductRequest,
 }, ref) => {
   const { t } = useI18n();
+  const [productSearch, setProductSearch] = useState('');
   const displayedItem = calculatedItem ?? item;
   const displayedSubtotal = toDocumentCurrencyAmount(displayedItem.subtotal, documentCurrencySnapshot);
 
@@ -74,7 +77,32 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
           placeholder={t('salesDocuments.placeholder.product')}
           value={item.product_id || undefined}
           options={productOptions}
-          onChange={(productId: string) => onSelectProduct(item.id, productId)}
+          onSearch={setProductSearch}
+          searchValue={productSearch}
+          notFoundContent={
+            productSearch.trim().length > 0 ? (
+              <div className="px-2 py-2">
+                <div className="mb-2 text-sm text-gray-600">
+                  {t('salesDocuments.quickCreate.notFound')}
+                </div>
+                <Button
+                  type="primary"
+                  size="small"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onCreateProductRequest?.(item.id, productSearch);
+                    setProductSearch('');
+                  }}
+                >
+                  {t('salesDocuments.quickCreate.action')}
+                </Button>
+              </div>
+            ) : null
+          }
+          onChange={(productId: string) => {
+            onSelectProduct(item.id, productId);
+            setProductSearch('');
+          }}
         />
         <InputNumber
           min={0}
@@ -154,5 +182,6 @@ export const DocumentLineItemRow = memo(DocumentLineItemRowBase, (prev, next) =>
   prev.onUpdateItem === next.onUpdateItem &&
   prev.onSelectProduct === next.onSelectProduct &&
   prev.onRemoveItem === next.onRemoveItem &&
-  prev.onToggleExpanded === next.onToggleExpanded
+  prev.onToggleExpanded === next.onToggleExpanded &&
+  prev.onCreateProductRequest === next.onCreateProductRequest
 ));

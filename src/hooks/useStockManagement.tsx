@@ -14,6 +14,7 @@ import {
 import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
+import { createProductRecord } from '@/services/productCreateService';
 import type { FinanceTransaction, Product } from '@/types';
 import type { ProductCsvImportItem } from '@/utils/productsCsv';
 import {
@@ -104,12 +105,15 @@ export const useStockManagement = () => {
   // Upsert (add/update) mutation
   const upsertMutation = useMutation({
     mutationFn: async (productData: ProductUpsertData & { purchase_quantity?: number }) => {
+      if (!editingId) {
+        return createProductRecord(productData as unknown as StockFormData);
+      }
+
       const currentUser = await getCurrentSessionUser();
       await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
       const purchase_quantity = productData.purchase_quantity || 0;
       const now = new Date().toISOString();
-      let productId = editingId ?? '';
-      const isEdit = Boolean(editingId);
+      const productId = editingId;
       let syncedProduct: Product | null = null;
       const financeTransactionsToSync: FinanceTransaction[] = [];
 
@@ -151,75 +155,41 @@ export const useStockManagement = () => {
       }
 
       await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
-        if (isEdit) {
-          productId = editingId!;
-          const existingProduct = await db.products.get(productId);
-          if (!existingProduct) {
-            throw new Error('Produk tidak ditemukan.');
-          }
+        const existingProduct = await db.products.get(productId);
+        if (!existingProduct) {
+          throw new Error('Produk tidak ditemukan.');
+        }
 
-          // Update product
-          const updatedProduct: Product = withPendingSync({
-            ...existingProduct,
-            ...cleanData,
-            stock: cleanData.stock ?? existingProduct.stock,
-            updated_at: now,
+        // Update product
+        const updatedProduct: Product = withPendingSync({
+          ...existingProduct,
+          ...cleanData,
+          stock: cleanData.stock ?? existingProduct.stock,
+          updated_at: now,
+        });
+        await db.products.put(updatedProduct);
+        syncedProduct = updatedProduct;
+
+        // Record purchase if stock was added
+        if (purchase_quantity > 0) {
+          const totalCost = cleanData.purchase_price * purchase_quantity;
+          const purchaseResult = await recordStockPurchase({
+            productId,
+            productName: cleanData.name,
+            sku: cleanData.sku,
+            quantity: purchase_quantity,
+            costPerUnit: cleanData.purchase_price,
+            totalCost,
+            description: t('stock.purchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
+            createdAt: now,
+            actor: currentUser,
           });
-          await db.products.put(updatedProduct);
-          syncedProduct = updatedProduct;
-
-          // Record purchase if stock was added
-          if (purchase_quantity > 0) {
-            const totalCost = cleanData.purchase_price * purchase_quantity;
-            const purchaseResult = await recordStockPurchase({
-              productId,
-              productName: cleanData.name,
-              sku: cleanData.sku,
-              quantity: purchase_quantity,
-              costPerUnit: cleanData.purchase_price,
-              totalCost,
-              description: t('stock.purchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
-              createdAt: now,
-              actor: currentUser,
-            });
-            financeTransactionsToSync.push(purchaseResult.financeTransaction);
-          }
-        } else {
-          // Create new product
-          const newId = crypto.randomUUID();
-          productId = newId;
-          const newProduct: Product = withPendingSync({
-            id: newId,
-            ...cleanData,
-            stock: cleanData.stock ?? 0, // Ensure stock is set for new product
-            created_at: now,
-            updated_at: now,
-          });
-
-          await db.products.add(newProduct);
-          syncedProduct = newProduct;
-
-          // Record initial purchase if stock was added
-          if (purchase_quantity > 0) {
-            const totalCost = cleanData.purchase_price * purchase_quantity;
-            const purchaseResult = await recordStockPurchase({
-              productId: newId,
-              productName: cleanData.name,
-              sku: cleanData.sku,
-              quantity: purchase_quantity,
-              costPerUnit: cleanData.purchase_price,
-              totalCost,
-              description: t('stock.initialPurchaseDescription', { name: cleanData.name, quantity: purchase_quantity }),
-              createdAt: now,
-              actor: currentUser,
-            });
-            financeTransactionsToSync.push(purchaseResult.financeTransaction);
-          }
+          financeTransactionsToSync.push(purchaseResult.financeTransaction);
         }
       });
 
       if (syncedProduct) {
-        await enqueueProductSync(syncedProduct, isEdit ? 'update' : 'create');
+        await enqueueProductSync(syncedProduct, 'update');
       }
       if (financeTransactionsToSync.length > 0) {
         await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
@@ -227,11 +197,17 @@ export const useStockManagement = () => {
 
       await writeActivityLog({
         user: currentUser,
-        action: isEdit ? 'PRODUCT_UPDATED' : 'PRODUCT_CREATED',
+        action: 'PRODUCT_UPDATED',
         entity: 'products',
         entity_id: productId,
-        description: `${currentUser?.name ?? 'User'} ${isEdit ? 'memperbarui' : 'menambahkan'} produk ${cleanData.name}.`,
+        description: `${currentUser?.name ?? 'User'} memperbarui produk ${cleanData.name}.`,
       });
+
+      if (!syncedProduct) {
+        throw new Error('Produk tidak ditemukan.');
+      }
+
+      return syncedProduct;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });

@@ -2,8 +2,17 @@ import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService
 import { db } from '@/lib/db';
 import { createPurchaseDocument, issuePurchaseDocument } from '@/services/purchaseDocumentService';
 import { enqueueProductSync } from '@/services/syncQueueService';
-import type { Product, ProductCategory, ProductUnit, PurchaseDocumentItem } from '@/types';
+import type {
+  Product,
+  ProductCategory,
+  ProductType,
+  ProductUnit,
+  ProductUnitMapping,
+  PurchaseDocumentItem,
+  WholesalePrice,
+} from '@/types';
 import { isProductVisibleInPos } from '@/utils/productAvailability';
+import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 
 export const QUICK_ITEM_SUPPLIER_NAME = 'Belum diketahui';
@@ -92,8 +101,15 @@ export interface CreatePosQuickItemInput {
   barcode?: string;
   sellingPrice: number;
   quantity: number;
+  /** @deprecated pakai purchaseUnit/sellingUnit; dipertahankan untuk kompatibilitas caller lama. */
   unit?: ProductUnit;
+  purchaseUnit?: ProductUnit;
+  sellingUnit?: ProductUnit;
+  sellableUnits?: ProductUnit[];
+  unitMappings?: ProductUnitMapping[];
+  wholesalePrices?: WholesalePrice[];
   category?: ProductCategory;
+  productType?: ProductType;
   estimatedPurchasePrice?: number;
 }
 
@@ -216,7 +232,8 @@ export const createPosQuickItem = async (
 
   const name = input.name.trim();
   const barcode = input.barcode?.trim() || undefined;
-  const unit = (input.unit || 'pcs').trim() || 'pcs';
+  const purchaseUnit = (input.purchaseUnit || input.unit || 'pcs').trim() || 'pcs';
+  const sellingUnit = (input.sellingUnit || input.unit || purchaseUnit).trim() || purchaseUnit;
   const sellingPrice = Number(input.sellingPrice || 0);
   const quantity = Number(input.quantity || 0);
 
@@ -237,21 +254,40 @@ export const createPosQuickItem = async (
 
   const estimate = resolveQuickItemEstimatedCost(sellingPrice, input.estimatedPurchasePrice);
   const now = new Date().toISOString();
+  const unitMappings = normalizeProductUnitMappings({
+    purchase_unit: purchaseUnit,
+    selling_unit: sellingUnit,
+    sellable_units: input.sellableUnits || [],
+    unit_mappings: input.unitMappings || [],
+  });
   const product: Product = {
     id: crypto.randomUUID(),
     name,
     sku: barcode,
     category: input.category,
-    purchase_unit: unit,
-    selling_unit: unit,
+    purchase_unit: purchaseUnit,
+    selling_unit: sellingUnit,
     purchase_price: estimate.price,
     selling_price: sellingPrice,
     stock: 0,
-    product_type: 'FINISHED_GOOD',
+    product_type: input.productType ?? 'FINISHED_GOOD',
     // Wajib true: is_visible_in_pos adalah saklar "boleh dijual di POS", bukan
     // sekadar penyembunyi katalog. Keranjang, pemindaian barcode, dan POS
     // restoran semuanya menolak produk yang saklarnya mati.
     is_visible_in_pos: true,
+    wholesale_prices: (input.wholesalePrices || []).map((price) => ({
+      min_quantity: Number(price.min_quantity),
+      unit: price.unit || sellingUnit,
+      price: Number(price.price),
+      price_type: price.price_type || 'unit',
+    })),
+    unit_mappings: unitMappings,
+    sellable_units: buildSellableUnitsFromMappings({
+      purchase_unit: purchaseUnit,
+      selling_unit: sellingUnit,
+      sellable_units: input.sellableUnits || [],
+      unit_mappings: unitMappings,
+    }),
     verification_status: 'UNVERIFIED',
     created_at: now,
     updated_at: now,

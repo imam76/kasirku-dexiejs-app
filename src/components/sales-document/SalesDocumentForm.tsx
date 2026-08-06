@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Button } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { App, Button } from 'antd';
 import { useForm, useWatch } from 'react-hook-form';
 import type { DefaultValues } from 'react-hook-form';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -8,11 +8,16 @@ import dayjs from '@/lib/dayjs';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
+import { buildQuickCreateDefaultValues, useProductQuickCreateForm } from '@/hooks/useProductQuickCreateForm';
 import { db } from '@/lib/db';
+import type { StockFormData } from '@/lib/validations/stock';
 import { DocumentCurrencyFields } from '@/components/DocumentCurrencyFields';
+import { createProductRecord } from '@/services/productCreateService';
 import { getCachedBaseCurrency } from '@/services/baseCurrencyService';
 import type { Contact, CurrencyRate, Department, Product, Project, PromoType, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
+import { getPrice } from '@/utils/pricing';
+import StockProductModal from '@/view/master-data/products/StockProductModal';
 import {
   applyCurrencySnapshotToLineItem,
   buildDocumentCurrencySnapshot,
@@ -123,8 +128,14 @@ export const SalesDocumentForm = ({
   submitting,
 }: SalesDocumentFormProps) => {
   const { t } = useI18n();
+  const { message } = App.useApp();
   const { baseCurrency, baseCurrencyCode } = useBaseCurrency();
   const defaultCurrencyAppliedRef = useRef(Boolean(initialData?.document));
+  const [createProductOpen, setCreateProductOpen] = useState(false);
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductBarcode, setNewProductBarcode] = useState('');
+  const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const quickCreateForm = useProductQuickCreateForm();
   const {
     control,
     formState: { errors },
@@ -138,6 +149,10 @@ export const SalesDocumentForm = ({
   });
   const watchedItems = useWatch({ control, name: 'items' });
   const items = useMemo(() => watchedItems ?? [], [watchedItems]);
+  const activeLineItem = useMemo(
+    () => items.find((item) => item.id === activeLineId),
+    [items, activeLineId],
+  );
   const documentDate = useWatch({ control, name: 'document_date' });
   const watchedCurrencyCode = useWatch({ control, name: 'currency_code' });
   const watchedCurrencyName = useWatch({ control, name: 'currency_name' });
@@ -244,6 +259,75 @@ export const SalesDocumentForm = ({
   const handleItemsChange = useCallback((nextItems: SalesDocumentItem[]) => {
     setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
   }, [setValue]);
+  const handleCreateProductRequest = useCallback((lineId: string, search: string) => {
+    const value = search.trim();
+    const isBarcodeLike = /^\d{6,}$/.test(value);
+    setNewProductName(isBarcodeLike ? '' : value);
+    setNewProductBarcode(isBarcodeLike ? value : '');
+    setActiveLineId(lineId);
+    setCreateProductOpen(true);
+  }, []);
+  const handleCreateProductCancel = useCallback(() => {
+    setCreateProductOpen(false);
+    setActiveLineId(null);
+  }, []);
+  useEffect(() => {
+    if (!createProductOpen) return;
+    const unit = activeLineItem?.unit || 'pcs';
+    quickCreateForm.reset(buildQuickCreateDefaultValues({
+      name: newProductName,
+      sku: newProductBarcode,
+      purchase_unit: unit,
+      selling_unit: unit,
+      sellable_units: [unit],
+      selling_price: activeLineItem?.price ? Number(activeLineItem.price) : undefined,
+    }));
+    // quickCreateForm.reset is a stable react-hook-form reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createProductOpen, newProductName, newProductBarcode, activeLineItem?.unit, activeLineItem?.price]);
+  const handleCreateProductPersist = useCallback(async (data: StockFormData): Promise<Product> => {
+    const sku = data.sku?.trim();
+    if (sku) {
+      const existing = products.find((product) => (product.sku || '').toLowerCase() === sku.toLowerCase());
+      if (existing) {
+        message.info('Barcode/SKU sudah terdaftar, gunakan produk yang sudah ada');
+        return existing;
+      }
+    }
+
+    return createProductRecord(data);
+  }, [products, message]);
+  const handleProductCreated = useCallback((product: Product) => {
+    if (activeLineId) {
+      const unit = product.selling_unit || 'pcs';
+      const nextItems = items.map((item) => (
+        item.id === activeLineId
+          ? {
+            ...item,
+            product_id: product.id,
+            product_name: product.name,
+            sku: product.sku,
+            unit,
+            price: getPrice(product, item.quantity || 1, unit),
+          }
+          : item
+      ));
+      setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
+    }
+
+    setCreateProductOpen(false);
+    setActiveLineId(null);
+  }, [activeLineId, items, setValue]);
+  const handleCreateProductSave = useCallback(async () => {
+    try {
+      const product = await quickCreateForm.submit(handleCreateProductPersist);
+      if (product) {
+        handleProductCreated(product);
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('productQuickCreate.failed'));
+    }
+  }, [quickCreateForm, handleCreateProductPersist, handleProductCreated, message, t]);
   const handleCurrencySnapshotChange = useCallback((snapshot: DocumentCurrencySnapshot, previousCurrencyCode?: string) => {
     const previousCode = normalizeCurrencyCode(previousCurrencyCode, snapshot.base_currency_code);
 
@@ -348,6 +432,7 @@ export const SalesDocumentForm = ({
         taxes={taxes}
         documentCurrencySnapshot={documentCurrencySnapshot}
         onChange={handleItemsChange}
+        onCreateProductRequest={handleCreateProductRequest}
       />
       <DocumentSummary
         config={config}
@@ -367,6 +452,19 @@ export const SalesDocumentForm = ({
           {t('salesDocuments.saveDraft')}
         </Button>
       </div>
+
+      <StockProductModal
+        open={createProductOpen}
+        editingId={null}
+        control={quickCreateForm.control}
+        errors={quickCreateForm.formState.errors}
+        setValue={quickCreateForm.setValue}
+        getValues={quickCreateForm.getValues}
+        reset={quickCreateForm.reset}
+        setIsModalOpen={setCreateProductOpen}
+        onCancel={handleCreateProductCancel}
+        onSave={handleCreateProductSave}
+      />
     </form>
   );
 };
