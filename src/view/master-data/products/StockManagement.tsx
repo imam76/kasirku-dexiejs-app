@@ -360,10 +360,15 @@ export default function StockManagement() {
     }
   };
 
+  // Template dipakai justru saat daftar produk masih kosong, jadi yang dimatikan
+  // hanya entri ekspor datanya — bukan seluruh menu.
+  const hasProducts = products.length > 0;
+
   const exportMenuItems: MenuProps['items'] = [
     {
       key: 'xlsx',
       label: t('stock.formatExcel'),
+      disabled: !hasProducts,
       children: [
         { key: 'xlsx:share', label: t('stock.share') },
         { key: 'xlsx:save', label: t('stock.saveToFile') },
@@ -372,6 +377,7 @@ export default function StockManagement() {
     {
       key: 'csv',
       label: t('stock.formatCsv'),
+      disabled: !hasProducts,
       children: [
         { key: 'csv:share', label: t('stock.share') },
         { key: 'csv:save', label: t('stock.saveToFile') },
@@ -441,7 +447,7 @@ export default function StockManagement() {
           </div>
           <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
             <Dropdown trigger={['click']} placement="bottomRight" menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}>
-              <Button icon={<Download size={16} />} disabled={products.length === 0}>
+              <Button icon={<Download size={16} />}>
                 {t('stock.exportCsv')}
               </Button>
             </Dropdown>
