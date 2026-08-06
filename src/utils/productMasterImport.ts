@@ -1,9 +1,11 @@
 import type { Product, ProductUnit } from '@/types';
 import type { ProductCsvImportItem, ProductCsvRowError } from '@/utils/productsCsv';
 import {
-  buildSellableUnitsFromMappings,
-  normalizeProductUnitMappings,
+  buildUnitMappingsFromLegacyUnits,
+  getProductDefaultUnit,
+  getProductUnits,
 } from '@/utils/productUnits';
+import { getConversionRatio, hasConversionRatio } from '@/utils/pricing';
 
 export interface ProductMasterImportPlanItem {
   rowNumber: number;
@@ -48,12 +50,19 @@ const buildImportedProduct = ({
 }): Product => {
   const purchaseUnit = (item.purchase_unit || existing?.purchase_unit || 'pcs') as ProductUnit;
   const sellingUnit = (item.selling_unit || existing?.selling_unit || 'pcs') as ProductUnit;
-  const unitMappings = normalizeProductUnitMappings({
-    purchase_unit: purchaseUnit,
-    selling_unit: sellingUnit,
-    sellable_units: item.sellable_units ?? existing?.sellable_units ?? [],
-    unit_mappings: item.unit_mappings ?? existing?.unit_mappings ?? [],
-  });
+  // Kolom lama `sellable_units` masih diterima, tapi hanya kalau rationya bisa
+  // ditentukan dari konversi global. Satuan tanpa ratio dibuang, bukan
+  // diam-diam dianggap 1:1.
+  const { unitMappings } = buildUnitMappingsFromLegacyUnits(
+    {
+      purchase_unit: purchaseUnit,
+      selling_unit: sellingUnit,
+      sellable_units: item.sellable_units ?? existing?.sellable_units ?? [],
+      unit_mappings: item.unit_mappings ?? existing?.unit_mappings ?? [],
+    },
+    (unit, baseUnit) => (hasConversionRatio(unit, baseUnit) ? getConversionRatio(unit, baseUnit) : undefined),
+  );
+  const productUnits = getProductUnits({ purchase_unit: purchaseUnit, unit_mappings: unitMappings });
 
   return {
     ...existing,
@@ -63,7 +72,11 @@ const buildImportedProduct = ({
     name: item.name || existing?.name || '',
     category: item.category || existing?.category || 'non_consumable',
     purchase_unit: purchaseUnit,
-    selling_unit: sellingUnit,
+    selling_unit: getProductDefaultUnit({
+      purchase_unit: purchaseUnit,
+      selling_unit: sellingUnit,
+      unit_mappings: unitMappings,
+    }),
     purchase_price: item.purchase_price ?? existing?.purchase_price ?? 0,
     selling_price: item.selling_price ?? existing?.selling_price ?? 0,
     // Import master data must never create or overwrite an operational stock balance.
@@ -75,14 +88,7 @@ const buildImportedProduct = ({
       item.wholesale_prices ?? existing?.wholesale_prices,
     ),
     unit_mappings: unitMappings,
-    sellable_units: buildSellableUnitsFromMappings({
-      purchase_unit: purchaseUnit,
-      selling_unit: sellingUnit,
-      sellable_units: item.sellable_units && item.sellable_units.length > 0
-        ? item.sellable_units
-        : existing?.sellable_units ?? [],
-      unit_mappings: unitMappings,
-    }),
+    sellable_units: productUnits,
     created_at: existing?.created_at ?? now,
     updated_at: now,
     sync_status: 'pending',

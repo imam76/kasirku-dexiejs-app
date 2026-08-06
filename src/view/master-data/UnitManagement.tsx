@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import type { UnitConversion, UnitDefinition, UnitDefinitionType } from '@/types';
 import type { TranslationKey } from '@/i18n/messages';
 import { setConversionRegistry } from '@/utils/pricing';
+import { getProductUnits } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 import {
@@ -249,12 +250,7 @@ export default function UnitManagement() {
         db.products.toArray(),
       ]);
 
-      const usedByProduct = products.some(
-        (product) =>
-          product.purchase_unit === unitId ||
-          product.selling_unit === unitId ||
-          Boolean(product.sellable_units?.includes(unitId)),
-      );
+      const usedByProduct = products.some((product) => getProductUnits(product).includes(unitId));
 
       if (fromCount > 0 || toCount > 0 || usedByProduct) {
         throw new Error(t('units.validation.unitInUse'));

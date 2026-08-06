@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { isTauriRuntime, productPostgresAdapter, type RemoteProductDto } from '@/services/postgresAdapter';
-import type { Product, ProductUnit, ProductUnitMapping, WholesalePrice } from '@/types';
+import type { Product, ProductUnitMapping, WholesalePrice } from '@/types';
+import { getProductUnits } from '@/utils/productUnits';
 
 export interface ProductReadSyncResult {
   fetched: number;
@@ -45,16 +46,6 @@ const mapWholesalePrices = (wholesalePrices: unknown): WholesalePrice[] | undefi
   return wholesalePrices.filter(isWholesalePrice);
 };
 
-const mapProductUnits = (
-  sellableUnits: unknown,
-  fallbackSellingUnit: ProductUnit,
-): ProductUnit[] => {
-  if (!Array.isArray(sellableUnits)) return [fallbackSellingUnit];
-
-  const units = sellableUnits.filter((unit): unit is ProductUnit => typeof unit === 'string');
-  return units.length > 0 ? units : [fallbackSellingUnit];
-};
-
 const mapUnitMappings = (unitMappings: unknown): ProductUnitMapping[] | undefined => {
   if (!Array.isArray(unitMappings)) return undefined;
   return unitMappings.filter(isProductUnitMapping);
@@ -76,7 +67,12 @@ const mapRemoteProductToLocal = (
   product_type: remoteProduct.product_type ?? 'FINISHED_GOOD',
   is_visible_in_pos: remoteProduct.is_visible_in_pos ?? true,
   wholesale_prices: mapWholesalePrices(remoteProduct.wholesale_prices),
-  sellable_units: mapProductUnits(remoteProduct.sellable_units, remoteProduct.selling_unit),
+  // Satuan yang dipakai transaksi diturunkan dari unit_mappings, jadi kolom
+  // lama ini hanya cerminannya supaya data remote tetap konsisten di lokal.
+  sellable_units: getProductUnits({
+    purchase_unit: remoteProduct.purchase_unit,
+    unit_mappings: mapUnitMappings(remoteProduct.unit_mappings),
+  }),
   unit_mappings: mapUnitMappings(remoteProduct.unit_mappings),
   created_at: remoteProduct.created_at,
   updated_at: remoteProduct.updated_at,

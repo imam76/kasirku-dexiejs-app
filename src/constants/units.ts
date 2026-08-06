@@ -81,6 +81,21 @@ export const areUnitsInSameCategory = (a?: ProductUnit, b?: ProductUnit) => {
   return inferUnitCategory(a) === inferUnitCategory(b);
 };
 
+/**
+ * Kategori satuan menurut master unit kalau satuannya terdaftar, karena satuan
+ * buatan pengguna seperti "karton" tidak dikenali daftar bawaan.
+ */
+export const resolveUnitCategory = (
+  unit?: ProductUnit,
+  definitionType?: UnitDefinitionType,
+): UnitCategory => {
+  if (definitionType === 'count' || definitionType === 'package' || definitionType === 'time') {
+    return definitionType;
+  }
+
+  return inferUnitCategory(unit);
+};
+
 export const inferUnitDefinitionType = (unit?: ProductUnit): UnitDefinitionType => {
   if (isCountUnit(unit)) return 'count';
   if (isPackageUnit(unit)) return 'package';

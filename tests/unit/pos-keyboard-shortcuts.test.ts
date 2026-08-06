@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { CartItem, Product } from '@/types';
 import { useTransactionStore } from '@/store/transactionStore';
-import { getAdjacentProductSellableUnit } from '@/utils/productUnits';
+import { getAdjacentProductUnit } from '@/utils/productUnits';
 
 const buildProduct = (overrides: Partial<Product> = {}): Product => ({
   id: 'pos-keyboard-product',
@@ -12,7 +12,6 @@ const buildProduct = (overrides: Partial<Product> = {}): Product => ({
   selling_price: 10_000,
   stock: 120,
   sku: 'POS-KEYBOARD',
-  sellable_units: ['pcs', 'pack', 'dus'],
   unit_mappings: [
     { unit: 'pack', base_unit: 'pcs', ratio: 6 },
     { unit: 'dus', base_unit: 'pcs', ratio: 12 },
@@ -34,23 +33,22 @@ describe('POS numpad unit shortcuts', () => {
     setCart([]);
   });
 
-  test('cycles sellable units forward, backward, and with wrap-around', () => {
+  test('cycles product units forward, backward, and with wrap-around', () => {
     const product = buildProduct();
 
-    expect(getAdjacentProductSellableUnit(product, 'pcs', 1)).toBe('pack');
-    expect(getAdjacentProductSellableUnit(product, 'pack', 1)).toBe('dus');
-    expect(getAdjacentProductSellableUnit(product, 'dus', 1)).toBe('pcs');
-    expect(getAdjacentProductSellableUnit(product, 'pcs', -1)).toBe('dus');
+    expect(getAdjacentProductUnit(product, 'pcs', 1)).toBe('pack');
+    expect(getAdjacentProductUnit(product, 'pack', 1)).toBe('dus');
+    expect(getAdjacentProductUnit(product, 'dus', 1)).toBe('pcs');
+    expect(getAdjacentProductUnit(product, 'pcs', -1)).toBe('dus');
   });
 
   test('keeps the only available unit unchanged', () => {
     const product = buildProduct({
-      sellable_units: ['pcs'],
       unit_mappings: [],
     });
 
-    expect(getAdjacentProductSellableUnit(product, 'pcs', 1)).toBe('pcs');
-    expect(getAdjacentProductSellableUnit(product, 'pcs', -1)).toBe('pcs');
+    expect(getAdjacentProductUnit(product, 'pcs', 1)).toBe('pcs');
+    expect(getAdjacentProductUnit(product, 'pcs', -1)).toBe('pcs');
   });
 
   test('rejects a unit change that would exceed stock without mutating the cart', () => {

@@ -2,7 +2,7 @@ import { Minus, Package, Plus, Trash2 } from 'lucide-react';
 import { CartItem as CartItemType } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getCartItemOriginalPrice, getCartItemPrice } from '@/utils/pricing';
-import { getProductSellableUnits } from '@/utils/productUnits';
+import { getProductUnits } from '@/utils/productUnits';
 import { InputNumber, Select } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
 
@@ -30,8 +30,8 @@ export default function CartItem({
   const isWholesale = currentPrice < getCartItemOriginalPrice({ ...item, quantity: 1 });
   const quantityStep = ['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1;
 
-  // Get available sellable units for this product
-  const sellableUnits = getProductSellableUnits(item.product);
+  // Satuan utama produk plus setiap satuan yang punya konversi
+  const productUnits = getProductUnits(item.product);
 
   const handleQuantityChange = (val: number | null) => {
     if (val !== null) {
@@ -43,7 +43,7 @@ export default function CartItem({
     updateUnit(item.product.id, newUnit);
   };
 
-  const unitOptions = sellableUnits.map((unit) => ({
+  const unitOptions = productUnits.map((unit) => ({
     value: unit,
     label: unit,
   }));

@@ -5,7 +5,7 @@ import type { Product, SalesDocumentItem, Tax } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
 import { getPrice, normalisasiHargaProduk } from '@/utils/pricing';
-import { getProductDocumentUnits } from '@/utils/productUnits';
+import { getProductUnits } from '@/utils/productUnits';
 import { createEmptySalesDocumentItem } from '@/utils/salesDocuments/createEmptySalesDocumentItem';
 import { mapProductToSalesDocumentItem } from '@/utils/salesDocuments/mapProductToSalesDocumentItem';
 import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
@@ -94,7 +94,7 @@ export const DocumentLineItems = ({
   const unitOptionsByProductId = useMemo(
     () => new Map(products.map((product) => [
       product.id,
-      getProductDocumentUnits(product).map((unit) => ({ value: unit, label: unit })),
+      getProductUnits(product).map((unit) => ({ value: unit, label: unit })),
     ])),
     [products],
   );

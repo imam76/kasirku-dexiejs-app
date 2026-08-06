@@ -14,7 +14,7 @@ import { useI18n } from '@/hooks/useI18n';
 import type { CashierSession, Product } from '@/types';
 import type { CashierSessionReconciliation } from '@/services/cashierSessionService';
 import { getPosProcessDraftScope } from '@/store/transactionStore';
-import { getAdjacentProductSellableUnit, getProductSellableUnits } from '@/utils/productUnits';
+import { getAdjacentProductUnit, getProductUnits } from '@/utils/productUnits';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 import {
   appendKeyboardBarcodeCharacter,
@@ -314,8 +314,8 @@ export default function Transaction() {
       return;
     }
 
-    const sellableUnits = getProductSellableUnits(activeItem.product);
-    if (sellableUnits.length <= 1) {
+    const productUnits = getProductUnits(activeItem.product);
+    if (productUnits.length <= 1) {
       message.open({
         key: 'pos-numpad-shortcut',
         type: 'info',
@@ -325,7 +325,7 @@ export default function Transaction() {
       return;
     }
 
-    const nextUnit = getAdjacentProductSellableUnit(activeItem.product, activeItem.unit, direction);
+    const nextUnit = getAdjacentProductUnit(activeItem.product, activeItem.unit, direction);
     if (!updateUnit(activeItem.product.id, nextUnit)) return;
 
     message.open({

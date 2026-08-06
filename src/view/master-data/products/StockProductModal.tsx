@@ -1,8 +1,7 @@
 import {
-  inferUnitCategory,
   inferUnitDefinitionType,
-  isGlobalConvertibleUnitType,
   normalizeUnitKey,
+  resolveUnitCategory,
 } from '@/constants/units';
 import type { StockFormData } from '@/hooks/useStockManagement';
 import type { UnitDefinition, UnitDefinitionType } from '@/types';
@@ -11,10 +10,9 @@ import { getProductCategoryOptions } from '@/i18n/stock';
 import { db } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { Alert, Badge, Button, Grid, Input, InputNumber, Modal, Select, Switch, Tabs } from 'antd';
 import type { InputRef } from 'antd';
-import { AlertTriangle, ExternalLink, Plus, ScanLine, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type Control,
@@ -36,12 +34,11 @@ import {
 
 const { useBreakpoint } = Grid;
 
-const buildSellableUnitsWithDefault = (defaultUnit: string, units: string[]) => {
-  const normalizedDefault = String(defaultUnit || '').trim();
+const uniqueUnitList = (units: Array<string | undefined>) => {
   const seen = new Set<string>();
 
-  return [normalizedDefault, ...units]
-    .map((unit) => String(unit || '').trim())
+  return units
+    .map((unit) => normalizeUnitKey(unit))
     .filter(Boolean)
     .filter((unit) => {
       if (seen.has(unit)) return false;
@@ -115,9 +112,7 @@ export default function StockProductModal({
 
   const purchaseUnit = useWatch({ control, name: 'purchase_unit' }) || 'pcs';
   const sellingUnit = useWatch({ control, name: 'selling_unit' }) || 'pcs';
-  const watchedSellableUnits = useWatch({ control, name: 'sellable_units' });
   const watchedUnitMappings = useWatch({ control, name: 'unit_mappings' });
-  const sellableUnits = useMemo(() => watchedSellableUnits || [], [watchedSellableUnits]);
   const unitMappings = useMemo(() => watchedUnitMappings || [], [watchedUnitMappings]);
   const previousPurchaseUnitRef = useRef<string | null>(null);
 
@@ -137,13 +132,13 @@ export default function StockProductModal({
     unitDefinitions.forEach((unit) => {
       units.add(normalizeUnitKey(unit.id));
     });
-    [purchaseUnit, sellingUnit, ...sellableUnits].forEach((unit) => units.add(normalizeUnitKey(unit)));
+    [purchaseUnit, sellingUnit].forEach((unit) => units.add(normalizeUnitKey(unit)));
     unitMappings.forEach((mapping) => {
       units.add(normalizeUnitKey(mapping.unit));
       units.add(normalizeUnitKey(mapping.base_unit));
     });
     return Array.from(units).filter(Boolean).sort();
-  }, [purchaseUnit, sellableUnits, sellingUnit, unitDefinitions, unitMappings]);
+  }, [purchaseUnit, sellingUnit, unitDefinitions, unitMappings]);
 
   const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
 
@@ -173,27 +168,17 @@ export default function StockProductModal({
 
   const getUnitCategory = useCallback((unit: string) => {
     const normalizedUnit = normalizeUnitKey(unit);
-    const definitionType = unitDefinitionById.get(normalizedUnit)?.type;
-
-    if (definitionType === 'count' || definitionType === 'package' || definitionType === 'time') {
-      return definitionType;
-    }
-
-    return inferUnitCategory(normalizedUnit);
+    return resolveUnitCategory(normalizedUnit, unitDefinitionById.get(normalizedUnit)?.type);
   }, [unitDefinitionById]);
 
-  const selectedSellableUnits = useMemo(() => {
-    const seen = new Set<string>();
-
-    return sellableUnits
-      .map((unit) => String(unit || '').trim())
-      .filter(Boolean)
-      .filter((unit) => {
-        if (seen.has(unit)) return false;
-        seen.add(unit);
-        return true;
-      });
-  }, [sellableUnits]);
+  /**
+   * Satuan yang boleh dipakai produk ini: satuan utama plus setiap baris
+   * konversi. Sama persis dengan yang dibaca POS, penjualan, dan pembelian.
+   */
+  const productUnits = useMemo(
+    () => uniqueUnitList([purchaseUnit, ...unitMappings.map((mapping) => mapping.unit)]),
+    [purchaseUnit, unitMappings],
+  );
 
   const baseUnitOptions = useMemo(
     () =>
@@ -207,46 +192,49 @@ export default function StockProductModal({
     [availableUnits, unitDefinitionById],
   );
 
-  const hasGlobalConversion = useCallback((fromUnit: string, toUnit: string) => {
-    const normalizedFromUnit = normalizeUnitKey(fromUnit);
-    const normalizedToUnit = normalizeUnitKey(toUnit);
+  /** Ratio bawaan dari konversi global, dipakai untuk mengisi baris baru. */
+  const getGlobalRatio = useCallback((unit: string, baseUnit: string): number | undefined => {
+    const normalizedUnit = normalizeUnitKey(unit);
+    const normalizedBaseUnit = normalizeUnitKey(baseUnit);
 
-    if (normalizedFromUnit === normalizedToUnit) return true;
-    return conversions.some(
-      (conversion) => {
-        const conversionFromUnit = normalizeUnitKey(conversion.fromUnit);
-        const conversionToUnit = normalizeUnitKey(conversion.toUnit);
+    if (!normalizedUnit || !normalizedBaseUnit) return undefined;
+    if (normalizedUnit === normalizedBaseUnit) return 1;
 
-        return (
-          (conversionFromUnit === normalizedFromUnit && conversionToUnit === normalizedToUnit) ||
-          (conversionFromUnit === normalizedToUnit && conversionToUnit === normalizedFromUnit)
-        );
-      },
+    const direct = conversions.find(
+      (conversion) =>
+        normalizeUnitKey(conversion.fromUnit) === normalizedUnit &&
+        normalizeUnitKey(conversion.toUnit) === normalizedBaseUnit,
     );
+    if (direct && Number(direct.ratio) > 0) return Number(direct.ratio);
+
+    const reverse = conversions.find(
+      (conversion) =>
+        normalizeUnitKey(conversion.fromUnit) === normalizedBaseUnit &&
+        normalizeUnitKey(conversion.toUnit) === normalizedUnit,
+    );
+    if (reverse && Number(reverse.ratio) > 0) return 1 / Number(reverse.ratio);
+
+    return undefined;
   }, [conversions]);
 
-  const isSellableUnitCompatible = useCallback((unit: string) => {
+  /**
+   * Satuan boleh dikonversi ke satuan utama kalau kategorinya sama, atau kalau
+   * ia satuan kemasan di atas satuan utama yang berbasis hitungan.
+   */
+  const isConvertibleToBaseUnit = useCallback((unit: string) => {
     const normalizedUnit = normalizeUnitKey(unit);
     const normalizedPurchaseUnit = normalizeUnitKey(purchaseUnit);
 
-    if (!normalizedUnit || normalizedUnit === normalizedPurchaseUnit) return true;
+    if (!normalizedUnit || normalizedUnit === normalizedPurchaseUnit) return false;
 
-    const unitType = getUnitType(normalizedUnit);
     const unitCategory = getUnitCategory(normalizedUnit);
     const purchaseCategory = getUnitCategory(normalizedPurchaseUnit);
 
-    if (unitCategory === 'package') {
-      return purchaseCategory === 'count';
-    }
+    if (unitCategory === 'package') return purchaseCategory === 'count';
+    return unitCategory === purchaseCategory;
+  }, [purchaseUnit, getUnitCategory]);
 
-    if (unitCategory !== purchaseCategory) {
-      return false;
-    }
-
-    return isGlobalConvertibleUnitType(unitType);
-  }, [purchaseUnit, getUnitType, getUnitCategory]);
-
-  const sellableUnitOptions = useMemo(
+  const unitMappingOptions = useMemo(
     () =>
       availableUnits
         .filter((unit) => {
@@ -254,121 +242,69 @@ export default function StockProductModal({
           const definition = unitDefinitionById.get(normalizedUnit);
           const canBeConversionUnit = definition?.canBeConversionUnit ?? (getUnitType(normalizedUnit) !== 'count');
 
-          return normalizedUnit === normalizeUnitKey(purchaseUnit) || (canBeConversionUnit && isSellableUnitCompatible(unit));
+          return canBeConversionUnit && isConvertibleToBaseUnit(normalizedUnit);
         })
         .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
-    [availableUnits, getUnitType, isSellableUnitCompatible, purchaseUnit, unitDefinitionById],
+    [availableUnits, unitDefinitionById, getUnitType, isConvertibleToBaseUnit],
   );
 
-  const unitMappingOptions = useMemo(
-    () =>
-      availableUnits
-        .filter((unit) => {
-          const normalizedUnit = normalizeUnitKey(unit);
-          const normalizedPurchaseUnit = normalizeUnitKey(purchaseUnit);
-          if (normalizedUnit === normalizedPurchaseUnit) return false;
-
-          const definition = unitDefinitionById.get(normalizedUnit);
-          const type = getUnitType(normalizedUnit);
-          const category = getUnitCategory(normalizedUnit);
-          const purchaseCategory = getUnitCategory(normalizedPurchaseUnit);
-          const canBeConversionUnit = definition?.canBeConversionUnit ?? (type !== 'count');
-
-          return canBeConversionUnit && category === 'package' && purchaseCategory === 'count';
-        })
-        .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
-    [availableUnits, purchaseUnit, unitDefinitionById, getUnitType, getUnitCategory],
+  const defaultUnitOptions = useMemo(
+    () => productUnits.map((unit) => ({
+      value: unit,
+      label: unitDefinitionById.get(unit)?.name ?? unit,
+    })),
+    [productUnits, unitDefinitionById],
   );
 
-  const needsProductMapping = useCallback(
-    (unit: string) => {
-      if (unit === purchaseUnit) return false;
-      const unitType = getUnitType(unit);
-      const purchaseType = getUnitType(purchaseUnit);
-      const canUseGlobalConversion =
-        unitType === purchaseType &&
-        getUnitCategory(unit) === getUnitCategory(purchaseUnit) &&
-        isGlobalConvertibleUnitType(unitType) &&
-        isGlobalConvertibleUnitType(purchaseType);
-
-      return !canUseGlobalConversion;
-    },
-    [purchaseUnit, getUnitType, getUnitCategory],
+  /** Baris konversi yang rationya belum diisi — satuannya belum bisa dipakai. */
+  const incompleteRatioUnits = useMemo(
+    () => unitMappings
+      .filter((mapping) => !(Number(mapping.ratio) > 0))
+      .map((mapping) => normalizeUnitKey(mapping.unit) || '-'),
+    [unitMappings],
   );
 
-  const missingProductMappingUnits = useMemo(() => {
-    return selectedSellableUnits.filter((unit) => {
-      if (!needsProductMapping(unit)) return false;
-      return !unitMappings.some((mapping) => mapping.unit === unit && mapping.base_unit === purchaseUnit);
-    });
-  }, [selectedSellableUnits, needsProductMapping, unitMappings, purchaseUnit]);
-
-  const incompleteProductMappingUnits = useMemo(() => {
-    return selectedSellableUnits.filter((unit) => {
-      if (!needsProductMapping(unit)) return false;
-      return !unitMappings.some(
-        (mapping) =>
-          mapping.unit === unit &&
-          mapping.base_unit === purchaseUnit &&
-          Number.isFinite(Number(mapping.ratio)) &&
-          Number(mapping.ratio) > 0,
-      );
-    });
-  }, [selectedSellableUnits, needsProductMapping, unitMappings, purchaseUnit]);
-
-  const missingGlobalConversionUnits = useMemo(() => {
-    return selectedSellableUnits.filter((unit) => {
-      if (unit === purchaseUnit) return false;
-      if (needsProductMapping(unit)) return false;
-      return !hasGlobalConversion(unit, purchaseUnit);
-    });
-  }, [selectedSellableUnits, purchaseUnit, needsProductMapping, hasGlobalConversion]);
-
-  const hasUnitConversion = useMemo(() => {
-    return incompleteProductMappingUnits.length === 0 && missingGlobalConversionUnits.length === 0;
-  }, [incompleteProductMappingUnits.length, missingGlobalConversionUnits.length]);
-  const unitConversionAttentionCount = incompleteProductMappingUnits.length + missingGlobalConversionUnits.length;
+  const unitConversionAttentionCount = incompleteRatioUnits.length;
 
   const conversionWarning = useMemo(() => {
-    if (hasUnitConversion) return null;
+    if (incompleteRatioUnits.length === 0) return null;
 
-    return missingGlobalConversionUnits.length > 0
-      ? {
-        title: t('stock.form.globalConversionMissingTitle'),
-        description: (
-          <div className="flex flex-col gap-2">
-            <p>
-              {t('stock.form.globalConversionMissingDescription', {
-                units: missingGlobalConversionUnits.join(', '),
-                baseUnit: purchaseUnit,
-              })}
-            </p>
-            <Link to="/master-data/units" hash="conversions">
-              <Button
-                size="small"
-                type="primary"
-                ghost
-                icon={<ExternalLink size={14} />}
-                className="flex w-fit items-center gap-1"
-              >
-                {t('stock.form.setupGlobalConversion')}
-              </Button>
-            </Link>
-          </div>
-        ),
-      }
-      : {
-        title: t('stock.form.productConversionMissingTitle'),
-        description: (
-          <p>
-            {t('stock.form.productConversionMissingDescription', {
-              units: incompleteProductMappingUnits.join(', '),
-              baseUnit: purchaseUnit,
-            })}
-          </p>
-        ),
-      };
-  }, [hasUnitConversion, purchaseUnit, missingGlobalConversionUnits, incompleteProductMappingUnits, t]);
+    return {
+      title: t('stock.form.productConversionMissingTitle'),
+      description: (
+        <p>
+          {t('stock.form.productConversionMissingDescription', {
+            units: incompleteRatioUnits.join(', '),
+            baseUnit: purchaseUnit,
+          })}
+        </p>
+      ),
+    };
+  }, [incompleteRatioUnits, purchaseUnit, t]);
+
+  const handleAddUnitMapping = useCallback(() => {
+    const usedUnits = new Set(unitMappings.map((mapping) => normalizeUnitKey(mapping.unit)));
+    const nextUnit = unitMappingOptions.find((option) => !usedUnits.has(option.value))?.value
+      ?? unitMappingOptions[0]?.value
+      ?? '';
+
+    appendUnitMapping({
+      unit: nextUnit,
+      base_unit: purchaseUnit,
+      ratio: getGlobalRatio(nextUnit, purchaseUnit) ?? 0,
+    });
+  }, [appendUnitMapping, getGlobalRatio, purchaseUnit, unitMappingOptions, unitMappings]);
+
+  /** Ganti satuan pada baris konversi, sekalian isi ratio global bila ada. */
+  const handleUnitMappingUnitChange = useCallback((index: number, unit: string) => {
+    const normalizedUnit = normalizeUnitKey(unit);
+    setValue(`unit_mappings.${index}.unit`, normalizedUnit, { shouldDirty: true, shouldValidate: true });
+
+    const globalRatio = getGlobalRatio(normalizedUnit, purchaseUnit);
+    if (globalRatio !== undefined) {
+      setValue(`unit_mappings.${index}.ratio`, globalRatio, { shouldDirty: true, shouldValidate: true });
+    }
+  }, [getGlobalRatio, purchaseUnit, setValue]);
 
   useEffect(() => {
     unitMappingFields.forEach((_, index) => {
@@ -376,32 +312,15 @@ export default function StockProductModal({
     });
   }, [purchaseUnit, setValue, unitMappingFields]);
 
-  useEffect(() => {
-    const nextSellingUnit = selectedSellableUnits[0] || '';
-    if (nextSellingUnit && nextSellingUnit !== sellingUnit) {
-      setValue('selling_unit', nextSellingUnit, { shouldDirty: true, shouldValidate: true });
-    }
-  }, [selectedSellableUnits, sellingUnit, setValue]);
-
-  useEffect(() => {
-    if (!open || missingProductMappingUnits.length === 0) return;
-
-    missingProductMappingUnits.forEach((unit) => {
-      appendUnitMapping({
-        unit,
-        base_unit: purchaseUnit,
-        ratio: 0,
-      });
-    });
-  }, [open, missingProductMappingUnits, purchaseUnit, appendUnitMapping]);
-
+  // Ganti satuan utama membatalkan konversi yang jadi tidak sepadan, mis. dus
+  // yang tidak lagi masuk akal setelah satuan utama berubah dari pcs ke kg.
   useEffect(() => {
     if (!open) {
       previousPurchaseUnitRef.current = null;
       return;
     }
 
-    const normalizedPurchaseUnit = String(purchaseUnit || '').trim();
+    const normalizedPurchaseUnit = normalizeUnitKey(purchaseUnit);
     const previousPurchaseUnit = previousPurchaseUnitRef.current;
     previousPurchaseUnitRef.current = normalizedPurchaseUnit;
 
@@ -409,23 +328,26 @@ export default function StockProductModal({
       return;
     }
 
-    const remainingUnits = selectedSellableUnits.slice(1).filter(isSellableUnitCompatible);
-    const nextSellableUnits = buildSellableUnitsWithDefault(normalizedPurchaseUnit, remainingUnits);
-    const hasChanged =
-      nextSellableUnits.length !== selectedSellableUnits.length ||
-      nextSellableUnits.some((unit, index) => unit !== selectedSellableUnits[index]);
+    const staleIndexes = unitMappings
+      .map((mapping, index) => ({ unit: normalizeUnitKey(mapping.unit), index }))
+      .filter(({ unit }) => !unit || !isConvertibleToBaseUnit(unit))
+      .map(({ index }) => index);
 
-    if (hasChanged) {
-      setValue('sellable_units', nextSellableUnits, { shouldDirty: true, shouldValidate: true });
+    if (staleIndexes.length > 0) {
+      removeUnitMapping(staleIndexes);
     }
+  }, [open, purchaseUnit, unitMappings, isConvertibleToBaseUnit, removeUnitMapping]);
 
-    if (sellingUnit !== normalizedPurchaseUnit) {
-      setValue('selling_unit', normalizedPurchaseUnit, { shouldDirty: true, shouldValidate: true });
-    }
-  }, [open, purchaseUnit, selectedSellableUnits, sellingUnit, setValue, isSellableUnitCompatible]);
+  // Satuan default harus selalu ada di daftar satuan yang dipakai transaksi.
+  useEffect(() => {
+    if (!open || productUnits.length === 0) return;
+    if (productUnits.includes(normalizeUnitKey(sellingUnit))) return;
+
+    setValue('selling_unit', productUnits[0], { shouldDirty: true, shouldValidate: true });
+  }, [open, productUnits, sellingUnit, setValue]);
 
   const handleSave = () => {
-    if (incompleteProductMappingUnits.length > 0 || errors.unit_mappings || errors.sellable_units || errors.selling_unit) {
+    if (incompleteRatioUnits.length > 0 || errors.unit_mappings || errors.selling_unit) {
       setActiveTab('multi-unit');
     }
 
@@ -829,30 +751,22 @@ export default function StockProductModal({
                 children: (
                   <div className="space-y-4">
                     <FieldContainer
-                      label={t('stock.form.sellableUnits')}
-                      error={(errors.sellable_units || errors.selling_unit) as FieldError | undefined}
-                      help={t('stock.form.sellableUnitsHelp')}
+                      label={t('stock.form.defaultUnit')}
+                      error={errors.selling_unit as FieldError | undefined}
+                      help={t('stock.form.defaultUnitHelp')}
                       required
                       requiredLabel={t('stock.form.requiredLabel')}
                     >
                       <Controller
-                        name="sellable_units"
+                        name="selling_unit"
                         control={control}
                         render={({ field }) => (
                           <Select
-                            mode="multiple"
-                            value={selectedSellableUnits}
-                            onChange={(values) => {
-                              const additionalUnits = values
-                                .filter((unit) => normalizeUnitKey(unit) !== normalizeUnitKey(purchaseUnit))
-                                .filter(isSellableUnitCompatible);
-                              const nextUnits = buildSellableUnitsWithDefault(purchaseUnit, additionalUnits);
-                              field.onChange(nextUnits);
-                              setValue('selling_unit', nextUnits[0] || '', { shouldDirty: true, shouldValidate: true });
-                            }}
+                            value={field.value || undefined}
+                            onChange={field.onChange}
                             className="w-full"
-                            placeholder={t('stock.form.sellableUnitsPlaceholder')}
-                            options={sellableUnitOptions}
+                            placeholder={t('stock.form.defaultUnitPlaceholder')}
+                            options={defaultUnitOptions}
                           />
                         )}
                       />
@@ -861,8 +775,8 @@ export default function StockProductModal({
                     <Alert
                       type="info"
                       showIcon
-                      title={t('stock.form.unitUsesGlobalManagement')}
-                      description={t('stock.form.unitUsesGlobalManagementDescription')}
+                      title={t('stock.form.availableUnitsTitle', { units: productUnits.join(', ') })}
+                      description={t('stock.form.availableUnitsDescription')}
                     />
 
                     {conversionWarning ? (
@@ -883,11 +797,7 @@ export default function StockProductModal({
                         </div>
                         <Button
                           type="dashed"
-                          onClick={() => appendUnitMapping({
-                            unit: unitMappingOptions[0]?.value || '',
-                            base_unit: purchaseUnit,
-                            ratio: 0,
-                          })}
+                          onClick={handleAddUnitMapping}
                           icon={<Plus size={16} />}
                           className="flex items-center gap-1"
                         >
@@ -914,8 +824,8 @@ export default function StockProductModal({
                                     control={control}
                                     render={({ field: itemField }) => (
                                       <Select
-                                        value={itemField.value}
-                                        onChange={itemField.onChange}
+                                        value={itemField.value || undefined}
+                                        onChange={(value) => handleUnitMappingUnitChange(index, value)}
                                         className="w-full"
                                         placeholder={t('stock.form.unitPlaceholder')}
                                         options={unitMappingOptions}

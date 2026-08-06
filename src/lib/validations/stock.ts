@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import {
-  areUnitsInSameCategory,
   inferUnitCategory,
-  inferUnitDefinitionType,
-  isGlobalConvertibleUnitType,
+  normalizeUnitKey,
+  type UnitCategory,
 } from '@/constants/units';
 import { defaultLocale, translate, type TranslationKey } from '@/i18n/messages';
 
@@ -12,9 +11,21 @@ type StockValidationTranslator = (
   params?: Record<string, string | number>,
 ) => string;
 
+/**
+ * Satuan buatan pengguna tidak ada di daftar bawaan, jadi form menyuntikkan
+ * kategori dari master unit supaya validasi menilai satuan yang sama dengan
+ * yang ditawarkan dropdown.
+ */
+type StockUnitCategoryResolver = (unit: string) => UnitCategory;
+
 const defaultT: StockValidationTranslator = (key, params) => translate(defaultLocale, key, params);
 
-export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.object({
+const defaultUnitCategory: StockUnitCategoryResolver = (unit) => inferUnitCategory(unit);
+
+export const createStockSchema = (
+  t: StockValidationTranslator = defaultT,
+  getUnitCategory: StockUnitCategoryResolver = defaultUnitCategory,
+) => z.object({
   name: z.string().min(1, t('stock.validation.nameRequired')),
   category: z.string().min(1, t('stock.validation.categoryRequired')),
   purchase_unit: z.string().min(1, t('stock.validation.purchaseUnitRequired')),
@@ -31,7 +42,6 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
     price: z.number().min(0, t('stock.validation.priceMin')),
     price_type: z.enum(['unit', 'bundle']).optional(),
   })),
-  sellable_units: z.array(z.string()).min(1, t('stock.validation.sellableUnitsRequired')),
   unit_mappings: z.array(z.object({
     unit: z.string().min(1, t('stock.validation.unitRequired')),
     base_unit: z.string().min(1, t('stock.validation.baseUnitRequired')),
@@ -39,11 +49,10 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
   })),
 }).superRefine((data, ctx) => {
   const seen = new Set<string>();
-  const sellableUnits = Array.from(new Set([data.selling_unit, ...data.sellable_units].filter(Boolean)));
 
   data.unit_mappings.forEach((mapping, index) => {
-    const unitCategory = inferUnitCategory(mapping.unit);
-    const purchaseCategory = inferUnitCategory(data.purchase_unit);
+    const unitCategory = getUnitCategory(mapping.unit);
+    const purchaseCategory = getUnitCategory(data.purchase_unit);
 
     if (mapping.base_unit !== data.purchase_unit) {
       ctx.addIssue({
@@ -69,7 +78,7 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
       });
     }
 
-    if (unitCategory !== 'package' && !areUnitsInSameCategory(mapping.unit, data.purchase_unit)) {
+    if (unitCategory !== 'package' && unitCategory !== purchaseCategory) {
       ctx.addIssue({
         code: 'custom',
         path: ['unit_mappings', index, 'unit'],
@@ -88,51 +97,20 @@ export const createStockSchema = (t: StockValidationTranslator = defaultT) => z.
     seen.add(key);
   });
 
-  sellableUnits.forEach((unit) => {
-    if (unit === data.purchase_unit) return;
+  // Satuan default kasir hanya boleh satuan yang rationya sudah terdefinisi,
+  // yaitu satuan dasar atau salah satu baris konversi produk.
+  const availableUnits = new Set([
+    normalizeUnitKey(data.purchase_unit),
+    ...data.unit_mappings.map((mapping) => normalizeUnitKey(mapping.unit)),
+  ]);
 
-    const unitCategory = inferUnitCategory(unit);
-    const purchaseCategory = inferUnitCategory(data.purchase_unit);
-
-    if (unitCategory === 'package' && purchaseCategory !== 'count') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['sellable_units'],
-        message: t('stock.validation.incompatibleUnitCategory', { unit }),
-      });
-      return;
-    }
-
-    if (unitCategory !== 'package' && !areUnitsInSameCategory(unit, data.purchase_unit)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['sellable_units'],
-        message: t('stock.validation.incompatibleUnitCategory', { unit }),
-      });
-      return;
-    }
-
-    const unitType = inferUnitDefinitionType(unit);
-    const purchaseType = inferUnitDefinitionType(data.purchase_unit);
-    const canUseGlobalConversion =
-      unitType === purchaseType &&
-      isGlobalConvertibleUnitType(unitType) &&
-      isGlobalConvertibleUnitType(purchaseType);
-
-    if (canUseGlobalConversion) return;
-
-    const hasProductMapping = data.unit_mappings.some(
-      (mapping) => mapping.unit === unit && mapping.base_unit === data.purchase_unit,
-    );
-
-    if (!hasProductMapping) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['sellable_units'],
-        message: t('stock.validation.unitNeedsRatio', { unit }),
-      });
-    }
-  });
+  if (!availableUnits.has(normalizeUnitKey(data.selling_unit))) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['selling_unit'],
+      message: t('stock.validation.sellingUnitNotAvailable', { unit: data.selling_unit }),
+    });
+  }
 });
 
 export const stockSchema = createStockSchema();

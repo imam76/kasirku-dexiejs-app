@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Product, CartItem } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
-import { getProductSellableUnits } from '@/utils/productUnits';
+import { getProductDefaultUnit, getProductUnits } from '@/utils/productUnits';
 import { isProductVisibleInPos } from '@/utils/productAvailability';
 
 export type TransactionError =
@@ -221,11 +221,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       });
     } else {
       set({ 
-        cart: [...cart, { 
-          product, 
-          quantity: 1, 
-          unit: product.selling_unit || 'pcs' 
-        }] 
+        cart: [...cart, {
+          product,
+          quantity: 1,
+          unit: getProductDefaultUnit(product)
+        }]
       });
     }
     return { success: true };
@@ -268,9 +268,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const item = cart.find((i) => i.product.id === productId);
     if (!item) return { success: false };
 
-    // Validate that the new unit is in the product's sellable units
-    const sellableUnits = getProductSellableUnits(item.product);
-    if (!sellableUnits.includes(newUnit)) {
+    // Satuan baru harus punya konversi, kalau tidak stok tercatat salah
+    const productUnits = getProductUnits(item.product);
+    if (!productUnits.includes(newUnit)) {
       return {
         success: false,
         error: {

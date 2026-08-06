@@ -63,7 +63,7 @@ export interface Product {
   is_visible_in_pos: boolean;
   sku?: string;
   wholesale_prices?: WholesalePrice[];
-  sellable_units?: ProductUnit[]; // Units cashier can select when selling (defaults to [selling_unit])
+  sellable_units?: ProductUnit[]; // Derived mirror of purchase_unit + unit_mappings, kept for sync/export back-compat
   unit_mappings?: ProductUnitMapping[]; // Product-specific conversions, e.g. 1 dus = 24 pcs
   created_at: string;
   updated_at: string;

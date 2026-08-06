@@ -18,7 +18,7 @@ import { Plus, Trash2, PackagePlus } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { useStockIn } from '@/hooks/useStockIn';
 import { buildManualStockInLine } from '@/utils/stockIn/stockInLine';
-import { getProductDocumentUnits } from '@/utils/productUnits';
+import { getProductUnits } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
 import type { StockInLine } from '@/utils/stockIn/stockInCsv';
 
@@ -233,7 +233,7 @@ export default function StockInPage() {
             disabled={!product}
             value={row.unit}
             onChange={(value) => updateRow(row.key, { unit: value })}
-            options={(product ? getProductDocumentUnits(product) : []).map((unit) => ({
+            options={(product ? getProductUnits(product) : []).map((unit) => ({
               value: unit,
               label: unit,
             }))}

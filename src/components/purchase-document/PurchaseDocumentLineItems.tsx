@@ -6,7 +6,7 @@ import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useUnits } from '@/hooks/useUnits';
 import { getPurchasePrice } from '@/utils/pricing';
-import { getProductDocumentUnits } from '@/utils/productUnits';
+import { getProductUnits } from '@/utils/productUnits';
 import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/createEmptyPurchaseDocumentItem';
 import { mapProductToPurchaseDocumentItem } from '@/utils/purchaseDocuments/mapProductToPurchaseDocumentItem';
 import {
@@ -90,20 +90,15 @@ export const PurchaseDocumentLineItems = ({
     })),
     [taxes],
   );
+  // Hanya satuan milik produk yang boleh dipilih. Menawarkan seluruh satuan
+  // master membuat pembelian 1 box tercatat 1 satuan dasar, karena rationya
+  // tidak ada dan konversi jatuh ke 1.
   const unitOptionsByProductId = useMemo(
     () => new Map(products.map((product) => {
-      const productUnits = getProductDocumentUnits(product);
-      const uniqueUnitKeys = new Set([
-        ...productUnits.map((u) => u.toLowerCase()),
-        ...Array.from(masterUnitMap.keys()),
-      ]);
-
-      const options = Array.from(uniqueUnitKeys)
-        .filter(Boolean)
-        .map((unitKey) => ({
-          value: unitKey,
-          label: masterUnitMap.get(unitKey) || unitKey,
-        }));
+      const options = getProductUnits(product).map((unitKey) => ({
+        value: unitKey,
+        label: masterUnitMap.get(unitKey) || unitKey,
+      }));
 
       return [product.id, options];
     })),

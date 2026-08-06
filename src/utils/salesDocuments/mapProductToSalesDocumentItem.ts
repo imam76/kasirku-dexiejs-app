@@ -1,11 +1,12 @@
 import type { Product, SalesDocumentItem } from '@/types';
 import { getPrice, normalisasiHargaProduk } from '@/utils/pricing';
+import { getProductDefaultUnit } from '@/utils/productUnits';
 
 export const mapProductToSalesDocumentItem = (
   product: Product,
   documentId: string,
 ): SalesDocumentItem => {
-  const unit = product.selling_unit;
+  const unit = getProductDefaultUnit(product);
   const price = getPrice(product, 1, unit);
 
   return {
