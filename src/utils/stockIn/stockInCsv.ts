@@ -135,6 +135,10 @@ export const buildStockInImport = ({
   const master = buildProductCsvImportItemsFromRows(rows, {
     nameOptional: true,
     allowDuplicateIdentity: true,
+    // File stock-in sering dibuat dari hasil ekspor produk lalu kolom satuannya
+    // dikosongkan karena dianggap tidak relevan. Itu bukan permintaan menghapus
+    // konversi, jadi barang masuk tidak boleh ikut mengubah daftar satuan.
+    allowCollectionClearing: false,
   });
   if (master.fileErrors.length > 0) {
     return {

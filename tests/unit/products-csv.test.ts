@@ -34,6 +34,26 @@ const existingProduct: Product = {
   updated_at: '2026-01-01T00:00:00.000Z',
 };
 
+const exportRowsOf = (...products: Product[]) =>
+  createProductCsvExportRows(products).map((row) => row.map((cell) => String(cell ?? '')));
+
+const planFromRows = (rows: string[][], existingProducts: Product[]) =>
+  buildProductMasterImportPlan({
+    items: buildProductCsvImportItemsFromRows(rows).items,
+    existingProducts,
+    now: '2026-08-06T00:00:00.000Z',
+    createId: () => 'generated-id',
+  });
+
+/** Mengosongkan sel di kolom bernama tertentu, meniru pengguna yang menghapus isinya di spreadsheet. */
+const blankColumns = (rows: string[][], columns: string[]) => {
+  columns.forEach((column) => {
+    const index = rows[0].indexOf(column);
+    if (index >= 0) rows[1][index] = '';
+  });
+  return rows;
+};
+
 describe('product master CSV import safety', () => {
   test('preserves existing prices and stock when CSV fields are blank', () => {
     const parsed = buildProductCsvImportItems([
@@ -500,6 +520,107 @@ describe('sellable units and round trip', () => {
     ]);
   });
 
+  test('deletes a unit conversion when its columns are present but blanked', () => {
+    const product: Product = {
+      ...existingProduct,
+      unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24, qty: 1, base_qty: 24 }],
+      sellable_units: ['pcs', 'dus'],
+    };
+    const rows = blankColumns(exportRowsOf(product), ['satuan_2', 'jumlah_2', 'isi_2']);
+    const plan = planFromRows(rows, [product]);
+
+    expect(plan.items[0].product.unit_mappings).toEqual([]);
+    // `selling_unit` dan `sellable_units` hasil ekspor masih menyebut dus; kalau
+    // jalur legacy tidak dilewati, satuannya hidup lagi lewat konversi global.
+    expect(plan.items[0].product.sellable_units).toEqual(['pcs']);
+    expect(plan.warnings.join(' ')).toContain('konversi satuan produk ini dihapus');
+  });
+
+  test('deletes wholesale tiers when their columns are present but blanked', () => {
+    const product: Product = {
+      ...existingProduct,
+      wholesale_prices: [{ min_quantity: 12, price: 11_000, price_type: 'unit' }],
+    };
+    const rows = blankColumns(exportRowsOf(product), ['grosir_qty_1', 'grosir_harga_1', 'grosir_tipe_1']);
+    const plan = planFromRows(rows, [product]);
+
+    expect(plan.items[0].product.wholesale_prices).toEqual([]);
+    expect(plan.warnings.join(' ')).toContain('harga grosir produk ini dihapus');
+  });
+
+  test('leaves collections untouched when the file carries no unit or wholesale column at all', () => {
+    const product: Product = {
+      ...existingProduct,
+      unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24, qty: 1, base_qty: 24 }],
+      sellable_units: ['pcs', 'dus'],
+      wholesale_prices: [{ min_quantity: 12, price: 11_000, price_type: 'unit' }],
+    };
+    const plan = planFromRows([
+      ['sku', 'name', 'harga_jual'],
+      ['A', 'Produk A', '16000'],
+    ], [product]);
+
+    expect(plan.items[0].product.unit_mappings).toEqual(product.unit_mappings);
+    expect(plan.items[0].product.wholesale_prices).toEqual(product.wholesale_prices);
+    expect(plan.warnings).toEqual([]);
+  });
+
+  test('reports a legacy sellable unit that has no ratio instead of dropping it silently', () => {
+    const plan = planFromRows([
+      ['sku', 'name', 'purchase_unit', 'selling_unit', 'sellable_units'],
+      ['B', 'Produk B', 'pcs', 'pcs', '["pcs","satuan_karangan"]'],
+    ], []);
+
+    expect(plan.items).toHaveLength(1);
+    expect(plan.items[0].product.sellable_units).toEqual(['pcs']);
+    expect(plan.warnings.join(' ')).toContain('satuan_karangan');
+  });
+
+  test('reports that sellable_units was ignored when the unit columns decide the list', () => {
+    const plan = planFromRows([
+      ['sku', 'name', 'purchase_unit', 'selling_unit', 'satuan_2', 'isi_2', 'sellable_units'],
+      ['B', 'Produk B', 'pcs', 'pcs', '', '', '["pcs","dus"]'],
+    ], []);
+
+    expect(plan.items[0].product.sellable_units).toEqual(['pcs']);
+    expect(plan.warnings.join(' ')).toContain('sellable_units (dus) diabaikan');
+  });
+
+  test('reports a selling unit that is not among the product units instead of swapping it silently', () => {
+    const plan = planFromRows([
+      ['sku', 'name', 'purchase_unit', 'selling_unit'],
+      ['B', 'Produk B', 'pcs', 'dus'],
+    ], []);
+
+    expect(plan.items[0].product.selling_unit).toBe('pcs');
+    expect(plan.warnings.join(' ')).toContain('selling_unit dus tidak ada di daftar satuan produk');
+  });
+
+  test('drops a JSON mapping that cannot be converted to the purchase unit', () => {
+    const plan = planFromRows([
+      ['sku', 'name', 'purchase_unit', 'selling_unit', 'unit_mappings'],
+      ['B', 'Produk B', 'kg', 'kg', '[{"unit":"gram","base_unit":"ons","ratio":0.01,"qty":100,"base_qty":1}]'],
+    ], []);
+
+    // `gram` hanya nyambung ke `ons`, dan `ons` tidak nyambung ke `kg`, jadi
+    // satuannya akan muncul di kasir tapi stoknya tidak bisa dihitung.
+    expect(plan.items[0].product.unit_mappings).toEqual([]);
+    expect(plan.items[0].product.sellable_units).toEqual(['kg']);
+    expect(plan.warnings.join(' ')).toContain('tidak nyambung ke satuan utama kg');
+  });
+
+  test('keeps a JSON mapping that is based on the purchase unit', () => {
+    const plan = planFromRows([
+      ['sku', 'name', 'purchase_unit', 'selling_unit', 'unit_mappings'],
+      ['B', 'Produk B', 'pcs', 'pcs', '[{"unit":"dus","base_unit":"pcs","ratio":24}]'],
+    ], []);
+
+    expect(plan.items[0].product.unit_mappings).toEqual([
+      { unit: 'dus', base_unit: 'pcs', ratio: 24, qty: 1, base_qty: 24 },
+    ]);
+    expect(plan.warnings).toEqual([]);
+  });
+
   test('reads a conversion written with the smaller unit on the left', () => {
     const parsed = buildProductCsvImportItems([
       'sku,name,purchase_unit,selling_unit,satuan_2,jumlah_2,isi_2',
@@ -510,6 +631,20 @@ describe('sellable units and round trip', () => {
     expect(parsed.items[0].unit_mappings).toEqual([
       { unit: 'pcs', base_unit: 'pack', ratio: 1 / 12, qty: 12, base_qty: 1 },
     ]);
+  });
+
+  test('reports nothing extra on a clean export then import round trip', () => {
+    const product: Product = {
+      ...existingProduct,
+      unit_mappings: [{ unit: 'dus', base_unit: 'pcs', ratio: 24, qty: 1, base_qty: 24 }],
+      sellable_units: ['pcs', 'dus'],
+      wholesale_prices: [{ min_quantity: 12, price: 11_000, price_type: 'unit' }],
+    };
+    const plan = planFromRows(exportRowsOf(product), [product]);
+
+    expect(plan.warnings).toEqual([]);
+    expect(plan.items[0].product.unit_mappings).toEqual(product.unit_mappings);
+    expect(plan.items[0].product.wholesale_prices).toEqual(product.wholesale_prices);
   });
 
   test('keeps the typed pair through an export then import round trip', () => {

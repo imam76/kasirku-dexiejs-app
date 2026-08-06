@@ -69,6 +69,16 @@ export interface ProductCsvParseOptions {
    * files opt out of the one-row-per-product rule that master import needs.
    */
   allowDuplicateIdentity?: boolean;
+  /**
+   * Sel kosong biasanya berarti "jangan ubah", sehingga konversi satuan dan
+   * tier grosir tidak akan pernah bisa dihapus lewat file. File master selalu
+   * diekspor lengkap dengan kolomnya, jadi di sana kolom yang ada tapi kosong
+   * dibaca sebagai "kosongkan" — itulah yang bikin alur ekspor, hapus isinya,
+   * impor lagi benar-benar menghapus. File stock-in tidak ikut aturan ini
+   * karena ia cuma menumpang kolom master dan tidak pernah bermaksud mengubah
+   * daftar satuan produk.
+   */
+  allowCollectionClearing?: boolean;
 }
 
 const normalizeHeaderName = (value: string) =>
@@ -350,6 +360,18 @@ export const buildProductCsvImportItemsFromRows = (
   const seenSku = new Set<string>();
   const seenId = new Set<string>();
 
+  const allowCollectionClearing = options.allowCollectionClearing ?? true;
+  const hasUnitColumns = unitSuffixes.length > 0 || idxUnitMappings !== undefined;
+  const hasWholesaleColumns = wholesaleSuffixes.length > 0 || idxWholesalePrices !== undefined;
+
+  /**
+   * Membedakan "kolomnya ada tapi barisnya dikosongkan" (kosongkan daftarnya)
+   * dari "kolomnya memang tidak ikut di file" (jangan sentuh apa pun).
+   */
+  const emptyListWhenBlank = <T>(parsed: T[] | undefined, columnsPresent: boolean) => (
+    parsed ?? (allowCollectionClearing && columnsPresent ? ([] as T[]) : undefined)
+  );
+
   const parseOptionalNonNegativeNumber = (
     rawValue: string | undefined,
     fieldLabel: string,
@@ -453,13 +475,15 @@ export const buildProductCsvImportItemsFromRows = (
       );
     }
 
-    const wholesale_prices = wideWholesalePrices.length > 0
-      ? wideWholesalePrices
-      : normalizeWholesalePrices(rawWholesaleCell);
+    const wholesale_prices = emptyListWhenBlank(
+      wideWholesalePrices.length > 0 ? wideWholesalePrices : normalizeWholesalePrices(rawWholesaleCell),
+      hasWholesaleColumns,
+    );
     const sellable_units = parseDelimitedList(idxSellableUnits !== undefined ? row[idxSellableUnits] : undefined);
-    const unit_mappings = wideUnitMappings.length > 0
-      ? wideUnitMappings
-      : normalizeUnitMappings(rawUnitMappingsCell);
+    const unit_mappings = emptyListWhenBlank(
+      wideUnitMappings.length > 0 ? wideUnitMappings : normalizeUnitMappings(rawUnitMappingsCell),
+      hasUnitColumns,
+    );
 
     const rawProductType = idxProductType !== undefined ? (row[idxProductType] ?? '').trim().toUpperCase() : '';
     let product_type: Product['product_type'] | undefined = undefined;
@@ -852,14 +876,17 @@ export const createProductCsvTemplateRows = () => [
 ];
 
 /**
- * Rebuilds only the rejected rows, prefixed with their row number and reason,
- * so the user fixes a short file instead of hunting through the original one.
+ * Rebuilds only the flagged rows, prefixed with their row number and reason, so
+ * the user fixes a short file instead of hunting through the original one. The
+ * same shape serves rejected rows and rows that imported with something unused;
+ * only the reason column is named differently.
  */
 export const createProductImportErrorRows = (
   headerRow: string[],
   rowErrors: ProductCsvRowError[],
+  reasonLabel = 'error',
 ) => [
-  ['baris', 'error', ...headerRow],
+  ['baris', reasonLabel, ...headerRow],
   ...rowErrors.map((rowError) => [
     rowError.rowNumber,
     rowError.messages.join(' | '),

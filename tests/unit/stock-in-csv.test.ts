@@ -326,4 +326,21 @@ describe('stock-in template', () => {
 
     expect(result.lines[0].notes).toBe('sisa gudang lama');
   });
+
+  /**
+   * File barang masuk sering dibuat dari hasil ekspor produk, lalu kolom
+   * satuannya dikosongkan karena dianggap tidak relevan. Di file master itu
+   * berarti "hapus konversinya"; di sini tidak boleh, karena satu-satunya
+   * maksud file ini adalah menambah stok.
+   */
+  test('never clears unit conversions even when the unit columns are blank', () => {
+    const result = importCsv([
+      'sku,name,purchase_unit,satuan_2,isi_2,qty,satuan,harga_beli',
+      'B,Produk B,pcs,,,2,dus,240000',
+    ].join('\n'), [multiUnitProduct], 'PURCHASE');
+
+    expect(result.rowErrors).toEqual([]);
+    expect(result.lines[0].unit).toBe('dus');
+    expect(result.lines[0].baseQuantity).toBe(48);
+  });
 });

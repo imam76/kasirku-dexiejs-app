@@ -1,4 +1,4 @@
-import { Alert, App, Button, Card, Drawer, Dropdown } from 'antd';
+import { Alert, App, Button, Card, Drawer, Dropdown, Segmented } from 'antd';
 import type { MenuProps } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
 import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
@@ -21,10 +21,18 @@ import {
   readWorkbookRows,
 } from '@/utils/productsWorkbook';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
-import { exportCsv, type ExportTarget } from '@/utils/export';
+import { exportCsv, exportXlsx, type ExportTarget } from '@/utils/export';
 import { useI18n } from '@/hooks/useI18n';
 
 const STOCK_SAVED_EVENT = 'frayukti-workflow-tour-stock-saved';
+
+/**
+ * Import sudah menerima .xlsx sejak awal, jadi ekspor yang cuma bisa .csv
+ * memaksa pengguna menyimpan ulang dari Excel — dan di situlah pemisah desimal
+ * dan koma di dalam sel JSON mulai rusak. Kedua format dipakai lewat satu
+ * pembangun baris yang sama supaya isinya tidak pernah berbeda.
+ */
+type ProductExportFormat = 'xlsx' | 'csv';
 
 const buildFileTimestamp = () => {
   const now = new Date();
@@ -54,6 +62,9 @@ export default function StockManagement() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isActionDrawerOpen, setIsActionDrawerOpen] = useState(false);
+  // Di layar kecil tidak ada ruang untuk submenu, jadi formatnya dipilih sekali
+  // lalu dipakai oleh ekspor maupun template.
+  const [mobileExportFormat, setMobileExportFormat] = useState<ProductExportFormat>('xlsx');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleModalCancel = () => {
@@ -75,22 +86,38 @@ export default function StockManagement() {
     void navigate({ to: '/finance/opening-balances/inventory' });
   };
 
-  const handleExportCsv = async (target: ExportTarget = 'auto') => {
+  /** Satu tabel, dua bungkus. Bedanya cuma cara file-nya ditulis. */
+  const writeExportFile = async (
+    format: ProductExportFormat,
+    baseName: string,
+    rows: ReturnType<typeof createProductCsvExportRows>,
+    sheetName: string,
+    target: ExportTarget,
+  ) => (format === 'xlsx'
+    ? exportXlsx({ filename: `${baseName}.xlsx`, sheets: [{ name: sheetName, rows }], target })
+    : exportCsv({ filename: `${baseName}.csv`, rows, target }));
+
+  const handleExportProducts = async (
+    format: ProductExportFormat,
+    target: ExportTarget = 'auto',
+  ) => {
     if (products.length === 0) {
       message.info(t('stock.noExportData'));
       return;
     }
 
     try {
-      const exported = await exportCsv({
-        filename: `products_export_${new Date().toISOString().split('T')[0]}.csv`,
-        rows: createProductCsvExportRows(products),
+      const exported = await writeExportFile(
+        format,
+        `products_export_${new Date().toISOString().split('T')[0]}`,
+        createProductCsvExportRows(products),
+        t('stock.title'),
         target,
-      });
+      );
       if (!exported) return;
       message.success(t('stock.exportSuccess'));
     } catch (error) {
-      console.error('Failed to export products CSV:', error);
+      console.error('Failed to export products:', error);
       message.error(t('stock.exportFailed'));
     }
   };
@@ -99,19 +126,49 @@ export default function StockManagement() {
     fileInputRef.current?.click();
   };
 
+  /**
+   * Laporan baris bermasalah mengikuti format file yang diunggah: yang diimpor
+   * dari Excel dikembalikan sebagai Excel, karena file ini memang untuk
+   * diperbaiki lalu diunggah ulang.
+   */
   const handleDownloadErrorRows = async (
     headerRow: string[],
     rowErrors: ProductCsvRowError[],
+    format: ProductExportFormat,
   ) => {
     try {
-      const exported = await exportCsv({
-        filename: `import-produk-gagal-${buildFileTimestamp()}.csv`,
-        rows: createProductImportErrorRows(headerRow, rowErrors),
-      });
+      const exported = await writeExportFile(
+        format,
+        `import-produk-gagal-${buildFileTimestamp()}`,
+        createProductImportErrorRows(headerRow, rowErrors),
+        t('stock.skippedRowsSheet'),
+        'auto',
+      );
       if (!exported) return;
       message.success(t('stock.errorRowsDownloaded'));
     } catch (error) {
       console.error('Failed to export failed import rows:', error);
+      message.error(t('stock.exportFailed'));
+    }
+  };
+
+  const handleDownloadWarningRows = async (
+    headerRow: string[],
+    rowWarnings: ProductCsvRowError[],
+    format: ProductExportFormat,
+  ) => {
+    try {
+      const exported = await writeExportFile(
+        format,
+        `import-produk-peringatan-${buildFileTimestamp()}`,
+        createProductImportErrorRows(headerRow, rowWarnings, 'peringatan'),
+        t('stock.adjustedRowsSheet'),
+        'auto',
+      );
+      if (!exported) return;
+      message.success(t('stock.warningRowsDownloaded'));
+    } catch (error) {
+      console.error('Failed to export warned import rows:', error);
       message.error(t('stock.exportFailed'));
     }
   };
@@ -127,7 +184,9 @@ export default function StockManagement() {
     }
 
     try {
-      const parsed = isWorkbookFile(file.name)
+      const isWorkbook = isWorkbookFile(file.name);
+      const reportFormat: ProductExportFormat = isWorkbook ? 'xlsx' : 'csv';
+      const parsed = isWorkbook
         ? buildProductCsvImportItemsFromRows(await readWorkbookRows(file))
         : buildProductCsvImportItems(await file.text());
       const { items, fileErrors, headerRow, ignoredOperationalColumns } = parsed;
@@ -170,7 +229,7 @@ export default function StockManagement() {
               {rowErrors.length > 0 ? (
                 <Button
                   icon={<Download size={16} />}
-                  onClick={() => void handleDownloadErrorRows(headerRow, rowErrors)}
+                  onClick={() => void handleDownloadErrorRows(headerRow, rowErrors, reportFormat)}
                 >
                   {t('stock.downloadErrorRows', { count: rowErrors.length })}
                 </Button>
@@ -220,9 +279,35 @@ export default function StockManagement() {
                 <Button
                   size="small"
                   icon={<Download size={14} />}
-                  onClick={() => void handleDownloadErrorRows(headerRow, rowErrors)}
+                  onClick={() => void handleDownloadErrorRows(headerRow, rowErrors, reportFormat)}
                 >
                   {t('stock.downloadErrorRows', { count: rowErrors.length })}
+                </Button>
+              </div>
+            ) : null}
+            {/*
+              Baris yang tetap masuk tapi ada isinya yang dibuang — satuan tanpa
+              konversi, satuan default di luar daftar. Dulu hal ini hilang tanpa
+              jejak dan pengguna mengira filenya terpakai utuh.
+            */}
+            {previewPlan.rowWarnings.length > 0 ? (
+              <div className="space-y-2">
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={t('stock.adjustedRows', { count: previewPlan.rowWarnings.length })}
+                />
+                <div className="max-h-32 overflow-y-auto text-xs text-gray-600">
+                  {previewPlan.warnings.map((warning) => (
+                    <div key={warning}>{warning}</div>
+                  ))}
+                </div>
+                <Button
+                  size="small"
+                  icon={<Download size={14} />}
+                  onClick={() => void handleDownloadWarningRows(headerRow, previewPlan.rowWarnings, reportFormat)}
+                >
+                  {t('stock.downloadWarningRows', { count: previewPlan.rowWarnings.length })}
                 </Button>
               </div>
             ) : null}
@@ -255,13 +340,18 @@ export default function StockManagement() {
     }
   };
 
-  const handleDownloadTemplate = async (target: ExportTarget = 'auto') => {
+  const handleDownloadTemplate = async (
+    format: ProductExportFormat,
+    target: ExportTarget = 'auto',
+  ) => {
     try {
-      const exported = await exportCsv({
-        filename: 'template-import-produk.csv',
-        rows: createProductCsvTemplateRows(),
+      const exported = await writeExportFile(
+        format,
+        'template-import-produk',
+        createProductCsvTemplateRows(),
+        t('stock.downloadTemplate'),
         target,
-      });
+      );
       if (!exported) return;
       message.success(t('stock.templateDownloaded'));
     } catch (error) {
@@ -271,23 +361,46 @@ export default function StockManagement() {
   };
 
   const exportMenuItems: MenuProps['items'] = [
-    { key: 'share', label: t('stock.share') },
-    { key: 'save', label: t('stock.saveToFile') },
+    {
+      key: 'xlsx',
+      label: t('stock.formatExcel'),
+      children: [
+        { key: 'xlsx:share', label: t('stock.share') },
+        { key: 'xlsx:save', label: t('stock.saveToFile') },
+      ],
+    },
+    {
+      key: 'csv',
+      label: t('stock.formatCsv'),
+      children: [
+        { key: 'csv:share', label: t('stock.share') },
+        { key: 'csv:save', label: t('stock.saveToFile') },
+      ],
+    },
     { type: 'divider' },
-    { key: 'template', label: t('stock.downloadTemplate') },
+    {
+      key: 'template',
+      label: t('stock.downloadTemplate'),
+      children: [
+        { key: 'template:xlsx', label: t('stock.formatExcel') },
+        { key: 'template:csv', label: t('stock.formatCsv') },
+      ],
+    },
   ];
 
   const handleExportMenuClick: NonNullable<MenuProps['onClick']> = ({ key }) => {
-    if (key === 'template') {
-      void handleDownloadTemplate();
+    const [scope, value] = key.split(':');
+
+    if (scope === 'template') {
+      void handleDownloadTemplate(value as ProductExportFormat);
       return;
     }
-    void handleExportCsv(key as ExportTarget);
+    void handleExportProducts(scope as ProductExportFormat, value as ExportTarget);
   };
 
   const handleMobileExport = (target: ExportTarget) => {
     setIsActionDrawerOpen(false);
-    void handleExportCsv(target);
+    void handleExportProducts(mobileExportFormat, target);
   };
 
   const handleMobileImportClick = () => {
@@ -297,7 +410,7 @@ export default function StockManagement() {
 
   const handleMobileTemplateDownload = () => {
     setIsActionDrawerOpen(false);
-    void handleDownloadTemplate();
+    void handleDownloadTemplate(mobileExportFormat);
   };
 
   return (
@@ -373,6 +486,16 @@ export default function StockManagement() {
               <Download size={18} />
               <span>{t('stock.exportCsv')}</span>
             </div>
+            <Segmented<ProductExportFormat>
+              block
+              className="mb-3"
+              value={mobileExportFormat}
+              onChange={setMobileExportFormat}
+              options={[
+                { value: 'xlsx', label: t('stock.formatExcel') },
+                { value: 'csv', label: t('stock.formatCsv') },
+              ]}
+            />
             <div className="grid grid-cols-2 gap-2">
               <Button
                 size="large"
