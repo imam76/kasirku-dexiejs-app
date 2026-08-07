@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import type { StockFormData } from '@/lib/validations/stock';
 import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
 import { recordStockPurchase } from '@/services/stockPurchaseService';
-import { enqueueProductSync } from '@/services/syncQueueService';
+import { buildProductSyncQueueItem, enqueueProductSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import type { FinanceTransaction, Product } from '@/types';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 
@@ -123,4 +123,61 @@ export const updateProductRecord = async (productId: string, data: StockFormData
   }
 
   return syncedProduct;
+};
+
+/**
+ * Bulk-update harga jual, dipakai halaman "Update Harga Jual" di detail
+ * purchase invoice supaya user tidak perlu buka form edit produk satu-satu.
+ */
+export const bulkUpdateProductSellingPrices = async (
+  updates: Array<{ productId: string; sellingPrice: number }>,
+  context: { sourceDocumentId?: string; sourceDocumentNumber?: string } = {},
+): Promise<Product[]> => {
+  const currentUser = await getCurrentSessionUser();
+  await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
+
+  // Purchase invoices can carry the same product across multiple lines, so
+  // keep only the last requested price per product before writing.
+  const dedupedUpdates = [...new Map(updates.map((update) => [update.productId, update])).values()];
+
+  if (dedupedUpdates.length === 0) {
+    return [];
+  }
+
+  const now = new Date().toISOString();
+  let updatedProducts: Product[] = [];
+
+  await db.transaction('rw', [db.products, db.syncQueue], async () => {
+    const existingProducts = await db.products.bulkGet(dedupedUpdates.map((update) => update.productId));
+
+    updatedProducts = dedupedUpdates.flatMap((update, index) => {
+      const existingProduct = existingProducts[index];
+      if (!existingProduct) return [];
+
+      return [withPendingSync({
+        ...existingProduct,
+        selling_price: update.sellingPrice,
+        updated_at: now,
+      })];
+    });
+
+    await db.products.bulkPut(updatedProducts);
+    await db.syncQueue.bulkAdd(updatedProducts.map((product) => (
+      buildProductSyncQueueItem(product, 'update', { createdAt: now })
+    )));
+  });
+
+  void processPendingSyncQueue();
+
+  await writeActivityLog({
+    user: currentUser,
+    action: 'PRODUCT_BULK_PRICE_UPDATED',
+    entity: 'products',
+    entity_id: context.sourceDocumentId,
+    description: context.sourceDocumentNumber
+      ? `${currentUser?.name ?? 'User'} memperbarui harga jual ${updatedProducts.length} produk dari invoice ${context.sourceDocumentNumber}.`
+      : `${currentUser?.name ?? 'User'} memperbarui harga jual ${updatedProducts.length} produk.`,
+  });
+
+  return updatedProducts;
 };

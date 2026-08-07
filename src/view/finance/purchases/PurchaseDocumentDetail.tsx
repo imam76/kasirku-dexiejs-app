@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, Modal, Space, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
-import { AlertTriangle, FileCheck2, Wrench } from 'lucide-react';
+import { AlertTriangle, FileCheck2, Tags, Wrench } from 'lucide-react';
 import { PayablePaymentHistory } from '@/components/accounts-payable/PayablePaymentHistory';
 import {
   getPurchaseDocumentConfig,
@@ -145,6 +145,9 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
     document.type === 'PURCHASE_RECEIPT' &&
     document.status === 'ISSUED' &&
     (document.cost_status ?? 'FINAL') !== 'FINAL';
+  const canUpdateSellPrices = can('PRODUCT_MANAGE') &&
+    document.type === 'PURCHASE_INVOICE' &&
+    document.status === 'ISSUED';
   const statusStyle = statusColor[document.status];
   const costStatus = document.cost_status ?? 'FINAL';
   const costStyle = costStatusColor[costStatus];
@@ -301,6 +304,17 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
               })}
             >
               Rekonsiliasi HPP
+            </Button>
+          )}
+          {canUpdateSellPrices && (
+            <Button
+              icon={<Tags size={16} />}
+              onClick={() => navigate({
+                to: '/purchases/$documentType/$documentId/update-sell-prices',
+                params: { documentType: getPurchaseDocumentTypePathSegment(document.type), documentId: document.id },
+              })}
+            >
+              Update Harga Jual
             </Button>
           )}
           {nextConvertOptions

@@ -1,7 +1,7 @@
 import { createLazyFileRoute } from '@tanstack/react-router';
 import PurchaseReceiptCostReconciliation from '@/view/finance/purchases/PurchaseReceiptCostReconciliation';
 
-export const Route = createLazyFileRoute('/purchases/$documentType/$documentId/reconcile')({
+export const Route = createLazyFileRoute('/purchases/$documentType/$documentId_/reconcile')({
   component: PurchaseReceiptCostReconciliationRoute,
 });
 

@@ -8,7 +8,7 @@ import { getPurchaseDocumentTypePathSegment } from '@/configs/purchase-document'
 import { usePurchaseCostReconciliation } from '@/hooks/usePurchaseCostReconciliation';
 import { db } from '@/lib/db';
 import type { PurchaseAdditionalCostTreatment, PurchaseDocument, PurchaseDocumentItem } from '@/types';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatCurrency, formatCurrencyInput, formatDate, parseCurrencyInput } from '@/utils/formatters';
 
 const { Title, Text } = Typography;
 
@@ -163,9 +163,10 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
         <InputNumber
           min={0}
           className="w-full"
+          prefix="Rp"
           value={line.finalPrice}
-          formatter={(value) => `Rp ${formatCurrency(Number(value || 0))}`}
-          parser={(value) => Number(String(value || '').replace(/[^\d.-]/g, ''))}
+          formatter={formatCurrencyInput}
+          parser={parseCurrencyInput}
           onChange={(value) => updateLine(line.purchaseDocumentItemId, { finalPrice: Number(value || 0) })}
         />
       ),

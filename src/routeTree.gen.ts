@@ -272,11 +272,13 @@ const SalesReturnsReturnIdEditLazyRouteImport = createFileRoute(
 const SalesDocumentTypeDocumentIdEditLazyRouteImport = createFileRoute(
   '/sales/$documentType/$documentId_/edit',
 )()
+const PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRouteImport =
+  createFileRoute('/purchases/$documentType/$documentId_/update-sell-prices')()
+const PurchasesDocumentTypeDocumentIdReconcileLazyRouteImport = createFileRoute(
+  '/purchases/$documentType/$documentId_/reconcile',
+)()
 const PurchasesDocumentTypeDocumentIdEditLazyRouteImport = createFileRoute(
   '/purchases/$documentType/$documentId_/edit',
-)()
-const PurchasesDocumentTypeDocumentIdReconcileLazyRouteImport = createFileRoute(
-  '/purchases/$documentType/$documentId/reconcile',
 )()
 const MarketplaceShopeeOrdersOrderIdLazyRouteImport = createFileRoute(
   '/marketplace/shopee/orders/$orderId',
@@ -1187,6 +1189,26 @@ const SalesDocumentTypeDocumentIdEditLazyRoute =
       (d) => d.Route,
     ),
   )
+const PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRoute =
+  PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRouteImport.update({
+    id: '/purchases/$documentType/$documentId_/update-sell-prices',
+    path: '/purchases/$documentType/$documentId/update-sell-prices',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/purchases/$documentType/$documentId_.update-sell-prices.lazy').then(
+      (d) => d.Route,
+    ),
+  )
+const PurchasesDocumentTypeDocumentIdReconcileLazyRoute =
+  PurchasesDocumentTypeDocumentIdReconcileLazyRouteImport.update({
+    id: '/purchases/$documentType/$documentId_/reconcile',
+    path: '/purchases/$documentType/$documentId/reconcile',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/purchases/$documentType/$documentId_.reconcile.lazy').then(
+      (d) => d.Route,
+    ),
+  )
 const PurchasesDocumentTypeDocumentIdEditLazyRoute =
   PurchasesDocumentTypeDocumentIdEditLazyRouteImport.update({
     id: '/purchases/$documentType/$documentId_/edit',
@@ -1194,16 +1216,6 @@ const PurchasesDocumentTypeDocumentIdEditLazyRoute =
     getParentRoute: () => rootRouteImport,
   } as any).lazy(() =>
     import('./routes/purchases/$documentType/$documentId_.edit.lazy').then(
-      (d) => d.Route,
-    ),
-  )
-const PurchasesDocumentTypeDocumentIdReconcileLazyRoute =
-  PurchasesDocumentTypeDocumentIdReconcileLazyRouteImport.update({
-    id: '/reconcile',
-    path: '/reconcile',
-    getParentRoute: () => PurchasesDocumentTypeDocumentIdLazyRoute,
-  } as any).lazy(() =>
-    import('./routes/purchases/$documentType/$documentId/reconcile.lazy').then(
       (d) => d.Route,
     ),
   )
@@ -1420,7 +1432,7 @@ export interface FileRoutesByFullPath {
   '/koperasi/laporan/tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
   '/koperasi/laporan/target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
   '/koperasi/laporan/tunai': typeof KoperasiLaporanTunaiLazyRoute
-  '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
+  '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRoute
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
   '/sales/$documentType/new': typeof SalesDocumentTypeNewLazyRoute
@@ -1439,8 +1451,9 @@ export interface FileRoutesByFullPath {
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
   '/marketplace/shopee/orders/$orderId': typeof MarketplaceShopeeOrdersOrderIdLazyRoute
-  '/purchases/$documentType/$documentId/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
   '/purchases/$documentType/$documentId/edit': typeof PurchasesDocumentTypeDocumentIdEditLazyRoute
+  '/purchases/$documentType/$documentId/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
+  '/purchases/$documentType/$documentId/update-sell-prices': typeof PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRoute
   '/sales/$documentType/$documentId/edit': typeof SalesDocumentTypeDocumentIdEditLazyRoute
   '/sales/returns/$returnId/edit': typeof SalesReturnsReturnIdEditLazyRoute
   '/finance/purchases/$documentType/': typeof FinancePurchasesDocumentTypeIndexRoute
@@ -1555,7 +1568,7 @@ export interface FileRoutesByTo {
   '/koperasi/laporan/tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
   '/koperasi/laporan/target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
   '/koperasi/laporan/tunai': typeof KoperasiLaporanTunaiLazyRoute
-  '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
+  '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRoute
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
   '/sales/$documentType/new': typeof SalesDocumentTypeNewLazyRoute
@@ -1574,8 +1587,9 @@ export interface FileRoutesByTo {
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
   '/marketplace/shopee/orders/$orderId': typeof MarketplaceShopeeOrdersOrderIdLazyRoute
-  '/purchases/$documentType/$documentId/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
   '/purchases/$documentType/$documentId/edit': typeof PurchasesDocumentTypeDocumentIdEditLazyRoute
+  '/purchases/$documentType/$documentId/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
+  '/purchases/$documentType/$documentId/update-sell-prices': typeof PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRoute
   '/sales/$documentType/$documentId/edit': typeof SalesDocumentTypeDocumentIdEditLazyRoute
   '/sales/returns/$returnId/edit': typeof SalesReturnsReturnIdEditLazyRoute
   '/finance/purchases/$documentType': typeof FinancePurchasesDocumentTypeIndexRoute
@@ -1691,7 +1705,7 @@ export interface FileRoutesById {
   '/koperasi/laporan/tabungan-masuk': typeof KoperasiLaporanTabunganMasukLazyRoute
   '/koperasi/laporan/target-harian': typeof KoperasiLaporanTargetHarianLazyRoute
   '/koperasi/laporan/tunai': typeof KoperasiLaporanTunaiLazyRoute
-  '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
+  '/purchases/$documentType/$documentId': typeof PurchasesDocumentTypeDocumentIdLazyRoute
   '/purchases/$documentType/new': typeof PurchasesDocumentTypeNewLazyRoute
   '/sales/$documentType/$documentId': typeof SalesDocumentTypeDocumentIdLazyRoute
   '/sales/$documentType/new': typeof SalesDocumentTypeNewLazyRoute
@@ -1710,8 +1724,9 @@ export interface FileRoutesById {
   '/finance/sales/returns/$returnId': typeof FinanceSalesReturnsReturnIdLazyRoute
   '/finance/sales/returns/new': typeof FinanceSalesReturnsNewLazyRoute
   '/marketplace/shopee/orders/$orderId': typeof MarketplaceShopeeOrdersOrderIdLazyRoute
-  '/purchases/$documentType/$documentId/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
   '/purchases/$documentType/$documentId_/edit': typeof PurchasesDocumentTypeDocumentIdEditLazyRoute
+  '/purchases/$documentType/$documentId_/reconcile': typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
+  '/purchases/$documentType/$documentId_/update-sell-prices': typeof PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRoute
   '/sales/$documentType/$documentId_/edit': typeof SalesDocumentTypeDocumentIdEditLazyRoute
   '/sales/returns/$returnId_/edit': typeof SalesReturnsReturnIdEditLazyRoute
   '/finance/purchases/$documentType/': typeof FinancePurchasesDocumentTypeIndexRoute
@@ -1847,8 +1862,9 @@ export interface FileRouteTypes {
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
     | '/marketplace/shopee/orders/$orderId'
-    | '/purchases/$documentType/$documentId/reconcile'
     | '/purchases/$documentType/$documentId/edit'
+    | '/purchases/$documentType/$documentId/reconcile'
+    | '/purchases/$documentType/$documentId/update-sell-prices'
     | '/sales/$documentType/$documentId/edit'
     | '/sales/returns/$returnId/edit'
     | '/finance/purchases/$documentType/'
@@ -1982,8 +1998,9 @@ export interface FileRouteTypes {
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
     | '/marketplace/shopee/orders/$orderId'
-    | '/purchases/$documentType/$documentId/reconcile'
     | '/purchases/$documentType/$documentId/edit'
+    | '/purchases/$documentType/$documentId/reconcile'
+    | '/purchases/$documentType/$documentId/update-sell-prices'
     | '/sales/$documentType/$documentId/edit'
     | '/sales/returns/$returnId/edit'
     | '/finance/purchases/$documentType'
@@ -2117,8 +2134,9 @@ export interface FileRouteTypes {
     | '/finance/sales/returns/$returnId'
     | '/finance/sales/returns/new'
     | '/marketplace/shopee/orders/$orderId'
-    | '/purchases/$documentType/$documentId/reconcile'
     | '/purchases/$documentType/$documentId_/edit'
+    | '/purchases/$documentType/$documentId_/reconcile'
+    | '/purchases/$documentType/$documentId_/update-sell-prices'
     | '/sales/$documentType/$documentId_/edit'
     | '/sales/returns/$returnId_/edit'
     | '/finance/purchases/$documentType/'
@@ -2226,7 +2244,7 @@ export interface RootRouteChildren {
   KoperasiLaporanTabunganMasukLazyRoute: typeof KoperasiLaporanTabunganMasukLazyRoute
   KoperasiLaporanTargetHarianLazyRoute: typeof KoperasiLaporanTargetHarianLazyRoute
   KoperasiLaporanTunaiLazyRoute: typeof KoperasiLaporanTunaiLazyRoute
-  PurchasesDocumentTypeDocumentIdLazyRoute: typeof PurchasesDocumentTypeDocumentIdLazyRouteWithChildren
+  PurchasesDocumentTypeDocumentIdLazyRoute: typeof PurchasesDocumentTypeDocumentIdLazyRoute
   PurchasesDocumentTypeNewLazyRoute: typeof PurchasesDocumentTypeNewLazyRoute
   SalesDocumentTypeDocumentIdLazyRoute: typeof SalesDocumentTypeDocumentIdLazyRoute
   SalesDocumentTypeNewLazyRoute: typeof SalesDocumentTypeNewLazyRoute
@@ -2245,6 +2263,8 @@ export interface RootRouteChildren {
   FinanceSalesReturnsReturnIdLazyRoute: typeof FinanceSalesReturnsReturnIdLazyRoute
   FinanceSalesReturnsNewLazyRoute: typeof FinanceSalesReturnsNewLazyRoute
   PurchasesDocumentTypeDocumentIdEditLazyRoute: typeof PurchasesDocumentTypeDocumentIdEditLazyRoute
+  PurchasesDocumentTypeDocumentIdReconcileLazyRoute: typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
+  PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRoute: typeof PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRoute
   SalesDocumentTypeDocumentIdEditLazyRoute: typeof SalesDocumentTypeDocumentIdEditLazyRoute
   SalesReturnsReturnIdEditLazyRoute: typeof SalesReturnsReturnIdEditLazyRoute
   FinancePurchasesDocumentTypeIndexRoute: typeof FinancePurchasesDocumentTypeIndexRoute
@@ -3097,19 +3117,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SalesDocumentTypeDocumentIdEditLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/purchases/$documentType/$documentId_/update-sell-prices': {
+      id: '/purchases/$documentType/$documentId_/update-sell-prices'
+      path: '/purchases/$documentType/$documentId/update-sell-prices'
+      fullPath: '/purchases/$documentType/$documentId/update-sell-prices'
+      preLoaderRoute: typeof PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/purchases/$documentType/$documentId_/reconcile': {
+      id: '/purchases/$documentType/$documentId_/reconcile'
+      path: '/purchases/$documentType/$documentId/reconcile'
+      fullPath: '/purchases/$documentType/$documentId/reconcile'
+      preLoaderRoute: typeof PurchasesDocumentTypeDocumentIdReconcileLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/purchases/$documentType/$documentId_/edit': {
       id: '/purchases/$documentType/$documentId_/edit'
       path: '/purchases/$documentType/$documentId/edit'
       fullPath: '/purchases/$documentType/$documentId/edit'
       preLoaderRoute: typeof PurchasesDocumentTypeDocumentIdEditLazyRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/purchases/$documentType/$documentId/reconcile': {
-      id: '/purchases/$documentType/$documentId/reconcile'
-      path: '/reconcile'
-      fullPath: '/purchases/$documentType/$documentId/reconcile'
-      preLoaderRoute: typeof PurchasesDocumentTypeDocumentIdReconcileLazyRouteImport
-      parentRoute: typeof PurchasesDocumentTypeDocumentIdLazyRoute
     }
     '/marketplace/shopee/orders/$orderId': {
       id: '/marketplace/shopee/orders/$orderId'
@@ -3264,21 +3291,6 @@ const MarketplaceShopeeLazyRouteWithChildren =
     MarketplaceShopeeLazyRouteChildren,
   )
 
-interface PurchasesDocumentTypeDocumentIdLazyRouteChildren {
-  PurchasesDocumentTypeDocumentIdReconcileLazyRoute: typeof PurchasesDocumentTypeDocumentIdReconcileLazyRoute
-}
-
-const PurchasesDocumentTypeDocumentIdLazyRouteChildren: PurchasesDocumentTypeDocumentIdLazyRouteChildren =
-  {
-    PurchasesDocumentTypeDocumentIdReconcileLazyRoute:
-      PurchasesDocumentTypeDocumentIdReconcileLazyRoute,
-  }
-
-const PurchasesDocumentTypeDocumentIdLazyRouteWithChildren =
-  PurchasesDocumentTypeDocumentIdLazyRoute._addFileChildren(
-    PurchasesDocumentTypeDocumentIdLazyRouteChildren,
-  )
-
 interface FinancePurchasesDocumentTypeDocumentIdLazyRouteChildren {
   FinancePurchasesDocumentTypeDocumentIdReconcileLazyRoute: typeof FinancePurchasesDocumentTypeDocumentIdReconcileLazyRoute
 }
@@ -3398,7 +3410,7 @@ const rootRouteChildren: RootRouteChildren = {
   KoperasiLaporanTargetHarianLazyRoute: KoperasiLaporanTargetHarianLazyRoute,
   KoperasiLaporanTunaiLazyRoute: KoperasiLaporanTunaiLazyRoute,
   PurchasesDocumentTypeDocumentIdLazyRoute:
-    PurchasesDocumentTypeDocumentIdLazyRouteWithChildren,
+    PurchasesDocumentTypeDocumentIdLazyRoute,
   PurchasesDocumentTypeNewLazyRoute: PurchasesDocumentTypeNewLazyRoute,
   SalesDocumentTypeDocumentIdLazyRoute: SalesDocumentTypeDocumentIdLazyRoute,
   SalesDocumentTypeNewLazyRoute: SalesDocumentTypeNewLazyRoute,
@@ -3421,6 +3433,10 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceSalesReturnsNewLazyRoute: FinanceSalesReturnsNewLazyRoute,
   PurchasesDocumentTypeDocumentIdEditLazyRoute:
     PurchasesDocumentTypeDocumentIdEditLazyRoute,
+  PurchasesDocumentTypeDocumentIdReconcileLazyRoute:
+    PurchasesDocumentTypeDocumentIdReconcileLazyRoute,
+  PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRoute:
+    PurchasesDocumentTypeDocumentIdUpdateSellPricesLazyRoute,
   SalesDocumentTypeDocumentIdEditLazyRoute:
     SalesDocumentTypeDocumentIdEditLazyRoute,
   SalesReturnsReturnIdEditLazyRoute: SalesReturnsReturnIdEditLazyRoute,
