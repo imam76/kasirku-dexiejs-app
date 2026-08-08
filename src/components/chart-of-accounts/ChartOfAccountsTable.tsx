@@ -1,6 +1,7 @@
-import { Button, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { Button, Space, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Archive, Edit2, RotateCcw } from 'lucide-react';
+import ManagementTable from '@/components/ManagementTable';
 import { useI18n } from '@/hooks/useI18n';
 import type { TranslationKey } from '@/i18n/messages';
 import type { ChartOfAccount } from '@/types';
@@ -42,6 +43,7 @@ export default function ChartOfAccountsTable({
       title: t('coa.table.name'),
       dataIndex: 'name',
       key: 'name',
+      width: 280,
       render: (name: string, account) => (
         <Space orientation="vertical" size={0}>
           <Text>{name}</Text>
@@ -108,13 +110,11 @@ export default function ChartOfAccountsTable({
   ];
 
   return (
-    <Table
-      dataSource={accounts}
+    <ManagementTable<ChartOfAccountTreeNode>
       columns={columns}
-      rowKey="id"
-      pagination={{ pageSize: 10 }}
-      scroll={{ x: 1060 }}
-      locale={{ emptyText: t('coa.empty') }}
+      dataSource={accounts}
+      scrollX={1310}
+      emptyText={t('coa.empty')}
     />
   );
 }

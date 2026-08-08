@@ -1,4 +1,5 @@
-import { Button, Drawer, Input, InputNumber, Select } from 'antd';
+import { Button, Drawer, Input, InputNumber, Select, Space, Tag, Tooltip } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import type { ChangeEvent } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useI18n } from '@/hooks/useI18n';
@@ -9,6 +10,7 @@ import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
 import { getProductDisplayPricing } from '@/utils/pricing';
 import { BadgeCheck, Edit2, PackagePlus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import ManagementTable from './ManagementTable';
 
 interface StockTableProps {
   products: Product[];
@@ -18,8 +20,6 @@ interface StockTableProps {
   onVerify?: (product: Product) => void;
 }
 
-type SortField = 'name' | 'sku' | 'purchase_price' | 'selling_price' | 'stock';
-type SortDirection = 'asc' | 'desc';
 type StockStatusFilter = 'all' | 'out' | 'low' | 'safe';
 type SkuStatusFilter = 'all' | 'with' | 'without';
 type WholesaleStatusFilter = 'all' | 'with' | 'without';
@@ -42,11 +42,6 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
   const [wholesaleStatus, setWholesaleStatus] = useState<WholesaleStatusFilter>('all');
   const [productType, setProductType] = useState<ProductTypeFilter>('all');
   const [posVisibility, setPosVisibility] = useState<PosVisibilityFilter>('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
   const stockStatusOptions = useMemo(() => [
@@ -105,7 +100,6 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
     setWholesaleStatus('all');
     setProductType('all');
     setPosVisibility('all');
-    setCurrentPage(1);
   };
 
   // Filter products berdasarkan search query
@@ -195,47 +189,144 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
     isStockStatusMatch,
   ]);
 
-  // Sort products
-  const sortedProducts = useMemo(() => {
-    const sorted = [...filteredProducts].sort((a, b) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
-
-      if (typeof aValue === 'string') {
-        return sortDirection === 'asc'
-          ? aValue.localeCompare(bValue as string)
-          : (bValue as string).localeCompare(aValue);
-      }
-
-      return sortDirection === 'asc'
-        ? (aValue as number) - (bValue as number)
-        : (bValue as number) - (aValue as number);
-    });
-
-    return sorted;
-  }, [filteredProducts, sortField, sortDirection]);
-
-  // Paginate products
-  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
-  const paginatedProducts = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return sortedProducts.slice(startIndex, startIndex + itemsPerPage);
-  }, [sortedProducts, currentPage, itemsPerPage]);
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-    setCurrentPage(1);
-  };
-
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
-    setCurrentPage(1);
   };
+
+  const columns: ColumnsType<Product> = [
+    {
+      title: 'SKU',
+      dataIndex: 'sku',
+      key: 'sku',
+      sorter: (a, b) => (a.sku ?? '').localeCompare(b.sku ?? ''),
+      render: (sku?: string) => sku || '-',
+    },
+    {
+      title: t('stock.productName'),
+      dataIndex: 'name',
+      key: 'name',
+      sorter: (a, b) => a.name.localeCompare(b.name),
+      render: (name: string, product) => (
+        <span className="font-medium text-gray-900">
+          {name}
+          {isProductUnverified(product) && (
+            <Tag color="gold" className="ml-2">{t('stock.unverified')}</Tag>
+          )}
+        </span>
+      ),
+    },
+    {
+      title: t('stock.category'),
+      dataIndex: 'category',
+      key: 'category',
+      render: (category?: string) => getProductCategoryLabel(category || 'non_consumable', t),
+    },
+    {
+      title: 'Tipe',
+      dataIndex: 'product_type',
+      key: 'product_type',
+      render: (type?: Product['product_type']) => (type === 'RAW_MATERIAL' ? 'Bahan Baku' : 'Barang Jadi'),
+    },
+    {
+      title: 'Status POS',
+      dataIndex: 'is_visible_in_pos',
+      key: 'is_visible_in_pos',
+      render: (isVisible?: boolean) => (
+        <Tag color={isVisible === false ? 'default' : 'blue'}>
+          {isVisible === false ? 'Tidak tampil di POS' : 'Tampil di POS'}
+        </Tag>
+      ),
+    },
+    {
+      title: t('stock.purchasePrice'),
+      dataIndex: 'purchase_price',
+      key: 'purchase_price',
+      sorter: (a, b) => a.purchase_price - b.purchase_price,
+      render: (_value, product) => (
+        <span>
+          Rp {formatCurrency(product.purchase_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
+        </span>
+      ),
+    },
+    {
+      title: t('stock.sellingPrice'),
+      dataIndex: 'selling_price',
+      key: 'selling_price',
+      sorter: (a, b) => a.selling_price - b.selling_price,
+      render: (_value, product) => (
+        <div>
+          <span>
+            Rp {formatCurrency(product.selling_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
+          </span>
+          {product.selling_unit !== product.purchase_unit && (
+            <div className="text-[10px] text-gray-400">
+              (≈ Rp {formatCurrency(getProductDisplayPricing(product).basePrice)} / {product.selling_unit})
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: t('stock.margin'),
+      key: 'margin',
+      render: (_value, product) => {
+        const margin = product.selling_price - product.purchase_price;
+        const marginPercent = product.purchase_price > 0
+          ? ((margin / product.purchase_price) * 100).toFixed(1)
+          : '0';
+        return `${marginPercent}%`;
+      },
+    },
+    {
+      title: t('product.stock'),
+      dataIndex: 'stock',
+      key: 'stock',
+      sorter: (a, b) => a.stock - b.stock,
+      render: (_value, product) => (
+        <span className={`px-2 py-1 rounded ${getStockStatusClass(product.stock)}`}>
+          {product.stock} {product.purchase_unit}
+        </span>
+      ),
+    },
+    {
+      title: t('stock.action'),
+      key: 'action',
+      fixed: 'right',
+      render: (_value, product) => (
+        <Space>
+          {onVerify && isProductUnverified(product) && (
+            <Tooltip title={t('stock.verifyAction')}>
+              <Button
+                type="text"
+                className="text-amber-600"
+                icon={<BadgeCheck size={16} />}
+                onClick={() => onVerify(product)}
+              />
+            </Tooltip>
+          )}
+          <Tooltip title={t('stock.openingStockAction')}>
+            <Button
+              type="text"
+              className="text-emerald-600"
+              icon={<PackagePlus size={16} />}
+              onClick={() => onOpeningStock(product)}
+            />
+          </Tooltip>
+          <Tooltip title={t('stock.editTitle')}>
+            <Button
+              type="text"
+              className="text-blue-600"
+              icon={<Edit2 size={16} />}
+              onClick={() => onEdit(product)}
+            />
+          </Tooltip>
+          <Tooltip title={t('stock.deleteProductTitle')}>
+            <Button danger type="text" icon={<Trash2 size={16} />} onClick={() => onDelete(product.id)} />
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
 
   const renderFilterControls = (compact = false) => (
     <div className={compact ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4'}>
@@ -245,19 +336,13 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
         maxTagCount="responsive"
         placeholder={t('stock.categoryPlaceholder')}
         value={selectedCategories}
-        onChange={(value) => {
-          setSelectedCategories(value);
-          setCurrentPage(1);
-        }}
+        onChange={setSelectedCategories}
         options={categoryOptions}
       />
 
       <Select
         value={stockStatus}
-        onChange={(value) => {
-          setStockStatus(value);
-          setCurrentPage(1);
-        }}
+        onChange={setStockStatus}
         options={stockStatusOptions}
       />
 
@@ -265,20 +350,14 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
         <InputNumber
           min={0}
           value={minStock}
-          onChange={(value) => {
-            setMinStock(value);
-            setCurrentPage(1);
-          }}
+          onChange={setMinStock}
           placeholder={t('stock.minStock')}
           style={{ width: '100%' }}
         />
         <InputNumber
           min={0}
           value={maxStock}
-          onChange={(value) => {
-            setMaxStock(value);
-            setCurrentPage(1);
-          }}
+          onChange={setMaxStock}
           placeholder={t('stock.maxStock')}
           style={{ width: '100%' }}
         />
@@ -286,25 +365,19 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
 
       <Select
         value={skuStatus}
-        onChange={(value) => {
-          setSkuStatus(value);
-          setCurrentPage(1);
-        }}
+        onChange={setSkuStatus}
         options={skuStatusOptions}
       />
 
       <Select
         value={wholesaleStatus}
-        onChange={(value) => {
-          setWholesaleStatus(value);
-          setCurrentPage(1);
-        }}
+        onChange={setWholesaleStatus}
         options={wholesaleStatusOptions}
       />
 
       <Select
         value={productType}
-        onChange={(value) => { setProductType(value); setCurrentPage(1); }}
+        onChange={setProductType}
         options={[
           { value: 'all', label: 'Semua tipe' },
           { value: 'FINISHED_GOOD', label: 'Barang Jadi' },
@@ -314,7 +387,7 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
 
       <Select
         value={posVisibility}
-        onChange={(value) => { setPosVisibility(value); setCurrentPage(1); }}
+        onChange={setPosVisibility}
         options={[
           { value: 'all', label: 'Semua' },
           { value: 'visible', label: 'Tampil di POS' },
@@ -326,20 +399,14 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
         <InputNumber
           min={0}
           value={minSellingPrice}
-          onChange={(value) => {
-            setMinSellingPrice(value);
-            setCurrentPage(1);
-          }}
+          onChange={setMinSellingPrice}
           placeholder={t('stock.minSell')}
           style={{ width: '100%' }}
         />
         <InputNumber
           min={0}
           value={maxSellingPrice}
-          onChange={(value) => {
-            setMaxSellingPrice(value);
-            setCurrentPage(1);
-          }}
+          onChange={setMaxSellingPrice}
           placeholder={t('stock.maxSell')}
           style={{ width: '100%' }}
         />
@@ -349,20 +416,14 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
         <InputNumber
           min={0}
           value={minPurchasePrice}
-          onChange={(value) => {
-            setMinPurchasePrice(value);
-            setCurrentPage(1);
-          }}
+          onChange={setMinPurchasePrice}
           placeholder={t('stock.minBuy')}
           style={{ width: '100%' }}
         />
         <InputNumber
           min={0}
           value={maxPurchasePrice}
-          onChange={(value) => {
-            setMaxPurchasePrice(value);
-            setCurrentPage(1);
-          }}
+          onChange={setMaxPurchasePrice}
           placeholder={t('stock.maxBuy')}
           style={{ width: '100%' }}
         />
@@ -455,398 +516,14 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
         </div>
       </Drawer>
 
-      {isMobile ? (
-        <div className="space-y-3">
-          {paginatedProducts.length === 0 && (
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 text-center py-8 text-gray-500 text-sm">
-              {searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
-            </div>
-          )}
-          {paginatedProducts.map((product) => {
-            const margin = product.selling_price - product.purchase_price;
-            const marginPercent = product.purchase_price > 0
-              ? ((margin / product.purchase_price) * 100).toFixed(1)
-              : '0';
-
-            return (
-              <div key={product.id} onClick={() => setSelectedProduct(product)} className="bg-white rounded-lg shadow-md border border-gray-200 p-4 cursor-pointer">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">{product.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">SKU: {product.sku || '-'}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{getProductCategoryLabel(product.category || 'non_consumable', t)}</p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{product.product_type === 'RAW_MATERIAL' ? 'Bahan Baku' : 'Barang Jadi'}</span>
-                      <span className={`rounded px-2 py-0.5 text-[10px] font-semibold ${product.is_visible_in_pos === false ? 'bg-gray-100 text-gray-500' : 'bg-blue-50 text-blue-700'}`}>{product.is_visible_in_pos === false ? 'Tidak tampil di POS' : 'Tampil di POS'}</span>
-                      {isProductUnverified(product) && (
-                        <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{t('stock.unverified')}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStockStatusClass(product.stock)}`}>
-                      {t('product.stock')}: {product.stock}
-                    </span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="bg-gray-50 rounded p-2">
-                    <p className="text-gray-500 mb-0.5">{t('stock.purchasePrice')}</p>
-                    <p className="font-semibold text-gray-900">Rp {formatCurrency(product.purchase_price)}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded p-2">
-                    <p className="text-gray-500 mb-0.5">{t('stock.sellingPrice')}</p>
-                    <p className="font-semibold text-gray-900">Rp {formatCurrency(product.selling_price)}</p>
-                  </div>
-                  <div className={`rounded p-2 ${margin > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                    <p className={`mb-0.5 ${margin > 0 ? 'text-green-600' : 'text-red-600'}`}>{t('stock.margin')}</p>
-                    <p className={`font-semibold ${margin > 0 ? 'text-green-800' : 'text-red-800'}`}>
-                      {marginPercent}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th
-                  onClick={() => handleSort('sku')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    SKU
-                    {sortField === 'sku' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  onClick={() => handleSort('name')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {t('stock.productName')}
-                    {sortField === 'name' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('stock.category')}
-                </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe</th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status POS</th>
-                <th
-                  onClick={() => handleSort('purchase_price')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {t('stock.purchasePrice')}
-                    {sortField === 'purchase_price' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  onClick={() => handleSort('selling_price')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {t('stock.sellingPrice')}
-                    {sortField === 'selling_price' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('stock.margin')}
-                </th>
-                <th
-                  onClick={() => handleSort('stock')}
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {t('product.stock')}
-                    {sortField === 'stock' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {t('stock.action')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedProducts.map((product) => {
-                const margin = product.selling_price - product.purchase_price;
-                const marginPercent = product.purchase_price > 0
-                  ? ((margin / product.purchase_price) * 100).toFixed(1)
-                  : '0';
-
-                return (
-                  <tr key={product.id} className="hover:bg-gray-50">
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.sku || '-'}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {product.name}
-                      {isProductUnverified(product) && (
-                        <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                          {t('stock.unverified')}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getProductCategoryLabel(product.category || 'non_consumable', t)}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.product_type === 'RAW_MATERIAL' ? 'Bahan Baku' : 'Barang Jadi'}</td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${product.is_visible_in_pos === false ? 'bg-gray-100 text-gray-600' : 'bg-blue-50 text-blue-700'}`}>{product.is_visible_in_pos === false ? 'Tidak tampil di POS' : 'Tampil di POS'}</span></td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      Rp {formatCurrency(product.purchase_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      Rp {formatCurrency(product.selling_price)} <span className="text-xs text-gray-500">/ {product.purchase_unit}</span>
-                      {product.selling_unit !== product.purchase_unit && (
-                        <div className="text-[10px] text-gray-400">
-                          (≈ Rp {formatCurrency(getProductDisplayPricing(product).basePrice)} / {product.selling_unit})
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {marginPercent}%
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <span className={`px-2 py-1 rounded ${getStockStatusClass(product.stock)}`}>
-                        {product.stock} {product.purchase_unit}
-                      </span>
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex gap-2">
-                        {onVerify && isProductUnverified(product) && (
-                          <button
-                            onClick={() => onVerify(product)}
-                            className="text-amber-600 hover:text-amber-800 transition-colors"
-                            title={t('stock.verifyAction')}
-                          >
-                            <BadgeCheck size={18} />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onOpeningStock(product)}
-                          className="text-emerald-600 hover:text-emerald-800 transition-colors"
-                          title={t('stock.openingStockAction')}
-                        >
-                          <PackagePlus size={18} />
-                        </button>
-                        <button
-                          onClick={() => onEdit(product)}
-                          className="text-blue-600 hover:text-blue-800 transition-colors"
-                          title={t('stock.editTitle')}
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => onDelete(product.id)}
-                          className="text-red-600 hover:text-red-800 transition-colors"
-                          title={t('stock.deleteProductTitle')}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-          {paginatedProducts.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              {searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Mobile Action Drawer */}
-      {isMobile && selectedProduct && (
-        <div className="fixed inset-0 z-50">
-          <div
-            className="absolute inset-0 bg-black bg-opacity-40 transition-opacity"
-            onClick={() => setSelectedProduct(null)}
-          />
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl p-5 animate-slide-up flex flex-col max-h-[85vh]">
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-1.5 bg-gray-300 rounded-full"></div>
-            </div>
-
-            <div className="mb-6">
-              <h3 className="text-lg font-bold text-gray-900 line-clamp-2">{selectedProduct.name}</h3>
-              <p className="text-sm text-gray-500 mt-1">SKU: {selectedProduct.sku || '-'}</p>
-            </div>
-
-            <div className="space-y-3">
-              {onVerify && isProductUnverified(selectedProduct) && (
-                <button
-                  onClick={() => {
-                    onVerify(selectedProduct);
-                    setSelectedProduct(null);
-                  }}
-                  className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
-                >
-                  <div className="p-2.5 bg-amber-100 rounded-lg text-amber-600">
-                    <BadgeCheck size={22} />
-                  </div>
-                  <div>
-                    <span className="block font-bold text-gray-900">{t('stock.verifyAction')}</span>
-                    <span className="block text-xs text-gray-500 mt-0.5">{t('stock.verifyDescription')}</span>
-                  </div>
-                </button>
-              )}
-
-              <button
-                onClick={() => {
-                  onOpeningStock(selectedProduct);
-                  setSelectedProduct(null);
-                }}
-                className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
-              >
-                <div className="p-2.5 bg-emerald-100 rounded-lg text-emerald-600">
-                  <PackagePlus size={22} />
-                </div>
-                <div>
-                  <span className="block font-bold text-gray-900">{t('stock.openingStockAction')}</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">{t('stock.openingStockDescription')}</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  onEdit(selectedProduct);
-                  setSelectedProduct(null);
-                }}
-                className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
-              >
-                <div className="p-2.5 bg-blue-100 rounded-lg text-blue-600">
-                  <Edit2 size={22} />
-                </div>
-                <div>
-                  <span className="block font-bold text-gray-900">{t('stock.editProduct')}</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">{t('stock.editDescription')}</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  onDelete(selectedProduct.id);
-                  setSelectedProduct(null);
-                }}
-                className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors text-left"
-              >
-                <div className="p-2.5 bg-red-100 rounded-lg text-red-600">
-                  <Trash2 size={22} />
-                </div>
-                <div>
-                  <span className="block font-bold text-gray-900">{t('stock.deleteProductTitle')}</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">{t('stock.deleteDescription')}</span>
-                </div>
-              </button>
-            </div>
-
-            <button
-              onClick={() => setSelectedProduct(null)}
-              className="w-full mt-6 py-3 text-gray-500 font-semibold hover:text-gray-700 border-t border-gray-100"
-            >
-              {t('stock.form.cancel')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Pagination Controls — Responsive */}
-      {totalPages > 1 && (
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-3 sm:p-4">
-
-          <div className="text-xs sm:text-sm text-gray-600 text-center mb-3">
-            {t('stock.showingRange', {
-              start: paginatedProducts.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0,
-              end: Math.min(currentPage * itemsPerPage, sortedProducts.length),
-              total: sortedProducts.length,
-            })}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2">
-
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
-            >
-              ← <span className="hidden sm:inline">{t('stock.previous')}</span>
-            </button>
-
-            <div className="flex gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded text-xs sm:text-sm flex items-center justify-center ${currentPage === pageNum
-                      ? 'bg-blue-600 text-white'
-                      : 'border border-gray-300 hover:bg-gray-50'
-                      }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
-            >
-              <span className="hidden sm:inline">{t('stock.next')}</span> →
-            </button>
-
-            <div className="flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto justify-center sm:justify-start border-t sm:border-t-0 pt-2 sm:pt-0">
-              <span className="text-gray-600">{t('stock.perPage')}:</span>
-              <select
-                value={itemsPerPage}
-                onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
+      <ManagementTable<Product>
+        columns={columns}
+        dataSource={filteredProducts}
+        scrollX={1300}
+        pageSizeOptions={['5', '10', '20', '50']}
+        showTotal={(total, range) => t('stock.showingRange', { start: range[0], end: range[1], total })}
+        emptyText={searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
+      />
     </div>
   );
 }
