@@ -1,7 +1,11 @@
 use crate::models::contact::ContactDto;
 use sqlx::PgPool;
 
-pub async fn list_contacts(pool: &PgPool) -> Result<Vec<ContactDto>, sqlx::Error> {
+pub async fn list_contacts(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<ContactDto>, sqlx::Error> {
     sqlx::query_as::<_, ContactDto>(
         r#"
         SELECT
@@ -24,10 +28,13 @@ pub async fn list_contacts(pool: &PgPool) -> Result<Vec<ContactDto>, sqlx::Error
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM contacts
-        WHERE deleted_at IS NULL
-        ORDER BY name ASC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

@@ -7,6 +7,7 @@ import {
   cooperativeMemberPostgresAdapter,
   cooperativeMemberSavingBalancePostgresAdapter,
   cooperativeSavingTransactionPostgresAdapter,
+  isPostgresUnavailableError,
   isTauriRuntime,
   type RemoteCooperativeLoanDto,
   type RemoteCooperativeLoanInstallmentDto,
@@ -16,6 +17,11 @@ import {
   type RemoteCooperativeMemberSavingBalanceDto,
   type RemoteCooperativeSavingTransactionDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
@@ -60,6 +66,14 @@ const NUMERIC_MEMBER_CODE_PATTERN = /^\d+$/;
 const MEMBER_CODE_PADDING_LENGTH = 4;
 
 let isRefreshingCooperativeDataFromPostgres = false;
+let isRefreshingCooperativeMembersFromPostgres = false;
+let isRefreshingCooperativeSavingTransactionsFromPostgres = false;
+let isRefreshingCooperativeMemberSavingBalancesFromPostgres = false;
+let isRefreshingCooperativeLoansFromPostgres = false;
+let isRefreshingCooperativeLoanInstallmentsFromPostgres = false;
+let isRefreshingCooperativeLoanPaymentsFromPostgres = false;
+
+const COOPERATIVE_BUNDLE_REFRESH_LIMIT = 500;
 
 const normalizeMemberCode = (value?: string | null) => {
   const trimmedValue = value?.trim() ?? '';
@@ -73,11 +87,6 @@ const normalizeMemberCode = (value?: string | null) => {
 };
 
 const getMemberCodeId = (value?: string | null) => normalizeMemberCode(value).toUpperCase();
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
 
 const hasLocalUnsyncedChanges = (item: { sync_status?: string }) => (
   item.sync_status === 'pending' || item.sync_status === 'failed'
@@ -505,56 +514,33 @@ export const mergeRemoteCooperativeLoansIntoDexie = async (
 
   await db.transaction('rw', db.cooperativeLoans, async () => {
     const loansToPut: CooperativeLoan[] = [];
+    const loanIdsToDelete: string[] = [];
     for (const remoteLoan of remoteLoans) {
       const localLoan = await db.cooperativeLoans.get(remoteLoan.id);
       if (!shouldApplyRemoteUpdatedAt(localLoan, remoteLoan.updated_at)) {
         result.skipped += 1;
         continue;
       }
+
+      if (remoteLoan.deleted_at) {
+        if (localLoan) {
+          loanIdsToDelete.push(remoteLoan.id);
+          result.deleted += 1;
+        } else {
+          result.skipped += 1;
+        }
+        continue;
+      }
+
       loansToPut.push(mapRemoteCooperativeLoanToLocal(remoteLoan, syncedAt));
       if (localLoan) result.updated += 1;
       else result.inserted += 1;
     }
     if (loansToPut.length > 0) await db.cooperativeLoans.bulkPut(loansToPut);
+    if (loanIdsToDelete.length > 0) await db.cooperativeLoans.bulkDelete(loanIdsToDelete);
   });
 
   return result;
-};
-
-const reconcileDeletedRemoteCooperativeLoans = async (
-  remoteLoans: RemoteCooperativeLoanDto[],
-): Promise<number> => {
-  const remoteLoanIds = new Set(remoteLoans.map((loan) => loan.id));
-  let deleted = 0;
-
-  await db.transaction('rw', [db.cooperativeLoans, db.syncQueue], async () => {
-    const [localLoans, loanQueueItems] = await Promise.all([
-      db.cooperativeLoans.toArray(),
-      db.syncQueue.where('entity').equals('cooperativeLoans').toArray(),
-    ]);
-    const protectedLoanIds = new Set(
-      loanQueueItems
-        .filter((item) => item.status !== 'synced')
-        .map((item) => item.entity_id),
-    );
-    const deletedLoanIds = localLoans
-      .filter((loan) => !remoteLoanIds.has(loan.id))
-      .filter((loan) => !hasLocalUnsyncedChanges(loan))
-      .filter((loan) => !protectedLoanIds.has(loan.id))
-      .filter((loan) => (
-        loan.sync_status === 'synced' ||
-        Boolean(loan.last_synced_at) ||
-        Boolean(loan.remote_updated_at)
-      ))
-      .map((loan) => loan.id);
-
-    if (deletedLoanIds.length > 0) {
-      await db.cooperativeLoans.bulkDelete(deletedLoanIds);
-      deleted = deletedLoanIds.length;
-    }
-  });
-
-  return deleted;
 };
 
 export const mergeRemoteCooperativeLoanInstallmentsIntoDexie = async (
@@ -566,62 +552,35 @@ export const mergeRemoteCooperativeLoanInstallmentsIntoDexie = async (
 
   await db.transaction('rw', db.cooperativeLoanInstallments, async () => {
     const installmentsToPut: CooperativeLoanInstallment[] = [];
+    const installmentIdsToDelete: string[] = [];
     for (const remoteInstallment of remoteInstallments) {
       const localInstallment = await db.cooperativeLoanInstallments.get(remoteInstallment.id);
       if (!shouldApplyRemoteUpdatedAt(localInstallment, remoteInstallment.updated_at)) {
         result.skipped += 1;
         continue;
       }
+
+      if (remoteInstallment.deleted_at) {
+        if (localInstallment) {
+          installmentIdsToDelete.push(remoteInstallment.id);
+          result.deleted += 1;
+        } else {
+          result.skipped += 1;
+        }
+        continue;
+      }
+
       installmentsToPut.push(mapRemoteCooperativeLoanInstallmentToLocal(remoteInstallment, syncedAt));
       if (localInstallment) result.updated += 1;
       else result.inserted += 1;
     }
     if (installmentsToPut.length > 0) await db.cooperativeLoanInstallments.bulkPut(installmentsToPut);
-  });
-
-  return result;
-};
-
-/**
- * Membuang kartu angsuran lokal yang sudah tidak ada di remote — mis. setelah saldo awal pinjaman
- * (loan migrasi) dihapus dari device lain. Tanpa ini, penghapusan loan direkonsiliasi
- * (`reconcileDeletedRemoteCooperativeLoans`) tetapi angsurannya tertinggal yatim secara lokal.
- * Angsuran dengan perubahan lokal belum tersinkron atau masih diantre sengaja dilindungi.
- */
-const reconcileDeletedRemoteCooperativeLoanInstallments = async (
-  remoteInstallments: RemoteCooperativeLoanInstallmentDto[],
-): Promise<number> => {
-  const remoteInstallmentIds = new Set(remoteInstallments.map((installment) => installment.id));
-  let deleted = 0;
-
-  await db.transaction('rw', [db.cooperativeLoanInstallments, db.syncQueue], async () => {
-    const [localInstallments, installmentQueueItems] = await Promise.all([
-      db.cooperativeLoanInstallments.toArray(),
-      db.syncQueue.where('entity').equals('cooperativeLoanInstallments').toArray(),
-    ]);
-    const protectedInstallmentIds = new Set(
-      installmentQueueItems
-        .filter((item) => item.status !== 'synced')
-        .map((item) => item.entity_id),
-    );
-    const deletedInstallmentIds = localInstallments
-      .filter((installment) => !remoteInstallmentIds.has(installment.id))
-      .filter((installment) => !hasLocalUnsyncedChanges(installment))
-      .filter((installment) => !protectedInstallmentIds.has(installment.id))
-      .filter((installment) => (
-        installment.sync_status === 'synced' ||
-        Boolean(installment.last_synced_at) ||
-        Boolean(installment.remote_updated_at)
-      ))
-      .map((installment) => installment.id);
-
-    if (deletedInstallmentIds.length > 0) {
-      await db.cooperativeLoanInstallments.bulkDelete(deletedInstallmentIds);
-      deleted = deletedInstallmentIds.length;
+    if (installmentIdsToDelete.length > 0) {
+      await db.cooperativeLoanInstallments.bulkDelete(installmentIdsToDelete);
     }
   });
 
-  return deleted;
+  return result;
 };
 
 export const mergeRemoteCooperativeLoanPaymentsIntoDexie = async (
@@ -649,6 +608,187 @@ export const mergeRemoteCooperativeLoanPaymentsIntoDexie = async (
   return result;
 };
 
+const addReadSyncResult = (aggregate: CooperativeReadSyncResult, next: CooperativeReadSyncResult) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.deleted += next.deleted;
+  aggregate.skipped += next.skipped;
+};
+
+const localCooperativeCursor = (record: { remote_updated_at?: string; updated_at: string; sync_status?: string }) => (
+  record.remote_updated_at ?? (record.sync_status === 'synced' ? record.updated_at : undefined)
+);
+
+/**
+ * Generic per-table delta fetch loop: pull rows changed since the latest known cursor, merge
+ * into Dexie, advance the cursor from the batch, repeat until a short page ends pagination.
+ * Mirrors the pattern in salesDocumentReadService.ts, applied independently per cooperative
+ * bundle table now that each has its own cursor index (migration 0074) and - for loans/
+ * installments - tombstone-based deletes instead of the old full-list diff reconciliation.
+ */
+const refreshCooperativeTableFromPostgres = async <TRemote extends { updated_at: string }>(
+  getLocalCursor: () => Promise<string | undefined>,
+  list: (options: { updatedAfter?: string; limit?: number }) => Promise<TRemote[]>,
+  merge: (remoteRows: TRemote[]) => Promise<CooperativeReadSyncResult>,
+): Promise<CooperativeReadSyncResult> => {
+  const aggregate = { ...EMPTY_READ_SYNC_RESULT };
+  let updatedAfter = await getLocalCursor();
+
+  while (true) {
+    const remoteRows = await list({ updatedAfter, limit: COOPERATIVE_BUNDLE_REFRESH_LIMIT });
+    const result = await merge(remoteRows);
+    addReadSyncResult(aggregate, result);
+
+    if (remoteRows.length < COOPERATIVE_BUNDLE_REFRESH_LIMIT) break;
+
+    const nextUpdatedAfter = getLatestRemoteUpdatedAt(remoteRows, (row) => row.updated_at);
+    if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+
+    updatedAfter = nextUpdatedAfter;
+  }
+
+  return aggregate;
+};
+
+export const refreshCooperativeMembersFromPostgres = async (): Promise<CooperativeReadSyncResult> => {
+  if (isRefreshingCooperativeMembersFromPostgres || !canReadFromPostgres()) {
+    return { ...EMPTY_READ_SYNC_RESULT };
+  }
+
+  isRefreshingCooperativeMembersFromPostgres = true;
+  try {
+    return await refreshCooperativeTableFromPostgres(
+      () => db.cooperativeMembers.toArray().then((members) => (
+        getLatestLocalRemoteUpdatedAt(members, localCooperativeCursor)
+      )),
+      (options) => cooperativeMemberPostgresAdapter.list(options),
+      mergeRemoteCooperativeMembersIntoDexie,
+    );
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) return { ...EMPTY_READ_SYNC_RESULT };
+    throw error;
+  } finally {
+    isRefreshingCooperativeMembersFromPostgres = false;
+  }
+};
+
+export const refreshCooperativeSavingTransactionsFromPostgres = async (): Promise<CooperativeReadSyncResult> => {
+  if (isRefreshingCooperativeSavingTransactionsFromPostgres || !canReadFromPostgres()) {
+    return { ...EMPTY_READ_SYNC_RESULT };
+  }
+
+  isRefreshingCooperativeSavingTransactionsFromPostgres = true;
+  try {
+    return await refreshCooperativeTableFromPostgres(
+      () => db.cooperativeSavingTransactions.toArray().then((transactions) => (
+        getLatestLocalRemoteUpdatedAt(transactions, localCooperativeCursor)
+      )),
+      (options) => cooperativeSavingTransactionPostgresAdapter.list(options),
+      mergeRemoteCooperativeSavingTransactionsIntoDexie,
+    );
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) return { ...EMPTY_READ_SYNC_RESULT };
+    throw error;
+  } finally {
+    isRefreshingCooperativeSavingTransactionsFromPostgres = false;
+  }
+};
+
+export const refreshCooperativeMemberSavingBalancesFromPostgres = async (): Promise<CooperativeReadSyncResult> => {
+  if (isRefreshingCooperativeMemberSavingBalancesFromPostgres || !canReadFromPostgres()) {
+    return { ...EMPTY_READ_SYNC_RESULT };
+  }
+
+  isRefreshingCooperativeMemberSavingBalancesFromPostgres = true;
+  try {
+    return await refreshCooperativeTableFromPostgres(
+      () => db.cooperativeMemberSavingBalances.toArray().then((balances) => (
+        getLatestLocalRemoteUpdatedAt(balances, localCooperativeCursor)
+      )),
+      (options) => cooperativeMemberSavingBalancePostgresAdapter.list(options),
+      mergeRemoteCooperativeMemberSavingBalancesIntoDexie,
+    );
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) return { ...EMPTY_READ_SYNC_RESULT };
+    throw error;
+  } finally {
+    isRefreshingCooperativeMemberSavingBalancesFromPostgres = false;
+  }
+};
+
+export const refreshCooperativeLoansFromPostgres = async (): Promise<CooperativeReadSyncResult> => {
+  if (isRefreshingCooperativeLoansFromPostgres || !canReadFromPostgres()) {
+    return { ...EMPTY_READ_SYNC_RESULT };
+  }
+
+  isRefreshingCooperativeLoansFromPostgres = true;
+  try {
+    return await refreshCooperativeTableFromPostgres(
+      () => db.cooperativeLoans.toArray().then((loans) => (
+        getLatestLocalRemoteUpdatedAt(loans, localCooperativeCursor)
+      )),
+      (options) => cooperativeLoanPostgresAdapter.list(options),
+      mergeRemoteCooperativeLoansIntoDexie,
+    );
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) return { ...EMPTY_READ_SYNC_RESULT };
+    throw error;
+  } finally {
+    isRefreshingCooperativeLoansFromPostgres = false;
+  }
+};
+
+export const refreshCooperativeLoanInstallmentsFromPostgres = async (): Promise<CooperativeReadSyncResult> => {
+  if (isRefreshingCooperativeLoanInstallmentsFromPostgres || !canReadFromPostgres()) {
+    return { ...EMPTY_READ_SYNC_RESULT };
+  }
+
+  isRefreshingCooperativeLoanInstallmentsFromPostgres = true;
+  try {
+    return await refreshCooperativeTableFromPostgres(
+      () => db.cooperativeLoanInstallments.toArray().then((installments) => (
+        getLatestLocalRemoteUpdatedAt(installments, localCooperativeCursor)
+      )),
+      (options) => cooperativeLoanInstallmentPostgresAdapter.list(options),
+      mergeRemoteCooperativeLoanInstallmentsIntoDexie,
+    );
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) return { ...EMPTY_READ_SYNC_RESULT };
+    throw error;
+  } finally {
+    isRefreshingCooperativeLoanInstallmentsFromPostgres = false;
+  }
+};
+
+export const refreshCooperativeLoanPaymentsFromPostgres = async (): Promise<CooperativeReadSyncResult> => {
+  if (isRefreshingCooperativeLoanPaymentsFromPostgres || !canReadFromPostgres()) {
+    return { ...EMPTY_READ_SYNC_RESULT };
+  }
+
+  isRefreshingCooperativeLoanPaymentsFromPostgres = true;
+  try {
+    return await refreshCooperativeTableFromPostgres(
+      () => db.cooperativeLoanPayments.toArray().then((payments) => (
+        getLatestLocalRemoteUpdatedAt(payments, localCooperativeCursor)
+      )),
+      (options) => cooperativeLoanPaymentPostgresAdapter.list(options),
+      mergeRemoteCooperativeLoanPaymentsIntoDexie,
+    );
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) return { ...EMPTY_READ_SYNC_RESULT };
+    throw error;
+  } finally {
+    isRefreshingCooperativeLoanPaymentsFromPostgres = false;
+  }
+};
+
+/**
+ * Orchestrator used by the manual/full sync path (runDatabaseSyncNow) and by flows that need
+ * the whole bundle refreshed together. The realtime scoped-refresh path (useSyncQueueWorker via
+ * REALTIME_TABLE_TO_ENTITY) calls the 6 table-specific functions above individually instead, so
+ * a change in just one cooperative table no longer re-fetches the other five.
+ */
 export const refreshCooperativeDataFromPostgres = async (): Promise<CooperativeReadSyncSummary> => {
   const emptySummary: CooperativeReadSyncSummary = {
     members: { ...EMPTY_READ_SYNC_RESULT },
@@ -666,23 +806,18 @@ export const refreshCooperativeDataFromPostgres = async (): Promise<CooperativeR
 
   isRefreshingCooperativeDataFromPostgres = true;
   try {
-    const remoteLoans = await cooperativeLoanPostgresAdapter.list();
-    const loans = await mergeRemoteCooperativeLoansIntoDexie(remoteLoans);
-    loans.deleted = await reconcileDeletedRemoteCooperativeLoans(remoteLoans);
+    const [members, memberCodes, savingTransactions, savingBalances, loans, loanInstallments, loanPayments] =
+      await Promise.all([
+        refreshCooperativeMembersFromPostgres(),
+        mergeRemoteCooperativeMemberCodesIntoDexie(await cooperativeMemberCodePostgresAdapter.list()),
+        refreshCooperativeSavingTransactionsFromPostgres(),
+        refreshCooperativeMemberSavingBalancesFromPostgres(),
+        refreshCooperativeLoansFromPostgres(),
+        refreshCooperativeLoanInstallmentsFromPostgres(),
+        refreshCooperativeLoanPaymentsFromPostgres(),
+      ]);
 
-    const remoteInstallments = await cooperativeLoanInstallmentPostgresAdapter.list();
-    const loanInstallments = await mergeRemoteCooperativeLoanInstallmentsIntoDexie(remoteInstallments);
-    loanInstallments.deleted = await reconcileDeletedRemoteCooperativeLoanInstallments(remoteInstallments);
-
-    return {
-      members: await mergeRemoteCooperativeMembersIntoDexie(await cooperativeMemberPostgresAdapter.list()),
-      memberCodes: await mergeRemoteCooperativeMemberCodesIntoDexie(await cooperativeMemberCodePostgresAdapter.list()),
-      savingTransactions: await mergeRemoteCooperativeSavingTransactionsIntoDexie(await cooperativeSavingTransactionPostgresAdapter.list()),
-      savingBalances: await mergeRemoteCooperativeMemberSavingBalancesIntoDexie(await cooperativeMemberSavingBalancePostgresAdapter.list()),
-      loans,
-      loanInstallments,
-      loanPayments: await mergeRemoteCooperativeLoanPaymentsIntoDexie(await cooperativeLoanPaymentPostgresAdapter.list()),
-    };
+    return { members, memberCodes, savingTransactions, savingBalances, loans, loanInstallments, loanPayments };
   } finally {
     isRefreshingCooperativeDataFromPostgres = false;
   }

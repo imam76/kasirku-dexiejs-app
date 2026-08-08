@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import {
   fixedAssetDepreciationRunPostgresAdapter,
   fixedAssetPostgresAdapter,
+  isPostgresUnavailableError,
   isTauriRuntime,
   type RemoteFixedAssetDepreciationRunBundleDto,
   type RemoteFixedAssetDto,
@@ -15,7 +16,33 @@ export interface FixedAssetReadSyncResult {
   skipped: number;
 }
 
+const FIXED_ASSET_REFRESH_LIMIT = 500;
+const FIXED_ASSET_RUN_REFRESH_LIMIT = 300;
+
+let isRefreshingFixedAssetsFromPostgres = false;
+let isRefreshingFixedAssetRunsFromPostgres = false;
+
 const emptyResult = (): FixedAssetReadSyncResult => ({ fetched: 0, inserted: 0, updated: 0, skipped: 0 });
+const addReadSyncResult = (aggregate: FixedAssetReadSyncResult, next: FixedAssetReadSyncResult) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.skipped += next.skipped;
+};
+const toTimestamp = (value: string) => {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
+  if (!candidate) return current;
+  if (!current) return candidate;
+  const currentTimestamp = toTimestamp(current);
+  const candidateTimestamp = toTimestamp(candidate);
+  if (currentTimestamp !== null && candidateTimestamp !== null) {
+    return candidateTimestamp > currentTimestamp ? candidate : current;
+  }
+  return candidate > current ? candidate : current;
+};
 const hasPending = (record: { sync_status?: string }) => record.sync_status === 'pending' || record.sync_status === 'failed';
 const shouldApply = (
   local: { version: number; updated_at: string; remote_updated_at?: string; sync_status?: string } | undefined,
@@ -118,12 +145,94 @@ export const mergeRemoteFixedAssetRunBundlesIntoDexie = async (
 
 const canRefresh = () => isTauriRuntime() && (typeof navigator === 'undefined' || navigator.onLine);
 
+const getLatestLocalFixedAssetUpdatedAt = async () => {
+  const assets = await db.fixedAssets.toArray();
+  return assets.reduce<string | undefined>((latest, asset) => {
+    const remoteUpdatedAt = asset.remote_updated_at
+      ?? (asset.sync_status === 'synced' ? asset.updated_at : undefined);
+    return getLaterUpdatedAt(latest, remoteUpdatedAt);
+  }, undefined);
+};
+
+const getLatestRemoteFixedAssetUpdatedAt = (remoteAssets: RemoteFixedAssetDto[]) => (
+  remoteAssets.reduce<string | undefined>(
+    (latest, asset) => getLaterUpdatedAt(latest, asset.updated_at),
+    undefined,
+  )
+);
+
+const getLatestLocalFixedAssetRunUpdatedAt = async () => {
+  const runs = await db.fixedAssetDepreciationRuns.toArray();
+  return runs.reduce<string | undefined>((latest, run) => {
+    const remoteUpdatedAt = run.remote_updated_at
+      ?? (run.sync_status === 'synced' ? run.updated_at : undefined);
+    return getLaterUpdatedAt(latest, remoteUpdatedAt);
+  }, undefined);
+};
+
+const getLatestRemoteFixedAssetRunUpdatedAt = (bundles: RemoteFixedAssetDepreciationRunBundleDto[]) => (
+  bundles.reduce<string | undefined>(
+    (latest, bundle) => getLaterUpdatedAt(latest, bundle.run.updated_at),
+    undefined,
+  )
+);
+
 export const refreshFixedAssetsFromPostgres = async () => {
-  if (!canRefresh()) return emptyResult();
-  return mergeRemoteFixedAssetsIntoDexie(await fixedAssetPostgresAdapter.list());
+  if (isRefreshingFixedAssetsFromPostgres || !canRefresh()) return emptyResult();
+
+  isRefreshingFixedAssetsFromPostgres = true;
+  try {
+    const aggregate = emptyResult();
+    let updatedAfter = await getLatestLocalFixedAssetUpdatedAt();
+
+    while (true) {
+      const remoteAssets = await fixedAssetPostgresAdapter.list(updatedAfter, FIXED_ASSET_REFRESH_LIMIT);
+      const result = await mergeRemoteFixedAssetsIntoDexie(remoteAssets);
+      addReadSyncResult(aggregate, result);
+
+      if (remoteAssets.length < FIXED_ASSET_REFRESH_LIMIT) break;
+
+      const nextUpdatedAfter = getLatestRemoteFixedAssetUpdatedAt(remoteAssets);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) return emptyResult();
+    throw error;
+  } finally {
+    isRefreshingFixedAssetsFromPostgres = false;
+  }
 };
 
 export const refreshFixedAssetRunsFromPostgres = async () => {
-  if (!canRefresh()) return emptyResult();
-  return mergeRemoteFixedAssetRunBundlesIntoDexie(await fixedAssetDepreciationRunPostgresAdapter.list());
+  if (isRefreshingFixedAssetRunsFromPostgres || !canRefresh()) return emptyResult();
+
+  isRefreshingFixedAssetRunsFromPostgres = true;
+  try {
+    const aggregate = emptyResult();
+    let updatedAfter = await getLatestLocalFixedAssetRunUpdatedAt();
+
+    while (true) {
+      const bundles = await fixedAssetDepreciationRunPostgresAdapter.list(updatedAfter, FIXED_ASSET_RUN_REFRESH_LIMIT);
+      const result = await mergeRemoteFixedAssetRunBundlesIntoDexie(bundles);
+      addReadSyncResult(aggregate, result);
+
+      if (bundles.length < FIXED_ASSET_RUN_REFRESH_LIMIT) break;
+
+      const nextUpdatedAfter = getLatestRemoteFixedAssetRunUpdatedAt(bundles);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) return emptyResult();
+    throw error;
+  } finally {
+    isRefreshingFixedAssetRunsFromPostgres = false;
+  }
 };

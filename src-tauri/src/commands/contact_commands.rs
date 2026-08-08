@@ -8,9 +8,11 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_contacts(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<ContactDto>> {
     let pool = state.pool()?;
-    Ok(contact_repository::list_contacts(&pool).await?)
+    Ok(contact_repository::list_contacts(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]

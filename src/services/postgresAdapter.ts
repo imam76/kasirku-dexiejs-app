@@ -1610,6 +1610,7 @@ export interface RemoteCooperativeLoanDto {
   created_by_name?: string | null;
   updated_by?: string | null;
   updated_by_name?: string | null;
+  deleted_at?: string | null;
 }
 
 export interface RemoteCooperativeLoanInstallmentDto {
@@ -1635,6 +1636,7 @@ export interface RemoteCooperativeLoanInstallmentDto {
   last_contacted_at?: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
 }
 
 export interface RemoteCooperativeLoanPaymentDto {
@@ -2247,9 +2249,12 @@ export const cashierSessionPostgresAdapter = {
 };
 
 export const chartOfAccountPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteChartOfAccountDto[]>('postgres_list_chart_of_accounts');
+    return invoke<RemoteChartOfAccountDto[]>('postgres_list_chart_of_accounts', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2403,9 +2408,12 @@ export const taxPostgresAdapter = {
 };
 
 export const contactPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteContactDto[]>('postgres_list_contacts');
+    return invoke<RemoteContactDto[]>('postgres_list_contacts', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2522,9 +2530,12 @@ export const biKursAdapter = {
 };
 
 export const productPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteProductDto[]>('postgres_list_products');
+    return invoke<RemoteProductDto[]>('postgres_list_products', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2790,9 +2801,12 @@ export const inventoryOpeningBalancePostgresAdapter = {
 };
 
 export const cooperativeMemberPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCooperativeMemberDto[]>('postgres_list_cooperative_members');
+    return invoke<RemoteCooperativeMemberDto[]>('postgres_list_cooperative_members', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2836,9 +2850,12 @@ export const cooperativeAreaPostgresAdapter = {
 };
 
 export const cooperativeSavingTransactionPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCooperativeSavingTransactionDto[]>('postgres_list_cooperative_saving_transactions');
+    return invoke<RemoteCooperativeSavingTransactionDto[]>('postgres_list_cooperative_saving_transactions', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2853,9 +2870,12 @@ export const cooperativeSavingTransactionPostgresAdapter = {
 };
 
 export const cooperativeMemberSavingBalancePostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCooperativeMemberSavingBalanceDto[]>('postgres_list_cooperative_member_saving_balances');
+    return invoke<RemoteCooperativeMemberSavingBalanceDto[]>('postgres_list_cooperative_member_saving_balances', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2870,9 +2890,12 @@ export const cooperativeMemberSavingBalancePostgresAdapter = {
 };
 
 export const cooperativeLoanPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCooperativeLoanDto[]>('postgres_list_cooperative_loans');
+    return invoke<RemoteCooperativeLoanDto[]>('postgres_list_cooperative_loans', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2897,9 +2920,12 @@ export const cooperativeLoanPostgresAdapter = {
 };
 
 export const cooperativeLoanInstallmentPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCooperativeLoanInstallmentDto[]>('postgres_list_cooperative_loan_installments');
+    return invoke<RemoteCooperativeLoanInstallmentDto[]>('postgres_list_cooperative_loan_installments', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2914,9 +2940,12 @@ export const cooperativeLoanInstallmentPostgresAdapter = {
 };
 
 export const cooperativeLoanPaymentPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCooperativeLoanPaymentDto[]>('postgres_list_cooperative_loan_payments');
+    return invoke<RemoteCooperativeLoanPaymentDto[]>('postgres_list_cooperative_loan_payments', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {

@@ -1,7 +1,11 @@
 use crate::models::chart_of_account::ChartOfAccountDto;
 use sqlx::PgPool;
 
-pub async fn list_chart_of_accounts(pool: &PgPool) -> Result<Vec<ChartOfAccountDto>, sqlx::Error> {
+pub async fn list_chart_of_accounts(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<ChartOfAccountDto>, sqlx::Error> {
     sqlx::query_as::<_, ChartOfAccountDto>(
         r#"
         SELECT
@@ -21,10 +25,13 @@ pub async fn list_chart_of_accounts(pool: &PgPool) -> Result<Vec<ChartOfAccountD
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM chart_of_accounts
-        WHERE deleted_at IS NULL
-        ORDER BY code ASC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

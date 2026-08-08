@@ -1,9 +1,15 @@
 import { db } from '@/lib/db';
 import {
   chartOfAccountPostgresAdapter,
+  isPostgresUnavailableError,
   isTauriRuntime,
   type RemoteChartOfAccountDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { AccountNormalBalance, AccountType, ChartOfAccount } from '@/types';
 
 export interface ChartOfAccountReadSyncResult {
@@ -19,6 +25,8 @@ const EMPTY_CHART_OF_ACCOUNT_READ_SYNC_RESULT: ChartOfAccountReadSyncResult = {
   updated: 0,
   skipped: 0,
 };
+
+const CHART_OF_ACCOUNT_REFRESH_LIMIT = 500;
 
 let isRefreshingChartOfAccountsFromPostgres = false;
 
@@ -51,11 +59,6 @@ const mapRemoteChartOfAccountToLocal = (
 const hasLocalUnsyncedChanges = (account: ChartOfAccount) => (
   account.sync_status === 'pending' || account.sync_status === 'failed'
 );
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
 
 const shouldApplyRemoteChartOfAccount = (
   localAccount: ChartOfAccount | undefined,
@@ -116,6 +119,28 @@ export const mergeRemoteChartOfAccountsIntoDexie = async (
   return result;
 };
 
+const getLatestLocalChartOfAccountUpdatedAt = async () => {
+  const accounts = await db.chartOfAccounts.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    accounts,
+    (account) => account.remote_updated_at ?? (account.sync_status === 'synced' ? account.updated_at : undefined),
+  );
+};
+
+const getLatestRemoteChartOfAccountUpdatedAt = (remoteAccounts: RemoteChartOfAccountDto[]) => (
+  getLatestRemoteUpdatedAt(remoteAccounts, (account) => account.updated_at)
+);
+
+const addChartOfAccountReadSyncResult = (
+  aggregate: ChartOfAccountReadSyncResult,
+  next: ChartOfAccountReadSyncResult,
+) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.skipped += next.skipped;
+};
+
 export const refreshChartOfAccountsFromPostgres = async (): Promise<ChartOfAccountReadSyncResult> => {
   if (isRefreshingChartOfAccountsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_CHART_OF_ACCOUNT_READ_SYNC_RESULT };
@@ -123,8 +148,36 @@ export const refreshChartOfAccountsFromPostgres = async (): Promise<ChartOfAccou
 
   isRefreshingChartOfAccountsFromPostgres = true;
   try {
-    const remoteAccounts = await chartOfAccountPostgresAdapter.list();
-    return mergeRemoteChartOfAccountsIntoDexie(remoteAccounts);
+    const aggregate = { ...EMPTY_CHART_OF_ACCOUNT_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalChartOfAccountUpdatedAt();
+
+    while (true) {
+      const remoteAccounts = await chartOfAccountPostgresAdapter.list({
+        updatedAfter,
+        limit: CHART_OF_ACCOUNT_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteChartOfAccountsIntoDexie(remoteAccounts);
+      addChartOfAccountReadSyncResult(aggregate, result);
+
+      if (remoteAccounts.length < CHART_OF_ACCOUNT_REFRESH_LIMIT) {
+        break;
+      }
+
+      const nextUpdatedAfter = getLatestRemoteChartOfAccountUpdatedAt(remoteAccounts);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
+        break;
+      }
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) {
+      return { ...EMPTY_CHART_OF_ACCOUNT_READ_SYNC_RESULT };
+    }
+
+    throw error;
   } finally {
     isRefreshingChartOfAccountsFromPostgres = false;
   }

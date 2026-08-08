@@ -8,9 +8,11 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_products(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<ProductDto>> {
     let pool = state.pool()?;
-    Ok(product_repository::list_products(&pool).await?)
+    Ok(product_repository::list_products(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]

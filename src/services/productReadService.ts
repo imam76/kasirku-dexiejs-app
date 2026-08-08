@@ -1,5 +1,15 @@
 import { db } from '@/lib/db';
-import { isTauriRuntime, productPostgresAdapter, type RemoteProductDto } from '@/services/postgresAdapter';
+import {
+  isPostgresUnavailableError,
+  isTauriRuntime,
+  productPostgresAdapter,
+  type RemoteProductDto,
+} from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { Product, ProductUnit, ProductUnitMapping, WholesalePrice } from '@/types';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 
@@ -16,6 +26,8 @@ const EMPTY_PRODUCT_READ_SYNC_RESULT: ProductReadSyncResult = {
   updated: 0,
   skipped: 0,
 };
+
+const PRODUCT_REFRESH_LIMIT = 500;
 
 let isRefreshingProductsFromPostgres = false;
 
@@ -112,11 +124,6 @@ const hasLocalUnsyncedChanges = (product: Product) => (
   product.sync_status === 'pending' || product.sync_status === 'failed'
 );
 
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
 const shouldApplyRemoteProduct = (
   localProduct: Product | undefined,
   remoteProduct: RemoteProductDto,
@@ -192,6 +199,28 @@ export const mergeRemoteProductsIntoDexie = async (
   return result;
 };
 
+const getLatestLocalProductUpdatedAt = async () => {
+  const products = await db.products.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    products,
+    (product) => product.remote_updated_at ?? (product.sync_status === 'synced' ? product.updated_at : undefined),
+  );
+};
+
+const getLatestRemoteProductUpdatedAt = (remoteProducts: RemoteProductDto[]) => (
+  getLatestRemoteUpdatedAt(remoteProducts, (product) => product.updated_at)
+);
+
+const addProductReadSyncResult = (
+  aggregate: ProductReadSyncResult,
+  next: ProductReadSyncResult,
+) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.skipped += next.skipped;
+};
+
 export const refreshProductsFromPostgres = async (): Promise<ProductReadSyncResult> => {
   if (isRefreshingProductsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_PRODUCT_READ_SYNC_RESULT };
@@ -199,8 +228,36 @@ export const refreshProductsFromPostgres = async (): Promise<ProductReadSyncResu
 
   isRefreshingProductsFromPostgres = true;
   try {
-    const remoteProducts = await productPostgresAdapter.list();
-    return mergeRemoteProductsIntoDexie(remoteProducts);
+    const aggregate = { ...EMPTY_PRODUCT_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalProductUpdatedAt();
+
+    while (true) {
+      const remoteProducts = await productPostgresAdapter.list({
+        updatedAfter,
+        limit: PRODUCT_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteProductsIntoDexie(remoteProducts);
+      addProductReadSyncResult(aggregate, result);
+
+      if (remoteProducts.length < PRODUCT_REFRESH_LIMIT) {
+        break;
+      }
+
+      const nextUpdatedAfter = getLatestRemoteProductUpdatedAt(remoteProducts);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
+        break;
+      }
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) {
+      return { ...EMPTY_PRODUCT_READ_SYNC_RESULT };
+    }
+
+    throw error;
   } finally {
     isRefreshingProductsFromPostgres = false;
   }

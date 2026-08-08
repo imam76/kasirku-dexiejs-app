@@ -193,7 +193,8 @@ macro_rules! cooperative_loan_select {
             created_by,
             created_by_name,
             updated_by,
-            updated_by_name
+            updated_by_name,
+            deleted_at::TEXT AS deleted_at
         FROM cooperative_loans
         "#
     };
@@ -224,7 +225,8 @@ macro_rules! cooperative_loan_installment_select {
             collection_notes,
             last_contacted_at,
             created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            updated_at::TEXT AS updated_at,
+            deleted_at::TEXT AS deleted_at
         FROM cooperative_loan_installments
         "#
     };
@@ -333,11 +335,17 @@ fn build_cooperative_member_code(
 
 pub async fn list_cooperative_members(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<CooperativeMemberDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeMemberDto>(concat!(
         cooperative_member_select!(),
-        " ORDER BY updated_at DESC, created_at DESC"
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+          ORDER BY updated_at, id
+          LIMIT $2"
     ))
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -627,11 +635,17 @@ pub async fn upsert_cooperative_member(
 
 pub async fn list_cooperative_saving_transactions(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<CooperativeSavingTransactionDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeSavingTransactionDto>(concat!(
         cooperative_saving_transaction_select!(),
-        " ORDER BY updated_at DESC, transaction_date DESC, created_at DESC"
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+          ORDER BY updated_at, id
+          LIMIT $2"
     ))
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -842,11 +856,17 @@ pub async fn upsert_cooperative_saving_transaction(
 
 pub async fn list_cooperative_member_saving_balances(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<CooperativeMemberSavingBalanceDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeMemberSavingBalanceDto>(concat!(
         cooperative_member_saving_balance_select!(),
-        " ORDER BY updated_at DESC, member_number ASC, saving_type ASC"
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+          ORDER BY updated_at, id
+          LIMIT $2"
     ))
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -926,11 +946,19 @@ pub async fn upsert_cooperative_member_saving_balance(
         .ok_or(sqlx::Error::RowNotFound)
 }
 
-pub async fn list_cooperative_loans(pool: &PgPool) -> Result<Vec<CooperativeLoanDto>, sqlx::Error> {
+pub async fn list_cooperative_loans(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<CooperativeLoanDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeLoanDto>(concat!(
         cooperative_loan_select!(),
-        " ORDER BY updated_at DESC, application_date DESC, created_at DESC"
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+          ORDER BY updated_at, id
+          LIMIT $2"
     ))
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -951,8 +979,10 @@ pub async fn delete_cooperative_loan_application(
 ) -> Result<bool, sqlx::Error> {
     let deleted_id = sqlx::query_scalar::<_, String>(
         r#"
-        DELETE FROM cooperative_loans AS loan
+        UPDATE cooperative_loans AS loan
+        SET updated_at = NOW(), deleted_at = NOW()
         WHERE loan.id = $1
+          AND loan.deleted_at IS NULL
           AND loan.status IN ('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED')
           AND loan.disbursed_at IS NULL
           AND loan.finance_transaction_id IS NULL
@@ -984,8 +1014,9 @@ pub async fn delete_cooperative_loan_application(
 /// Berbeda dengan `delete_cooperative_loan_application` yang hanya menerima loan belum cair
 /// tanpa angsuran, loan migrasi berstatus DISBURSED/PAID_OFF dan MEMILIKI kartu angsuran yang
 /// ditandai lunas historis. Karena migrasi tidak menyentuh kas/jurnal/payment, penghapusannya
-/// aman: buang angsuran lalu loan dalam satu transaksi. Setiap DELETE memicu trigger NOTIFY
-/// sehingga device lain menerima perubahan realtime.
+/// aman: tandai angsuran lalu loan sebagai `deleted_at` (soft-delete) dalam satu transaksi -
+/// bukan hard DELETE, supaya client lain yang delta-fetch lewat cursor `updated_at` tetap
+/// menerima tombstone-nya. Tiap UPDATE tetap memicu trigger NOTIFY seperti biasa.
 ///
 /// Guard: hanya loan `is_migration = TRUE` tanpa payment maupun collection event yang boleh
 /// dihapus. Bila ada jejak tersebut, kembalikan `false` (tolak) agar pemanggil membatalkan.
@@ -1000,6 +1031,7 @@ pub async fn delete_cooperative_loan_migration(
         SELECT loan.id
         FROM cooperative_loans AS loan
         WHERE loan.id = $1
+          AND loan.deleted_at IS NULL
           AND loan.is_migration IS TRUE
           AND NOT EXISTS (
               SELECT 1 FROM cooperative_loan_payments payment
@@ -1024,12 +1056,16 @@ pub async fn delete_cooperative_loan_migration(
         }
     };
 
-    sqlx::query("DELETE FROM cooperative_loan_installments WHERE loan_id = $1")
-        .bind(&loan_id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE cooperative_loan_installments \
+         SET updated_at = NOW(), deleted_at = NOW() \
+         WHERE loan_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(&loan_id)
+    .execute(&mut *tx)
+    .await?;
 
-    sqlx::query("DELETE FROM cooperative_loans WHERE id = $1")
+    sqlx::query("UPDATE cooperative_loans SET updated_at = NOW(), deleted_at = NOW() WHERE id = $1")
         .bind(&loan_id)
         .execute(&mut *tx)
         .await?;
@@ -1321,7 +1357,8 @@ pub async fn upsert_cooperative_loan(
             created_by,
             created_by_name,
             updated_by,
-            updated_by_name
+            updated_by_name,
+            deleted_at::TEXT AS deleted_at
         "#,
     )
     .bind(input.id)
@@ -1402,11 +1439,17 @@ pub async fn upsert_cooperative_loan(
 
 pub async fn list_cooperative_loan_installments(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<CooperativeLoanInstallmentDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeLoanInstallmentDto>(concat!(
         cooperative_loan_installment_select!(),
-        " ORDER BY updated_at DESC, due_date ASC, installment_number ASC"
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+          ORDER BY updated_at, id
+          LIMIT $2"
     ))
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -1529,7 +1572,8 @@ pub async fn upsert_cooperative_loan_installment(
             collection_notes,
             last_contacted_at,
             created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            updated_at::TEXT AS updated_at,
+            deleted_at::TEXT AS deleted_at
         "#,
     )
     .bind(input.id)
@@ -1568,11 +1612,17 @@ pub async fn upsert_cooperative_loan_installment(
 
 pub async fn list_cooperative_loan_payments(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<CooperativeLoanPaymentDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeLoanPaymentDto>(concat!(
         cooperative_loan_payment_select!(),
-        " ORDER BY updated_at DESC, payment_date DESC, created_at DESC"
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+          ORDER BY updated_at, id
+          LIMIT $2"
     ))
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

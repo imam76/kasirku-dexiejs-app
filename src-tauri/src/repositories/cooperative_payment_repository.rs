@@ -576,9 +576,11 @@ async fn get_locked_installment(
           collection_notes,
           last_contacted_at,
           created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at
+          updated_at::TEXT AS updated_at,
+          deleted_at::TEXT AS deleted_at
         FROM cooperative_loan_installments
         WHERE id = $1
+          AND deleted_at IS NULL
         FOR UPDATE
         "#,
     )
@@ -618,10 +620,12 @@ async fn get_locked_payable_installments_for_loan(
           collection_notes,
           last_contacted_at,
           created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at
+          updated_at::TEXT AS updated_at,
+          deleted_at::TEXT AS deleted_at
         FROM cooperative_loan_installments
         WHERE loan_id = $1
           AND status <> 'PAID'
+          AND deleted_at IS NULL
         ORDER BY due_date ASC, installment_number ASC, created_at ASC, id ASC
         FOR UPDATE
         "#,
@@ -655,6 +659,7 @@ async fn get_locked_loan(
           collection_schedule_id
         FROM cooperative_loans
         WHERE id = $1
+          AND deleted_at IS NULL
         FOR UPDATE
         "#,
     )
@@ -3481,9 +3486,12 @@ pub async fn list_payment_installment_reconciliation(
         LEFT JOIN payment_totals AS payment
           ON payment.installment_id = installment.id
         WHERE
-          ABS(installment.paid_principal_amount - COALESCE(payment.principal_amount, 0)) > 0.01 OR
-          ABS(installment.paid_interest_amount - COALESCE(payment.interest_amount, 0)) > 0.01 OR
-          ABS(installment.paid_penalty_amount - COALESCE(payment.penalty_amount, 0)) > 0.01
+          installment.deleted_at IS NULL
+          AND (
+            ABS(installment.paid_principal_amount - COALESCE(payment.principal_amount, 0)) > 0.01 OR
+            ABS(installment.paid_interest_amount - COALESCE(payment.interest_amount, 0)) > 0.01 OR
+            ABS(installment.paid_penalty_amount - COALESCE(payment.penalty_amount, 0)) > 0.01
+          )
         UNION ALL
         SELECT
           COALESCE(payment.installment_id, 'ORPHAN:' || payment.id) AS installment_id,

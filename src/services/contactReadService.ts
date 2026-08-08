@@ -1,5 +1,15 @@
 import { db } from '@/lib/db';
-import { contactPostgresAdapter, isTauriRuntime, type RemoteContactDto } from '@/services/postgresAdapter';
+import {
+  contactPostgresAdapter,
+  isPostgresUnavailableError,
+  isTauriRuntime,
+  type RemoteContactDto,
+} from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { Contact, ContactType, RetailMembershipStatus } from '@/types';
 
 export interface ContactReadSyncResult {
@@ -15,6 +25,8 @@ const EMPTY_CONTACT_READ_SYNC_RESULT: ContactReadSyncResult = {
   updated: 0,
   skipped: 0,
 };
+
+const CONTACT_REFRESH_LIMIT = 500;
 
 let isRefreshingContactsFromPostgres = false;
 
@@ -43,11 +55,6 @@ const hasMembershipSnapshot = (contact?: MembershipSnapshotLike | null) => (
     Number(contact?.membership_points_balance || 0) > 0,
   )
 );
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
 
 const shouldKeepLocalMembershipSnapshot = (
   remoteContact: RemoteContactDto,
@@ -167,6 +174,28 @@ export const mergeRemoteContactsIntoDexie = async (
   return result;
 };
 
+const getLatestLocalContactUpdatedAt = async () => {
+  const contacts = await db.contacts.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    contacts,
+    (contact) => contact.remote_updated_at ?? (contact.sync_status === 'synced' ? contact.updated_at : undefined),
+  );
+};
+
+const getLatestRemoteContactUpdatedAt = (remoteContacts: RemoteContactDto[]) => (
+  getLatestRemoteUpdatedAt(remoteContacts, (contact) => contact.updated_at)
+);
+
+const addContactReadSyncResult = (
+  aggregate: ContactReadSyncResult,
+  next: ContactReadSyncResult,
+) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.skipped += next.skipped;
+};
+
 export const refreshContactsFromPostgres = async (): Promise<ContactReadSyncResult> => {
   if (isRefreshingContactsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_CONTACT_READ_SYNC_RESULT };
@@ -174,8 +203,36 @@ export const refreshContactsFromPostgres = async (): Promise<ContactReadSyncResu
 
   isRefreshingContactsFromPostgres = true;
   try {
-    const remoteContacts = await contactPostgresAdapter.list();
-    return mergeRemoteContactsIntoDexie(remoteContacts);
+    const aggregate = { ...EMPTY_CONTACT_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalContactUpdatedAt();
+
+    while (true) {
+      const remoteContacts = await contactPostgresAdapter.list({
+        updatedAfter,
+        limit: CONTACT_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteContactsIntoDexie(remoteContacts);
+      addContactReadSyncResult(aggregate, result);
+
+      if (remoteContacts.length < CONTACT_REFRESH_LIMIT) {
+        break;
+      }
+
+      const nextUpdatedAfter = getLatestRemoteContactUpdatedAt(remoteContacts);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
+        break;
+      }
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) {
+      return { ...EMPTY_CONTACT_READ_SYNC_RESULT };
+    }
+
+    throw error;
   } finally {
     isRefreshingContactsFromPostgres = false;
   }

@@ -177,9 +177,11 @@ pub async fn postgres_upsert_cooperative_area(
 #[tauri::command]
 pub async fn postgres_list_cooperative_members(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CooperativeMemberDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_members(&pool).await?)
+    Ok(cooperative_repository::list_cooperative_members(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
@@ -220,9 +222,14 @@ pub async fn postgres_upsert_cooperative_member_code(
 #[tauri::command]
 pub async fn postgres_list_cooperative_saving_transactions(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CooperativeSavingTransactionDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_saving_transactions(&pool).await?)
+    Ok(
+        cooperative_repository::list_cooperative_saving_transactions(&pool, updated_after, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]
@@ -246,9 +253,18 @@ pub async fn postgres_upsert_cooperative_saving_transaction(
 #[tauri::command]
 pub async fn postgres_list_cooperative_member_saving_balances(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CooperativeMemberSavingBalanceDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_member_saving_balances(&pool).await?)
+    Ok(
+        cooperative_repository::list_cooperative_member_saving_balances(
+            &pool,
+            updated_after,
+            limit,
+        )
+        .await?,
+    )
 }
 
 #[tauri::command]
@@ -272,9 +288,11 @@ pub async fn postgres_upsert_cooperative_member_saving_balance(
 #[tauri::command]
 pub async fn postgres_list_cooperative_loans(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CooperativeLoanDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_loans(&pool).await?)
+    Ok(cooperative_repository::list_cooperative_loans(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
@@ -316,9 +334,14 @@ pub async fn postgres_delete_cooperative_loan_migration(
 #[tauri::command]
 pub async fn postgres_list_cooperative_loan_installments(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CooperativeLoanInstallmentDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_loan_installments(&pool).await?)
+    Ok(
+        cooperative_repository::list_cooperative_loan_installments(&pool, updated_after, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]
@@ -342,9 +365,14 @@ pub async fn postgres_upsert_cooperative_loan_installment(
 #[tauri::command]
 pub async fn postgres_list_cooperative_loan_payments(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CooperativeLoanPaymentDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_loan_payments(&pool).await?)
+    Ok(
+        cooperative_repository::list_cooperative_loan_payments(&pool, updated_after, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]

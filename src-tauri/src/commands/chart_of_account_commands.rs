@@ -8,9 +8,11 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_chart_of_accounts(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<ChartOfAccountDto>> {
     let pool = state.pool()?;
-    Ok(chart_of_account_repository::list_chart_of_accounts(&pool).await?)
+    Ok(chart_of_account_repository::list_chart_of_accounts(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
