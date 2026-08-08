@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import type { InventoryLotConsumptionSourceType, PurchaseCostStatus } from '@/types';
+import { computeLotRemainingBalances } from '@/utils/inventory/lotBalance';
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -52,12 +53,11 @@ export const consumeFifoLots = async (
     return { totalCost: 0, weightedAvgCostPerUnit: 0, consumedLots: [] };
   }
 
-  // Fetch all lots with remaining stock for this product, sorted oldest first (FIFO)
-  const lots = await db.inventoryLots
-    .where('product_id')
-    .equals(productId)
-    .filter((lot) => lot.quantity_remaining > 0)
-    .toArray();
+  // Fetch all lots for this product and derive true remaining stock from the consumption
+  // ledger (cross-device consistent) rather than trusting the stored quantity_remaining field.
+  const allLots = await db.inventoryLots.where('product_id').equals(productId).toArray();
+  const remainingByLotId = await computeLotRemainingBalances(allLots);
+  const lots = allLots.filter((lot) => (remainingByLotId.get(lot.id) ?? 0) > 0);
 
   // Sort by received_at ascending so oldest lot is consumed first
   lots.sort((a, b) => a.received_at.localeCompare(b.received_at));
@@ -75,7 +75,8 @@ export const consumeFifoLots = async (
       throw new Error(`Stok ${lot.product_name} belum memiliki harga beli dan tidak boleh dijual.`);
     }
 
-    const consume = Math.min(lot.quantity_remaining, remaining);
+    const lotRemaining = remainingByLotId.get(lot.id) ?? 0;
+    const consume = Math.min(lotRemaining, remaining);
     const lotCost = roundCurrency(consume * lot.cost_per_unit);
 
     totalCost += lotCost;
@@ -90,7 +91,7 @@ export const consumeFifoLots = async (
     });
 
     await db.inventoryLots.update(lot.id, {
-      quantity_remaining: lot.quantity_remaining - consume,
+      quantity_remaining: lotRemaining - consume,
       updated_at: now,
     });
 

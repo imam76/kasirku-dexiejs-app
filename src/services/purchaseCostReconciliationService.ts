@@ -4,6 +4,7 @@ import { postPurchaseCostReconciliationJournal } from '@/services/generalLedgerS
 import { enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
 import type {
   InventoryLot,
+  InventoryLotConsumption,
   Product,
   PurchaseAdditionalCostTreatment,
   PurchaseCostReconciliation,
@@ -12,6 +13,7 @@ import type {
   PurchaseDocumentItem,
   TransactionItem,
 } from '@/types';
+import { computeLotRemainingBalances } from '@/utils/inventory/lotBalance';
 import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { isTransactionExpense } from '@/utils/transactions';
 
@@ -63,7 +65,8 @@ const getLotQuantitiesForItem = async (item: PurchaseDocumentItem, product?: Pro
       .toArray()
     : [];
   const soldStockQuantity = consumptions.reduce((sum, consumption) => sum + Number(consumption.quantity || 0), 0);
-  const remainingStockQuantity = lots.reduce((sum, lot) => sum + Number(lot.quantity_remaining || 0), 0);
+  const remainingByLotId = await computeLotRemainingBalances(lots);
+  const remainingStockQuantity = lots.reduce((sum, lot) => sum + (remainingByLotId.get(lot.id) ?? 0), 0);
 
   if (!product) {
     return {
@@ -368,7 +371,8 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
             .toArray()
           : [];
         const soldQuantityStock = consumptions.reduce((sum, consumption) => sum + Number(consumption.quantity || 0), 0);
-        const remainingQuantityStock = lots.reduce((sum, lot) => sum + Number(lot.quantity_remaining || 0), 0);
+        const remainingByLotId = await computeLotRemainingBalances(lots);
+        const remainingQuantityStock = lots.reduce((sum, lot) => sum + (remainingByLotId.get(lot.id) ?? 0), 0);
         const totalLotQuantity = lots.reduce((sum, lot) => sum + Number(lot.quantity_received || 0), 0);
         const oldAverageLotCost = lots.length > 0 && totalLotQuantity > 0
           ? lots.reduce((sum, lot) => sum + Number(lot.cost_per_unit || 0) * Number(lot.quantity_received || 0), 0) / totalLotQuantity

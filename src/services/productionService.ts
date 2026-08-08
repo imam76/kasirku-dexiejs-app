@@ -16,6 +16,7 @@ import type {
 } from '@/types';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
+import { computeLotRemainingBalances } from '@/utils/inventory/lotBalance';
 import { createProductionNumber } from '@/utils/production/createProductionNumber';
 import {
   assertProductionOrderDraft,
@@ -150,11 +151,9 @@ const getEstimatedFifoCost = async (product: Product, quantityNeeded: number) =>
     return { totalCost: 0, weightedAvgCostPerUnit: 0 };
   }
 
-  const lots = await db.inventoryLots
-    .where('product_id')
-    .equals(product.id)
-    .filter((lot) => lot.quantity_remaining > 0)
-    .toArray();
+  const allLots = await db.inventoryLots.where('product_id').equals(product.id).toArray();
+  const remainingByLotId = await computeLotRemainingBalances(allLots);
+  const lots = allLots.filter((lot) => (remainingByLotId.get(lot.id) ?? 0) > 0);
   lots.sort((left, right) => left.received_at.localeCompare(right.received_at));
 
   let remaining = quantityNeeded;
@@ -168,7 +167,7 @@ const getEstimatedFifoCost = async (product: Product, quantityNeeded: number) =>
       throw new Error(`Stok ${lot.product_name} belum memiliki harga beli final.`);
     }
 
-    const consumed = Math.min(lot.quantity_remaining, remaining);
+    const consumed = Math.min(remainingByLotId.get(lot.id) ?? 0, remaining);
     totalCost += consumed * lot.cost_per_unit;
     remaining -= consumed;
   }
