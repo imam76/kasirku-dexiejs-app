@@ -51,7 +51,15 @@ export interface ReconcilePurchaseReceiptCostInput {
 
 const getItemReceivedQuantity = (item: PurchaseDocumentItem) => Number(item.received_quantity ?? item.quantity ?? 0);
 
-const getLotQuantitiesForItem = async (item: PurchaseDocumentItem, product?: Product) => {
+interface LotConsumptionSummary {
+  lots: InventoryLot[];
+  consumptions: InventoryLotConsumption[];
+  soldQuantity: number;
+  remainingQuantity: number;
+  totalReceivedQuantity: number;
+}
+
+const getLotConsumptionSummaryForItem = async (item: PurchaseDocumentItem): Promise<LotConsumptionSummary> => {
   const lots = await db.inventoryLots
     .where('source_line_id')
     .equals(item.id)
@@ -64,24 +72,34 @@ const getLotQuantitiesForItem = async (item: PurchaseDocumentItem, product?: Pro
       .filter((consumption) => consumption.source_type === 'POS_TRANSACTION')
       .toArray()
     : [];
-  const soldStockQuantity = consumptions.reduce((sum, consumption) => sum + Number(consumption.quantity || 0), 0);
   const remainingByLotId = await computeLotRemainingBalances(lots);
-  const remainingStockQuantity = lots.reduce((sum, lot) => sum + (remainingByLotId.get(lot.id) ?? 0), 0);
+
+  return {
+    lots,
+    consumptions,
+    soldQuantity: consumptions.reduce((sum, consumption) => sum + Number(consumption.quantity || 0), 0),
+    remainingQuantity: lots.reduce((sum, lot) => sum + (remainingByLotId.get(lot.id) ?? 0), 0),
+    totalReceivedQuantity: lots.reduce((sum, lot) => sum + Number(lot.quantity_received || 0), 0),
+  };
+};
+
+const getLotQuantitiesForItem = async (item: PurchaseDocumentItem, product?: Product) => {
+  const { lots, consumptions, soldQuantity, remainingQuantity } = await getLotConsumptionSummaryForItem(item);
 
   if (!product) {
     return {
       lots,
       consumptions,
-      sold_quantity: soldStockQuantity,
-      remaining_quantity: remainingStockQuantity,
+      sold_quantity: soldQuantity,
+      remaining_quantity: remainingQuantity,
     };
   }
 
   return {
     lots,
     consumptions,
-    sold_quantity: konversiSatuanProduk(soldStockQuantity, product, product.purchase_unit, item.unit),
-    remaining_quantity: konversiSatuanProduk(remainingStockQuantity, product, product.purchase_unit, item.unit),
+    sold_quantity: konversiSatuanProduk(soldQuantity, product, product.purchase_unit, item.unit),
+    remaining_quantity: konversiSatuanProduk(remainingQuantity, product, product.purchase_unit, item.unit),
   };
 };
 
@@ -357,23 +375,13 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
           item.unit,
           product.purchase_unit,
         );
-        const lots = await db.inventoryLots
-          .where('source_line_id')
-          .equals(item.id)
-          .filter((lot) => lot.source_type === 'PURCHASE_RECEIPT')
-          .toArray();
-        const lotIds = lots.map((lot) => lot.id);
-        const consumptions = lotIds.length > 0
-          ? await db.inventoryLotConsumptions
-            .where('lot_id')
-            .anyOf(lotIds)
-            .filter((consumption) => consumption.source_type === 'POS_TRANSACTION')
-            .toArray()
-          : [];
-        const soldQuantityStock = consumptions.reduce((sum, consumption) => sum + Number(consumption.quantity || 0), 0);
-        const remainingByLotId = await computeLotRemainingBalances(lots);
-        const remainingQuantityStock = lots.reduce((sum, lot) => sum + (remainingByLotId.get(lot.id) ?? 0), 0);
-        const totalLotQuantity = lots.reduce((sum, lot) => sum + Number(lot.quantity_received || 0), 0);
+        const {
+          lots,
+          consumptions,
+          soldQuantity: soldQuantityStock,
+          remainingQuantity: remainingQuantityStock,
+          totalReceivedQuantity: totalLotQuantity,
+        } = await getLotConsumptionSummaryForItem(item);
         const oldAverageLotCost = lots.length > 0 && totalLotQuantity > 0
           ? lots.reduce((sum, lot) => sum + Number(lot.cost_per_unit || 0) * Number(lot.quantity_received || 0), 0) / totalLotQuantity
           : normalisasiHargaProduk(estimatedPrice, product, item.unit, product.purchase_unit);
