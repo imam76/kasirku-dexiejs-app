@@ -20,6 +20,8 @@ fn cutoff_date_key(value: Option<&str>) -> Option<&str> {
 
 pub async fn list_finance_account_mappings(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<FinanceAccountMappingDto>, sqlx::Error> {
     sqlx::query_as::<_, FinanceAccountMappingDto>(
         r#"
@@ -35,9 +37,13 @@ pub async fn list_finance_account_mappings(
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at
         FROM finance_account_mappings
-        ORDER BY key ASC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

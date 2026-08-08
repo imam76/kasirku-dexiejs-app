@@ -17,6 +17,7 @@ pub mod finance_transaction;
 pub mod fiscal_year_closing_run;
 pub mod fixed_asset;
 pub mod hr;
+pub mod inventory_lot;
 pub mod journal_entry;
 pub mod marketplace;
 pub mod opening_balance;

@@ -8,9 +8,11 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_employees(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<EmployeeDto>> {
     let pool = state.pool()?;
-    Ok(employee_repository::list_employees(&pool).await?)
+    Ok(employee_repository::list_employees(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
@@ -34,9 +36,11 @@ pub async fn postgres_upsert_employee(
 #[tauri::command]
 pub async fn postgres_list_employee_areas(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<EmployeeAreaDto>> {
     let pool = state.pool()?;
-    Ok(employee_repository::list_employee_areas(&pool).await?)
+    Ok(employee_repository::list_employee_areas(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]
@@ -51,9 +55,11 @@ pub async fn postgres_upsert_employee_area(
 #[tauri::command]
 pub async fn postgres_list_employee_collection_schedules(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<EmployeeCollectionScheduleDto>> {
     let pool = state.pool()?;
-    Ok(employee_repository::list_employee_collection_schedules(&pool).await?)
+    Ok(employee_repository::list_employee_collection_schedules(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]

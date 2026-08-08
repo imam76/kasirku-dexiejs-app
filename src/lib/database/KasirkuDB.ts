@@ -108,6 +108,7 @@ import type {
   EmployeeAvailabilityException,
   CollectionCoverageException,
   ImplementationReviewItem,
+  StockMutation,
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
@@ -221,6 +222,7 @@ export class KasirkuDB extends Dexie {
   employeeAvailabilityExceptions!: Table<EmployeeAvailabilityException>;
   collectionCoverageExceptions!: Table<CollectionCoverageException>;
   implementationReviewQueue!: Table<ImplementationReviewItem>;
+  stockMutations!: Table<StockMutation>;
 
   constructor() {
     super('KasirkuDB');

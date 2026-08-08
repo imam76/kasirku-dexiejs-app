@@ -6,6 +6,11 @@ import {
   type RemotePurchaseDocumentDto,
   type RemotePurchaseDocumentItemDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type {
   AccountType,
   PaymentMethod,
@@ -56,6 +61,8 @@ const VALID_TAX_CALCULATION_MODES: TaxCalculationMode[] = ['EXCLUSIVE', 'INCLUSI
 const VALID_TAX_FLOWS: TaxFlow[] = ['ADDITIVE', 'WITHHOLDING'];
 const VALID_ACCOUNT_TYPES: AccountType[] = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'CONTRA_REVENUE', 'EXPENSE'];
 const VALID_PAYMENT_METHODS: PaymentMethod[] = ['TUNAI', 'NON_TUNAI'];
+
+const PURCHASE_DOCUMENT_REFRESH_LIMIT = 500;
 
 let isRefreshingPurchaseDocumentsFromPostgres = false;
 
@@ -265,11 +272,6 @@ const hasLocalUnsyncedChanges = (document: PurchaseDocument) => (
   document.sync_status === 'pending' || document.sync_status === 'failed'
 );
 
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
 const shouldApplyRemotePurchaseDocument = (
   localDocument: PurchaseDocument | undefined,
   remoteDocument: RemotePurchaseDocumentDto,
@@ -335,6 +337,28 @@ export const mergeRemotePurchaseDocumentBundlesIntoDexie = async (
   return result;
 };
 
+const getLatestLocalPurchaseDocumentUpdatedAt = async () => {
+  const documents = await db.purchaseDocuments.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    documents,
+    (document) => document.remote_updated_at ?? (document.sync_status === 'synced' ? document.updated_at : undefined),
+  );
+};
+
+const getLatestRemotePurchaseDocumentBundleUpdatedAt = (remoteBundles: RemotePurchaseDocumentBundleDto[]) => (
+  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.document.updated_at)
+);
+
+const addPurchaseDocumentReadSyncResult = (
+  aggregate: PurchaseDocumentReadSyncResult,
+  next: PurchaseDocumentReadSyncResult,
+) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.skipped += next.skipped;
+};
+
 export const refreshPurchaseDocumentsFromPostgres = async (): Promise<PurchaseDocumentReadSyncResult> => {
   if (isRefreshingPurchaseDocumentsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_PURCHASE_DOCUMENT_READ_SYNC_RESULT };
@@ -342,8 +366,25 @@ export const refreshPurchaseDocumentsFromPostgres = async (): Promise<PurchaseDo
 
   isRefreshingPurchaseDocumentsFromPostgres = true;
   try {
-    const remoteBundles = await purchaseDocumentPostgresAdapter.list();
-    return mergeRemotePurchaseDocumentBundlesIntoDexie(remoteBundles);
+    const aggregate = { ...EMPTY_PURCHASE_DOCUMENT_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalPurchaseDocumentUpdatedAt();
+
+    while (true) {
+      const remoteBundles = await purchaseDocumentPostgresAdapter.list({
+        updatedAfter,
+        limit: PURCHASE_DOCUMENT_REFRESH_LIMIT,
+      });
+      const result = await mergeRemotePurchaseDocumentBundlesIntoDexie(remoteBundles);
+      addPurchaseDocumentReadSyncResult(aggregate, result);
+
+      if (remoteBundles.length < PURCHASE_DOCUMENT_REFRESH_LIMIT) break;
+
+      const nextUpdatedAfter = getLatestRemotePurchaseDocumentBundleUpdatedAt(remoteBundles);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
   } finally {
     isRefreshingPurchaseDocumentsFromPostgres = false;
   }

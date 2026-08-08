@@ -36,6 +36,10 @@ import {
   refreshAccountingFiscalYearsFromPostgres,
   refreshFiscalYearClosingRunsFromPostgres,
 } from '@/services/fiscalYearReadService';
+import {
+  refreshInventoryLotConsumptionsFromPostgres,
+  refreshInventoryLotsFromPostgres,
+} from '@/services/inventoryLotReadService';
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
 import { refreshOpeningBalancesFromPostgres } from '@/services/openingBalanceReadService';
 import { refreshPaymentMethodsFromPostgres } from '@/services/paymentMethodReadService';
@@ -46,6 +50,7 @@ import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
 import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
+import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
@@ -324,9 +329,12 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
   stock_opnames: { refreshFns: [refreshStockOpnamesFromPostgres], queryKeys: STOCK_OPNAME_QUERY_KEYS },
   stock_opname_items: { refreshFns: [refreshStockOpnamesFromPostgres], queryKeys: STOCK_OPNAME_QUERY_KEYS },
   // No pull-side sync yet - see module doc comment above.
-  stock_mutations: { refreshFns: noRefresh, queryKeys: noQueryKeys },
-  inventory_lots: { refreshFns: noRefresh, queryKeys: noQueryKeys },
-  inventory_lot_consumptions: { refreshFns: noRefresh, queryKeys: noQueryKeys },
+  stock_mutations: { refreshFns: [refreshStockMutationsFromPostgres], queryKeys: noQueryKeys },
+  inventory_lots: { refreshFns: [refreshInventoryLotsFromPostgres], queryKeys: ['stockCard'] },
+  inventory_lot_consumptions: {
+    refreshFns: [refreshInventoryLotConsumptionsFromPostgres],
+    queryKeys: ['stockCard'],
+  },
 
   // Production
   production_orders: { refreshFns: [refreshProductionOrdersFromPostgres], queryKeys: PRODUCTION_ORDER_QUERY_KEYS },

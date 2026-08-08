@@ -47,6 +47,8 @@ import type {
   PurchaseDocumentStatus,
   PurchaseDocumentType,
   RetailMembershipStatus,
+  InventoryLotConsumptionSourceType,
+  InventoryLotSourceType,
   PurchaseAdditionalCostTreatment,
   PurchaseCostEstimateSource,
   PurchaseCostStatus,
@@ -739,6 +741,42 @@ export interface RemoteStockMutationDto {
   actor_user_id?: string | null;
   actor_user_name?: string | null;
   occurred_at: string;
+  created_at: string;
+}
+
+export interface RemoteInventoryLotDto {
+  id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string | null;
+  source_type: InventoryLotSourceType;
+  source_id?: string | null;
+  source_line_id?: string | null;
+  quantity_received: number;
+  quantity_remaining: number;
+  cost_per_unit: number;
+  cost_status?: PurchaseCostStatus | null;
+  estimate_source?: PurchaseCostEstimateSource | null;
+  estimated_cost_per_unit?: number | null;
+  final_cost_per_unit?: number | null;
+  cost_finalized_at?: string | null;
+  cost_reconciliation_id?: string | null;
+  received_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteInventoryLotConsumptionDto {
+  id: string;
+  lot_id: string;
+  product_id: string;
+  product_name: string;
+  source_type: InventoryLotConsumptionSourceType;
+  source_id: string;
+  source_line_id: string;
+  quantity: number;
+  cost_per_unit_at_consumption: number;
+  cost_status_at_consumption: PurchaseCostStatus;
   created_at: string;
 }
 
@@ -2030,9 +2068,12 @@ export const activityLogPostgresAdapter = {
 };
 
 export const employeePostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteEmployeeDto[]>('postgres_list_employees');
+    return invoke<RemoteEmployeeDto[]>('postgres_list_employees', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2047,9 +2088,12 @@ export const employeePostgresAdapter = {
 };
 
 export const employeeAreaPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteEmployeeAreaDto[]>('postgres_list_employee_areas');
+    return invoke<RemoteEmployeeAreaDto[]>('postgres_list_employee_areas', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async upsert(input: RemoteEmployeeAreaDto) {
@@ -2059,9 +2103,12 @@ export const employeeAreaPostgresAdapter = {
 };
 
 export const employeeCollectionSchedulePostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteEmployeeCollectionScheduleDto[]>('postgres_list_employee_collection_schedules');
+    return invoke<RemoteEmployeeCollectionScheduleDto[]>('postgres_list_employee_collection_schedules', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async upsert(input: RemoteEmployeeCollectionScheduleDto) {
@@ -2274,9 +2321,12 @@ export const chartOfAccountPostgresAdapter = {
 };
 
 export const financeAccountMappingPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteFinanceAccountMappingDto[]>('postgres_list_finance_account_mappings');
+    return invoke<RemoteFinanceAccountMappingDto[]>('postgres_list_finance_account_mappings', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async upsert(input: RemoteFinanceAccountMappingDto) {
@@ -2555,9 +2605,12 @@ export const productPostgresAdapter = {
 };
 
 export const stockMutationPostgresAdapter = {
-  async list() {
+  async list(options: { createdAfter?: string; limit?: number } = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteStockMutationDto[]>('postgres_list_stock_mutations');
+    return invoke<RemoteStockMutationDto[]>('postgres_list_stock_mutations', {
+      createdAfter: options.createdAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2568,6 +2621,36 @@ export const stockMutationPostgresAdapter = {
   async upsert(input: RemoteStockMutationDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteStockMutationDto>('postgres_upsert_stock_mutation', { input });
+  },
+};
+
+export const inventoryLotPostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteInventoryLotDto[]>('postgres_list_inventory_lots', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async upsert(input: RemoteInventoryLotDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteInventoryLotDto>('postgres_upsert_inventory_lot', { input });
+  },
+};
+
+export const inventoryLotConsumptionPostgresAdapter = {
+  async list(options: { createdAfter?: string; limit?: number } = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteInventoryLotConsumptionDto[]>('postgres_list_inventory_lot_consumptions', {
+      createdAfter: options.createdAfter,
+      limit: options.limit,
+    });
+  },
+
+  async upsert(input: RemoteInventoryLotConsumptionDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteInventoryLotConsumptionDto>('postgres_upsert_inventory_lot_consumption', { input });
   },
 };
 
@@ -2632,9 +2715,12 @@ export const salesDocumentPostgresAdapter = {
 };
 
 export const purchaseDocumentPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemotePurchaseDocumentBundleDto[]>('postgres_list_purchase_document_bundles');
+    return invoke<RemotePurchaseDocumentBundleDto[]>('postgres_list_purchase_document_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {

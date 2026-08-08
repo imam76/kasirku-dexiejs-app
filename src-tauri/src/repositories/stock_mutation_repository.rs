@@ -1,7 +1,15 @@
 use crate::models::stock_mutation::StockMutationDto;
 use sqlx::{PgPool, Postgres, Transaction};
 
-pub async fn list_stock_mutations(pool: &PgPool) -> Result<Vec<StockMutationDto>, sqlx::Error> {
+/// Delta fetch for the stock_mutations ledger. Unlike other entities this cursors on
+/// `created_at`, not `updated_at` - the table is append-only (rows are inserted once via
+/// `ON CONFLICT DO NOTHING` in `upsert_stock_mutation_in_tx` and never updated), so `created_at`
+/// is the only monotonic column available.
+pub async fn list_stock_mutations(
+    pool: &PgPool,
+    created_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<StockMutationDto>, sqlx::Error> {
     sqlx::query_as::<_, StockMutationDto>(
         r#"
         SELECT
@@ -27,9 +35,13 @@ pub async fn list_stock_mutations(pool: &PgPool) -> Result<Vec<StockMutationDto>
             occurred_at::TEXT AS occurred_at,
             created_at::TEXT AS created_at
         FROM stock_mutations
-        ORDER BY occurred_at DESC, created_at DESC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR created_at > $1::TIMESTAMPTZ)
+        ORDER BY created_at, id
+        LIMIT $2
         "#,
     )
+    .bind(created_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

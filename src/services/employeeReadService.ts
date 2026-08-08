@@ -8,6 +8,11 @@ import {
   type RemoteEmployeeCollectionScheduleDto,
   type RemoteEmployeeDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { ChartOfAccount, Employee, EmployeeArea, EmployeeCollectionSchedule } from '@/types';
 
 export interface EmployeeReadSyncResult {
@@ -30,14 +35,11 @@ const EMPTY_READ_SYNC_RESULT: EmployeeReadSyncResult = {
   skipped: 0,
 };
 
+const EMPLOYEE_REFRESH_LIMIT = 500;
+
 let isRefreshingEmployeesFromPostgres = false;
 
 const optionalString = (value: string | null | undefined) => value ?? undefined;
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
 
 const hasLocalUnsyncedChanges = (item: { sync_status?: string }) => (
   item.sync_status === 'pending' || item.sync_status === 'failed'
@@ -344,6 +346,46 @@ export const mergeRemoteEmployeeCollectionSchedulesIntoDexie = async (
   return result;
 };
 
+const addReadSyncResult = (aggregate: EmployeeReadSyncResult, next: EmployeeReadSyncResult) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.skipped += next.skipped;
+};
+
+const localEmployeeCursor = (record: { remote_updated_at?: string; updated_at: string; sync_status?: string }) => (
+  record.remote_updated_at ?? (record.sync_status === 'synced' ? record.updated_at : undefined)
+);
+
+/**
+ * Delta fetch loop shared by the 3 employee-bundle tables: pull rows changed since the local
+ * cursor, merge into Dexie, advance the cursor from the batch, repeat until a short page ends
+ * pagination. Mirrors salesDocumentReadService.ts, run independently per table since each has
+ * its own cursor index.
+ */
+const refreshEmployeeTableFromPostgres = async <TRemote extends { updated_at: string }>(
+  getLocalCursor: () => Promise<string | undefined>,
+  list: (options: { updatedAfter?: string; limit?: number }) => Promise<TRemote[]>,
+  merge: (remoteRows: TRemote[]) => Promise<EmployeeReadSyncResult>,
+): Promise<EmployeeReadSyncResult> => {
+  const aggregate = { ...EMPTY_READ_SYNC_RESULT };
+  let updatedAfter = await getLocalCursor();
+
+  while (true) {
+    const remoteRows = await list({ updatedAfter, limit: EMPLOYEE_REFRESH_LIMIT });
+    const result = await merge(remoteRows);
+    addReadSyncResult(aggregate, result);
+
+    if (remoteRows.length < EMPLOYEE_REFRESH_LIMIT) break;
+
+    const nextUpdatedAfter = getLatestRemoteUpdatedAt(remoteRows, (row) => row.updated_at);
+    if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+    updatedAfter = nextUpdatedAfter;
+  }
+
+  return aggregate;
+};
+
 export const refreshEmployeesFromPostgres = async (): Promise<EmployeeReadSyncSummary> => {
   const emptySummary: EmployeeReadSyncSummary = {
     employees: { ...EMPTY_READ_SYNC_RESULT },
@@ -358,10 +400,22 @@ export const refreshEmployeesFromPostgres = async (): Promise<EmployeeReadSyncSu
   isRefreshingEmployeesFromPostgres = true;
   try {
     return {
-      employees: await mergeRemoteEmployeesIntoDexie(await employeePostgresAdapter.list()),
-      employeeAreas: await mergeRemoteEmployeeAreasIntoDexie(await employeeAreaPostgresAdapter.list()),
-      collectionSchedules: await mergeRemoteEmployeeCollectionSchedulesIntoDexie(
-        await employeeCollectionSchedulePostgresAdapter.list(),
+      employees: await refreshEmployeeTableFromPostgres(
+        async () => getLatestLocalRemoteUpdatedAt(await db.employees.toArray(), localEmployeeCursor),
+        (options) => employeePostgresAdapter.list(options),
+        mergeRemoteEmployeesIntoDexie,
+      ),
+      employeeAreas: await refreshEmployeeTableFromPostgres(
+        async () => getLatestLocalRemoteUpdatedAt(await db.employeeAreas.toArray(), localEmployeeCursor),
+        (options) => employeeAreaPostgresAdapter.list(options),
+        mergeRemoteEmployeeAreasIntoDexie,
+      ),
+      collectionSchedules: await refreshEmployeeTableFromPostgres(
+        async () => (
+          getLatestLocalRemoteUpdatedAt(await db.employeeCollectionSchedules.toArray(), localEmployeeCursor)
+        ),
+        (options) => employeeCollectionSchedulePostgresAdapter.list(options),
+        mergeRemoteEmployeeCollectionSchedulesIntoDexie,
       ),
     };
   } finally {

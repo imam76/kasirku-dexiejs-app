@@ -3795,6 +3795,9 @@ export type InventoryLotConsumptionSourceType =
   | 'PRODUCTION_CONSUMPTION'
   | 'PRODUCTION_VOID';
 
+export type InventoryLotSyncStatus = EntitySyncStatus;
+export type InventoryLotConsumptionSyncStatus = EntitySyncStatus;
+
 /**
  * Represents a single batch (lot) of inventory received at a specific cost.
  * Used for FIFO (First In, First Out) cost calculation.
@@ -3820,6 +3823,10 @@ export interface InventoryLot {
   received_at: string;       // Timestamp used for FIFO ordering (oldest first)
   created_at: string;
   updated_at: string;
+  sync_status?: InventoryLotSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface InventoryLotConsumption {
@@ -3834,4 +3841,7 @@ export interface InventoryLotConsumption {
   cost_per_unit_at_consumption: number;
   cost_status_at_consumption: PurchaseCostStatus;
   created_at: string;
+  sync_status?: InventoryLotConsumptionSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
 }

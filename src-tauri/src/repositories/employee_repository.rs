@@ -1,7 +1,11 @@
 use crate::models::employee::{EmployeeAreaDto, EmployeeCollectionScheduleDto, EmployeeDto};
 use sqlx::PgPool;
 
-pub async fn list_employees(pool: &PgPool) -> Result<Vec<EmployeeDto>, sqlx::Error> {
+pub async fn list_employees(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<EmployeeDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeDto>(
         r#"
         SELECT
@@ -84,10 +88,13 @@ pub async fn list_employees(pool: &PgPool) -> Result<Vec<EmployeeDto>, sqlx::Err
             FROM employee_access_profiles
             WHERE deleted_at IS NULL
         ) access_profile ON access_profile.employee_id = employees.id
-        WHERE deleted_at IS NULL
-        ORDER BY name ASC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR employees.updated_at > $1::TIMESTAMPTZ)
+        ORDER BY employees.updated_at, employees.id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -331,7 +338,11 @@ pub async fn upsert_employee(
         .ok_or(sqlx::Error::RowNotFound)
 }
 
-pub async fn list_employee_areas(pool: &PgPool) -> Result<Vec<EmployeeAreaDto>, sqlx::Error> {
+pub async fn list_employee_areas(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<EmployeeAreaDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeAreaDto>(
         r#"
         SELECT
@@ -347,9 +358,13 @@ pub async fn list_employee_areas(pool: &PgPool) -> Result<Vec<EmployeeAreaDto>, 
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM employee_areas
-        ORDER BY employee_id, area_name ASC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -416,6 +431,8 @@ pub async fn upsert_employee_area(
 
 pub async fn list_employee_collection_schedules(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<EmployeeCollectionScheduleDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeCollectionScheduleDto>(
         r#"
@@ -436,9 +453,13 @@ pub async fn list_employee_collection_schedules(
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM employee_collection_schedules
-        ORDER BY employee_id, area_id, weekday ASC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

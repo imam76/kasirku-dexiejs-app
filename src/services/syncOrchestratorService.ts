@@ -37,7 +37,12 @@ import { refreshProductionOrdersFromPostgres } from '@/services/productionReadSe
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshFixedAssetsFromPostgres, refreshFixedAssetRunsFromPostgres } from '@/services/fixedAssetReadService';
+import {
+  refreshInventoryLotConsumptionsFromPostgres,
+  refreshInventoryLotsFromPostgres,
+} from '@/services/inventoryLotReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
+import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadService';
 import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import {
@@ -68,6 +73,8 @@ import {
   enqueuePendingStockOpnamesForSync,
   enqueuePendingFixedAssetsForSync,
   enqueuePendingFixedAssetRunsForSync,
+  enqueuePendingInventoryLotsForSync,
+  enqueuePendingInventoryLotConsumptionsForSync,
   enqueuePendingTaxesForSync,
   processPendingSyncQueue,
   recoverStaleProcessingSyncQueueItems,
@@ -111,6 +118,8 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingStockOpnamesForSync();
   await enqueuePendingFixedAssetsForSync();
   await enqueuePendingFixedAssetRunsForSync();
+  await enqueuePendingInventoryLotsForSync();
+  await enqueuePendingInventoryLotConsumptionsForSync();
 };
 
 export const refreshAllDataFromPostgres = async () => {
@@ -171,6 +180,9 @@ export const refreshAllDataFromPostgres = async () => {
     purchaseDocuments: await refreshPurchaseDocumentsFromPostgres(),
     salesDocuments: await refreshSalesDocumentsFromPostgres(),
     stockOpnames: await refreshStockOpnamesFromPostgres(),
+    stockMutations: await refreshStockMutationsFromPostgres(),
+    inventoryLots: await refreshInventoryLotsFromPostgres(),
+    inventoryLotConsumptions: await refreshInventoryLotConsumptionsFromPostgres(),
   };
 
   console.info('[PostgreSQL sync] read refresh completed', refreshResults);

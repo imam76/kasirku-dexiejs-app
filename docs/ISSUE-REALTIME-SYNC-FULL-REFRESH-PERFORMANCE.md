@@ -574,3 +574,196 @@ File yang diubah/ditambah pada slice ini:
 - `src/services/contactReadService.ts` (diubah)
 - `src/services/productReadService.ts` (diubah)
 - `src-tauri/migrations/0073_delta_fetch_pilot_indexes.sql` (baru)
+
+---
+
+**2026-08-08 — Bagian 2, slice 2 (cooperative bundle) sudah dikerjakan** di commit
+`f937ea5` (bukan dalam sesi yang menulis dokumen ini, tapi ditemukan sudah selesai
+saat sesi berikutnya mengaudit sisa pekerjaan) — `cooperative_members`,
+`cooperative_saving_transactions`, `cooperative_member_saving_balances`,
+`cooperative_loans`, `cooperative_loan_installments`, `cooperative_loan_payments`
+masing-masing dipecah jadi delta fetch independen (`refreshCooperativeXFromPostgres`
+per tabel di `cooperativeReadService.ts`), `cooperative_loans`/`cooperative_loan_installments`
+dipindah dari hard-delete ke soft-delete (`deleted_at`, migration
+`0074_cooperative_bundle_delta_fetch.sql`) supaya kompatibel dengan cursor
+pagination. Dicatat di sini karena bagian "Sisa pekerjaan" sebelumnya sempat
+salah menyebut ini "belum dikerjakan, butuh investigasi terpisah" — itu sudah
+tidak akurat.
+
+---
+
+**2026-08-08 — Bagian 2, slice 3 (rollout delta fetch prioritas menengah + 2 pull-path baru)
+sudah dikerjakan**, sebagai tindak lanjut diskusi "sisa-sisa pekerjaan" di atas.
+Restaurant POS (`restaurant_sessions/tables/orders/kitchen_tickets`) **sengaja
+di-skip** atas keputusan user — bukan optimasi delta fetch, itu proyek fitur baru
+(bangun sync dua arah dari nol, tabelnya sampai sekarang nol kode Rust/TS yang
+menyentuhnya) dan tidak berkontribusi ke traffic padat saat ini (trigger-nya
+tidak pernah fired karena tidak ada yang menulis ke tabel itu).
+
+Ringkasan perubahan:
+
+1. **Delta fetch conversion (pola sudah ada, kontainable)** — 3 entity, ngikutin
+   pola persis `salesDocumentReadService.ts`/slice 1:
+   - `finance_account_mappings` (`accounting_setting_repository.rs`,
+     `accountingSettingReadService.ts`) — tabel master kecil, tapi tetap
+     dikonversi untuk konsistensi.
+   - `employees` bundle (`employees` + `employee_areas` + `employee_collection_schedules`,
+     `employee_repository.rs`, `employeeReadService.ts`) — sekalian perbaiki bug
+     tombstone yang sama seperti slice 1: query `list_employees` lama punya
+     `WHERE deleted_at IS NULL` sehingga karyawan yang di-soft-delete di server
+     tidak pernah terkirim ke client lain; filter itu dibuang dari jalur list
+     (jalur `get`/`upsert` single-row tidak disentuh, sesuai pola slice 1).
+   - `purchase_documents` bundle (+ `purchase_document_items`,
+     `purchase_document_repository.rs`, `purchaseDocumentReadService.ts`) —
+     `ORDER BY` diubah dari `created_at DESC` ke `updated_at, id` supaya cursor
+     pagination valid; purchase_documents tidak punya kolom `deleted_at` (dibatalkan
+     lewat status/`voided_at`, bukan hard delete) jadi tidak ada isu tombstone di sini.
+
+2. **`stock_mutations` — pull-path baru (read-only cache)**: repository/command
+   Rust sudah lama ada tapi tidak pernah dipanggil dari frontend (dead code).
+   Ditambahkan: parameter `created_after`/`limit` di `list_stock_mutations`
+   (cursor di `created_at`, bukan `updated_at` — tabelnya append-only, baris tidak
+   pernah di-UPDATE setelah insert), tabel Dexie baru `stockMutations` (migration
+   `v114`, murni cache baca — alur penulisan mutasi yang sudah ada di
+   checkoutService/productionService/dll **tidak diubah**, tetap push langsung ke
+   queue tanpa nulis lokal dulu), read service baru
+   `src/services/stockMutationReadService.ts` (merge id-keyed sederhana, tidak
+   perlu guard konflik karena baris immutable).
+
+3. **`inventory_lots` + `inventory_lot_consumptions` — dibangun dari nol (bukan
+   pull-path saja)**: audit ulang nemuin tabel Postgres-nya ada (migration 0018)
+   dan sudah di-wire ke trigger notify sejak awal, tapi **nol kode Rust/TS**
+   pernah menyentuhnya sama sekali — beda dari `stock_mutations` yang setidaknya
+   punya write-path. `addInventoryLot()`/`consumeFifoLots()` (dipakai checkout,
+   produksi, pembelian, retur, stock opname, void) 100% lokal Dexie.
+
+   Desain yang dipakai (lihat komentar di `inventory_lot_repository.rs` untuk detail):
+   - `quantity_remaining` tidak pernah diset lewat upsert biasa (baik arah push
+     maupun pull) — field itu HANYA pernah bergerak lewat
+     `upsert_inventory_lot_consumption`, yang secara atomik melakukan
+     `quantity_remaining = quantity_remaining - $delta` di server (pola identik
+     `stock_mutation_repository::upsert_stock_mutation_in_tx` untuk
+     `products.stock`). Ini supaya dua device yang konsumsi lot yang sama nyaris
+     bersamaan tidak saling menimpa hasil decrement satu sama lain. Tidak
+     di-clamp ke nol — sistem ini offline-first, lot yang minus karena dua
+     device sama-sama konsumsi sebelum saling tahu adalah trade-off yang
+     diterima, bukan bug yang dijaga di sini.
+   - Konsekuensinya: field `quantity_remaining` pada baris yang SUDAH ada secara
+     lokal **tidak pernah ditimpa oleh pull dari device lain** (hanya field
+     identitas/biaya yang ikut ter-update: `cost_status`, `final_cost_per_unit`,
+     dll) — nilainya hanya diisi sekali saat device itu pertama kali menerima
+     lot tsb. Ini konsisten (simetris) dengan sisi push, tapi artinya **belum
+     ada rekonsiliasi otomatis lintas-device untuk quantity_remaining pada lot
+     yang sudah pernah dilihat device tsb** — device itu harus menghitungnya
+     sendiri dari total `inventory_lot_consumptions` yang sudah di-pull kalau
+     mau tahu sisa stok gabungan semua device. **Ini gap yang disadari, bukan
+     diselesaikan** — dicatat sebagai sisa pekerjaan di bawah.
+   - `cooperative_loans`-style hard-delete tidak relevan di sini karena baik
+     lot maupun consumption tidak pernah di-hard-delete di alur manapun yang ada.
+   - Push: sync-queue entity baru `inventoryLots`/`inventoryLotConsumptions` di
+     `syncQueueService.ts` (mapper, type guard, processor, mark-synced,
+     enqueue helper, pending scanner). **Enqueue TIDAK dipanggil langsung di
+     dalam `addInventoryLot()`/`consumeFifoLots()`** — kedua fungsi itu dipanggil
+     di dalam `db.transaction()` milik pemanggilnya yang tidak menyertakan
+     `db.syncQueue` (persis seperti `stockMutations`, yang enqueue-nya juga
+     sengaja di luar transaksi). Sebagai gantinya baris ditandai
+     `sync_status: 'pending'` di dalam transaksi (aman, `db.inventoryLots`/
+     `db.inventoryLotConsumptions` sudah termasuk scope transaksi pemanggil),
+     lalu scanner `enqueuePendingInventoryLotsForSync`/
+     `enqueuePendingInventoryLotConsumptionsForSync` (dipanggil dari
+     `enqueueAllPendingLocalChangesForSync`, jalan saat startup/reconnect/tombol
+     Sync DB manual) yang mengambil alih push-nya belakangan. **Konsekuensi**:
+     lot/consumption baru tidak langsung ter-push detik itu juga seperti entity
+     lain (yang enqueue tepat setelah transaksinya selesai) — baru ter-push saat
+     salah satu dari 3 trigger itu jalan. Alternatif "enqueue tepat setelah
+     transaksi" butuh mengubah return value + lokasi enqueue di 6 file alur
+     transaksi (checkoutService, productionService, purchaseDocumentService,
+     stockOpnameService, transactionVoidService, salesReturnService,
+     salesDocumentService) — sengaja tidak dikerjakan di slice ini karena
+     risikonya (breaking alur transaksi uang) tidak sepadan dengan percepatan
+     beberapa detik.
+   - Cost finalization (`purchaseCostReconciliationService.ts`) sekarang juga
+     menandai `sync_status: 'pending'` supaya ikut ter-enqueue oleh scanner.
+   - Pull: read service baru `src/services/inventoryLotReadService.ts`,
+     `inventory_lots` cursor di `updated_at` (kolom TEXT bukan TIMESTAMPTZ di
+     skema aslinya — dibandingkan sebagai teks langsung, aman karena app selalu
+     menulis `.toISOString()` yang fixed-width), `inventory_lot_consumptions`
+     cursor di `created_at` (append-only, sama seperti `stock_mutations`).
+   - Dexie: `InventoryLot`/`InventoryLotConsumption` dapat field sync
+     (`sync_status`, `sync_error`, `last_synced_at`, `remote_updated_at` khusus
+     lot) di `src/types/index.ts`, migration `v115` menambah index `sync_status`
+     + backfill SEMUA baris lokal yang sudah ada jadi `pending` (sama seperti
+     precedent `chartOfAccounts` v70) — artinya start pertama setelah upgrade ini
+     akan memicu burst push untuk seluruh histori lot/consumption yang selama ini
+     cuma ada di Dexie satu device. Belum ada throttling untuk burst ini di luar
+     mekanisme sync-queue worker yang sudah ada.
+
+4. **Migration index baru**: `src-tauri/migrations/0075_delta_fetch_rollout_indexes.sql`
+   — index `(updated_at, id)` untuk `employees`, `employee_areas`,
+   `employee_collection_schedules`, `purchase_documents`,
+   `finance_account_mappings`, `inventory_lots`; index `(created_at, id)` untuk
+   `stock_mutations`, `inventory_lot_consumptions`.
+
+5. **`realtimeSyncTableMap.ts`**: `stock_mutations`, `inventory_lots`,
+   `inventory_lot_consumptions` diubah dari `refreshFns: noRefresh` jadi
+   memanggil refresh function masing-masing (sebelumnya notify di tabel ini
+   tidak memicu apa pun sama sekali). `inventory_lots`/`inventory_lot_consumptions`
+   juga meng-invalidate query key `['stockCard']`.
+
+Verifikasi yang sudah dilakukan:
+- `cargo check` di `src-tauri/`: **pass**, tanpa error.
+- `bun run build` (`tsc -b` + vite build): **pass**, tanpa error type.
+- `bun run lint`: **pass** — 1 error + 2 warning yang muncul dikonfirmasi
+  pre-existing di file yang tidak disentuh (persis temuan yang sama dengan
+  slice 1, file-nya juga sama).
+
+**Belum diuji terhadap PostgreSQL nyata / LAN multi-PC**, sama seperti slice-slice
+sebelumnya. Yang paling penting untuk diverifikasi manual sebelum dianggap selesai
+secara operasional:
+- Perilaku atomic-decrement `upsert_inventory_lot_consumption` di bawah konkurensi
+  sungguhan (dua device konsumsi lot yang sama nyaris bersamaan) — baru diverifikasi
+  lewat pembacaan kode, belum dicoba nyata.
+- Burst push dari migration `v115` backfill saat pertama kali device existing
+  upgrade ke versi ini.
+- Delay push inventory_lots/inventory_lot_consumptions sampai ke salah satu
+  trigger (startup/reconnect/manual sync) — perlu dikonfirmasi apakah delay ini
+  cukup cepat dalam pemakaian nyata atau perlu dipercepat di iterasi berikutnya.
+
+Sisa pekerjaan yang **disadari tapi belum dikerjakan** (di luar scope slice ini):
+- **Rekonsiliasi `quantity_remaining` lintas-device** untuk lot yang sudah pernah
+  dilihat suatu device (lihat penjelasan desain di atas) — butuh keputusan
+  produk/desain terpisah, bukan sekadar tambahan kode.
+- **Push langsung setelah transaksi** untuk inventory_lots/inventory_lot_consumptions
+  (saat ini baru ter-push lewat scanner periodik) — butuh menyentuh 6 file alur
+  transaksi, sengaja ditunda.
+- **Restaurant POS** — di-skip atas keputusan user, statusnya sama seperti
+  sebelumnya (nol integrasi Postgres).
+- Entity prioritas rendah yang tetap boleh full fetch (tidak berubah dari
+  rencana awal): `roles`, `taxes`, `payment_methods`, `warehouses`,
+  `departments`, `currencies`, singleton settings.
+
+File yang diubah/ditambah pada slice ini:
+- `src-tauri/src/repositories/accounting_setting_repository.rs`,
+  `employee_repository.rs`, `purchase_document_repository.rs`,
+  `stock_mutation_repository.rs` (diubah)
+- `src-tauri/src/repositories/inventory_lot_repository.rs` (baru)
+- `src-tauri/src/models/inventory_lot.rs` (baru)
+- `src-tauri/src/commands/accounting_setting_commands.rs`,
+  `employee_commands.rs`, `purchase_document_commands.rs`,
+  `stock_mutation_commands.rs` (diubah)
+- `src-tauri/src/commands/inventory_lot_commands.rs` (baru)
+- `src-tauri/src/models/mod.rs`, `repositories/mod.rs`, `commands/mod.rs`,
+  `lib.rs` (diubah — registrasi modul/command baru)
+- `src-tauri/migrations/0075_delta_fetch_rollout_indexes.sql` (baru)
+- `src/services/postgresAdapter.ts`, `syncQueueService.ts`,
+  `syncOrchestratorService.ts`, `accountingSettingReadService.ts`,
+  `employeeReadService.ts`, `purchaseDocumentReadService.ts`,
+  `realtimeSyncTableMap.ts` (diubah)
+- `src/services/stockMutationReadService.ts`,
+  `src/services/inventoryLotReadService.ts` (baru)
+- `src/utils/inventory/addInventoryLot.ts`, `consumeFifoLots.ts`,
+  `src/services/purchaseCostReconciliationService.ts` (diubah — tandai `pending`)
+- `src/types/index.ts` (diubah — sync fields untuk `InventoryLot`/`InventoryLotConsumption`)
+- `src/lib/database/KasirkuDB.ts`, `migrations.ts` (diubah)
+- `src/lib/database/migrations/versions/v114.ts`,
+  `src/lib/database/migrations/versions/v115.ts` (baru)

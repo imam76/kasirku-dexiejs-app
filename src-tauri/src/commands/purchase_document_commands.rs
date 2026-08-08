@@ -8,9 +8,14 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_purchase_document_bundles(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<PurchaseDocumentBundleDto>> {
     let pool = state.pool()?;
-    Ok(purchase_document_repository::list_purchase_document_bundles(&pool).await?)
+    Ok(
+        purchase_document_repository::list_purchase_document_bundles(&pool, updated_after, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]

@@ -402,6 +402,7 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
             cost_finalized_at: now,
             cost_reconciliation_id: reconciliationId,
             updated_at: now,
+            sync_status: 'pending',
           } satisfies Partial<InventoryLot>);
         }
 

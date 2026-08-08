@@ -92,6 +92,8 @@ import {
   isTauriRuntime,
   hrPositionPostgresAdapter,
   inventoryOpeningBalancePostgresAdapter,
+  inventoryLotConsumptionPostgresAdapter,
+  inventoryLotPostgresAdapter,
   journalEntryPostgresAdapter,
   openingBalancePostgresAdapter,
   paymentMethodPostgresAdapter,
@@ -148,6 +150,8 @@ import {
   type RemoteFinanceTransactionDto,
   type RemoteFiscalYearClosingRunDto,
   type RemoteHrPositionDto,
+  type RemoteInventoryLotConsumptionDto,
+  type RemoteInventoryLotDto,
   type RemoteInventoryOpeningBalancePostingBundleDto,
   type RemoteJournalEntryBundleDto,
   type RemoteJournalEntryDto,
@@ -194,6 +198,7 @@ import {
 } from '@/services/fiscalYearReadService';
 import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
+import type { InventoryLot, InventoryLotConsumption } from '@/types';
 import type { LeaveRequest } from '@/types';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 
@@ -247,6 +252,8 @@ const PRODUCTION_ORDER_ENTITY = 'productionOrders';
 const PROJECT_ENTITY = 'projects';
 const FIXED_ASSET_ENTITY = 'fixedAssets';
 const FIXED_ASSET_DEPRECIATION_RUN_ENTITY = 'fixedAssetDepreciationRuns';
+const INVENTORY_LOT_ENTITY = 'inventoryLots';
+const INVENTORY_LOT_CONSUMPTION_ENTITY = 'inventoryLotConsumptions';
 const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
 const ROLE_ENTITY = 'roles';
 const ROLE_PERMISSION_ENTITY = 'rolePermissions';
@@ -1139,6 +1146,44 @@ const mapStockMutationToRemoteDto = (mutation: StockMutation): RemoteStockMutati
   actor_user_name: mutation.actor_user_name,
   occurred_at: mutation.occurred_at,
   created_at: mutation.created_at,
+});
+
+const mapInventoryLotToRemoteDto = (lot: InventoryLot): RemoteInventoryLotDto => ({
+  id: lot.id,
+  product_id: lot.product_id,
+  product_name: lot.product_name,
+  sku: lot.sku,
+  source_type: lot.source_type,
+  source_id: lot.source_id,
+  source_line_id: lot.source_line_id,
+  quantity_received: lot.quantity_received,
+  quantity_remaining: lot.quantity_remaining,
+  cost_per_unit: lot.cost_per_unit,
+  cost_status: lot.cost_status,
+  estimate_source: lot.estimate_source,
+  estimated_cost_per_unit: lot.estimated_cost_per_unit,
+  final_cost_per_unit: lot.final_cost_per_unit,
+  cost_finalized_at: lot.cost_finalized_at,
+  cost_reconciliation_id: lot.cost_reconciliation_id,
+  received_at: lot.received_at,
+  created_at: lot.created_at,
+  updated_at: lot.updated_at,
+});
+
+const mapInventoryLotConsumptionToRemoteDto = (
+  consumption: InventoryLotConsumption,
+): RemoteInventoryLotConsumptionDto => ({
+  id: consumption.id,
+  lot_id: consumption.lot_id,
+  product_id: consumption.product_id,
+  product_name: consumption.product_name,
+  source_type: consumption.source_type,
+  source_id: consumption.source_id,
+  source_line_id: consumption.source_line_id,
+  quantity: consumption.quantity,
+  cost_per_unit_at_consumption: consumption.cost_per_unit_at_consumption,
+  cost_status_at_consumption: consumption.cost_status_at_consumption,
+  created_at: consumption.created_at,
 });
 
 const mapStockOpnameToRemoteDto = (opname: StockOpname): RemoteStockOpnameDto => ({
@@ -2612,6 +2657,45 @@ const isRemoteStockMutationDto = (payload: unknown): payload is RemoteStockMutat
   );
 };
 
+const isRemoteInventoryLotDto = (payload: unknown): payload is RemoteInventoryLotDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteInventoryLotDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.product_id === 'string' &&
+    typeof candidate.product_name === 'string' &&
+    typeof candidate.source_type === 'string' &&
+    typeof candidate.quantity_received === 'number' &&
+    typeof candidate.quantity_remaining === 'number' &&
+    typeof candidate.cost_per_unit === 'number' &&
+    typeof candidate.received_at === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteInventoryLotConsumptionDto = (
+  payload: unknown,
+): payload is RemoteInventoryLotConsumptionDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteInventoryLotConsumptionDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.lot_id === 'string' &&
+    typeof candidate.product_id === 'string' &&
+    typeof candidate.product_name === 'string' &&
+    typeof candidate.source_type === 'string' &&
+    typeof candidate.source_id === 'string' &&
+    typeof candidate.source_line_id === 'string' &&
+    typeof candidate.quantity === 'number' &&
+    typeof candidate.cost_per_unit_at_consumption === 'number' &&
+    typeof candidate.cost_status_at_consumption === 'string' &&
+    typeof candidate.created_at === 'string'
+  );
+};
+
 const isRemoteStockOpnameDto = (payload: unknown): payload is RemoteStockOpnameDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3588,6 +3672,27 @@ const updateTaxSyncMetadata = async (
   await db.taxes.update(taxId, syncMetadata);
 };
 
+const updateInventoryLotSyncMetadata = async (
+  lotId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<InventoryLot, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentLot = await db.inventoryLots.get(lotId);
+  if (!currentLot || currentLot.updated_at !== sourceUpdatedAt) return;
+
+  await db.inventoryLots.update(lotId, syncMetadata);
+};
+
+const updateInventoryLotConsumptionSyncMetadata = async (
+  consumptionId: string,
+  syncMetadata: Partial<Pick<InventoryLotConsumption, 'sync_status' | 'sync_error' | 'last_synced_at'>>,
+) => {
+  const currentConsumption = await db.inventoryLotConsumptions.get(consumptionId);
+  if (!currentConsumption) return;
+
+  await db.inventoryLotConsumptions.update(consumptionId, syncMetadata);
+};
+
 const updateWarehouseSyncMetadata = async (
   warehouseId: string,
   sourceUpdatedAt: string,
@@ -4022,6 +4127,18 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === FIXED_ASSET_DEPRECIATION_RUN_ENTITY && isRemoteFixedAssetRunBundleDto(queueItem.payload)) {
     await updateFixedAssetRunSyncMetadata(queueItem.entity_id, queueItem.payload.run.updated_at, {
+      sync_status: 'failed', sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === INVENTORY_LOT_ENTITY && isRemoteInventoryLotDto(queueItem.payload)) {
+    await updateInventoryLotSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed', sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === INVENTORY_LOT_CONSUMPTION_ENTITY && isRemoteInventoryLotConsumptionDto(queueItem.payload)) {
+    await updateInventoryLotConsumptionSyncMetadata(queueItem.entity_id, {
       sync_status: 'failed', sync_error: errorMessage,
     });
   }
@@ -4601,6 +4718,30 @@ const processStockMutationQueueItem = async (queueItem: SyncQueueItem) => {
   return stockMutationPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processInventoryLotQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Inventory lot sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteInventoryLotDto(queueItem.payload)) {
+    throw new Error('Payload inventory lot sync queue tidak valid.');
+  }
+
+  return inventoryLotPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processInventoryLotConsumptionQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Inventory lot consumption sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteInventoryLotConsumptionDto(queueItem.payload)) {
+    throw new Error('Payload inventory lot consumption sync queue tidak valid.');
+  }
+
+  return inventoryLotConsumptionPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processStockOpnameQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Stock opname sync queue tidak mendukung operasi delete.');
@@ -4769,6 +4910,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteProject: RemoteProjectDto | null = null;
     let remoteFixedAsset: RemoteFixedAssetDto | null = null;
     let remoteFixedAssetRunBundle: RemoteFixedAssetDepreciationRunBundleDto | null = null;
+    let remoteInventoryLot: RemoteInventoryLotDto | null = null;
+    let remoteInventoryLotConsumption: RemoteInventoryLotConsumptionDto | null = null;
     let remotePurchaseDocumentBundle: RemotePurchaseDocumentBundleDto | null = null;
     let remoteRole: RemoteRoleDto | null = null;
     let remoteRolePermission: RemoteRolePermissionDto | null = null;
@@ -4881,6 +5024,10 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteStockOpnameBundle = await processStockOpnameQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === STOCK_MUTATION_ENTITY) {
       remoteStockMutation = await processStockMutationQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === INVENTORY_LOT_ENTITY) {
+      remoteInventoryLot = await processInventoryLotQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === INVENTORY_LOT_CONSUMPTION_ENTITY) {
+      remoteInventoryLotConsumption = await processInventoryLotConsumptionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === TAX_ENTITY) {
       remoteTax = await processTaxQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === WAREHOUSE_ENTITY) {
@@ -5737,6 +5884,27 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
 
     if (remoteStockMutation && isRemoteStockMutationDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      return;
+    }
+
+    if (remoteInventoryLot && isRemoteInventoryLotDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateInventoryLotSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteInventoryLot.updated_at,
+      });
+      return;
+    }
+
+    if (remoteInventoryLotConsumption && isRemoteInventoryLotConsumptionDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateInventoryLotConsumptionSyncMetadata(currentQueueItem.entity_id, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+      });
       return;
     }
 
@@ -7994,6 +8162,89 @@ export const enqueueProductionOrderBundleSync = async (
   void processPendingSyncQueue();
 
   return queueItem;
+};
+
+export const enqueueInventoryLotSync = async (
+  lot: InventoryLot,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'> = 'create',
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: INVENTORY_LOT_ENTITY,
+    entity_id: lot.id,
+    operation,
+    payload: mapInventoryLotToRemoteDto(lot),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueInventoryLotConsumptionSync = async (consumption: InventoryLotConsumption) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: INVENTORY_LOT_CONSUMPTION_ENTITY,
+    entity_id: consumption.id,
+    operation: 'create',
+    payload: mapInventoryLotConsumptionToRemoteDto(consumption),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingInventoryLotsForSync = async () => {
+  const lots = (await db.inventoryLots.toArray())
+    .filter((lot) => lot.sync_status === 'pending' || lot.sync_status === 'failed');
+
+  const lotQueueItems = await db.syncQueue.where('entity').equals(INVENTORY_LOT_ENTITY).toArray();
+
+  for (const lot of lots) {
+    const existingQueueItem = lotQueueItems.find((queueItem) => (
+      queueItem.entity_id === lot.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteInventoryLotDto(queueItem.payload) &&
+      queueItem.payload.updated_at === lot.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueInventoryLotSync(lot, 'update');
+    }
+  }
+};
+
+export const enqueuePendingInventoryLotConsumptionsForSync = async () => {
+  const consumptions = (await db.inventoryLotConsumptions.toArray())
+    .filter((consumption) => consumption.sync_status === 'pending' || consumption.sync_status === 'failed');
+
+  const consumptionQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(INVENTORY_LOT_CONSUMPTION_ENTITY)
+    .toArray();
+
+  for (const consumption of consumptions) {
+    const existingQueueItem = consumptionQueueItems.find((queueItem) => (
+      queueItem.entity_id === consumption.id && queueItem.status !== 'synced'
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueInventoryLotConsumptionSync(consumption);
+    }
+  }
 };
 
 export const enqueuePurchaseDocumentBundleSync = async (

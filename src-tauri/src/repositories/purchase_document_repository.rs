@@ -163,11 +163,17 @@ macro_rules! purchase_document_item_select {
 
 pub async fn list_purchase_document_bundles(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<PurchaseDocumentBundleDto>, sqlx::Error> {
     let documents = sqlx::query_as::<_, PurchaseDocumentDto>(concat!(
         purchase_document_select!(),
-        " ORDER BY created_at DESC"
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+          ORDER BY updated_at, id
+          LIMIT $2"
     ))
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await?;
 

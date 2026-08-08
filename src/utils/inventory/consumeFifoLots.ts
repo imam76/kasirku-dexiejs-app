@@ -107,6 +107,10 @@ export const consumeFifoLots = async (
         cost_per_unit_at_consumption: lot.cost_per_unit,
         cost_status_at_consumption: costStatus,
         created_at: options.createdAt ?? now,
+        // Marked pending, not enqueued here: consumeFifoLots runs inside callers' Dexie
+        // transactions that don't include db.syncQueue. enqueuePendingInventoryLotConsumptionsForSync()
+        // (run via enqueueAllPendingLocalChangesForSync) picks up pending rows after the fact.
+        sync_status: 'pending',
       });
     }
   }

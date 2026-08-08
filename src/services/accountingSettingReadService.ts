@@ -12,6 +12,10 @@ import {
   type RemoteFinanceAccountMappingDto,
   type RemoteGeneralLedgerSettingDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+} from '@/services/shared/remoteRefreshCursor';
 import type {
   AccountingBusinessTemplateCode,
   AccountingInitialSetupSetting,
@@ -94,6 +98,21 @@ const isAccountingBusinessTemplateCode = (
 
 // ---- Finance account mappings ----
 
+const FINANCE_ACCOUNT_MAPPING_REFRESH_LIMIT = 500;
+let isRefreshingFinanceAccountMappingsFromPostgres = false;
+
+const getLatestLocalFinanceAccountMappingUpdatedAt = async () => {
+  const mappings = await db.financeAccountMappings.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    mappings,
+    (mapping) => mapping.remote_updated_at ?? (mapping.sync_status === 'synced' ? mapping.updated_at : undefined),
+  );
+};
+
+const getLatestRemoteFinanceAccountMappingUpdatedAt = (remoteMappings: RemoteFinanceAccountMappingDto[]) => (
+  getLatestRemoteUpdatedAt(remoteMappings, (mapping) => mapping.updated_at)
+);
+
 const mapRemoteFinanceAccountMappingToLocal = (
   remote: RemoteFinanceAccountMappingDto,
   syncedAt: string,
@@ -140,8 +159,37 @@ export const mergeRemoteFinanceAccountMappingsIntoDexie = async (
 };
 
 export const refreshFinanceAccountMappingsFromPostgres = async (): Promise<AccountingSettingReadSyncResult> => {
-  if (!canReadFromPostgres()) return { ...EMPTY_RESULT };
-  return mergeRemoteFinanceAccountMappingsIntoDexie(await financeAccountMappingPostgresAdapter.list());
+  if (isRefreshingFinanceAccountMappingsFromPostgres || !canReadFromPostgres()) {
+    return { ...EMPTY_RESULT };
+  }
+
+  isRefreshingFinanceAccountMappingsFromPostgres = true;
+  try {
+    const aggregate = { ...EMPTY_RESULT };
+    let updatedAfter = await getLatestLocalFinanceAccountMappingUpdatedAt();
+
+    while (true) {
+      const remoteMappings = await financeAccountMappingPostgresAdapter.list({
+        updatedAfter,
+        limit: FINANCE_ACCOUNT_MAPPING_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteFinanceAccountMappingsIntoDexie(remoteMappings);
+      aggregate.fetched += result.fetched;
+      aggregate.inserted += result.inserted;
+      aggregate.updated += result.updated;
+      aggregate.skipped += result.skipped;
+
+      if (remoteMappings.length < FINANCE_ACCOUNT_MAPPING_REFRESH_LIMIT) break;
+
+      const nextUpdatedAfter = getLatestRemoteFinanceAccountMappingUpdatedAt(remoteMappings);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } finally {
+    isRefreshingFinanceAccountMappingsFromPostgres = false;
+  }
 };
 
 // ---- Accounting profile setting (singleton) ----

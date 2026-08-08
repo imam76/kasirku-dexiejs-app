@@ -42,6 +42,11 @@ export const addInventoryLot = async (input: AddInventoryLotInput): Promise<Inve
     received_at: input.receivedAt,
     created_at: now,
     updated_at: now,
+    // Marked pending, not enqueued here: this runs inside callers' Dexie transactions that
+    // don't include db.syncQueue, so pushing has to happen after the transaction closes.
+    // enqueuePendingInventoryLotsForSync() (run via enqueueAllPendingLocalChangesForSync, e.g.
+    // on startup/reconnect/manual sync) picks up pending rows and enqueues them.
+    sync_status: 'pending',
   };
 
   await db.inventoryLots.add(lot);
