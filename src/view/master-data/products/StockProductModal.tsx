@@ -69,6 +69,13 @@ type Props = {
   submitLabel?: string;
   /** Konten tambahan di atas tab, mis. panel deteksi duplikat produk saat quick-create. */
   topContent?: ReactNode;
+  /**
+   * Cuma dinyalakan POS quick-create: qty di sana langsung menerbitkan Purchase
+   * Receipt asli supaya barang bisa dijual saat itu juga. Master Data serta
+   * quick-create Sales/Purchase sengaja tidak punya field ini karena qty
+   * pembelian sudah dicatat di baris dokumen transaksi masing-masing.
+   */
+  showPurchaseQuantity?: boolean;
 };
 
 export default function StockProductModal({
@@ -84,6 +91,7 @@ export default function StockProductModal({
   title,
   submitLabel,
   topContent,
+  showPurchaseQuantity = false,
 }: Props) {
   const { t } = useI18n();
   const screens = useBreakpoint();
@@ -613,6 +621,7 @@ export default function StockProductModal({
                     baseUnitOptions={baseUnitOptions}
                     skuInputRef={skuInputRef}
                     onOpenScanner={() => setScannerOpen(true)}
+                    showPurchaseQuantity={showPurchaseQuantity}
                   />
                 ),
               },

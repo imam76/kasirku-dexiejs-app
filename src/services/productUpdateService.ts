@@ -1,11 +1,8 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
-import { defaultLocale, translate } from '@/i18n/messages';
 import { db } from '@/lib/db';
 import type { StockFormData } from '@/lib/validations/stock';
-import { enqueueFinanceTransactionsSync } from '@/services/financeTransactionSyncService';
-import { recordStockPurchase } from '@/services/stockPurchaseService';
 import { buildProductSyncQueueItem, enqueueProductSync, processPendingSyncQueue } from '@/services/syncQueueService';
-import type { FinanceTransaction, Product } from '@/types';
+import type { Product } from '@/types';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 
 const withPendingSync = (product: Product): Product => ({
@@ -17,13 +14,13 @@ const withPendingSync = (product: Product): Product => ({
 /**
  * Memperbarui produk yang sudah ada di Dexie, dipakai oleh form Master Produk
  * maupun quick-edit di POS/Sales/Purchase supaya keduanya menempuh jalur
- * update yang persis sama (pencatatan pembelian stok awal, sync queue, log).
+ * update yang persis sama (sync queue, log). Perubahan stok tidak lewat sini —
+ * itu tugas dokumen transaksi (Purchase/POS receipt) masing-masing.
  */
 export const updateProductRecord = async (productId: string, data: StockFormData): Promise<Product> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'PRODUCT_MANAGE');
 
-  const purchaseQuantity = data.purchase_quantity || 0;
   const now = new Date().toISOString();
 
   const sellableUnits = data.sellable_units && data.sellable_units.length > 0
@@ -66,9 +63,8 @@ export const updateProductRecord = async (productId: string, data: StockFormData
   };
 
   let syncedProduct: Product | null = null;
-  const financeTransactionsToSync: FinanceTransaction[] = [];
 
-  await db.transaction('rw', [db.products, db.stockPurchases, db.financeBalance, db.financeTransactions, db.chartOfAccounts, db.financeAccountMappings, db.enabledModules, db.generalLedgerSetting, db.journalEntries, db.journalEntryLines], async () => {
+  await db.transaction('rw', [db.products], async () => {
     const existingProduct = await db.products.get(productId);
     if (!existingProduct) {
       throw new Error('Produk tidak ditemukan.');
@@ -82,32 +78,10 @@ export const updateProductRecord = async (productId: string, data: StockFormData
     });
     await db.products.put(updatedProduct);
     syncedProduct = updatedProduct;
-
-    if (purchaseQuantity > 0) {
-      const totalCost = cleanData.purchase_price * purchaseQuantity;
-      const purchaseResult = await recordStockPurchase({
-        productId,
-        productName: cleanData.name,
-        sku: cleanData.sku,
-        quantity: purchaseQuantity,
-        costPerUnit: cleanData.purchase_price,
-        totalCost,
-        description: translate(defaultLocale, 'stock.purchaseDescription', {
-          name: cleanData.name,
-          quantity: purchaseQuantity,
-        }),
-        createdAt: now,
-        actor: currentUser,
-      });
-      financeTransactionsToSync.push(purchaseResult.financeTransaction);
-    }
   });
 
   if (syncedProduct) {
     await enqueueProductSync(syncedProduct, 'update');
-  }
-  if (financeTransactionsToSync.length > 0) {
-    await enqueueFinanceTransactionsSync(financeTransactionsToSync, 'create');
   }
 
   await writeActivityLog({

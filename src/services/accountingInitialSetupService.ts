@@ -252,22 +252,12 @@ const resolveTemplateBundle = (templateId: string): TemplateBundle => {
 
 const getOperationalSignals = async (): Promise<OperationalSignalResult> => getBaseCurrencyLockSignals();
 
-const validateDateInput = (input: SaveInitialAccountingSetupInput, requiresAccountingBaseline: boolean) => {
+const validateDateInput = (input: SaveInitialAccountingSetupInput) => {
   const fiscalStart = normalizeDateOnly(input.fiscal_period_start, 'Awal periode fiskal');
   const fiscalEnd = normalizeDateOnly(input.fiscal_period_end, 'Akhir periode fiskal');
   const currentStart = normalizeDateOnly(input.current_period_start, 'Awal periode berjalan');
   const currentEnd = normalizeDateOnly(input.current_period_end, 'Akhir periode berjalan');
   const cutoffDate = normalizeDateOnly(input.cutoff_date, 'Cutoff');
-
-  if (!requiresAccountingBaseline) {
-    return {
-      cutoffDate,
-      fiscalStart,
-      fiscalEnd,
-      currentStart,
-      currentEnd,
-    };
-  }
 
   if (fiscalEnd < fiscalStart) {
     throw new Error('Akhir periode fiskal harus sama atau setelah awal periode fiskal.');
@@ -293,13 +283,12 @@ const validateDateInput = (input: SaveInitialAccountingSetupInput, requiresAccou
 
 const validateBusinessTemplate = (
   businessTemplateCode: AccountingBusinessTemplateCode,
-  requiresAccountingBaseline: boolean,
 ) => {
   const template = ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[businessTemplateCode];
   if (!template) {
     throw new Error('Jenis bisnis tidak dikenal.');
   }
-  if (requiresAccountingBaseline && template.status !== 'ENABLED') {
+  if (template.status !== 'ENABLED') {
     throw new Error('Jenis bisnis ini belum aktif untuk setup awal.');
   }
   return template;
@@ -700,7 +689,6 @@ const buildSetupSnapshot = ({
   existingSetup,
   fiscalEnd,
   fiscalStart,
-  requiresAccountingBaseline,
   templateDefinition,
   configuredBy,
   configuredByName,
@@ -715,7 +703,6 @@ const buildSetupSnapshot = ({
   existingSetup?: AccountingInitialSetupSetting;
   fiscalEnd: string;
   fiscalStart: string;
-  requiresAccountingBaseline: boolean;
   templateDefinition: typeof ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[AccountingBusinessTemplateCode];
   configuredBy: string;
   configuredByName?: string;
@@ -734,11 +721,9 @@ const buildSetupSnapshot = ({
   current_period_id: currentPeriodId,
   base_currency_code: normalizeCurrencyCode(baseCurrencyCode),
   inventory_policy: templateDefinition.default_inventory_policy,
-  setup_completed_at: requiresAccountingBaseline ? now : existingSetup?.setup_completed_at,
-  setup_completed_by: requiresAccountingBaseline ? configuredBy : existingSetup?.setup_completed_by,
-  setup_completed_by_name: requiresAccountingBaseline
-    ? configuredByName ?? existingSetup?.setup_completed_by_name
-    : existingSetup?.setup_completed_by_name,
+  setup_completed_at: now,
+  setup_completed_by: configuredBy,
+  setup_completed_by_name: configuredByName ?? existingSetup?.setup_completed_by_name,
   version: Math.max(0, Number(existingSetup?.version || 0)) + 1,
   created_at: existingSetup?.created_at ?? now,
   updated_at: now,
@@ -796,10 +781,9 @@ export const saveInitialAccountingSetup = async (
     throw new Error('Pilih minimal satu module.');
   }
 
-  const requiresAccountingBaseline = requiresAccountingBaselineForModules(input.enabledModules);
   const effectiveEnabledModules = withAutomaticAccountingBaselineModules(input.enabledModules);
-  const templateDefinition = validateBusinessTemplate(input.business_template_code, requiresAccountingBaseline);
-  const dates = validateDateInput(input, requiresAccountingBaseline);
+  const templateDefinition = validateBusinessTemplate(input.business_template_code);
+  const dates = validateDateInput(input);
   const baseCurrencyCode = normalizeCurrencyCode(input.base_currency_code);
   if (!/^[A-Z]{3}$/.test(baseCurrencyCode)) {
     throw new Error('Kode base currency harus 3 huruf uppercase.');
@@ -816,7 +800,6 @@ export const saveInitialAccountingSetup = async (
     ? await db.accountingPeriods.get(existingSetup.current_period_id)
     : undefined;
   if (
-    requiresAccountingBaseline &&
     existingCurrentPeriod &&
     existingCurrentPeriod.status !== 'OPEN' &&
     (
@@ -864,86 +847,78 @@ export const saveInitialAccountingSetup = async (
     currencyChanges = baseCurrencyChanges.currencies;
     currencyRateChanges = baseCurrencyChanges.rates;
 
-    let currentPeriodId = existingSetup?.current_period_id;
-    if (requiresAccountingBaseline) {
-      const bundle = resolveTemplateBundle(templateDefinition.template_id);
-      result.createdAccounts = await mergeTemplateAccounts(bundle.lines, now);
-      result.updatedMappings = await updateTemplateMappings(bundle.lines, now);
-      result.updatedModules = await updateAccountingModules(templateDefinition, effectiveEnabledModules, now);
+    const bundle = resolveTemplateBundle(templateDefinition.template_id);
+    result.createdAccounts = await mergeTemplateAccounts(bundle.lines, now);
+    result.updatedMappings = await updateTemplateMappings(bundle.lines, now);
+    result.updatedModules = await updateAccountingModules(templateDefinition, effectiveEnabledModules, now);
 
-      const updatedProfile = await upsertAccountingProfileSetting(templateDefinition, now);
-      if (updatedProfile) {
-        profileChange = {
-          record: updatedProfile,
-          operation: existingSetup ? 'update' : 'create',
-        };
-        result.accountingProfileSetting = updatedProfile;
-      }
+    const updatedProfile = await upsertAccountingProfileSetting(templateDefinition, now);
+    if (updatedProfile) {
+      profileChange = {
+        record: updatedProfile,
+        operation: existingSetup ? 'update' : 'create',
+      };
+      result.accountingProfileSetting = updatedProfile;
+    }
 
-      const updatedLedger = await upsertGeneralLedgerSetting({
-        cutoffDate: dates.cutoffDate,
-        inventoryPolicy: templateDefinition.default_inventory_policy,
-        now,
-      });
-      if (updatedLedger) {
-        ledgerChange = {
-          record: updatedLedger,
-          operation: existingSetup ? 'update' : 'create',
-        };
-        result.generalLedgerSetting = updatedLedger;
-      }
+    const updatedLedger = await upsertGeneralLedgerSetting({
+      cutoffDate: dates.cutoffDate,
+      inventoryPolicy: templateDefinition.default_inventory_policy,
+      now,
+    });
+    if (updatedLedger) {
+      ledgerChange = {
+        record: updatedLedger,
+        operation: existingSetup ? 'update' : 'create',
+      };
+      result.generalLedgerSetting = updatedLedger;
+    }
 
-      const currentPeriod = await findOrCreateCurrentPeriod({
-        currentStart: dates.currentStart,
-        currentEnd: dates.currentEnd,
-        fiscalStart: dates.fiscalStart,
-        fiscalEnd: dates.fiscalEnd,
-        now,
-        actorId: actor?.id ?? input.configuredBy,
-        actorName: actor?.name ?? input.configuredByName,
-      });
-      currentPeriodId = currentPeriod.period.id;
-      result.accountingPeriod = currentPeriod.period;
-      if (currentPeriod.operation) {
-        periodChange = {
-          record: currentPeriod.period,
-          operation: currentPeriod.operation,
-        };
-      }
+    const currentPeriod = await findOrCreateCurrentPeriod({
+      currentStart: dates.currentStart,
+      currentEnd: dates.currentEnd,
+      fiscalStart: dates.fiscalStart,
+      fiscalEnd: dates.fiscalEnd,
+      now,
+      actorId: actor?.id ?? input.configuredBy,
+      actorName: actor?.name ?? input.configuredByName,
+    });
+    const currentPeriodId = currentPeriod.period.id;
+    result.accountingPeriod = currentPeriod.period;
+    if (currentPeriod.operation) {
+      periodChange = {
+        record: currentPeriod.period,
+        operation: currentPeriod.operation,
+      };
+    }
 
-      const fiscalYear = await findOrCreateAccountingFiscalYear({
-        fiscalStart: dates.fiscalStart,
-        fiscalEnd: dates.fiscalEnd,
-        now,
-        actorId: actor?.id ?? input.configuredBy,
-        actorName: actor?.name ?? input.configuredByName,
-        notes: 'Tahun fiskal dibuat dari setup akuntansi awal.',
-      });
-      result.accountingFiscalYear = fiscalYear.fiscalYear;
-      if (fiscalYear.operation) {
-        fiscalYearChange = {
-          record: fiscalYear.fiscalYear,
-          operation: fiscalYear.operation,
-        };
-      }
+    const fiscalYear = await findOrCreateAccountingFiscalYear({
+      fiscalStart: dates.fiscalStart,
+      fiscalEnd: dates.fiscalEnd,
+      now,
+      actorId: actor?.id ?? input.configuredBy,
+      actorName: actor?.name ?? input.configuredByName,
+      notes: 'Tahun fiskal dibuat dari setup akuntansi awal.',
+    });
+    result.accountingFiscalYear = fiscalYear.fiscalYear;
+    if (fiscalYear.operation) {
+      fiscalYearChange = {
+        record: fiscalYear.fiscalYear,
+        operation: fiscalYear.operation,
+      };
     }
 
     const setupSnapshot = buildSetupSnapshot({
       baseCurrencyCode,
-      businessTemplateCode: requiresAccountingBaseline
-        ? input.business_template_code
-        : existingSetup?.business_template_code ?? 'RETAIL',
-      cutoffDate: requiresAccountingBaseline ? dates.cutoffDate : existingSetup?.cutoff_date ?? dates.cutoffDate,
-      currentEnd: requiresAccountingBaseline ? dates.currentEnd : existingSetup?.current_period_end ?? dates.currentEnd,
-      currentPeriodId: requiresAccountingBaseline ? currentPeriodId : existingSetup?.current_period_id,
-      currentStart: requiresAccountingBaseline ? dates.currentStart : existingSetup?.current_period_start ?? dates.currentStart,
+      businessTemplateCode: input.business_template_code,
+      cutoffDate: dates.cutoffDate,
+      currentEnd: dates.currentEnd,
+      currentPeriodId,
+      currentStart: dates.currentStart,
       existingSetup,
-      fiscalEnd: requiresAccountingBaseline ? dates.fiscalEnd : existingSetup?.fiscal_period_end ?? dates.fiscalEnd,
-      fiscalStart: requiresAccountingBaseline ? dates.fiscalStart : existingSetup?.fiscal_period_start ?? dates.fiscalStart,
-      requiresAccountingBaseline,
-      templateDefinition: requiresAccountingBaseline
-        ? templateDefinition
-        : ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[existingSetup?.business_template_code ?? 'RETAIL'],
+      fiscalEnd: dates.fiscalEnd,
+      fiscalStart: dates.fiscalStart,
+      templateDefinition,
       configuredBy: input.configuredBy,
       configuredByName: input.configuredByName,
       now,

@@ -16,6 +16,8 @@ type StockProductGeneralTabProps = {
   baseUnitOptions: Array<{ value: string; label: string }>;
   skuInputRef: RefObject<InputRef | null>;
   onOpenScanner: () => void;
+  /** Cuma dipakai POS quick-create, yang butuh stok fisik langsung tersedia untuk dijual. */
+  showPurchaseQuantity?: boolean;
 };
 
 export default function StockProductGeneralTab({
@@ -25,6 +27,7 @@ export default function StockProductGeneralTab({
   baseUnitOptions,
   skuInputRef,
   onOpenScanner,
+  showPurchaseQuantity = false,
 }: StockProductGeneralTabProps) {
   const { t } = useI18n();
   const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
@@ -187,28 +190,30 @@ export default function StockProductGeneralTab({
           />
         </StockProductFieldContainer>
 
-        <StockProductFieldContainer
-          label={t('stock.form.purchaseQuantity')}
-          error={errors.purchase_quantity}
-          help={t('stock.form.priceOptionalHelp')}
-        >
-          <Controller
-            name="purchase_quantity"
-            control={control}
-            render={({ field }) => (
-              <InputNumber
-                data-testid="stock-product-purchase-quantity"
-                inputMode="decimal"
-                value={field.value}
-                onBlur={field.onBlur}
-                onChange={(value) => field.onChange(value ?? undefined)}
-                className="w-full"
-                placeholder={t('stock.form.purchaseQuantityPlaceholder')}
-                min={0}
-              />
-            )}
-          />
-        </StockProductFieldContainer>
+        {showPurchaseQuantity && (
+          <StockProductFieldContainer
+            label={t('stock.form.purchaseQuantity')}
+            error={errors.purchase_quantity}
+            help={t('stock.form.priceOptionalHelp')}
+          >
+            <Controller
+              name="purchase_quantity"
+              control={control}
+              render={({ field }) => (
+                <InputNumber
+                  data-testid="stock-product-purchase-quantity"
+                  inputMode="decimal"
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  onChange={(value) => field.onChange(value ?? undefined)}
+                  className="w-full"
+                  placeholder={t('stock.form.purchaseQuantityPlaceholder')}
+                  min={0}
+                />
+              )}
+            />
+          </StockProductFieldContainer>
+        )}
       </div>
     </>
   );

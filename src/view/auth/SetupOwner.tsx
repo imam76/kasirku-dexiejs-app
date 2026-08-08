@@ -9,7 +9,6 @@ import { db } from '@/lib/db';
 import { getBaseCurrencyLockSignals } from '@/services/baseCurrencyService';
 import {
   getSuggestedAccountingBusinessTemplate,
-  requiresAccountingBaselineForModules,
   saveInitialAccountingSetup,
 } from '@/services/accountingInitialSetupService';
 import { getSetupConfig } from '@/services/setupKeyService';
@@ -59,11 +58,6 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
   const [hasOperationalSignal, setHasOperationalSignal] = useState(false);
   const [existingAccountingSetup, setExistingAccountingSetup] =
     useState<AccountingInitialSetupSetting | null>(null);
-
-  const requiresAccountingBaseline = useMemo(
-    () => requiresAccountingBaselineForModules(enabledModules),
-    [enabledModules],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -146,7 +140,6 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
 
     const errors = validateAccountingDraft(
       accountingDraft,
-      requiresAccountingBaseline,
       hasOperationalSignal,
       existingAccountingSetup?.base_currency_code,
     );
@@ -323,7 +316,6 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
                 hasOperationalSignal={hasOperationalSignal}
                 onChange={updateAccountingDraft}
                 onSelectBusinessTemplate={handleSelectBusinessTemplate}
-                requiresAccountingBaseline={requiresAccountingBaseline}
               />
             )}
           </div>

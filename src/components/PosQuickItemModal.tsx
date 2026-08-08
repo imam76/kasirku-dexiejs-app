@@ -379,6 +379,7 @@ const QuickItemCreateForm = ({
       topContent={topContent}
       onCancel={onCancel}
       onSave={handleSave}
+      showPurchaseQuantity
     />
   );
 };

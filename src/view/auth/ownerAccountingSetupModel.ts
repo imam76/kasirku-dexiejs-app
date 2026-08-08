@@ -47,63 +47,60 @@ export const getFirstValidationError = (errors: AccountingValidationErrors) => (
 
 export const validateAccountingDraft = (
   draft: AccountingDraft,
-  requiresAccountingBaseline: boolean,
   hasOperationalSignal: boolean,
   lockedBaseCurrencyCode?: string,
 ): AccountingValidationErrors => {
   const errors: AccountingValidationErrors = {};
   const baseCurrencyCode = normalizeCurrencyCode(draft.baseCurrencyCode);
 
-  if (requiresAccountingBaseline) {
-    const template = ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[draft.businessTemplateCode];
-    if (!template || template.status !== 'ENABLED') {
-      errors.business_template_code = 'Pilih jenis usaha yang tersedia.';
-    }
+  const template = ACCOUNTING_BUSINESS_TEMPLATE_BY_CODE[draft.businessTemplateCode];
+  if (!template || template.status !== 'ENABLED') {
+    errors.business_template_code = 'Pilih jenis usaha yang tersedia.';
+  }
 
-    const fiscalStart = dayjs(draft.fiscalPeriodStart);
-    const fiscalEnd = dayjs(draft.fiscalPeriodEnd);
-    const currentStart = dayjs(draft.currentPeriodStart);
-    const currentEnd = dayjs(draft.currentPeriodEnd);
-    const cutoff = dayjs(draft.cutoffDate);
+  const fiscalStart = dayjs(draft.fiscalPeriodStart);
+  const fiscalEnd = dayjs(draft.fiscalPeriodEnd);
+  const currentStart = dayjs(draft.currentPeriodStart);
+  const currentEnd = dayjs(draft.currentPeriodEnd);
+  const cutoff = dayjs(draft.cutoffDate);
 
-    if (!cutoff.isValid()) {
-      errors.cutoff_date = 'Tanggal mulai pembukuan wajib diisi.';
-    }
-    if (!fiscalStart.isValid()) {
-      errors.fiscal_period_start = 'Awal tahun buku wajib diisi.';
-    }
-    if (!fiscalEnd.isValid()) {
-      errors.fiscal_period_end = 'Akhir tahun buku wajib diisi.';
-    }
-    if (!currentStart.isValid()) {
-      errors.current_period_start = 'Awal periode aktif wajib diisi.';
-    }
-    if (!currentEnd.isValid()) {
-      errors.current_period_end = 'Akhir periode aktif wajib diisi.';
-    }
+  if (!cutoff.isValid()) {
+    errors.cutoff_date = 'Tanggal mulai pembukuan wajib diisi.';
+  }
+  if (!fiscalStart.isValid()) {
+    errors.fiscal_period_start = 'Awal tahun buku wajib diisi.';
+  }
+  if (!fiscalEnd.isValid()) {
+    errors.fiscal_period_end = 'Akhir tahun buku wajib diisi.';
+  }
+  if (!currentStart.isValid()) {
+    errors.current_period_start = 'Awal periode aktif wajib diisi.';
+  }
+  if (!currentEnd.isValid()) {
+    errors.current_period_end = 'Akhir periode aktif wajib diisi.';
+  }
 
-    if (fiscalStart.isValid() && fiscalEnd.isValid() && fiscalEnd.isBefore(fiscalStart, 'day')) {
-      errors.fiscal_period_end = 'Akhir tahun buku tidak boleh sebelum tanggal awal.';
-    }
+  if (fiscalStart.isValid() && fiscalEnd.isValid() && fiscalEnd.isBefore(fiscalStart, 'day')) {
+    errors.fiscal_period_end = 'Akhir tahun buku tidak boleh sebelum tanggal awal.';
+  }
 
-    if (currentStart.isValid() && currentEnd.isValid() && currentEnd.isBefore(currentStart, 'day')) {
-      errors.current_period_end = 'Akhir periode aktif tidak boleh sebelum tanggal awal.';
-    }
+  if (currentStart.isValid() && currentEnd.isValid() && currentEnd.isBefore(currentStart, 'day')) {
+    errors.current_period_end = 'Akhir periode aktif tidak boleh sebelum tanggal awal.';
+  }
 
-    if (
-      fiscalStart.isValid() &&
-      fiscalEnd.isValid() &&
-      currentStart.isValid() &&
-      currentEnd.isValid() &&
-      (currentStart.isBefore(fiscalStart, 'day') || currentEnd.isAfter(fiscalEnd, 'day'))
-    ) {
-      errors.current_period_start = 'Periode aktif harus berada di dalam tahun buku.';
-      errors.current_period_end = 'Periode aktif harus berada di dalam tahun buku.';
-    }
+  if (
+    fiscalStart.isValid() &&
+    fiscalEnd.isValid() &&
+    currentStart.isValid() &&
+    currentEnd.isValid() &&
+    (currentStart.isBefore(fiscalStart, 'day') || currentEnd.isAfter(fiscalEnd, 'day'))
+  ) {
+    errors.current_period_start = 'Periode aktif harus berada di dalam tahun buku.';
+    errors.current_period_end = 'Periode aktif harus berada di dalam tahun buku.';
+  }
 
-    if (cutoff.isValid() && currentEnd.isValid() && cutoff.isAfter(currentEnd, 'day')) {
-      errors.cutoff_date = 'Mulai pembukuan tidak boleh setelah akhir periode aktif.';
-    }
+  if (cutoff.isValid() && currentEnd.isValid() && cutoff.isAfter(currentEnd, 'day')) {
+    errors.cutoff_date = 'Mulai pembukuan tidak boleh setelah akhir periode aktif.';
   }
 
   if (!/^[A-Z]{3}$/.test(baseCurrencyCode)) {

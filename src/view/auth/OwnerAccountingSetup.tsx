@@ -1,4 +1,4 @@
-import { Alert, DatePicker, Form, Select, Typography } from 'antd';
+import { DatePicker, Form, Select, Typography } from 'antd';
 import { Building2, CalendarDays, Check, CircleDollarSign } from 'lucide-react';
 import dayjs from 'dayjs';
 import { ACCOUNTING_BUSINESS_TEMPLATES } from '@/constants/accounting';
@@ -282,7 +282,6 @@ export const OwnerAccountingSetup = ({
   hasOperationalSignal,
   onChange,
   onSelectBusinessTemplate,
-  requiresAccountingBaseline,
 }: {
   disabled?: boolean;
   draft: AccountingDraft;
@@ -291,32 +290,20 @@ export const OwnerAccountingSetup = ({
   hasOperationalSignal: boolean;
   onChange: (patch: Partial<AccountingDraft>) => void;
   onSelectBusinessTemplate: (code: AccountingBusinessTemplateCode) => void;
-  requiresAccountingBaseline: boolean;
 }) => (
   <div className="divide-y divide-gray-100 [&>*+*]:mt-8 [&>*+*]:pt-8">
-    {requiresAccountingBaseline ? (
-      <>
-        <BusinessTemplatePicker
-          selectedCode={draft.businessTemplateCode}
-          validationError={errors.business_template_code}
-          disabled={disabled}
-          onSelect={onSelectBusinessTemplate}
-        />
-        <AccountingPeriodFields
-          draft={draft}
-          errors={errors}
-          disabled={disabled}
-          onChange={onChange}
-        />
-      </>
-    ) : (
-      <Alert
-        type="warning"
-        showIcon
-        title="Pengaturan sederhana"
-        description="Modul yang dipilih belum memerlukan pengaturan lengkap. Sistem akan memakai pilihan awal yang aman."
-      />
-    )}
+    <BusinessTemplatePicker
+      selectedCode={draft.businessTemplateCode}
+      validationError={errors.business_template_code}
+      disabled={disabled}
+      onSelect={onSelectBusinessTemplate}
+    />
+    <AccountingPeriodFields
+      draft={draft}
+      errors={errors}
+      disabled={disabled}
+      onChange={onChange}
+    />
     <BaseCurrencyField
       baseCurrencyCode={draft.baseCurrencyCode}
       error={errors.base_currency_code}
