@@ -134,36 +134,84 @@ const hasPricing = (document: Pick<PurchaseDocument, 'type'>) => (
   getPurchaseDocumentConfig(document.type).behavior.hasPricing
 );
 
-function PurchaseDocumentMenuGrid() {
+type PurchaseHomeMenuItem = {
+  key: string;
+  to: string;
+  params?: Record<string, string>;
+  code?: string;
+  label: string;
+  desc: string;
+  icon: LucideIcon;
+  color: string;
+  iconBackground: string;
+};
+
+function PurchaseMenuGrid() {
   const { t } = useI18n();
   const { currentUser, currentRole, permissionSet } = useAuth();
-  const visibleMenuItems = purchaseDocumentMenuItems.filter((item) => canAccessPath(
+  const canAccess = (path: string) => canAccessPath(
     currentUser ?? undefined,
-    `/purchases/${getPurchaseDocumentTypePathSegment(item.type)}`,
+    path,
     { currentRole, permissionSet },
-  ));
+  );
+
+  const items: PurchaseHomeMenuItem[] = [
+    ...purchaseDocumentMenuItems
+      .filter((item) => canAccess(`/purchases/${getPurchaseDocumentTypePathSegment(item.type)}`))
+      .map((item): PurchaseHomeMenuItem => ({
+        key: item.type,
+        to: '/purchases/$documentType',
+        params: { documentType: getPurchaseDocumentTypePathSegment(item.type) },
+        code: item.code,
+        label: t(item.labelKey),
+        desc: t(item.descKey),
+        icon: item.icon,
+        color: item.color,
+        iconBackground: item.iconBackground,
+      })),
+    ...(canAccess('/purchases/pending-costs') ? [{
+      key: 'pending-costs',
+      to: '/purchases/pending-costs',
+      label: 'Harga Belum Final',
+      desc: 'Daftar Purchase Receipt dengan HPP sementara.',
+      icon: FileCheck2,
+      color: 'text-amber-700',
+      iconBackground: 'bg-amber-50',
+    }] : []),
+    ...(canAccess('/finance/payables') ? [{
+      key: 'payables',
+      to: '/finance/payables',
+      label: t('accountsPayable.title'),
+      desc: t('accountsPayable.shortDesc'),
+      icon: CreditCard,
+      color: 'text-emerald-700',
+      iconBackground: 'bg-emerald-50',
+    }] : []),
+  ];
 
   return (
     <div className="app-menu-grid">
-      {visibleMenuItems.map((item) => (
+      {items.map((item) => (
         <Link
-          key={item.type}
-          to="/purchases/$documentType"
-          params={{ documentType: getPurchaseDocumentTypePathSegment(item.type) }}
+          key={item.key}
+          to={item.to}
+          params={item.params}
           className="app-menu-card"
         >
           <div className="app-menu-card__body flex flex-col items-center justify-center">
             <div className={`app-menu-card__icon ${item.iconBackground}`}>
               <item.icon className={`app-menu-card__icon-svg ${item.color}`} />
             </div>
-            <div className={`app-menu-card__code ${item.color}`}>
-              {item.code}
-            </div>
+            {item.code && (
+              <div className={`app-menu-card__code ${item.color}`}>
+                {item.code}
+              </div>
+            )}
             <h2 className="app-menu-card__title">
-              {t(item.labelKey)}
+              {item.label}
             </h2>
             <p className="app-menu-card__brief mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400 sm:text-[11px] sm:leading-[1.55] lg:hidden">
-              {t(item.descKey)}
+              {item.desc}
             </p>
             <div className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
               <span>{t('purchaseDocuments.menu.open')}</span>
@@ -172,7 +220,7 @@ function PurchaseDocumentMenuGrid() {
           </div>
           <div className="app-menu-card__detail flex-col text-center">
             <p className="text-[12px] leading-[1.55] text-gray-500">
-              {t(item.descKey)}
+              {item.desc}
             </p>
             <div className="mt-3 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400">
               <span>{t('purchaseDocuments.menu.open')}</span>
@@ -181,73 +229,6 @@ function PurchaseDocumentMenuGrid() {
           </div>
         </Link>
       ))}
-    </div>
-  );
-}
-
-function PurchaseFinanceActionGrid() {
-  const { t } = useI18n();
-  const { currentUser, currentRole, permissionSet } = useAuth();
-  const canAccess = (path: string) => canAccessPath(
-    currentUser ?? undefined,
-    path,
-    { currentRole, permissionSet },
-  );
-  const canAccessPendingCosts = canAccess('/purchases/pending-costs');
-  const canAccessPayables = canAccess('/finance/payables');
-
-  return (
-    <div className="app-menu-grid">
-      {canAccessPendingCosts && <Link
-        to="/purchases/pending-costs"
-        className="app-menu-card"
-      >
-        <span className="app-menu-card__body flex flex-col items-center justify-center">
-          <span className="app-menu-card__icon bg-amber-50">
-            <FileCheck2 className="app-menu-card__icon-svg text-amber-700" />
-          </span>
-          <span className="app-menu-card__title">Harga Belum Final</span>
-          <span className="app-menu-card__brief mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400 sm:text-[11px] sm:leading-[1.55] lg:hidden">
-            Daftar Purchase Receipt dengan HPP sementara.
-          </span>
-          <span className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
-            <span>{t('purchaseDocuments.menu.open')}</span>
-            <ArrowRight size={12} />
-          </span>
-        </span>
-        <span className="app-menu-card__detail flex-col text-center">
-          <span className="text-xs leading-5 text-gray-500">Daftar Purchase Receipt dengan HPP sementara.</span>
-          <span className="mt-3 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400">
-            <span>{t('purchaseDocuments.menu.open')}</span>
-            <ArrowRight size={12} />
-          </span>
-        </span>
-      </Link>}
-      {canAccessPayables && <Link
-        to="/finance/payables"
-        className="app-menu-card"
-      >
-        <span className="app-menu-card__body flex flex-col items-center justify-center">
-          <span className="app-menu-card__icon bg-emerald-50">
-            <CreditCard className="app-menu-card__icon-svg text-emerald-700" />
-          </span>
-          <span className="app-menu-card__title">{t('accountsPayable.title')}</span>
-          <span className="app-menu-card__brief mt-1 line-clamp-2 text-center text-[10px] leading-[1.45] text-gray-400 sm:text-[11px] sm:leading-[1.55] lg:hidden">
-            {t('accountsPayable.shortDesc')}
-          </span>
-          <span className="mt-2 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400 sm:mt-3">
-            <span>{t('purchaseDocuments.menu.open')}</span>
-            <ArrowRight size={12} />
-          </span>
-        </span>
-        <span className="app-menu-card__detail flex-col text-center">
-          <span className="text-xs leading-5 text-gray-500">{t('accountsPayable.shortDesc')}</span>
-          <span className="mt-3 flex items-center gap-1 text-[11px] font-medium leading-none text-gray-400">
-            <span>{t('purchaseDocuments.menu.open')}</span>
-            <ArrowRight size={12} />
-          </span>
-        </span>
-      </Link>}
     </div>
   );
 }
@@ -267,10 +248,7 @@ export default function PurchaseDocumentsManagement() {
           </p>
         </div>
 
-        <div className="space-y-4">
-          <PurchaseDocumentMenuGrid />
-          <PurchaseFinanceActionGrid />
-        </div>
+        <PurchaseMenuGrid />
       </div>
     </div>
   );

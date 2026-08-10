@@ -33,6 +33,7 @@ import type {
 } from '@/types';
 import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
+import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/createEmptyPurchaseDocumentItem';
 import {
   applyCurrencySnapshotToLineItem,
   buildDocumentCurrencySnapshot,
@@ -78,9 +79,21 @@ export type PurchaseDocumentFormValues = Omit<
   items: PurchaseDocumentItem[];
 };
 
+const MIN_DEFAULT_ITEM_ROWS = 5;
+
+const createDefaultLineItems = (
+  documentId: string,
+  currencySnapshot: DocumentCurrencySnapshot,
+): PurchaseDocumentItem[] => (
+  Array.from({ length: MIN_DEFAULT_ITEM_ROWS }, () => (
+    applyCurrencySnapshotToLineItem(createEmptyPurchaseDocumentItem(documentId), currencySnapshot)
+  ))
+);
+
 const toFormInitialValues = (
   document: PurchaseDocument | undefined,
   config: PurchaseDocumentConfig,
+  documentId: string,
 ): DefaultValues<PurchaseDocumentFormValues> => {
   if (!document) {
     const fallbackBaseCurrency = getCachedBaseCurrency();
@@ -97,7 +110,7 @@ const toFormInitialValues = (
       discount_value: 0,
       discount_amount: 0,
       ...fallbackCurrencySnapshot,
-      items: [],
+      items: createDefaultLineItems(documentId, fallbackCurrencySnapshot),
     };
 
     if (config.behavior.hasPaymentStatus) {
@@ -187,14 +200,15 @@ export const PurchaseDocumentForm = ({
   const [editProductOpen, setEditProductOpen] = useState(false);
   const quickEditForm = useProductQuickEditForm();
 
+  const baseFormValues = toFormInitialValues(initialData?.document, config, documentId);
   const {
     control,
     handleSubmit,
     setValue,
   } = useForm<PurchaseDocumentFormValues, unknown, PurchaseDocumentFormValues>({
     defaultValues: {
-      ...toFormInitialValues(initialData?.document, config),
-      items: initialData?.items ?? [],
+      ...baseFormValues,
+      items: initialData?.items?.length ? initialData.items : (baseFormValues.items ?? []),
     } as DefaultValues<PurchaseDocumentFormValues>,
   });
   const watchedItems = useWatch({ control, name: 'items' });

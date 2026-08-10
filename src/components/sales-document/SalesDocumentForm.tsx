@@ -18,6 +18,7 @@ import { updateProductRecord } from '@/services/productUpdateService';
 import { getCachedBaseCurrency } from '@/services/baseCurrencyService';
 import type { Contact, CurrencyRate, Department, Product, Project, PromoType, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
+import { createEmptySalesDocumentItem } from '@/utils/salesDocuments/createEmptySalesDocumentItem';
 import { getPrice } from '@/utils/pricing';
 import StockProductModal from '@/view/master-data/products/StockProductModal';
 import {
@@ -55,9 +56,21 @@ export type SalesDocumentFormValues = Omit<Partial<SalesDocument>, 'document_dat
   items: SalesDocumentItem[];
 };
 
+const MIN_DEFAULT_ITEM_ROWS = 5;
+
+const createDefaultLineItems = (
+  documentId: string,
+  currencySnapshot: DocumentCurrencySnapshot,
+): SalesDocumentItem[] => (
+  Array.from({ length: MIN_DEFAULT_ITEM_ROWS }, () => (
+    applyCurrencySnapshotToLineItem(createEmptySalesDocumentItem(documentId), currencySnapshot)
+  ))
+);
+
 const toFormInitialValues = (
   document: SalesDocument | undefined,
   config: SalesDocumentConfig,
+  documentId: string,
 ): DefaultValues<SalesDocumentFormValues> => {
   if (!document) {
     const fallbackBaseCurrency = getCachedBaseCurrency();
@@ -74,7 +87,7 @@ const toFormInitialValues = (
       discount_value: 0,
       discount_amount: 0,
       ...fallbackCurrencySnapshot,
-      items: [],
+      items: createDefaultLineItems(documentId, fallbackCurrencySnapshot),
     };
 
     if (config.behavior.hasPaymentStatus) {
@@ -140,6 +153,8 @@ export const SalesDocumentForm = ({
   const quickCreateForm = useProductQuickCreateForm();
   const [editProductOpen, setEditProductOpen] = useState(false);
   const quickEditForm = useProductQuickEditForm();
+  const documentId = initialData?.document?.id ?? 'draft';
+  const baseFormValues = toFormInitialValues(initialData?.document, config, documentId);
   const {
     control,
     formState: { errors },
@@ -147,8 +162,8 @@ export const SalesDocumentForm = ({
     setValue,
   } = useForm<SalesDocumentFormValues, unknown, SalesDocumentFormValues>({
     defaultValues: {
-      ...toFormInitialValues(initialData?.document, config),
-      items: initialData?.items ?? [],
+      ...baseFormValues,
+      items: initialData?.items?.length ? initialData.items : (baseFormValues.items ?? []),
     } as DefaultValues<SalesDocumentFormValues>,
   });
   const watchedItems = useWatch({ control, name: 'items' });
@@ -183,7 +198,6 @@ export const SalesDocumentForm = ({
   const taxAccountCode = selectedTax?.sales_tax_account_code ?? initialTaxSnapshot?.tax_account_code;
   const taxAccountName = selectedTax?.sales_tax_account_name ?? initialTaxSnapshot?.tax_account_name;
   const taxAccountType = selectedTax?.sales_tax_account_type ?? initialTaxSnapshot?.tax_account_type;
-  const documentId = initialData?.document?.id ?? 'draft';
   const currencies = useLiveQuery(
     () => db.currencies.orderBy('code').toArray(),
     [],
