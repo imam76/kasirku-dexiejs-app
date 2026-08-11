@@ -3,6 +3,8 @@ use sqlx::PgPool;
 
 pub async fn list_finance_transactions(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<FinanceTransactionDto>, sqlx::Error> {
     sqlx::query_as::<_, FinanceTransactionDto>(
         r#"
@@ -43,9 +45,13 @@ pub async fn list_finance_transactions(
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM finance_transactions
-        ORDER BY created_at DESC, updated_at DESC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

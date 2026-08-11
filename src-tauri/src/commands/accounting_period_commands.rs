@@ -8,9 +8,14 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_accounting_periods(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<AccountingPeriodDto>> {
     let pool = state.pool()?;
-    Ok(accounting_period_repository::list_accounting_periods(&pool).await?)
+    Ok(
+        accounting_period_repository::list_accounting_periods(&pool, updated_after, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]

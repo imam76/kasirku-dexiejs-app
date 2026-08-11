@@ -4,7 +4,14 @@ import {
   isTauriRuntime,
   type RemoteCashBankReconciliationDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { CashBankReconciliation, CashBankReconciliationStatus } from '@/types';
+
+const CASH_BANK_RECONCILIATION_REFRESH_LIMIT = 500;
 
 export interface CashBankReconciliationReadSyncResult {
   fetched: number;
@@ -82,11 +89,6 @@ const hasLocalUnsyncedChanges = (reconciliation: CashBankReconciliation) => (
   reconciliation.sync_status === 'pending' || reconciliation.sync_status === 'failed'
 );
 
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
 const shouldApplyRemoteCashBankReconciliation = (
   localReconciliation: CashBankReconciliation | undefined,
   remoteReconciliation: RemoteCashBankReconciliationDto,
@@ -158,6 +160,19 @@ export const mergeRemoteCashBankReconciliationsIntoDexie = async (
   return result;
 };
 
+const getLatestLocalCashBankReconciliationUpdatedAt = async () => {
+  const reconciliations = await db.cashBankReconciliations.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    reconciliations,
+    (reconciliation) => reconciliation.remote_updated_at
+      ?? (reconciliation.sync_status === 'synced' ? reconciliation.updated_at : undefined),
+  );
+};
+
+const getLatestRemoteCashBankReconciliationUpdatedAt = (
+  remoteReconciliations: RemoteCashBankReconciliationDto[],
+) => getLatestRemoteUpdatedAt(remoteReconciliations, (reconciliation) => reconciliation.updated_at);
+
 export const refreshCashBankReconciliationsFromPostgres =
   async (): Promise<CashBankReconciliationReadSyncResult> => {
     if (isRefreshingCashBankReconciliationsFromPostgres || !canReadFromPostgres()) {
@@ -166,8 +181,29 @@ export const refreshCashBankReconciliationsFromPostgres =
 
     isRefreshingCashBankReconciliationsFromPostgres = true;
     try {
-      const remoteReconciliations = await cashBankReconciliationPostgresAdapter.list();
-      return mergeRemoteCashBankReconciliationsIntoDexie(remoteReconciliations);
+      const aggregate = { ...EMPTY_CASH_BANK_RECONCILIATION_READ_SYNC_RESULT };
+      let updatedAfter = await getLatestLocalCashBankReconciliationUpdatedAt();
+
+      while (true) {
+        const remoteReconciliations = await cashBankReconciliationPostgresAdapter.list({
+          updatedAfter,
+          limit: CASH_BANK_RECONCILIATION_REFRESH_LIMIT,
+        });
+        const result = await mergeRemoteCashBankReconciliationsIntoDexie(remoteReconciliations);
+        aggregate.fetched += result.fetched;
+        aggregate.inserted += result.inserted;
+        aggregate.updated += result.updated;
+        aggregate.deleted += result.deleted;
+        aggregate.skipped += result.skipped;
+
+        if (remoteReconciliations.length < CASH_BANK_RECONCILIATION_REFRESH_LIMIT) break;
+
+        const nextUpdatedAfter = getLatestRemoteCashBankReconciliationUpdatedAt(remoteReconciliations);
+        if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+        updatedAfter = nextUpdatedAfter;
+      }
+
+      return aggregate;
     } finally {
       isRefreshingCashBankReconciliationsFromPostgres = false;
     }

@@ -8,9 +8,11 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_cashier_sessions(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CashierSessionDto>> {
     let pool = state.pool()?;
-    Ok(cashier_session_repository::list_cashier_sessions(&pool).await?)
+    Ok(cashier_session_repository::list_cashier_sessions(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]

@@ -2,9 +2,15 @@ import { getFinanceTransactionBusinessType } from '@/constants/finance';
 import { db } from '@/lib/db';
 import {
   financeTransactionPostgresAdapter,
+  isPostgresUnavailableError,
   isTauriRuntime,
   type RemoteFinanceTransactionDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type {
   AccountType,
   CooperativeFieldCashMovementKind,
@@ -42,6 +48,8 @@ const VALID_FIELD_CASH_MOVEMENT_KINDS: CooperativeFieldCashMovementKind[] = [
   'IPTW_PAYOUT',
   'DEPOSIT_TO_FINANCE',
 ];
+
+const FINANCE_TRANSACTION_REFRESH_LIMIT = 500;
 
 let isRefreshingFinanceTransactionsFromPostgres = false;
 
@@ -131,11 +139,6 @@ const mapRemoteFinanceTransactionToLocal = (
 const hasLocalUnsyncedChanges = (transaction: FinanceTransaction) => (
   transaction.sync_status === 'pending' || transaction.sync_status === 'failed'
 );
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
 
 const shouldApplyRemoteFinanceTransaction = (
   localTransaction: FinanceTransaction | undefined,
@@ -238,6 +241,31 @@ export const mergeRemoteFinanceTransactionsIntoDexie = async (
   return result;
 };
 
+const getLatestLocalFinanceTransactionUpdatedAt = async () => {
+  const transactions = await db.financeTransactions.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    transactions,
+    (transaction) => (
+      transaction.remote_updated_at ?? (transaction.sync_status === 'synced' ? transaction.updated_at : undefined)
+    ),
+  );
+};
+
+const getLatestRemoteFinanceTransactionUpdatedAt = (remoteTransactions: RemoteFinanceTransactionDto[]) => (
+  getLatestRemoteUpdatedAt(remoteTransactions, (transaction) => transaction.updated_at)
+);
+
+const addFinanceTransactionReadSyncResult = (
+  aggregate: FinanceTransactionReadSyncResult,
+  next: FinanceTransactionReadSyncResult,
+) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.deleted += next.deleted;
+  aggregate.skipped += next.skipped;
+};
+
 export const refreshFinanceTransactionsFromPostgres = async (): Promise<FinanceTransactionReadSyncResult> => {
   if (isRefreshingFinanceTransactionsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_FINANCE_TRANSACTION_READ_SYNC_RESULT };
@@ -245,8 +273,36 @@ export const refreshFinanceTransactionsFromPostgres = async (): Promise<FinanceT
 
   isRefreshingFinanceTransactionsFromPostgres = true;
   try {
-    const remoteTransactions = await financeTransactionPostgresAdapter.list();
-    return mergeRemoteFinanceTransactionsIntoDexie(remoteTransactions);
+    const aggregate = { ...EMPTY_FINANCE_TRANSACTION_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalFinanceTransactionUpdatedAt();
+
+    while (true) {
+      const remoteTransactions = await financeTransactionPostgresAdapter.list({
+        updatedAfter,
+        limit: FINANCE_TRANSACTION_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteFinanceTransactionsIntoDexie(remoteTransactions);
+      addFinanceTransactionReadSyncResult(aggregate, result);
+
+      if (remoteTransactions.length < FINANCE_TRANSACTION_REFRESH_LIMIT) {
+        break;
+      }
+
+      const nextUpdatedAfter = getLatestRemoteFinanceTransactionUpdatedAt(remoteTransactions);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
+        break;
+      }
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) {
+      return { ...EMPTY_FINANCE_TRANSACTION_READ_SYNC_RESULT };
+    }
+
+    throw error;
   } finally {
     isRefreshingFinanceTransactionsFromPostgres = false;
   }

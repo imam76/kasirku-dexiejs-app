@@ -767,3 +767,303 @@ File yang diubah/ditambah pada slice ini:
 - `src/lib/database/KasirkuDB.ts`, `migrations.ts` (diubah)
 - `src/lib/database/migrations/versions/v114.ts`,
   `src/lib/database/migrations/versions/v115.ts` (baru)
+
+---
+
+**2026-08-11 — Audit ulang status delta fetch** (bukan implementasi baru,
+verifikasi terhadap kode saat ini, dipicu pertanyaan user soal akurasi klaim
+"sudah tertarget tapi belum delta-fetch semua"). Dilakukan dengan grep
+langsung (`getLatestLocalRemoteUpdatedAt` / `remoteRefreshCursor` /
+`.list(`) terhadap seluruh 32 file `src/services/*ReadService.ts`, untuk
+cek apakah catatan slice 1-3 di atas masih akurat 3 hari kemudian.
+
+Hasil:
+
+1. **16 dari 32 read service (≈27 dari 74 tabel) sudah delta fetch** (cursor
+   `updatedAfter`/`getLatestLocalRemoteUpdatedAt`): `salesDocumentReadService`,
+   `journalEntryReadService`, `stockOpnameReadService`, `productionReadService`,
+   `openingBalanceReadService`, `payrollReadService` (termasuk
+   `employee_cash_advances`), `fixedAssetReadService`, `chartOfAccountReadService`,
+   `contactReadService`, `productReadService`, `cooperativeReadService` (6 tabel),
+   `accountingSettingReadService`, `employeeReadService` (3 tabel),
+   `purchaseDocumentReadService`, `stockMutationReadService`,
+   `inventoryLotReadService` (2 tabel). Cocok dengan slice 1-3 di atas — tidak
+   ada regresi/drift dari yang didokumentasikan.
+
+2. **~15 read service lain masih literal `xxxPostgresAdapter.list()` tanpa
+   argumen** — full table scan tiap kali refresh terpanggil:
+   `accountingPeriodReadService`, `cashBankReconciliationReadService`,
+   `cashierSessionReadService`, `closingRunReadService`,
+   `cooperativeAreaReadService`, `currencyReadService` (+ `currency_rates`),
+   `departmentReadService`, `financeTransactionReadService`,
+   `fiscalYearReadService` (+ `fiscal_year_closing_runs`), `hrReadService`
+   (bundle 4 tabel: `hr_positions`, `employment_contracts`,
+   `salary_components`, `employee_salary_components`), `paymentMethodReadService`,
+   `projectReadService`, `taxReadService`, `warehouseReadService`.
+
+3. **Gap yang belum tercatat eksplisit di rencana awal**: dari 15 read
+   service full-scan di atas, hanya `taxReadService`, `paymentMethodReadService`,
+   `warehouseReadService`, `departmentReadService`, `currencyReadService` yang
+   memang masuk daftar "prioritas rendah, boleh tetap full fetch" di rencana
+   Bagian 2 (tabel master kecil, jarang berubah). Sisanya —
+   `financeTransactionReadService`, `cashierSessionReadService`,
+   `cashBankReconciliationReadService`, `accountingPeriodReadService`,
+   `closingRunReadService`, `cooperativeAreaReadService`, `fiscalYearReadService`,
+   `hrReadService` — **tidak pernah dinilai/diprioritaskan secara sadar**,
+   bukan keputusan "aman dibiarkan full scan". `financeTransactionReadService`
+   dan `cashierSessionReadService` khususnya patut dicurigai sebagai tabel
+   yang sering berubah (transaksi finance/kasir harian) — kandidat kuat untuk
+   rollout delta-fetch berikutnya, belum tentu semurah tabel master data untuk
+   dibiarkan full scan.
+
+4. **12 tabel tanpa jalur pull sama sekali** — tidak berubah dari catatan
+   slice 3 di atas (`server_auth_sessions`,
+   `cooperative_payment_approval_requests/policy/posting_accounts`,
+   `product_recipes`+items, `purchase_cost_reconciliations`+items, 4 tabel
+   restaurant POS).
+
+Kesimpulan: dokumentasi slice 1-3 di atas masih akurat, tidak ada drift.
+Tambahan dari audit ini adalah kuantifikasi eksplisit ("16/32 read service,
+≈27/74 tabel sudah delta fetch") dan identifikasi bahwa sebagian tabel
+full-scan **bukan** keputusan sadar "boleh full scan" — masih perlu dinilai,
+khususnya `financeTransactionReadService`/`cashierSessionReadService`
+sebagai kandidat prioritas rollout berikutnya.
+
+**Tidak ada perubahan kode di audit ini — murni verifikasi status,
+tidak menyentuh file manapun di luar dokumen ini.**
+
+---
+
+**2026-08-11 — Bagian 2, slice 4 (`finance_transactions` + `cashier_sessions` ke delta
+fetch) sudah dikerjakan.** Tindak lanjut langsung dari audit di atas: dua tabel ini
+diduga paling sering berubah (transaksi finance/kasir harian) dari daftar 8 read
+service yang "belum pernah dinilai secara sadar", jadi dipilih sebagai kandidat
+prioritas berikutnya alih-alih tabel master data yang jarang berubah.
+
+Ringkasan perubahan (pola persis slice 1-3, pakai shared cursor util yang sudah ada,
+tidak ada perubahan desain baru):
+
+1. **Rust — repository + command** (`finance_transaction_repository.rs`,
+   `cashier_session_repository.rs` dan command pasangannya): `list_finance_transactions`
+   / `list_cashier_sessions` sekarang menerima `updated_after: Option<String>,
+   limit: Option<i64>` dan memakai query cursor
+   `WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ) ORDER BY
+   updated_at, id LIMIT $2` (limit di-clamp 1-1000), sama seperti
+   `fixed_asset_repository.rs`/`chart_of_account_repository.rs`.
+   - `ORDER BY` diubah dari `created_at DESC, updated_at DESC` (finance_transactions)
+     dan `opened_at DESC, created_at DESC` (cashier_sessions) ke `updated_at, id`
+     supaya cursor pagination valid.
+   - **Tidak ada bug tombstone yang diperbaiki di slice ini** (beda dari slice 1/3):
+     `finance_transactions` sudah punya kolom `deleted_at` dan query lama-nya
+     **sudah tidak** memfilter `WHERE deleted_at IS NULL` — baris ter-soft-delete
+     sudah terkirim sejak sebelum slice ini, jadi tidak ada regresi maupun
+     perbaikan di sisi tombstone untuk tabel ini. `cashier_sessions` tidak punya
+     kolom `deleted_at` sama sekali (sesi kasir tidak pernah di-soft-delete di
+     alur manapun yang ada) — tidak relevan.
+   - `get_x_by_id` / `upsert_x` (single-row) **tidak diubah**, sesuai pola slice
+     sebelumnya.
+
+2. **`src/services/postgresAdapter.ts`**: `financeTransactionPostgresAdapter.list()`
+   dan `cashierSessionPostgresAdapter.list()` diubah dari tanpa argumen menjadi
+   `(options: PostgresListOptions = {})`, meneruskan `{ updatedAfter, limit }` ke
+   `invoke()`.
+
+3. **Read service** (`financeTransactionReadService.ts`, `cashierSessionReadService.ts`):
+   `refreshFinanceTransactionsFromPostgres()` dan `refreshCashierSessionsFromPostgres()`
+   (signature publik tidak berubah) sekarang memakai shared cursor util
+   (`remoteRefreshCursor.ts`) + loop pagination `updatedAfter`/`limit` (limit 500 per
+   halaman), termasuk guard concurrency dan penanganan `isPostgresUnavailableError`
+   yang sudah ada di entity delta-fetch lain. Duplikat lokal `toTimestamp()` di kedua
+   file dihapus, diganti import dari shared util. Logika bisnis lain di
+   `financeTransactionReadService.ts` (rekalkulasi `financeBalance` dari seluruh
+   `db.financeTransactions.toArray()` setiap kali ada baris berubah, penghapusan
+   lokal saat `deleted_at` ada) **tidak diubah** — tetap jalan per halaman seperti
+   sebelumnya, hasil akhirnya konvergen sama setelah seluruh halaman selesai.
+
+4. **`realtimeSyncTableMap.ts`**: **tidak perlu diubah** — `finance_transactions` dan
+   `cashier_sessions` sudah dipetakan dengan benar ke
+   `refreshFinanceTransactionsFromPostgres`/`refreshCashierSessionsFromPostgres`
+   sejak Bagian 1, jadi begitu kedua fungsi ini jadi delta fetch, jalur realtime
+   otomatis langsung dapat manfaatnya tanpa perubahan tambahan.
+
+5. **Migration baru — `src-tauri/migrations/0078_finance_transaction_cashier_session_delta_fetch_indexes.sql`**:
+   index `(updated_at, id)` untuk `finance_transactions` dan `cashier_sessions`.
+   Index saja, tidak mengubah skema/data. (Catatan: nomor lanjut dari `0077`, dua
+   migration `0076`/`0077` — perbaikan tipe kolom uang fixed asset & marketplace —
+   ternyata sudah ada di repo sebelum slice ini tapi belum sempat tercatat di
+   dokumen ini; tidak relevan dengan isu sync, disebut di sini sekadar supaya
+   penomoran tidak terlihat meloncat.)
+
+Verifikasi yang sudah dilakukan:
+- `cargo check` di `src-tauri/`: **pass**, tanpa error.
+- `bun run build` (`tsc -b` + vite build): **pass**, tanpa error type.
+- `bun run lint`: **pass** dalam arti tidak ada regresi baru — 1 error
+  (`JoinExistingHostModal.tsx`) + 2 warning (`CashFlowReport.tsx`, `StockCard.tsx`)
+  yang sama persis dengan yang sudah dikonfirmasi pre-existing di slice-slice
+  sebelumnya, di file yang tidak disentuh perubahan ini.
+
+**Belum diuji terhadap PostgreSQL nyata**, sama seperti semua slice sebelumnya —
+migration index baru belum dijalankan ke database live, dan perilaku delta fetch
+(update 1 sesi kasir/1 transaksi finance → hanya baris itu yang ke-refresh) belum
+dicoba end-to-end.
+
+Sisa 6 read service dari daftar "belum pernah dinilai secara sadar" di audit
+2026-08-11 (`cashBankReconciliationReadService`, `accountingPeriodReadService`,
+`closingRunReadService`, `cooperativeAreaReadService`, `fiscalYearReadService`,
+`hrReadService`) **masih belum dikerjakan** — kandidat untuk slice berikutnya, di
+luar scope slice ini.
+
+File yang diubah/ditambah pada slice ini:
+- `src-tauri/src/repositories/finance_transaction_repository.rs`,
+  `cashier_session_repository.rs` (diubah)
+- `src-tauri/src/commands/finance_transaction_commands.rs`,
+  `cashier_session_commands.rs` (diubah)
+- `src-tauri/migrations/0078_finance_transaction_cashier_session_delta_fetch_indexes.sql`
+  (baru)
+- `src/services/postgresAdapter.ts`, `financeTransactionReadService.ts`,
+  `cashierSessionReadService.ts` (diubah)
+
+---
+
+**2026-08-11 — Bagian 2, slice 5 (6 read service sisa dari audit 2026-08-11) sudah
+dikerjakan.** Tindak lanjut langsung dari slice 4: 6 read service yang tersisa dari
+daftar "belum pernah dinilai secara sadar" (`cashBankReconciliationReadService`,
+`accountingPeriodReadService`, `closingRunReadService`, `cooperativeAreaReadService`,
+`fiscalYearReadService` — 2 tabel, `hrReadService` — bundle 4 tabel) semuanya
+dikonversi ke delta fetch dalam satu slice sekaligus (bukan satu-satu) karena
+semuanya kecil/menengah dan polanya identik — tidak ada alasan kuat untuk
+memisahkannya jadi beberapa PR. Dengan ini seluruh 32 read service (~35/74 tabel
+yang pernah diaudit eksplisit) sudah delta fetch, kecuali tabel master data kecil
+yang memang sengaja dibiarkan full fetch (`roles`, `taxes`, `payment_methods`,
+`warehouses`, `departments`, `currencies`, singleton settings) dan 12 tabel tanpa
+jalur pull sama sekali (lihat catatan slice 3).
+
+Ringkasan perubahan (pola persis slice 1-4, pakai shared cursor util yang sudah ada):
+
+1. **Rust — repository + command**, 9 tabel di 7 file repository
+   (`cash_bank_reconciliation_repository.rs`, `accounting_period_repository.rs`,
+   `closing_run_repository.rs`, `accounting_fiscal_year_repository.rs`,
+   `fiscal_year_closing_run_repository.rs`, `cooperative_repository.rs` — fungsi
+   `list_cooperative_areas`, `hr_repository.rs` — 4 fungsi
+   `list_hr_positions`/`list_employment_contracts`/`list_salary_components`/
+   `list_employee_salary_components`) dan command pasangannya masing-masing:
+   semua `list_x` sekarang menerima `updated_after: Option<String>, limit:
+   Option<i64>` dan memakai query cursor `WHERE ($1::TIMESTAMPTZ IS NULL OR
+   updated_at > $1::TIMESTAMPTZ) ORDER BY updated_at, id LIMIT $2` (limit
+   di-clamp 1-1000), pola sama persis slice-slice sebelumnya. `ORDER BY` semua
+   diubah dari kolom bisnis (`statement_date DESC`, `start_date DESC`, `name`,
+   dst) ke `updated_at, id` supaya cursor pagination valid.
+   - **Bug tombstone diperbaiki** di 5 dari 9 tabel: `list_cooperative_areas`
+     (di `cooperative_repository.rs`) dan seluruh 4 tabel HR
+     (`hr_positions`, `employment_contracts`, `salary_components`,
+     `employee_salary_components`, di `hr_repository.rs`) sebelumnya punya
+     `WHERE deleted_at IS NULL`, filter itu dibuang dari jalur list. Untuk
+     `cooperative_areas` ini nyata (client sudah siap menerima `deleted_at`
+     lewat soft-flag `is_active: false`, lihat `cooperativeAreaReadService.ts`
+     yang tidak diubah perilakunya). Untuk 4 tabel HR, diverifikasi lewat grep
+     bahwa **tidak ada kode Rust manapun yang pernah menulis `deleted_at`**
+     untuk tabel-tabel ini (tidak ada command delete sama sekali) — jadi
+     perbaikan filter ini murni pencegahan drift ke depan, bukan memperbaiki
+     bug yang sedang aktif merugikan data sekarang.
+   - 4 tabel lain (`cash_bank_reconciliations`, `accounting_periods`,
+     `closing_runs`, `accounting_fiscal_years`, `fiscal_year_closing_runs` —
+     5 sebenarnya) **tidak** punya bug tombstone — query list lama-nya sudah
+     tidak memfilter `deleted_at`, read service sisi client juga sudah siap
+     menghapus baris lokal saat `deleted_at` terisi (lihat
+     `mergeRemote*IntoDexie` di masing-masing read service, tidak diubah).
+   - `get_x_by_id` / `upsert_x` (single-row) **tidak diubah** di semua 9
+     tabel, sesuai pola slice sebelumnya.
+
+2. **`src/services/postgresAdapter.ts`**: 9 adapter (`cashBankReconciliationPostgresAdapter`,
+   `accountingPeriodPostgresAdapter`, `closingRunPostgresAdapter`,
+   `accountingFiscalYearPostgresAdapter`, `fiscalYearClosingRunPostgresAdapter`,
+   `cooperativeAreaPostgresAdapter`, `hrPositionPostgresAdapter`,
+   `employmentContractPostgresAdapter`, `salaryComponentPostgresAdapter`,
+   `employeeSalaryComponentPostgresAdapter` — 10 sebenarnya) `.list()` diubah
+   dari tanpa argumen menjadi `(options: PostgresListOptions = {})`, meneruskan
+   `{ updatedAfter, limit }` ke `invoke()`.
+
+3. **Read service** — 6 file:
+   - `cashBankReconciliationReadService.ts`, `accountingPeriodReadService.ts`,
+     `closingRunReadService.ts`, `cooperativeAreaReadService.ts`: pola identik
+     slice 1-4 — shared cursor util (`remoteRefreshCursor.ts`) + loop pagination
+     `updatedAfter`/`limit` (limit 500/halaman), duplikat lokal `toTimestamp()`
+     dihapus diganti import dari shared util. Logika `shouldApplyRemote*`
+     (version/timestamp conflict check) dan `mergeRemote*IntoDexie` (termasuk
+     push side `pushLocalCooperativeAreasToPostgres` di cooperativeArea)
+     **tidak diubah** — hanya cara remote data diambil yang berubah.
+   - `fiscalYearReadService.ts`: dua fungsi refresh (`accounting_fiscal_years`
+     dan `fiscal_year_closing_runs`) masing-masing dapat loop pagination
+     independen dengan cursor terpisah (bukan cursor bersama), karena kedua
+     tabel ini secara desain independen (fiscal year vs closing run-nya
+     punya siklus update berbeda).
+   - `hrReadService.ts`: berbeda dari yang lain — sebelumnya sudah punya 1
+     fungsi orkestrasi (`refreshHrDataFromPostgres`) yang menjalankan 4
+     `Promise.all` list lalu 1 kali `mergeRemoteHrDataIntoDexie` gabungan.
+     Alih-alih membongkar struktur itu, ditambahkan helper generic baru
+     `fetchAllRemoteWithCursor()` yang membungkus loop cursor pagination per
+     collection (dipanggil 4x secara paralel via `Promise.all`, masing-masing
+     mengumpulkan seluruh halaman jadi 1 array sebelum dikembalikan) —
+     `mergeRemoteHrDataIntoDexie()` dan `HrReadSummary`/`mergeCollection()`
+     **tidak diubah sama sekali**, tetap menerima array lengkap seperti
+     sebelumnya. Trade-off: beda dari pola "merge per halaman" di file lain,
+     tapi lebih aman (tidak menyentuh fungsi merge yang sudah teruji) untuk
+     bundle 4-tabel yang strukturnya sudah agak berbeda dari pola tunggal.
+
+4. **Migration baru — `src-tauri/migrations/0079_accounting_hr_cooperative_delta_fetch_indexes.sql`**:
+   index `(updated_at, id)` untuk kesepuluh tabel di atas. Index saja, tidak
+   mengubah skema/data.
+
+Verifikasi yang sudah dilakukan:
+- `cargo check` di `src-tauri/`: **pass**, tanpa error, dijalankan 2x (setelah
+  seluruh perubahan Rust, dan sekali lagi setelah menambah file migration
+  index — migration SQL tidak dikompilasi cargo, jadi run kedua hanya
+  memastikan tidak ada state stale).
+- `bun run build` (`tsc -b` + vite build): **pass**, tanpa error type.
+- `bun run lint`: **pass** — error/warning yang muncul (`JoinExistingHostModal.tsx`,
+  `CashFlowReport.tsx`, `StockCard.tsx`) sama persis dengan yang sudah
+  dikonfirmasi pre-existing di slice-slice sebelumnya, di file yang tidak
+  disentuh perubahan ini.
+
+**Belum diuji terhadap PostgreSQL nyata**, sama seperti semua slice sebelumnya —
+migration index baru belum dijalankan ke database live, dan perilaku delta fetch
+(update 1 baris di salah satu dari 10 tabel ini → hanya baris itu yang ke-refresh)
+belum dicoba end-to-end.
+
+Dengan slice 5 ini, seluruh read service yang teridentifikasi eksplisit di audit
+2026-08-11 sudah selesai dikonversi. Sisa pekerjaan Bagian 2 yang **disadari tapi
+sengaja tidak dikerjakan** (bukan terlewat):
+- Entity prioritas rendah yang tetap boleh full fetch (tidak berubah dari rencana
+  awal): `roles`, `taxes`, `payment_methods`, `warehouses`, `departments`,
+  `currencies`, singleton settings — tabel master kecil, jarang berubah.
+- 12 tabel tanpa jalur pull sama sekali (lihat catatan slice 3): `server_auth_sessions`,
+  `cooperative_payment_approval_requests/policy/posting_accounts`,
+  `product_recipes`+items, `purchase_cost_reconciliations`+items, 4 tabel
+  restaurant POS — membangun sync untuk ini adalah proyek fitur baru, bukan
+  optimasi delta fetch.
+- **Rekonsiliasi `quantity_remaining` lintas-device** untuk `inventory_lots` (lihat
+  slice 3) dan **push langsung setelah transaksi** untuk inventory_lots/
+  inventory_lot_consumptions — keduanya butuh keputusan desain terpisah.
+- Ekstrak duplikat cursor helper di 8 entity yang delta fetch-nya dibangun
+  sebelum `remoteRefreshCursor.ts` ada (sales documents, journal entries, stock
+  opnames, production orders, opening balances, payroll runs, employee cash
+  advances, fixed assets) — cleanup opsional, tidak mengubah perilaku.
+- Verifikasi end-to-end terhadap PostgreSQL nyata / LAN multi-PC untuk seluruh
+  rollout Bagian 2 (semua slice) — belum pernah dilakukan sama sekali, ini yang
+  paling penting sebelum seluruh Bagian 2 dianggap selesai secara operasional.
+
+File yang diubah/ditambah pada slice ini:
+- `src-tauri/src/repositories/cash_bank_reconciliation_repository.rs`,
+  `accounting_period_repository.rs`, `closing_run_repository.rs`,
+  `accounting_fiscal_year_repository.rs`, `fiscal_year_closing_run_repository.rs`,
+  `cooperative_repository.rs`, `hr_repository.rs` (diubah)
+- `src-tauri/src/commands/cash_bank_reconciliation_commands.rs`,
+  `accounting_period_commands.rs`, `closing_run_commands.rs`,
+  `accounting_fiscal_year_commands.rs`, `fiscal_year_closing_run_commands.rs`,
+  `cooperative_commands.rs`, `hr_commands.rs` (diubah)
+- `src-tauri/migrations/0079_accounting_hr_cooperative_delta_fetch_indexes.sql`
+  (baru)
+- `src/services/postgresAdapter.ts`, `cashBankReconciliationReadService.ts`,
+  `accountingPeriodReadService.ts`, `closingRunReadService.ts`,
+  `cooperativeAreaReadService.ts`, `fiscalYearReadService.ts`,
+  `hrReadService.ts` (diubah)

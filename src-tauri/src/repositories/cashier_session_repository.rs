@@ -1,7 +1,11 @@
 use crate::models::cashier_session::CashierSessionDto;
 use sqlx::PgPool;
 
-pub async fn list_cashier_sessions(pool: &PgPool) -> Result<Vec<CashierSessionDto>, sqlx::Error> {
+pub async fn list_cashier_sessions(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<CashierSessionDto>, sqlx::Error> {
     sqlx::query_as::<_, CashierSessionDto>(
         r#"
         SELECT
@@ -30,9 +34,13 @@ pub async fn list_cashier_sessions(pool: &PgPool) -> Result<Vec<CashierSessionDt
             created_at::TEXT AS created_at,
             updated_at::TEXT AS updated_at
         FROM cashier_sessions
-        ORDER BY opened_at DESC, created_at DESC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

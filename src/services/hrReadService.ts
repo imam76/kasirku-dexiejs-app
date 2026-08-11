@@ -5,17 +5,24 @@ import {
   hrPositionPostgresAdapter,
   isTauriRuntime,
   salaryComponentPostgresAdapter,
+  type PostgresListOptions,
   type RemoteEmployeeSalaryComponentDto,
   type RemoteEmploymentContractDto,
   type RemoteHrPositionDto,
   type RemoteSalaryComponentDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+} from '@/services/shared/remoteRefreshCursor';
 import type {
   EmployeeSalaryComponent,
   EmploymentContract,
   HrPosition,
   SalaryComponent,
 } from '@/types';
+
+const HR_REFRESH_LIMIT = 500;
 
 export interface HrReadResult {
   fetched: number;
@@ -109,6 +116,32 @@ export const mergeRemoteHrDataIntoDexie = async (input: {
   ),
 });
 
+const fetchAllRemoteWithCursor = async <
+  TLocal extends { updated_at: string; sync_status?: string; remote_updated_at?: string },
+  TRemote extends { updated_at: string },
+>(
+  getLocalRecords: () => Promise<TLocal[]>,
+  listRemote: (options: PostgresListOptions) => Promise<TRemote[]>,
+): Promise<TRemote[]> => {
+  const allRemotes: TRemote[] = [];
+  let updatedAfter = getLatestLocalRemoteUpdatedAt(
+    await getLocalRecords(),
+    (record) => record.remote_updated_at ?? (record.sync_status === 'synced' ? record.updated_at : undefined),
+  );
+
+  while (true) {
+    const page = await listRemote({ updatedAfter, limit: HR_REFRESH_LIMIT });
+    allRemotes.push(...page);
+    if (page.length < HR_REFRESH_LIMIT) break;
+
+    const nextUpdatedAfter = getLatestRemoteUpdatedAt(page, (item) => item.updated_at);
+    if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+    updatedAfter = nextUpdatedAfter;
+  }
+
+  return allRemotes;
+};
+
 let isRefreshing = false;
 
 export const refreshHrDataFromPostgres = async (): Promise<HrReadSummary> => {
@@ -127,10 +160,13 @@ export const refreshHrDataFromPostgres = async (): Promise<HrReadSummary> => {
   isRefreshing = true;
   try {
     const [positions, contracts, salaryComponents, employeeSalaryComponents] = await Promise.all([
-      hrPositionPostgresAdapter.list(),
-      employmentContractPostgresAdapter.list(),
-      salaryComponentPostgresAdapter.list(),
-      employeeSalaryComponentPostgresAdapter.list(),
+      fetchAllRemoteWithCursor(() => db.hrPositions.toArray(), hrPositionPostgresAdapter.list),
+      fetchAllRemoteWithCursor(() => db.employmentContracts.toArray(), employmentContractPostgresAdapter.list),
+      fetchAllRemoteWithCursor(() => db.salaryComponents.toArray(), salaryComponentPostgresAdapter.list),
+      fetchAllRemoteWithCursor(
+        () => db.employeeSalaryComponents.toArray(),
+        employeeSalaryComponentPostgresAdapter.list,
+      ),
     ]);
     return mergeRemoteHrDataIntoDexie({
       positions,

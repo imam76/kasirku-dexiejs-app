@@ -3,6 +3,8 @@ use sqlx::PgPool;
 
 pub async fn list_cash_bank_reconciliations(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<CashBankReconciliationDto>, sqlx::Error> {
     sqlx::query_as::<_, CashBankReconciliationDto>(
         r#"
@@ -34,9 +36,13 @@ pub async fn list_cash_bank_reconciliations(
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM cash_bank_reconciliations
-        ORDER BY statement_date DESC, created_at DESC
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

@@ -8,9 +8,18 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_cash_bank_reconciliations(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CashBankReconciliationDto>> {
     let pool = state.pool()?;
-    Ok(cash_bank_reconciliation_repository::list_cash_bank_reconciliations(&pool).await?)
+    Ok(
+        cash_bank_reconciliation_repository::list_cash_bank_reconciliations(
+            &pool,
+            updated_after,
+            limit,
+        )
+        .await?,
+    )
 }
 
 #[tauri::command]

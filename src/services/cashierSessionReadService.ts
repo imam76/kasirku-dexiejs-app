@@ -1,9 +1,15 @@
 import { db } from '@/lib/db';
 import {
   cashierSessionPostgresAdapter,
+  isPostgresUnavailableError,
   isTauriRuntime,
   type RemoteCashierSessionDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { CashierSession } from '@/types';
 
 export interface CashierSessionReadSyncResult {
@@ -19,6 +25,8 @@ const EMPTY_CASHIER_SESSION_READ_SYNC_RESULT: CashierSessionReadSyncResult = {
   updated: 0,
   skipped: 0,
 };
+
+const CASHIER_SESSION_REFRESH_LIMIT = 500;
 
 let isRefreshingCashierSessionsFromPostgres = false;
 
@@ -62,11 +70,6 @@ const mapRemoteCashierSessionToLocal = (
 const hasLocalUnsyncedChanges = (session: CashierSession) => (
   session.sync_status === 'pending' || session.sync_status === 'failed'
 );
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
 
 const shouldApplyRemoteCashierSession = (
   localSession: CashierSession | undefined,
@@ -127,6 +130,30 @@ export const mergeRemoteCashierSessionsIntoDexie = async (
   return result;
 };
 
+const getLatestLocalCashierSessionUpdatedAt = async () => {
+  const sessions = await db.cashierSessions.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    sessions,
+    (session) => (
+      session.remote_updated_at ?? (session.sync_status === 'synced' ? session.updated_at : undefined)
+    ),
+  );
+};
+
+const getLatestRemoteCashierSessionUpdatedAt = (remoteSessions: RemoteCashierSessionDto[]) => (
+  getLatestRemoteUpdatedAt(remoteSessions, (session) => session.updated_at)
+);
+
+const addCashierSessionReadSyncResult = (
+  aggregate: CashierSessionReadSyncResult,
+  next: CashierSessionReadSyncResult,
+) => {
+  aggregate.fetched += next.fetched;
+  aggregate.inserted += next.inserted;
+  aggregate.updated += next.updated;
+  aggregate.skipped += next.skipped;
+};
+
 export const refreshCashierSessionsFromPostgres = async (): Promise<CashierSessionReadSyncResult> => {
   if (isRefreshingCashierSessionsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_CASHIER_SESSION_READ_SYNC_RESULT };
@@ -134,8 +161,36 @@ export const refreshCashierSessionsFromPostgres = async (): Promise<CashierSessi
 
   isRefreshingCashierSessionsFromPostgres = true;
   try {
-    const remoteSessions = await cashierSessionPostgresAdapter.list();
-    return mergeRemoteCashierSessionsIntoDexie(remoteSessions);
+    const aggregate = { ...EMPTY_CASHIER_SESSION_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalCashierSessionUpdatedAt();
+
+    while (true) {
+      const remoteSessions = await cashierSessionPostgresAdapter.list({
+        updatedAfter,
+        limit: CASHIER_SESSION_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteCashierSessionsIntoDexie(remoteSessions);
+      addCashierSessionReadSyncResult(aggregate, result);
+
+      if (remoteSessions.length < CASHIER_SESSION_REFRESH_LIMIT) {
+        break;
+      }
+
+      const nextUpdatedAfter = getLatestRemoteCashierSessionUpdatedAt(remoteSessions);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
+        break;
+      }
+
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
+  } catch (error) {
+    if (isPostgresUnavailableError(error)) {
+      return { ...EMPTY_CASHIER_SESSION_READ_SYNC_RESULT };
+    }
+
+    throw error;
   } finally {
     isRefreshingCashierSessionsFromPostgres = false;
   }

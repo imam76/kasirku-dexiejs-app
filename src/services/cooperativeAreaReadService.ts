@@ -5,7 +5,14 @@ import {
   postgresAdapter,
   type RemoteCooperativeAreaDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { CooperativeArea } from '@/types';
+
+const COOPERATIVE_AREA_REFRESH_LIMIT = 500;
 
 export interface CooperativeAreaReadSyncResult {
   fetched: number;
@@ -39,11 +46,6 @@ let isRefreshingCooperativeAreasFromPostgres = false;
 let isPushingCooperativeAreasToPostgres = false;
 
 const optionalString = (value: string | null | undefined) => value ?? undefined;
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
 
 const hasLocalUnsyncedChanges = (area: CooperativeArea) => (
   area.sync_status === 'pending' || area.sync_status === 'failed'
@@ -130,6 +132,18 @@ export const mergeRemoteCooperativeAreasIntoDexie = async (
   return result;
 };
 
+const getLatestLocalCooperativeAreaUpdatedAt = async () => {
+  const areas = await db.cooperativeAreas.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    areas,
+    (area) => area.remote_updated_at ?? (area.sync_status === 'synced' ? area.updated_at : undefined),
+  );
+};
+
+const getLatestRemoteCooperativeAreaUpdatedAt = (remoteAreas: RemoteCooperativeAreaDto[]) => (
+  getLatestRemoteUpdatedAt(remoteAreas, (area) => area.updated_at)
+);
+
 export const refreshCooperativeAreasFromPostgres = async (): Promise<CooperativeAreaReadSyncResult> => {
   if (isRefreshingCooperativeAreasFromPostgres || !canUsePostgres()) {
     return { ...EMPTY_READ_SYNC_RESULT };
@@ -137,8 +151,28 @@ export const refreshCooperativeAreasFromPostgres = async (): Promise<Cooperative
 
   isRefreshingCooperativeAreasFromPostgres = true;
   try {
-    const remoteAreas = await cooperativeAreaPostgresAdapter.list();
-    return mergeRemoteCooperativeAreasIntoDexie(remoteAreas);
+    const aggregate = { ...EMPTY_READ_SYNC_RESULT };
+    let updatedAfter = await getLatestLocalCooperativeAreaUpdatedAt();
+
+    while (true) {
+      const remoteAreas = await cooperativeAreaPostgresAdapter.list({
+        updatedAfter,
+        limit: COOPERATIVE_AREA_REFRESH_LIMIT,
+      });
+      const result = await mergeRemoteCooperativeAreasIntoDexie(remoteAreas);
+      aggregate.fetched += result.fetched;
+      aggregate.inserted += result.inserted;
+      aggregate.updated += result.updated;
+      aggregate.skipped += result.skipped;
+
+      if (remoteAreas.length < COOPERATIVE_AREA_REFRESH_LIMIT) break;
+
+      const nextUpdatedAfter = getLatestRemoteCooperativeAreaUpdatedAt(remoteAreas);
+      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+      updatedAfter = nextUpdatedAfter;
+    }
+
+    return aggregate;
   } finally {
     isRefreshingCooperativeAreasFromPostgres = false;
   }

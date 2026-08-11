@@ -151,9 +151,11 @@ pub async fn postgres_record_cooperative_loan_collection_event(
 #[tauri::command]
 pub async fn postgres_list_cooperative_areas(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CooperativeAreaDto>> {
     let pool = state.pool()?;
-    Ok(cooperative_repository::list_cooperative_areas(&pool).await?)
+    Ok(cooperative_repository::list_cooperative_areas(&pool, updated_after, limit).await?)
 }
 
 #[tauri::command]

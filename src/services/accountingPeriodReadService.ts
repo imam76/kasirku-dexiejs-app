@@ -4,7 +4,14 @@ import {
   isTauriRuntime,
   type RemoteAccountingPeriodDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { AccountingPeriod, AccountingPeriodStatus, AccountingPeriodType } from '@/types';
+
+const ACCOUNTING_PERIOD_REFRESH_LIMIT = 500;
 
 export interface AccountingPeriodReadSyncResult {
   fetched: number;
@@ -81,11 +88,6 @@ const hasLocalUnsyncedChanges = (period: AccountingPeriod) => (
   period.sync_status === 'pending' || period.sync_status === 'failed'
 );
 
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
 const shouldApplyRemoteAccountingPeriod = (
   localPeriod: AccountingPeriod | undefined,
   remotePeriod: RemoteAccountingPeriodDto,
@@ -157,6 +159,18 @@ export const mergeRemoteAccountingPeriodsIntoDexie = async (
   return result;
 };
 
+const getLatestLocalAccountingPeriodUpdatedAt = async () => {
+  const periods = await db.accountingPeriods.toArray();
+  return getLatestLocalRemoteUpdatedAt(
+    periods,
+    (period) => period.remote_updated_at ?? (period.sync_status === 'synced' ? period.updated_at : undefined),
+  );
+};
+
+const getLatestRemoteAccountingPeriodUpdatedAt = (remotePeriods: RemoteAccountingPeriodDto[]) => (
+  getLatestRemoteUpdatedAt(remotePeriods, (period) => period.updated_at)
+);
+
 export const refreshAccountingPeriodsFromPostgres =
   async (): Promise<AccountingPeriodReadSyncResult> => {
     if (isRefreshingAccountingPeriodsFromPostgres || !canReadFromPostgres()) {
@@ -165,8 +179,29 @@ export const refreshAccountingPeriodsFromPostgres =
 
     isRefreshingAccountingPeriodsFromPostgres = true;
     try {
-      const remotePeriods = await accountingPeriodPostgresAdapter.list();
-      return mergeRemoteAccountingPeriodsIntoDexie(remotePeriods);
+      const aggregate = { ...EMPTY_ACCOUNTING_PERIOD_READ_SYNC_RESULT };
+      let updatedAfter = await getLatestLocalAccountingPeriodUpdatedAt();
+
+      while (true) {
+        const remotePeriods = await accountingPeriodPostgresAdapter.list({
+          updatedAfter,
+          limit: ACCOUNTING_PERIOD_REFRESH_LIMIT,
+        });
+        const result = await mergeRemoteAccountingPeriodsIntoDexie(remotePeriods);
+        aggregate.fetched += result.fetched;
+        aggregate.inserted += result.inserted;
+        aggregate.updated += result.updated;
+        aggregate.deleted += result.deleted;
+        aggregate.skipped += result.skipped;
+
+        if (remotePeriods.length < ACCOUNTING_PERIOD_REFRESH_LIMIT) break;
+
+        const nextUpdatedAfter = getLatestRemoteAccountingPeriodUpdatedAt(remotePeriods);
+        if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
+        updatedAfter = nextUpdatedAfter;
+      }
+
+      return aggregate;
     } finally {
       isRefreshingAccountingPeriodsFromPostgres = false;
     }

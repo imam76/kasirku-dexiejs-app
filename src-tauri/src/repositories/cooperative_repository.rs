@@ -395,11 +395,19 @@ pub async fn upsert_cooperative_member_code(
     .await
 }
 
-pub async fn list_cooperative_areas(pool: &PgPool) -> Result<Vec<CooperativeAreaDto>, sqlx::Error> {
+pub async fn list_cooperative_areas(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<CooperativeAreaDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeAreaDto>(concat!(
         cooperative_area_select!(),
-        " WHERE deleted_at IS NULL ORDER BY name ASC"
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+          ORDER BY updated_at, id
+          LIMIT $2"
     ))
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

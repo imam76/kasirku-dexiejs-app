@@ -3,7 +3,11 @@ use crate::models::hr::{
 };
 use sqlx::PgPool;
 
-pub async fn list_hr_positions(pool: &PgPool) -> Result<Vec<HrPositionDto>, sqlx::Error> {
+pub async fn list_hr_positions(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<HrPositionDto>, sqlx::Error> {
     sqlx::query_as::<_, HrPositionDto>(
         r#"
         SELECT id, code, name, department_id, department_code, department_name, level,
@@ -11,10 +15,13 @@ pub async fn list_hr_positions(pool: &PgPool) -> Result<Vec<HrPositionDto>, sqlx
                description, is_active, created_at::TEXT AS created_at,
                updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
         FROM hr_positions
-        WHERE deleted_at IS NULL
-        ORDER BY name
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -66,6 +73,8 @@ pub async fn upsert_hr_position(
 
 pub async fn list_employment_contracts(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<EmploymentContractDto>, sqlx::Error> {
     sqlx::query_as::<_, EmploymentContractDto>(
         r#"
@@ -76,10 +85,13 @@ pub async fn list_employment_contracts(
                created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
                deleted_at::TEXT AS deleted_at
         FROM employment_contracts
-        WHERE deleted_at IS NULL
-        ORDER BY start_date DESC, contract_number
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -137,17 +149,24 @@ pub async fn upsert_employment_contract(
     .await
 }
 
-pub async fn list_salary_components(pool: &PgPool) -> Result<Vec<SalaryComponentDto>, sqlx::Error> {
+pub async fn list_salary_components(
+    pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<SalaryComponentDto>, sqlx::Error> {
     sqlx::query_as::<_, SalaryComponentDto>(
         r#"
         SELECT id, code, name, kind, calculation, default_value, is_taxable, is_active,
                created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
                deleted_at::TEXT AS deleted_at
         FROM salary_components
-        WHERE deleted_at IS NULL
-        ORDER BY name
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }
@@ -194,6 +213,8 @@ pub async fn upsert_salary_component(
 
 pub async fn list_employee_salary_components(
     pool: &PgPool,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> Result<Vec<EmployeeSalaryComponentDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeSalaryComponentDto>(
         r#"
@@ -201,10 +222,13 @@ pub async fn list_employee_salary_components(
                kind, calculation, value, is_active, created_at::TEXT AS created_at,
                updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
         FROM employee_salary_components
-        WHERE deleted_at IS NULL
-        ORDER BY employee_id, component_name
+        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        ORDER BY updated_at, id
+        LIMIT $2
         "#,
     )
+    .bind(updated_after)
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
 }

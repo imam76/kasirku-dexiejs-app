@@ -8,9 +8,14 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_finance_transactions(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<FinanceTransactionDto>> {
     let pool = state.pool()?;
-    Ok(finance_transaction_repository::list_finance_transactions(&pool).await?)
+    Ok(
+        finance_transaction_repository::list_finance_transactions(&pool, updated_after, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]

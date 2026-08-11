@@ -8,9 +8,18 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_fiscal_year_closing_runs(
     state: State<'_, PostgresState>,
+    updated_after: Option<String>,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<FiscalYearClosingRunDto>> {
     let pool = state.pool()?;
-    Ok(fiscal_year_closing_run_repository::list_fiscal_year_closing_runs(&pool).await?)
+    Ok(
+        fiscal_year_closing_run_repository::list_fiscal_year_closing_runs(
+            &pool,
+            updated_after,
+            limit,
+        )
+        .await?,
+    )
 }
 
 #[tauri::command]

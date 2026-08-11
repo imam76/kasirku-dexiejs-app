@@ -2235,9 +2235,12 @@ export const departmentPostgresAdapter = {
 };
 
 export const hrPositionPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteHrPositionDto[]>('postgres_list_hr_positions');
+    return invoke<RemoteHrPositionDto[]>('postgres_list_hr_positions', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
   async upsert(input: RemoteHrPositionDto) {
     if (!isTauriRuntime()) return null;
@@ -2246,9 +2249,12 @@ export const hrPositionPostgresAdapter = {
 };
 
 export const employmentContractPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteEmploymentContractDto[]>('postgres_list_employment_contracts');
+    return invoke<RemoteEmploymentContractDto[]>('postgres_list_employment_contracts', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
   async upsert(input: RemoteEmploymentContractDto) {
     if (!isTauriRuntime()) return null;
@@ -2257,9 +2263,12 @@ export const employmentContractPostgresAdapter = {
 };
 
 export const salaryComponentPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteSalaryComponentDto[]>('postgres_list_salary_components');
+    return invoke<RemoteSalaryComponentDto[]>('postgres_list_salary_components', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
   async upsert(input: RemoteSalaryComponentDto) {
     if (!isTauriRuntime()) return null;
@@ -2268,9 +2277,12 @@ export const salaryComponentPostgresAdapter = {
 };
 
 export const employeeSalaryComponentPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteEmployeeSalaryComponentDto[]>('postgres_list_employee_salary_components');
+    return invoke<RemoteEmployeeSalaryComponentDto[]>('postgres_list_employee_salary_components', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
   async upsert(input: RemoteEmployeeSalaryComponentDto) {
     if (!isTauriRuntime()) return null;
@@ -2279,9 +2291,12 @@ export const employeeSalaryComponentPostgresAdapter = {
 };
 
 export const cashierSessionPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCashierSessionDto[]>('postgres_list_cashier_sessions');
+    return invoke<RemoteCashierSessionDto[]>('postgres_list_cashier_sessions', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2735,9 +2750,12 @@ export const purchaseDocumentPostgresAdapter = {
 };
 
 export const financeTransactionPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteFinanceTransactionDto[]>('postgres_list_finance_transactions');
+    return invoke<RemoteFinanceTransactionDto[]>('postgres_list_finance_transactions', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2752,9 +2770,12 @@ export const financeTransactionPostgresAdapter = {
 };
 
 export const cashBankReconciliationPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCashBankReconciliationDto[]>('postgres_list_cash_bank_reconciliations');
+    return invoke<RemoteCashBankReconciliationDto[]>('postgres_list_cash_bank_reconciliations', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2769,9 +2790,12 @@ export const cashBankReconciliationPostgresAdapter = {
 };
 
 export const accountingPeriodPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteAccountingPeriodDto[]>('postgres_list_accounting_periods');
+    return invoke<RemoteAccountingPeriodDto[]>('postgres_list_accounting_periods', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2786,9 +2810,12 @@ export const accountingPeriodPostgresAdapter = {
 };
 
 export const accountingFiscalYearPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteAccountingFiscalYearDto[]>('postgres_list_accounting_fiscal_years');
+    return invoke<RemoteAccountingFiscalYearDto[]>('postgres_list_accounting_fiscal_years', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2803,9 +2830,12 @@ export const accountingFiscalYearPostgresAdapter = {
 };
 
 export const closingRunPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteClosingRunDto[]>('postgres_list_closing_runs');
+    return invoke<RemoteClosingRunDto[]>('postgres_list_closing_runs', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2820,9 +2850,12 @@ export const closingRunPostgresAdapter = {
 };
 
 export const fiscalYearClosingRunPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteFiscalYearClosingRunDto[]>('postgres_list_fiscal_year_closing_runs');
+    return invoke<RemoteFiscalYearClosingRunDto[]>('postgres_list_fiscal_year_closing_runs', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
@@ -2919,9 +2952,12 @@ export const cooperativeMemberCodePostgresAdapter = {
 };
 
 export const cooperativeAreaPostgresAdapter = {
-  async list() {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteCooperativeAreaDto[]>('postgres_list_cooperative_areas');
+    return invoke<RemoteCooperativeAreaDto[]>('postgres_list_cooperative_areas', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
   },
 
   async get(id: string) {
