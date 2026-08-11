@@ -96,10 +96,16 @@ export const createStockSchema = (
     const normalizedFromUnit = normalizeUnitKey(mapping.from_unit);
     const normalizedToUnit = normalizeUnitKey(mapping.to_unit);
 
-    if (normalizedFromUnit === normalizedToUnit) {
+    const ratio = mapping.to_quantity / mapping.from_quantity;
+
+    // Satuan asal dan tujuan boleh sama (mis. mengonfirmasi "1 pcs = 1 pcs"),
+    // tapi hanya kalau rasionya persis 1:1 — "1 pcs = 5 pcs" jelas keliru dan
+    // dulu dicegah dengan melarang satuannya sama sama sekali, yang justru
+    // membuat baris lama tidak bisa disunting begitu satuannya sama.
+    if (normalizedFromUnit === normalizedToUnit && !(Number.isFinite(ratio) && ratio === 1)) {
       ctx.addIssue({
         code: 'custom',
-        path: ['unit_mappings', index, 'to_unit'],
+        path: ['unit_mappings', index, 'to_quantity'],
         message: t('stock.validation.sameConversionUnit'),
       });
     }
@@ -109,7 +115,6 @@ export const createStockSchema = (
     // box dan bikin stok tercatat 12 kali lipat.
     const fromCategory = getUnitCategory(normalizedFromUnit);
     const toCategory = getUnitCategory(normalizedToUnit);
-    const ratio = mapping.to_quantity / mapping.from_quantity;
 
     if (Number.isFinite(ratio) && ratio > 0) {
       if (fromCategory === 'package' && toCategory === 'count' && ratio <= 1) {

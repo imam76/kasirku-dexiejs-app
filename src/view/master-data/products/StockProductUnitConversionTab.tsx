@@ -1,4 +1,3 @@
-import { normalizeUnitKey } from '@/constants/units';
 import type { StockFormData } from '@/hooks/useStockManagement';
 import { useI18n } from '@/hooks/useI18n';
 import { Alert, Button, InputNumber, Select } from 'antd';
@@ -25,7 +24,6 @@ type StockProductUnitConversionTabProps = {
   purchaseUnit: string;
   nextUnitMappingTarget: string;
   unitMappingOptions: Array<{ value: string; label: string }>;
-  unitMappings: StockFormData['unit_mappings'];
   productUnits: string[];
   productUnitOptions: Array<{ value: string; label: string }>;
 };
@@ -40,7 +38,6 @@ export default function StockProductUnitConversionTab({
   purchaseUnit,
   nextUnitMappingTarget,
   unitMappingOptions,
-  unitMappings,
   productUnits,
   productUnitOptions,
 }: StockProductUnitConversionTabProps) {
@@ -129,11 +126,10 @@ export default function StockProductUnitConversionTab({
                           data-testid={`stock-product-unit-mapping-source-unit-${index}`}
                           value={itemField.value}
                           onChange={itemField.onChange}
+                          showSearch={{ optionFilterProp: 'label' }}
                           className="w-full"
                           placeholder={t('stock.form.unitPlaceholder')}
-                          options={unitMappingOptions.filter(
-                            (option) => normalizeUnitKey(option.value) !== normalizeUnitKey(unitMappings[index]?.to_unit),
-                          )}
+                          options={unitMappingOptions}
                         />
                       )}
                     />
@@ -181,11 +177,10 @@ export default function StockProductUnitConversionTab({
                           data-testid={`stock-product-unit-mapping-target-unit-${index}`}
                           value={itemField.value}
                           onChange={itemField.onChange}
+                          showSearch={{ optionFilterProp: 'label' }}
                           className="w-full"
                           placeholder={t('stock.form.unitPlaceholder')}
-                          options={unitMappingOptions.filter(
-                            (option) => normalizeUnitKey(option.value) !== normalizeUnitKey(unitMappings[index]?.from_unit),
-                          )}
+                          options={unitMappingOptions}
                         />
                       )}
                     />
@@ -238,6 +233,7 @@ export default function StockProductUnitConversionTab({
                 data-testid="stock-product-default-unit"
                 value={field.value || undefined}
                 onChange={field.onChange}
+                showSearch={{ optionFilterProp: 'label' }}
                 className="w-full"
                 placeholder={t('stock.form.defaultUnitPlaceholder')}
                 options={productUnitOptions}

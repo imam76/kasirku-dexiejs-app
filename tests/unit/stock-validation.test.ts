@@ -154,11 +154,34 @@ describe('stock multi-unit validation', () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error.issues).toContainEqual(expect.objectContaining({
-      path: ['unit_mappings', 0, 'to_unit'],
+      path: ['unit_mappings', 0, 'to_quantity'],
     }));
     expect(result.error.issues).toContainEqual(expect.objectContaining({
       path: ['unit_mappings', 2, 'to_unit'],
     }));
+  });
+
+  test('allows a same-unit equation only when the ratio is exactly 1:1', () => {
+    const schema = createStockSchema(undefined, { globalConversions: [] });
+
+    const invalid = schema.safeParse(buildStockForm({
+      unit_mappings: [
+        { from_quantity: 1, from_unit: 'kg', to_quantity: 5, to_unit: 'kg' },
+      ],
+    }));
+    expect(invalid.success).toBe(false);
+    if (invalid.success) return;
+    expect(invalid.error.issues).toContainEqual(expect.objectContaining({
+      path: ['unit_mappings', 0, 'to_quantity'],
+      message: expect.stringContaining('1:1'),
+    }));
+
+    const valid = schema.safeParse(buildStockForm({
+      unit_mappings: [
+        { from_quantity: 1, from_unit: 'kg', to_quantity: 1, to_unit: 'kg' },
+      ],
+    }));
+    expect(valid.success).toBe(true);
   });
 
   test('requires every wholesale tier unit to be available for sale', () => {

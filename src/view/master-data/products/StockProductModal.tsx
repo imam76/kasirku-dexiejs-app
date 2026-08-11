@@ -215,14 +215,22 @@ export default function StockProductModal({
   /**
    * Baris konversi jadi satu-satunya tempat satuan jual ditambahkan, jadi
    * batasan "bisa jadi satuan konversi" dari master satuan dipasang di sini.
+   * Satuan yang sudah dipakai di baris konversi produk ini tetap masuk daftar
+   * biarpun belakangan ditandai bukan satuan konversi di Manajemen Satuan —
+   * kalau tidak, baris lama jadi tidak bisa diedit karena satuannya sendiri
+   * hilang dari pilihan dropdown-nya.
    */
-  const unitMappingOptions = useMemo(
-    () =>
-      availableUnits
-        .filter((unit) => canUseAsConversionUnit(unit))
-        .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit })),
-    [availableUnits, canUseAsConversionUnit, unitDefinitionById],
-  );
+  const unitMappingOptions = useMemo(() => {
+    const usedConversionUnits = new Set<string>();
+    unitMappings.forEach((mapping) => {
+      usedConversionUnits.add(normalizeUnitKey(mapping.from_unit));
+      usedConversionUnits.add(normalizeUnitKey(mapping.to_unit));
+    });
+
+    return availableUnits
+      .filter((unit) => canUseAsConversionUnit(unit) || usedConversionUnits.has(normalizeUnitKey(unit)))
+      .map((unit) => ({ value: unit, label: unitDefinitionById.get(normalizeUnitKey(unit))?.name ?? unit }));
+  }, [availableUnits, canUseAsConversionUnit, unitDefinitionById, unitMappings]);
 
   const nextUnitMappingTarget = useMemo(() => unitMappingOptions.find((option) => {
     const targetUnit = normalizeUnitKey(option.value);
@@ -643,7 +651,6 @@ export default function StockProductModal({
                     purchaseUnit={purchaseUnit}
                     nextUnitMappingTarget={nextUnitMappingTarget}
                     unitMappingOptions={unitMappingOptions}
-                    unitMappings={unitMappings}
                     productUnits={productUnits}
                     productUnitOptions={productUnitOptions}
                   />
