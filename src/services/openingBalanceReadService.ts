@@ -7,6 +7,11 @@ import {
   type RemoteOpeningBalanceBundleDto,
   type RemoteOpeningBalanceLineDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type {
   InventoryLot,
   OpeningBalanceBatch,
@@ -180,40 +185,17 @@ const hasLocalUnsyncedBatchChanges = (batch: OpeningBalanceBatch | undefined) =>
   batch?.sync_status === 'pending' || batch?.sync_status === 'failed'
 );
 
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
-const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
-  if (!candidate) return current;
-  if (!current) return candidate;
-
-  const currentTimestamp = toTimestamp(current);
-  const candidateTimestamp = toTimestamp(candidate);
-
-  if (currentTimestamp !== null && candidateTimestamp !== null) {
-    return candidateTimestamp > currentTimestamp ? candidate : current;
-  }
-
-  return candidate > current ? candidate : current;
-};
-
-const getLatestLocalRemoteUpdatedAt = async () => {
+const getLatestLocalOpeningBalanceBatchUpdatedAt = async () => {
   const batches = await db.openingBalanceBatches.toArray();
-
-  return batches.reduce<string | undefined>((latest, batch) => {
-    const remoteUpdatedAt = batch.remote_updated_at
-      ?? (batch.sync_status === 'synced' ? batch.updated_at : undefined);
-    return getLaterUpdatedAt(latest, remoteUpdatedAt);
-  }, undefined);
+  return getLatestLocalRemoteUpdatedAt(
+    batches,
+    (batch) => batch.remote_updated_at
+      ?? (batch.sync_status === 'synced' ? batch.updated_at : undefined),
+  );
 };
 
 const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteOpeningBalanceBundleDto[]) => (
-  remoteBundles.reduce<string | undefined>(
-    (latest, bundle) => getLaterUpdatedAt(latest, bundle.batch.updated_at),
-    undefined,
-  )
+  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.batch.updated_at)
 );
 
 const addOpeningBalanceReadSyncResult = (
@@ -406,7 +388,7 @@ export const refreshOpeningBalancesFromPostgres = async (): Promise<OpeningBalan
   isRefreshingOpeningBalancesFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_OPENING_BALANCE_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalRemoteUpdatedAt();
+    let updatedAfter = await getLatestLocalOpeningBalanceBatchUpdatedAt();
 
     while (true) {
       const remoteBundles = await openingBalancePostgresAdapter.list({

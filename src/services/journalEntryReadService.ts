@@ -7,6 +7,11 @@ import {
   type RemoteJournalEntryDto,
   type RemoteJournalEntryLineDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { AccountType, JournalEntry, JournalEntryLine, JournalEntryStatus, JournalSourceType } from '@/types';
 
 export interface JournalEntryReadSyncResult {
@@ -126,40 +131,17 @@ const hasLocalUnsyncedChanges = (entry: JournalEntry) => (
   entry.sync_status === 'pending' || entry.sync_status === 'failed'
 );
 
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
-const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
-  if (!candidate) return current;
-  if (!current) return candidate;
-
-  const currentTimestamp = toTimestamp(current);
-  const candidateTimestamp = toTimestamp(candidate);
-
-  if (currentTimestamp !== null && candidateTimestamp !== null) {
-    return candidateTimestamp > currentTimestamp ? candidate : current;
-  }
-
-  return candidate > current ? candidate : current;
-};
-
-const getLatestLocalRemoteUpdatedAt = async () => {
+const getLatestLocalJournalEntryUpdatedAt = async () => {
   const entries = await db.journalEntries.toArray();
-
-  return entries.reduce<string | undefined>((latest, entry) => {
-    const remoteUpdatedAt = entry.remote_updated_at
-      ?? (entry.sync_status === 'synced' ? entry.updated_at : undefined);
-    return getLaterUpdatedAt(latest, remoteUpdatedAt);
-  }, undefined);
+  return getLatestLocalRemoteUpdatedAt(
+    entries,
+    (entry) => entry.remote_updated_at
+      ?? (entry.sync_status === 'synced' ? entry.updated_at : undefined),
+  );
 };
 
 const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteJournalEntryBundleDto[]) => (
-  remoteBundles.reduce<string | undefined>(
-    (latest, bundle) => getLaterUpdatedAt(latest, bundle.entry.updated_at),
-    undefined,
-  )
+  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.entry.updated_at)
 );
 
 const addJournalEntryReadSyncResult = (
@@ -257,7 +239,7 @@ export const refreshJournalEntriesFromPostgres = async (): Promise<JournalEntryR
   isRefreshingJournalEntriesFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_JOURNAL_ENTRY_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalRemoteUpdatedAt();
+    let updatedAfter = await getLatestLocalJournalEntryUpdatedAt();
 
     while (true) {
       const remoteBundles = await journalEntryPostgresAdapter.list({

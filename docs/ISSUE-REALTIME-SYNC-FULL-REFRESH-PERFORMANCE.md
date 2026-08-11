@@ -1067,3 +1067,61 @@ File yang diubah/ditambah pada slice ini:
   `accountingPeriodReadService.ts`, `closingRunReadService.ts`,
   `cooperativeAreaReadService.ts`, `fiscalYearReadService.ts`,
   `hrReadService.ts` (diubah)
+
+---
+
+**2026-08-11 — Cleanup: extract duplikat cursor helper di 8 entity delta-fetch lama**
+sudah dikerjakan. Ini item cleanup opsional yang sudah dicatat sejak slice 5 ("Ekstrak
+duplikat cursor helper di 8 entity yang delta fetch-nya dibangun sebelum
+`remoteRefreshCursor.ts` ada") — dipilih user sebagai arah lanjutan dibanding opsi lain
+(bangun pull-path baru untuk 12 tabel, desain reconciliation `quantity_remaining`, atau
+verifikasi live Postgres/LAN — yang terakhir tidak bisa dijalankan di sandbox ini karena
+tidak ada instance Postgres/Tauri live yang tersedia).
+
+Ringkasan perubahan — murni refactor, **tidak mengubah perilaku sama sekali**:
+
+- 7 file (`salesDocumentReadService.ts`, `journalEntryReadService.ts`,
+  `stockOpnameReadService.ts`, `productionReadService.ts`,
+  `openingBalanceReadService.ts`, `payrollReadService.ts` — payroll runs + employee
+  cash advances sekaligus, `fixedAssetReadService.ts`) masing-masing punya duplikat
+  lokal `toTimestamp()`/`getLaterUpdatedAt()`/reduce manual untuk cari cursor
+  `updated_at` terbaru (baik dari data lokal Dexie maupun dari batch remote yang baru
+  di-fetch). Semua duplikat ini dihapus, diganti import `getLatestLocalRemoteUpdatedAt`,
+  `getLatestRemoteUpdatedAt`, `toTimestamp` dari `src/services/shared/remoteRefreshCursor.ts`
+  (util yang sama yang sudah dipakai 25 entity lain sejak slice 1) — pola persis
+  `chartOfAccountReadService.ts` yang sudah lebih dulu memakainya.
+- Fungsi wrapper async per-entity yang membaca Dexie lokal (mis.
+  `getLatestLocalSalesDocumentUpdatedAt`, `getLatestLocalJournalEntryUpdatedAt`,
+  `getLatestLocalStockOpnameUpdatedAt`, `getLatestLocalProductionOrderUpdatedAt`,
+  `getLatestLocalOpeningBalanceBatchUpdatedAt`) dipertahankan/ditambahkan namanya
+  supaya tidak bentrok dengan nama fungsi generic yang diimport (2 file — payroll,
+  fixed assets — sudah punya nama unik dari awal jadi tidak perlu rename).
+  `fixedAssetReadService.ts` hanya mengimport `getLatestLocalRemoteUpdatedAt`/
+  `getLatestRemoteUpdatedAt` (tidak `toTimestamp`, karena file ini tidak memakainya
+  di luar `getLaterUpdatedAt` yang sudah dihapus — mengimport tapi tidak dipakai akan
+  kena lint unused-import).
+- Tidak ada perubahan Rust/migration — cleanup ini murni sisi TypeScript.
+
+Verifikasi yang sudah dilakukan:
+- `bun run build` (`tsc -b` + vite build): **pass**, tanpa error type.
+- `bun run lint`: **pass** — error/warning yang muncul (`JoinExistingHostModal.tsx`,
+  `CashFlowReport.tsx`, `StockCard.tsx`) sama persis dengan yang sudah dikonfirmasi
+  pre-existing di slice-slice sebelumnya, di file yang tidak disentuh perubahan ini.
+- Grep manual memastikan tidak ada sisa definisi lokal `getLaterUpdatedAt` di
+  ketujuh file setelah refactor.
+- `cargo check` **tidak dijalankan** — tidak relevan, tidak ada file Rust yang disentuh
+  slice ini.
+
+Dengan ini, seluruh 32 read service (baik yang dibangun sebelum maupun sesudah
+`remoteRefreshCursor.ts` ada) sekarang memakai 1 implementasi cursor helper yang sama,
+tidak ada lagi duplikasi. Sisa pekerjaan Bagian 2 yang **disadari tapi belum
+dikerjakan** tidak berubah dari catatan slice 5 (12 tabel tanpa jalur pull, reconciliation
+`quantity_remaining`, push langsung setelah transaksi, dan yang paling penting: verifikasi
+end-to-end terhadap PostgreSQL nyata/LAN multi-PC — masih belum pernah dilakukan sama
+sekali).
+
+File yang diubah pada slice ini:
+- `src/services/salesDocumentReadService.ts`, `journalEntryReadService.ts`,
+  `stockOpnameReadService.ts`, `productionReadService.ts`,
+  `openingBalanceReadService.ts`, `payrollReadService.ts`,
+  `fixedAssetReadService.ts` (diubah)

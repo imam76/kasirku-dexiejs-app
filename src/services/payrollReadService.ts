@@ -10,6 +10,11 @@ import {
   type RemotePayrollRunDto,
   type RemotePayrollRunItemDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type {
   EmployeeCashAdvance,
   EmployeeCashAdvanceRepayment,
@@ -63,25 +68,6 @@ const isCashAdvanceStatus = (status: string): status is EmployeeCashAdvanceStatu
 const isCashAdvanceRepaymentStatus = (status: string): status is EmployeeCashAdvanceRepaymentStatus => (
   VALID_CASH_ADVANCE_REPAYMENT_STATUSES.includes(status as EmployeeCashAdvanceRepaymentStatus)
 );
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
-const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
-  if (!candidate) return current;
-  if (!current) return candidate;
-
-  const currentTimestamp = toTimestamp(current);
-  const candidateTimestamp = toTimestamp(candidate);
-
-  if (currentTimestamp !== null && candidateTimestamp !== null) {
-    return candidateTimestamp > currentTimestamp ? candidate : current;
-  }
-
-  return candidate > current ? candidate : current;
-};
 
 const hasLocalUnsyncedChanges = (record: { sync_status?: string }) => (
   record.sync_status === 'pending' || record.sync_status === 'failed'
@@ -246,36 +232,28 @@ const mapRemoteCashAdvanceRepaymentToLocal = (
 
 const getLatestPayrollRunRemoteUpdatedAt = async () => {
   const runs = await db.payrollRuns.toArray();
-
-  return runs.reduce<string | undefined>((latest, run) => {
-    const remoteUpdatedAt = run.remote_updated_at
-      ?? (run.sync_status === 'synced' ? run.updated_at : undefined);
-    return getLaterUpdatedAt(latest, remoteUpdatedAt);
-  }, undefined);
+  return getLatestLocalRemoteUpdatedAt(
+    runs,
+    (run) => run.remote_updated_at
+      ?? (run.sync_status === 'synced' ? run.updated_at : undefined),
+  );
 };
 
 const getLatestCashAdvanceRemoteUpdatedAt = async () => {
   const cashAdvances = await db.employeeCashAdvances.toArray();
-
-  return cashAdvances.reduce<string | undefined>((latest, cashAdvance) => {
-    const remoteUpdatedAt = cashAdvance.remote_updated_at
-      ?? (cashAdvance.sync_status === 'synced' ? cashAdvance.updated_at : undefined);
-    return getLaterUpdatedAt(latest, remoteUpdatedAt);
-  }, undefined);
+  return getLatestLocalRemoteUpdatedAt(
+    cashAdvances,
+    (cashAdvance) => cashAdvance.remote_updated_at
+      ?? (cashAdvance.sync_status === 'synced' ? cashAdvance.updated_at : undefined),
+  );
 };
 
 const getLatestRemotePayrollBundleUpdatedAt = (remoteBundles: RemotePayrollRunBundleDto[]) => (
-  remoteBundles.reduce<string | undefined>(
-    (latest, bundle) => getLaterUpdatedAt(latest, bundle.run.updated_at),
-    undefined,
-  )
+  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.run.updated_at)
 );
 
 const getLatestRemoteCashAdvanceBundleUpdatedAt = (remoteBundles: RemoteEmployeeCashAdvanceBundleDto[]) => (
-  remoteBundles.reduce<string | undefined>(
-    (latest, bundle) => getLaterUpdatedAt(latest, bundle.cash_advance.updated_at),
-    undefined,
-  )
+  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.cash_advance.updated_at)
 );
 
 const addPayrollReadSyncResult = (

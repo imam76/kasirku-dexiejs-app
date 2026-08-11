@@ -7,6 +7,11 @@ import {
   type RemoteProductionOrderDto,
   type RemoteProductionOrderItemDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type {
   ProductionOrder,
   ProductionOrderCost,
@@ -59,25 +64,6 @@ const matchesDateRange = (value: string, startDate?: string, endDate?: string) =
   if (startDate && time < new Date(startDate).getTime()) return false;
   if (endDate && time > new Date(endDate).getTime()) return false;
   return true;
-};
-
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
-const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
-  if (!candidate) return current;
-  if (!current) return candidate;
-
-  const currentTimestamp = toTimestamp(current);
-  const candidateTimestamp = toTimestamp(candidate);
-
-  if (currentTimestamp !== null && candidateTimestamp !== null) {
-    return candidateTimestamp > currentTimestamp ? candidate : current;
-  }
-
-  return candidate > current ? candidate : current;
 };
 
 const hasLocalUnsyncedChanges = (order: ProductionOrder) => (
@@ -164,21 +150,17 @@ const mapRemoteProductionOrderCostToLocal = (
   updated_at: remoteCost.updated_at,
 });
 
-const getLatestLocalRemoteUpdatedAt = async () => {
+const getLatestLocalProductionOrderUpdatedAt = async () => {
   const orders = await db.productionOrders.toArray();
-
-  return orders.reduce<string | undefined>((latest, order) => {
-    const remoteUpdatedAt = order.remote_updated_at
-      ?? (order.sync_status === 'synced' ? order.updated_at : undefined);
-    return getLaterUpdatedAt(latest, remoteUpdatedAt);
-  }, undefined);
+  return getLatestLocalRemoteUpdatedAt(
+    orders,
+    (order) => order.remote_updated_at
+      ?? (order.sync_status === 'synced' ? order.updated_at : undefined),
+  );
 };
 
 const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteProductionOrderBundleDto[]) => (
-  remoteBundles.reduce<string | undefined>(
-    (latest, bundle) => getLaterUpdatedAt(latest, bundle.order.updated_at),
-    undefined,
-  )
+  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.order.updated_at)
 );
 
 const addProductionOrderReadSyncResult = (
@@ -289,7 +271,7 @@ export const refreshProductionOrdersFromPostgres = async (): Promise<ProductionO
   isRefreshingProductionOrdersFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PRODUCTION_ORDER_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalRemoteUpdatedAt();
+    let updatedAfter = await getLatestLocalProductionOrderUpdatedAt();
 
     while (true) {
       const remoteBundles = await productionOrderPostgresAdapter.list({

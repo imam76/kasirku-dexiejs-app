@@ -7,6 +7,10 @@ import {
   type RemoteFixedAssetDepreciationRunBundleDto,
   type RemoteFixedAssetDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+} from '@/services/shared/remoteRefreshCursor';
 import type { FixedAsset, FixedAssetDepreciationRun } from '@/types';
 
 export interface FixedAssetReadSyncResult {
@@ -28,20 +32,6 @@ const addReadSyncResult = (aggregate: FixedAssetReadSyncResult, next: FixedAsset
   aggregate.inserted += next.inserted;
   aggregate.updated += next.updated;
   aggregate.skipped += next.skipped;
-};
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
-  if (!candidate) return current;
-  if (!current) return candidate;
-  const currentTimestamp = toTimestamp(current);
-  const candidateTimestamp = toTimestamp(candidate);
-  if (currentTimestamp !== null && candidateTimestamp !== null) {
-    return candidateTimestamp > currentTimestamp ? candidate : current;
-  }
-  return candidate > current ? candidate : current;
 };
 const hasPending = (record: { sync_status?: string }) => record.sync_status === 'pending' || record.sync_status === 'failed';
 const shouldApply = (
@@ -147,34 +137,28 @@ const canRefresh = () => isTauriRuntime() && (typeof navigator === 'undefined' |
 
 const getLatestLocalFixedAssetUpdatedAt = async () => {
   const assets = await db.fixedAssets.toArray();
-  return assets.reduce<string | undefined>((latest, asset) => {
-    const remoteUpdatedAt = asset.remote_updated_at
-      ?? (asset.sync_status === 'synced' ? asset.updated_at : undefined);
-    return getLaterUpdatedAt(latest, remoteUpdatedAt);
-  }, undefined);
+  return getLatestLocalRemoteUpdatedAt(
+    assets,
+    (asset) => asset.remote_updated_at
+      ?? (asset.sync_status === 'synced' ? asset.updated_at : undefined),
+  );
 };
 
 const getLatestRemoteFixedAssetUpdatedAt = (remoteAssets: RemoteFixedAssetDto[]) => (
-  remoteAssets.reduce<string | undefined>(
-    (latest, asset) => getLaterUpdatedAt(latest, asset.updated_at),
-    undefined,
-  )
+  getLatestRemoteUpdatedAt(remoteAssets, (asset) => asset.updated_at)
 );
 
 const getLatestLocalFixedAssetRunUpdatedAt = async () => {
   const runs = await db.fixedAssetDepreciationRuns.toArray();
-  return runs.reduce<string | undefined>((latest, run) => {
-    const remoteUpdatedAt = run.remote_updated_at
-      ?? (run.sync_status === 'synced' ? run.updated_at : undefined);
-    return getLaterUpdatedAt(latest, remoteUpdatedAt);
-  }, undefined);
+  return getLatestLocalRemoteUpdatedAt(
+    runs,
+    (run) => run.remote_updated_at
+      ?? (run.sync_status === 'synced' ? run.updated_at : undefined),
+  );
 };
 
 const getLatestRemoteFixedAssetRunUpdatedAt = (bundles: RemoteFixedAssetDepreciationRunBundleDto[]) => (
-  bundles.reduce<string | undefined>(
-    (latest, bundle) => getLaterUpdatedAt(latest, bundle.run.updated_at),
-    undefined,
-  )
+  getLatestRemoteUpdatedAt(bundles, (bundle) => bundle.run.updated_at)
 );
 
 export const refreshFixedAssetsFromPostgres = async () => {

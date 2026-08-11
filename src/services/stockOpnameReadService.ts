@@ -6,6 +6,11 @@ import {
   type RemoteStockOpnameDto,
   type RemoteStockOpnameItemDto,
 } from '@/services/postgresAdapter';
+import {
+  getLatestLocalRemoteUpdatedAt,
+  getLatestRemoteUpdatedAt,
+  toTimestamp,
+} from '@/services/shared/remoteRefreshCursor';
 import type { Product, StockOpname, StockOpnameItem, StockOpnameStatus } from '@/types';
 import { calculateStockOpnameSummary } from '@/utils/stockOpname/calculateStockOpnameVariance';
 
@@ -124,40 +129,17 @@ const hasLocalUnsyncedChanges = (opname: StockOpname) => (
   opname.sync_status === 'pending' || opname.sync_status === 'failed'
 );
 
-const toTimestamp = (value: string) => {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
-const getLaterUpdatedAt = (current: string | undefined, candidate: string | undefined) => {
-  if (!candidate) return current;
-  if (!current) return candidate;
-
-  const currentTimestamp = toTimestamp(current);
-  const candidateTimestamp = toTimestamp(candidate);
-
-  if (currentTimestamp !== null && candidateTimestamp !== null) {
-    return candidateTimestamp > currentTimestamp ? candidate : current;
-  }
-
-  return candidate > current ? candidate : current;
-};
-
-const getLatestLocalRemoteUpdatedAt = async () => {
+const getLatestLocalStockOpnameUpdatedAt = async () => {
   const opnames = await db.stockOpnames.toArray();
-
-  return opnames.reduce<string | undefined>((latest, opname) => {
-    const remoteUpdatedAt = opname.remote_updated_at
-      ?? (opname.sync_status === 'synced' ? opname.updated_at : undefined);
-    return getLaterUpdatedAt(latest, remoteUpdatedAt);
-  }, undefined);
+  return getLatestLocalRemoteUpdatedAt(
+    opnames,
+    (opname) => opname.remote_updated_at
+      ?? (opname.sync_status === 'synced' ? opname.updated_at : undefined),
+  );
 };
 
 const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteStockOpnameBundleDto[]) => (
-  remoteBundles.reduce<string | undefined>(
-    (latest, bundle) => getLaterUpdatedAt(latest, bundle.opname.updated_at),
-    undefined,
-  )
+  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.opname.updated_at)
 );
 
 const addStockOpnameReadSyncResult = (
@@ -305,7 +287,7 @@ export const refreshStockOpnamesFromPostgres = async (): Promise<StockOpnameRead
   isRefreshingStockOpnamesFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_STOCK_OPNAME_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalRemoteUpdatedAt();
+    let updatedAfter = await getLatestLocalStockOpnameUpdatedAt();
 
     while (true) {
       const remoteBundles = await stockOpnamePostgresAdapter.list({
