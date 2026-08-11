@@ -76,9 +76,10 @@ pub async fn postgres_post_cooperative_loan_payment_batch(
 pub async fn postgres_list_cooperative_payment_approval_requests(
     state: State<'_, PostgresState>,
     session_token: String,
+    limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CooperativePaymentApprovalRequestDto>> {
     let pool = state.pool()?;
-    cooperative_payment_repository::list_payment_approval_requests(&pool, session_token)
+    cooperative_payment_repository::list_payment_approval_requests(&pool, session_token, limit)
         .await
         .map_err(cooperative_mutation_error)
 }

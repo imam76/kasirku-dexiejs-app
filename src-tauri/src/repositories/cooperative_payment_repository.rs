@@ -2594,13 +2594,15 @@ async fn post_loan_payment_internal(
 pub async fn list_payment_approval_requests(
     pool: &PgPool,
     session_token: String,
+    limit: Option<i64>,
 ) -> Result<Vec<CooperativePaymentApprovalRequestDto>, CooperativeMutationError> {
     let mut tx = pool.begin().await?;
     require_actor(&mut tx, &session_token, PAYMENT_APPROVAL_PERMISSION).await?;
     let requests = sqlx::query_as::<_, CooperativePaymentApprovalRequestDto>(concat!(
         cooperative_payment_approval_select!(),
-        " ORDER BY requested_at DESC, created_at DESC"
+        " ORDER BY requested_at DESC, created_at DESC LIMIT $1"
     ))
+    .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(&mut *tx)
     .await?;
     tx.commit().await?;

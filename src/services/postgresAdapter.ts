@@ -3114,11 +3114,11 @@ export const cooperativePostingPostgresAdapter = {
     );
   },
 
-  async listApprovalRequests(sessionToken: string) {
+  async listApprovalRequests(sessionToken: string, limit?: number) {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCooperativePaymentApprovalRequestDto[]>(
       'postgres_list_cooperative_payment_approval_requests',
-      { sessionToken },
+      { sessionToken, limit },
     );
   },
 

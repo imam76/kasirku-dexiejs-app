@@ -1125,3 +1125,143 @@ File yang diubah pada slice ini:
   `stockOpnameReadService.ts`, `productionReadService.ts`,
   `openingBalanceReadService.ts`, `payrollReadService.ts`,
   `fixedAssetReadService.ts` (diubah)
+
+---
+
+**2026-08-11 — Audit menyeluruh 8 dari 12 tabel tanpa jalur pull** (murni riset,
+tidak ada perubahan kode). User memilih arah "bangun pull-path 12 tabel baru" sebagai
+kelanjutan setelah cleanup cursor helper di atas. 4 dari 12 tabel adalah restaurant POS
+yang sudah di-skip permanen atas keputusan user sebelumnya (lihat slice 3) — audit ini
+menyisir 8 sisanya secara mendalam (skema Postgres, kode Rust, pemakaian frontend,
+skema Dexie, mapping `realtimeSyncTableMap.ts`) sebelum menulis kode apa pun.
+
+**Temuan utama: ke-8 tabel ini BUKAN 8 kandidat delta-fetch yang seragam seperti
+slice 1-5 di atas.** Berbeda dari rollout sebelumnya (pola "ganti `.list()` jadi
+cursor pagination" yang bisa direplikasi langsung), audit menemukan tiap tabel
+punya alasan desain sendiri kenapa belum ada pull-path:
+
+1. **`server_auth_sessions`** — **rekomendasi: SKIP PERMANEN, ini boundary keamanan
+   bukan gap.** Tidak ada `updated_at`/`deleted_at` di skema, dan yang lebih penting:
+   tidak ada command `list` yang mengekspos tabel ini ke frontend sama sekali (beda
+   dari 7 tabel lain yang minimal listable) — `token` adalah bearer credential sesi
+   user/device lain, replikasi ke semua client via Dexie = risiko session hijacking.
+   Rust hanya expose `authenticate`/`revoke` (`auth_commands.rs:11-34`).
+
+2. **`cooperative_payment_approval_requests`** — **sudah tepat sebagai on-demand
+   React Query, bukan Dexie**, dan ini keputusan desain yang benar (bukan kelalaian):
+   fitur maker-checker approval butuh state paling terbaru + `session_token` live
+   untuk permission-check server-side, snapshot Dexie offline tidak cocok (`useCooperativeInstallments.tsx:125-129`
+   → `listCooperativePaymentApprovalRequests`, `cooperativeLoanService.ts:3395-3403`).
+   Satu-satunya gap nyata: `list_payment_approval_requests` (`cooperative_payment_repository.rs:2594-2608`)
+   tidak punya `updated_after`/`limit` — full-fetch tanpa batas, bisa membesar tanpa
+   batas seiring histori approval bertambah. Perbaikan pagination ini valid dikerjakan,
+   tapi terpisah dari "bangun pull-path Dexie".
+
+3. **`cooperative_payment_policy`** — singleton 2 kolom (`max_backdate_days`,
+   `max_future_minutes`), tidak ada command frontend, nol referensi di UI. Prioritas
+   sangat rendah, tidak berkontribusi ke traffic/performance.
+
+4. **`cooperative_posting_accounts`** — **push-only sudah tepat by design.** Client
+   derive data akun dari `chartOfAccounts` lokal (sudah delta-fetch) lalu push
+   role-mapping ke server (`ensureServerPostingAccounts()`, `cooperativeLoanService.ts:2438-2480`).
+   Tidak ada command list yang diekspos, dan tidak perlu — source of truth (chart of
+   accounts) sudah sync duluan.
+
+5-6. **`product_recipes` / `product_recipe_items`** — **fitur BOM/resep belum pernah
+   dibangun sama sekali**, bukan gap pull-path. Skema Postgres + Dexie + TS types
+   sudah di-scaffold (Dexie sejak migration v56) tapi **nol kode Rust** (repo/command/model)
+   dan **nol UI/usage frontend** — dead schema di kedua sisi. Butuh keputusan produk
+   dulu (masih diinginkan atau tidak) sebelum bicara pull-path.
+
+7-8. **`purchase_cost_reconciliations` / `purchase_cost_reconciliation_items`** —
+   kondisi terbalik dari kasus 5-6: **Dexie aktif dipakai** sebagai audit-log lokal
+   saat finalisasi HPP pembelian (`purchaseCostReconciliationService.ts`), tapi
+   **Postgres-nya write-orphaned total** (nol kode Rust, tidak pernah di-enqueue ke
+   syncQueue, tabel Postgres tidak pernah ke-INSERT oleh app manapun sejak awal).
+   Append-only, `created_at TEXT` saja (tanpa `updated_at`) — kalau visibilitas
+   lintas-device untuk histori rekonsiliasi ini memang diinginkan, ini justru salah
+   satu yang paling gampang dari 8 tabel untuk dibangun (pola cursor `created_at`
+   sama seperti `stock_mutations`/`inventory_lot_consumptions`, tidak ada isu
+   tombstone/conflict karena immutable). Kalau tidak, skema Postgres-nya kandidat
+   cleanup (dead table).
+
+**Kesimpulan**: dari 8 tabel, **6 di antaranya (`server_auth_sessions`,
+`cooperative_payment_approval_requests`, `cooperative_payment_policy`,
+`cooperative_posting_accounts`, dan secara tidak langsung 5-6/7-8 karena butuh
+keputusan produk dulu) tidak punya jalan lurus untuk "sekadar ditambah pull-path"**
+seperti pola delta-fetch rollout Bagian 2 sebelumnya. Item aksi konkret yang tersisa
+dari audit ini, semuanya butuh keputusan terpisah dari user, bukan pekerjaan yang bisa
+langsung dieksekusi dengan pola replikasi seperti slice 1-5:
+- Tambah `updated_after`/`limit` ke `list_payment_approval_requests` (kecil, aman,
+  murni pagination hygiene — TIDAK mengubah on-demand-nya jadi Dexie pull).
+- Keputusan produk: fitur resep produksi (`product_recipes`) masih diinginkan atau
+  schema mati dibersihkan?
+- Keputusan produk: histori rekonsiliasi HPP pembelian perlu lintas-device (bangun
+  push+pull dari nol) atau cukup lokal-only (schema Postgres dibersihkan)?
+
+**Tidak ada perubahan kode di audit ini** — murni riset, tidak menyentuh file
+manapun di luar dokumen ini.
+
+---
+
+**2026-08-11 — Item aksi #1 dari audit di atas dikerjakan: pagination untuk
+`list_payment_approval_requests`.** Dari 3 item aksi yang diidentifikasi audit,
+user memilih yang paling kecil/aman lebih dulu — 2 item lain (nasib
+`product_recipes` dan `purchase_cost_reconciliations`) adalah keputusan produk,
+belum diputuskan, di luar scope slice ini.
+
+Ringkasan perubahan (murni menambah `LIMIT`, bukan konversi ke cursor pagination —
+lihat rasionalisasi di bawah):
+
+1. **Rust — `cooperative_payment_repository.rs::list_payment_approval_requests`**:
+   tanda tangan fungsi ditambah parameter `limit: Option<i64>`. Query ditambah
+   `LIMIT $1` di akhir (setelah `ORDER BY requested_at DESC, created_at DESC` yang
+   sudah ada), `.bind(limit.unwrap_or(500).clamp(1, 1000))` — pola clamp yang sama
+   persis dengan seluruh repository delta-fetch lain (mis.
+   `chart_of_account_repository.rs:34`), untuk konsistensi angka default/batas atas
+   walau di sini tidak dipakai sebagai page size loop.
+2. **`cooperative_commands.rs::postgres_list_cooperative_payment_approval_requests`**:
+   diteruskan parameter `limit: Option<i64>` baru ke repository.
+3. **`postgresAdapter.ts::cooperativePostingPostgresAdapter.listApprovalRequests`**:
+   tanda tangan ditambah `limit?: number` opsional, diteruskan ke `invoke()`.
+   **`cooperativeLoanService.ts::listCooperativePaymentApprovalRequests` (satu-satunya
+   pemanggil, dipakai `useCooperativeInstallments.tsx:127` sebagai `queryFn`) TIDAK
+   diubah** — tetap memanggil tanpa argumen `limit`, sehingga default Rust (500)
+   yang berlaku otomatis.
+
+**Kenapa `LIMIT` saja, bukan `updated_after`/cursor pagination penuh seperti
+slice 1-5**: dicek dulu bagaimana data ini dipakai di UI
+(`CooperativeInstallmentManagement.tsx:509-523`) — hasilnya dirender di 1 tabel
+AntD dengan client-side pagination (`pageSize: 8`) yang menampilkan SELURUH histori
+(PENDING/APPROVED/REJECTED, bukan cuma yang pending) sebagai riwayat approval yang
+bisa di-scroll. Ini bukan cursor sync ke Dexie (tidak ada local cache untuk
+diselisihkan), tapi fetch-ulang penuh tiap kali komponen mount — jadi
+`updated_after` tidak relevan di sini (tidak ada "sejak kapan" yang bermakna untuk
+di-diff). Risiko sebenarnya yang diangkat audit murni "SELECT tanpa LIMIT pada
+tabel yang terus bertambah seiring waktu (reversal request, dst) akan makin berat
+tiap kali di-fetch" — `LIMIT 500` (terurut dari yang paling baru) membatasi payload
+tanpa mengubah arsitektur on-demand yang sudah tepat, dan tidak memotong visibilitas
+praktis (500 baris riwayat approval jauh di atas kebutuhan browsing harian/mingguan).
+
+Verifikasi yang sudah dilakukan:
+- `cargo check` di `src-tauri/`: **pass**, tanpa error.
+- `bun run build` (`tsc -b` + vite build): **pass**, tanpa error type.
+- `bun run lint`: **pass** — 1 error (`JoinExistingHostModal.tsx`) + 2 warning
+  (`CashFlowReport.tsx`, `StockCard.tsx`) sama persis dengan yang sudah dikonfirmasi
+  pre-existing di slice-slice sebelumnya, di file yang tidak disentuh perubahan ini.
+
+**Belum diuji terhadap PostgreSQL nyata** — perilaku `LIMIT` di query belum dicoba
+terhadap dataset approval request sungguhan, sama seperti caveat semua slice
+sebelumnya.
+
+Sisa item dari audit 8-tabel yang **masih menunggu keputusan produk user** (di luar
+scope slice ini):
+- Nasib `product_recipes`/`product_recipe_items` — bangun fitur resep dari nol, atau
+  bersihkan schema mati?
+- Nasib `purchase_cost_reconciliations`/`items` — bangun push+pull dari nol supaya
+  lintas-device, atau terima lokal-only dan bersihkan schema Postgres mati?
+
+File yang diubah pada slice ini:
+- `src-tauri/src/repositories/cooperative_payment_repository.rs` (diubah)
+- `src-tauri/src/commands/cooperative_commands.rs` (diubah)
+- `src/services/postgresAdapter.ts` (diubah)
