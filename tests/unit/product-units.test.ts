@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import type { Product, PurchaseDocumentItem } from '@/types';
-import { resolveUnitCategory } from '@/constants/units';
 import { createStockSchema } from '@/lib/validations/stock';
 import {
   getProductDocumentUnits,
@@ -397,27 +396,25 @@ describe('validasi form produk', () => {
     expect(result.success).toBe(true);
   });
 
-  test('menolak kemasan yang ditulis lebih kecil dari satuan hitungan', () => {
+  test('menerima kemasan tertulis "kebalik" karena arah sudah ditentukan lewat from/to, bukan posisi tetap', () => {
     const result = schema.safeParse(formData({
       purchase_unit: 'box',
       selling_unit: 'pcs',
       sellable_units: ['box', 'pcs'],
-      // "1 pcs = 12 box" — kebalik, satu pcs tidak mungkin berisi 12 box.
+      // "1 pcs = 12 box" — tidak lagi ditolak, user yang memilih arah lewat from/to.
       unit_mappings: [{ from_quantity: 1, from_unit: 'pcs', to_quantity: 12, to_unit: 'box' }],
     }));
 
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.some((issue) => issue.path.join('.') === 'unit_mappings.0.to_quantity')).toBe(true);
+    expect(result.success).toBe(true);
   });
 
-  test('menolak kemasan di atas satuan hitungan yang isinya kurang dari satu', () => {
+  test('menerima kemasan besar dengan isi pecahan tanpa memaksa arah tertentu', () => {
     const result = schema.safeParse(formData({
       sellable_units: ['pcs', 'box'],
       unit_mappings: [{ from_quantity: 12, from_unit: 'box', to_quantity: 1, to_unit: 'pcs' }],
     }));
 
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.some((issue) => issue.path.join('.') === 'unit_mappings.0.to_quantity')).toBe(true);
+    expect(result.success).toBe(true);
   });
 
   test('menerima produk tanpa harga beli dan harga jual', () => {
@@ -436,12 +433,8 @@ describe('validasi form produk', () => {
     expect(result.error?.issues.some((issue) => issue.path.join('.') === 'selling_price')).toBe(true);
   });
 
-  test('menerima satuan kemasan buatan pengguna yang terdaftar di master unit', () => {
-    const schemaWithMasterUnits = createStockSchema(undefined, {
-      getUnitCategory: (unit) => resolveUnitCategory(unit, unit === 'karton' ? 'package' : undefined),
-    });
-
-    const result = schemaWithMasterUnits.safeParse(formData({
+  test('menerima satuan kemasan buatan pengguna', () => {
+    const result = schema.safeParse(formData({
       sellable_units: ['pcs', 'karton'],
       unit_mappings: [{ from_quantity: 1, from_unit: 'karton', to_quantity: 24, to_unit: 'pcs' }],
     }));

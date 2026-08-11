@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { Alert, Dropdown, Input, InputNumber, Select, Switch } from 'antd';
 import { Banknote, CheckCircle2, ChevronDown, CreditCard, DollarSign, NotebookPen, Plus, QrCode, Trash2, X } from 'lucide-react';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
@@ -86,6 +87,24 @@ export default function PosSplitPaymentEditor({
   const isDialog = layout === 'dialog';
   const hasValidPaymentMethod = methods.some((method) => method.isValid);
   const useSplitAction = isDesktopViewport && Boolean(onRecordExpense);
+
+  // Scoped to the full-screen payment dialog only (layout === 'dialog') so the
+  // embedded mobile/tablet payment editor never registers a second listener.
+  useHotkeys('mod+enter', () => {
+    if (canConfirm) void onConfirm();
+  }, {
+    enabled: isDialog,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [canConfirm, isDialog, onConfirm]);
+
+  useHotkeys('f9', () => {
+    if (canAdd) onAdd();
+  }, {
+    enabled: isDialog,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [canAdd, isDialog, onAdd]);
 
   const handleRecordExpense = async () => {
     if (!onRecordExpense || isRecordingExpense) return;
@@ -312,6 +331,9 @@ export default function PosSplitPaymentEditor({
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 py-2 font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50"
           >
             <Plus size={17} /> {t('payment.add')}
+            {isDialog && (
+              <kbd className="rounded border border-blue-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-blue-700">F9</kbd>
+            )}
           </button>
         )}
 
@@ -363,6 +385,9 @@ export default function PosSplitPaymentEditor({
           >
             <CheckCircle2 size={16} className="shrink-0" />
             <span className="truncate">{confirmLabel ?? t('payment.confirmPayment')}</span>
+            {isDialog && (
+              <kbd className="hidden shrink-0 rounded border border-white/30 bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-white/90 sm:inline-block">Ctrl+Enter</kbd>
+            )}
           </button>
           {useSplitAction ? (
             <Dropdown

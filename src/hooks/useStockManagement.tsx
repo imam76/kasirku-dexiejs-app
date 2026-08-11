@@ -22,7 +22,7 @@ import {
 } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
-import { DEFAULT_CONVERSIONS, normalizeUnitKey, resolveUnitCategory } from '@/constants/units';
+import { DEFAULT_CONVERSIONS } from '@/constants/units';
 import { materializeWholesalePriceUnits } from '@/utils/pricing';
 
 export type { StockFormData };
@@ -43,19 +43,9 @@ export const useStockManagement = () => {
     queryFn: () => db.unitConversions.toArray(),
   });
 
-  // Validasi harus menilai satuan pakai master unit, bukan hanya daftar bawaan,
-  // supaya satuan kemasan buatan pengguna tidak ditolak diam-diam.
-  const unitDefinitions = useLiveQuery(() => db.units.toArray(), [], []);
-  const unitTypeById = useMemo(
-    () => new Map(unitDefinitions.map((unit) => [normalizeUnitKey(unit.id), unit.type])),
-    [unitDefinitions],
-  );
   const stockSchema = useMemo(
-    () => createStockSchema(t, {
-      globalConversions: unitConversions,
-      getUnitCategory: (unit) => resolveUnitCategory(unit, unitTypeById.get(normalizeUnitKey(unit))),
-    }),
-    [t, unitConversions, unitTypeById],
+    () => createStockSchema(t, { globalConversions: unitConversions }),
+    [t, unitConversions],
   );
 
 

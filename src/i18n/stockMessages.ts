@@ -214,7 +214,6 @@ export const stockMessages = {
         'stock.validation.baseUnitMustMatch': 'Satuan dasar harus sama dengan Satuan Dasar Stok',
         'stock.validation.unitAlreadyBase': 'Satuan ini sudah menjadi Satuan Dasar Stok',
         'stock.validation.duplicateUnitConversion': 'Konversi satuan produk tidak boleh duplikat',
-        'stock.validation.packageMustBeLarger': 'Satu {packageUnit} harus berisi lebih dari satu {countUnit}. Angkanya kebalik — tulis jumlah {countUnit} di sisi kiri, mis. 12 {countUnit} = 1 {packageUnit}.',
         'stock.validation.unitNeedsRatio': 'Satuan {unit} perlu ratio di Konversi Unit',
         'stock.validation.incompatibleUnitCategory': 'Satuan {unit} tidak sekategori dengan Satuan Dasar Stok',
     },
@@ -433,7 +432,6 @@ export const stockMessages = {
         'stock.validation.baseUnitMustMatch': 'Base unit must match Base Stock Unit',
         'stock.validation.unitAlreadyBase': 'This unit is already the Base Stock Unit',
         'stock.validation.duplicateUnitConversion': 'Product unit conversion cannot be duplicated',
-        'stock.validation.packageMustBeLarger': 'One {packageUnit} must hold more than one {countUnit}. The numbers are the wrong way round — put the {countUnit} count on the left, e.g. 12 {countUnit} = 1 {packageUnit}.',
         'stock.validation.unitNeedsRatio': 'Unit {unit} needs a ratio in Unit Conversion',
         'stock.validation.incompatibleUnitCategory': 'Unit {unit} is not in the same category as the Base Stock Unit',
     }

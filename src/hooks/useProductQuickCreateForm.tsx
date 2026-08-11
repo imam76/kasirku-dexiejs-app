@@ -1,9 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
-import { DEFAULT_CONVERSIONS, normalizeUnitKey, resolveUnitCategory } from '@/constants/units';
+import { DEFAULT_CONVERSIONS } from '@/constants/units';
 import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import { createStockSchema, type StockFormData } from '@/lib/validations/stock';
@@ -41,17 +40,9 @@ export const useProductQuickCreateForm = (defaultValues?: Partial<StockFormData>
     queryFn: () => db.unitConversions.toArray(),
   });
 
-  const unitDefinitions = useLiveQuery(() => db.units.toArray(), [], []);
-  const unitTypeById = useMemo(
-    () => new Map(unitDefinitions.map((unit) => [normalizeUnitKey(unit.id), unit.type])),
-    [unitDefinitions],
-  );
   const stockSchema = useMemo(
-    () => createStockSchema(t, {
-      globalConversions: unitConversions,
-      getUnitCategory: (unit) => resolveUnitCategory(unit, unitTypeById.get(normalizeUnitKey(unit))),
-    }),
-    [t, unitConversions, unitTypeById],
+    () => createStockSchema(t, { globalConversions: unitConversions }),
+    [t, unitConversions],
   );
 
   const form = useForm<StockFormData>({

@@ -184,6 +184,28 @@ describe('stock multi-unit validation', () => {
     expect(valid.success).toBe(true);
   });
 
+  test('allows unconventional package/count ratios since from/to already lets the user pick the direction', () => {
+    const schema = createStockSchema(undefined, { globalConversions: [] });
+
+    const packageSmallerThanCount = schema.safeParse(buildStockForm({
+      sellable_units: ['kg', 'box', 'pcs'],
+      unit_mappings: [
+        { from_quantity: 1, from_unit: 'kg', to_quantity: 5, to_unit: 'box' },
+        { from_quantity: 1, from_unit: 'box', to_quantity: 1, to_unit: 'pcs' },
+      ],
+    }));
+    expect(packageSmallerThanCount.success).toBe(true);
+
+    const inverted = schema.safeParse(buildStockForm({
+      sellable_units: ['kg', 'box', 'pcs'],
+      unit_mappings: [
+        { from_quantity: 1, from_unit: 'kg', to_quantity: 5, to_unit: 'box' },
+        { from_quantity: 1, from_unit: 'pcs', to_quantity: 20, to_unit: 'box' },
+      ],
+    }));
+    expect(inverted.success).toBe(true);
+  });
+
   test('requires every wholesale tier unit to be available for sale', () => {
     const schema = createStockSchema(undefined, { globalConversions: [] });
     const result = schema.safeParse(buildStockForm({

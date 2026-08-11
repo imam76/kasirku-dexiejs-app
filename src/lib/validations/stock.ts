@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  DEFAULT_CONVERSIONS,
-  inferUnitCategory,
-  normalizeUnitKey,
-  type UnitCategory,
-} from '@/constants/units';
+import { DEFAULT_CONVERSIONS, normalizeUnitKey } from '@/constants/units';
 import { defaultLocale, translate, type TranslationKey } from '@/i18n/messages';
 import type { UnitConversion } from '@/types';
 import { resolveProductUnitRatio } from '@/utils/productUnits';
@@ -14,26 +9,16 @@ type StockValidationTranslator = (
   params?: Record<string, string | number>,
 ) => string;
 
-type StockUnitCategoryResolver = (unit: string) => UnitCategory;
-
 const defaultT: StockValidationTranslator = (key, params) => translate(defaultLocale, key, params);
-
-const defaultUnitCategory: StockUnitCategoryResolver = (unit) => inferUnitCategory(unit);
 
 type StockValidationOptions = {
   globalConversions?: ReadonlyArray<Pick<UnitConversion, 'fromUnit' | 'toUnit' | 'ratio'>>;
-  /**
-   * Kategori satuan dinilai lewat master unit, bukan hanya daftar bawaan,
-   * supaya satuan kemasan buatan pengguna tidak ditolak diam-diam.
-   */
-  getUnitCategory?: StockUnitCategoryResolver;
 };
 
 export const createStockSchema = (
   t: StockValidationTranslator = defaultT,
   {
     globalConversions = DEFAULT_CONVERSIONS,
-    getUnitCategory = defaultUnitCategory,
   }: StockValidationOptions = {},
 ) => z.object({
   name: z.string().min(1, t('stock.validation.nameRequired')),
@@ -108,36 +93,6 @@ export const createStockSchema = (
         path: ['unit_mappings', index, 'to_quantity'],
         message: t('stock.validation.sameConversionUnit'),
       });
-    }
-
-    // Kemasan menampung satuan hitungan, tidak pernah sebaliknya. Tanpa ini
-    // form menerima "1 pcs = 12 box", yang membaca satu pcs berisi dua belas
-    // box dan bikin stok tercatat 12 kali lipat.
-    const fromCategory = getUnitCategory(normalizedFromUnit);
-    const toCategory = getUnitCategory(normalizedToUnit);
-
-    if (Number.isFinite(ratio) && ratio > 0) {
-      if (fromCategory === 'package' && toCategory === 'count' && ratio <= 1) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['unit_mappings', index, 'to_quantity'],
-          message: t('stock.validation.packageMustBeLarger', {
-            packageUnit: mapping.from_unit,
-            countUnit: mapping.to_unit,
-          }),
-        });
-      }
-
-      if (fromCategory === 'count' && toCategory === 'package' && ratio >= 1) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['unit_mappings', index, 'to_quantity'],
-          message: t('stock.validation.packageMustBeLarger', {
-            packageUnit: mapping.to_unit,
-            countUnit: mapping.from_unit,
-          }),
-        });
-      }
     }
 
     const key = [normalizedFromUnit, normalizedToUnit].sort().join(':');

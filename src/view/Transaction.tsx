@@ -2,7 +2,8 @@ import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
 import { useState, useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { Banknote, Clock, Keyboard, LockKeyhole, PlayCircle, ScanLine } from 'lucide-react';
+import { useHotkeys } from 'react-hotkeys-hook';
+import { Banknote, Clock, LockKeyhole, PlayCircle, ScanLine } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { useCashierSession } from '@/hooks/useCashierSession';
 import { formatCurrency } from '@/utils/formatters';
@@ -11,6 +12,7 @@ import CartSidebar from '../components/CartSidebar';
 import MobileCartDrawer from '../components/MobileCartDrawer';
 import ScannerModal from '../components/ScannerModal';
 import { PosQuickItemModal } from '../components/PosQuickItemModal';
+import PosHotkeysInfo from '../components/PosHotkeysInfo';
 import { useAuth } from '@/auth/useAuth';
 import { isProductUnverified } from '@/services/posQuickItemService';
 import { useI18n } from '@/hooks/useI18n';
@@ -19,6 +21,7 @@ import type { CashierSessionReconciliation } from '@/services/cashierSessionServ
 import { getPosProcessDraftScope } from '@/store/transactionStore';
 import { getAdjacentProductSellableUnit, getProductSellableUnits } from '@/utils/productUnits';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
+import { hasVisiblePosShortcutBlocker, isPosShortcutTypingTarget } from '@/utils/posShortcutGuards';
 import {
   appendKeyboardBarcodeCharacter,
   finishKeyboardBarcodeScan,
@@ -121,28 +124,10 @@ const ReconciliationSummary = ({ reconciliation }: { reconciliation: CashierSess
   );
 };
 
-const isTypingTarget = (target: EventTarget | null) => {
-  if (!(target instanceof HTMLElement)) return false;
-
-  const tagName = target.tagName.toLowerCase();
-  return target.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select';
-};
-
-const hasVisiblePosShortcutBlocker = () => {
-  const selectors = [
-    '.ant-modal-wrap',
-    '.ant-drawer-open .ant-drawer-content-wrapper',
-    '.ant-select-dropdown',
-  ];
-
-  return selectors.some((selector) => (
-    Array.from(document.querySelectorAll<HTMLElement>(selector))
-      .some((element) => element.getClientRects().length > 0)
-  ));
-};
+const isTypingTarget = isPosShortcutTypingTarget;
 
 export default function Transaction() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const { t } = useI18n();
   const { can } = useAuth();
   const canQuickAddItem = can('POS_QUICK_ITEM_ENTRY');
@@ -224,13 +209,6 @@ export default function Transaction() {
   const [editingCartProduct, setEditingCartProduct] = useState<Product | null>(null);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [reconciliation, setReconciliation] = useState<CashierSessionReconciliation | null>(null);
-  const desktopShortcuts = [
-    { keys: ['/'], label: t('transaction.shortcut.focusSearch') },
-    { keys: ['Enter'], label: t('transaction.shortcut.addProduct') },
-    { keys: ['Num *'], label: t('transaction.shortcut.editQuantity') },
-    { keys: ['Num +', 'Num -'], label: t('transaction.shortcut.changeUnit') },
-    { keys: ['Esc'], label: t('transaction.shortcut.clearSearch') },
-  ];
 
   const resetPendingSearchKeySequence = useCallback(() => {
     if (pendingSearchFlushTimeoutRef.current !== null) {
@@ -353,6 +331,42 @@ export default function Transaction() {
       duration: 1,
     });
   }, [activeCartItemId, cart, message, t, updateUnit]);
+
+  const activateAdjacentCartItem = useCallback((direction: 1 | -1) => {
+    if (cart.length === 0) {
+      message.open({
+        key: 'pos-numpad-shortcut',
+        type: 'info',
+        content: t('transaction.shortcut.emptyCart'),
+        duration: 1,
+      });
+      return;
+    }
+
+    const currentIndex = cart.findIndex((item) => item.product.id === activeCartItemId);
+    const nextIndex = currentIndex === -1
+      ? (direction === 1 ? 0 : cart.length - 1)
+      : (currentIndex + direction + cart.length) % cart.length;
+    const nextItem = cart[nextIndex];
+    if (!nextItem) return;
+
+    // Keep editing quantities hands-free: only chase focus into the next row when
+    // the user was already inside the active item's quantity field.
+    const activeQuantityInput = activeCartItemId
+      ? quantityInputRefs.current.get(activeCartItemId)
+      : undefined;
+    const wasEditingQuantity = document.activeElement === activeQuantityInput;
+
+    setActiveCartItemId(nextItem.product.id);
+
+    if (wasEditingQuantity) {
+      window.requestAnimationFrame(() => {
+        const nextInput = quantityInputRefs.current.get(nextItem.product.id);
+        nextInput?.focus();
+        nextInput?.select();
+      });
+    }
+  }, [activeCartItemId, cart, message, t]);
 
   const addProductFromSearch = useCallback(async (inputSearchTerm = searchTerm) => {
     const normalizedSearchTerm = normalizeProductSearchTerm(inputSearchTerm);
@@ -736,6 +750,80 @@ export default function Transaction() {
     searchTerm,
   ]);
 
+  // F-keys and mod-combos never collide with the raw barcode-scanner listener above
+  // (it only intercepts single printable characters), and react-hotkeys-hook's
+  // `preventDefault: true` marks the event as defaultPrevented before that listener's
+  // handler runs, so it short-circuits there instead of double-handling the key.
+  const isPosHotkeyBlocked = useCallback(() => (
+    scannerOpen || closeModalOpen || cartOpen || hasVisiblePosShortcutBlocker()
+  ), [cartOpen, closeModalOpen, scannerOpen]);
+
+  const handleOpenPaymentHotkey = useCallback(() => {
+    if (cart.length === 0) {
+      message.open({
+        key: 'pos-numpad-shortcut',
+        type: 'info',
+        content: t('transaction.shortcut.emptyCart'),
+        duration: 1,
+      });
+      return;
+    }
+
+    setShowPayment(true);
+  }, [cart.length, message, setShowPayment, t]);
+
+  useHotkeys('f2', handleOpenPaymentHotkey, {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
+  }, [handleOpenPaymentHotkey, isPosHotkeyBlocked, showPayment]);
+
+  const handleOpenScannerHotkey = useCallback(() => setScannerOpen(true), []);
+
+  // F7, not F3: F3 triggers macOS Mission Control at the OS level (unpreventable
+  // from JS), and this app also ships as a native Tauri build for macOS.
+  useHotkeys('f7', handleOpenScannerHotkey, {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
+  }, [handleOpenScannerHotkey, isPosHotkeyBlocked, showPayment]);
+
+  const handleClearCartHotkey = useCallback(() => {
+    if (cart.length === 0) return;
+
+    modal.confirm({
+      title: t('transaction.shortcut.clearCartConfirmTitle'),
+      content: t('transaction.shortcut.clearCartConfirmContent'),
+      okText: t('cart.clear'),
+      okType: 'danger',
+      cancelText: t('common.cancel'),
+      onOk: () => {
+        clearCart();
+        window.requestAnimationFrame(focusSearch);
+      },
+    });
+  }, [cart.length, clearCart, focusSearch, modal, t]);
+
+  useHotkeys('f4', handleClearCartHotkey, {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
+  }, [handleClearCartHotkey, isPosHotkeyBlocked, showPayment]);
+
+  // PageUp/PageDown, not Arrow Up/Down: the active item's quantity field is an
+  // antd InputNumber, which already steps its value on Arrow Up/Down.
+  useHotkeys('pagedown', () => activateAdjacentCartItem(1), {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
+  }, [activateAdjacentCartItem, isPosHotkeyBlocked, showPayment]);
+
+  useHotkeys('pageup', () => activateAdjacentCartItem(-1), {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
+  }, [activateAdjacentCartItem, isPosHotkeyBlocked, showPayment]);
+
   const handleOpenSession = async (values: OpenCashierFormValues) => {
     await openSession({
       opening_cash_amount: Number(values.opening_cash_amount || 0),
@@ -886,30 +974,7 @@ export default function Transaction() {
               </Button>
             </div>
 
-            <div className="mt-3 hidden flex-wrap items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs text-blue-900 lg:flex">
-              <div className="flex items-center gap-1.5 font-semibold">
-                <Keyboard size={15} />
-                <span>{t('transaction.desktopShortcutTitle')}</span>
-              </div>
-              {desktopShortcuts.map((shortcut) => (
-                <div
-                  key={shortcut.label}
-                  className="flex items-center gap-1.5 rounded-md bg-white px-2 py-1 shadow-sm ring-1 ring-blue-100"
-                >
-                  <span className="flex items-center gap-1">
-                    {shortcut.keys.map((key) => (
-                      <kbd
-                        key={key}
-                        className="min-w-6 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-center font-mono text-[11px] font-semibold leading-none text-blue-800"
-                      >
-                        {key}
-                      </kbd>
-                    ))}
-                  </span>
-                  <span className="font-medium">{shortcut.label}</span>
-                </div>
-              ))}
-            </div>
+            <PosHotkeysInfo />
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden">
@@ -958,7 +1023,10 @@ export default function Transaction() {
           isCreatingMember={isCreatingMember}
           handleCheckout={handleCheckout}
           handleRecordExpense={handleRecordExpense}
-          onCheckoutSuccess={() => setCartOpen(false)}
+          onCheckoutSuccess={() => {
+            setCartOpen(false);
+            window.requestAnimationFrame(focusSearch);
+          }}
         />
       </div>
 
