@@ -24,6 +24,10 @@ import { isTransactionExpense } from '@/utils/transactions';
 const DEFAULT_MERCHANT_NAME = 'Frayukti';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
 
+interface ReceiptPrintOptions {
+  openCashDrawer?: boolean;
+}
+
 const updateReceiptStatus = async (
   transactionId: string,
   status: ReceiptPrintStatus,
@@ -44,6 +48,7 @@ export const buildReceiptPayload = (
   transaction: TransactionReceiptInput,
   merchantName = DEFAULT_MERCHANT_NAME,
   paperSize: ReceiptPaperSize = getStoredReceiptPaperSize(),
+  options: ReceiptPrintOptions = {},
 ): ReceiptPayload => {
   const payment = getTransactionPaymentSnapshot(transaction);
   const payments = getTransactionPaymentsOrLegacyFallback(transaction, transaction.payments);
@@ -86,12 +91,17 @@ export const buildReceiptPayload = (
     totalAmount: transaction.total_amount,
     paymentAmount: transaction.payment_amount,
     changeAmount: transaction.change_amount,
+    openCashDrawer: Boolean(
+      options.openCashDrawer
+      && payments.some((item) => item.payment_method_category === 'CASH')
+    ),
     footer: DEFAULT_RECEIPT_FOOTER,
   };
 };
 
 export const printReceiptAfterTransaction = async (
-  transaction: TransactionReceiptInput
+  transaction: TransactionReceiptInput,
+  options: ReceiptPrintOptions = {},
 ): Promise<ReceiptPrintResult> => {
   if (isTransactionExpense(transaction)) {
     return {
@@ -101,7 +111,12 @@ export const printReceiptAfterTransaction = async (
     };
   }
   const companyProfile = await db.companyProfileSetting.get('default');
-  const receipt = buildReceiptPayload(transaction, companyProfile?.company_name);
+  const receipt = buildReceiptPayload(
+    transaction,
+    companyProfile?.company_name,
+    getStoredReceiptPaperSize(),
+    options,
+  );
 
   // Try USB printer first, then fall back to Bluetooth
   const usbPrinter = getStoredUsbPrinter();

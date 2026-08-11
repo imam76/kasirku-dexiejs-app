@@ -419,7 +419,10 @@ export const useTransaction = (draftScope?: string) => {
       queryClient.invalidateQueries({ queryKey: ['membershipSetting'] });
       reset();
 
-      void printReceiptAfterTransaction({ ...transaction, items, payments })
+      void printReceiptAfterTransaction(
+        { ...transaction, items, payments },
+        { openCashDrawer: true },
+      )
         .then((result) => {
           queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
 

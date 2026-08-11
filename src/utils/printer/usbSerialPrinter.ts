@@ -122,6 +122,11 @@ const ESC = 0x1b;
 const GS = 0x1d;
 const LF = 0x0a;
 const INIT = new Uint8Array([ESC, 0x40]);
+// Kick both connector pins (2 and 5) since drawer wiring varies by brand.
+const CASH_DRAWER_KICK = new Uint8Array([
+  ESC, 0x70, 0x00, 0x19, 0xfa,
+  ESC, 0x70, 0x01, 0x19, 0xfa,
+]);
 const CUT = new Uint8Array([GS, 0x56, 0x41, 0x00]);
 const BOLD_ON = new Uint8Array([ESC, 0x45, 0x01]);
 const BOLD_OFF = new Uint8Array([ESC, 0x45, 0x00]);
@@ -235,6 +240,7 @@ export const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
   const push = (...chunks: Uint8Array[]) => parts.push(...chunks);
 
   push(INIT);
+  if (receipt.openCashDrawer) push(CASH_DRAWER_KICK);
   push(ALIGN_CENTER, BOLD_ON);
   wrapText(receipt.merchantName, paperWidth).forEach((merchantLine) => push(text(merchantLine)));
   push(BOLD_OFF);

@@ -117,6 +117,8 @@ pub struct ReceiptPayload {
     total_amount: f64,
     payment_amount: f64,
     change_amount: f64,
+    #[serde(default)]
+    open_cash_drawer: bool,
     footer: Option<String>,
 }
 

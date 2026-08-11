@@ -80,6 +80,7 @@ class ReceiptPayloadArg {
   var totalAmount: Double = 0.0
   var paymentAmount: Double = 0.0
   var changeAmount: Double = 0.0
+  var openCashDrawer: Boolean = false
   var footer: String? = null
 }
 
@@ -387,6 +388,11 @@ object EscPosReceiptRenderer {
       PAPER_WIDTH_58_MM
     }
     output.writeCommand(0x1B, 0x40)
+    if (receipt.openCashDrawer) {
+      // Kick both connector pins (2 and 5) since drawer wiring varies by brand.
+      output.writeCommand(0x1B, 0x70, 0x00, 0x19, 0xFA)
+      output.writeCommand(0x1B, 0x70, 0x01, 0x19, 0xFA)
+    }
     output.writeCommand(0x1B, 0x74, 0x00)
     output.writeCommand(0x1B, 0x61, 0x01)
     output.writeCommand(0x1B, 0x45, 0x01)

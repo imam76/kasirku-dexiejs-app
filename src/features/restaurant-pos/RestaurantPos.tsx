@@ -307,7 +307,7 @@ export default function RestaurantPos() {
         ...result.transaction,
         items: result.items,
         payments: result.payments,
-      }).then((printResult) => {
+      }, { openCashDrawer: true }).then((printResult) => {
         if (!printResult.success) message.warning(printResult.error || t('checkout.receiptPrintFailed'));
       }).catch((error) => {
         message.warning(error instanceof Error ? error.message : t('checkout.receiptPrintFailed'));

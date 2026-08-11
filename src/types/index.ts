@@ -2580,6 +2580,7 @@ export interface ReceiptPayload {
   totalAmount: number;
   paymentAmount: number;
   changeAmount: number;
+  openCashDrawer: boolean;
   footer?: string;
 }
 

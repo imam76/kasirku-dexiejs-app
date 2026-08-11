@@ -109,4 +109,34 @@ describe('receipt print settings', () => {
     expect(containsByteSequence(printedData, qrStoreCommand)).toBe(true);
     expect(new TextDecoder().decode(printedData)).toContain('Scan nomor transaksi');
   });
+
+  test('kicks the cash drawer only for a new cash payment receipt', () => {
+    const cashReceipt = buildReceiptPayload(
+      transaction,
+      'Toko Makmur',
+      '58mm',
+      { openCashDrawer: true },
+    );
+    const nonCashReceipt = buildReceiptPayload(
+      { ...transaction, payment_method: 'NON_TUNAI' },
+      'Toko Makmur',
+      '58mm',
+      { openCashDrawer: true },
+    );
+    const reprintedReceipt = buildReceiptPayload(transaction, 'Toko Makmur', '58mm');
+    const drawerKickPin2 = [0x1b, 0x70, 0x00, 0x19, 0xfa];
+    const drawerKickPin5 = [0x1b, 0x70, 0x01, 0x19, 0xfa];
+
+    const cashReceiptBytes = buildEscPosReceipt(cashReceipt);
+    expect(containsByteSequence(cashReceiptBytes, drawerKickPin2)).toBe(true);
+    expect(containsByteSequence(cashReceiptBytes, drawerKickPin5)).toBe(true);
+
+    const nonCashReceiptBytes = buildEscPosReceipt(nonCashReceipt);
+    expect(containsByteSequence(nonCashReceiptBytes, drawerKickPin2)).toBe(false);
+    expect(containsByteSequence(nonCashReceiptBytes, drawerKickPin5)).toBe(false);
+
+    const reprintedReceiptBytes = buildEscPosReceipt(reprintedReceipt);
+    expect(containsByteSequence(reprintedReceiptBytes, drawerKickPin2)).toBe(false);
+    expect(containsByteSequence(reprintedReceiptBytes, drawerKickPin5)).toBe(false);
+  });
 });
