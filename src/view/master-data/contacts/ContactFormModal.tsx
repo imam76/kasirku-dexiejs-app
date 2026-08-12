@@ -1,5 +1,6 @@
-import { Form, Input, Modal, Select, Switch } from 'antd';
+import { Button, Form, Input, Select, Switch } from 'antd';
 import type { FormInstance } from 'antd';
+import { ResponsiveCrudEditor } from '@/components/mobile-crud';
 import { useI18n } from '@/hooks/useI18n';
 import type { ContactType, RetailMembershipStatus } from '@/types';
 import { contactTypeOptions } from './contactOptions';
@@ -43,15 +44,27 @@ export default function ContactFormModal({
   const isMember = Form.useWatch('is_member', form);
 
   return (
-    <Modal
+    <ResponsiveCrudEditor
       title={isEditing ? t('contacts.editTitle') : t('contacts.addTitle')}
       open={open}
-      onCancel={onCancel}
-      onOk={() => form.submit()}
-      confirmLoading={isSubmitting}
-      destroyOnHidden
-      forceRender
-      width={760}
+      onClose={onCancel}
+      desktopWidth={760}
+      footer={(
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+          <Button size="large" onClick={onCancel} disabled={isSubmitting}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            size="large"
+            type="primary"
+            loading={isSubmitting}
+            disabled={isSubmitting}
+            onClick={() => form.submit()}
+          >
+            {t('contacts.form.save')}
+          </Button>
+        </div>
+      )}
     >
       <Form<ContactFormValues>
         form={form}
@@ -117,6 +130,6 @@ export default function ContactFormModal({
           <Switch checkedChildren={t('contacts.status.active')} unCheckedChildren={t('contacts.status.inactive')} />
         </Form.Item>
       </Form>
-    </Modal>
+    </ResponsiveCrudEditor>
   );
 }

@@ -10,12 +10,13 @@ const { Text } = Typography;
 
 interface ContactTableProps {
   contacts: Contact[];
+  loading?: boolean;
   onEdit: (contact: Contact) => void;
   onArchive: (contact: Contact) => void;
   onRestore: (contact: Contact) => void;
 }
 
-export default function ContactTable({ contacts, onEdit, onArchive, onRestore }: ContactTableProps) {
+export default function ContactTable({ contacts, loading = false, onEdit, onArchive, onRestore }: ContactTableProps) {
   const { t } = useI18n();
   const typeLabelMap = contactTypeOptions.reduce<Record<ContactType, string>>((acc, option) => {
     acc[option.value] = t(option.labelKey);
@@ -99,6 +100,7 @@ export default function ContactTable({ contacts, onEdit, onArchive, onRestore }:
     <Table
       dataSource={contacts}
       columns={columns}
+      loading={loading}
       rowKey="id"
       pagination={{ pageSize: 8 }}
       scroll={{ x: true }}

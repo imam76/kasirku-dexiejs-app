@@ -241,3 +241,11 @@ docker compose -f postgres-dev/compose.yml down -v
 - Jika PostgreSQL tidak bisa diakses, pastikan container `postgres-dev` sudah berjalan.
 - Jika port `1420` sedang dipakai, hentikan proses lain yang memakai port tersebut sebelum menjalankan `bun run dev` atau `bun run tauri dev`.
 - Untuk Android, `localhost` mengarah ke device/emulator, bukan laptop/PC. Pakai IP LAN host PostgreSQL lewat `KASIRKU_DATABASE_URL`.
+
+### mobile view component harusnya pake standar ini
+MOBILE-CRUD-GLOBAL.md
+
+pada master data contact [contacts](src/view/master-data/contacts/) 
+pada saat mobile view/mobile screen/mobile native
+
+implementasikan ini [MOBILE-CRUD-GLOBAL.md](docs/MOBILE-CRUD-GLOBAL.md)

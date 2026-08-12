@@ -17,11 +17,11 @@ export const useContacts = () => {
   const [statusFilter, setStatusFilter] = useState<ContactStatusFilter>('active');
   const [membershipFilter, setMembershipFilter] = useState<ContactMembershipFilter>('all');
 
-  const contacts = useLiveQuery(
+  const queriedContacts = useLiveQuery(
     () => db.contacts.orderBy('name').toArray(),
     [],
-    [],
   );
+  const contacts = useMemo(() => queriedContacts ?? [], [queriedContacts]);
 
   const filteredContacts = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -79,6 +79,7 @@ export const useContacts = () => {
 
   return {
     contacts,
+    isLoading: queriedContacts === undefined,
     filteredContacts,
     editingContact,
     searchText,
