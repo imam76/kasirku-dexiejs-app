@@ -1,7 +1,6 @@
-import { Button, Drawer, FloatButton, Input, InputNumber, Select, Space, Tag, Tooltip } from 'antd';
+import { Button, Input, InputNumber, Select, Space, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { ChangeEvent, CSSProperties } from 'react';
-import { useIsMobile } from '@/hooks/useIsMobile';
+import type { ChangeEvent } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import { isProductUnverified } from '@/services/posQuickItemService';
@@ -11,7 +10,10 @@ import { getProductDisplayPricing } from '@/utils/pricing';
 import { BadgeCheck, Edit2, EyeOff, Package, PackagePlus, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import ManagementTable from './ManagementTable';
-import MobileCrudList, { type MobileCrudAction } from './mobile-crud/MobileCrudList';
+import {
+  ResponsiveCrudCollection,
+  type MobileCrudAction,
+} from './mobile-crud';
 
 interface StockTableProps {
   products: Product[];
@@ -39,7 +41,6 @@ export default function StockTable({
   loading = false,
 }: StockTableProps) {
   const { t } = useI18n();
-  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [stockStatus, setStockStatus] = useState<StockStatusFilter>('all');
@@ -473,152 +474,140 @@ export default function StockTable({
 
   return (
     <div className="space-y-4">
-      {/* Desktop search and filters stay inline; mobile uses one drawer from a FAB. */}
-      {!isMobile ? <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('stock.filterTitle')}</div>
-            <p className="mt-1 text-xs text-gray-500">
-              {t('stock.filterSummary', { shown: filteredProducts.length, total: products.length })}
-            </p>
-          </div>
-          {(searchQuery || activeFilterCount > 0) && (
-            <Button onClick={resetFilters} className="w-full sm:w-auto">
-              {t('stock.resetFilter')}
-            </Button>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <Input.Search
-              allowClear
-              placeholder={t('stock.searchPlaceholder')}
-              value={searchQuery}
-              onChange={handleSearchChange}
-            />
-          </div>
-          {renderFilterControls()}
-        </div>
-      </div> : null}
-
-      <Drawer
-        title={t('stock.filterTitle')}
-        placement="bottom"
-        open={isMobile && isFilterDrawerOpen}
-        onClose={() => setIsFilterDrawerOpen(false)}
-        size="auto"
-        rootClassName="mobile-bottom-drawer"
-        styles={{
-          body: { padding: 16 },
-          header: { padding: '16px 20px' },
-        }}
-      >
-        <div className="space-y-3 pb-3">
-          <Input.Search
-            size="large"
-            allowClear
-            autoFocus
-            aria-label={t('stock.searchPlaceholder')}
-            placeholder={t('stock.searchPlaceholder')}
-            value={searchQuery}
-            onChange={handleSearchChange}
-          />
-
-          <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-              <SlidersHorizontal size={18} />
-              <span>{t('stock.filterParams')}</span>
-            </div>
-            {renderFilterControls(true)}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              size="large"
-              disabled={activeFilterCount === 0 && !searchQuery}
-              onClick={resetFilters}
-              className="h-12"
-            >
-              {t('transaction.reset')}
-            </Button>
-            <Button
-              size="large"
-              type="primary"
-              onClick={() => setIsFilterDrawerOpen(false)}
-              className="h-12"
-            >
-              {t('stock.apply')}
-            </Button>
-          </div>
-        </div>
-      </Drawer>
-
-      <Drawer
-        placement="bottom"
-        open={isMobile && selectedProductId !== null && selectedProduct !== null}
-        onClose={closeDetailSheet}
-        afterOpenChange={(isOpen) => {
-          if (!isOpen && selectedProductId) setSelectedProductId(null);
-        }}
-        closable={false}
-        size="auto"
-        destroyOnHidden
-        rootClassName="mobile-bottom-drawer"
-        styles={{ body: { padding: '20px 20px 24px' } }}
-      >
-        {selectedProduct ? (
-          <div className="space-y-4" data-testid="stock-detail-sheet">
-            <div className="mx-auto h-1 w-9 rounded-full bg-gray-200 dark:bg-gray-700" />
-            <div className="flex items-center gap-3">
-              <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                <Package aria-hidden size={22} />
-              </span>
-              <div className="min-w-0">
-                <div className="truncate text-base font-extrabold text-gray-900 dark:text-gray-100">
-                  {selectedProduct.name}
+      <ResponsiveCrudCollection<Product>
+        desktop={(
+          <>
+            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                    {t('stock.filterTitle')}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t('stock.filterSummary', { shown: filteredProducts.length, total: products.length })}
+                  </p>
                 </div>
-                <div className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
-                  {selectedProduct.sku?.trim() || t('stock.mobile.noSku')}
-                </div>
+                {(searchQuery || activeFilterCount > 0) ? (
+                  <Button onClick={resetFilters} className="w-full sm:w-auto">
+                    {t('stock.resetFilter')}
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="space-y-3">
+                <Input.Search
+                  allowClear
+                  placeholder={t('stock.searchPlaceholder')}
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                />
+                {renderFilterControls()}
               </div>
             </div>
 
-            {renderPriceStockGrid(selectedProduct)}
+            <ManagementTable<Product>
+              columns={columns}
+              dataSource={filteredProducts}
+              loading={loading}
+              scrollX={1300}
+              pageSizeOptions={['5', '10', '20', '50']}
+              showTotal={(total, range) => t('stock.showingRange', {
+                start: range[0],
+                end: range[1],
+                total,
+              })}
+              emptyText={searchQuery || activeFilterCount > 0
+                ? t('stock.noFilteredProducts')
+                : t('stock.noProducts')}
+            />
+          </>
+        )}
+        mobileFilter={{
+          open: isFilterDrawerOpen,
+          title: t('stock.filterTitle'),
+          onClose: () => setIsFilterDrawerOpen(false),
+          onReset: resetFilters,
+          resetLabel: t('transaction.reset'),
+          applyLabel: t('stock.apply'),
+          resetDisabled: activeFilterCount === 0 && !searchQuery,
+          children: (
+            <>
+              <Input.Search
+                size="large"
+                allowClear
+                autoFocus
+                aria-label={t('stock.searchPlaceholder')}
+                placeholder={t('stock.searchPlaceholder')}
+                value={searchQuery}
+                onChange={handleSearchChange}
+              />
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <Button
-                size="large"
-                className="h-12"
-                onClick={() => {
-                  closeDetailSheet();
-                  onOpeningStock(selectedProduct);
-                }}
-              >
-                {t('stock.openingStockAction')}
-              </Button>
-              <Button
-                type="primary"
-                size="large"
-                className="h-12"
-                onClick={() => {
-                  closeDetailSheet();
-                  onEdit(selectedProduct);
-                }}
-              >
-                {t('stock.editProduct')}
-              </Button>
+              <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                  <SlidersHorizontal size={18} />
+                  <span>{t('stock.filterParams')}</span>
+                </div>
+                {renderFilterControls(true)}
+              </div>
+            </>
+          ),
+        }}
+        mobileDetail={{
+          open: selectedProduct !== null,
+          onClose: closeDetailSheet,
+          closable: false,
+          testId: 'stock-detail-sheet',
+          bodyStyle: { padding: '20px 20px 24px' },
+          children: selectedProduct ? (
+            <div className="space-y-4">
+              <div className="mx-auto h-1 w-9 rounded-full bg-gray-200 dark:bg-gray-700" />
+              <div className="flex items-center gap-3">
+                <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                  <Package aria-hidden size={22} />
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-base font-extrabold text-gray-900 dark:text-gray-100">
+                    {selectedProduct.name}
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                    {selectedProduct.sku?.trim() || t('stock.mobile.noSku')}
+                  </div>
+                </div>
+              </div>
+
+              {renderPriceStockGrid(selectedProduct)}
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <Button
+                  size="large"
+                  className="h-12"
+                  onClick={() => {
+                    closeDetailSheet();
+                    onOpeningStock(selectedProduct);
+                  }}
+                >
+                  {t('stock.openingStockAction')}
+                </Button>
+                <Button
+                  type="primary"
+                  size="large"
+                  className="h-12"
+                  onClick={() => {
+                    closeDetailSheet();
+                    onEdit(selectedProduct);
+                  }}
+                >
+                  {t('stock.editProduct')}
+                </Button>
+              </div>
             </div>
-          </div>
-        ) : null}
-      </Drawer>
-
-      {isMobile ? (
-        <MobileCrudList<Product>
-          items={filteredProducts}
-          getKey={(product) => product.id}
-          loading={loading}
-          resetKey={JSON.stringify([
+          ) : null,
+        }}
+        mobileList={{
+          items: filteredProducts,
+          getKey: (product) => product.id,
+          loading,
+          resetKey: JSON.stringify([
             searchQuery,
             selectedCategories.join(','),
             stockStatus,
@@ -632,20 +621,22 @@ export default function StockTable({
             wholesaleStatus,
             productType,
             posVisibility,
-          ])}
-          resultSummary={t('stock.filterSummary', { shown: filteredProducts.length, total: products.length })}
-          emptyText={searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
-          emptyAction={!searchQuery && activeFilterCount === 0 && onAdd ? (
+          ]),
+          resultSummary: t('stock.filterSummary', { shown: filteredProducts.length, total: products.length }),
+          emptyText: searchQuery || activeFilterCount > 0
+            ? t('stock.noFilteredProducts')
+            : t('stock.noProducts'),
+          emptyAction: !searchQuery && activeFilterCount === 0 && onAdd ? (
             <Button type="primary" size="large" icon={<Plus size={18} />} onClick={onAdd}>
               {t('stock.addProduct')}
             </Button>
-          ) : undefined}
-          loadMoreLabel={(remaining) => t('stock.mobile.loadMore', { count: remaining })}
-          getItemAriaLabel={(product) => t('stock.mobile.detailAria', { name: product.name })}
-          getActionsAriaLabel={(product) => t('stock.mobile.actionsAria', { name: product.name })}
-          getActionSheetTitle={(product) => product.name}
-          onItemClick={(product) => setSelectedProductId(product.id)}
-          getActions={(product): MobileCrudAction<Product>[] => [
+          ) : undefined,
+          loadMoreLabel: (remaining) => t('stock.mobile.loadMore', { count: remaining }),
+          getItemAriaLabel: (product) => t('stock.mobile.detailAria', { name: product.name }),
+          getActionsAriaLabel: (product) => t('stock.mobile.actionsAria', { name: product.name }),
+          getActionSheetTitle: (product) => product.name,
+          onItemClick: (product) => setSelectedProductId(product.id),
+          getActions: (product): MobileCrudAction<Product>[] => [
             {
               key: 'edit',
               label: t('stock.editTitle'),
@@ -676,8 +667,8 @@ export default function StockTable({
               danger: true,
               onSelect: (item) => onDelete(item.id),
             },
-          ]}
-          renderItem={(product) => (
+          ],
+          renderItem: (product) => (
             <div className="space-y-3">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
@@ -708,51 +699,29 @@ export default function StockTable({
 
               {renderPriceStockGrid(product)}
             </div>
-          )}
-        />
-      ) : (
-        <ManagementTable<Product>
-          columns={columns}
-          dataSource={filteredProducts}
-          loading={loading}
-          scrollX={1300}
-          pageSizeOptions={['5', '10', '20', '50']}
-          showTotal={(total, range) => t('stock.showingRange', { start: range[0], end: range[1], total })}
-          emptyText={searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
-        />
-      )}
-
-      {isMobile && onAdd ? (
-        <>
-          <FloatButton
-            type="default"
-            icon={<SlidersHorizontal size={22} />}
-            aria-label={t('stock.filterTitle')}
-            tooltip={t('stock.filterTitle')}
-            badge={{ count: activeSearchAndFilterCount, color: '#fa8c16' }}
-            data-testid="stock-search-filter-fab"
-            onClick={() => setIsFilterDrawerOpen(true)}
-            style={{
-              '--ant-float-btn-size': '56px',
-              bottom: 'calc(4rem + var(--app-safe-area-inset-bottom, 0px) + 5.25rem)',
-              insetInlineEnd: 16,
-            } as CSSProperties & { '--ant-float-btn-size': string }}
-          />
-          <FloatButton
-            type="primary"
-            icon={<Plus size={24} />}
-            aria-label={t('stock.add')}
-            tooltip={t('stock.add')}
-            data-tour="stock-add-product"
-            onClick={onAdd}
-            style={{
-              '--ant-float-btn-size': '56px',
-              bottom: 'calc(4rem + var(--app-safe-area-inset-bottom, 0px) + 1rem)',
-              insetInlineEnd: 16,
-            } as CSSProperties & { '--ant-float-btn-size': string }}
-          />
-        </>
-      ) : null}
+          ),
+        }}
+        mobileFloatingActions={onAdd ? {
+          actions: [
+            {
+              key: 'add',
+              type: 'primary',
+              icon: <Plus size={24} />,
+              label: t('stock.add'),
+              tourId: 'stock-add-product',
+              onClick: onAdd,
+            },
+            {
+              key: 'filter',
+              icon: <SlidersHorizontal size={22} />,
+              label: t('stock.filterTitle'),
+              badge: { count: activeSearchAndFilterCount, color: '#fa8c16' },
+              testId: 'stock-search-filter-fab',
+              onClick: () => setIsFilterDrawerOpen(true),
+            },
+          ],
+        } : undefined}
+      />
     </div>
   );
 }

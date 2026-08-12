@@ -1,4 +1,4 @@
-import { Button, Drawer, Empty, Skeleton, theme as antdTheme } from 'antd';
+import { Button, Empty, Skeleton, theme as antdTheme } from 'antd';
 import { MoreVertical } from 'lucide-react';
 import {
   useMemo,
@@ -9,6 +9,7 @@ import {
   getMobileCrudRemainingCount,
   getNextMobileCrudVisibleCount,
 } from '@/utils/mobileCrud';
+import MobileCrudBottomSheet from './MobileCrudBottomSheet';
 
 export type MobileCrudAction<T> = {
   key: string;
@@ -21,7 +22,7 @@ export type MobileCrudAction<T> = {
   onSelect: (item: T) => void | Promise<void>;
 };
 
-type MobileCrudListProps<T> = {
+export type MobileCrudListProps<T> = {
   items: readonly T[];
   getKey: (item: T) => string;
   renderItem: (item: T) => ReactNode;
@@ -178,21 +179,12 @@ function MobileCrudListStateful<T>({
         </Button>
       ) : null}
 
-      <Drawer
+      <MobileCrudBottomSheet
         title={actionItem ? getActionSheetTitle?.(actionItem) : undefined}
-        placement="bottom"
         open={actionItem !== null}
         onClose={closeActionSheet}
-        afterOpenChange={(isOpen) => {
-          if (!isOpen && actionCandidate) setActionCandidate(null);
-        }}
-        size="auto"
-        destroyOnHidden
         rootClassName="mobile-crud-action-sheet"
-        styles={{
-          body: { padding: '8px 16px 16px' },
-          header: { padding: '16px 20px' },
-        }}
+        bodyStyle={{ padding: '8px 16px 16px' }}
       >
         <div className="space-y-1 pb-2">
           {activeActions.map((action) => (
@@ -223,7 +215,7 @@ function MobileCrudListStateful<T>({
             </button>
           ))}
         </div>
-      </Drawer>
+      </MobileCrudBottomSheet>
     </div>
   );
 }

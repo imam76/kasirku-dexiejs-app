@@ -2,7 +2,7 @@ import { Drawer, Modal } from 'antd';
 import type { ReactNode } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-type ResponsiveCrudEditorProps = {
+export type ResponsiveCrudEditorProps = {
   open: boolean;
   title: ReactNode;
   children: ReactNode;

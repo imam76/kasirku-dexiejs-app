@@ -1,4 +1,4 @@
-import { Alert, App, Button, Card, Drawer, Dropdown, Segmented } from 'antd';
+import { Alert, App, Button, Card, Dropdown, Segmented } from 'antd';
 import type { MenuProps } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
 import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
@@ -26,6 +26,7 @@ import { exportCsv, exportXlsx, type ExportTarget } from '@/utils/export';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb';
+import { MobileCrudBottomSheet, MobileCrudPageHeader } from '@/components/mobile-crud';
 
 const STOCK_SAVED_EVENT = 'frayukti-workflow-tour-stock-saved';
 
@@ -436,25 +437,20 @@ export default function StockManagement() {
   return (
     <>
       {isMobile ? (
-        <header
-          data-testid="mobile-product-page-header"
-          className="mobile-page-fixed-header fixed inset-x-0 z-[39] border-b border-gray-200 bg-white py-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-        >
-          <GlobalBreadcrumb pathname="/master-data/products" compact />
-          <div className="flex min-h-11 items-center justify-between gap-3">
-            <h1 className="flex min-w-0 items-center gap-2 text-lg font-bold text-gray-900 dark:text-gray-100">
-              <Package aria-hidden className="h-5 w-5 shrink-0" />
-              <span className="truncate">{t('stock.title')}</span>
-            </h1>
+        <MobileCrudPageHeader
+          testId="mobile-product-page-header"
+          title={t('stock.title')}
+          icon={<Package aria-hidden className="h-5 w-5 shrink-0" />}
+          breadcrumb={<GlobalBreadcrumb pathname="/master-data/products" compact />}
+          action={(
             <Button
               aria-label={t('stock.actionMenuAria')}
               icon={<MoreVertical size={18} />}
               onClick={() => setIsActionDrawerOpen(true)}
             />
-          </div>
-        </header>
+          )}
+        />
       ) : null}
-      {isMobile ? <div aria-hidden className="mobile-page-fixed-header-spacer mb-4" /> : null}
 
       <Card
       className={isMobile ? '' : 'shadow-md'}
@@ -499,17 +495,10 @@ export default function StockManagement() {
         onChange={handleImportSelected}
       />
 
-      <Drawer
+      <MobileCrudBottomSheet
         title={t('stock.actions')}
-        placement="bottom"
         open={isActionDrawerOpen}
         onClose={() => setIsActionDrawerOpen(false)}
-        size="auto"
-        className="sm:hidden"
-        styles={{
-          body: { padding: 16 },
-          header: { padding: '16px 20px' },
-        }}
       >
         <div className="space-y-3 pb-3">
           <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
@@ -568,7 +557,7 @@ export default function StockManagement() {
             {t('stock.downloadTemplate')}
           </Button>
         </div>
-      </Drawer>
+      </MobileCrudBottomSheet>
 
       <StockProductModal
         open={isModalOpen}

@@ -31,7 +31,7 @@ import StockProductBarcodeScanner from './StockProductBarcodeScanner';
 import StockProductGeneralTab from './StockProductGeneralTab';
 import StockProductUnitConversionTab from './StockProductUnitConversionTab';
 import StockProductWholesaleTab from './StockProductWholesaleTab';
-import ResponsiveCrudEditor from '@/components/mobile-crud/ResponsiveCrudEditor';
+import { ResponsiveCrudEditor } from '@/components/mobile-crud';
 
 /** Ratio yang tersimpan sebagai float (mis. 1/12) dikembalikan ke angka bulat. */
 const snapNearInteger = (value: number) => {
