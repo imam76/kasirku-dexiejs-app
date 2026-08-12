@@ -1,5 +1,6 @@
 package com.asepimamnawawi_imam76.frayukti_app
 
+import android.os.Build
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
@@ -10,6 +11,17 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+
+    // enableEdgeToEdge() default (SystemBarStyle.auto) membuat navigationBarColor
+    // transparan TAPI tetap menyalakan isNavigationBarContrastEnforced di API 29+,
+    // sehingga OS menggambar scrim abu-abu gelap sendiri di atas area navigasi
+    // gestur agar tombol/pill tetap kontras — inilah "bar hitam" yang masih
+    // muncul walau device sudah full gesture mode (bukan ulah OEM Samsung).
+    // App ini sudah menyediakan padding sendiri via env(safe-area-inset-bottom)
+    // di CSS, jadi scrim bawaan sistem ini tidak diperlukan dan dimatikan.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      window.isNavigationBarContrastEnforced = false
+    }
   }
 
   // Edge-to-edge (targetSdk 35+) membuat window tidak lagi resize otomatis saat
