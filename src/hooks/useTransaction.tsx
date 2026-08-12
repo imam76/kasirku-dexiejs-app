@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
+import { useEffect, useMemo, useCallback, useLayoutEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
@@ -70,6 +70,7 @@ export const useTransaction = (draftScope?: string) => {
     reset,
   } = useTransactionStore();
   const { options: paymentMethods, validMethods } = usePosPaymentMethods();
+  const [selectedProductCategory, setSelectedProductCategoryState] = useState<string>();
   const productSearchTerm = normalizeProductSearchTerm(searchTerm);
   const isPosProcessReady = activeDraftScope === draftScope;
 
@@ -95,14 +96,23 @@ export const useTransaction = (draftScope?: string) => {
     setStoreSearchTerm(value);
   }, [setProductPage, setStoreSearchTerm]);
 
+  const setSelectedProductCategory = useCallback((category?: string) => {
+    setProductPage(1);
+    setSelectedProductCategoryState(category);
+  }, [setProductPage]);
+
   const productPageResult = useLiveQuery(
     async () => {
-      if (productSearchTerm) {
-        const matchedProducts = await db.products
-          .orderBy('name')
-          .filter((product) => isProductVisibleInPos(product) && matchesProductSearch(product, productSearchTerm))
-          .toArray();
+      const matchedProducts = await db.products
+        .orderBy('name')
+        .filter((product) => (
+          isProductVisibleInPos(product)
+          && (!selectedProductCategory || (product.category || 'non_consumable') === selectedProductCategory)
+          && (!productSearchTerm || matchesProductSearch(product, productSearchTerm))
+        ))
+        .toArray();
 
+      if (productSearchTerm) {
         return {
           products: matchedProducts,
           total: matchedProducts.length,
@@ -110,12 +120,11 @@ export const useTransaction = (draftScope?: string) => {
         };
       }
 
-      const visibleProducts = await db.products.orderBy('name').filter(isProductVisibleInPos).toArray();
-      const total = visibleProducts.length;
+      const total = matchedProducts.length;
       const lastPage = Math.max(1, Math.ceil(total / TRANSACTION_PRODUCT_PAGE_SIZE));
       const currentPage = Math.min(productPage, lastPage);
       const offset = (currentPage - 1) * TRANSACTION_PRODUCT_PAGE_SIZE;
-      const pageProducts = visibleProducts.slice(offset, offset + TRANSACTION_PRODUCT_PAGE_SIZE);
+      const pageProducts = matchedProducts.slice(offset, offset + TRANSACTION_PRODUCT_PAGE_SIZE);
 
       return {
         products: pageProducts,
@@ -123,7 +132,7 @@ export const useTransaction = (draftScope?: string) => {
         currentPage,
       };
     },
-    [productPage, productSearchTerm],
+    [productPage, productSearchTerm, selectedProductCategory],
     EMPTY_TRANSACTION_PRODUCT_PAGE,
   );
   const productTotal = productPageResult.total;
@@ -145,6 +154,11 @@ export const useTransaction = (draftScope?: string) => {
 
     return lookup;
   }, [skuLookupProducts]);
+  const availableProductCategories = useMemo(() => Array.from(new Set(
+    skuLookupProducts
+      .filter(isProductVisibleInPos)
+      .map((product) => product.category || 'non_consumable'),
+  )).sort((left, right) => left.localeCompare(right, 'id')), [skuLookupProducts]);
 
   useEffect(() => {
     setProducts(productPageResult.products);
@@ -508,6 +522,8 @@ export const useTransaction = (draftScope?: string) => {
     isPosProcessReady,
     filteredProducts,
     productPagination,
+    availableProductCategories,
+    selectedProductCategory,
     promoPreview,
     membershipPreview,
     activePromos,
@@ -530,6 +546,7 @@ export const useTransaction = (draftScope?: string) => {
     handleAddPayment,
     clearCart: reset,
     setSearchTerm,
+    setSelectedProductCategory,
     updatePaymentDraft,
     removePaymentDraft,
     setVoucherCode,

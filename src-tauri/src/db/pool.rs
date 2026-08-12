@@ -5,10 +5,17 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     Executor, PgPool,
 };
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use std::sync::OnceLock;
 use std::{env, fs, io, path::PathBuf, str::FromStr, sync::RwLock, time::Duration};
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use tauri::Manager;
 use thiserror::Error;
 
 const MAX_MIGRATION_REPAIR_ATTEMPTS: usize = 8;
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+static MOBILE_APP_CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -1215,6 +1222,35 @@ fn read_database_url_from_storage() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+pub fn initialize_app_config_dir<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+) -> io::Result<()> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let config_dir = app_handle.path().app_config_dir().map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("failed to resolve application config directory: {error}"),
+            )
+        })?;
+
+        return match MOBILE_APP_CONFIG_DIR.set(config_dir.clone()) {
+            Ok(()) => Ok(()),
+            Err(_) if MOBILE_APP_CONFIG_DIR.get() == Some(&config_dir) => Ok(()),
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "application config directory was already initialized with a different path",
+            )),
+        };
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let _ = app_handle;
+        Ok(())
+    }
+}
+
 pub fn persist_database_url(database_url: &str) -> io::Result<()> {
     let path = database_url_path().ok_or_else(|| {
         io::Error::new(
@@ -1244,6 +1280,11 @@ fn database_url_path() -> Option<PathBuf> {
 }
 
 fn app_config_dir() -> Option<PathBuf> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        MOBILE_APP_CONFIG_DIR.get().cloned()
+    }
+
     #[cfg(target_os = "windows")]
     {
         env::var_os("APPDATA").map(|appdata| PathBuf::from(appdata).join("frayukti"))
@@ -1259,7 +1300,12 @@ fn app_config_dir() -> Option<PathBuf> {
         })
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "android",
+        target_os = "ios"
+    )))]
     {
         env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)

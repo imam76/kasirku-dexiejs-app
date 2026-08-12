@@ -9,6 +9,11 @@ import { QueryProvider } from '@/providers/QueryProvider';
 import '@/lib/dayjs';
 import { I18nProvider } from '@/providers/I18nProvider';
 import { AuthProvider } from '@/auth/AuthProvider';
+import { initializeSafeAreaInsets } from '@/platform/safeAreaInsets';
+
+void initializeSafeAreaInsets().catch((error) => {
+  console.error('Failed to initialize native safe-area insets:', error);
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -25,7 +25,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_share::init())
+        .plugin(tauri_plugin_safe_area_insets_css::init())
         .plugin(bluetooth_printer::init());
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder = builder.plugin(tauri_plugin_ios_webview_insets::init());
 
     #[cfg(desktop)]
     let builder = builder
@@ -35,6 +39,7 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            db::initialize_app_config_dir(app.handle())?;
             let state = tauri::async_runtime::block_on(db::create_postgres_state());
             let realtime_state = postgres_realtime::PostgresRealtimeState::default();
             realtime_state.restart(app.handle().clone(), state.health().available);
@@ -240,6 +245,7 @@ pub fn run() {
             commands::marketplace_commands::marketplace_list_orders,
             commands::marketplace_commands::marketplace_get_order,
             commands::marketplace_commands::marketplace_list_integration_logs,
+            commands::feedback_commands::submit_feedback,
             commands::postgres_health::postgres_health_check,
             commands::postgres_health::set_postgres_database_url,
             commands::postgres_health::probe_postgres_database_url,

@@ -16,6 +16,8 @@ interface ProductListProps {
     total: number;
     onChange: (page: number) => void;
   };
+  isMobile?: boolean;
+  hasMobileCart?: boolean;
 }
 
 const animateProductToCart = (source: HTMLElement) => {
@@ -64,7 +66,15 @@ const animateProductToCart = (source: HTMLElement) => {
   });
 };
 
-export default function ProductList({ products, cart, addToCart, updateQuantity, pagination }: ProductListProps) {
+export default function ProductList({
+  products,
+  cart,
+  addToCart,
+  updateQuantity,
+  pagination,
+  isMobile = false,
+  hasMobileCart = false,
+}: ProductListProps) {
   const { t } = useI18n();
   const shouldPaginate = pagination && pagination.total > pagination.pageSize;
 
@@ -73,9 +83,9 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden pb-24 min-[1024px]:pb-0">
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1" data-testid="pos-product-scroll-panel">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+    <div className={`flex h-full min-h-0 flex-col gap-3 overflow-hidden ${isMobile && hasMobileCart ? 'pb-20' : ''}`}>
+      <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 ${isMobile ? 'pb-3' : ''}`} data-testid="pos-product-scroll-panel">
+        <div className={`grid items-stretch gap-2.5 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
           {products.map((product) => {
             const { basePrice, wholesaleFromPrice } = getProductDisplayPricing(product);
             const cartItem = cart.find((item) => item.product.id === product.id);
@@ -85,7 +95,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
             return (
               <article
                 key={product.id}
-                className={`group relative min-h-32 overflow-hidden rounded-xl border bg-white p-2.5 text-left transition-all ${
+                className={`group relative overflow-hidden rounded-xl border bg-white p-2.5 text-left transition-all ${isMobile ? 'flex min-h-44 flex-col' : 'min-h-32'} ${
                   isInCart
                     ? 'border-blue-400 shadow-md shadow-blue-100/70 ring-2 ring-blue-100'
                     : 'border-slate-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-100/60 active:translate-y-0'
@@ -104,14 +114,14 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 text-blue-600 ring-1 ring-blue-100">
                       <Package size={19} strokeWidth={1.8} />
                     </span>
-                    <span className="flex items-center justify-end gap-1">
-                      <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wide ${product.stock < 10
+                    <span className="flex min-w-0 items-center justify-end gap-1">
+                      <span className={`inline-flex max-w-full truncate whitespace-nowrap rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wide ${product.stock < 10
                         ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
                         : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'}`}
                       >
                         {t('product.stock')} {product.stock}
                       </span>
-                      {cartItem && (
+                      {cartItem && !isMobile && (
                         <span className="inline-flex whitespace-nowrap rounded-full bg-gradient-to-br from-blue-50 to-blue-100 px-2 py-1 text-[9px] font-bold text-blue-600 ring-1 ring-blue-100">
                           {cartItem.quantity} {product.selling_unit}
                         </span>
@@ -120,10 +130,12 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                   </div>
 
                   <h3 className="mt-2 line-clamp-2 text-sm font-bold leading-4 text-slate-900">{product.name}</h3>
-                  <p className="mt-1 line-clamp-1 text-[10px] font-medium text-slate-400">SKU · {product.sku || '-'}</p>
+                  {(!isMobile || product.sku) && (
+                    <p className="mt-1 line-clamp-1 text-[10px] font-medium text-slate-400">SKU · {product.sku || '-'}</p>
+                  )}
                 </div>
 
-                <div className="pointer-events-none relative z-10 mt-2 flex items-end justify-between gap-2">
+                <div className={`pointer-events-none relative z-10 flex gap-2 ${isMobile ? 'mt-auto flex-col items-stretch pt-2' : 'mt-2 items-end justify-between'}`}>
                   <div className="pointer-events-none min-w-0">
                     <p className="text-sm font-black text-slate-900">
                       Rp {formatCurrency(basePrice)}
@@ -142,17 +154,17 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                   </div>
 
                   {cartItem ? (
-                    <div className="pointer-events-auto flex h-8 w-fit shrink-0 items-center overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm lg:hidden">
+                    <div className={`pointer-events-auto items-center overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm lg:hidden ${isMobile ? 'flex h-12 w-full justify-between' : 'flex h-8 w-fit shrink-0'}`}>
                       <button
                         type="button"
                         onClick={() => updateQuantity(product.id, cartItem.quantity - quantityStep)}
-                        className="grid h-full w-8 place-items-center bg-blue-50 text-blue-700 transition hover:bg-blue-600 hover:text-white"
+                        className={`grid h-full place-items-center bg-blue-50 text-blue-700 transition hover:bg-blue-600 hover:text-white ${isMobile ? 'w-12' : 'w-8'}`}
                         title={t('cart.decrease')}
                         aria-label={`${t('cart.decrease')} ${product.name}`}
                       >
                         <Minus size={14} strokeWidth={2.5} />
                       </button>
-                      <span className="min-w-8 px-1 text-center text-xs font-black tabular-nums text-slate-900">
+                      <span className="min-w-8 flex-1 px-1 text-center text-xs font-black tabular-nums text-slate-900">
                         {cartItem.quantity}
                       </span>
                       <button
@@ -160,7 +172,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                         onClick={(event) => {
                           if (updateQuantity(product.id, cartItem.quantity + quantityStep)) animateProductToCart(event.currentTarget);
                         }}
-                        className="grid h-full w-8 place-items-center bg-blue-50 text-blue-700 transition hover:bg-blue-600 hover:text-white"
+                        className={`grid h-full place-items-center bg-blue-50 text-blue-700 transition hover:bg-blue-600 hover:text-white ${isMobile ? 'w-12' : 'w-8'}`}
                         title={t('cart.increase')}
                         aria-label={`${t('cart.increase')} ${product.name}`}
                       >
@@ -168,7 +180,7 @@ export default function ProductList({ products, cart, addToCart, updateQuantity,
                       </button>
                     </div>
                   ) : null}
-                  <span className={`pointer-events-none h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-white shadow-sm transition group-hover:bg-blue-700 ${cartItem ? 'hidden lg:grid' : 'grid'}`}>
+                  <span className={`pointer-events-none shrink-0 place-items-center rounded-lg bg-blue-600 text-white shadow-sm transition group-hover:bg-blue-700 ${isMobile ? 'h-11 w-11 self-end' : 'h-8 w-8'} ${cartItem ? 'hidden lg:grid' : 'grid'}`}>
                     <Plus size={15} />
                   </span>
                 </div>

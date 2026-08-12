@@ -1,9 +1,9 @@
 import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
-import { App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Spin } from 'antd';
+import { App, Button, Card, Descriptions, Dropdown, Form, Input, InputNumber, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
 import { useState, useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { Banknote, Clock, LockKeyhole, PlayCircle, ScanLine } from 'lucide-react';
+import { Banknote, Clock, LockKeyhole, PlayCircle, RotateCcw, ScanLine, SlidersHorizontal } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { useCashierSession } from '@/hooks/useCashierSession';
 import { formatCurrency } from '@/utils/formatters';
@@ -16,6 +16,9 @@ import PosHotkeysInfo from '../components/PosHotkeysInfo';
 import { useAuth } from '@/auth/useAuth';
 import { isProductUnverified } from '@/services/posQuickItemService';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { getProductCategoryLabel } from '@/i18n/stock';
+import { OPEN_MOBILE_CASHIER_CLOSE_EVENT } from '@/navigation/mobileNavigation';
 import type { CashierSession, Product } from '@/types';
 import type { CashierSessionReconciliation } from '@/services/cashierSessionService';
 import { getPosProcessDraftScope } from '@/store/transactionStore';
@@ -158,6 +161,8 @@ export default function Transaction() {
     isPosProcessReady,
     filteredProducts,
     productPagination,
+    availableProductCategories,
+    selectedProductCategory,
     promoPreview,
     membershipPreview,
     activePromos,
@@ -179,6 +184,7 @@ export default function Transaction() {
     handleAddPayment,
     clearCart,
     setSearchTerm,
+    setSelectedProductCategory,
     updatePaymentDraft,
     removePaymentDraft,
     setVoucherCode,
@@ -187,6 +193,7 @@ export default function Transaction() {
     setShowPayment,
     discardDraftScope,
   } = useTransaction(posProcessDraftScope);
+  const isMobile = useIsMobile();
 
   // Mobile cart drawer state
   const [cartOpen, setCartOpen] = useState(false);
@@ -209,6 +216,14 @@ export default function Transaction() {
   const [editingCartProduct, setEditingCartProduct] = useState<Product | null>(null);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [reconciliation, setReconciliation] = useState<CashierSessionReconciliation | null>(null);
+
+  useEffect(() => {
+    if (!isMobile) return undefined;
+
+    const openCloseCashierModal = () => setCloseModalOpen(true);
+    window.addEventListener(OPEN_MOBILE_CASHIER_CLOSE_EVENT, openCloseCashierModal);
+    return () => window.removeEventListener(OPEN_MOBILE_CASHIER_CLOSE_EVENT, openCloseCashierModal);
+  }, [isMobile]);
 
   const resetPendingSearchKeySequence = useCallback(() => {
     if (pendingSearchFlushTimeoutRef.current !== null) {
@@ -930,12 +945,102 @@ export default function Transaction() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-slate-50/60 p-2 sm:p-3 min-[1024px]:px-3 min-[1024px]:pb-3 min-[1024px]:pt-0">
-      <CashierSessionStatusBar session={activeSession} onClose={openCloseModal} isClosing={isClosingSession} />
+      {!isMobile && (
+        <CashierSessionStatusBar session={activeSession} onClose={openCloseModal} isClosing={isClosingSession} />
+      )}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div id="product-list" className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-          <div className="sticky top-0 z-20 mb-2 shrink-0 rounded-2xl border border-blue-100 bg-white p-3 shadow-sm">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
+          <div className={`sticky top-0 z-20 mb-2 shrink-0 border border-blue-100 bg-white shadow-sm ${isMobile ? 'rounded-xl p-2' : 'rounded-2xl p-3'}`}>
+            {isMobile ? (
+              <>
+                <div className="flex items-stretch gap-2">
+                  <Input
+                    ref={searchInputRef}
+                    size="large"
+                    data-tour="transaction-search"
+                    allowClear={false}
+                    prefix={<SearchOutlined className="text-gray-400" />}
+                    placeholder={t('transaction.searchPlaceholder')}
+                    value={searchTerm}
+                    onKeyDownCapture={handleSearchKeyDownCapture}
+                    onChange={(event) => {
+                      resetPendingSearchKeySequence();
+                      searchTermRef.current = event.target.value;
+                      setSearchTerm(event.target.value);
+                    }}
+                    className="min-w-0 flex-1 rounded-xl"
+                  />
+                  <Dropdown
+                    trigger={['click']}
+                    placement="bottomRight"
+                    menu={{
+                      items: [
+                        {
+                          key: 'scan',
+                          icon: <ScanLine size={17} />,
+                          label: t('transaction.scanBarcode'),
+                          onClick: () => setScannerOpen(true),
+                        },
+                        {
+                          key: 'reset',
+                          icon: <RotateCcw size={17} />,
+                          label: t('transaction.reset'),
+                          disabled: !searchTerm,
+                          onClick: clearSearch,
+                        },
+                      ],
+                    }}
+                  >
+                    <Button
+                      htmlType="button"
+                      size="large"
+                      icon={<SlidersHorizontal size={19} />}
+                      aria-label={t('transaction.searchActions')}
+                      title={t('transaction.searchActions')}
+                      className="!h-auto !w-12 shrink-0 !rounded-xl"
+                    />
+                  </Dropdown>
+                </div>
+
+                <nav
+                  aria-label={t('transaction.categoryNavigation')}
+                  className="mobile-horizontal-scroll mt-2 flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProductCategory(undefined)}
+                    aria-pressed={!selectedProductCategory}
+                    className={`min-h-10 shrink-0 whitespace-nowrap rounded-full border px-3 py-2 text-xs font-bold transition-colors ${
+                      !selectedProductCategory
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-slate-200 bg-white text-slate-600'
+                    }`}
+                  >
+                    {t('transaction.allCategories')}
+                  </button>
+                  {availableProductCategories.map((category) => {
+                    const active = selectedProductCategory === category;
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => setSelectedProductCategory(category)}
+                        aria-pressed={active}
+                        className={`min-h-10 shrink-0 whitespace-nowrap rounded-full border px-3 py-2 text-xs font-bold transition-colors ${
+                          active
+                            ? 'border-blue-600 bg-blue-600 text-white'
+                            : 'border-slate-200 bg-white text-slate-600'
+                        }`}
+                      >
+                        {getProductCategoryLabel(category, t)}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
               <Input
                 ref={searchInputRef}
                 size="large"
@@ -972,9 +1077,10 @@ export default function Transaction() {
               >
                 {t('transaction.scanBarcode')}
               </Button>
-            </div>
+              </div>
+            )}
 
-            <PosHotkeysInfo />
+            {!isMobile && <PosHotkeysInfo />}
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden">
@@ -984,6 +1090,8 @@ export default function Transaction() {
               addToCart={handleAddProduct}
               updateQuantity={updateQuantity}
               pagination={productPagination}
+              isMobile={isMobile}
+              hasMobileCart={isMobile && totalItems > 0}
             />
           </div>
         </div>
@@ -1032,7 +1140,14 @@ export default function Transaction() {
 
       {/* Mobile: floating cart button. Tablet: inline footer below the product panel. */}
       {totalItems > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 z-30 min-[1024px]:static min-[1024px]:mt-2 min-[1024px]:shrink-0 lg:hidden">
+        <div
+          className={isMobile
+            ? 'fixed left-4 right-4 z-30'
+            : 'fixed bottom-4 left-4 right-4 z-30 min-[1024px]:static min-[1024px]:mt-2 min-[1024px]:shrink-0 lg:hidden'}
+          style={isMobile ? {
+            bottom: 'calc(4rem + max(var(--app-safe-area-inset-bottom), 0.5rem) + 0.75rem)',
+          } : undefined}
+        >
           <button
             onClick={() => setCartOpen(true)}
             data-tour="transaction-mobile-cart"

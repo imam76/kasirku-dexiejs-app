@@ -2,6 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --app-safe-area-inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --app-safe-area-inset-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+    --app-safe-area-inset-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --app-safe-area-inset-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  }
+}
+
+@layer utilities {
+  .safe-area-pad-top {
+    padding-top: calc(
+      var(--safe-area-extra-top, 0px)
+      + max(var(--app-safe-area-inset-top), var(--safe-area-min-top, 0.5rem))
+    );
+  }
+
+  .safe-area-pad-right {
+    padding-right: calc(
+      var(--safe-area-extra-right, 0px)
+      + max(var(--app-safe-area-inset-right), var(--safe-area-min-right, 1rem))
+    );
+  }
+
+  .safe-area-pad-bottom {
+    padding-bottom: calc(
+      var(--safe-area-extra-bottom, 0px)
+      + max(var(--app-safe-area-inset-bottom), var(--safe-area-min-bottom, 0.5rem))
+    );
+  }
+
+  .safe-area-pad-left {
+    padding-left: calc(
+      var(--safe-area-extra-left, 0px)
+      + max(var(--app-safe-area-inset-left), var(--safe-area-min-left, 1rem))
+    );
+  }
+
+  .mobile-bottom-navigation-clearance {
+    --safe-area-extra-bottom: 4rem;
+  }
+
+  .mobile-horizontal-scroll {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-horizontal-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer components {
   .app-menu-grid {
     display: grid;

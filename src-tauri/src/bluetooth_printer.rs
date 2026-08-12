@@ -15,6 +15,7 @@ impl BluetoothPrinterError {
         }
     }
 
+    #[cfg(not(target_os = "android"))]
     fn unsupported_platform() -> Self {
         Self::new(
             "UNSUPPORTED_PLATFORM",
@@ -207,7 +208,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .setup(|app, _api| {
             #[cfg(target_os = "android")]
             let printer = BluetoothPrinter(_api.register_android_plugin(
-                "com.asepimamnawawi_imam76.kasirku_erp_app",
+                "com.asepimamnawawi_imam76.frayukti_app",
                 "BluetoothPrinterPlugin",
             )?);
 

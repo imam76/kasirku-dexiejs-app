@@ -8,16 +8,21 @@ import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useAuth } from '@/auth/useAuth'
 import { Loading } from '@/components/Loading'
 import { NotFound } from '@/components/NotFound'
+import { MobileBottomNavigation, type MobileBottomNavigationItem } from '@/components/navigation/MobileBottomNavigation'
 import { FEEDBACK_QUESTIONS } from '@/constants/feedback'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useI18n } from '@/hooks/useI18n'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useTheme } from '@/hooks/useTheme'
 import { useEnabledModules } from '@/hooks/useEnabledModules'
+import { getCashierSessionActiveQueryKey } from '@/hooks/useCashierSession'
 import dayjs from '@/lib/dayjs'
 import { db } from '@/lib/db'
+import { getOpenCashierSessionForCurrentUser } from '@/services/cashierSessionService'
+import { submitFeedback } from '@/services/feedbackService'
 import { incrementSessionCount, markFeedbackSubmitted, shouldTriggerWave1, shouldTriggerWave2 } from '@/utils/feedback'
 import { setConversionRegistry } from '@/utils/pricing'
-import { OPEN_MOBILE_NAVIGATION_EVENT } from '@/navigation/mobileNavigation'
+import { OPEN_MOBILE_CASHIER_CLOSE_EVENT, OPEN_MOBILE_NAVIGATION_EVENT } from '@/navigation/mobileNavigation'
 import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
@@ -33,8 +38,10 @@ import {
   // HelpCircle,
   Home,
   Languages,
+  LockKeyhole,
   PanelLeftClose,
   PanelLeftOpen,
+  Package,
   RefreshCw,
   Settings,
   ShoppingBag,
@@ -48,7 +55,6 @@ import { useEffect, useState } from 'react'
 
 const { Content, Sider } = Layout
 
-const NAVBAR_HEIGHT = 64
 const SIDEBAR_WIDTH = 250
 
 type FeedbackValues = Record<string, unknown>
@@ -100,6 +106,13 @@ const RootLayout = () => {
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
   const isMobile = useIsMobile()
+  const isPhoneViewport = useMediaQuery('(max-width: 767.98px)')
+  const showMobileCashierSession = isMobile && location.pathname === '/transaction'
+  const { data: mobileCashierSession } = useQuery({
+    queryKey: getCashierSessionActiveQueryKey(currentUser?.id),
+    queryFn: () => getOpenCashierSessionForCurrentUser(currentUser!.id),
+    enabled: showMobileCashierSession && Boolean(currentUser?.id),
+  })
 
   useEffect(() => {
     if (!isMobile) setMobileNavOpen(false)
@@ -151,15 +164,7 @@ const RootLayout = () => {
     console.log(`Feedback Wave ${feedbackWave} submitted:`, values)
 
     try {
-      const response = await fetch('/api/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: message }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Feedback API failed with status ${response.status}`)
-      }
+      await submitFeedback(message)
     } catch (error) {
       console.error('Error submitting feedback:', error)
       notification.error({
@@ -291,6 +296,16 @@ const RootLayout = () => {
 
   const filteredNavLinks = filterNavLinks(navLinks)
 
+  const mobileBottomNavigationItems: MobileBottomNavigationItem[] = [
+    { to: '/', label: t('nav.home'), icon: Home },
+    { to: '/transaction', label: t('nav.transaction'), icon: ShoppingCart },
+    { to: '/master-data/products', label: t('nav.product'), icon: Package },
+    { to: '/history', label: t('nav.history'), icon: History },
+  ].filter((item) => (
+    canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet })
+    && isRouteEnabled(item.to)
+  ))
+
   const buildMenuItem = (link: NavLink): NonNullable<MenuProps['items']>[number] => {
     if (isNavGroup(link)) {
       return {
@@ -347,24 +362,30 @@ const RootLayout = () => {
   const isModuleActive = isRouteEnabled(location.pathname)
   const useFixedPosWorkspace = location.pathname === '/transaction' || location.pathname === '/pos-resto'
 
-  const safeAreaTop = 'env(safe-area-inset-top, 0px)'
-  const topOffset = `calc(${NAVBAR_HEIGHT}px + ${safeAreaTop})`
+  const topOffset = '4rem'
   const contentHeight = `calc(100dvh - ${topOffset})`
+  const mobileContentClassName = [
+    useFixedPosWorkspace ? 'h-full' : '',
+    'safe-area-pad-right safe-area-pad-bottom safe-area-pad-left py-4',
+    isPhoneViewport ? 'mobile-bottom-navigation-clearance' : '',
+  ].filter(Boolean).join(' ')
+  const contentClassName = isMobile
+    ? mobileContentClassName
+    : useFixedPosWorkspace
+      ? 'h-full p-4 min-[1024px]:p-0'
+      : 'p-4'
 
   return (
     <AuthGate>
       <Layout style={{ height: '100dvh', overflow: 'hidden' }}>
         {/* Top Navbar - Logo & Theme Toggle */}
         <nav
-          className="fixed top-0 z-40 w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200"
-          style={{
-            height: topOffset,
-            paddingTop: safeAreaTop,
-          }}
+          data-testid="app-top-navbar"
+          className={`${isMobile ? 'safe-area-pad-top ' : ''}fixed top-0 z-40 w-full border-b border-gray-200 bg-white shadow-sm transition-colors duration-200 dark:border-gray-700 dark:bg-gray-800`}
         >
-          <div className="h-full px-4 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <button
+          <div className="safe-area-pad-right safe-area-pad-left flex h-16 items-center justify-between">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              {!isPhoneViewport && <button
                 type="button"
                 data-testid="sidebar-toggle"
                 aria-label={isMobile
@@ -383,7 +404,7 @@ const RootLayout = () => {
                 {(isMobile ? mobileNavOpen : !collapsed)
                   ? <PanelLeftClose size={22} />
                   : <PanelLeftOpen size={22} />}
-              </button>
+              </button>}
               {/* Logo */}
               <img
                 src="/frayukti-f.svg"
@@ -397,10 +418,23 @@ const RootLayout = () => {
                 onClick={handleLogoClick}
                 className="hidden h-8 w-auto cursor-pointer lg:block"
               />
+              {showMobileCashierSession && mobileCashierSession ? (
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new Event(OPEN_MOBILE_CASHIER_CLOSE_EVENT))}
+                  className="flex min-w-0 max-w-36 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-emerald-800 outline-none transition-colors hover:bg-emerald-100 focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  aria-label={`${t('cashierSession.activeTitle')}: ${mobileCashierSession.session_number}. ${t('cashierSession.closeButton')}`}
+                  title={`${t('cashierSession.activeTitle')} · ${mobileCashierSession.session_number}`}
+                >
+                  <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                  <span className="truncate text-[11px] font-bold">{mobileCashierSession.session_number}</span>
+                  <LockKeyhole aria-hidden size={13} className="shrink-0" />
+                </button>
+              ) : null}
             </div>
 
             {/* Navbar actions */}
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <SyncStatusIndicator />
               <button
                 onClick={toggleLocale}
@@ -438,7 +472,11 @@ const RootLayout = () => {
         </nav>
 
         {/* Body: Sider + Content */}
-        <Layout hasSider={!isMobile} style={{ marginTop: topOffset, height: contentHeight }}>
+        <Layout
+          className={isMobile ? 'safe-area-pad-top' : undefined}
+          hasSider={!isMobile}
+          style={{ marginTop: topOffset, height: contentHeight }}
+        >
           {/* Side Navigation */}
           {!isMobile && (
             <Sider
@@ -484,7 +522,7 @@ const RootLayout = () => {
             }}
           >
             <Content className="transition-all duration-200" style={{ height: '100%', overflowY: useFixedPosWorkspace ? 'hidden' : 'auto' }}>
-              <div className={useFixedPosWorkspace ? 'h-full p-4 min-[1024px]:p-0' : 'p-4'}>
+              <div data-testid="app-content-insets" className={contentClassName}>
                 {!isModuleActive ? (
                   <Result
                     status="info"
@@ -548,7 +586,18 @@ const RootLayout = () => {
             />
           </Drawer>
 
-          <TanStackRouterDevtools />
+          {isPhoneViewport && (
+            <MobileBottomNavigation
+              pathname={location.pathname}
+              items={mobileBottomNavigationItems}
+              moreLabel={t('home.mobile.more')}
+              navigationLabel={t('root.navigation')}
+              drawerOpen={mobileNavOpen}
+              onOpenMore={() => setMobileNavOpen(true)}
+            />
+          )}
+
+          {!isMobile && <TanStackRouterDevtools />}
           <FeedbackModal
             open={showFeedback}
             wave={feedbackWave}

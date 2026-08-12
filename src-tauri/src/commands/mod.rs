@@ -13,6 +13,7 @@ pub mod cooperative_commands;
 pub mod currency_commands;
 pub mod department_commands;
 pub mod employee_commands;
+pub mod feedback_commands;
 pub mod finance_transaction_commands;
 pub mod fiscal_year_closing_run_commands;
 pub mod fixed_asset_commands;

@@ -5,6 +5,7 @@ import {
   prioritizeMobileHomeServices,
 } from '@/utils/mobileHome';
 import { buildMobileHomeData } from '@/services/mobileHomeService';
+import { isMobileBottomNavigationItemActive } from '@/utils/mobileBottomNavigation';
 import type { Transaction } from '@/types';
 
 const buildTransaction = (partial: Partial<Transaction> = {}): Transaction => ({
@@ -20,6 +21,15 @@ const buildTransaction = (partial: Partial<Transaction> = {}): Transaction => ({
 });
 
 describe('mobile Home helpers', () => {
+  test('matches bottom navigation items without marking Home active on every route', () => {
+    expect(isMobileBottomNavigationItemActive('/', { to: '/' })).toBe(true);
+    expect(isMobileBottomNavigationItemActive('/history', { to: '/' })).toBe(false);
+    expect(isMobileBottomNavigationItemActive('/history/detail', { to: '/history' })).toBe(true);
+    expect(isMobileBottomNavigationItemActive('/master-data/products/new', {
+      to: '/master-data/products',
+    })).toBe(true);
+  });
+
   test('builds compact user initials', () => {
     expect(getUserInitials('Imam')).toBe('I');
     expect(getUserInitials('Imam Maulana Yusuf')).toBe('IM');
