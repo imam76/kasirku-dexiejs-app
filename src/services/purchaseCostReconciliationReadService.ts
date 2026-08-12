@@ -6,7 +6,6 @@ import {
   type RemotePurchaseCostReconciliationDto,
   type RemotePurchaseCostReconciliationItemDto,
 } from '@/services/postgresAdapter';
-import { getLaterUpdatedAt } from '@/services/shared/remoteRefreshCursor';
 import type { PurchaseCostReconciliation, PurchaseCostReconciliationItem } from '@/types';
 
 export interface PurchaseCostReconciliationReadSyncResult {
@@ -113,22 +112,34 @@ export const mergeRemotePurchaseCostReconciliationBundlesIntoDexie = async (
   return result;
 };
 
-const getLatestLocalPurchaseCostReconciliationCreatedAt = async () => {
-  const reconciliations = await db.purchaseCostReconciliations.toArray();
-  return reconciliations.reduce<string | undefined>(
-    (latest, reconciliation) => getLaterUpdatedAt(latest, reconciliation.created_at),
-    undefined,
-  );
+const PURCHASE_COST_RECONCILIATION_CURSOR_ENTITY = 'purchaseCostReconciliations';
+
+interface PurchaseCostReconciliationCursor {
+  serverCreatedAt: string;
+  id: string;
+}
+
+/**
+ * The pull cursor is stored separately from the entity's own rows (db.syncCursors), not derived
+ * from MAX(created_at) of local data. created_at is client-supplied business time and can be
+ * pushed to the server long after it was set on an offline device - deriving the cursor from it
+ * lets a delayed push get silently skipped once other devices' cursors have advanced past that
+ * earlier timestamp. The cursor instead tracks server_created_at (server-assigned arrival order,
+ * see migration 0081) paired with id to break ties when rows share the same timestamp.
+ */
+const getStoredPurchaseCostReconciliationCursor = async (): Promise<PurchaseCostReconciliationCursor | undefined> => {
+  const stored = await db.syncCursors.get(PURCHASE_COST_RECONCILIATION_CURSOR_ENTITY);
+  if (!stored) return undefined;
+  return { serverCreatedAt: stored.cursor_value, id: stored.cursor_id };
 };
 
-const getLatestRemotePurchaseCostReconciliationCreatedAt = (
-  remoteBundles: RemotePurchaseCostReconciliationBundleDto[],
-) => (
-  remoteBundles.reduce<string | undefined>(
-    (latest, bundle) => getLaterUpdatedAt(latest, bundle.reconciliation.created_at),
-    undefined,
-  )
-);
+const setStoredPurchaseCostReconciliationCursor = async (cursor: PurchaseCostReconciliationCursor) => {
+  await db.syncCursors.put({
+    entity: PURCHASE_COST_RECONCILIATION_CURSOR_ENTITY,
+    cursor_value: cursor.serverCreatedAt,
+    cursor_id: cursor.id,
+  });
+};
 
 export const refreshPurchaseCostReconciliationsFromPostgres = async (): Promise<PurchaseCostReconciliationReadSyncResult> => {
   if (isRefreshingPurchaseCostReconciliationsFromPostgres || !canReadFromPostgres()) {
@@ -138,22 +149,27 @@ export const refreshPurchaseCostReconciliationsFromPostgres = async (): Promise<
   isRefreshingPurchaseCostReconciliationsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PURCHASE_COST_RECONCILIATION_READ_SYNC_RESULT };
-    let createdAfter = await getLatestLocalPurchaseCostReconciliationCreatedAt();
+    let cursor = await getStoredPurchaseCostReconciliationCursor();
 
     while (true) {
       const remoteBundles = await purchaseCostReconciliationPostgresAdapter.list({
-        createdAfter,
+        cursor,
         limit: PURCHASE_COST_RECONCILIATION_REFRESH_LIMIT,
       });
+      if (remoteBundles.length === 0) break;
+
       const result = await mergeRemotePurchaseCostReconciliationBundlesIntoDexie(remoteBundles);
       aggregate.fetched += result.fetched;
       aggregate.inserted += result.inserted;
 
-      if (remoteBundles.length < PURCHASE_COST_RECONCILIATION_REFRESH_LIMIT) break;
+      // Bundles come back ordered by (server_created_at, id) ascending, so the last one carries
+      // the furthest cursor position reached in this page.
+      const lastReconciliation = remoteBundles[remoteBundles.length - 1].reconciliation;
+      if (!lastReconciliation.server_created_at) break;
+      cursor = { serverCreatedAt: lastReconciliation.server_created_at, id: lastReconciliation.id };
+      await setStoredPurchaseCostReconciliationCursor(cursor);
 
-      const nextCreatedAfter = getLatestRemotePurchaseCostReconciliationCreatedAt(remoteBundles);
-      if (!nextCreatedAfter || nextCreatedAfter === createdAfter) break;
-      createdAfter = nextCreatedAfter;
+      if (remoteBundles.length < PURCHASE_COST_RECONCILIATION_REFRESH_LIMIT) break;
     }
 
     return aggregate;

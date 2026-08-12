@@ -18,6 +18,7 @@ import type {
   ActivityLog,
   DashboardPreference,
   SyncQueueItem,
+  SyncCursor,
   Promo,
   Contact,
   Department,
@@ -137,6 +138,7 @@ export class KasirkuDB extends Dexie {
   roles!: Table<Role>;
   rolePermissions!: Table<RolePermission>;
   syncQueue!: Table<SyncQueueItem>;
+  syncCursors!: Table<SyncCursor>;
   promos!: Table<Promo>;
   contacts!: Table<Contact>;
   departments!: Table<Department>;

@@ -8,14 +8,16 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_purchase_cost_reconciliation_bundles(
     state: State<'_, PostgresState>,
-    created_after: Option<String>,
+    cursor_server_created_at: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<PurchaseCostReconciliationBundleDto>> {
     let pool = state.pool()?;
     Ok(
         purchase_cost_reconciliation_repository::list_purchase_cost_reconciliation_bundles(
             &pool,
-            created_after,
+            cursor_server_created_at,
+            cursor_id,
             limit,
         )
         .await?,

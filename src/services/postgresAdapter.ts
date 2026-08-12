@@ -1190,6 +1190,13 @@ export interface RemotePurchaseCostReconciliationDto {
   created_by?: string | null;
   created_by_name?: string | null;
   created_at: string;
+  /**
+   * Server-assigned ingestion timestamp used for delta-fetch cursoring, distinct from
+   * created_at (client-supplied business creation time). Always present on rows read back
+   * from Postgres; absent on bundles built client-side for a push, since the server assigns
+   * it at INSERT time.
+   */
+  server_created_at?: string;
 }
 
 export interface RemotePurchaseCostReconciliationItemDto {
@@ -2799,12 +2806,13 @@ export const purchaseDocumentPostgresAdapter = {
 };
 
 export const purchaseCostReconciliationPostgresAdapter = {
-  async list(options: { createdAfter?: string; limit?: number } = {}) {
+  async list(options: { cursor?: { serverCreatedAt: string; id: string }; limit?: number } = {}) {
     if (!isTauriRuntime()) return [];
     return invoke<RemotePurchaseCostReconciliationBundleDto[]>(
       'postgres_list_purchase_cost_reconciliation_bundles',
       {
-        createdAfter: options.createdAfter,
+        cursorServerCreatedAt: options.cursor?.serverCreatedAt,
+        cursorId: options.cursor?.id,
         limit: options.limit,
       },
     );

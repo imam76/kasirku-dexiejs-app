@@ -445,6 +445,18 @@ export interface SyncQueueItem {
   updated_at: string;
 }
 
+/**
+ * Persisted delta-fetch pull cursor for a read-only sync entity, keyed by entity name. Kept
+ * separate from the entity's own rows (rather than recomputing MAX(created_at) from local data
+ * on every refresh) so the cursor reflects server-side arrival order, not a business timestamp
+ * that can be set on an offline device and pushed to the server much later.
+ */
+export interface SyncCursor {
+  entity: string;
+  cursor_value: string;
+  cursor_id: string;
+}
+
 export interface Promo {
   id: string;
   name: string;

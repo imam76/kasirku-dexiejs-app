@@ -20,6 +20,13 @@ pub struct PurchaseCostReconciliationDto {
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub created_at: String,
+    /// Server-assigned ingestion timestamp used for delta-fetch cursoring, distinct from
+    /// `created_at` (client-supplied business creation time). See migration 0081. Always present
+    /// on rows read back from Postgres (SELECT casts it to TEXT); absent on push payloads built
+    /// client-side, since the server assigns it at INSERT time via DEFAULT NOW() - `#[serde(default)]`
+    /// lets those payloads deserialize without the field.
+    #[serde(default)]
+    pub server_created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
