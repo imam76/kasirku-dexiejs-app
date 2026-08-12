@@ -361,9 +361,10 @@ const RootLayout = () => {
   const canOpenCurrentPath = canAccessPermissionRule(currentUser ?? undefined, requiredPermission, { currentRole, permissionSet })
   const isModuleActive = isRouteEnabled(location.pathname)
   const useFixedPosWorkspace = location.pathname === '/transaction' || location.pathname === '/pos-resto'
+  const usesEmbeddedProductHeader = isMobile && location.pathname === '/master-data/products'
 
   const topOffset = '4rem'
-  const contentHeight = `calc(100dvh - ${topOffset})`
+  const contentHeight = `calc(var(--app-vh) - ${topOffset})`
   const mobileContentClassName = [
     useFixedPosWorkspace ? 'h-full' : '',
     'safe-area-pad-right safe-area-pad-bottom safe-area-pad-left py-4',
@@ -377,7 +378,7 @@ const RootLayout = () => {
 
   return (
     <AuthGate>
-      <Layout style={{ height: '100dvh', overflow: 'hidden' }}>
+      <Layout style={{ height: 'var(--app-vh)', overflow: 'hidden' }}>
         {/* Top Navbar - Logo & Theme Toggle */}
         <nav
           data-testid="app-top-navbar"
@@ -536,7 +537,7 @@ const RootLayout = () => {
                   />
                 ) : canOpenCurrentPath ? (
                   <>
-                    <GlobalBreadcrumb pathname={location.pathname} />
+                    {!usesEmbeddedProductHeader ? <GlobalBreadcrumb pathname={location.pathname} /> : null}
                     <Outlet />
                   </>
                 ) : (

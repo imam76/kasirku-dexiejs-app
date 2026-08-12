@@ -87,8 +87,9 @@ export default function ProductList({
       <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 ${isMobile ? 'pb-3' : ''}`} data-testid="pos-product-scroll-panel">
         <div className={`grid items-stretch gap-2.5 ${isMobile ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
           {products.map((product) => {
-            const { basePrice, wholesaleFromPrice } = getProductDisplayPricing(product);
             const cartItem = cart.find((item) => item.product.id === product.id);
+            const displayUnit = cartItem?.unit ?? product.selling_unit;
+            const { basePrice, wholesaleFromPrice } = getProductDisplayPricing(product, displayUnit);
             const isInCart = Boolean(cartItem);
             const quantityStep = cartItem && ['gram', 'menit'].includes(cartItem.unit.toLowerCase()) ? 10 : 1;
 
@@ -123,7 +124,7 @@ export default function ProductList({
                       </span>
                       {cartItem && !isMobile && (
                         <span className="inline-flex whitespace-nowrap rounded-full bg-gradient-to-br from-blue-50 to-blue-100 px-2 py-1 text-[9px] font-bold text-blue-600 ring-1 ring-blue-100">
-                          {cartItem.quantity} {product.selling_unit}
+                          {cartItem.quantity} {cartItem.unit}
                         </span>
                       )}
                     </span>
@@ -141,7 +142,7 @@ export default function ProductList({
                       Rp {formatCurrency(basePrice)}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] font-medium text-slate-400">/ {product.selling_unit}</span>
+                      <span className="text-[10px] font-medium text-slate-400">/ {displayUnit}</span>
                       {product.wholesale_prices && product.wholesale_prices.length > 0 && (
                         <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">{t('product.wholesale')}</span>
                       )}

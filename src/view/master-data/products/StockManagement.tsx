@@ -24,6 +24,8 @@ import {
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
 import { exportCsv, exportXlsx, type ExportTarget } from '@/utils/export';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb';
 
 const STOCK_SAVED_EVENT = 'frayukti-workflow-tour-stock-saved';
 
@@ -46,6 +48,7 @@ export default function StockManagement() {
   const { t } = useI18n();
   const {
     products,
+    isLoading,
     editingId,
     control,
     handleSubmit,
@@ -60,6 +63,7 @@ export default function StockManagement() {
     isImporting,
   } = useStockManagement();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isActionDrawerOpen, setIsActionDrawerOpen] = useState(false);
@@ -430,32 +434,43 @@ export default function StockManagement() {
   };
 
   return (
-    <Card
-      className="shadow-md"
-      title={(
-        <div className="flex items-center gap-2">
-          <Package className="h-5 w-5" />
-          {t('stock.title')}
-        </div>
-      )}
-      extra={(
-        <div className="flex items-center gap-2">
-          <div className="flex shrink-0 items-center gap-2 sm:hidden">
-            <Button
-              type="primary"
-              icon={<Plus size={16} />}
-              onClick={handleAddProduct}
-              data-tour="stock-add-product"
-            >
-              {t('stock.add')}
-            </Button>
+    <>
+      {isMobile ? (
+        <header
+          data-testid="mobile-product-page-header"
+          className="mobile-page-fixed-header fixed inset-x-0 z-[39] border-b border-gray-200 bg-white py-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+        >
+          <GlobalBreadcrumb pathname="/master-data/products" compact />
+          <div className="flex min-h-11 items-center justify-between gap-3">
+            <h1 className="flex min-w-0 items-center gap-2 text-lg font-bold text-gray-900 dark:text-gray-100">
+              <Package aria-hidden className="h-5 w-5 shrink-0" />
+              <span className="truncate">{t('stock.title')}</span>
+            </h1>
             <Button
               aria-label={t('stock.actionMenuAria')}
               icon={<MoreVertical size={18} />}
               onClick={() => setIsActionDrawerOpen(true)}
             />
           </div>
-          <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
+        </header>
+      ) : null}
+      {isMobile ? <div aria-hidden className="mobile-page-fixed-header-spacer mb-4" /> : null}
+
+      <Card
+      className={isMobile ? '' : 'shadow-md'}
+      style={isMobile ? { background: 'transparent', border: 0, boxShadow: 'none' } : undefined}
+      styles={isMobile ? {
+        body: { padding: 0 },
+      } : undefined}
+      title={!isMobile ? (
+        <div className="flex items-center gap-2">
+          <Package className="h-5 w-5" />
+          {t('stock.title')}
+        </div>
+      ) : undefined}
+      extra={!isMobile ? (
+        <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Dropdown trigger={['click']} placement="bottomRight" menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}>
               <Button icon={<Download size={16} />}>
                 {t('stock.exportCsv')}
@@ -474,7 +489,7 @@ export default function StockManagement() {
             </Button>
           </div>
         </div>
-      )}
+      ) : undefined}
     >
       <input
         ref={fileInputRef}
@@ -584,7 +599,10 @@ export default function StockManagement() {
         onDelete={handleDelete}
         onOpeningStock={handleOpeningStockClick}
         onVerify={handleVerifyProduct}
+        onAdd={handleAddProduct}
+        loading={isLoading}
       />
-    </Card>
+      </Card>
+    </>
   );
 }

@@ -9,9 +9,10 @@ import {
 
 type GlobalBreadcrumbProps = {
   pathname: string;
+  compact?: boolean;
 };
 
-export function GlobalBreadcrumb({ pathname }: GlobalBreadcrumbProps) {
+export function GlobalBreadcrumb({ pathname, compact = false }: GlobalBreadcrumbProps) {
   const { t } = useI18n();
   const currentMatch = useMatches({
     select: (matches) => {
@@ -36,7 +37,10 @@ export function GlobalBreadcrumb({ pathname }: GlobalBreadcrumbProps) {
     <nav
       aria-label={t('breadcrumb.ariaLabel')}
       data-testid="global-breadcrumb"
-      className="mb-3 max-w-full overflow-x-auto pb-1 [scrollbar-width:thin]"
+      className={[
+        'max-w-full overflow-x-auto [scrollbar-width:thin]',
+        compact ? 'mb-2' : 'mb-3 pb-1',
+      ].join(' ')}
     >
       <Breadcrumb
         className="w-max min-w-full whitespace-nowrap [&_ol]:!items-center [&_ol]:!flex-nowrap [&_li]:shrink-0 [&_.ant-breadcrumb-link]:!inline-flex [&_.ant-breadcrumb-link]:!items-center [&_.ant-breadcrumb-separator]:!flex [&_.ant-breadcrumb-separator]:!self-stretch [&_.ant-breadcrumb-separator]:!items-center"

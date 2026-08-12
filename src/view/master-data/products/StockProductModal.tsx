@@ -8,7 +8,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useQuery } from '@tanstack/react-query';
-import { Badge, Grid, Modal, Tabs } from 'antd';
+import { Badge, Button, Tabs } from 'antd';
 import type { InputRef } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -31,8 +31,7 @@ import StockProductBarcodeScanner from './StockProductBarcodeScanner';
 import StockProductGeneralTab from './StockProductGeneralTab';
 import StockProductUnitConversionTab from './StockProductUnitConversionTab';
 import StockProductWholesaleTab from './StockProductWholesaleTab';
-
-const { useBreakpoint } = Grid;
+import ResponsiveCrudEditor from '@/components/mobile-crud/ResponsiveCrudEditor';
 
 /** Ratio yang tersimpan sebagai float (mis. 1/12) dikembalikan ke angka bulat. */
 const snapNearInteger = (value: number) => {
@@ -94,8 +93,9 @@ export default function StockProductModal({
   showPurchaseQuantity = false,
 }: Props) {
   const { t } = useI18n();
-  const screens = useBreakpoint();
   const [activeTab, setActiveTab] = useState('product');
+  const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const { fields: wholesaleFields, append: appendWholesale, remove: removeWholesale } = useFieldArray({
     control,
     name: 'wholesale_prices',
@@ -382,7 +382,9 @@ export default function StockProductModal({
     }
   }, [errors.sellable_units, errors.selling_unit, errors.unit_mappings, errors.wholesale_prices, open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (isSavingRef.current) return;
+
     if (errors.wholesale_prices) {
       setActiveTab('wholesale');
     } else if (!hasUnitConversion || errors.unit_mappings || errors.sellable_units || errors.selling_unit) {
@@ -391,7 +393,14 @@ export default function StockProductModal({
 
     if (!hasUnitConversion) return;
 
-    onSave();
+    isSavingRef.current = true;
+    setIsSaving(true);
+    try {
+      await onSave();
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -593,22 +602,29 @@ export default function StockProductModal({
         onClose={() => setScannerOpen(false)}
       />
 
-      {/*
-        Baris konversi memuat empat kolom (jumlah, satuan, setara, satuan), jadi
-        lebar bawaan 520px milik antd bikin isinya berhimpitan.
-      */}
-      <Modal
+      <ResponsiveCrudEditor
         title={title ?? (editingId ? t('stock.editProduct') : t('stock.newProduct'))}
         open={open}
-        onCancel={onCancel}
-        footer={null}
-        destroyOnHidden
-        width={!screens.sm ? '100%' : 760}
-        style={!screens.sm ? { top: 0, margin: 0, padding: 0, maxWidth: '100vw', height: '100vh' } : undefined}
-        styles={!screens.sm ? { body: { height: 'calc(100vh - 55px)', overflowY: 'auto' } } : undefined}
-        centered={!!screens.sm}
+        onClose={onCancel}
+        desktopWidth={760}
+        footer={(
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+            <Button size="large" onClick={onCancel}>
+              {t('stock.form.cancel')}
+            </Button>
+            <Button size="large" type="primary" loading={isSaving} onClick={() => void handleSave()}>
+              {submitLabel ?? t('stock.form.save')}
+            </Button>
+          </div>
+        )}
       >
-        <form onSubmit={onSave} className="mt-6">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSave();
+          }}
+          className="mt-2 sm:mt-6"
+        >
           {topContent}
           <div className="mb-4 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-gray-600">
             <span className="mr-1 font-bold text-red-500">*</span>
@@ -675,24 +691,8 @@ export default function StockProductModal({
             ]}
           />
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex items-center gap-2 rounded-lg bg-gray-500 px-4 py-2 text-sm text-white transition-colors hover:bg-gray-600"
-            >
-              {t('stock.form.cancel')}
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm text-white transition-colors hover:bg-green-700"
-            >
-              {submitLabel ?? t('stock.form.save')}
-            </button>
-          </div>
         </form>
-      </Modal>
+      </ResponsiveCrudEditor>
     </>
   );
 }

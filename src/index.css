@@ -8,6 +8,20 @@
     --app-safe-area-inset-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
     --app-safe-area-inset-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
     --app-safe-area-inset-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+    /* Diisi live dari native Android (lihat MainActivity.kt) karena WebView
+       edge-to-edge di sini tidak resize layout viewport saat keyboard virtual
+       muncul, jadi interactive-widget=resizes-content saja tidak cukup. */
+    --app-keyboard-inset-bottom: 0px;
+    /* WebView lama (mis. Samsung Internet/Chrome jadul di Samsung A6) tidak
+       kenal unit dvh, sehingga height yang memakainya diabaikan seluruhnya
+       dan app-shell kehilangan tinggi tetap. vh dipakai sebagai fallback. */
+    --app-vh: 100vh;
+  }
+
+  @supports (height: 100dvh) {
+    :root {
+      --app-vh: 100dvh;
+    }
   }
 }
 
@@ -51,6 +65,16 @@
 
   .mobile-horizontal-scroll::-webkit-scrollbar {
     display: none;
+  }
+
+  .mobile-page-fixed-header {
+    top: calc(4rem + max(var(--app-safe-area-inset-top), 0.5rem));
+    padding-left: max(var(--app-safe-area-inset-left), 1rem);
+    padding-right: max(var(--app-safe-area-inset-right), 1rem);
+  }
+
+  .mobile-page-fixed-header-spacer {
+    height: calc(6.125rem - 1rem);
   }
 }
 

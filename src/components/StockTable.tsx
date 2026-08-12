@@ -1,6 +1,6 @@
-import { Button, Drawer, Input, InputNumber, Select, Space, Tag, Tooltip } from 'antd';
+import { Button, Drawer, FloatButton, Input, InputNumber, Select, Space, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, CSSProperties } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
@@ -8,9 +8,10 @@ import { isProductUnverified } from '@/services/posQuickItemService';
 import type { Product } from '@/types';
 import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
 import { getProductDisplayPricing } from '@/utils/pricing';
-import { BadgeCheck, Edit2, PackagePlus, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { BadgeCheck, Edit2, EyeOff, Package, PackagePlus, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import ManagementTable from './ManagementTable';
+import MobileCrudList, { type MobileCrudAction } from './mobile-crud/MobileCrudList';
 
 interface StockTableProps {
   products: Product[];
@@ -18,6 +19,8 @@ interface StockTableProps {
   onDelete: (id: string) => void;
   onOpeningStock: (product: Product) => void;
   onVerify?: (product: Product) => void;
+  onAdd?: () => void;
+  loading?: boolean;
 }
 
 type StockStatusFilter = 'all' | 'out' | 'low' | 'safe';
@@ -26,7 +29,15 @@ type WholesaleStatusFilter = 'all' | 'with' | 'without';
 type ProductTypeFilter = 'all' | Product['product_type'];
 type PosVisibilityFilter = 'all' | 'visible' | 'hidden';
 
-export default function StockTable({ products, onEdit, onDelete, onOpeningStock, onVerify }: StockTableProps) {
+export default function StockTable({
+  products,
+  onEdit,
+  onDelete,
+  onOpeningStock,
+  onVerify,
+  onAdd,
+  loading = false,
+}: StockTableProps) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,6 +54,7 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
   const [productType, setProductType] = useState<ProductTypeFilter>('all');
   const [posVisibility, setPosVisibility] = useState<PosVisibilityFilter>('all');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
   const stockStatusOptions = useMemo(() => [
     { value: 'all', label: t('stock.allStock') },
@@ -72,6 +84,7 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
     productType !== 'all',
     posVisibility !== 'all',
   ].filter(Boolean).length;
+  const activeSearchAndFilterCount = activeFilterCount + (searchQuery.trim() ? 1 : 0);
 
   const isStockStatusMatch = useCallback((product: Product) => {
     switch (stockStatus) {
@@ -188,6 +201,33 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
     posVisibility,
     isStockStatusMatch,
   ]);
+
+  const selectedProduct = selectedProductId
+    ? filteredProducts.find((product) => product.id === selectedProductId) ?? null
+    : null;
+  const closeDetailSheet = () => setSelectedProductId(null);
+
+  const renderPriceStockGrid = (product: Product) => (
+    <div className="grid grid-cols-2 gap-2">
+      <span className="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800">
+        <span className="block text-[10px] font-bold uppercase tracking-wide text-gray-400">
+          {t('stock.sellingPrice')}
+        </span>
+        <span className="mt-0.5 block font-bold text-gray-900 dark:text-gray-100">
+          Rp {formatCurrency(product.selling_price)}
+        </span>
+        <span className="block text-[10px] text-gray-500">/ {product.purchase_unit}</span>
+      </span>
+      <span className="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800">
+        <span className="block text-[10px] font-bold uppercase tracking-wide text-gray-400">
+          {t('product.stock')}
+        </span>
+        <span className={`mt-1 inline-flex rounded px-2 py-0.5 text-sm font-bold ${getStockStatusClass(product.stock)}`}>
+          {product.stock} {product.purchase_unit}
+        </span>
+      </span>
+    </div>
+  );
 
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -433,8 +473,8 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
 
   return (
     <div className="space-y-4">
-      {/* Search and Filters */}
-      <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+      {/* Desktop search and filters stay inline; mobile uses one drawer from a FAB. */}
+      {!isMobile ? <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('stock.filterTitle')}</div>
@@ -450,29 +490,17 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
         </div>
 
         <div className="space-y-3">
-          <div className={isMobile ? 'grid grid-cols-[1fr_auto] gap-2' : 'block'}>
+          <div>
             <Input.Search
               allowClear
               placeholder={t('stock.searchPlaceholder')}
               value={searchQuery}
               onChange={handleSearchChange}
             />
-            {isMobile && (
-              <Button
-                size="large"
-                icon={<SlidersHorizontal size={18} />}
-                onClick={() => setIsFilterDrawerOpen(true)}
-              >
-                <span className="hidden min-[380px]:inline">
-                  {activeFilterCount > 0 ? t('stock.filterWithCount', { count: activeFilterCount }) : t('stock.filter')}
-                </span>
-              </Button>
-            )}
           </div>
-
-          {!isMobile && renderFilterControls()}
+          {renderFilterControls()}
         </div>
-      </div>
+      </div> : null}
 
       <Drawer
         title={t('stock.filterTitle')}
@@ -487,6 +515,16 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
         }}
       >
         <div className="space-y-3 pb-3">
+          <Input.Search
+            size="large"
+            allowClear
+            autoFocus
+            aria-label={t('stock.searchPlaceholder')}
+            placeholder={t('stock.searchPlaceholder')}
+            value={searchQuery}
+            onChange={handleSearchChange}
+          />
+
           <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
               <SlidersHorizontal size={18} />
@@ -516,14 +554,205 @@ export default function StockTable({ products, onEdit, onDelete, onOpeningStock,
         </div>
       </Drawer>
 
-      <ManagementTable<Product>
-        columns={columns}
-        dataSource={filteredProducts}
-        scrollX={1300}
-        pageSizeOptions={['5', '10', '20', '50']}
-        showTotal={(total, range) => t('stock.showingRange', { start: range[0], end: range[1], total })}
-        emptyText={searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
-      />
+      <Drawer
+        placement="bottom"
+        open={isMobile && selectedProductId !== null && selectedProduct !== null}
+        onClose={closeDetailSheet}
+        afterOpenChange={(isOpen) => {
+          if (!isOpen && selectedProductId) setSelectedProductId(null);
+        }}
+        closable={false}
+        size="auto"
+        destroyOnHidden
+        rootClassName="mobile-bottom-drawer"
+        styles={{ body: { padding: '20px 20px 24px' } }}
+      >
+        {selectedProduct ? (
+          <div className="space-y-4" data-testid="stock-detail-sheet">
+            <div className="mx-auto h-1 w-9 rounded-full bg-gray-200 dark:bg-gray-700" />
+            <div className="flex items-center gap-3">
+              <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                <Package aria-hidden size={22} />
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-base font-extrabold text-gray-900 dark:text-gray-100">
+                  {selectedProduct.name}
+                </div>
+                <div className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                  {selectedProduct.sku?.trim() || t('stock.mobile.noSku')}
+                </div>
+              </div>
+            </div>
+
+            {renderPriceStockGrid(selectedProduct)}
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <Button
+                size="large"
+                className="h-12"
+                onClick={() => {
+                  closeDetailSheet();
+                  onOpeningStock(selectedProduct);
+                }}
+              >
+                {t('stock.openingStockAction')}
+              </Button>
+              <Button
+                type="primary"
+                size="large"
+                className="h-12"
+                onClick={() => {
+                  closeDetailSheet();
+                  onEdit(selectedProduct);
+                }}
+              >
+                {t('stock.editProduct')}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Drawer>
+
+      {isMobile ? (
+        <MobileCrudList<Product>
+          items={filteredProducts}
+          getKey={(product) => product.id}
+          loading={loading}
+          resetKey={JSON.stringify([
+            searchQuery,
+            selectedCategories.join(','),
+            stockStatus,
+            minStock,
+            maxStock,
+            skuStatus,
+            minSellingPrice,
+            maxSellingPrice,
+            minPurchasePrice,
+            maxPurchasePrice,
+            wholesaleStatus,
+            productType,
+            posVisibility,
+          ])}
+          resultSummary={t('stock.filterSummary', { shown: filteredProducts.length, total: products.length })}
+          emptyText={searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
+          emptyAction={!searchQuery && activeFilterCount === 0 && onAdd ? (
+            <Button type="primary" size="large" icon={<Plus size={18} />} onClick={onAdd}>
+              {t('stock.addProduct')}
+            </Button>
+          ) : undefined}
+          loadMoreLabel={(remaining) => t('stock.mobile.loadMore', { count: remaining })}
+          getItemAriaLabel={(product) => t('stock.mobile.detailAria', { name: product.name })}
+          getActionsAriaLabel={(product) => t('stock.mobile.actionsAria', { name: product.name })}
+          getActionSheetTitle={(product) => product.name}
+          onItemClick={(product) => setSelectedProductId(product.id)}
+          getActions={(product): MobileCrudAction<Product>[] => [
+            {
+              key: 'edit',
+              label: t('stock.editTitle'),
+              description: t('stock.editDescription'),
+              icon: <Edit2 aria-hidden size={19} />,
+              onSelect: onEdit,
+            },
+            {
+              key: 'verify',
+              label: t('stock.verifyAction'),
+              description: t('stock.verifyDescription'),
+              icon: <BadgeCheck aria-hidden size={19} />,
+              hidden: !onVerify || !isProductUnverified(product),
+              onSelect: (item) => onVerify?.(item),
+            },
+            {
+              key: 'opening-stock',
+              label: t('stock.openingStockAction'),
+              description: t('stock.openingStockDescription'),
+              icon: <PackagePlus aria-hidden size={19} />,
+              onSelect: onOpeningStock,
+            },
+            {
+              key: 'delete',
+              label: t('stock.deleteProductTitle'),
+              description: t('stock.deleteDescription'),
+              icon: <Trash2 aria-hidden size={19} />,
+              danger: true,
+              onSelect: (item) => onDelete(item.id),
+            },
+          ]}
+          renderItem={(product) => (
+            <div className="space-y-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                  <Package aria-hidden size={21} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-start gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-gray-900 dark:text-gray-100">
+                      {product.name}
+                    </span>
+                    {product.is_visible_in_pos === false ? (
+                      <EyeOff aria-label={t('stock.mobile.hiddenFromPos')} size={17} className="mt-0.5 shrink-0 text-gray-400" />
+                    ) : null}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
+                    {product.sku?.trim() || t('stock.mobile.noSku')}
+                  </span>
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                <Tag className="m-0">{getProductCategoryLabel(product.category || 'non_consumable', t)}</Tag>
+                <Tag className="m-0" color={product.product_type === 'RAW_MATERIAL' ? 'cyan' : 'blue'}>
+                  {product.product_type === 'RAW_MATERIAL' ? t('stock.mobile.rawMaterial') : t('stock.mobile.finishedGood')}
+                </Tag>
+                {isProductUnverified(product) ? <Tag className="m-0" color="gold">{t('stock.unverified')}</Tag> : null}
+              </div>
+
+              {renderPriceStockGrid(product)}
+            </div>
+          )}
+        />
+      ) : (
+        <ManagementTable<Product>
+          columns={columns}
+          dataSource={filteredProducts}
+          loading={loading}
+          scrollX={1300}
+          pageSizeOptions={['5', '10', '20', '50']}
+          showTotal={(total, range) => t('stock.showingRange', { start: range[0], end: range[1], total })}
+          emptyText={searchQuery || activeFilterCount > 0 ? t('stock.noFilteredProducts') : t('stock.noProducts')}
+        />
+      )}
+
+      {isMobile && onAdd ? (
+        <>
+          <FloatButton
+            type="default"
+            icon={<SlidersHorizontal size={22} />}
+            aria-label={t('stock.filterTitle')}
+            tooltip={t('stock.filterTitle')}
+            badge={{ count: activeSearchAndFilterCount, color: '#fa8c16' }}
+            data-testid="stock-search-filter-fab"
+            onClick={() => setIsFilterDrawerOpen(true)}
+            style={{
+              '--ant-float-btn-size': '56px',
+              bottom: 'calc(4rem + var(--app-safe-area-inset-bottom, 0px) + 5.25rem)',
+              insetInlineEnd: 16,
+            } as CSSProperties & { '--ant-float-btn-size': string }}
+          />
+          <FloatButton
+            type="primary"
+            icon={<Plus size={24} />}
+            aria-label={t('stock.add')}
+            tooltip={t('stock.add')}
+            data-tour="stock-add-product"
+            onClick={onAdd}
+            style={{
+              '--ant-float-btn-size': '56px',
+              bottom: 'calc(4rem + var(--app-safe-area-inset-bottom, 0px) + 1rem)',
+              insetInlineEnd: 16,
+            } as CSSProperties & { '--ant-float-btn-size': string }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
