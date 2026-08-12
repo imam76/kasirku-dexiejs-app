@@ -102,6 +102,7 @@ import {
   productPostgresAdapter,
   productionOrderPostgresAdapter,
   purchaseDocumentPostgresAdapter,
+  purchaseCostReconciliationPostgresAdapter,
   projectPostgresAdapter,
   fixedAssetPostgresAdapter,
   fixedAssetDepreciationRunPostgresAdapter,
@@ -171,6 +172,9 @@ import {
   type RemotePurchaseDocumentBundleDto,
   type RemotePurchaseDocumentDto,
   type RemotePurchaseDocumentItemDto,
+  type RemotePurchaseCostReconciliationBundleDto,
+  type RemotePurchaseCostReconciliationDto,
+  type RemotePurchaseCostReconciliationItemDto,
   type RemoteProjectDto,
   type RemoteFixedAssetDto,
   type RemoteFixedAssetDepreciationRunBundleDto,
@@ -198,7 +202,7 @@ import {
 } from '@/services/fiscalYearReadService';
 import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
-import type { InventoryLot, InventoryLotConsumption } from '@/types';
+import type { InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem } from '@/types';
 import type { LeaveRequest } from '@/types';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 
@@ -255,6 +259,7 @@ const FIXED_ASSET_DEPRECIATION_RUN_ENTITY = 'fixedAssetDepreciationRuns';
 const INVENTORY_LOT_ENTITY = 'inventoryLots';
 const INVENTORY_LOT_CONSUMPTION_ENTITY = 'inventoryLotConsumptions';
 const PURCHASE_DOCUMENT_ENTITY = 'purchaseDocuments';
+const PURCHASE_COST_RECONCILIATION_ENTITY = 'purchaseCostReconciliations';
 const ROLE_ENTITY = 'roles';
 const ROLE_PERMISSION_ENTITY = 'rolePermissions';
 const SALES_DOCUMENT_ENTITY = 'salesDocuments';
@@ -1947,6 +1952,62 @@ const mapPurchaseDocumentBundleToRemoteDto = (
   items: items.map(mapPurchaseDocumentItemToRemoteDto),
 });
 
+const mapPurchaseCostReconciliationToRemoteDto = (
+  reconciliation: PurchaseCostReconciliation,
+): RemotePurchaseCostReconciliationDto => ({
+  id: reconciliation.id,
+  purchase_document_id: reconciliation.purchase_document_id,
+  purchase_document_number: reconciliation.purchase_document_number,
+  supplier_invoice_number: reconciliation.supplier_invoice_number,
+  supplier_invoice_date: reconciliation.supplier_invoice_date,
+  additional_cost_treatment: reconciliation.additional_cost_treatment,
+  additional_cost_amount: reconciliation.additional_cost_amount,
+  supplier_discount_amount: reconciliation.supplier_discount_amount,
+  supplier_tax_amount: reconciliation.supplier_tax_amount,
+  total_estimated_cost: reconciliation.total_estimated_cost,
+  total_final_cost: reconciliation.total_final_cost,
+  total_variance_amount: reconciliation.total_variance_amount,
+  sold_cost_variance_amount: reconciliation.sold_cost_variance_amount,
+  remaining_stock_variance_amount: reconciliation.remaining_stock_variance_amount,
+  notes: reconciliation.notes,
+  created_by: reconciliation.created_by,
+  created_by_name: reconciliation.created_by_name,
+  created_at: reconciliation.created_at,
+});
+
+const mapPurchaseCostReconciliationItemToRemoteDto = (
+  item: PurchaseCostReconciliationItem,
+): RemotePurchaseCostReconciliationItemDto => ({
+  id: item.id,
+  reconciliation_id: item.reconciliation_id,
+  purchase_document_item_id: item.purchase_document_item_id,
+  product_id: item.product_id,
+  product_name: item.product_name,
+  received_quantity: item.received_quantity,
+  invoiced_quantity: item.invoiced_quantity,
+  quantity_variance: item.quantity_variance,
+  sold_quantity_at_reconciliation: item.sold_quantity_at_reconciliation,
+  remaining_quantity_at_reconciliation: item.remaining_quantity_at_reconciliation,
+  estimated_price: item.estimated_price,
+  final_price: item.final_price,
+  additional_cost_allocation: item.additional_cost_allocation,
+  supplier_discount_allocation: item.supplier_discount_allocation,
+  supplier_tax_allocation: item.supplier_tax_allocation,
+  final_landed_cost_per_unit: item.final_landed_cost_per_unit,
+  variance_per_unit: item.variance_per_unit,
+  sold_cost_variance_amount: item.sold_cost_variance_amount,
+  remaining_stock_variance_amount: item.remaining_stock_variance_amount,
+  created_at: item.created_at,
+});
+
+const mapPurchaseCostReconciliationBundleToRemoteDto = (
+  reconciliation: PurchaseCostReconciliation,
+  items: PurchaseCostReconciliationItem[],
+): RemotePurchaseCostReconciliationBundleDto => ({
+  reconciliation: mapPurchaseCostReconciliationToRemoteDto(reconciliation),
+  items: items.map(mapPurchaseCostReconciliationItemToRemoteDto),
+});
+
 const mapTaxToRemoteDto = (tax: Tax): RemoteTaxDto => ({
   id: tax.id,
   code: tax.code,
@@ -3131,6 +3192,66 @@ const isRemotePurchaseDocumentBundleDto = (
   );
 };
 
+const isRemotePurchaseCostReconciliationDto = (
+  payload: unknown,
+): payload is RemotePurchaseCostReconciliationDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePurchaseCostReconciliationDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.purchase_document_id === 'string' &&
+    typeof candidate.purchase_document_number === 'string' &&
+    typeof candidate.additional_cost_treatment === 'string' &&
+    typeof candidate.additional_cost_amount === 'number' &&
+    typeof candidate.supplier_discount_amount === 'number' &&
+    typeof candidate.supplier_tax_amount === 'number' &&
+    typeof candidate.total_estimated_cost === 'number' &&
+    typeof candidate.total_final_cost === 'number' &&
+    typeof candidate.total_variance_amount === 'number' &&
+    typeof candidate.sold_cost_variance_amount === 'number' &&
+    typeof candidate.remaining_stock_variance_amount === 'number' &&
+    typeof candidate.created_at === 'string'
+  );
+};
+
+const isRemotePurchaseCostReconciliationItemDto = (
+  payload: unknown,
+): payload is RemotePurchaseCostReconciliationItemDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePurchaseCostReconciliationItemDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.reconciliation_id === 'string' &&
+    typeof candidate.purchase_document_item_id === 'string' &&
+    typeof candidate.product_id === 'string' &&
+    typeof candidate.product_name === 'string' &&
+    typeof candidate.received_quantity === 'number' &&
+    typeof candidate.invoiced_quantity === 'number' &&
+    typeof candidate.quantity_variance === 'number' &&
+    typeof candidate.sold_quantity_at_reconciliation === 'number' &&
+    typeof candidate.remaining_quantity_at_reconciliation === 'number' &&
+    typeof candidate.estimated_price === 'number' &&
+    typeof candidate.final_price === 'number' &&
+    typeof candidate.final_landed_cost_per_unit === 'number' &&
+    typeof candidate.created_at === 'string'
+  );
+};
+
+const isRemotePurchaseCostReconciliationBundleDto = (
+  payload: unknown,
+): payload is RemotePurchaseCostReconciliationBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePurchaseCostReconciliationBundleDto>;
+  return (
+    isRemotePurchaseCostReconciliationDto(candidate.reconciliation) &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every(isRemotePurchaseCostReconciliationItemDto)
+  );
+};
+
 const isRemoteTaxDto = (payload: unknown): payload is RemoteTaxDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3626,6 +3747,26 @@ const updatePurchaseDocumentSyncMetadata = async (
   if (!currentDocument || currentDocument.updated_at !== sourceUpdatedAt) return;
 
   await db.purchaseDocuments.update(documentId, syncMetadata);
+};
+
+/**
+ * No sourceUpdatedAt/version guard like updatePurchaseDocumentSyncMetadata - reconciliation rows
+ * are immutable (created once, never edited), so there's no local-edit-in-flight race to protect
+ * against, same rationale as updateInventoryLotConsumptionSyncMetadata. Updates the reconciliation
+ * row and all its item rows together since they share one sync-queue entry (bundle push).
+ */
+const updatePurchaseCostReconciliationSyncMetadata = async (
+  reconciliationId: string,
+  itemIds: string[],
+  syncMetadata: Partial<Pick<PurchaseCostReconciliation, 'sync_status' | 'sync_error' | 'last_synced_at'>>,
+) => {
+  const currentReconciliation = await db.purchaseCostReconciliations.get(reconciliationId);
+  if (!currentReconciliation) return;
+
+  await db.purchaseCostReconciliations.update(reconciliationId, syncMetadata);
+  if (itemIds.length > 0) {
+    await db.purchaseCostReconciliationItems.where('id').anyOf(itemIds).modify(syncMetadata);
+  }
 };
 
 const updateSalesDocumentSyncMetadata = async (
@@ -4155,6 +4296,20 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
       sync_status: 'failed',
       sync_error: errorMessage,
     });
+  }
+
+  if (
+    queueItem.entity === PURCHASE_COST_RECONCILIATION_ENTITY &&
+    isRemotePurchaseCostReconciliationBundleDto(queueItem.payload)
+  ) {
+    await updatePurchaseCostReconciliationSyncMetadata(
+      queueItem.entity_id,
+      queueItem.payload.items.map((item) => item.id),
+      {
+        sync_status: 'failed',
+        sync_error: errorMessage,
+      },
+    );
   }
 
   if (queueItem.entity === SALES_DOCUMENT_ENTITY && isRemoteSalesDocumentBundleDto(queueItem.payload)) {
@@ -4694,6 +4849,18 @@ const processPurchaseDocumentQueueItem = async (queueItem: SyncQueueItem) => {
   return purchaseDocumentPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processPurchaseCostReconciliationQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Purchase cost reconciliation sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemotePurchaseCostReconciliationBundleDto(queueItem.payload)) {
+    throw new Error('Payload purchase cost reconciliation sync queue tidak valid.');
+  }
+
+  return purchaseCostReconciliationPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processSalesDocumentQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Sales document sync queue tidak mendukung operasi delete.');
@@ -4913,6 +5080,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteInventoryLot: RemoteInventoryLotDto | null = null;
     let remoteInventoryLotConsumption: RemoteInventoryLotConsumptionDto | null = null;
     let remotePurchaseDocumentBundle: RemotePurchaseDocumentBundleDto | null = null;
+    let remotePurchaseCostReconciliationBundle: RemotePurchaseCostReconciliationBundleDto | null = null;
     let remoteRole: RemoteRoleDto | null = null;
     let remoteRolePermission: RemoteRolePermissionDto | null = null;
     let remoteSalesDocumentBundle: RemoteSalesDocumentBundleDto | null = null;
@@ -5014,6 +5182,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteFixedAssetRunBundle = await processFixedAssetRunQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PURCHASE_DOCUMENT_ENTITY) {
       remotePurchaseDocumentBundle = await processPurchaseDocumentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === PURCHASE_COST_RECONCILIATION_ENTITY) {
+      remotePurchaseCostReconciliationBundle = await processPurchaseCostReconciliationQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === ROLE_ENTITY) {
       remoteRole = await processRoleQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === ROLE_PERMISSION_ENTITY) {
@@ -5819,6 +5989,23 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remotePurchaseDocumentBundle.document.updated_at,
       });
       await mergeRemotePurchaseDocumentBundlesIntoDexie([remotePurchaseDocumentBundle], syncedAt);
+      return;
+    }
+
+    if (
+      remotePurchaseCostReconciliationBundle &&
+      isRemotePurchaseCostReconciliationBundleDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updatePurchaseCostReconciliationSyncMetadata(
+        currentQueueItem.entity_id,
+        remotePurchaseCostReconciliationBundle.items.map((item) => item.id),
+        {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+        },
+      );
       return;
     }
 
@@ -8292,6 +8479,57 @@ export const enqueuePendingPurchaseDocumentsForSync = async () => {
     if (!existingQueueItem) {
       const items = await db.purchaseDocumentItems.where('document_id').equals(document.id).toArray();
       await enqueuePurchaseDocumentBundleSync(document, items, 'update');
+    }
+  }
+};
+
+/**
+ * Reconciliation + its items are immutable (see mark-synced helpers above), so operation is
+ * always 'create' - unlike enqueuePurchaseDocumentBundleSync there's no 'update' case.
+ */
+export const enqueuePurchaseCostReconciliationBundleSync = async (
+  reconciliation: PurchaseCostReconciliation,
+  items: PurchaseCostReconciliationItem[],
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: PURCHASE_COST_RECONCILIATION_ENTITY,
+    entity_id: reconciliation.id,
+    operation: 'create',
+    payload: mapPurchaseCostReconciliationBundleToRemoteDto(reconciliation, items),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingPurchaseCostReconciliationsForSync = async () => {
+  const reconciliations = (await db.purchaseCostReconciliations.toArray())
+    .filter((reconciliation) => reconciliation.sync_status === 'pending' || reconciliation.sync_status === 'failed');
+
+  const reconciliationQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(PURCHASE_COST_RECONCILIATION_ENTITY)
+    .toArray();
+
+  for (const reconciliation of reconciliations) {
+    const existingQueueItem = reconciliationQueueItems.find((queueItem) => (
+      queueItem.entity_id === reconciliation.id && queueItem.status !== 'synced'
+    ));
+
+    if (!existingQueueItem) {
+      const items = await db.purchaseCostReconciliationItems
+        .where('reconciliation_id')
+        .equals(reconciliation.id)
+        .toArray();
+      await enqueuePurchaseCostReconciliationBundleSync(reconciliation, items);
     }
   }
 };

@@ -29,6 +29,7 @@ pub mod payroll_repository;
 pub mod product_repository;
 pub mod production_order_repository;
 pub mod project_repository;
+pub mod purchase_cost_reconciliation_repository;
 pub mod purchase_document_repository;
 pub mod sales_document_repository;
 pub mod stock_mutation_repository;

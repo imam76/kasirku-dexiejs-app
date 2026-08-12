@@ -26,6 +26,7 @@ pub mod payroll;
 pub mod product;
 pub mod production_order;
 pub mod project;
+pub mod purchase_cost_reconciliation;
 pub mod purchase_document;
 pub mod sales_document;
 pub mod stock_mutation;

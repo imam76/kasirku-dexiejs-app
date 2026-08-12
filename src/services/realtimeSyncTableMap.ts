@@ -48,6 +48,7 @@ import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
+import { refreshPurchaseCostReconciliationsFromPostgres } from '@/services/purchaseCostReconciliationReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
 import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
 import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadService';
@@ -323,9 +324,14 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
     refreshFns: [refreshPurchaseDocumentsFromPostgres],
     queryKeys: PURCHASE_DOCUMENT_QUERY_KEYS,
   },
-  // No pull-side sync yet - see module doc comment above.
-  purchase_cost_reconciliations: { refreshFns: noRefresh, queryKeys: ['pendingPurchaseCosts'] },
-  purchase_cost_reconciliation_items: { refreshFns: noRefresh, queryKeys: ['pendingPurchaseCosts'] },
+  purchase_cost_reconciliations: {
+    refreshFns: [refreshPurchaseCostReconciliationsFromPostgres],
+    queryKeys: ['pendingPurchaseCosts'],
+  },
+  purchase_cost_reconciliation_items: {
+    refreshFns: [refreshPurchaseCostReconciliationsFromPostgres],
+    queryKeys: ['pendingPurchaseCosts'],
+  },
   stock_opnames: { refreshFns: [refreshStockOpnamesFromPostgres], queryKeys: STOCK_OPNAME_QUERY_KEYS },
   stock_opname_items: { refreshFns: [refreshStockOpnamesFromPostgres], queryKeys: STOCK_OPNAME_QUERY_KEYS },
   // No pull-side sync yet - see module doc comment above.

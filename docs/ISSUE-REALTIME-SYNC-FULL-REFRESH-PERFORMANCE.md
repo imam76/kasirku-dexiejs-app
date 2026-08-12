@@ -1265,3 +1265,101 @@ File yang diubah pada slice ini:
 - `src-tauri/src/repositories/cooperative_payment_repository.rs` (diubah)
 - `src-tauri/src/commands/cooperative_commands.rs` (diubah)
 - `src/services/postgresAdapter.ts` (diubah)
+
+---
+
+**2026-08-12 — Bangun push+pull dari nol untuk `purchase_cost_reconciliations` /
+`purchase_cost_reconciliation_items`** (item aksi ke-2 dari 2 yang tersisa dari audit
+2026-08-11). User memilih arah "bangun sync lintas-device" (bukan cleanup skema mati) untuk
+tabel ini — beda dari `product_recipes`/items yang masih menunggu keputusan produk terpisah.
+
+Desain: **pola bundle** (parent + array item, di-push/pull sebagai satu unit), meniru persis
+`purchase_documents`/`purchase_document_items` — bukan pola entity independen
+`inventory_lots`/`inventory_lot_consumptions` — karena reconciliation + items selalu dibuat
+bersamaan dalam satu operasi atomik (`reconcilePurchaseReceiptCost()`), tidak pernah independen.
+Cursor pull di `created_at` pada parent (bukan `updated_at`), sama seperti `stock_mutations` —
+kedua tabel append-only/immutable, baris dibuat sekali dan tidak pernah diubah/dihapus lagi.
+Upsert push jadi `INSERT ... ON CONFLICT (id) DO NOTHING` untuk parent & items (idempotent,
+retry-safe) — lebih sederhana dari `upsert_purchase_document_bundle` yang full column `UPDATE`,
+karena baris immutable tidak pernah perlu diupdate.
+
+Ringkasan perubahan:
+
+1. **Rust (baru)** — `models/purchase_cost_reconciliation.rs`
+   (`PurchaseCostReconciliationDto`/`Item`/`BundleDto`),
+   `repositories/purchase_cost_reconciliation_repository.rs` (`list_..._bundles` cursor
+   `created_at`, `get_..._bundle`, `upsert_..._bundle` insert-only + fallback select),
+   `commands/purchase_cost_reconciliation_commands.rs` (3 command), registrasi di 3 `mod.rs` +
+   `lib.rs` invoke_handler. Migration baru
+   `0080_purchase_cost_reconciliation_delta_fetch_indexes.sql` — index `(created_at, id)` untuk
+   `purchase_cost_reconciliations` (index `reconciliation_id` untuk items sudah ada dari `0018`).
+2. **TS types** — `PurchaseCostReconciliation`/`PurchaseCostReconciliationItem` dapat field sync
+   (`sync_status`, `sync_error`, `last_synced_at` — tanpa `remote_updated_at`, karena immutable
+   tidak butuh conflict/version check saat pull), pola persis `InventoryLotConsumption`.
+3. **`src/services/postgresAdapter.ts`** — `RemotePurchaseCostReconciliation(Item)?Dto`,
+   `purchaseCostReconciliationPostgresAdapter` (`list({ createdAfter, limit })`, `get`, `upsert`).
+4. **`src/services/syncQueueService.ts`** — entity baru `purchaseCostReconciliations` (mapper,
+   type guard, `processPurchaseCostReconciliationQueueItem` — create-only, throw on delete,
+   `updatePurchaseCostReconciliationSyncMetadata` — update reconciliation + seluruh item terkait
+   sekaligus, tanpa guard `sourceUpdatedAt` seperti entity mutable karena data immutable),
+   `enqueuePurchaseCostReconciliationBundleSync()` (operation selalu `'create'`),
+   `enqueuePendingPurchaseCostReconciliationsForSync()` (scanner fallback). Beda dari
+   `purchase_documents`, sukses push **tidak** merge balik ke Dexie (`mergeRemote...IntoDexie`) —
+   tidak ada field turunan server yang perlu ditarik balik, sama seperti pola
+   `inventory_lot_consumptions`.
+5. **`src/services/purchaseCostReconciliationService.ts`** —
+   `reconcilePurchaseReceiptCost()` menandai `sync_status: 'pending'` pada reconciliation & tiap
+   item di dalam transaksi (tabelnya sudah dalam scope transaksi), lalu memanggil
+   `enqueuePurchaseCostReconciliationBundleSync()` setelah transaksi selesai, sejajar dengan
+   `enqueuePurchaseDocumentBundleSync()` yang sudah ada di fungsi yang sama — push langsung,
+   bukan ditunda ke scanner periodik seperti `inventory_lots` (di sini cuma 1 call site, tidak
+   ada alasan menunda).
+6. **`src/services/purchaseCostReconciliationReadService.ts`** (baru) — mirror
+   `stockMutationReadService.ts`: cursor `created_at`, `bulkPut` id-keyed ke dua tabel Dexie
+   sekaligus dalam 1 transaksi (tanpa conflict check, karena immutable),
+   `refreshPurchaseCostReconciliationsFromPostgres()` dengan guard concurrency.
+7. **Dexie `v116`** — tambah index `sync_status` ke `purchaseCostReconciliations`/
+   `purchaseCostReconciliationItems`, backfill seluruh baris lokal existing jadi
+   `sync_status: 'pending'` (sama pola `v115` untuk inventory lots) — histori rekonsiliasi HPP
+   yang selama ini cuma di Dexie satu device akan ter-push saat upgrade pertama.
+8. **`realtimeSyncTableMap.ts`** — `purchase_cost_reconciliations`/`_items` diubah dari
+   `refreshFns: noRefresh` jadi memanggil `refreshPurchaseCostReconciliationsFromPostgres`
+   (satu fungsi menangani keduanya, sama seperti child table lain yang mengarah ke refresh
+   fungsi bundle induknya).
+9. **`syncOrchestratorService.ts`** — `enqueuePendingPurchaseCostReconciliationsForSync()` dan
+   `refreshPurchaseCostReconciliationsFromPostgres()` didaftarkan di
+   `enqueueAllPendingLocalChangesForSync`/`refreshAllDataFromPostgres`.
+
+Push ordering divalidasi aman tanpa mitigasi tambahan: `processPendingSyncQueue` single-threaded,
+FIFO by `created_at`; reconciliation hanya bisa dibuat untuk purchase document yang sudah
+`ISSUED` (operasi lebih awal, `created_at` lebih kecil), jadi FK `purchase_document_id` di
+Postgres aman — identik dengan precedent `inventory_lot_consumptions → inventory_lots`.
+
+Verifikasi yang sudah dilakukan:
+- `cargo check` di `src-tauri/`: **pass**, tanpa error.
+- `bun run build` (`tsc -b` + vite build): **pass**, tanpa error type.
+- `bun run lint`: **pass** — 1 error (`JoinExistingHostModal.tsx`) + 2 warning
+  (`CashFlowReport.tsx`, `StockCard.tsx`) sama persis dengan yang sudah dikonfirmasi
+  pre-existing di slice-slice sebelumnya, di file yang tidak disentuh perubahan ini.
+
+**Belum diuji terhadap PostgreSQL nyata** — migration index baru belum dijalankan ke database
+live, dan perilaku push+pull end-to-end (rekonsiliasi baru di 1 device → muncul di device lain,
+backfill `v116` push histori lama) belum dicoba nyata, sama seperti caveat semua slice sebelumnya.
+
+Sisa item dari audit 8-tabel yang **masih menunggu keputusan produk user**:
+- Nasib `product_recipes`/`product_recipe_items` — bangun fitur resep dari nol, atau bersihkan
+  schema mati?
+
+File yang diubah/ditambah pada slice ini:
+- `src-tauri/src/models/purchase_cost_reconciliation.rs` (baru)
+- `src-tauri/src/repositories/purchase_cost_reconciliation_repository.rs` (baru)
+- `src-tauri/src/commands/purchase_cost_reconciliation_commands.rs` (baru)
+- `src-tauri/src/models/mod.rs`, `repositories/mod.rs`, `commands/mod.rs`, `lib.rs` (diubah —
+  registrasi modul/command baru)
+- `src-tauri/migrations/0080_purchase_cost_reconciliation_delta_fetch_indexes.sql` (baru)
+- `src/types/index.ts` (diubah — sync fields untuk `PurchaseCostReconciliation`/`Item`)
+- `src/services/postgresAdapter.ts`, `syncQueueService.ts`, `syncOrchestratorService.ts`,
+  `purchaseCostReconciliationService.ts`, `realtimeSyncTableMap.ts` (diubah)
+- `src/services/purchaseCostReconciliationReadService.ts` (baru)
+- `src/lib/database/migrations.ts` (diubah)
+- `src/lib/database/migrations/versions/v116.ts` (baru)

@@ -35,6 +35,7 @@ import { postgresAdapter } from '@/services/postgresAdapter';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
+import { refreshPurchaseCostReconciliationsFromPostgres } from '@/services/purchaseCostReconciliationReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshFixedAssetsFromPostgres, refreshFixedAssetRunsFromPostgres } from '@/services/fixedAssetReadService';
 import {
@@ -67,6 +68,7 @@ import {
   enqueuePendingPayrollDataForSync,
   enqueuePendingProductionOrdersForSync,
   enqueuePendingPurchaseDocumentsForSync,
+  enqueuePendingPurchaseCostReconciliationsForSync,
   enqueuePendingRolePermissionsForSync,
   enqueuePendingRolesForSync,
   enqueuePendingSalesDocumentsForSync,
@@ -114,6 +116,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingFiscalYearClosingRunsForSync();
   await enqueuePendingProductionOrdersForSync();
   await enqueuePendingPurchaseDocumentsForSync();
+  await enqueuePendingPurchaseCostReconciliationsForSync();
   await enqueuePendingSalesDocumentsForSync();
   await enqueuePendingStockOpnamesForSync();
   await enqueuePendingFixedAssetsForSync();
@@ -178,6 +181,7 @@ export const refreshAllDataFromPostgres = async () => {
     cooperative: await refreshCooperativeDataFromPostgres(),
     cooperativeCollectionEvents: await refreshCooperativeCollectionEventsFromPostgres(),
     purchaseDocuments: await refreshPurchaseDocumentsFromPostgres(),
+    purchaseCostReconciliations: await refreshPurchaseCostReconciliationsFromPostgres(),
     salesDocuments: await refreshSalesDocumentsFromPostgres(),
     stockOpnames: await refreshStockOpnamesFromPostgres(),
     stockMutations: await refreshStockMutationsFromPostgres(),

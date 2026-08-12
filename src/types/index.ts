@@ -571,6 +571,7 @@ export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;
 export type ProjectSyncStatus = EntitySyncStatus;
 export type PurchaseDocumentSyncStatus = EntitySyncStatus;
+export type PurchaseCostReconciliationSyncStatus = EntitySyncStatus;
 export type SalesDocumentSyncStatus = EntitySyncStatus;
 export type TaxSyncStatus = EntitySyncStatus;
 export type WarehouseSyncStatus = EntitySyncStatus;
@@ -1827,6 +1828,9 @@ export interface PurchaseCostReconciliation {
   created_by?: string;
   created_by_name?: string;
   created_at: string;
+  sync_status?: PurchaseCostReconciliationSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
 }
 
 export interface PurchaseCostReconciliationItem {
@@ -1850,6 +1854,9 @@ export interface PurchaseCostReconciliationItem {
   sold_cost_variance_amount: number;
   remaining_stock_variance_amount: number;
   created_at: string;
+  sync_status?: PurchaseCostReconciliationSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
 }
 
 export interface SalesReturn {

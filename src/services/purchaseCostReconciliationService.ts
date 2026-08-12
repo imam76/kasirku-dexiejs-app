@@ -1,7 +1,7 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { postPurchaseCostReconciliationJournal } from '@/services/generalLedgerService';
-import { enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
+import { enqueuePurchaseCostReconciliationBundleSync, enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
 import type {
   InventoryLot,
   InventoryLotConsumption,
@@ -456,6 +456,7 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
           sold_cost_variance_amount: itemSoldVariance,
           remaining_stock_variance_amount: itemRemainingVariance,
           created_at: now,
+          sync_status: 'pending',
         });
       }
 
@@ -525,6 +526,7 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
         created_by: currentUser?.id,
         created_by_name: currentUser?.name,
         created_at: now,
+        sync_status: 'pending',
       };
 
       await db.purchaseDocuments.put(nextDocument);
@@ -560,6 +562,8 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
   if (updatedDocument) {
     await enqueuePurchaseDocumentBundleSync(updatedDocument, updatedItems, 'update');
   }
+
+  await enqueuePurchaseCostReconciliationBundleSync(result.reconciliation, result.items);
 
   return result;
 };

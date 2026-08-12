@@ -1171,6 +1171,55 @@ export interface RemotePurchaseDocumentBundleDto {
   items: RemotePurchaseDocumentItemDto[];
 }
 
+export interface RemotePurchaseCostReconciliationDto {
+  id: string;
+  purchase_document_id: string;
+  purchase_document_number: string;
+  supplier_invoice_number?: string | null;
+  supplier_invoice_date?: string | null;
+  additional_cost_treatment: string;
+  additional_cost_amount: number;
+  supplier_discount_amount: number;
+  supplier_tax_amount: number;
+  total_estimated_cost: number;
+  total_final_cost: number;
+  total_variance_amount: number;
+  sold_cost_variance_amount: number;
+  remaining_stock_variance_amount: number;
+  notes?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+}
+
+export interface RemotePurchaseCostReconciliationItemDto {
+  id: string;
+  reconciliation_id: string;
+  purchase_document_item_id: string;
+  product_id: string;
+  product_name: string;
+  received_quantity: number;
+  invoiced_quantity: number;
+  quantity_variance: number;
+  sold_quantity_at_reconciliation: number;
+  remaining_quantity_at_reconciliation: number;
+  estimated_price: number;
+  final_price: number;
+  additional_cost_allocation: number;
+  supplier_discount_allocation: number;
+  supplier_tax_allocation: number;
+  final_landed_cost_per_unit: number;
+  variance_per_unit: number;
+  sold_cost_variance_amount: number;
+  remaining_stock_variance_amount: number;
+  created_at: string;
+}
+
+export interface RemotePurchaseCostReconciliationBundleDto {
+  reconciliation: RemotePurchaseCostReconciliationDto;
+  items: RemotePurchaseCostReconciliationItemDto[];
+}
+
 export interface RemoteFinanceTransactionDto {
   id: string;
   type: FinanceTransactionType;
@@ -2746,6 +2795,35 @@ export const purchaseDocumentPostgresAdapter = {
   async upsert(input: RemotePurchaseDocumentBundleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemotePurchaseDocumentBundleDto>('postgres_upsert_purchase_document_bundle', { input });
+  },
+};
+
+export const purchaseCostReconciliationPostgresAdapter = {
+  async list(options: { createdAfter?: string; limit?: number } = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemotePurchaseCostReconciliationBundleDto[]>(
+      'postgres_list_purchase_cost_reconciliation_bundles',
+      {
+        createdAfter: options.createdAfter,
+        limit: options.limit,
+      },
+    );
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePurchaseCostReconciliationBundleDto | null>(
+      'postgres_get_purchase_cost_reconciliation_bundle',
+      { id },
+    );
+  },
+
+  async upsert(input: RemotePurchaseCostReconciliationBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePurchaseCostReconciliationBundleDto>(
+      'postgres_upsert_purchase_cost_reconciliation_bundle',
+      { input },
+    );
   },
 };
 

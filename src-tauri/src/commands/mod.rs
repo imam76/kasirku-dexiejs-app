@@ -27,6 +27,7 @@ pub mod postgres_health;
 pub mod product_commands;
 pub mod production_order_commands;
 pub mod project_commands;
+pub mod purchase_cost_reconciliation_commands;
 pub mod purchase_document_commands;
 pub mod sales_document_commands;
 pub mod stock_mutation_commands;
