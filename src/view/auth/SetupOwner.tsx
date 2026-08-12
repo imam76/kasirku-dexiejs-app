@@ -197,10 +197,14 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
     <div className="h-[100dvh] overflow-y-auto [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-6 sm:py-16">
         <div className="mb-9 sm:mb-11">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-            <ShieldCheck size={24} />
+          <div className="flex items-center gap-3 sm:block">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <ShieldCheck size={24} />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:mt-5">
+              Daftarkan Owner
+            </h1>
           </div>
-          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-gray-900">Daftarkan Owner</h1>
           <Text type="secondary" className="mt-2 block max-w-lg text-sm leading-relaxed">
             Akun Owner memegang akses utama aplikasi dan menentukan dasar pencatatan usaha.
           </Text>

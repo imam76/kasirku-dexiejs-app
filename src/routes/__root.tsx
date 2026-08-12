@@ -17,6 +17,7 @@ import dayjs from '@/lib/dayjs'
 import { db } from '@/lib/db'
 import { incrementSessionCount, markFeedbackSubmitted, shouldTriggerWave1, shouldTriggerWave2 } from '@/utils/feedback'
 import { setConversionRegistry } from '@/utils/pricing'
+import { OPEN_MOBILE_NAVIGATION_EVENT } from '@/navigation/mobileNavigation'
 import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
@@ -107,6 +108,12 @@ const RootLayout = () => {
   useEffect(() => {
     setMobileNavOpen(false)
   }, [location.pathname, location.hash])
+
+  useEffect(() => {
+    const openMobileNavigation = () => setMobileNavOpen(true)
+    window.addEventListener(OPEN_MOBILE_NAVIGATION_EVENT, openMobileNavigation)
+    return () => window.removeEventListener(OPEN_MOBILE_NAVIGATION_EVENT, openMobileNavigation)
+  }, [])
   useEffect(() => {
     // Increment session on mount
     incrementSessionCount()

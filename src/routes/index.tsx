@@ -27,6 +27,12 @@ import type { Dayjs } from 'dayjs';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useDashboardPreference } from '@/hooks/useDashboardPreference';
 import { useDashboardPosSalesReport, useDashboardProfitLossReport } from '@/hooks/useDashboardReports';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useMobileHomeData } from '@/hooks/useMobileHomeData';
+import {
+  MobileOperationalHome,
+  type MobileHomeServiceItem,
+} from '@/components/home/MobileOperationalHome';
 import dayjs from '@/lib/dayjs';
 import { formatCurrency } from '@/utils/formatters';
 import { useI18n } from '@/hooks/useI18n';
@@ -58,12 +64,7 @@ export const Route = createFileRoute('/')({
   component: Index,
 });
 
-type HomeMenuItem = {
-  to: string;
-  hash?: string;
-  label: string;
-  icon: typeof ShoppingCartOutlined;
-  color: string;
+type HomeMenuItem = MobileHomeServiceItem & {
   desc: string;
   tour?: string;
 };
@@ -76,6 +77,7 @@ type DashboardDateRange = {
 };
 
 const PROFIT_LOSS_WIDGET_IDS = new Set<DashboardWidgetId>(['net-income', 'revenue', 'expense']);
+const MOBILE_DASHBOARD_QUERY = '(max-width: 767.98px)';
 
 const DASHBOARD_PERIOD_PRESETS: DashboardPeriodPreset[] = [
   'this-month',
@@ -658,8 +660,11 @@ function DashboardDateAction({
 function Index() {
   const { message } = App.useApp();
   const { t } = useI18n();
+  const isMobileViewport = useMediaQuery(MOBILE_DASHBOARD_QUERY);
   const { currentUser, currentRole, permissionSet, can } = useAuth();
   const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole });
+  const mobileHomeDate = dayjs.tz().format('YYYY-MM-DD');
+  const canViewMobileSales = can('REPORT_POS_SALES_VIEW') && isRouteEnabled('/report/pos-sales-report');
   const defaultRange = useMemo(() => getDefaultMonthRange(), []);
   const [profitRange] = useState(defaultRange);
   const [salesChartRange, setSalesChartRange] = useState(defaultRange);
@@ -683,21 +688,26 @@ function Index() {
   const profitLossReport = useDashboardProfitLossReport({
     startDate: profitRange.startDate,
     endDate: profitRange.endDate,
-    enabled: hasProfitLossWidget && canViewProfitLoss,
+    enabled: !isMobileViewport && hasProfitLossWidget && canViewProfitLoss,
     refreshKey,
   });
   const salesChartReport = useDashboardPosSalesReport({
     startDate: salesChartRange.startDate,
     endDate: salesChartRange.endDate,
-    enabled: isSalesChartVisible && can('REPORT_POS_SALES_VIEW'),
+    enabled: !isMobileViewport && isSalesChartVisible && can('REPORT_POS_SALES_VIEW'),
     refreshKey,
   });
   const topProductsReport = useDashboardPosSalesReport({
     startDate: topProductsRange.startDate,
     endDate: topProductsRange.endDate,
-    enabled: isTopProductsVisible && can('REPORT_POS_SALES_VIEW'),
+    enabled: !isMobileViewport && isTopProductsVisible && can('REPORT_POS_SALES_VIEW'),
     refreshKey,
     topProductsLimit: 5,
+  });
+  const mobileHomeData = useMobileHomeData({
+    date: mobileHomeDate,
+    enabled: isMobileViewport && canViewMobileSales,
+    refreshKey,
   });
   const { width, containerRef, mounted } = useStableContainerWidth();
   const dashboardLayouts = useMemo(
@@ -781,6 +791,19 @@ function Index() {
       }, currentUser.id);
     });
   }, [activePreference, currentUser, isEditing]);
+
+  if (isMobileViewport) {
+    return (
+      <MobileOperationalHome
+        canViewHistory={menuItems.some((item) => item.to === '/history')}
+        canViewSales={canViewMobileSales}
+        currentUserName={currentUser?.name ?? t('root.currentUserFallback')}
+        dataState={mobileHomeData}
+        onRefresh={() => setRefreshKey((current) => current + 1)}
+        services={menuItems}
+      />
+    );
+  }
 
   const renderWidget = (widgetId: DashboardWidgetId) => {
     const periodSubtitle = formatRangeLabel(profitRange.startDate, profitRange.endDate);
@@ -901,7 +924,7 @@ function Index() {
     </div>
   );
 
-  if (isLoading && !activePreference) {
+  if (!isMobileViewport && isLoading && !activePreference) {
     return (
       <div className="p-4 sm:p-6">
         <Skeleton active paragraph={{ rows: 8 }} />
@@ -921,44 +944,46 @@ function Index() {
               {t('dashboard.subtitle')}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => setRefreshKey((current) => current + 1)}
-            >
-              {t('common.refresh')}
-            </Button>
-            {isEditing ? (
-              <>
-                <Button
-                  icon={<UndoOutlined />}
-                  onClick={handleResetLayout}
-                  loading={isResetting}
-                >
-                  {t('dashboard.resetLayout')}
-                </Button>
-                <Button
-                  type="primary"
-                  icon={<CheckOutlined />}
-                  onClick={handleFinishEdit}
-                  loading={isSaving}
-                >
-                  {t('dashboard.finishEdit')}
-                </Button>
-              </>
-            ) : (
+          {!isMobileViewport && (
+            <div className="flex flex-wrap gap-2">
               <Button
-                icon={<EditOutlined />}
-                onClick={handleStartEdit}
-                disabled={!activePreference || allowedWidgetIds.length === 0}
+                icon={<ReloadOutlined />}
+                onClick={() => setRefreshKey((current) => current + 1)}
               >
-                {t('dashboard.editLayout')}
+                {t('common.refresh')}
               </Button>
-            )}
-          </div>
+              {isEditing ? (
+                <>
+                  <Button
+                    icon={<UndoOutlined />}
+                    onClick={handleResetLayout}
+                    loading={isResetting}
+                  >
+                    {t('dashboard.resetLayout')}
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    onClick={handleFinishEdit}
+                    loading={isSaving}
+                  >
+                    {t('dashboard.finishEdit')}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={handleStartEdit}
+                  disabled={!activePreference || allowedWidgetIds.length === 0}
+                >
+                  {t('dashboard.editLayout')}
+                </Button>
+              )}
+            </div>
+          )}
         </header>
 
-        {isEditing && (
+        {!isMobileViewport && isEditing && (
           <div className="dashboard-edit-panel mb-4">
             <div className="mb-2 text-[11px] font-bold uppercase text-gray-400">
               {t('dashboard.widgetPicker')}
@@ -977,46 +1002,48 @@ function Index() {
           </div>
         )}
 
-        <div ref={containerRef} className={`dashboard-grid-wrap ${isEditing ? 'dashboard-grid-wrap--editing' : ''}`}>
-          {allowedWidgetIds.length === 0 ? (
-            <div className="rounded-lg border border-gray-100 bg-white py-12 text-center">
-              <Empty description={t('dashboard.noAllowedWidgets')} />
-            </div>
-          ) : visibleWidgetIds.length === 0 ? (
-            <div className="rounded-lg border border-gray-100 bg-white py-12 text-center">
-              <Empty description={t('dashboard.noVisibleWidgets')} />
-            </div>
-          ) : mounted ? (
-            <Responsive
-              layouts={dashboardLayouts}
-              breakpoints={DASHBOARD_BREAKPOINTS}
-              cols={DASHBOARD_COLUMNS}
-              width={width}
-              rowHeight={61}
-              margin={[14, 14]}
-              containerPadding={null}
-              dragConfig={{
-                enabled: isEditing,
-                handle: '.dashboard-widget-drag-handle',
-                cancel: '.dashboard-widget-no-drag',
-                threshold: 4,
-              }}
-              resizeConfig={{ enabled: isEditing, handles: ['se'] }}
-              onLayoutChange={handleLayoutChange}
-            >
-              {visibleWidgetIds.map((widgetId) => (
-                <div key={widgetId}>
-                  {renderWidget(widgetId)}
-                </div>
-              ))}
-            </Responsive>
-          ) : (
-            <Skeleton active paragraph={{ rows: 8 }} />
-          )}
-        </div>
+        {!isMobileViewport && (
+          <div ref={containerRef} className={`dashboard-grid-wrap ${isEditing ? 'dashboard-grid-wrap--editing' : ''}`}>
+            {allowedWidgetIds.length === 0 ? (
+              <div className="rounded-lg border border-gray-100 bg-white py-12 text-center">
+                <Empty description={t('dashboard.noAllowedWidgets')} />
+              </div>
+            ) : visibleWidgetIds.length === 0 ? (
+              <div className="rounded-lg border border-gray-100 bg-white py-12 text-center">
+                <Empty description={t('dashboard.noVisibleWidgets')} />
+              </div>
+            ) : mounted ? (
+              <Responsive
+                layouts={dashboardLayouts}
+                breakpoints={DASHBOARD_BREAKPOINTS}
+                cols={DASHBOARD_COLUMNS}
+                width={width}
+                rowHeight={61}
+                margin={[14, 14]}
+                containerPadding={null}
+                dragConfig={{
+                  enabled: isEditing,
+                  handle: '.dashboard-widget-drag-handle',
+                  cancel: '.dashboard-widget-no-drag',
+                  threshold: 4,
+                }}
+                resizeConfig={{ enabled: isEditing, handles: ['se'] }}
+                onLayoutChange={handleLayoutChange}
+              >
+                {visibleWidgetIds.map((widgetId) => (
+                  <div key={widgetId}>
+                    {renderWidget(widgetId)}
+                  </div>
+                ))}
+              </Responsive>
+            ) : (
+              <Skeleton active paragraph={{ rows: 8 }} />
+            )}
+          </div>
+        )}
 
         {menuItems.length > 0 && (
-          <section className="mt-8 border-t border-gray-200 pt-6">
+          <section className="border-t border-gray-200 pt-6 sm:mt-8">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-700">
                 {t('home.operationalMenu')}
