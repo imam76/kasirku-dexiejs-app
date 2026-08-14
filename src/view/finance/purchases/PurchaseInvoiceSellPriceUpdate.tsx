@@ -6,6 +6,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 import { getPurchaseDocumentTypePathSegment } from '@/configs/purchase-document';
 import { useBulkUpdateProductSellingPrices } from '@/hooks/useBulkUpdateProductSellingPrices';
 import { db } from '@/lib/db';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import type { PurchaseDocument } from '@/types';
 import { formatCurrency, formatCurrencyInput, formatDate, parseCurrencyInput } from '@/utils/formatters';
 
@@ -40,7 +41,7 @@ export default function PurchaseInvoiceSellPriceUpdate({ documentId }: PurchaseI
       setIsLoading(true);
       const [loadedDocument, loadedItems] = await Promise.all([
         db.purchaseDocuments.get(documentId),
-        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray(),
+        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
       ]);
       const loadedProducts = await db.products.bulkGet(loadedItems.map((item) => item.product_id));
 

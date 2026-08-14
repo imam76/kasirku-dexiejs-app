@@ -155,6 +155,7 @@ macro_rules! purchase_document_item_select {
             final_landed_cost_per_unit,
             cost_finalized_at,
             cost_variance_amount,
+            sort_order,
             created_at::TEXT AS created_at
         FROM purchase_document_items
         "#
@@ -803,7 +804,8 @@ async fn replace_purchase_document_items(
                 foreign_tax_base_amount,
                 foreign_tax_amount,
                 foreign_subtotal,
-                foreign_total_amount
+                foreign_total_amount,
+                sort_order
             )
             VALUES (
                 $1,
@@ -844,7 +846,8 @@ async fn replace_purchase_document_items(
                 $36,
                 $37,
                 $38,
-                $39
+                $39,
+                $40
             )
             "#,
         )
@@ -887,6 +890,7 @@ async fn replace_purchase_document_items(
         .bind(item.foreign_tax_amount)
         .bind(item.foreign_subtotal)
         .bind(item.foreign_total_amount)
+        .bind(item.sort_order)
         .execute(&mut **tx)
         .await?;
 

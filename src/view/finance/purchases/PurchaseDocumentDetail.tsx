@@ -14,6 +14,7 @@ import { getPurchaseDocumentPermission } from '@/auth/documentPermissions';
 import { useAccountsPayable } from '@/hooks/useAccountsPayable';
 import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
 import { db } from '@/lib/db';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import type {
   PurchaseDocument,
   PurchaseDocumentItem,
@@ -90,7 +91,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
   const loadDocument = useCallback(async () => {
     const [loadedDocument, loadedItems] = await Promise.all([
       db.purchaseDocuments.get(documentId),
-      db.purchaseDocumentItems.where('document_id').equals(documentId).toArray(),
+      db.purchaseDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
     ]);
     setDocument(loadedDocument);
     setItems(loadedItems);
@@ -102,7 +103,7 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
     const syncDocument = async () => {
       const [loadedDocument, loadedItems] = await Promise.all([
         db.purchaseDocuments.get(documentId),
-        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray(),
+        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
       ]);
       if (!isCurrent) return;
 

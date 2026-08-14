@@ -6,6 +6,7 @@ import { PurchaseDocumentForm } from '@/components/purchase-document/PurchaseDoc
 import { useI18n } from '@/hooks/useI18n';
 import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
 import { db } from '@/lib/db';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import type { PurchaseDocument, PurchaseDocumentItem, PurchaseDocumentType } from '@/types';
 
 const { Title, Text } = Typography;
@@ -40,7 +41,7 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
       setIsLoading(true);
       const [loadedDocument, loadedItems] = await Promise.all([
         db.purchaseDocuments.get(documentId),
-        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray(),
+        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
       ]);
       setDocument(loadedDocument);
       setItems(loadedItems);

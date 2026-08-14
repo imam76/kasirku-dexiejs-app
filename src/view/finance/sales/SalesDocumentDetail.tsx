@@ -15,6 +15,7 @@ import { getSalesDocumentPermission } from '@/auth/documentPermissions';
 import { useAccountsReceivable } from '@/hooks/useAccountsReceivable';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
 import type {
   AccountsReceivableRow,
@@ -90,7 +91,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
   const loadDocument = useCallback(async () => {
     const [loadedDocument, loadedItems] = await Promise.all([
       db.salesDocuments.get(documentId),
-      db.salesDocumentItems.where('document_id').equals(documentId).toArray(),
+      db.salesDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
     ]);
     const loadedReturnSummary = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
       ? await getIssuedReturnSummaryForSource(loadedDocument.type, loadedDocument.id)
@@ -113,7 +114,7 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
     const syncDocument = async () => {
       const [loadedDocument, loadedItems] = await Promise.all([
         db.salesDocuments.get(documentId),
-        db.salesDocumentItems.where('document_id').equals(documentId).toArray(),
+        db.salesDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
       ]);
       const loadedReturnSummary = loadedDocument && (loadedDocument.type === 'SALES_DELIVERY' || loadedDocument.type === 'SALES_INVOICE')
         ? await getIssuedReturnSummaryForSource(loadedDocument.type, loadedDocument.id)

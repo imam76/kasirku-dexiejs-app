@@ -44,6 +44,7 @@ import {
 } from '@/utils/documentCurrency';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 
 export interface SalesDocumentUpsertInput {
   document: Partial<SalesDocument>;
@@ -109,10 +110,11 @@ const normalizeDocumentItems = (
   documentId: string,
   createdAt: string,
   documentCurrency: DocumentCurrencySnapshot,
-): SalesDocumentItem[] => items.map((item) => applyCurrencySnapshotToLineItem({
+): SalesDocumentItem[] => items.map((item, index) => applyCurrencySnapshotToLineItem({
   ...item,
   id: item.id || crypto.randomUUID(),
   document_id: documentId,
+  sort_order: index,
   quantity: Number(item.quantity || item.delivered_quantity || 0),
   ordered_quantity: item.ordered_quantity === undefined ? undefined : Number(item.ordered_quantity),
   delivered_quantity: item.delivered_quantity === undefined ? undefined : Number(item.delivered_quantity),
@@ -510,7 +512,7 @@ export const convertSalesDocument = async (sourceId: string, targetType: SalesDo
   const now = new Date();
   const createdAt = now.toISOString();
   const targetId = crypto.randomUUID();
-  const sourceItems = await db.salesDocumentItems.where('document_id').equals(sourceId).toArray();
+  const sourceItems = orderLineItemsForDisplay(await db.salesDocumentItems.where('document_id').equals(sourceId).toArray());
   const documentNumber = await createSalesDocumentNumber(targetConfig.numberPrefix, now);
   const discountAccountSnapshot = await getDocumentDiscountAccountSnapshot('sales', source.discount_account_id);
   const sourceCurrencySnapshot = snapshotFromDocumentInput(source, undefined, source.document_date);
@@ -671,7 +673,7 @@ export const correctSalesDocument = async (sourceId: string, reason: string) => 
   }
 
   const config = getSalesDocumentConfig(source.type);
-  const sourceItems = await db.salesDocumentItems.where('document_id').equals(sourceId).toArray();
+  const sourceItems = orderLineItemsForDisplay(await db.salesDocumentItems.where('document_id').equals(sourceId).toArray());
   const now = new Date();
   const nowIso = now.toISOString();
   let stockMutations: StockMutation[] = [];

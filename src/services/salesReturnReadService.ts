@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import type {
   IssuedSalesReturnSummary,
   SalesDocument,
@@ -29,7 +30,7 @@ export const loadSalesReturnSourceChain = async (
   const source = await db.salesDocuments.get(sourceId);
   if (!source) throw new Error('Source dokumen tidak ditemukan.');
 
-  const sourceItems = await db.salesDocumentItems.where('document_id').equals(sourceId).toArray();
+  const sourceItems = orderLineItemsForDisplay(await db.salesDocumentItems.where('document_id').equals(sourceId).toArray());
   const relatedDocuments: SalesDocument[] = [];
 
   if (sourceType === 'SALES_INVOICE' && source.source_document_type === 'SALES_DELIVERY' && source.source_document_id) {

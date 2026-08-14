@@ -7,6 +7,7 @@ import dayjs from '@/lib/dayjs';
 import { getPurchaseDocumentTypePathSegment } from '@/configs/purchase-document';
 import { usePurchaseCostReconciliation } from '@/hooks/usePurchaseCostReconciliation';
 import { db } from '@/lib/db';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import type { PurchaseAdditionalCostTreatment, PurchaseDocument, PurchaseDocumentItem } from '@/types';
 import { formatCurrency, formatCurrencyInput, formatDate, parseCurrencyInput } from '@/utils/formatters';
 
@@ -48,7 +49,7 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
       setIsLoading(true);
       const [loadedDocument, loadedItems] = await Promise.all([
         db.purchaseDocuments.get(documentId),
-        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray(),
+        db.purchaseDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
       ]);
 
       if (!active) return;

@@ -51,6 +51,25 @@ export const findDuplicateProductIds = (items: LineItemLike[]): Set<string> => {
   return duplicates;
 };
 
+export interface PersistedLineItemOrder {
+  id: string;
+  sort_order?: number;
+  created_at?: string;
+}
+
+// Dexie mengembalikan item terurut UUID (primary key), bukan urutan input. sort_order
+// ditulis dari index array saat save; created_at + id hanya fallback untuk data lama
+// yang tersimpan sebelum kolom ini ada.
+export const orderLineItemsForDisplay = <T extends PersistedLineItemOrder>(items: T[]): T[] =>
+  [...items].sort((a, b) => {
+    const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) return orderA - orderB;
+    const byCreated = (a.created_at ?? '').localeCompare(b.created_at ?? '');
+    if (byCreated !== 0) return byCreated;
+    return a.id.localeCompare(b.id);
+  });
+
 export const sortLineItems = <T extends LineItemLike>(
   items: T[],
   sortKey: LineItemSortKey,

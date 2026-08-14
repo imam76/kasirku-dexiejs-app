@@ -265,6 +265,7 @@ const mapRemotePurchaseDocumentItemToLocal = (
   final_landed_cost_per_unit: optionalNumber(remoteItem.final_landed_cost_per_unit),
   cost_finalized_at: optionalString(remoteItem.cost_finalized_at),
   cost_variance_amount: optionalNumber(remoteItem.cost_variance_amount),
+  sort_order: optionalNumber(remoteItem.sort_order),
   created_at: remoteItem.created_at,
 });
 

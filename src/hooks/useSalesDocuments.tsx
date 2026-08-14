@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import {
   convertSalesDocument,
   correctSalesDocument,
@@ -134,7 +135,7 @@ export const useSalesDocuments = () => {
     onError: (error: Error) => modal.error({ title: t('salesDocuments.error.paymentTitle'), content: error.message }),
   });
 
-  const getItems = (documentId: string) => db.salesDocumentItems.where('document_id').equals(documentId).toArray();
+  const getItems = (documentId: string) => db.salesDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay);
   const getDocument = (documentId: string): SalesDocument | undefined => documents.find((document) => document.id === documentId);
 
   return {

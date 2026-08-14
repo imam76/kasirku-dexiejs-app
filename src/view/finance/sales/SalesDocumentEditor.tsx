@@ -6,6 +6,7 @@ import { SalesDocumentForm } from '@/components/sales-document/SalesDocumentForm
 import { useI18n } from '@/hooks/useI18n';
 import { useSalesDocuments } from '@/hooks/useSalesDocuments';
 import { db } from '@/lib/db';
+import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import type { SalesDocument, SalesDocumentItem, SalesDocumentType } from '@/types';
 
 const { Title, Text } = Typography;
@@ -40,7 +41,7 @@ export default function SalesDocumentEditor({ documentType, documentId }: SalesD
       setIsLoading(true);
       const [loadedDocument, loadedItems] = await Promise.all([
         db.salesDocuments.get(documentId),
-        db.salesDocumentItems.where('document_id').equals(documentId).toArray(),
+        db.salesDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
       ]);
       setDocument(loadedDocument);
       setItems(loadedItems);

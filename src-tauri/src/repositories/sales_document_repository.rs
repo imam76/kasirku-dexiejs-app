@@ -136,6 +136,7 @@ macro_rules! sales_document_item_select {
             is_price_edited,
             price_edited_by,
             price_edited_at::TEXT AS price_edited_at,
+            sort_order,
             created_at::TEXT AS created_at
         FROM sales_document_items
         "#
@@ -737,7 +738,8 @@ async fn replace_sales_document_items(
                 foreign_tax_base_amount,
                 foreign_tax_amount,
                 foreign_subtotal,
-                foreign_total_amount
+                foreign_total_amount,
+                sort_order
             )
             VALUES (
                 $1,
@@ -783,7 +785,8 @@ async fn replace_sales_document_items(
                 $41,
                 $42,
                 $43,
-                $44
+                $44,
+                $45
             )
             "#,
         )
@@ -831,6 +834,7 @@ async fn replace_sales_document_items(
         .bind(item.foreign_tax_amount)
         .bind(item.foreign_subtotal)
         .bind(item.foreign_total_amount)
+        .bind(item.sort_order)
         .execute(&mut **tx)
         .await?;
     }

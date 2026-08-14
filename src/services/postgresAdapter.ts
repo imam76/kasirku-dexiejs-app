@@ -1012,6 +1012,7 @@ export interface RemoteSalesDocumentItemDto {
   is_price_edited?: boolean | null;
   price_edited_by?: string | null;
   price_edited_at?: string | null;
+  sort_order?: number | null;
   created_at: string;
 }
 
@@ -1163,6 +1164,7 @@ export interface RemotePurchaseDocumentItemDto {
   final_landed_cost_per_unit?: number | null;
   cost_finalized_at?: string | null;
   cost_variance_amount?: number | null;
+  sort_order?: number | null;
   created_at: string;
 }
 

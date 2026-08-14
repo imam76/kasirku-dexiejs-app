@@ -145,6 +145,7 @@ pub struct PurchaseDocumentItemDto {
     pub final_landed_cost_per_unit: Option<f64>,
     pub cost_finalized_at: Option<String>,
     pub cost_variance_amount: Option<f64>,
+    pub sort_order: Option<i32>,
     pub created_at: String,
 }
 

@@ -125,6 +125,7 @@ pub struct SalesDocumentItemDto {
     pub is_price_edited: Option<bool>,
     pub price_edited_by: Option<String>,
     pub price_edited_at: Option<String>,
+    pub sort_order: Option<i32>,
     pub created_at: String,
 }
 

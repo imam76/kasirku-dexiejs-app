@@ -1595,6 +1595,7 @@ export interface SalesDocumentItem {
   is_price_edited?: boolean;
   price_edited_by?: string;
   price_edited_at?: string;
+  sort_order?: number;
   created_at: string;
 }
 
@@ -1818,6 +1819,7 @@ export interface PurchaseDocumentItem {
   final_landed_cost_per_unit?: number;
   cost_finalized_at?: string;
   cost_variance_amount?: number;
+  sort_order?: number;
   created_at: string;
 }
 

@@ -3,6 +3,7 @@ import {
   countFilledLineItems,
   filterLineItemEntries,
   findDuplicateProductIds,
+  orderLineItemsForDisplay,
   sortLineItems,
   type LineItemLike,
 } from '@/utils/documentLineItems/lineItemView';
@@ -100,5 +101,46 @@ describe('sortLineItems', () => {
     const input = [...items];
     sortLineItems(input, 'name-asc');
     expect(input.map((item) => item.id)).toEqual(items.map((item) => item.id));
+  });
+});
+
+describe('orderLineItemsForDisplay', () => {
+  test('restores persisted order by sort_order regardless of fetch order', () => {
+    const fetched = [
+      { id: 'c', sort_order: 2, created_at: '2026-08-01T10:00:00.000Z' },
+      { id: 'a', sort_order: 0, created_at: '2026-08-01T10:00:00.000Z' },
+      { id: 'b', sort_order: 1, created_at: '2026-08-01T10:00:00.000Z' },
+    ];
+    expect(orderLineItemsForDisplay(fetched).map((item) => item.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('places legacy rows without sort_order after ordered rows, sorted by created_at then id', () => {
+    const fetched = [
+      { id: 'z', created_at: '2026-08-01T09:00:00.000Z' },
+      { id: 'b', sort_order: 1, created_at: '2026-08-01T12:00:00.000Z' },
+      { id: 'y', created_at: '2026-08-01T08:00:00.000Z' },
+      { id: 'a', sort_order: 0, created_at: '2026-08-01T12:00:00.000Z' },
+    ];
+    expect(orderLineItemsForDisplay(fetched).map((item) => item.id)).toEqual(['a', 'b', 'y', 'z']);
+  });
+
+  test('breaks identical created_at ties deterministically by id', () => {
+    const sameInstant = '2026-08-01T10:00:00.000Z';
+    const fetched = [
+      { id: 'b', created_at: sameInstant },
+      { id: 'a', created_at: sameInstant },
+      { id: 'c', created_at: sameInstant },
+    ];
+    expect(orderLineItemsForDisplay(fetched).map((item) => item.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('does not mutate the input array', () => {
+    const fetched = [
+      { id: 'b', sort_order: 1 },
+      { id: 'a', sort_order: 0 },
+    ];
+    const snapshot = [...fetched];
+    orderLineItemsForDisplay(fetched);
+    expect(fetched).toEqual(snapshot);
   });
 });

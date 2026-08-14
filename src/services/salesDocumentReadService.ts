@@ -246,6 +246,7 @@ const mapRemoteSalesDocumentItemToLocal = (
   is_price_edited: optionalBoolean(remoteItem.is_price_edited),
   price_edited_by: optionalString(remoteItem.price_edited_by),
   price_edited_at: optionalString(remoteItem.price_edited_at),
+  sort_order: optionalNumber(remoteItem.sort_order),
   created_at: remoteItem.created_at,
 });
 
