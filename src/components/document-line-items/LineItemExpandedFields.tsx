@@ -1,6 +1,6 @@
 import { InputNumber, Select } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
-import type { PromoType, PurchaseDocumentItem } from '@/types';
+import type { PromoType, SalesDocumentItem } from '@/types';
 import {
   formatBaseCurrencyAmount,
   type DocumentCurrencySnapshot,
@@ -11,12 +11,25 @@ interface Option {
   label: string;
 }
 
-interface PurchaseLineItemExpandedFieldsProps {
-  item: PurchaseDocumentItem;
-  calculatedItem?: PurchaseDocumentItem;
+// Field pajak/diskon di SalesDocumentItem dan PurchaseDocumentItem identik secara
+// struktural, jadi Pick dari salah satunya berlaku untuk keduanya.
+export type LineItemTaxDiscountFields = Pick<SalesDocumentItem,
+  'id' | 'discount_type' | 'discount_value' | 'discount_amount' | 'tax_id' | 'tax_amount'
+>;
+
+export type LineItemTaxDiscountPatch = Partial<Pick<SalesDocumentItem,
+  'discount_type' | 'discount_value' | 'tax_id' | 'tax_name' | 'tax_code' | 'tax_rate' |
+  'tax_calculation_mode' | 'tax_flow' | 'tax_account_id' | 'tax_account_code' |
+  'tax_account_name' | 'tax_account_type'
+>>;
+
+interface LineItemExpandedFieldsProps {
+  i18nPrefix: 'salesDocuments' | 'purchaseDocuments';
+  item: LineItemTaxDiscountFields;
+  calculatedItem?: { tax_amount?: number };
   taxOptions: Option[];
   documentCurrencySnapshot: DocumentCurrencySnapshot;
-  onUpdateItem: (itemId: string, patch: Partial<PurchaseDocumentItem>) => void;
+  onUpdateItem: (itemId: string, patch: LineItemTaxDiscountPatch) => void;
 }
 
 const expandedFieldControlClassName = [
@@ -30,13 +43,14 @@ const expandedFieldControlClassName = [
 
 const expandedFieldLabelClassName = 'mb-1 flex min-h-5 items-center text-xs text-gray-500';
 
-export const PurchaseLineItemExpandedFields = ({
+export const LineItemExpandedFields = ({
+  i18nPrefix,
   item,
   calculatedItem,
   taxOptions,
   documentCurrencySnapshot,
   onUpdateItem,
-}: PurchaseLineItemExpandedFieldsProps) => {
+}: LineItemExpandedFieldsProps) => {
   const { t } = useI18n();
   const displayedItem = calculatedItem ?? item;
 
@@ -44,14 +58,14 @@ export const PurchaseLineItemExpandedFields = ({
     <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-3">
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <div className={expandedFieldLabelClassName}>{t('purchaseDocuments.field.discount')}</div>
+          <div className={expandedFieldLabelClassName}>{t(`${i18nPrefix}.field.discount`)}</div>
           <div className="grid grid-cols-[120px_1fr] gap-2">
             <Select
               className={expandedFieldControlClassName}
               value={item.discount_type ?? 'fixed'}
               options={[
-                { value: 'percent' satisfies PromoType, label: t('purchaseDocuments.discountType.percent') },
-                { value: 'fixed' satisfies PromoType, label: t('purchaseDocuments.discountType.fixed') },
+                { value: 'percent' satisfies PromoType, label: t(`${i18nPrefix}.discountType.percent`) },
+                { value: 'fixed' satisfies PromoType, label: t(`${i18nPrefix}.discountType.fixed`) },
               ]}
               onChange={(discountType: PromoType) => onUpdateItem(item.id, { discount_type: discountType })}
             />
@@ -64,11 +78,11 @@ export const PurchaseLineItemExpandedFields = ({
           </div>
         </div>
         <div>
-          <div className={expandedFieldLabelClassName}>{t('purchaseDocuments.field.tax')} (%)</div>
+          <div className={expandedFieldLabelClassName}>{t(`${i18nPrefix}.field.tax`)} (%)</div>
           <Select
             allowClear
             className={expandedFieldControlClassName}
-            placeholder={t('purchaseDocuments.placeholder.itemTax')}
+            placeholder={t(`${i18nPrefix}.placeholder.itemTax`)}
             value={item.tax_id || undefined}
             options={taxOptions}
             onChange={(taxId?: string) => onUpdateItem(item.id, {
@@ -86,7 +100,7 @@ export const PurchaseLineItemExpandedFields = ({
           />
         </div>
         <div>
-          <div className={expandedFieldLabelClassName}>{t('purchaseDocuments.field.tax')}</div>
+          <div className={expandedFieldLabelClassName}>{t(`${i18nPrefix}.field.tax`)}</div>
           <InputNumber
             className={expandedFieldControlClassName}
             value={displayedItem.tax_amount}

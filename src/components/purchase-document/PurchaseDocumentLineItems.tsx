@@ -5,6 +5,9 @@ import type { Product, PurchaseDocumentItem, Tax } from '@/types';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useUnits } from '@/hooks/useUnits';
+import { useLineItemViewControls } from '@/hooks/useLineItemViewControls';
+import { LineItemsToolbar } from '@/components/document-line-items/LineItemsToolbar';
+import { sortLineItems, type LineItemSortKey } from '@/utils/documentLineItems/lineItemView';
 import { getPurchasePrice } from '@/utils/pricing';
 import { getProductDocumentUnits } from '@/utils/productUnits';
 import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/createEmptyPurchaseDocumentItem';
@@ -63,6 +66,16 @@ export const PurchaseDocumentLineItems = ({
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  const {
+    searchText,
+    setSearchText,
+    clearSearch,
+    isFiltering,
+    entries,
+    filledCount,
+    duplicateProductIds,
+  } = useLineItemViewControls(items);
 
   const productOptions = useMemo(
     () => products.map((product) => ({
@@ -173,12 +186,22 @@ export const PurchaseDocumentLineItems = ({
   }, [config.behavior.hasPricing, documentCurrencySnapshot, onChange, productsById]);
 
   const addRow = useCallback(() => {
+    clearSearch();
     onChange([
       ...itemsRef.current,
       applyCurrencySnapshotToLineItem(createEmptyPurchaseDocumentItem(documentId), documentCurrencySnapshot),
     ]);
     setScrollToLastRequest((current) => current + 1);
-  }, [documentCurrencySnapshot, documentId, onChange]);
+  }, [clearSearch, documentCurrencySnapshot, documentId, onChange]);
+
+  const subtotalById = useMemo(
+    () => new Map(calculatedItems.map((item) => [item.id, item.subtotal ?? 0])),
+    [calculatedItems],
+  );
+
+  const handleSort = useCallback((sortKey: LineItemSortKey) => {
+    onChange(sortLineItems(itemsRef.current, sortKey, subtotalById));
+  }, [onChange, subtotalById]);
 
   const selectProduct = useCallback((itemId: string, productId: string) => {
     const product = productsById.get(productId);
@@ -235,8 +258,20 @@ export const PurchaseDocumentLineItems = ({
 
   return (
     <div className="space-y-3">
+      <LineItemsToolbar
+        searchText={searchText}
+        filledCount={filledCount}
+        visibleCount={entries.length}
+        totalCount={items.length}
+        isFiltering={isFiltering}
+        showSubtotalSort={config.behavior.hasPricing}
+        onSearchChange={setSearchText}
+        onSort={handleSort}
+      />
       <PurchaseLineItemsVirtualTable
-        items={items}
+        entries={entries}
+        totalItemCount={items.length}
+        duplicateProductIds={duplicateProductIds}
         calculatedItemsById={calculatedItemsById}
         productOptions={productOptions}
         unitOptionsByProductId={unitOptionsByProductId}

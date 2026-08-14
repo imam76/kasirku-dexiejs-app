@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Button, Card, DatePicker, Input, InputNumber, Segmented, Select, Tooltip } from 'antd';
-import { Settings } from 'lucide-react';
+import { App, Button, DatePicker, Input, Select } from 'antd';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import type { DefaultValues } from 'react-hook-form';
 import type { Dayjs } from 'dayjs';
@@ -12,8 +11,8 @@ import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { buildQuickCreateDefaultValues, useProductQuickCreateForm } from '@/hooks/useProductQuickCreateForm';
 import { useProductQuickEditForm } from '@/hooks/useProductQuickEditForm';
 import type { TranslationKey } from '@/i18n/messages';
-import { DocumentDiscountSettingsModal } from '@/components/DocumentDiscountSettingsModal';
 import { DocumentCurrencyFields } from '@/components/DocumentCurrencyFields';
+import { DocumentTotalsSummary } from '@/components/document-line-items/DocumentTotalsSummary';
 import { db } from '@/lib/db';
 import type { StockFormData } from '@/lib/validations/stock';
 import { createProductRecord } from '@/services/productCreateService';
@@ -25,25 +24,19 @@ import type {
   Department,
   Product,
   Project,
-  PromoType,
   PurchaseDocument,
   PurchaseDocumentItem,
   Tax,
   Warehouse,
 } from '@/types';
-import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { calculateDocumentTotal } from '@/utils/documentTotals';
 import { createEmptyPurchaseDocumentItem } from '@/utils/purchaseDocuments/createEmptyPurchaseDocumentItem';
+import { countFilledLineItems } from '@/utils/documentLineItems/lineItemView';
 import {
   applyCurrencySnapshotToLineItem,
   buildDocumentCurrencySnapshot,
-  formatBaseCurrencyAmount,
-  formatDocumentCurrencyAmount,
-  isBaseCurrency,
   normalizeCurrencyCode,
   snapshotFromDocumentInput,
-  toBaseCurrencyAmount,
-  toDocumentCurrencyAmount,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
 import { PurchaseDocumentLineItems } from './PurchaseDocumentLineItems';
@@ -190,7 +183,6 @@ export const PurchaseDocumentForm = ({
   const defaultCurrencyAppliedRef = useRef(Boolean(initialData?.document));
   const documentId = initialData?.document?.id ?? 'draft';
   const warehouseHelperKey = warehouseHelperKeysByType[config.type];
-  const [isDiscountSettingsOpen, setIsDiscountSettingsOpen] = useState(false);
 
   const [createProductOpen, setCreateProductOpen] = useState(false);
   const [newProductName, setNewProductName] = useState('');
@@ -213,6 +205,7 @@ export const PurchaseDocumentForm = ({
   });
   const watchedItems = useWatch({ control, name: 'items' });
   const items = useMemo(() => watchedItems ?? [], [watchedItems]);
+  const filledItemCount = useMemo(() => countFilledLineItems(items), [items]);
   const documentDate = useWatch({ control, name: 'document_date' });
   const watchedCostStatus = useWatch({ control, name: 'cost_status' });
   const watchedCurrencyCode = useWatch({ control, name: 'currency_code' });
@@ -351,15 +344,6 @@ export const PurchaseDocumentForm = ({
   const discountType = useWatch({ control, name: 'discount_type' }) ?? 'fixed';
   const discountValue = useWatch({ control, name: 'discount_value' }) ?? 0;
   const selectedTaxId = useWatch({ control, name: 'tax_id' });
-  const discountAccounts = useLiveQuery(
-    () => db.chartOfAccounts
-      .where('type')
-      .equals('EXPENSE')
-      .filter((account) => account.is_active && account.is_postable)
-      .toArray(),
-    [],
-    [],
-  );
   const currencies = useLiveQuery(
     () => db.currencies.orderBy('code').toArray(),
     [],
@@ -400,14 +384,6 @@ export const PurchaseDocumentForm = ({
     watchedExchangeRateDate,
     watchedExchangeRateSource,
   ]);
-  const discountAccountOptions = useMemo(() => discountAccounts.map((account) => ({
-    value: account.id,
-    label: `${account.code} - ${account.name}`,
-  })), [discountAccounts]);
-  const defaultDiscountAccount = useMemo(
-    () => getDefaultDocumentDiscountAccount('purchase', discountAccounts),
-    [discountAccounts],
-  );
   const selectedTax = taxes.find((tax) => tax.id === selectedTaxId);
   const initialTaxSnapshot = selectedTaxId && selectedTaxId === initialData?.document?.tax_id
     ? initialData.document
@@ -459,28 +435,10 @@ export const PurchaseDocumentForm = ({
       taxes,
     ],
   );
-  const isForeignCurrency = !isBaseCurrency(
-    documentCurrencySnapshot.currency_code,
-    documentCurrencySnapshot.base_currency_code,
-  );
-  const displayedDiscountValue = discountType === 'fixed'
-    ? toDocumentCurrencyAmount(discountValue, documentCurrencySnapshot)
-    : discountValue;
-  const renderMoney = useCallback((amount?: number, className = 'font-medium text-gray-900') => (
-    <span className="text-right">
-      <span className={className}>
-        {formatDocumentCurrencyAmount(
-          toDocumentCurrencyAmount(amount, documentCurrencySnapshot),
-          documentCurrencySnapshot,
-        )}
-      </span>
-      {isForeignCurrency && (
-        <span className="block text-[11px] font-normal text-gray-400">
-          {formatBaseCurrencyAmount(amount || 0, documentCurrencySnapshot)}
-        </span>
-      )}
-    </span>
-  ), [documentCurrencySnapshot, isForeignCurrency]);
+  const summaryTaxOptions = useMemo(() => taxes.map((tax) => ({
+    value: tax.id,
+    label: `${tax.name} (${tax.rate}%)`,
+  })), [taxes]);
 
   const handleItemsChange = useCallback((nextItems: PurchaseDocumentItem[]) => {
     setValue('items', nextItems, { shouldDirty: true, shouldValidate: true });
@@ -847,105 +805,22 @@ export const PurchaseDocumentForm = ({
       />
 
       {config.behavior.hasPricing && (
-        <Card size="small" className="ml-auto w-full max-w-md">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-gray-500">{t('purchaseDocuments.field.subtotal')}</span>
-              {renderMoney(total.subtotal_amount)}
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-              <span className="text-sm text-gray-500">{t('purchaseDocuments.field.documentDiscount')}</span>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                <Segmented
-                  size="small"
-                  value={discountType}
-                  options={[
-                    { value: 'fixed', label: t('purchaseDocuments.discountType.fixed') },
-                    { value: 'percent', label: t('purchaseDocuments.discountType.percent') },
-                  ]}
-                  onChange={(value) => setValue('discount_type', value as PromoType, { shouldDirty: true, shouldValidate: true })}
-                />
-                <InputNumber
-                  min={0}
-                  max={discountType === 'percent' ? 100 : undefined}
-                  className="w-full sm:w-32"
-                  value={Number(displayedDiscountValue || 0)}
-                  addonAfter={discountType === 'percent' ? '%' : undefined}
-                  onChange={(value) => setValue(
-                    'discount_value',
-                    discountType === 'fixed'
-                      ? toBaseCurrencyAmount(Number(value || 0), documentCurrencySnapshot)
-                      : Number(value || 0),
-                    { shouldDirty: true, shouldValidate: true },
-                  )}
-                />
-                <Tooltip title={t('purchaseDocuments.field.discountAccount')}>
-                  <Button
-                    type="default"
-                    icon={<Settings size={16} />}
-                    aria-label={t('purchaseDocuments.field.discountAccount')}
-                    onClick={() => setIsDiscountSettingsOpen(true)}
-                  />
-                </Tooltip>
-              </div>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-gray-500">{t('purchaseDocuments.field.discountAmount')}</span>
-              {renderMoney(total.discount_amount)}
-            </div>
-            <Controller
-              name="discount_account_id"
-              control={control}
-              render={({ field }) => (
-                <DocumentDiscountSettingsModal
-                  open={isDiscountSettingsOpen}
-                  title={t('purchaseDocuments.field.documentDiscount')}
-                  accountLabel={t('purchaseDocuments.field.discountAccount')}
-                  accountPlaceholder={t('purchaseDocuments.placeholder.discountAccount')}
-                  accountValue={field.value}
-                  defaultAccountValue={defaultDiscountAccount?.id}
-                  accountOptions={discountAccountOptions}
-                  onAccountChange={field.onChange}
-                  onClose={() => setIsDiscountSettingsOpen(false)}
-                />
-              )}
-            />
-            {config.behavior.hasTax && (
-              <>
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                  <span className="text-sm text-gray-500">{t('purchaseDocuments.field.documentTax')}</span>
-                  <Controller
-                    name="tax_id"
-                    control={control}
-                    render={({ field }) => (
-                      <Select
-                        className="w-full sm:w-56"
-                        allowClear
-                        showSearch={{ optionFilterProp: 'label' }}
-                        placeholder={t('purchaseDocuments.placeholder.tax')}
-                        value={field.value}
-                        onBlur={field.onBlur}
-                        options={taxes.map((tax) => ({ value: tax.id, label: `${tax.name} (${tax.rate}%)` }))}
-                        onChange={(taxId) => {
-                          field.onChange(taxId);
-                          handleTaxChange(taxId);
-                        }}
-                      />
-                    )}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-gray-500">{t('purchaseDocuments.field.tax')}</span>
-                  {renderMoney(total.tax_amount)}
-                </div>
-              </>
-            )}
-            <div className="flex items-center justify-between gap-4 border-t border-gray-100 pt-3">
-              <span className="text-sm font-medium text-gray-700">{t('purchaseDocuments.field.total')}</span>
-              {renderMoney(total.total_amount, 'text-lg font-semibold text-gray-900')}
-            </div>
-          </div>
-        </Card>
+        <DocumentTotalsSummary
+          i18nPrefix="purchaseDocuments"
+          discountPurpose="purchase"
+          discountAccountType="EXPENSE"
+          control={control}
+          total={total}
+          filledItemCount={filledItemCount}
+          documentCurrencySnapshot={documentCurrencySnapshot}
+          taxOptions={summaryTaxOptions}
+          hasTax={config.behavior.hasTax}
+          discountType={discountType}
+          discountValue={discountValue}
+          onDiscountTypeChange={(value) => setValue('discount_type', value, { shouldDirty: true, shouldValidate: true })}
+          onDiscountValueChange={(value) => setValue('discount_value', value, { shouldDirty: true, shouldValidate: true })}
+          onTaxChange={handleTaxChange}
+        />
       )}
 
       <div className="flex w-full justify-end gap-2">

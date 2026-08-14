@@ -19,6 +19,7 @@ import { getCachedBaseCurrency } from '@/services/baseCurrencyService';
 import type { Contact, CurrencyRate, Department, Product, Project, PromoType, SalesDocument, SalesDocumentItem, Tax, Warehouse } from '@/types';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { createEmptySalesDocumentItem } from '@/utils/salesDocuments/createEmptySalesDocumentItem';
+import { countFilledLineItems } from '@/utils/documentLineItems/lineItemView';
 import { getPrice } from '@/utils/pricing';
 import StockProductModal from '@/view/master-data/products/StockProductModal';
 import {
@@ -28,9 +29,10 @@ import {
   snapshotFromDocumentInput,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
+import { DocumentTotalsSummary } from '@/components/document-line-items/DocumentTotalsSummary';
+import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import { DocumentHeader } from './DocumentHeader';
 import { DocumentLineItems } from './DocumentLineItems';
-import { DocumentSummary } from './DocumentSummary';
 
 interface SalesDocumentFormProps {
   config: SalesDocumentConfig;
@@ -168,6 +170,11 @@ export const SalesDocumentForm = ({
   });
   const watchedItems = useWatch({ control, name: 'items' });
   const items = useMemo(() => watchedItems ?? [], [watchedItems]);
+  const filledItemCount = useMemo(() => countFilledLineItems(items), [items]);
+  const summaryTaxOptions = useMemo(() => taxes.map((tax) => ({
+    value: tax.id,
+    label: `${tax.name} (${tax.rate}%, ${t(taxCalculationModeLabelKeys[tax.calculation_mode])})`,
+  })), [t, taxes]);
   const activeLineItem = useMemo(
     () => items.find((item) => item.id === activeLineId),
     [items, activeLineId],
@@ -494,18 +501,24 @@ export const SalesDocumentForm = ({
         onCreateProductRequest={handleCreateProductRequest}
         onEditProductRequest={handleEditProductRequest}
       />
-      <DocumentSummary
-        config={config}
-        control={control}
-        total={total}
-        documentCurrencySnapshot={documentCurrencySnapshot}
-        taxes={taxes}
-        discountType={discountType}
-        discountValue={discountValue}
-        onDiscountTypeChange={(value: PromoType) => setValue('discount_type', value, { shouldDirty: true, shouldValidate: true })}
-        onDiscountValueChange={(value) => setValue('discount_value', value, { shouldDirty: true, shouldValidate: true })}
-        onTaxChange={handleTaxChange}
-      />
+      {config.behavior.hasPricing && (
+        <DocumentTotalsSummary
+          i18nPrefix="salesDocuments"
+          discountPurpose="sales"
+          discountAccountType="CONTRA_REVENUE"
+          control={control}
+          total={total}
+          filledItemCount={filledItemCount}
+          documentCurrencySnapshot={documentCurrencySnapshot}
+          taxOptions={summaryTaxOptions}
+          hasTax={config.behavior.hasTax}
+          discountType={discountType}
+          discountValue={discountValue}
+          onDiscountTypeChange={(value: PromoType) => setValue('discount_type', value, { shouldDirty: true, shouldValidate: true })}
+          onDiscountValueChange={(value) => setValue('discount_value', value, { shouldDirty: true, shouldValidate: true })}
+          onTaxChange={handleTaxChange}
+        />
+      )}
       <div className="flex w-full justify-end gap-2">
         {onCancel && <Button onClick={onCancel}>{t('common.cancel')}</Button>}
         <Button type="primary" htmlType="submit" loading={submitting}>

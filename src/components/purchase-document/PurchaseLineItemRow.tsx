@@ -1,7 +1,7 @@
 import { forwardRef, memo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, InputNumber, Select } from 'antd';
-import { ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { PurchaseDocumentItem } from '@/types';
 import {
@@ -14,7 +14,7 @@ import {
   formatCurrencyInput,
   parseCurrencyInput,
 } from '@/utils/formatters';
-import { PurchaseLineItemExpandedFields } from './PurchaseLineItemExpandedFields';
+import { LineItemExpandedFields } from '@/components/document-line-items/LineItemExpandedFields';
 
 interface Option {
   value: string;
@@ -33,6 +33,8 @@ export interface PurchaseLineItemRowProps {
   isPurchaseReceipt: boolean;
   gridTemplateColumns: string;
   virtualIndex: number;
+  rowNumber: number;
+  isDuplicateProduct: boolean;
   style: CSSProperties;
   onUpdateItem: (itemId: string, patch: Partial<PurchaseDocumentItem>) => void;
   onSelectProduct: (itemId: string, productId: string) => void;
@@ -56,6 +58,8 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
       isPurchaseReceipt,
       gridTemplateColumns,
       virtualIndex,
+      rowNumber,
+      isDuplicateProduct,
       style,
       onUpdateItem,
       onSelectProduct,
@@ -84,13 +88,22 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
         ref={ref}
         data-index={virtualIndex}
         style={style}
-        className="border-b border-gray-100 bg-white"
+        className={`border-b border-gray-100 ${isDuplicateProduct ? 'bg-amber-50' : 'bg-white'}`}
       >
         <div
           className="grid items-center gap-2 px-3 py-2"
           style={{ gridTemplateColumns }}
         >
+          <div className="text-right text-xs tabular-nums text-gray-400">{rowNumber}</div>
           <div className="flex min-w-0 items-center gap-1">
+            {isDuplicateProduct && (
+              <span
+                title={t('documentLineItems.duplicateProduct')}
+                className="flex shrink-0 items-center text-amber-500"
+              >
+                <AlertTriangle size={14} />
+              </span>
+            )}
             <Select
               showSearch={{ optionFilterProp: 'label' }}
               className="w-full min-w-0"
@@ -219,7 +232,8 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
         </div>
 
         {hasPricing && isExpanded && item.product_id && (
-          <PurchaseLineItemExpandedFields
+          <LineItemExpandedFields
+            i18nPrefix="purchaseDocuments"
             item={item}
             calculatedItem={calculatedItem}
             taxOptions={taxOptions}
@@ -246,6 +260,8 @@ export const PurchaseLineItemRow = memo(PurchaseLineItemRowBase, (prev, next) =>
   prev.isPurchaseReceipt === next.isPurchaseReceipt &&
   prev.gridTemplateColumns === next.gridTemplateColumns &&
   prev.virtualIndex === next.virtualIndex &&
+  prev.rowNumber === next.rowNumber &&
+  prev.isDuplicateProduct === next.isDuplicateProduct &&
   prev.style === next.style &&
   prev.onUpdateItem === next.onUpdateItem &&
   prev.onSelectProduct === next.onSelectProduct &&
