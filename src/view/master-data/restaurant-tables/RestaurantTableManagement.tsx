@@ -1,7 +1,7 @@
 import { App, Button, Card, Empty, Form, Input, InputNumber, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Armchair, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Armchair, LayoutGrid, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuth } from '@/auth/useAuth';
 import { useI18n } from '@/hooks/useI18n';
@@ -12,11 +12,14 @@ import {
   deleteRestaurantTable,
   normalizeRestaurantTableName,
   updateRestaurantTable,
+  RESTAURANT_TABLE_TYPES,
   type RestaurantTableFilterStatus,
   type RestaurantTableFilterType,
   type RestaurantTableInput,
 } from '@/services/restaurantTableService';
 import type { RestaurantTableRecord, RestaurantTableType } from '@/types';
+import RestaurantTableSeedModal from './RestaurantTableSeedModal';
+import { RESTAURANT_TABLE_TYPE_LABEL_KEY, RESTAURANT_TABLE_TYPE_TAG_COLOR } from './restaurantTableTypeMeta';
 
 export default function RestaurantTableManagement() {
   const { message, modal } = App.useApp();
@@ -25,6 +28,7 @@ export default function RestaurantTableManagement() {
   const [form] = Form.useForm<RestaurantTableInput>();
   const [editing, setEditing] = useState<RestaurantTableRecord>();
   const [formOpen, setFormOpen] = useState(false);
+  const [seedOpen, setSeedOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<RestaurantTableFilterType>('ALL');
@@ -98,14 +102,25 @@ export default function RestaurantTableManagement() {
     });
   };
 
-  const typeLabel = (type: RestaurantTableType) => type === 'VIP'
-    ? t('restaurantTables.vip')
-    : t('restaurantTables.regular');
+  const typeLabel = (type: RestaurantTableType) => t(
+    RESTAURANT_TABLE_TYPE_LABEL_KEY[type] ?? 'restaurantTables.regular',
+  );
+
+  const typeOptions = RESTAURANT_TABLE_TYPES.map((tableType) => ({
+    value: tableType,
+    label: typeLabel(tableType),
+  }));
+
+  const handleSeeded = ({ created, skipped }: { created: number; skipped: string[] }) => {
+    message.success(skipped.length > 0
+      ? t('restaurantTables.bulkSuccessSkipped', { count: created, skipped: skipped.length })
+      : t('restaurantTables.bulkSuccess', { count: created }));
+  };
 
   const columns: ColumnsType<RestaurantTableRecord> = [
     { title: t('restaurantTables.name'), dataIndex: 'name', key: 'name', sorter: (a, b) => a.name.localeCompare(b.name, 'id-ID') },
     { title: t('restaurantTables.capacity'), dataIndex: 'capacity', key: 'capacity', width: 150 },
-    { title: t('restaurantTables.type'), dataIndex: 'type', key: 'type', width: 120, render: (type: RestaurantTableType) => <Tag color={type === 'VIP' ? 'gold' : 'blue'}>{typeLabel(type)}</Tag> },
+    { title: t('restaurantTables.type'), dataIndex: 'type', key: 'type', width: 120, render: (type: RestaurantTableType) => <Tag color={RESTAURANT_TABLE_TYPE_TAG_COLOR[type] ?? 'blue'}>{typeLabel(type)}</Tag> },
     { title: t('restaurantTables.status'), dataIndex: 'status', key: 'status', width: 130, render: (status) => <Tag color={status === 'OCCUPIED' ? 'orange' : 'green'}>{status === 'OCCUPIED' ? t('restaurantTables.occupied') : t('restaurantTables.available')}</Tag> },
     {
       title: t('restaurantTables.actions'),
@@ -131,15 +146,19 @@ export default function RestaurantTableManagement() {
             <Typography.Text type="secondary">{t('restaurantTables.description')}</Typography.Text>
           </div>
         </div>
-        {can('RESTAURANT_TABLE_CREATE') ? <Button type="primary" icon={<Plus size={16} />} onClick={openCreate}>{t('restaurantTables.add')}</Button> : null}
+        {can('RESTAURANT_TABLE_CREATE') ? (
+          <Space wrap>
+            <Button icon={<LayoutGrid size={16} />} onClick={() => setSeedOpen(true)}>{t('restaurantTables.bulkAdd')}</Button>
+            <Button type="primary" icon={<Plus size={16} />} onClick={openCreate}>{t('restaurantTables.add')}</Button>
+          </Space>
+        ) : null}
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,1fr)_180px_180px]">
         <Input.Search allowClear value={search} placeholder={t('restaurantTables.search')} onChange={(event) => setSearch(event.target.value)} />
         <Select<RestaurantTableFilterType> value={typeFilter} onChange={setTypeFilter} options={[
-          { value: 'ALL', label: t('restaurantTables.allTypes') },
-          { value: 'REGULAR', label: t('restaurantTables.regular') },
-          { value: 'VIP', label: t('restaurantTables.vip') },
+          { value: 'ALL' as const, label: t('restaurantTables.allTypes') },
+          ...typeOptions,
         ]} />
         <Select<RestaurantTableFilterStatus> value={statusFilter} onChange={setStatusFilter} options={[
           { value: 'ALL', label: t('restaurantTables.allStatuses') },
@@ -170,14 +189,18 @@ export default function RestaurantTableManagement() {
             <InputNumber min={1} precision={0} className="w-full" />
           </Form.Item>
           <Form.Item name="type" label={t('restaurantTables.type')} initialValue="REGULAR" rules={[{ required: true }]}>
-            <Select options={[
-              { value: 'REGULAR', label: t('restaurantTables.regular') },
-              { value: 'VIP', label: t('restaurantTables.vip') },
-            ]} />
+            <Select options={typeOptions} />
           </Form.Item>
           {editing ? <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500"><Tag color={editing.status === 'OCCUPIED' ? 'orange' : 'green'}>{editing.status === 'OCCUPIED' ? t('restaurantTables.occupied') : t('restaurantTables.available')}</Tag>{t('restaurantTables.readOnlyStatus')}</div> : null}
         </Form>
       </Modal>
+
+      <RestaurantTableSeedModal
+        open={seedOpen}
+        existingTables={tables ?? []}
+        onClose={() => setSeedOpen(false)}
+        onCreated={handleSeeded}
+      />
     </Card>
   );
 }
