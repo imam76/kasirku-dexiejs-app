@@ -130,6 +130,7 @@ export const DocumentLineItemsVirtualTable = ({
           open={editingEntry !== null}
           title={editingItem?.product_name || t('salesDocuments.placeholder.product')}
           onClose={() => setEditingItemId(null)}
+          showCloseButton
           footer={(
             <Button
               block

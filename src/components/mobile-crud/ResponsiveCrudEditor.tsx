@@ -1,5 +1,6 @@
-import { Drawer, Modal } from 'antd';
+import { Button, Drawer, Modal } from 'antd';
 import type { ReactNode } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 export type ResponsiveCrudEditorProps = {
@@ -10,6 +11,8 @@ export type ResponsiveCrudEditorProps = {
   onClose: () => void;
   desktopWidth?: number;
   destroyOnClose?: boolean;
+  /** Tombol "Tutup" tambahan di footer (mobile), supaya tidak cuma bisa dijangkau lewat ikon X di pojok atas. */
+  showCloseButton?: boolean;
 };
 
 /**
@@ -24,10 +27,21 @@ export default function ResponsiveCrudEditor({
   onClose,
   desktopWidth = 760,
   destroyOnClose = true,
+  showCloseButton = false,
 }: ResponsiveCrudEditorProps) {
+  const { t } = useI18n();
   const isMobile = useIsMobile();
 
   if (isMobile) {
+    const mobileFooter = showCloseButton ? (
+      <div className="space-y-2">
+        {footer}
+        <Button block size="large" className="h-12" onClick={onClose}>
+          {t('common.close')}
+        </Button>
+      </div>
+    ) : footer;
+
     return (
       <Drawer
         title={title}
@@ -35,7 +49,7 @@ export default function ResponsiveCrudEditor({
         width="100%"
         open={open}
         onClose={onClose}
-        footer={footer}
+        footer={mobileFooter}
         destroyOnHidden={destroyOnClose}
         rootClassName="mobile-crud-editor"
         styles={{

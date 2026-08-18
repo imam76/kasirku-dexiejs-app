@@ -214,6 +214,7 @@ export const SalesDocumentMobileComposer = ({
         open={openSpoke === 'core'}
         title={t('salesDocuments.mobile.spoke.customerDate')}
         onClose={closeSpoke}
+        showCloseButton
       >
         <DocumentHeader
           config={{ ...config, headerFields: coreFields }}
@@ -232,6 +233,7 @@ export const SalesDocumentMobileComposer = ({
         open={openSpoke === 'items'}
         title={t('salesDocuments.mobile.spoke.items', { count: filledItemCount })}
         onClose={closeSpoke}
+        showCloseButton
       >
         <DocumentLineItems
           config={config}
@@ -252,6 +254,7 @@ export const SalesDocumentMobileComposer = ({
           open={openSpoke === 'totals'}
           title={t('salesDocuments.mobile.spoke.totals')}
           onClose={closeSpoke}
+          showCloseButton
         >
           <div className="space-y-4">
             <DocumentCurrencyFields
@@ -287,6 +290,7 @@ export const SalesDocumentMobileComposer = ({
           open={openSpoke === 'advanced'}
           title={t('salesDocuments.mobile.spoke.advanced')}
           onClose={closeSpoke}
+          showCloseButton
         >
           <DocumentHeader
             config={{ ...config, headerFields: advancedFields }}

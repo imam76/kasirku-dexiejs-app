@@ -725,7 +725,7 @@ export default function StockTable({
               <div className="grid grid-cols-2 gap-2.5">
                 <Button
                   size="large"
-                  className="h-12"
+                  className="h-auto min-h-12 whitespace-normal py-2 text-center leading-tight"
                   onClick={() => {
                     closeDetailSheet();
                     onOpeningStock(selectedProduct);
@@ -736,7 +736,7 @@ export default function StockTable({
                 <Button
                   type="primary"
                   size="large"
-                  className="h-12"
+                  className="h-auto min-h-12 whitespace-normal py-2 text-center leading-tight"
                   onClick={() => {
                     closeDetailSheet();
                     onEdit(selectedProduct);
