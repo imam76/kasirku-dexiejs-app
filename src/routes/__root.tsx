@@ -2,6 +2,8 @@ import FeedbackModal from '@/components/FeedbackModal'
 // import { AppWorkflowTour } from '@/components/AppWorkflowTour'
 import { AuthGate } from '@/auth/AuthGate'
 import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } from '@/auth/routePermissions'
+import { getPurchaseDocumentTypeFromPathSegment } from '@/configs/purchase-document'
+import { getSalesDocumentTypeFromPathSegment } from '@/configs/sales-document'
 import LoginProfile from '@/components/auth/LoginProfile'
 import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
@@ -68,6 +70,21 @@ type NavLeaf = {
 }
 type NavGroup = { label: string; icon: LucideIcon; key: string; children: NavLink[] }
 type NavLink = NavLeaf | NavGroup
+
+/** Halaman mobile-crud yang me-render breadcrumb-nya sendiri di dalam header fixed, jadi breadcrumb global di bawah ini harus disembunyikan untuk path tersebut. */
+const EMBEDDED_MOBILE_HEADER_PATHS = new Set(['/master-data/products', '/master-data/contacts'])
+const isEmbeddedMobileDocumentListPath = (pathname: string) => {
+  const salesMatch = /^\/(?:finance\/)?sales\/([a-z]+)$/.exec(pathname)
+  if (salesMatch) return getSalesDocumentTypeFromPathSegment(salesMatch[1]) !== undefined
+
+  const purchaseMatch = /^\/(?:finance\/)?purchases\/([a-z]+)$/.exec(pathname)
+  if (purchaseMatch) return getPurchaseDocumentTypeFromPathSegment(purchaseMatch[1]) !== undefined
+
+  return false
+}
+const usesEmbeddedMobileHeaderForPath = (pathname: string) => (
+  EMBEDDED_MOBILE_HEADER_PATHS.has(pathname) || isEmbeddedMobileDocumentListPath(pathname)
+)
 
 const isNavGroup = (link: NavLink): link is NavGroup => 'children' in link
 const getNavLeafKey = (link: NavLeaf) => link.key ?? `${link.to}${link.hash ? `#${link.hash}` : ''}`
@@ -361,7 +378,7 @@ const RootLayout = () => {
   const canOpenCurrentPath = canAccessPermissionRule(currentUser ?? undefined, requiredPermission, { currentRole, permissionSet })
   const isModuleActive = isRouteEnabled(location.pathname)
   const useFixedPosWorkspace = location.pathname === '/transaction' || location.pathname === '/pos-resto'
-  const usesEmbeddedProductHeader = isMobile && location.pathname === '/master-data/products'
+  const usesEmbeddedMobileHeader = isMobile && usesEmbeddedMobileHeaderForPath(location.pathname)
 
   const topOffset = '4rem'
   const contentHeight = `calc(var(--app-vh) - ${topOffset})`
@@ -537,7 +554,7 @@ const RootLayout = () => {
                   />
                 ) : canOpenCurrentPath ? (
                   <>
-                    {!usesEmbeddedProductHeader ? <GlobalBreadcrumb pathname={location.pathname} /> : null}
+                    {!usesEmbeddedMobileHeader ? <GlobalBreadcrumb pathname={location.pathname} /> : null}
                     <Outlet />
                   </>
                 ) : (

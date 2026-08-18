@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, DatePicker, Input, Select, Table, Tag } from 'antd';
-import { Link } from '@tanstack/react-router';
-import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, Eye, FileCheck2, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, type LucideIcon } from 'lucide-react';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
+import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, Eye, FileCheck2, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import {
   getPurchaseDocumentConfig,
@@ -9,6 +9,7 @@ import {
 } from '@/configs/purchase-document';
 import type { TranslationKey } from '@/i18n/messages';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
 import type { PurchaseCostStatus, PurchaseDocument, PurchaseDocumentStatus, PurchaseDocumentType } from '@/types';
 import {
@@ -21,7 +22,9 @@ import { formatDate } from '@/utils/formatters';
 import { purchaseDocumentStatusLabelKeys, purchaseInvoicePaymentStatusLabelKeys } from '@/utils/purchaseDocuments/i18n';
 import { canAccessPath } from '@/auth/routePermissions';
 import { useAuth } from '@/auth/useAuth';
+import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb';
 import ManagementListCard from '@/components/ManagementListCard';
+import { MobileCrudPageHeader, ResponsiveCrudCollection } from '@/components/mobile-crud';
 import dayjs from '@/lib/dayjs';
 
 const statusColor: Record<PurchaseDocumentStatus, string> = {
@@ -260,9 +263,18 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<PurchaseDocumentStatus | 'ALL'>('ALL');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const location = useLocation();
+  const navigate = useNavigate();
   const config = getPurchaseDocumentConfig(documentType);
   const menuItem = purchaseDocumentMenuItems.find((item) => item.type === documentType);
   const documentPathSegment = getPurchaseDocumentTypePathSegment(documentType);
+
+  const documentsOfType = useMemo(
+    () => documents.filter((document) => document.type === documentType),
+    [documents, documentType],
+  );
 
   const filteredDocuments = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -363,80 +375,234 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
     },
   ];
 
+  const statusFilterOptions = [
+    { value: 'ALL' as const, label: t('common.allStatuses') },
+    { value: 'DRAFT' as const, label: t(purchaseDocumentStatusLabelKeys.DRAFT) },
+    { value: 'ISSUED' as const, label: t(purchaseDocumentStatusLabelKeys.ISSUED) },
+    { value: 'CONVERTED' as const, label: t(purchaseDocumentStatusLabelKeys.CONVERTED) },
+    { value: 'VOIDED' as const, label: t(purchaseDocumentStatusLabelKeys.VOIDED) },
+  ];
+
+  const resetFilters = () => {
+    setSearchText('');
+    setStatusFilter('ALL');
+    setDateRange(null);
+  };
+
+  const activeFilterCount = (statusFilter !== 'ALL' ? 1 : 0) + (dateRange ? 1 : 0);
+  const activeSearchAndFilterCount = activeFilterCount + (searchText.trim() ? 1 : 0);
+
   return (
-    <ManagementListCard
-      title={menuItem ? `${menuItem.code} - ${t(config.titleKey)}` : t(config.titleKey)}
-      icon={menuItem
-        ? <menuItem.icon className={`h-5 w-5 ${menuItem.color}`} />
-        : <FileText className="h-5 w-5" />}
-      actions={(
-        <div className="flex flex-wrap justify-end gap-2">
-          <Link to="/purchases">
-            <Button icon={<ArrowLeft size={16} />}>
-              {t('purchaseDocuments.backToPurchasesMenu')}
-            </Button>
-          </Link>
-          <Link
-            to="/purchases/$documentType/new"
-            params={{ documentType: documentPathSegment }}
+    <>
+      {isMobile ? (
+        <MobileCrudPageHeader
+          title={menuItem ? `${menuItem.code} - ${t(config.titleKey)}` : t(config.titleKey)}
+          icon={menuItem
+            ? <menuItem.icon className={`h-5 w-5 ${menuItem.color}`} />
+            : <FileText className="h-5 w-5" />}
+          breadcrumb={<GlobalBreadcrumb pathname={location.pathname} compact />}
+        />
+      ) : null}
+
+      <ResponsiveCrudCollection<PurchaseDocument>
+        desktop={(
+          <ManagementListCard
+            title={menuItem ? `${menuItem.code} - ${t(config.titleKey)}` : t(config.titleKey)}
+            icon={menuItem
+              ? <menuItem.icon className={`h-5 w-5 ${menuItem.color}`} />
+              : <FileText className="h-5 w-5" />}
+            actions={(
+              <div className="flex flex-wrap justify-end gap-2">
+                <Link to="/purchases">
+                  <Button icon={<ArrowLeft size={16} />}>
+                    {t('purchaseDocuments.backToPurchasesMenu')}
+                  </Button>
+                </Link>
+                <Link
+                  to="/purchases/$documentType/new"
+                  params={{ documentType: documentPathSegment }}
+                >
+                  <Button type="primary" icon={<Plus size={16} />}>
+                    {t('purchaseDocuments.menu.new')}
+                  </Button>
+                </Link>
+              </div>
+            )}
+            toolbar={(
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(240px,1fr)_180px_280px_auto]">
+                <Input.Search
+                  allowClear
+                  placeholder={t('purchaseDocuments.searchPlaceholder')}
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                />
+                <Select<PurchaseDocumentStatus | 'ALL'>
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={statusFilterOptions}
+                />
+                <DatePicker.RangePicker
+                  value={dateRange}
+                  allowClear
+                  format="DD MMM YYYY"
+                  onChange={(value) => {
+                    if (value?.[0] && value[1]) {
+                      setDateRange([value[0], value[1]]);
+                      return;
+                    }
+                    setDateRange(null);
+                  }}
+                />
+                <Button
+                  icon={<RotateCcw size={16} />}
+                  onClick={resetFilters}
+                >
+                  {t('common.reset')}
+                </Button>
+              </div>
+            )}
           >
-            <Button type="primary" icon={<Plus size={16} />}>
-              {t('purchaseDocuments.menu.new')}
-            </Button>
-          </Link>
-        </div>
-      )}
-      toolbar={(
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(240px,1fr)_180px_280px_auto]">
-          <Input.Search
-            allowClear
-            placeholder={t('purchaseDocuments.searchPlaceholder')}
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-          />
-          <Select<PurchaseDocumentStatus | 'ALL'>
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={[
-              { value: 'ALL', label: t('common.allStatuses') },
-              { value: 'DRAFT', label: t(purchaseDocumentStatusLabelKeys.DRAFT) },
-              { value: 'ISSUED', label: t(purchaseDocumentStatusLabelKeys.ISSUED) },
-              { value: 'CONVERTED', label: t(purchaseDocumentStatusLabelKeys.CONVERTED) },
-              { value: 'VOIDED', label: t(purchaseDocumentStatusLabelKeys.VOIDED) },
-            ]}
-          />
-          <DatePicker.RangePicker
-            value={dateRange}
-            allowClear
-            format="DD MMM YYYY"
-            onChange={(value) => {
-              if (value?.[0] && value[1]) {
-                setDateRange([value[0], value[1]]);
-                return;
-              }
-              setDateRange(null);
-            }}
-          />
-          <Button
-            icon={<RotateCcw size={16} />}
-            onClick={() => {
-              setSearchText('');
-              setStatusFilter('ALL');
-              setDateRange(null);
-            }}
-          >
-            {t('common.reset')}
-          </Button>
-        </div>
-      )}
-    >
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={filteredDocuments}
-        scroll={{ x: 1100 }}
-        pagination={{ pageSize: 20, showSizeChanger: true }}
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={filteredDocuments}
+              scroll={{ x: 1100 }}
+              pagination={{ pageSize: 20, showSizeChanger: true }}
+            />
+          </ManagementListCard>
+        )}
+        mobileFilter={{
+          open: isFilterDrawerOpen,
+          title: t('purchaseDocuments.mobile.filterTitle'),
+          onClose: () => setIsFilterDrawerOpen(false),
+          onReset: resetFilters,
+          resetLabel: t('common.reset'),
+          applyLabel: t('purchaseDocuments.mobile.applyFilter'),
+          resetDisabled: !searchText.trim() && activeFilterCount === 0,
+          children: (
+            <>
+              <Input.Search
+                size="large"
+                allowClear
+                autoFocus
+                aria-label={t('purchaseDocuments.searchPlaceholder')}
+                placeholder={t('purchaseDocuments.searchPlaceholder')}
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+              />
+              <Select<PurchaseDocumentStatus | 'ALL'>
+                size="large"
+                className="w-full"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={statusFilterOptions}
+              />
+              <DatePicker.RangePicker
+                size="large"
+                className="w-full"
+                value={dateRange}
+                allowClear
+                format="DD MMM YYYY"
+                onChange={(value) => {
+                  if (value?.[0] && value[1]) {
+                    setDateRange([value[0], value[1]]);
+                    return;
+                  }
+                  setDateRange(null);
+                }}
+              />
+            </>
+          ),
+        }}
+        mobileList={{
+          items: filteredDocuments,
+          getKey: (document) => document.id,
+          resetKey: JSON.stringify([
+            searchText,
+            statusFilter,
+            dateRange?.[0]?.valueOf() ?? null,
+            dateRange?.[1]?.valueOf() ?? null,
+          ]),
+          resultSummary: t('purchaseDocuments.mobile.resultSummary', {
+            shown: filteredDocuments.length,
+            total: documentsOfType.length,
+          }),
+          emptyText: searchText.trim() || activeFilterCount > 0
+            ? t('purchaseDocuments.mobile.noFilteredDocuments')
+            : t('purchaseDocuments.mobile.noDocuments'),
+          emptyAction: !searchText.trim() && activeFilterCount === 0 ? (
+            <Link to="/purchases/$documentType/new" params={{ documentType: documentPathSegment }}>
+              <Button type="primary" size="large" icon={<Plus size={18} />}>
+                {t('purchaseDocuments.menu.new')}
+              </Button>
+            </Link>
+          ) : undefined,
+          loadMoreLabel: (remaining) => t('purchaseDocuments.mobile.loadMoreDocuments', { count: remaining }),
+          getItemAriaLabel: (document) => t('purchaseDocuments.mobile.detailAria', { number: document.document_number }),
+          onItemClick: (document) => {
+            void navigate({
+              to: '/purchases/$documentType/$documentId',
+              params: {
+                documentType: getPurchaseDocumentTypePathSegment(document.type),
+                documentId: document.id,
+              },
+            });
+          },
+          renderItem: (document) => (
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-gray-900 dark:text-gray-100">
+                  {document.document_number}
+                </span>
+                <Tag className="m-0 shrink-0" color={statusColor[document.status]}>
+                  {t(purchaseDocumentStatusLabelKeys[document.status])}
+                </Tag>
+              </div>
+              <div className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                {document.supplier_name || '-'}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-gray-400">{formatDate(document.document_date)}</span>
+                {hasPaymentStatus(document) && document.payment_status ? (
+                  <Tag className="m-0">{t(purchaseInvoicePaymentStatusLabelKeys[document.payment_status])}</Tag>
+                ) : null}
+              </div>
+              {document.type === 'PURCHASE_RECEIPT' ? (
+                <div className="mt-2">
+                  <Tag className="m-0" color={costStatusColor[document.cost_status ?? 'FINAL']}>
+                    {costStatusLabel[document.cost_status ?? 'FINAL']}
+                  </Tag>
+                </div>
+              ) : null}
+              {hasPricing(document) && document.total_amount !== undefined ? (
+                <div className="mt-2 text-right text-sm font-bold text-gray-900 dark:text-gray-100">
+                  {renderDocumentTotal(document)}
+                </div>
+              ) : null}
+            </div>
+          ),
+        }}
+        mobileFloatingActions={{
+          actions: [
+            {
+              key: 'add',
+              type: 'primary',
+              icon: <Plus size={24} />,
+              label: t('purchaseDocuments.menu.new'),
+              onClick: () => {
+                void navigate({ to: '/purchases/$documentType/new', params: { documentType: documentPathSegment } });
+              },
+            },
+            {
+              key: 'filter',
+              icon: <SlidersHorizontal size={22} />,
+              label: t('purchaseDocuments.mobile.filterTitle'),
+              badge: { count: activeSearchAndFilterCount, color: '#fa8c16' },
+              onClick: () => setIsFilterDrawerOpen(true),
+            },
+          ],
+        }}
       />
-    </ManagementListCard>
+    </>
   );
 }
