@@ -23,7 +23,7 @@ import {
   reversePurchaseInvoiceJournal,
   reversePurchaseReturnJournal,
 } from '@/services/generalLedgerService';
-import { enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
+import { enqueuePendingProductsForSync, enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
 import { createPurchaseDocumentNumber } from '@/utils/purchaseDocuments/createPurchaseDocumentNumber';
 import {
   createPurchaseDepartmentSnapshot,
@@ -358,6 +358,7 @@ const addReceiptStock = async (
   sourceType: PurchaseStockInSourceType = getPurchaseStockInSourceType(document),
 ) => {
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
 
   for (const item of items) {
     const product = await db.products.get(item.product_id);
@@ -367,7 +368,10 @@ const addReceiptStock = async (
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) + quantityInStockUnit,
       updated_at: occurredAt,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+    touchedProductIds.add(product.id);
 
     if (quantityInStockUnit > 0) {
       // Calculate cost per stock unit from item price in the document
@@ -409,7 +413,7 @@ const addReceiptStock = async (
     }
   }
 
-  return stockMutations;
+  return { stockMutations, touchedProductIds };
 };
 
 const restoreReceiptStock = async (
@@ -421,6 +425,7 @@ const restoreReceiptStock = async (
   sourceType: PurchaseStockInVoidSourceType = getPurchaseStockInVoidSourceType(document),
 ) => {
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
 
   for (const item of items) {
     const product = await db.products.get(item.product_id);
@@ -430,7 +435,10 @@ const restoreReceiptStock = async (
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) - quantityInStockUnit,
       updated_at: occurredAt,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+    touchedProductIds.add(product.id);
 
     if (quantityInStockUnit > 0) {
       // Stock Out -> Consume FIFO lots to keep stock consistent
@@ -453,7 +461,7 @@ const restoreReceiptStock = async (
     }
   }
 
-  return stockMutations;
+  return { stockMutations, touchedProductIds };
 };
 
 const removePurchaseReturnStock = async (
@@ -463,6 +471,7 @@ const removePurchaseReturnStock = async (
   occurredAt: string,
 ) => {
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
 
   for (const item of items) {
     const product = await db.products.get(item.product_id);
@@ -472,7 +481,10 @@ const removePurchaseReturnStock = async (
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) - quantityInStockUnit,
       updated_at: occurredAt,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+    touchedProductIds.add(product.id);
 
     if (quantityInStockUnit > 0) {
       // Stock Out (Returned to supplier) -> Consume FIFO lots to keep stock consistent
@@ -494,7 +506,7 @@ const removePurchaseReturnStock = async (
     }
   }
 
-  return stockMutations;
+  return { stockMutations, touchedProductIds };
 };
 
 const restorePurchaseReturnStock = async (
@@ -505,6 +517,7 @@ const restorePurchaseReturnStock = async (
   reason: string,
 ) => {
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
 
   for (const item of items) {
     const product = await db.products.get(item.product_id);
@@ -514,7 +527,10 @@ const restorePurchaseReturnStock = async (
     await db.products.update(product.id, {
       stock: Number(product.stock || 0) + quantityInStockUnit,
       updated_at: occurredAt,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+    touchedProductIds.add(product.id);
 
     if (quantityInStockUnit > 0) {
       // Calculate cost per stock unit from item price in the return document
@@ -556,7 +572,7 @@ const restorePurchaseReturnStock = async (
     }
   }
 
-  return stockMutations;
+  return { stockMutations, touchedProductIds };
 };
 
 const calculatePurchaseTotal = async (
@@ -766,6 +782,7 @@ export const issuePurchaseDocument = async (id: string) => {
   validatePurchaseDocument({ document, items, config, products, mode: 'issue' });
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
   const issuedDocument = withUpdatedPurchaseDocumentSync({
     ...document,
     status: 'ISSUED',
@@ -778,9 +795,9 @@ export const issuePurchaseDocument = async (id: string) => {
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (shouldApplyPurchaseReturnStockImpact(issuedDocument, config)) {
-      stockMutations = await removePurchaseReturnStock(issuedDocument, items, currentUser, now);
+      ({ stockMutations, touchedProductIds } = await removePurchaseReturnStock(issuedDocument, items, currentUser, now));
     } else if (shouldApplyPurchaseStockInImpact(issuedDocument, config)) {
-      stockMutations = await addReceiptStock(issuedDocument, items, currentUser, now);
+      ({ stockMutations, touchedProductIds } = await addReceiptStock(issuedDocument, items, currentUser, now));
     }
 
     await db.purchaseDocuments.put(issuedDocument);
@@ -799,6 +816,9 @@ export const issuePurchaseDocument = async (id: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await enqueuePurchaseDocumentBundleSync(issuedDocument, items, 'update');
 
   if (document.type === 'PURCHASE_RETURN') {
@@ -924,6 +944,7 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   const config = getPurchaseDocumentConfig(document.type);
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
   const voidedDocument = withUpdatedPurchaseDocumentSync({
     ...document,
     status: 'VOIDED',
@@ -935,9 +956,9 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (document.status === 'ISSUED') {
       if (shouldApplyPurchaseReturnStockImpact(document, config)) {
-        stockMutations = await restorePurchaseReturnStock(document, items, currentUser, now, normalizedReason);
+        ({ stockMutations, touchedProductIds } = await restorePurchaseReturnStock(document, items, currentUser, now, normalizedReason));
       } else if (shouldApplyPurchaseStockInImpact(document, config)) {
-        stockMutations = await restoreReceiptStock(document, items, currentUser, now, normalizedReason);
+        ({ stockMutations, touchedProductIds } = await restoreReceiptStock(document, items, currentUser, now, normalizedReason));
       }
     }
 
@@ -965,6 +986,9 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await enqueuePurchaseDocumentBundleSync(voidedDocument, items, 'update');
 
   if (document.type === 'PURCHASE_RETURN') {
@@ -993,6 +1017,7 @@ export const correctPurchaseDocument = async (sourceId: string, reason: string) 
   const now = new Date();
   const nowIso = now.toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
 
   const voidedDocument = withUpdatedPurchaseDocumentSync({
     ...source,
@@ -1033,9 +1058,9 @@ export const correctPurchaseDocument = async (sourceId: string, reason: string) 
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
     if (shouldApplyPurchaseReturnStockImpact(source, config)) {
-      stockMutations = await restorePurchaseReturnStock(source, sourceItems, currentUser, nowIso, normalizedReason);
+      ({ stockMutations, touchedProductIds } = await restorePurchaseReturnStock(source, sourceItems, currentUser, nowIso, normalizedReason));
     } else if (shouldApplyPurchaseStockInImpact(source, config)) {
-      stockMutations = await restoreReceiptStock(source, sourceItems, currentUser, nowIso, normalizedReason);
+      ({ stockMutations, touchedProductIds } = await restoreReceiptStock(source, sourceItems, currentUser, nowIso, normalizedReason));
     }
 
     await db.purchaseDocuments.put(voidedDocument);
@@ -1066,6 +1091,9 @@ export const correctPurchaseDocument = async (sourceId: string, reason: string) 
   });
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await enqueuePurchaseDocumentBundleSync(voidedDocument, sourceItems, 'update');
   await enqueuePurchaseDocumentBundleSync(draftDocument, draftItems, 'create');
 

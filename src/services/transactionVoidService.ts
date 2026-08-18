@@ -10,7 +10,7 @@ import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } fro
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { normalisasiHargaProduk } from '@/utils/pricing';
 import { recordMembershipPointTransaction } from '@/services/membershipService';
-import { enqueueContactSync } from '@/services/syncQueueService';
+import { enqueueContactSync, enqueuePendingProductsForSync } from '@/services/syncQueueService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -44,6 +44,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   const normalizedReason = reason.trim() || 'Transaksi dibatalkan';
   let transactionNumber = transactionId;
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
   const deletedFinanceTransactions: FinanceTransaction[] = [];
   let updatedMemberForSync: Contact | undefined;
 
@@ -93,7 +94,10 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         const returnedQuantity = getReturnedStockQuantity(item, product);
         await db.products.update(product.id, {
           stock: product.stock + returnedQuantity,
+          sync_status: 'pending',
+          sync_error: undefined,
         });
+        touchedProductIds.add(product.id);
 
         if (returnedQuantity > 0) {
           // Create a FIFO lot for the returned stock using the cost snapshot from the original sale
@@ -244,6 +248,9 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   );
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   if (deletedFinanceTransactions.length > 0) {
     await enqueueFinanceTransactionsSync(deletedFinanceTransactions, 'delete');
   }

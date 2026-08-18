@@ -1,6 +1,7 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import {
+  enqueuePendingProductsForSync,
   enqueueProductSync,
   enqueueProductionOrderBundleSync,
 } from '@/services/syncQueueService';
@@ -373,6 +374,7 @@ export const postProductionOrder = async ({
   await requireUserPermission(currentUser, 'PRODUCTION_MANAGE');
   const now = new Date().toISOString();
   const stockMutations: StockMutation[] = [];
+  const touchedMaterialProductIds = new Set<string>();
   let finishedProductForSync: Product | undefined;
   let postedOrder: ProductionOrder | undefined;
   let postedItems: ProductionOrderItem[] = [];
@@ -429,7 +431,10 @@ export const postProductionOrder = async ({
       await db.products.update(product.id, {
         stock: toFiniteNumber(product.stock) - stockQuantityUsed,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
+      touchedMaterialProductIds.add(product.id);
 
       stockMutations.push(createStockMutation({
         product,
@@ -513,6 +518,9 @@ export const postProductionOrder = async ({
 
   await enqueueStockMutations(stockMutations);
   await enqueueProductSync(finishedProductForSync, 'update');
+  if (touchedMaterialProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedMaterialProductIds);
+  }
   await enqueueProductionOrderBundleSync(postedOrder, postedItems, postedCosts, 'update');
   await writeActivityLog({
     user: currentUser,
@@ -534,6 +542,7 @@ export const voidProductionOrder = async ({
   const now = new Date().toISOString();
   const normalizedReason = reason?.trim() || 'Void produksi';
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
   let voidedOrder: ProductionOrder | undefined;
   let items: ProductionOrderItem[] = [];
   let costs: ProductionOrderCost[] = [];
@@ -570,7 +579,10 @@ export const voidProductionOrder = async ({
     await db.products.update(finishedProduct.id, {
       stock: toFiniteNumber(finishedProduct.stock) - order.quantity_produced,
       updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+    touchedProductIds.add(finishedProduct.id);
     stockMutations.push(createStockMutation({
       product: finishedProduct,
       sourceType: 'PRODUCTION_VOID',
@@ -590,7 +602,10 @@ export const voidProductionOrder = async ({
       await db.products.update(materialProduct.id, {
         stock: toFiniteNumber(materialProduct.stock) + item.stock_quantity_used,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
+      touchedProductIds.add(materialProduct.id);
       await addInventoryLot({
         productId: materialProduct.id,
         productName: materialProduct.name,
@@ -635,6 +650,9 @@ export const voidProductionOrder = async ({
   }
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await enqueueProductionOrderBundleSync(voidedOrder, items, costs, 'update');
   await writeActivityLog({
     user: currentUser,

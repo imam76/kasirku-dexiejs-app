@@ -11,7 +11,7 @@ import {
   postSalesInvoiceIssuedJournal,
   reverseSalesInvoiceJournal,
 } from '@/services/generalLedgerService';
-import { enqueueSalesDocumentBundleSync } from '@/services/syncQueueService';
+import { enqueuePendingProductsForSync, enqueueSalesDocumentBundleSync } from '@/services/syncQueueService';
 import type {
   PaymentMethod,
   SalesDocument,
@@ -168,6 +168,7 @@ const reduceDeliveryStock = async (
   occurredAt: string,
 ) => {
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
 
   for (const item of items) {
     const product = await db.products.get(item.product_id);
@@ -177,7 +178,10 @@ const reduceDeliveryStock = async (
     const quantityInStockUnit = konversiSatuanProduk(quantity, product, item.unit, product.purchase_unit);
     await db.products.update(product.id, {
       stock: product.stock - quantityInStockUnit,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+    touchedProductIds.add(product.id);
 
     if (quantityInStockUnit > 0) {
       // Stock Out -> Consume FIFO lots to keep stock consistent
@@ -199,7 +203,7 @@ const reduceDeliveryStock = async (
     }
   }
 
-  return stockMutations;
+  return { stockMutations, touchedProductIds };
 };
 
 const restoreDeliveryStock = async (
@@ -210,6 +214,7 @@ const restoreDeliveryStock = async (
   reason: string,
 ) => {
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
 
   for (const item of items) {
     const product = await db.products.get(item.product_id);
@@ -219,7 +224,10 @@ const restoreDeliveryStock = async (
     const quantityInStockUnit = konversiSatuanProduk(quantity, product, item.unit, product.purchase_unit);
     await db.products.update(product.id, {
       stock: product.stock + quantityInStockUnit,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+    touchedProductIds.add(product.id);
 
     if (quantityInStockUnit > 0) {
       const costPerStockUnit = normalisasiHargaProduk(
@@ -259,7 +267,7 @@ const restoreDeliveryStock = async (
     }
   }
 
-  return stockMutations;
+  return { stockMutations, touchedProductIds };
 };
 
 const assertDraft = (document: SalesDocument) => {
@@ -472,6 +480,7 @@ export const issueSalesDocument = async (id: string) => {
   validateSalesDocument({ document, items, config, products });
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
   const issuedDocument: SalesDocument = withUpdatedSalesDocumentSync({
     ...document,
     status: 'ISSUED',
@@ -481,7 +490,7 @@ export const issueSalesDocument = async (id: string) => {
 
   await db.transaction('rw', salesDocumentTables, async () => {
     if (config.behavior.affectsStock) {
-      stockMutations = await reduceDeliveryStock(issuedDocument, items, currentUser, now);
+      ({ stockMutations, touchedProductIds } = await reduceDeliveryStock(issuedDocument, items, currentUser, now));
     }
 
     await db.salesDocuments.put(issuedDocument);
@@ -498,6 +507,9 @@ export const issueSalesDocument = async (id: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await enqueueSalesDocumentBundleSync(issuedDocument, items, 'update');
 };
 
@@ -619,6 +631,7 @@ export const voidSalesDocument = async (id: string, reason: string) => {
   const items = await db.salesDocumentItems.where('document_id').equals(id).toArray();
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
   const voidedDocument = withUpdatedSalesDocumentSync({
     ...document,
     status: 'VOIDED',
@@ -629,7 +642,7 @@ export const voidSalesDocument = async (id: string, reason: string) => {
 
   await db.transaction('rw', salesDocumentTables, async () => {
     if (document.type === 'SALES_DELIVERY' && document.status === 'ISSUED') {
-      stockMutations = await restoreDeliveryStock(document, items, currentUser, now, normalizedReason);
+      ({ stockMutations, touchedProductIds } = await restoreDeliveryStock(document, items, currentUser, now, normalizedReason));
     }
 
     await db.salesDocuments.put(voidedDocument);
@@ -646,6 +659,9 @@ export const voidSalesDocument = async (id: string, reason: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await enqueueSalesDocumentBundleSync(voidedDocument, items, 'update');
 };
 
@@ -677,6 +693,7 @@ export const correctSalesDocument = async (sourceId: string, reason: string) => 
   const now = new Date();
   const nowIso = now.toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
 
   const voidedDocument = withUpdatedSalesDocumentSync({
     ...source,
@@ -717,7 +734,7 @@ export const correctSalesDocument = async (sourceId: string, reason: string) => 
 
   await db.transaction('rw', salesDocumentTables, async () => {
     if (source.type === 'SALES_DELIVERY') {
-      stockMutations = await restoreDeliveryStock(source, sourceItems, currentUser, nowIso, normalizedReason);
+      ({ stockMutations, touchedProductIds } = await restoreDeliveryStock(source, sourceItems, currentUser, nowIso, normalizedReason));
     }
 
     await db.salesDocuments.put(voidedDocument);
@@ -738,6 +755,9 @@ export const correctSalesDocument = async (sourceId: string, reason: string) => 
   });
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await enqueueSalesDocumentBundleSync(voidedDocument, sourceItems, 'update');
   await enqueueSalesDocumentBundleSync(draftDocument, draftItems, 'create');
 

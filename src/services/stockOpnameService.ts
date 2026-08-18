@@ -1,6 +1,6 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
-import { enqueueStockOpnameBundleSync } from '@/services/syncQueueService';
+import { enqueuePendingProductsForSync, enqueueStockOpnameBundleSync } from '@/services/syncQueueService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import type { AuthUser, Product, StockMutation, StockOpname, StockOpnameItem } from '@/types';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
@@ -392,6 +392,7 @@ export const postStockOpname = async ({
   await requireUserPermission(currentUser, 'STOCK_OPNAME_MANAGE');
   const now = new Date().toISOString();
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
   let postedOpname: StockOpname | undefined;
   let postedItems: StockOpnameItem[] = [];
 
@@ -457,7 +458,10 @@ export const postStockOpname = async ({
       await db.products.update(product.id, {
         stock: toFiniteNumber(product.stock) + quantityDelta,
         updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
+      touchedProductIds.add(product.id);
 
       if (quantityDelta > 0) {
         await addInventoryLot({
@@ -520,6 +524,9 @@ export const postStockOpname = async ({
   }
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await enqueueStockOpnameBundleSync(postedOpname, postedItems, 'update');
   await writeActivityLog({
     user: currentUser,

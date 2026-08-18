@@ -36,6 +36,7 @@ import type { SalesReturnSourceChain } from '@/utils/salesReturns/resolveSalesRe
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
+import { enqueuePendingProductsForSync } from '@/services/syncQueueService';
 
 export interface SalesReturnItemInput {
   source_item_id: string;
@@ -375,6 +376,7 @@ const applyRestockEffect = async (
   reason?: string,
 ) => {
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
 
   for (const item of items) {
     const restockQuantity = Number(item.restock_quantity || 0);
@@ -391,7 +393,12 @@ const applyRestockEffect = async (
       throw new Error(`Stok ${product.name} tidak cukup untuk membatalkan retur.`);
     }
 
-    await db.products.update(product.id, { stock: nextStock });
+    await db.products.update(product.id, {
+      stock: nextStock,
+      sync_status: 'pending',
+      sync_error: undefined,
+    });
+    touchedProductIds.add(product.id);
 
     // When restocking (direction === 1), create a FIFO lot using the original purchase_price snapshot.
     // On void of a return (direction === -1), we do NOT remove the lot — it may already be consumed.
@@ -425,7 +432,7 @@ const applyRestockEffect = async (
     }));
   }
 
-  return stockMutations;
+  return { stockMutations, touchedProductIds };
 };
 
 const createRefundFinanceTransaction = async (
@@ -608,10 +615,11 @@ export const issueSalesReturn = async (id: string) => {
 
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
   let financeTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', salesReturnTables, async () => {
-    stockMutations = await applyRestockEffect(salesReturn, items, 1, currentUser, now);
+    ({ stockMutations, touchedProductIds } = await applyRestockEffect(salesReturn, items, 1, currentUser, now));
     financeTransaction = await createRefundFinanceTransaction(salesReturn, now, currentUser);
     const financeTransactionId = financeTransaction?.id;
     const issuedSalesReturn: SalesReturn = {
@@ -650,6 +658,9 @@ export const issueSalesReturn = async (id: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
   }
@@ -670,12 +681,13 @@ export const voidSalesReturn = async (id: string, reason: string) => {
   const items = await db.salesReturnItems.where('return_id').equals(id).toArray();
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
   let reversalFinanceTransaction: FinanceTransaction | undefined;
 
   await db.transaction('rw', salesReturnTables, async () => {
     let reversalFinanceTransactionId = salesReturn.reversal_finance_transaction_id;
     if (salesReturn.status === 'ISSUED') {
-      stockMutations = await applyRestockEffect(salesReturn, items, -1, currentUser, now, normalizedReason);
+      ({ stockMutations, touchedProductIds } = await applyRestockEffect(salesReturn, items, -1, currentUser, now, normalizedReason));
       reversalFinanceTransaction = await reverseRefundFinanceTransaction(salesReturn, now, currentUser);
       reversalFinanceTransactionId = reversalFinanceTransaction?.id;
       await reverseSalesReturnJournal(salesReturn, `Pembalikan jurnal retur ${salesReturn.return_number}: ${normalizedReason}`, currentUser);
@@ -702,6 +714,9 @@ export const voidSalesReturn = async (id: string, reason: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   if (reversalFinanceTransaction) {
     await enqueueFinanceTransactionsSync([reversalFinanceTransaction], 'create');
   }

@@ -26,7 +26,7 @@ import {
   isActiveRetailMember,
   recordMembershipPointTransaction,
 } from '@/services/membershipService';
-import { enqueueContactSync } from '@/services/syncQueueService';
+import { enqueueContactSync, enqueuePendingProductsForSync } from '@/services/syncQueueService';
 
 export type PosCheckoutSessionContext =
   | { kind: 'CASHIER' }
@@ -336,6 +336,7 @@ const reduceProductStock = async (
   occurredAt: string,
 ) => {
   const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
 
   for (const [index, item] of cart.entries()) {
     const product = await db.products.get(item.product.id);
@@ -351,7 +352,10 @@ const reduceProductStock = async (
 
     await db.products.update(item.product.id, {
       stock: product.stock - quantityInStockUnit,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+    touchedProductIds.add(item.product.id);
 
     if (transactionItem && quantityInStockUnit > 0) {
       stockMutations.push(createStockMutation({
@@ -369,7 +373,7 @@ const reduceProductStock = async (
     }
   }
 
-  return stockMutations;
+  return { stockMutations, touchedProductIds };
 };
 
 export const checkout = async ({
@@ -410,6 +414,7 @@ export const checkout = async ({
   const createdAt = now.toISOString();
   const activePromos = await getActivePromos(now);
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
   let financeTransactions: FinanceTransaction[] = [];
   let updatedMemberForSync: Contact | undefined;
 
@@ -578,13 +583,16 @@ export const checkout = async ({
       financeTransactions = await recordFinanceIncome(transaction, createdAt, paymentRecords, currentUser);
       await db.posTransactionPayments.bulkAdd(paymentRecords);
       await postPosSaleJournal(transaction, items, currentUser, paymentRecords);
-      stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
+      ({ stockMutations, touchedProductIds } = await reduceProductStock(cart, transaction, items, currentUser, createdAt));
 
       return { transaction, items, payments: paymentRecords, warnings };
     },
   );
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   if (financeTransactions.length > 0) {
     await enqueueFinanceTransactionsSync(financeTransactions, 'create');
   }
@@ -629,6 +637,7 @@ export const recordPosExpense = async ({
   const transactionNumber = `EXP-${Date.now()}`;
   const createdAt = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
+  let touchedProductIds = new Set<string>();
 
   const result = await db.transaction(
     'rw',
@@ -677,13 +686,16 @@ export const recordPosExpense = async ({
       await db.transactionItems.bulkAdd(items);
       await recordProfit(transaction, items, createdAt);
       await postPosExpenseJournal(transaction, items, currentUser);
-      stockMutations = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
+      ({ stockMutations, touchedProductIds } = await reduceProductStock(cart, transaction, items, currentUser, createdAt));
 
       return { transaction, items, payments: [], warnings };
     },
   );
 
   await enqueueStockMutations(stockMutations);
+  if (touchedProductIds.size > 0) {
+    await enqueuePendingProductsForSync(touchedProductIds);
+  }
   await writeActivityLog({
     user: currentUser,
     action: 'POS_EXPENSE_RECORDED',

@@ -77,6 +77,7 @@ import {
   enqueuePendingFixedAssetRunsForSync,
   enqueuePendingInventoryLotsForSync,
   enqueuePendingInventoryLotConsumptionsForSync,
+  enqueuePendingProductsForSync,
   enqueuePendingTaxesForSync,
   processPendingSyncQueue,
   recoverStaleProcessingSyncQueueItems,
@@ -100,6 +101,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingTaxesForSync();
   await enqueuePendingPaymentMethodsForSync();
   await enqueuePendingContactsForSync();
+  await enqueuePendingProductsForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingEmployeesForSync();
   await enqueuePendingHrDataForSync();
