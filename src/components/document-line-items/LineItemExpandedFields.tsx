@@ -1,5 +1,6 @@
 import { InputNumber, Select } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type { PromoType, SalesDocumentItem } from '@/types';
 import {
   formatBaseCurrencyAmount,
@@ -32,7 +33,7 @@ interface LineItemExpandedFieldsProps {
   onUpdateItem: (itemId: string, patch: LineItemTaxDiscountPatch) => void;
 }
 
-const expandedFieldControlClassName = [
+const expandedFieldControlClassNameDesktop = [
   'h-9 w-full',
   '[&_.ant-input-number-input]:h-9',
   '[&_.ant-input-number-input]:py-0',
@@ -40,6 +41,19 @@ const expandedFieldControlClassName = [
   '[&_.ant-select-selection-item]:!leading-9',
   '[&_.ant-select-selection-placeholder]:!leading-9',
 ].join(' ');
+
+const expandedFieldControlClassNameMobile = [
+  'h-11 w-full',
+  '[&_.ant-input-number-input]:h-11',
+  '[&_.ant-input-number-input]:py-0',
+  '[&_.ant-select-selector]:!h-11',
+  '[&_.ant-select-selection-item]:!leading-[2.75rem]',
+  '[&_.ant-select-selection-placeholder]:!leading-[2.75rem]',
+].join(' ');
+
+const buildExpandedFieldControlClassName = (isMobile: boolean) => (
+  isMobile ? expandedFieldControlClassNameMobile : expandedFieldControlClassNameDesktop
+);
 
 const expandedFieldLabelClassName = 'mb-1 flex min-h-5 items-center text-xs text-gray-500';
 
@@ -52,11 +66,13 @@ export const LineItemExpandedFields = ({
   onUpdateItem,
 }: LineItemExpandedFieldsProps) => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const displayedItem = calculatedItem ?? item;
+  const expandedFieldControlClassName = buildExpandedFieldControlClassName(isMobile);
 
   return (
     <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-3">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <div className={expandedFieldLabelClassName}>{t(`${i18nPrefix}.field.discount`)}</div>
           <div className="grid grid-cols-[120px_1fr] gap-2">

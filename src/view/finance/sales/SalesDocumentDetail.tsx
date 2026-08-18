@@ -10,6 +10,7 @@ import {
   SALES_DOCUMENT_TYPE_OPTIONS,
 } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAuth } from '@/auth/useAuth';
 import { getSalesDocumentPermission } from '@/auth/documentPermissions';
 import { useAccountsReceivable } from '@/hooks/useAccountsReceivable';
@@ -40,6 +41,7 @@ import {
   getSalesInvoicePaymentForeignAllocatedAmount,
 } from '@/utils/accountsReceivable/paymentAmounts';
 import { salesDocumentStatusLabelKeys, salesInvoicePaymentStatusLabelKeys } from '@/utils/salesDocuments/i18n';
+import { formatLineItemQuantitySummary } from '@/utils/salesDocuments/lineItemSummaryFormat';
 
 const { Title, Text } = Typography;
 
@@ -74,6 +76,7 @@ interface SalesDocumentDetailProps {
 export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { can } = useAuth();
   const { issueDocument, voidDocument, convertDocument, correctDocument, isMutating } = useSalesDocuments();
   const {
@@ -627,71 +630,101 @@ export default function SalesDocumentDetail({ documentId }: SalesDocumentDetailP
           </div>
         )}
 
-        <div className="mt-7 overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-[13px]">
-            <thead>
-              <tr style={{ backgroundColor: config.theme.accent }}>
-                <th className="w-10 rounded-l-md px-3 py-3 text-center text-[11px] font-bold uppercase tracking-[.06em] text-white">#</th>
-                <th className="px-3 py-3 text-left text-[11px] font-bold uppercase tracking-[.06em] text-white">
-                  {t('salesDocuments.field.product')}
-                </th>
-                <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
-                  {t('salesDocuments.field.quantity')}
-                </th>
-                {config.type === 'SALES_DELIVERY' && (
-                  <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
-                    {t('salesDocuments.field.deliveredQuantity')}
-                  </th>
-                )}
-                {config.behavior.hasPricing && (
-                  <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
-                    {t('salesDocuments.field.price')}
-                  </th>
-                )}
-                <th className={`${config.behavior.hasPricing ? '' : 'rounded-r-md'} px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white`}>
-                  {t('salesDocuments.field.unit')}
-                </th>
-                {config.behavior.hasPricing && (
-                  <th className="rounded-r-md px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
-                    {t('salesDocuments.field.subtotal')}
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, index) => (
-                <tr key={item.id} className="border-b border-gray-100 last:border-b-0">
-                  <td className="px-3 py-3 text-center align-top text-xs font-semibold text-gray-400">{index + 1}</td>
-                  <td className="px-3 py-3 align-top">
-                    <div className="font-semibold text-gray-950">{item.product_name}</div>
-                    <div className="mt-1 text-[11.5px] leading-5 text-gray-400">
-                      {item.sku ? `${item.sku} · ` : ''}
-                      {item.quantity} {item.unit}
-                      {item.delivered_quantity !== undefined ? ` · ${t('salesDocuments.field.deliveredQuantity')}: ${item.delivered_quantity}` : ''}
-                      {config.behavior.hasPricing ? ` · ${t('salesDocuments.field.discount')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.discount_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
+        {isMobile ? (
+          <div className="mt-7 divide-y divide-gray-100">
+            {items.length === 0 ? (
+              <div className="py-6 text-center text-sm text-gray-400">{t('salesDocuments.emptyItems')}</div>
+            ) : items.map((item, index) => (
+              <div key={item.id} className="flex gap-3 py-3">
+                <div className="w-5 shrink-0 pt-0.5 text-center text-xs font-semibold text-gray-400">{index + 1}</div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="font-semibold text-gray-950">{item.product_name}</div>
+                  <div className="text-[11.5px] leading-5 text-gray-400">
+                    {item.sku ? `${item.sku} · ` : ''}
+                    {formatLineItemQuantitySummary(
+                      item,
+                      { isSalesDelivery: config.type === 'SALES_DELIVERY', hasPricing: config.behavior.hasPricing },
+                      documentCurrencySnapshot,
+                    )}
+                  </div>
+                  {config.behavior.hasPricing && (
+                    <div className="text-[11.5px] leading-5 text-gray-400">
+                      {t('salesDocuments.field.price')}: {formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.price, documentCurrencySnapshot), documentCurrencySnapshot)}
+                      {' · '}{t('salesDocuments.field.discount')}: {formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.discount_amount, documentCurrencySnapshot), documentCurrencySnapshot)}
                       {config.behavior.hasTax ? ` · ${t('salesDocuments.field.tax')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.tax_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
                     </div>
-                  </td>
-                  <td className="px-3 py-3 text-right align-top text-gray-700">{item.quantity}</td>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-7 overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+              <thead>
+                <tr style={{ backgroundColor: config.theme.accent }}>
+                  <th className="w-10 rounded-l-md px-3 py-3 text-center text-[11px] font-bold uppercase tracking-[.06em] text-white">#</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                    {t('salesDocuments.field.product')}
+                  </th>
+                  <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                    {t('salesDocuments.field.quantity')}
+                  </th>
                   {config.type === 'SALES_DELIVERY' && (
-                    <td className="px-3 py-3 text-right align-top text-gray-700">{item.delivered_quantity ?? '-'}</td>
+                    <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                      {t('salesDocuments.field.deliveredQuantity')}
+                    </th>
                   )}
                   {config.behavior.hasPricing && (
-                    <td className="px-3 py-3 text-right align-top text-gray-700">
-                      {renderMoney(item.price || 0, item.foreign_price, 'font-medium')}
-                    </td>
+                    <th className="px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                      {t('salesDocuments.field.price')}
+                    </th>
                   )}
-                  <td className="px-3 py-3 text-right align-top text-gray-700">{item.unit}</td>
+                  <th className={`${config.behavior.hasPricing ? '' : 'rounded-r-md'} px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white`}>
+                    {t('salesDocuments.field.unit')}
+                  </th>
                   {config.behavior.hasPricing && (
-                    <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
-                      {renderMoney(item.subtotal || 0, item.foreign_subtotal, 'font-semibold text-gray-950')}
-                    </td>
+                    <th className="rounded-r-md px-3 py-3 text-right text-[11px] font-bold uppercase tracking-[.06em] text-white">
+                      {t('salesDocuments.field.subtotal')}
+                    </th>
                   )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map((item, index) => (
+                  <tr key={item.id} className="border-b border-gray-100 last:border-b-0">
+                    <td className="px-3 py-3 text-center align-top text-xs font-semibold text-gray-400">{index + 1}</td>
+                    <td className="px-3 py-3 align-top">
+                      <div className="font-semibold text-gray-950">{item.product_name}</div>
+                      <div className="mt-1 text-[11.5px] leading-5 text-gray-400">
+                        {item.sku ? `${item.sku} · ` : ''}
+                        {item.quantity} {item.unit}
+                        {item.delivered_quantity !== undefined ? ` · ${t('salesDocuments.field.deliveredQuantity')}: ${item.delivered_quantity}` : ''}
+                        {config.behavior.hasPricing ? ` · ${t('salesDocuments.field.discount')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.discount_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
+                        {config.behavior.hasTax ? ` · ${t('salesDocuments.field.tax')}: ${formatDocumentCurrencyAmount(toDocumentCurrencyAmount(item.tax_amount, documentCurrencySnapshot), documentCurrencySnapshot)}` : ''}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-right align-top text-gray-700">{item.quantity}</td>
+                    {config.type === 'SALES_DELIVERY' && (
+                      <td className="px-3 py-3 text-right align-top text-gray-700">{item.delivered_quantity ?? '-'}</td>
+                    )}
+                    {config.behavior.hasPricing && (
+                      <td className="px-3 py-3 text-right align-top text-gray-700">
+                        {renderMoney(item.price || 0, item.foreign_price, 'font-medium')}
+                      </td>
+                    )}
+                    <td className="px-3 py-3 text-right align-top text-gray-700">{item.unit}</td>
+                    {config.behavior.hasPricing && (
+                      <td className="px-3 py-3 text-right align-top font-semibold text-gray-950">
+                        {renderMoney(item.subtotal || 0, item.foreign_subtotal, 'font-semibold text-gray-950')}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {config.behavior.hasPricing && (
           <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-end">

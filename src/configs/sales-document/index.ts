@@ -22,6 +22,8 @@ export interface SalesDocumentFieldConfig {
   helperKey?: TranslationKey;
   type: SalesDocumentFieldType;
   required?: boolean;
+  /** Progressive disclosure di mobile composer. Tanpa nilai dianggap 'core'. */
+  group?: 'core' | 'advanced';
 }
 
 export interface SalesDocumentLineColumnConfig {

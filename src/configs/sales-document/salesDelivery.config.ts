@@ -17,8 +17,8 @@ export const salesDeliveryConfig: SalesDocumentConfig = {
     { name: 'customer_name', labelKey: 'salesDocuments.field.customerName', type: 'text', required: true },
     { name: 'document_date', labelKey: 'salesDocuments.field.documentDate', type: 'date', required: true },
     { name: 'warehouse_id', labelKey: 'salesDocuments.field.warehouse', helperKey: 'salesDocuments.helper.warehouse.salesDelivery', type: 'warehouse' },
-    { name: 'department_id', labelKey: 'salesDocuments.field.department', type: 'department' },
-    { name: 'project_id', labelKey: 'salesDocuments.field.project', type: 'project' },
+    { name: 'department_id', labelKey: 'salesDocuments.field.department', type: 'department', group: 'advanced' },
+    { name: 'project_id', labelKey: 'salesDocuments.field.project', type: 'project', group: 'advanced' },
     { name: 'notes', labelKey: 'salesDocuments.field.notes', type: 'textarea' },
   ],
   lineItemColumns: [

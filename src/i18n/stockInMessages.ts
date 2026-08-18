@@ -34,6 +34,9 @@ export const stockInMessages = {
         'stockIn.confirmLines': '{count} baris barang',
         'stockIn.confirmTotal': 'Total nilai: {total}',
         'stockIn.confirmPendingPrice': 'Ada baris tanpa harga. Stok tetap bertambah, tetapi nilai persediaan baru masuk buku setelah harga dilengkapi.',
+        'stockIn.mobile.tapToEdit': 'Ketuk untuk mengisi baris ini.',
+        'stockIn.mobile.loadMore': 'Muat lagi ({count})',
+        'stockIn.mobile.editRowAria': 'Edit baris {product}',
     },
     en: {
         'stockIn.title': 'Stock In',
@@ -70,5 +73,8 @@ export const stockInMessages = {
         'stockIn.confirmLines': '{count} product rows',
         'stockIn.confirmTotal': 'Total value: {total}',
         'stockIn.confirmPendingPrice': 'Some rows have no price. Stock still increases, but the inventory value only reaches the books once the price is filled in.',
+        'stockIn.mobile.tapToEdit': 'Tap to fill in this row.',
+        'stockIn.mobile.loadMore': 'Load more ({count})',
+        'stockIn.mobile.editRowAria': 'Edit row {product}',
     },
 };

@@ -6,6 +6,7 @@ import type { Control, FieldValues, Path } from 'react-hook-form';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { DocumentDiscountSettingsModal } from '@/components/DocumentDiscountSettingsModal';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { db } from '@/lib/db';
 import type { PromoType } from '@/types';
 import { getDefaultDocumentDiscountAccount } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
@@ -64,6 +65,8 @@ export const DocumentTotalsSummary = <TFieldValues extends FieldValues>({
   onTaxChange,
 }: DocumentTotalsSummaryProps<TFieldValues>) => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
+  const size = isMobile ? 'large' as const : undefined;
   const [isDiscountSettingsOpen, setIsDiscountSettingsOpen] = useState(false);
   const discountAccounts = useLiveQuery(
     () => db.chartOfAccounts
@@ -119,7 +122,7 @@ export const DocumentTotalsSummary = <TFieldValues extends FieldValues>({
           <span className="text-sm text-gray-500">{t(`${i18nPrefix}.field.documentDiscount`)}</span>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Segmented
-              size="small"
+              size={isMobile ? 'middle' : 'small'}
               value={discountType}
               options={[
                 { value: 'fixed', label: t(`${i18nPrefix}.discountType.fixed`) },
@@ -128,6 +131,7 @@ export const DocumentTotalsSummary = <TFieldValues extends FieldValues>({
               onChange={(value) => onDiscountTypeChange(value as PromoType)}
             />
             <InputNumber
+              size={size}
               min={0}
               max={discountType === 'percent' ? 100 : undefined}
               className="w-full sm:w-32"
@@ -140,6 +144,7 @@ export const DocumentTotalsSummary = <TFieldValues extends FieldValues>({
             <Tooltip title={t(`${i18nPrefix}.field.discountAccount`)}>
               <Button
                 type="default"
+                size={size}
                 icon={<Settings size={16} />}
                 aria-label={t(`${i18nPrefix}.field.discountAccount`)}
                 onClick={() => setIsDiscountSettingsOpen(true)}
@@ -177,6 +182,7 @@ export const DocumentTotalsSummary = <TFieldValues extends FieldValues>({
                 control={control}
                 render={({ field }) => (
                   <Select
+                    size={size}
                     className="w-full sm:w-56"
                     allowClear
                     showSearch={{ optionFilterProp: 'label' }}

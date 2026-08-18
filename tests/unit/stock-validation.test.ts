@@ -224,7 +224,7 @@ describe('stock multi-unit validation', () => {
     }));
   });
 
-  test('rejects a tier that starts at 1 selling unit because it overrides the base price', () => {
+  test('allows a tier that starts at 1 selling unit', () => {
     const schema = createStockSchema(undefined, { globalConversions: [] });
     const result = schema.safeParse(buildStockForm({
       wholesale_prices: [{
@@ -235,11 +235,7 @@ describe('stock multi-unit validation', () => {
       }],
     }));
 
-    expect(result.success).toBe(false);
-    if (result.success) return;
-    expect(result.error.issues).toContainEqual(expect.objectContaining({
-      path: ['wholesale_prices', 0, 'min_quantity'],
-    }));
+    expect(result.success).toBe(true);
   });
 
   test('still allows a threshold of 1 in a bulkier unit than the selling unit', () => {

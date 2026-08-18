@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { Dayjs } from 'dayjs';
 import dayjs from '@/lib/dayjs';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
+import { useAuth } from '@/auth/useAuth';
 import { useI18n } from '@/hooks/useI18n';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { buildQuickCreateDefaultValues, useProductQuickCreateForm } from '@/hooks/useProductQuickCreateForm';
@@ -31,8 +32,10 @@ import {
 } from '@/utils/documentCurrency';
 import { DocumentTotalsSummary } from '@/components/document-line-items/DocumentTotalsSummary';
 import { taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { DocumentHeader } from './DocumentHeader';
 import { DocumentLineItems } from './DocumentLineItems';
+import { SalesDocumentMobileComposer } from './SalesDocumentMobileComposer';
 
 interface SalesDocumentFormProps {
   config: SalesDocumentConfig;
@@ -146,8 +149,11 @@ export const SalesDocumentForm = ({
 }: SalesDocumentFormProps) => {
   const { t } = useI18n();
   const { message } = App.useApp();
+  const isMobile = useIsMobile();
+  const { currentUser } = useAuth();
   const { baseCurrency, baseCurrencyCode } = useBaseCurrency();
   const defaultCurrencyAppliedRef = useRef(Boolean(initialData?.document));
+  const defaultDepartmentAppliedRef = useRef(Boolean(initialData?.document));
   const [createProductOpen, setCreateProductOpen] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductBarcode, setNewProductBarcode] = useState('');
@@ -430,6 +436,21 @@ export const SalesDocumentForm = ({
     setValue('exchange_rate_date', snapshot.exchange_rate_date, { shouldDirty: false });
     defaultCurrencyAppliedRef.current = true;
   }, [baseCurrency, documentDate, setValue]);
+
+  const currentEmployee = useLiveQuery(
+    () => (currentUser?.employee_id ? db.employees.get(currentUser.employee_id) : undefined),
+    [currentUser?.employee_id],
+  );
+  useEffect(() => {
+    if (defaultDepartmentAppliedRef.current) return;
+    if (!config.behavior.allowDepartmentPicker || currentEmployee === undefined) return;
+
+    if (currentEmployee.department_id) {
+      setValue('department_id', currentEmployee.department_id, { shouldDirty: false });
+    }
+    defaultDepartmentAppliedRef.current = true;
+  }, [config.behavior.allowDepartmentPicker, currentEmployee, setValue]);
+
   const handleTaxChange = useCallback((taxId?: string) => {
     const tax = taxes.find((candidate) => candidate.id === taxId);
 
@@ -468,63 +489,100 @@ export const SalesDocumentForm = ({
       onSubmit={handleSubmit(handleFinish)}
       className="space-y-4"
     >
-      <DocumentHeader
-        config={config}
-        control={control}
-        errors={errors}
-        setValue={setValue}
-        contacts={contacts}
-        taxes={taxes}
-        departments={departments}
-        projects={projects}
-        warehouses={warehouses}
-      />
-      {config.behavior.hasPricing && (
-        <DocumentCurrencyFields
+      {isMobile ? (
+        <SalesDocumentMobileComposer
+          config={config}
           control={control}
+          errors={errors}
           setValue={setValue}
+          contacts={contacts}
+          taxes={taxes}
+          departments={departments}
+          projects={projects}
+          warehouses={warehouses}
+          products={products}
           currencies={currencies}
           latestRateByCurrency={latestRateByCurrency}
-          documentDate={documentDate}
-          onSnapshotChange={handleCurrencySnapshotChange}
-        />
-      )}
-      <DocumentLineItems
-        config={config}
-        documentId={documentId}
-        items={items}
-        calculatedItems={total.items}
-        products={products}
-        taxes={taxes}
-        documentCurrencySnapshot={documentCurrencySnapshot}
-        onChange={handleItemsChange}
-        onCreateProductRequest={handleCreateProductRequest}
-        onEditProductRequest={handleEditProductRequest}
-      />
-      {config.behavior.hasPricing && (
-        <DocumentTotalsSummary
-          i18nPrefix="salesDocuments"
-          discountPurpose="sales"
-          discountAccountType="CONTRA_REVENUE"
-          control={control}
-          total={total}
+          documentId={documentId}
+          items={items}
+          calculatedItems={total.items}
           filledItemCount={filledItemCount}
           documentCurrencySnapshot={documentCurrencySnapshot}
-          taxOptions={summaryTaxOptions}
-          hasTax={config.behavior.hasTax}
+          total={total}
           discountType={discountType}
           discountValue={discountValue}
+          summaryTaxOptions={summaryTaxOptions}
+          submitting={submitting}
+          onCancel={onCancel}
+          onItemsChange={handleItemsChange}
+          onCreateProductRequest={handleCreateProductRequest}
+          onEditProductRequest={handleEditProductRequest}
+          onCurrencySnapshotChange={handleCurrencySnapshotChange}
           onDiscountTypeChange={(value: PromoType) => setValue('discount_type', value, { shouldDirty: true, shouldValidate: true })}
           onDiscountValueChange={(value) => setValue('discount_value', value, { shouldDirty: true, shouldValidate: true })}
           onTaxChange={handleTaxChange}
         />
+      ) : (
+        <>
+          <DocumentHeader
+            config={config}
+            control={control}
+            errors={errors}
+            setValue={setValue}
+            contacts={contacts}
+            taxes={taxes}
+            departments={departments}
+            projects={projects}
+            warehouses={warehouses}
+          />
+          {config.behavior.hasPricing && (
+            <DocumentCurrencyFields
+              control={control}
+              setValue={setValue}
+              currencies={currencies}
+              latestRateByCurrency={latestRateByCurrency}
+              documentDate={documentDate}
+              onSnapshotChange={handleCurrencySnapshotChange}
+            />
+          )}
+          <DocumentLineItems
+            config={config}
+            documentId={documentId}
+            items={items}
+            calculatedItems={total.items}
+            products={products}
+            taxes={taxes}
+            documentCurrencySnapshot={documentCurrencySnapshot}
+            onChange={handleItemsChange}
+            onCreateProductRequest={handleCreateProductRequest}
+            onEditProductRequest={handleEditProductRequest}
+          />
+          {config.behavior.hasPricing && (
+            <DocumentTotalsSummary
+              i18nPrefix="salesDocuments"
+              discountPurpose="sales"
+              discountAccountType="CONTRA_REVENUE"
+              control={control}
+              total={total}
+              filledItemCount={filledItemCount}
+              documentCurrencySnapshot={documentCurrencySnapshot}
+              taxOptions={summaryTaxOptions}
+              hasTax={config.behavior.hasTax}
+              discountType={discountType}
+              discountValue={discountValue}
+              onDiscountTypeChange={(value: PromoType) => setValue('discount_type', value, { shouldDirty: true, shouldValidate: true })}
+              onDiscountValueChange={(value) => setValue('discount_value', value, { shouldDirty: true, shouldValidate: true })}
+              onTaxChange={handleTaxChange}
+            />
+          )}
+          <div className="flex w-full justify-end gap-2">
+            {onCancel && <Button onClick={onCancel}>{t('common.cancel')}</Button>}
+            <Button type="primary" htmlType="submit" loading={submitting}>
+              {t('salesDocuments.saveDraft')}
+            </Button>
+          </div>
+        </>
       )}
-      <div className="flex w-full justify-end gap-2">
-        {onCancel && <Button onClick={onCancel}>{t('common.cancel')}</Button>}
-        <Button type="primary" htmlType="submit" loading={submitting}>
-          {t('salesDocuments.saveDraft')}
-        </Button>
-      </div>
 
       <StockProductModal
         open={createProductOpen}

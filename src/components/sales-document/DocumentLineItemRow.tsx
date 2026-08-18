@@ -1,4 +1,4 @@
-import { forwardRef, memo, useState } from 'react';
+import { forwardRef, memo } from 'react';
 import type { CSSProperties } from 'react';
 import { Button, InputNumber, Select } from 'antd';
 import { AlertTriangle, ChevronDown, ChevronUp, Pencil, RotateCcw, Trash2 } from 'lucide-react';
@@ -16,6 +16,7 @@ import {
   parseCurrencyInput,
 } from '@/utils/formatters';
 import { LineItemExpandedFields } from '@/components/document-line-items/LineItemExpandedFields';
+import { LineItemProductPicker } from '@/components/document-line-items/LineItemProductPicker';
 
 interface Option {
   value: string;
@@ -68,7 +69,6 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
   onEditProductRequest,
 }, ref) => {
   const { t } = useI18n();
-  const [productSearch, setProductSearch] = useState('');
   const displayedItem = calculatedItem ?? item;
   const displayedSubtotal = toDocumentCurrencyAmount(displayedItem.subtotal, documentCurrencySnapshot);
   const isPriceEdited = Boolean(item.is_price_edited && item.original_price !== undefined);
@@ -98,38 +98,11 @@ const DocumentLineItemRowBase = forwardRef<HTMLDivElement, DocumentLineItemRowPr
               <AlertTriangle size={14} />
             </span>
           )}
-          <Select
-            showSearch={{ optionFilterProp: 'label' }}
-            className="w-full min-w-0"
-            placeholder={t('salesDocuments.placeholder.product')}
-            value={item.product_id || undefined}
-            options={productOptions}
-            onSearch={setProductSearch}
-            searchValue={productSearch}
-            notFoundContent={
-              productSearch.trim().length > 0 ? (
-                <div className="px-2 py-2">
-                  <div className="mb-2 text-sm text-gray-600">
-                    {t('salesDocuments.quickCreate.notFound')}
-                  </div>
-                  <Button
-                    type="primary"
-                    size="small"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      onCreateProductRequest?.(item.id, productSearch);
-                      setProductSearch('');
-                    }}
-                  >
-                    {t('salesDocuments.quickCreate.action')}
-                  </Button>
-                </div>
-              ) : null
-            }
-            onChange={(productId: string) => {
-              onSelectProduct(item.id, productId);
-              setProductSearch('');
-            }}
+          <LineItemProductPicker
+            productId={item.product_id}
+            productOptions={productOptions}
+            onSelectProduct={(productId) => onSelectProduct(item.id, productId)}
+            onCreateProductRequest={(search) => onCreateProductRequest?.(item.id, search)}
           />
           {item.product_id && (
             <Button

@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import type { Product, SalesDocumentItem, Tax } from '@/types';
 import type { SalesDocumentConfig } from '@/configs/sales-document';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useLineItemViewControls } from '@/hooks/useLineItemViewControls';
 import { LineItemsToolbar } from '@/components/document-line-items/LineItemsToolbar';
 import { sortLineItems, type LineItemSortKey } from '@/utils/documentLineItems/lineItemView';
@@ -70,6 +71,7 @@ export const DocumentLineItems = ({
   onEditProductRequest,
 }: DocumentLineItemsProps) => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
   const [scrollToLastRequest, setScrollToLastRequest] = useState(0);
   const itemsRef = useRef(items);
@@ -278,16 +280,18 @@ export const DocumentLineItems = ({
 
   return (
     <div className="space-y-3">
-      <LineItemsToolbar
-        searchText={searchText}
-        filledCount={filledCount}
-        visibleCount={entries.length}
-        totalCount={items.length}
-        isFiltering={isFiltering}
-        showSubtotalSort={config.behavior.hasPricing}
-        onSearchChange={setSearchText}
-        onSort={handleSort}
-      />
+      <div className={isMobile ? 'sticky top-0 z-10 border-b border-gray-100 bg-white pb-3 dark:border-gray-800 dark:bg-gray-950' : ''}>
+        <LineItemsToolbar
+          searchText={searchText}
+          filledCount={filledCount}
+          visibleCount={entries.length}
+          totalCount={items.length}
+          isFiltering={isFiltering}
+          showSubtotalSort={config.behavior.hasPricing}
+          onSearchChange={setSearchText}
+          onSort={handleSort}
+        />
+      </div>
       <DocumentLineItemsVirtualTable
         entries={entries}
         totalItemCount={items.length}

@@ -20,6 +20,8 @@ import { useStockIn } from '@/hooks/useStockIn';
 import { buildManualStockInLine } from '@/utils/stockIn/stockInLine';
 import { getProductDocumentUnits } from '@/utils/productUnits';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileCrudBottomSheet, MobileCrudList } from '@/components/mobile-crud';
 import type { StockInLine } from '@/utils/stockIn/stockInCsv';
 
 const { Text } = Typography;
@@ -44,6 +46,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 export default function StockInPage() {
   const { t } = useI18n();
   const { message, modal } = App.useApp();
+  const isMobile = useIsMobile();
   const {
     products,
     suppliers,
@@ -57,6 +60,7 @@ export default function StockInPage() {
   const [contactId, setContactId] = useState<string | undefined>();
   const [notes, setNotes] = useState('');
   const [rows, setRows] = useState<DraftRow[]>([createEmptyRow()]);
+  const [editingRowKey, setEditingRowKey] = useState<string | null>(null);
 
   const productsById = useMemo(
     () => new Map(products.map((product) => [product.id, product])),
@@ -121,6 +125,10 @@ export default function StockInPage() {
       previous.length === 1 ? [createEmptyRow()] : previous.filter((row) => row.key !== key)
     ));
   };
+
+  const editingRow = editingRowKey ? rows.find((row) => row.key === editingRowKey) ?? null : null;
+  const editingRowProduct = editingRow?.productId ? productsById.get(editingRow.productId) : undefined;
+  const closeRowEditor = () => setEditingRowKey(null);
 
   const destinationLabel = routing.mode === 'OPENING'
     ? t('stockIn.destination.opening', { date: documentDate.format('DD MMM YYYY') })
@@ -341,7 +349,7 @@ export default function StockInPage() {
           </div>
         </div>
 
-        {rowErrors.size > 0 ? (
+        {!isMobile && rowErrors.size > 0 ? (
           <Alert
             type="error"
             showIcon
@@ -356,34 +364,184 @@ export default function StockInPage() {
           />
         ) : null}
 
-        <Table
-          rowKey="key"
-          size="small"
-          columns={columns}
-          dataSource={rows}
-          pagination={false}
-          scroll={{ x: 'max-content' }}
-          locale={{ emptyText: <Empty description={t('stockIn.noLines')} /> }}
-          summary={() => (
-            <Table.Summary.Row>
-              <Table.Summary.Cell index={0} colSpan={3}>
-                <Text strong>{t('stockIn.totalLines', { count: lines.length })}</Text>
-              </Table.Summary.Cell>
-              <Table.Summary.Cell index={1} colSpan={3}>
+        {isMobile ? (
+          <MobileCrudList<DraftRow>
+            items={rows}
+            getKey={(row) => row.key}
+            onItemClick={(row) => setEditingRowKey(row.key)}
+            emptyText={t('stockIn.noLines')}
+            loadMoreLabel={(remaining) => t('stockIn.mobile.loadMore', { count: remaining })}
+            getItemAriaLabel={(row) => {
+              const product = row.productId ? productsById.get(row.productId) : undefined;
+              return t('stockIn.mobile.editRowAria', { product: product?.name ?? t('stockIn.selectProduct') });
+            }}
+            resultSummary={(
+              <div className="flex items-center justify-between">
+                <span>{t('stockIn.totalLines', { count: lines.length })}</span>
                 {hasFinalPrice ? (
-                  <Text strong>{formatCurrency(totalValue)}</Text>
+                  <span className="font-semibold">{formatCurrency(totalValue)}</span>
                 ) : (
-                  <Tag color="orange">{t('stockIn.pricePending')}</Tag>
+                  <Tag color="orange" className="m-0">{t('stockIn.pricePending')}</Tag>
                 )}
-              </Table.Summary.Cell>
-            </Table.Summary.Row>
-          )}
-        />
+              </div>
+            )}
+            renderItem={(row) => {
+              const product = row.productId ? productsById.get(row.productId) : undefined;
+              const error = rowErrors.get(row.key);
+              const subtotal = row.quantity !== undefined && row.costPerUnit !== undefined
+                ? row.quantity * row.costPerUnit
+                : undefined;
+
+              return (
+                <div className="space-y-1.5">
+                  <span className="block min-w-0 truncate text-[15px] font-bold">
+                    {product ? (product.sku ? `${product.sku} — ${product.name}` : product.name) : t('stockIn.selectProduct')}
+                  </span>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {row.quantity !== undefined && row.unit
+                      ? `${row.quantity} ${row.unit}${subtotal !== undefined ? ` → ${formatCurrency(subtotal)}` : ''}`
+                      : t('stockIn.mobile.tapToEdit')}
+                  </div>
+                  {row.notes ? (
+                    <div className="truncate text-xs text-gray-400 dark:text-gray-500">{row.notes}</div>
+                  ) : null}
+                  {error ? (
+                    <div className="rounded-lg bg-red-50 px-2 py-1 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">
+                      {error}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }}
+          />
+        ) : (
+          <Table
+            rowKey="key"
+            size="small"
+            columns={columns}
+            dataSource={rows}
+            pagination={false}
+            scroll={{ x: 'max-content' }}
+            locale={{ emptyText: <Empty description={t('stockIn.noLines')} /> }}
+            summary={() => (
+              <Table.Summary.Row>
+                <Table.Summary.Cell index={0} colSpan={3}>
+                  <Text strong>{t('stockIn.totalLines', { count: lines.length })}</Text>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} colSpan={3}>
+                  {hasFinalPrice ? (
+                    <Text strong>{formatCurrency(totalValue)}</Text>
+                  ) : (
+                    <Tag color="orange">{t('stockIn.pricePending')}</Tag>
+                  )}
+                </Table.Summary.Cell>
+              </Table.Summary.Row>
+            )}
+          />
+        )}
 
         <Button icon={<Plus size={16} />} onClick={handleAddRow}>
           {t('stockIn.addRow')}
         </Button>
       </div>
+
+      <MobileCrudBottomSheet
+        open={editingRow !== null}
+        onClose={closeRowEditor}
+        title={editingRowProduct ? editingRowProduct.name : t('stockIn.selectProduct')}
+        testId="stock-in-row-sheet"
+      >
+        {editingRow ? (
+          <div className="space-y-3 pb-1">
+            <div>
+              <Text className="mb-1 block text-xs text-gray-500">{t('stockIn.column.product')}</Text>
+              <Select
+                showSearch
+                allowClear
+                className="w-full"
+                size="large"
+                placeholder={t('stockIn.selectProduct')}
+                value={editingRow.productId}
+                optionFilterProp="label"
+                onChange={(value) => (value
+                  ? handleProductChange(editingRow.key, value)
+                  : updateRow(editingRow.key, { productId: undefined }))}
+                options={products.map((product) => ({
+                  value: product.id,
+                  label: product.sku ? `${product.sku} — ${product.name}` : product.name,
+                }))}
+              />
+            </div>
+
+            <div>
+              <Text className="mb-1 block text-xs text-gray-500">{t('stockIn.column.quantity')}</Text>
+              <InputNumber
+                className="w-full"
+                size="large"
+                min={0}
+                value={editingRow.quantity}
+                onChange={(value) => updateRow(editingRow.key, { quantity: value ?? undefined })}
+              />
+            </div>
+
+            <div>
+              <Text className="mb-1 block text-xs text-gray-500">{t('stockIn.column.unit')}</Text>
+              <Select
+                className="w-full"
+                size="large"
+                disabled={!editingRowProduct}
+                value={editingRow.unit}
+                onChange={(value) => updateRow(editingRow.key, { unit: value })}
+                options={(editingRowProduct ? getProductDocumentUnits(editingRowProduct) : []).map((unit) => ({
+                  value: unit,
+                  label: unit,
+                }))}
+              />
+            </div>
+
+            <div>
+              <Text className="mb-1 block text-xs text-gray-500">{t('stockIn.column.price')}</Text>
+              <InputNumber
+                className="w-full"
+                size="large"
+                min={0}
+                value={editingRow.costPerUnit}
+                placeholder={routing.mode === 'OPENING' ? t('stockIn.priceRequired') : t('stockIn.pricePending')}
+                onChange={(value) => updateRow(editingRow.key, { costPerUnit: value ?? undefined })}
+              />
+            </div>
+
+            <div>
+              <Text className="mb-1 block text-xs text-gray-500">{t('stockIn.column.notes')}</Text>
+              <Input
+                size="large"
+                value={editingRow.notes}
+                onChange={(event) => updateRow(editingRow.key, { notes: event.target.value })}
+              />
+            </div>
+
+            {rowErrors.get(editingRow.key) ? (
+              <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">
+                {rowErrors.get(editingRow.key)}
+              </div>
+            ) : null}
+
+            <Button
+              block
+              danger
+              size="large"
+              className="h-12"
+              icon={<Trash2 size={16} />}
+              onClick={() => {
+                handleRemoveRow(editingRow.key);
+                closeRowEditor();
+              }}
+            >
+              {t('stockIn.removeRow')}
+            </Button>
+          </div>
+        ) : null}
+      </MobileCrudBottomSheet>
     </Card>
   );
 }

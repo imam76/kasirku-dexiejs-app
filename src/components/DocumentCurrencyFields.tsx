@@ -7,6 +7,7 @@ import dayjs from '@/lib/dayjs';
 import { BASE_CURRENCY_CODE, DEFAULT_EXCHANGE_RATE } from '@/constants/currencies';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { fetchAndCacheBiCurrencyRate } from '@/services/currencyService';
 import type { Currency, CurrencyRate } from '@/types';
 import {
@@ -46,6 +47,8 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
 }: DocumentCurrencyFieldsProps<TFieldValues>) {
   const { t } = useI18n();
   const { message } = App.useApp();
+  const isMobile = useIsMobile();
+  const size = isMobile ? 'large' as const : undefined;
   const { baseCurrency, baseCurrencyCode, baseCurrencySymbol } = useBaseCurrency();
   const [fetching, setFetching] = useState(false);
   const currencyCode = normalizeCurrencyCode(useWatch({
@@ -136,6 +139,7 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
           control={control}
           render={({ field }) => (
             <Select
+              size={size}
               showSearch={{ optionFilterProp: 'label' }}
               className="w-full"
               value={field.value ?? baseCurrencyCode}
@@ -152,6 +156,7 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
       <div className={fieldContainerClassName}>
         <label className={labelClassName}>{t('documents.exchangeRate')}</label>
         <InputNumber
+          size={size}
           min={selectedIsBaseCurrency ? 1 : 0.000001}
           disabled={selectedIsBaseCurrency}
           className="w-full"
@@ -165,6 +170,7 @@ export function DocumentCurrencyFields<TFieldValues extends FieldValues>({
         <Tooltip title={selectedIsBaseCurrency ? t('documents.baseCurrency') : t('documents.fetchBiRate')}>
           <Button
             block
+            size={size}
             icon={<RefreshCw size={16} />}
             disabled={!canFetchBiRate}
             loading={fetching}

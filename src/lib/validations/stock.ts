@@ -65,19 +65,6 @@ export const createStockSchema = (
       });
     }
 
-    // Tier yang mulai dari 1 satuan jual berlaku di setiap kuantitas, jadi harga
-    // jual tidak pernah terpakai lagi. Threshold 1 pada satuan lain (mis. 1 dus
-    // saat produk dijual per pcs) tetap sah karena itu memang pembelian borongan.
-    if (
-      price.min_quantity <= 1 &&
-      normalizeUnitKey(price.unit) === normalizeUnitKey(data.selling_unit)
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['wholesale_prices', index, 'min_quantity'],
-        message: t('stock.validation.wholesaleMinQtyOverridesBase', { unit: price.unit }),
-      });
-    }
   });
 
   data.unit_mappings.forEach((mapping, index) => {

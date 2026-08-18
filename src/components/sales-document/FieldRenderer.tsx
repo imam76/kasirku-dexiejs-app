@@ -5,6 +5,7 @@ import { Controller } from 'react-hook-form';
 import type { Control, FieldErrors, FieldPath, UseFormSetValue } from 'react-hook-form';
 import type { Contact, Department, Project, SalesInvoicePaymentStatus, Tax, Warehouse } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type { TranslationKey } from '@/i18n/messages';
 import { salesInvoicePaymentStatusLabelKeys, taxCalculationModeLabelKeys } from '@/utils/salesDocuments/i18n';
 import type { SalesDocumentFormValues } from './SalesDocumentForm';
@@ -62,6 +63,8 @@ export const FieldRenderer = ({
   warehouses,
 }: FieldRendererProps) => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
+  const size = isMobile ? 'large' as const : undefined;
   const fieldName = name as FieldPath<SalesDocumentFormValues>;
   const fieldError = errors[name as keyof SalesDocumentFormValues];
   const error = fieldError?.message ? String(fieldError.message) : undefined;
@@ -77,6 +80,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              size={size}
               style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
@@ -115,6 +119,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              size={size}
               style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
@@ -142,6 +147,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              size={size}
               style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
@@ -169,6 +175,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              size={size}
               style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
@@ -196,6 +203,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              size={size}
               style={{ width: '100%' }}
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
@@ -234,6 +242,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <Select
+              size={size}
               style={{ width: '100%' }}
               value={field.value as SalesInvoicePaymentStatus | undefined}
               onBlur={field.onBlur}
@@ -255,6 +264,7 @@ export const FieldRenderer = ({
           rules={rules}
           render={({ field }) => (
             <DatePicker
+              size={size}
               style={{ width: '100%' }}
               value={(field.value as Dayjs | undefined) ?? null}
               onBlur={field.onBlur}
@@ -273,7 +283,7 @@ export const FieldRenderer = ({
           name={fieldName}
           control={control}
           rules={rules}
-          render={({ field }) => <Input.TextArea {...field} rows={3} value={String(field.value ?? '')} />}
+          render={({ field }) => <Input.TextArea {...field} size={size} rows={3} value={String(field.value ?? '')} />}
         />
       </FieldContainer>
     );
@@ -285,7 +295,7 @@ export const FieldRenderer = ({
         name={fieldName}
         control={control}
         rules={rules}
-        render={({ field }) => <Input {...field} value={String(field.value ?? '')} />}
+        render={({ field }) => <Input {...field} size={size} value={String(field.value ?? '')} />}
       />
     </FieldContainer>
   );
