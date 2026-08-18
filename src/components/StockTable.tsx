@@ -1,6 +1,7 @@
-import { Button, Input, InputNumber, Select, Space, Tag, Tooltip } from 'antd';
+import { Button, Dropdown, Input, InputNumber, Select, Space, Tag, Tooltip } from 'antd';
+import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, Key } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import { isProductUnverified } from '@/services/posQuickItemService';
@@ -8,13 +9,21 @@ import type { Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getStockStatus, getStockStatusClass, resolveProductMinStock } from '@/utils/stockStatus';
 import { getProductDisplayPricing } from '@/utils/pricing';
-import { BadgeCheck, Edit2, EyeOff, Package, PackagePlus, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { BadgeCheck, CheckSquare, Edit2, EyeOff, Package, PackagePlus, Plus, ShoppingCart, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import ManagementTable from './ManagementTable';
 import {
+  MobileCrudBottomSheet,
   ResponsiveCrudCollection,
   type MobileCrudAction,
+  type MobileCrudFloatingAction,
 } from './mobile-crud';
+
+export interface StockBulkAction {
+  key: string;
+  label: string;
+  onSelect: (products: Product[]) => void;
+}
 
 interface StockTableProps {
   products: Product[];
@@ -24,6 +33,7 @@ interface StockTableProps {
   onVerify?: (product: Product) => void;
   onAdd?: () => void;
   loading?: boolean;
+  bulkActions?: { label: string; items: StockBulkAction[] };
 }
 
 type StockStatusFilter = 'all' | 'out' | 'low' | 'safe';
@@ -40,6 +50,7 @@ export default function StockTable({
   onVerify,
   onAdd,
   loading = false,
+  bulkActions,
 }: StockTableProps) {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +68,9 @@ export default function StockTable({
   const [posVisibility, setPosVisibility] = useState<PosVisibilityFilter>('all');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkSheetOpen, setIsBulkSheetOpen] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
   const stockStatusOptions = useMemo(() => [
     { value: 'all', label: t('stock.allStock') },
@@ -203,6 +217,66 @@ export default function StockTable({
     ? filteredProducts.find((product) => product.id === selectedProductId) ?? null
     : null;
   const closeDetailSheet = () => setSelectedProductId(null);
+
+  const selectionEnabled = Boolean(bulkActions?.items.length);
+  const productById = useMemo(
+    () => (selectionEnabled ? new Map(products.map((product) => [product.id, product])) : null),
+    [products, selectionEnabled],
+  );
+  /** Pilihan sengaja bertahan lintas filter supaya user bisa memungut dari beberapa saringan. */
+  const selectedProducts = useMemo(() => (productById
+    ? selectedIds.flatMap((id) => {
+      const product = productById.get(id);
+      return product ? [product] : [];
+    })
+    : []), [productById, selectedIds]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const rowSelection = useMemo(() => (selectionEnabled ? {
+    selectedRowKeys: selectedIds,
+    preserveSelectedRowKeys: true,
+    onChange: (keys: Key[]) => setSelectedIds(keys as string[]),
+  } : undefined), [selectedIds, selectionEnabled]);
+  /** Mode pilih berakhir sendiri saat centang terakhir dilepas. */
+  const toggleSelected = useCallback((product: Product) => {
+    const nextIds = selectedIdSet.has(product.id)
+      ? selectedIds.filter((id) => id !== product.id)
+      : [...selectedIds, product.id];
+
+    setSelectedIds(nextIds);
+    if (!nextIds.length) setIsSelectionMode(false);
+  }, [selectedIdSet, selectedIds]);
+  const startSelection = useCallback((product: Product) => {
+    setIsSelectionMode(true);
+    setSelectedIds((current) => (current.includes(product.id) ? current : [...current, product.id]));
+  }, []);
+  const listSelection = useMemo(() => (selectionEnabled ? {
+    active: isSelectionMode,
+    isSelected: (product: Product) => selectedIdSet.has(product.id),
+    onToggle: toggleSelected,
+    onLongPress: startSelection,
+    getAriaLabel: (product: Product) => t('stock.mobile.selectAria', { name: product.name }),
+  } : undefined), [isSelectionMode, selectedIdSet, selectionEnabled, startSelection, t, toggleSelected]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds([]);
+    setIsSelectionMode(false);
+  }, []);
+  /** Menambahkan seluruh hasil filter tanpa membuang pilihan dari filter sebelumnya. */
+  const selectAllFiltered = useCallback(() => {
+    setSelectedIds((current) => [
+      ...current,
+      ...filteredProducts.filter((product) => !current.includes(product.id)).map((product) => product.id),
+    ]);
+    setIsSelectionMode(true);
+  }, [filteredProducts]);
+  const runBulkAction = useCallback((key: string) => {
+    setIsBulkSheetOpen(false);
+    bulkActions?.items.find((action) => action.key === key)?.onSelect(selectedProducts);
+  }, [bulkActions, selectedProducts]);
+  const bulkMenuItems = useMemo<MenuProps['items']>(
+    () => bulkActions?.items.map(({ key, label }) => ({ key, label })) ?? [],
+    [bulkActions],
+  );
 
   const renderPriceStockGrid = (product: Product) => (
     <div className="grid grid-cols-2 gap-2">
@@ -480,6 +554,37 @@ export default function StockTable({
     </div>
   );
 
+  const floatingActions: MobileCrudFloatingAction[] = [
+    ...(onAdd ? [
+      {
+        key: 'add',
+        type: 'primary' as const,
+        icon: <Plus size={24} />,
+        label: t('stock.add'),
+        tourId: 'stock-add-product',
+        onClick: onAdd,
+      },
+      {
+        key: 'filter',
+        icon: <SlidersHorizontal size={22} />,
+        label: t('stock.filterTitle'),
+        badge: { count: activeSearchAndFilterCount, color: '#fa8c16' },
+        testId: 'stock-search-filter-fab',
+        onClick: () => setIsFilterDrawerOpen(true),
+      },
+    ] : []),
+    // FAB kontekstual ditumpuk paling atas supaya tombol lama tidak berpindah.
+    ...(bulkActions && selectedProducts.length > 0 ? [{
+      key: 'bulk',
+      type: 'primary' as const,
+      icon: <ShoppingCart size={22} />,
+      label: bulkActions.label,
+      badge: { count: selectedProducts.length, color: '#0F766E' },
+      testId: 'stock-bulk-purchase-fab',
+      onClick: () => setIsBulkSheetOpen(true),
+    }] : []),
+  ];
+
   return (
     <div className="space-y-4">
       <ResponsiveCrudCollection<Product>
@@ -513,10 +618,35 @@ export default function StockTable({
               </div>
             </div>
 
+            {bulkActions && selectedProducts.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3">
+                <span className="text-sm font-semibold text-teal-900">
+                  {t('stock.selectedCount', { count: selectedProducts.length })}
+                </span>
+                <Button size="small" onClick={selectAllFiltered}>
+                  {t('stock.selectAll', { count: filteredProducts.length })}
+                </Button>
+                <Button size="small" onClick={clearSelection}>
+                  {t('stock.clearSelection')}
+                </Button>
+                <span className="ml-auto">
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{ items: bulkMenuItems, onClick: ({ key }) => runBulkAction(key) }}
+                  >
+                    <Button type="primary" icon={<ShoppingCart size={16} />}>
+                      {bulkActions.label}
+                    </Button>
+                  </Dropdown>
+                </span>
+              </div>
+            ) : null}
+
             <ManagementTable<Product>
               columns={columns}
               dataSource={filteredProducts}
               loading={loading}
+              rowSelection={rowSelection}
               scrollX={1300}
               pageSizeOptions={['5', '10', '20', '50']}
               showTotal={(total, range) => t('stock.showingRange', {
@@ -583,6 +713,13 @@ export default function StockTable({
                 </div>
               </div>
 
+              <div className="flex flex-wrap gap-1.5">
+                <Tag className="m-0">{getProductCategoryLabel(selectedProduct.category || 'non_consumable', t)}</Tag>
+                <Tag className="m-0" color={selectedProduct.product_type === 'RAW_MATERIAL' ? 'cyan' : 'blue'}>
+                  {selectedProduct.product_type === 'RAW_MATERIAL' ? t('stock.mobile.rawMaterial') : t('stock.mobile.finishedGood')}
+                </Tag>
+              </div>
+
               {renderPriceStockGrid(selectedProduct)}
 
               <div className="grid grid-cols-2 gap-2.5">
@@ -630,7 +767,19 @@ export default function StockTable({
             productType,
             posVisibility,
           ]),
-          resultSummary: t('stock.filterSummary', { shown: filteredProducts.length, total: products.length }),
+          resultSummary: isSelectionMode ? (
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">
+                {t('stock.selectedCount', { count: selectedProducts.length })}
+              </span>
+              <Button size="small" type="link" className="h-auto p-0" onClick={selectAllFiltered}>
+                {t('stock.selectAll', { count: filteredProducts.length })}
+              </Button>
+              <Button size="small" type="link" className="h-auto p-0" onClick={clearSelection}>
+                {t('stock.clearSelection')}
+              </Button>
+            </span>
+          ) : t('stock.filterSummary', { shown: filteredProducts.length, total: products.length }),
           emptyText: searchQuery || activeFilterCount > 0
             ? t('stock.noFilteredProducts')
             : t('stock.noProducts'),
@@ -644,7 +793,16 @@ export default function StockTable({
           getActionsAriaLabel: (product) => t('stock.mobile.actionsAria', { name: product.name }),
           getActionSheetTitle: (product) => product.name,
           onItemClick: (product) => setSelectedProductId(product.id),
+          selection: listSelection,
           getActions: (product): MobileCrudAction<Product>[] => [
+            {
+              key: 'select',
+              label: t('stock.mobile.selectAction'),
+              description: t('stock.mobile.selectDescription'),
+              icon: <CheckSquare aria-hidden size={19} />,
+              hidden: !selectionEnabled,
+              onSelect: startSelection,
+            },
             {
               key: 'edit',
               label: t('stock.editTitle'),
@@ -676,60 +834,84 @@ export default function StockTable({
               onSelect: (item) => onDelete(item.id),
             },
           ],
+          /** Sisanya sudah tersedia di detail sheet, jadi card cukup satu baris. */
           renderItem: (product) => (
-            <div className="space-y-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                  <Package aria-hidden size={21} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-gray-900 dark:text-gray-100">
-                      {product.name}
-                    </span>
-                    {product.is_visible_in_pos === false ? (
-                      <EyeOff aria-label={t('stock.mobile.hiddenFromPos')} size={17} className="mt-0.5 shrink-0 text-gray-400" />
-                    ) : null}
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                <Package aria-hidden size={19} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-gray-900 dark:text-gray-100">
+                    {product.name}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
-                    {product.sku?.trim() || t('stock.mobile.noSku')}
+                  {product.is_visible_in_pos === false ? (
+                    <EyeOff aria-label={t('stock.mobile.hiddenFromPos')} size={16} className="shrink-0 text-gray-400" />
+                  ) : null}
+                  <span
+                    className={`shrink-0 rounded px-2 py-0.5 text-xs font-bold ${getStockStatusClass(product)}`}
+                    title={t('stock.minStockBadgeHint', {
+                      min: resolveProductMinStock(product),
+                      unit: product.purchase_unit,
+                    })}
+                  >
+                    {product.stock} {product.purchase_unit}
                   </span>
                 </span>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                <Tag className="m-0">{getProductCategoryLabel(product.category || 'non_consumable', t)}</Tag>
-                <Tag className="m-0" color={product.product_type === 'RAW_MATERIAL' ? 'cyan' : 'blue'}>
-                  {product.product_type === 'RAW_MATERIAL' ? t('stock.mobile.rawMaterial') : t('stock.mobile.finishedGood')}
-                </Tag>
-                {isProductUnverified(product) ? <Tag className="m-0" color="gold">{t('stock.unverified')}</Tag> : null}
-              </div>
-
-              {renderPriceStockGrid(product)}
+                <span className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="min-w-0 truncate">{product.sku?.trim() || t('stock.mobile.noSku')}</span>
+                  {isProductUnverified(product) ? (
+                    <Tag className="m-0 leading-4" color="gold">{t('stock.unverified')}</Tag>
+                  ) : null}
+                </span>
+              </span>
             </div>
           ),
         }}
-        mobileFloatingActions={onAdd ? {
-          actions: [
-            {
-              key: 'add',
-              type: 'primary',
-              icon: <Plus size={24} />,
-              label: t('stock.add'),
-              tourId: 'stock-add-product',
-              onClick: onAdd,
-            },
-            {
-              key: 'filter',
-              icon: <SlidersHorizontal size={22} />,
-              label: t('stock.filterTitle'),
-              badge: { count: activeSearchAndFilterCount, color: '#fa8c16' },
-              testId: 'stock-search-filter-fab',
-              onClick: () => setIsFilterDrawerOpen(true),
-            },
-          ],
-        } : undefined}
+        mobileFloatingActions={floatingActions.length ? { actions: floatingActions } : undefined}
       />
+
+      {bulkActions ? (
+        <MobileCrudBottomSheet
+          title={bulkActions.label}
+          open={isBulkSheetOpen}
+          onClose={() => setIsBulkSheetOpen(false)}
+          rootClassName="mobile-crud-action-sheet"
+          bodyStyle={{ padding: '8px 16px 16px' }}
+        >
+          <div className="space-y-1 pb-2">
+            <p className="px-3 pb-1 text-xs text-gray-500">
+              {t('stock.selectedCount', { count: selectedProducts.length })}
+            </p>
+            {bulkActions.items.map((action) => (
+              <button
+                key={action.key}
+                type="button"
+                className="flex min-h-14 w-full items-center gap-3 rounded-xl px-3 py-2 text-left font-semibold outline-none transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                onClick={() => runBulkAction(action.key)}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-current/10">
+                  <ShoppingCart aria-hidden size={19} />
+                </span>
+                {action.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="flex min-h-14 w-full items-center gap-3 rounded-xl px-3 py-2 text-left font-semibold text-red-600 outline-none transition-colors hover:bg-red-50 dark:hover:bg-red-950/30"
+              onClick={() => {
+                setIsBulkSheetOpen(false);
+                clearSelection();
+              }}
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-current/10">
+                <Trash2 aria-hidden size={19} />
+              </span>
+              {t('stock.clearSelection')}
+            </button>
+          </div>
+        </MobileCrudBottomSheet>
+      ) : null}
     </div>
   );
 }

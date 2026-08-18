@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Spin, Typography } from 'antd';
 import { useNavigate } from '@tanstack/react-router';
 import { getPurchaseDocumentConfig, getPurchaseDocumentTypePathSegment } from '@/configs/purchase-document';
@@ -6,7 +6,11 @@ import { PurchaseDocumentForm } from '@/components/purchase-document/PurchaseDoc
 import { useI18n } from '@/hooks/useI18n';
 import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
 import { db } from '@/lib/db';
+import { getCachedBaseCurrency } from '@/services/baseCurrencyService';
+import { clearPurchaseDraftLines, usePurchaseDraftStore } from '@/store/purchaseDraftStore';
+import { buildDocumentCurrencySnapshot } from '@/utils/documentCurrency';
 import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
+import { buildPurchaseDraftItems } from '@/utils/purchaseDocuments/buildPurchaseDraftItems';
 import type { PurchaseDocument, PurchaseDocumentItem, PurchaseDocumentType } from '@/types';
 
 const { Title, Text } = Typography;
@@ -33,7 +37,34 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
   const [document, setDocument] = useState<PurchaseDocument | undefined>();
   const [items, setItems] = useState<PurchaseDocumentItem[]>([]);
   const [isLoading, setIsLoading] = useState(Boolean(documentId));
+  const draftLines = usePurchaseDraftStore((state) => state.lines);
   const config = getPurchaseDocumentConfig(documentType);
+  const hasDraft = !documentId && draftLines.length > 0;
+
+  const draftItems = useMemo(() => {
+    if (!hasDraft || !products.length) return [];
+    const baseCurrency = getCachedBaseCurrency();
+    const snapshot = buildDocumentCurrencySnapshot(
+      baseCurrency,
+      undefined,
+      new Date().toISOString().slice(0, 10),
+      baseCurrency,
+    );
+
+    return buildPurchaseDraftItems(
+      draftLines,
+      new Map(products.map((product) => [product.id, product])),
+      'draft',
+      config,
+      snapshot,
+    );
+  }, [config, draftLines, hasDraft, products]);
+
+  // Titipan baru dilepas setelah editornya ditutup, bukan saat dibaca.
+  useEffect(() => {
+    if (!draftItems.length) return;
+    return clearPurchaseDraftLines;
+  }, [draftItems.length]);
 
   useEffect(() => {
     if (!documentId) return;
@@ -51,7 +82,8 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
     loadDocument();
   }, [documentId]);
 
-  if (isLoading) {
+  // Item awal hanya dibaca sekali oleh form, jadi jangan render sebelum siap.
+  if (isLoading || (hasDraft && !products.length)) {
     return <div className="p-6"><Spin /></div>;
   }
 
@@ -71,7 +103,7 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
       </div>
       <PurchaseDocumentForm
         config={config}
-        initialData={{ document, items }}
+        initialData={{ document, items: items.length ? items : draftItems }}
         products={products}
         contacts={contacts}
         taxes={taxes}

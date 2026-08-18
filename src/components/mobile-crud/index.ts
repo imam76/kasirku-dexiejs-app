@@ -8,7 +8,11 @@ export type {
   MobileCrudFloatingActionsProps,
 } from './MobileCrudFloatingActions';
 export { default as MobileCrudList } from './MobileCrudList';
-export type { MobileCrudAction, MobileCrudListProps } from './MobileCrudList';
+export type {
+  MobileCrudAction,
+  MobileCrudListProps,
+  MobileCrudSelection,
+} from './MobileCrudList';
 export { default as MobileCrudPageHeader } from './MobileCrudPageHeader';
 export type { MobileCrudPageHeaderProps } from './MobileCrudPageHeader';
 export { default as ResponsiveCrudCollection } from './ResponsiveCrudCollection';

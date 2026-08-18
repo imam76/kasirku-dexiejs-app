@@ -13,6 +13,7 @@ interface ManagementTableProps<T> {
   pageSizeOptions?: string[];
   showTotal?: (total: number, range: [number, number]) => ReactNode;
   onRow?: TableProps<T>['onRow'];
+  rowSelection?: TableProps<T>['rowSelection'];
 }
 
 /**
@@ -31,6 +32,7 @@ export default function ManagementTable<T extends object>({
   pageSizeOptions = ['10', '20', '50', '100'],
   showTotal,
   onRow,
+  rowSelection,
 }: ManagementTableProps<T>) {
   return (
     <Table<T>
@@ -39,6 +41,7 @@ export default function ManagementTable<T extends object>({
       dataSource={dataSource}
       loading={loading}
       onRow={onRow}
+      rowSelection={rowSelection}
       scroll={{ x: scrollX }}
       pagination={{
         pageSize,

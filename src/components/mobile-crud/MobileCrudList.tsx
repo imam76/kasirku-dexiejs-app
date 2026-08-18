@@ -1,10 +1,11 @@
-import { Button, Empty, Skeleton, theme as antdTheme } from 'antd';
+import { Button, Checkbox, Empty, Skeleton, theme as antdTheme } from 'antd';
 import { MoreVertical } from 'lucide-react';
 import {
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import { useLongPress } from '@/hooks/useLongPress';
 import {
   getMobileCrudRemainingCount,
   getNextMobileCrudVisibleCount,
@@ -22,6 +23,15 @@ export type MobileCrudAction<T> = {
   onSelect: (item: T) => void | Promise<void>;
 };
 
+export type MobileCrudSelection<T> = {
+  /** Mode pilih aktif: checkbox muncul dan ketuk card berarti pilih, bukan buka detail. */
+  active: boolean;
+  isSelected: (item: T) => boolean;
+  onToggle: (item: T) => void;
+  onLongPress?: (item: T) => void;
+  getAriaLabel?: (item: T) => string;
+};
+
 export type MobileCrudListProps<T> = {
   items: readonly T[];
   getKey: (item: T) => string;
@@ -31,6 +41,7 @@ export type MobileCrudListProps<T> = {
   getItemAriaLabel?: (item: T) => string;
   getActionsAriaLabel?: (item: T) => string;
   onItemClick?: (item: T) => void;
+  selection?: MobileCrudSelection<T>;
   loading?: boolean;
   emptyText: ReactNode;
   emptyAction?: ReactNode;
@@ -55,6 +66,7 @@ function MobileCrudListStateful<T>({
   getItemAriaLabel,
   getActionsAriaLabel,
   onItemClick,
+  selection,
   loading = false,
   emptyText,
   emptyAction,
@@ -79,7 +91,18 @@ function MobileCrudListStateful<T>({
     ? (getActions?.(actionItem) ?? []).filter((action) => !action.hidden)
     : [];
 
+  const longPress = useLongPress<T>(selection && !selection.active ? selection.onLongPress : undefined);
+
   const closeActionSheet = () => setActionCandidate(null);
+
+  const handleItemClick = (item: T) => {
+    if (longPress.consume()) return;
+    if (selection?.active) {
+      selection.onToggle(item);
+      return;
+    }
+    onItemClick?.(item);
+  };
 
   const runAction = async (action: MobileCrudAction<T>) => {
     if (!actionItem || action.disabled) return;
@@ -116,7 +139,8 @@ function MobileCrudListStateful<T>({
   }
 
   return (
-    <div className="space-y-3" data-testid="mobile-crud-list">
+    // Ruang bawah supaya baris terakhir bisa digulir lepas dari tumpukan FAB.
+    <div className="space-y-3 pb-24" data-testid="mobile-crud-list">
       {resultSummary ? (
         <div className="px-1 text-xs" style={{ color: token.colorTextSecondary }} aria-live="polite">
           {resultSummary}
@@ -135,12 +159,30 @@ function MobileCrudListStateful<T>({
               style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
               data-testid="mobile-crud-item"
             >
-              {onItemClick ? (
+              {selection?.active ? (
+                <div className="flex items-start p-2 pr-0">
+                  <label className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
+                    <Checkbox
+                      checked={selection.isSelected(item)}
+                      aria-label={selection.getAriaLabel?.(item)}
+                      onChange={() => selection.onToggle(item)}
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              {onItemClick || selection ? (
                 <button
                   type="button"
-                  className="min-w-0 flex-1 rounded-l-xl p-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset"
+                  className={[
+                    'min-w-0 flex-1 p-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset',
+                    selection ? 'select-none' : '',
+                    selection?.active ? '' : 'rounded-l-xl',
+                  ].join(' ')}
                   aria-label={getItemAriaLabel?.(item)}
-                  onClick={() => onItemClick(item)}
+                  aria-pressed={selection?.active ? selection.isSelected(item) : undefined}
+                  onClick={() => handleItemClick(item)}
+                  {...longPress.getHandlers(item)}
                 >
                   {content}
                 </button>
@@ -148,7 +190,7 @@ function MobileCrudListStateful<T>({
                 <div className="min-w-0 flex-1 p-4">{content}</div>
               )}
 
-              {itemActions.length > 0 ? (
+              {itemActions.length > 0 && !selection?.active ? (
                 <div className="flex items-start p-2 pl-0">
                   <button
                     type="button"

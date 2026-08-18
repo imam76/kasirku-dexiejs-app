@@ -7,6 +7,7 @@ import { useStockManagement } from '@/hooks/useStockManagement';
 import { markProductVerified } from '@/services/posQuickItemService';
 import type { Product } from '@/types';
 import StockTable from '@/components/StockTable';
+import { usePurchaseFromProductsActions } from '@/hooks/usePurchaseFromProductsActions';
 import StockProductModal from './StockProductModal';
 import {
   buildProductCsvImportItems,
@@ -47,6 +48,7 @@ const buildFileTimestamp = () => {
 export default function StockManagement() {
   const { modal, message } = App.useApp();
   const { t } = useI18n();
+  const purchaseActions = usePurchaseFromProductsActions();
   const {
     products,
     isLoading,
@@ -590,6 +592,9 @@ export default function StockManagement() {
         onVerify={handleVerifyProduct}
         onAdd={handleAddProduct}
         loading={isLoading}
+        bulkActions={purchaseActions.length
+          ? { label: t('purchaseDocuments.addSelectedProducts'), items: purchaseActions }
+          : undefined}
       />
       </Card>
     </>
