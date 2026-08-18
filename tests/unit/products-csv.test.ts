@@ -151,6 +151,48 @@ describe('product master CSV import safety', () => {
     });
   });
 
+  test('imports the low-stock threshold and leaves it untouched when the column is blank', () => {
+    const explicit = buildProductCsvImportItems([
+      'sku,name,min_stock',
+      'A,Produk A,4',
+    ].join('\n'));
+    expect(explicit.errors).toEqual([]);
+    expect(explicit.items[0]).toMatchObject({ min_stock: 4 });
+
+    const blank = buildProductCsvImportItems([
+      'sku,name,min_stock',
+      'A,Produk A,',
+    ].join('\n'));
+    const preservedPlan = buildProductMasterImportPlan({
+      items: blank.items,
+      existingProducts: [{ ...existingProduct, min_stock: 4 }],
+      now: '2026-07-31T00:00:00.000Z',
+    });
+    expect(preservedPlan.items[0].product.min_stock).toBe(4);
+  });
+
+  test('rejects a negative low-stock threshold', () => {
+    const parsed = buildProductCsvImportItems([
+      'sku,name,min_stock',
+      'A,Produk A,-1',
+    ].join('\n'));
+
+    expect(parsed.items).toEqual([]);
+    expect(parsed.errors.join(' ')).toContain('min_stock');
+  });
+
+  test('exports a blank threshold for products that never set one', () => {
+    const [header, unset, custom] = exportRowsOf(
+      existingProduct,
+      { ...existingProduct, id: 'product-b', sku: 'B', min_stock: 6 },
+    );
+    const idxMinStock = header.indexOf('min_stock');
+
+    expect(idxMinStock).toBeGreaterThan(-1);
+    expect(unset[idxMinStock]).toBe('');
+    expect(custom[idxMinStock]).toBe('6');
+  });
+
   test('rejects invalid POS visibility field values', () => {
     const parsed = buildProductCsvImportItems([
       'sku,name,product_type,is_visible_in_pos',

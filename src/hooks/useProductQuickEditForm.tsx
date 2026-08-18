@@ -44,6 +44,7 @@ export const useProductQuickEditForm = () => {
       purchase_price: product.purchase_price,
       selling_price: product.selling_price,
       stock: undefined,
+      min_stock: product.min_stock,
       sku: product.sku || '',
       product_type: product.product_type ?? 'FINISHED_GOOD',
       is_visible_in_pos: product.is_visible_in_pos ?? true,

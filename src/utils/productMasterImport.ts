@@ -113,6 +113,7 @@ const buildImportedProduct = ({
     sku: item.sku || existing?.sku || '',
     product_type: item.product_type ?? existing?.product_type ?? 'FINISHED_GOOD',
     is_visible_in_pos: item.is_visible_in_pos ?? existing?.is_visible_in_pos ?? true,
+    min_stock: item.min_stock ?? existing?.min_stock,
     wholesale_prices: normalizeImportedWholesalePrices(
       item.wholesale_prices ?? existing?.wholesale_prices,
     ),

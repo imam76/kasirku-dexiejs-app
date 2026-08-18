@@ -11,6 +11,17 @@ export const DASHBOARD_WIDGET_IDS: DashboardWidgetId[] = [
   'net-income',
   'revenue',
   'expense',
+  'cash-out',
+  'sales-chart',
+  'top-products',
+];
+
+// Widget yang aktif untuk user baru / setelah reset layout.
+// Widget di luar daftar ini tetap tersedia di widget picker, tapi tidak tampil sebagai default.
+export const DEFAULT_VISIBLE_DASHBOARD_WIDGET_IDS: DashboardWidgetId[] = [
+  'net-income',
+  'revenue',
+  'expense',
   'sales-chart',
   'top-products',
 ];
@@ -19,6 +30,7 @@ export const DASHBOARD_WIDGET_PERMISSION: Record<DashboardWidgetId, Permission> 
   'net-income': 'REPORT_PROFIT_LOSS_VIEW',
   revenue: 'REPORT_PROFIT_LOSS_VIEW',
   expense: 'REPORT_PROFIT_LOSS_VIEW',
+  'cash-out': 'REPORT_CASH_FLOW_VIEW',
   'sales-chart': 'REPORT_POS_SALES_VIEW',
   'top-products': 'REPORT_POS_SALES_VIEW',
 };
@@ -48,6 +60,7 @@ export const DEFAULT_DASHBOARD_LAYOUTS: Required<DashboardLayouts> = {
     { i: 'net-income', x: 0, y: 0, w: 4, h: 2, minW: 3, minH: 2, maxH: 2 },
     { i: 'revenue', x: 4, y: 0, w: 4, h: 2, minW: 3, minH: 2, maxH: 2 },
     { i: 'expense', x: 8, y: 0, w: 4, h: 2, minW: 3, minH: 2, maxH: 2 },
+    { i: 'cash-out', x: 0, y: 2, w: 4, h: 2, minW: 3, minH: 2, maxH: 2 },
     { i: 'sales-chart', x: 0, y: 2, w: 8, h: 5, minW: 4, minH: 3 },
     { i: 'top-products', x: 8, y: 2, w: 4, h: 5, minW: 3, minH: 3 },
   ],
@@ -55,6 +68,7 @@ export const DEFAULT_DASHBOARD_LAYOUTS: Required<DashboardLayouts> = {
     { i: 'net-income', x: 0, y: 0, w: 4, h: 2, minW: 3, minH: 2, maxH: 2 },
     { i: 'revenue', x: 4, y: 0, w: 3, h: 2, minW: 3, minH: 2, maxH: 2 },
     { i: 'expense', x: 7, y: 0, w: 3, h: 2, minW: 3, minH: 2, maxH: 2 },
+    { i: 'cash-out', x: 0, y: 2, w: 3, h: 2, minW: 3, minH: 2, maxH: 2 },
     { i: 'sales-chart', x: 0, y: 2, w: 6, h: 5, minW: 4, minH: 3 },
     { i: 'top-products', x: 6, y: 2, w: 4, h: 5, minW: 3, minH: 3 },
   ],
@@ -62,6 +76,7 @@ export const DEFAULT_DASHBOARD_LAYOUTS: Required<DashboardLayouts> = {
     { i: 'net-income', x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'revenue', x: 2, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'expense', x: 4, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 2 },
+    { i: 'cash-out', x: 0, y: 2, w: 2, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'sales-chart', x: 0, y: 2, w: 6, h: 5, minW: 3, minH: 3 },
     { i: 'top-products', x: 0, y: 7, w: 6, h: 5, minW: 3, minH: 3 },
   ],
@@ -69,6 +84,7 @@ export const DEFAULT_DASHBOARD_LAYOUTS: Required<DashboardLayouts> = {
     { i: 'net-income', x: 0, y: 0, w: 4, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'revenue', x: 0, y: 2, w: 4, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'expense', x: 0, y: 4, w: 4, h: 2, minW: 2, minH: 2, maxH: 2 },
+    { i: 'cash-out', x: 0, y: 6, w: 4, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'sales-chart', x: 0, y: 6, w: 4, h: 5, minW: 2, minH: 3 },
     { i: 'top-products', x: 0, y: 11, w: 4, h: 5, minW: 2, minH: 3 },
   ],
@@ -76,6 +92,7 @@ export const DEFAULT_DASHBOARD_LAYOUTS: Required<DashboardLayouts> = {
     { i: 'net-income', x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'revenue', x: 0, y: 2, w: 2, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'expense', x: 0, y: 4, w: 2, h: 2, minW: 2, minH: 2, maxH: 2 },
+    { i: 'cash-out', x: 0, y: 6, w: 2, h: 2, minW: 2, minH: 2, maxH: 2 },
     { i: 'sales-chart', x: 0, y: 6, w: 2, h: 5, minW: 2, minH: 3 },
     { i: 'top-products', x: 0, y: 11, w: 2, h: 5, minW: 2, minH: 3 },
   ],
@@ -159,7 +176,7 @@ export const normalizeDashboardLayouts = (layouts?: DashboardLayouts): Required<
 export const getDefaultDashboardPreference = (userId: string, now = new Date().toISOString()): DashboardPreference => ({
   id: `dashboard:${userId}`,
   user_id: userId,
-  visible_widget_ids: [...DASHBOARD_WIDGET_IDS],
+  visible_widget_ids: [...DEFAULT_VISIBLE_DASHBOARD_WIDGET_IDS],
   layouts: normalizeDashboardLayouts(DEFAULT_DASHBOARD_LAYOUTS),
   created_at: now,
   updated_at: now,

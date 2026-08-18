@@ -11,6 +11,8 @@ pub struct ProductDto {
     pub purchase_price: f64,
     pub selling_price: f64,
     pub stock: f64,
+    /// NULL untuk produk yang belum menyetel ambangnya sendiri.
+    pub min_stock: Option<f64>,
     pub sku: Option<String>,
     pub product_type: String,
     pub is_visible_in_pos: bool,

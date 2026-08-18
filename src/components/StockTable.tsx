@@ -5,7 +5,8 @@ import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock';
 import { isProductUnverified } from '@/services/posQuickItemService';
 import type { Product } from '@/types';
-import { formatCurrency, getStockStatusClass } from '@/utils/formatters';
+import { formatCurrency } from '@/utils/formatters';
+import { getStockStatus, getStockStatusClass, resolveProductMinStock } from '@/utils/stockStatus';
 import { getProductDisplayPricing } from '@/utils/pricing';
 import { BadgeCheck, Edit2, EyeOff, Package, PackagePlus, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -88,16 +89,11 @@ export default function StockTable({
   const activeSearchAndFilterCount = activeFilterCount + (searchQuery.trim() ? 1 : 0);
 
   const isStockStatusMatch = useCallback((product: Product) => {
-    switch (stockStatus) {
-      case 'out':
-        return product.stock <= 0;
-      case 'low':
-        return product.stock > 0 && product.stock < 10;
-      case 'safe':
-        return product.stock >= 10;
-      default:
-        return true;
-    }
+    if (stockStatus === 'all') return true;
+    const status = getStockStatus(product);
+    if (stockStatus === 'out') return status === 'habis';
+    if (stockStatus === 'low') return status === 'menipis';
+    return status === 'tersedia';
   }, [stockStatus]);
 
   const resetFilters = () => {
@@ -223,7 +219,13 @@ export default function StockTable({
         <span className="block text-[10px] font-bold uppercase tracking-wide text-gray-400">
           {t('product.stock')}
         </span>
-        <span className={`mt-1 inline-flex rounded px-2 py-0.5 text-sm font-bold ${getStockStatusClass(product.stock)}`}>
+        <span
+          className={`mt-1 inline-flex rounded px-2 py-0.5 text-sm font-bold ${getStockStatusClass(product)}`}
+          title={t('stock.minStockBadgeHint', {
+            min: resolveProductMinStock(product),
+            unit: product.purchase_unit,
+          })}
+        >
           {product.stock} {product.purchase_unit}
         </span>
       </span>
@@ -324,7 +326,13 @@ export default function StockTable({
       key: 'stock',
       sorter: (a, b) => a.stock - b.stock,
       render: (_value, product) => (
-        <span className={`px-2 py-1 rounded ${getStockStatusClass(product.stock)}`}>
+        <span
+          className={`px-2 py-1 rounded ${getStockStatusClass(product)}`}
+          title={t('stock.minStockBadgeHint', {
+            min: resolveProductMinStock(product),
+            unit: product.purchase_unit,
+          })}
+        >
           {product.stock} {product.purchase_unit}
         </span>
       ),

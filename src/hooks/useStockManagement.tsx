@@ -59,6 +59,7 @@ export const useStockManagement = () => {
       purchase_price: undefined,
       selling_price: undefined,
       stock: undefined,
+      min_stock: undefined,
       sku: '',
       product_type: 'FINISHED_GOOD',
       is_visible_in_pos: true,
@@ -221,6 +222,7 @@ export const useStockManagement = () => {
     setValue('purchase_price', product.purchase_price);
     setValue('selling_price', product.selling_price);
     setValue('sku', product.sku || '');
+    setValue('min_stock', product.min_stock);
     setValue('product_type', product.product_type ?? 'FINISHED_GOOD');
     setValue('is_visible_in_pos', product.is_visible_in_pos ?? true);
     setValue('purchase_quantity', 0);

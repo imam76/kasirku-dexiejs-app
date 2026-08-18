@@ -17,6 +17,7 @@ pub async fn list_products(
             purchase_price,
             selling_price,
             stock,
+            min_stock,
             sku,
             product_type,
             is_visible_in_pos,
@@ -50,6 +51,7 @@ pub async fn get_product(pool: &PgPool, id: String) -> Result<Option<ProductDto>
             purchase_price,
             selling_price,
             stock,
+            min_stock,
             sku,
             product_type,
             is_visible_in_pos,
@@ -83,6 +85,7 @@ async fn get_product_including_deleted(
             purchase_price,
             selling_price,
             stock,
+            min_stock,
             sku,
             product_type,
             is_visible_in_pos,
@@ -118,6 +121,7 @@ pub async fn upsert_product(
             purchase_price,
             selling_price,
             stock,
+            min_stock,
             sku,
             product_type,
             is_visible_in_pos,
@@ -128,7 +132,7 @@ pub async fn upsert_product(
             updated_at,
             deleted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::JSONB, $13::JSONB, $14::JSONB, $15::TIMESTAMPTZ, $16::TIMESTAMPTZ, $17::TIMESTAMPTZ)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::JSONB, $14::JSONB, $15::JSONB, $16::TIMESTAMPTZ, $17::TIMESTAMPTZ, $18::TIMESTAMPTZ)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             category = EXCLUDED.category,
@@ -136,7 +140,8 @@ pub async fn upsert_product(
             selling_unit = EXCLUDED.selling_unit,
             purchase_price = EXCLUDED.purchase_price,
             selling_price = EXCLUDED.selling_price,
-            stock = CASE WHEN $18 THEN products.stock ELSE EXCLUDED.stock END,
+            stock = CASE WHEN $19 THEN products.stock ELSE EXCLUDED.stock END,
+            min_stock = EXCLUDED.min_stock,
             sku = EXCLUDED.sku,
             product_type = EXCLUDED.product_type,
             is_visible_in_pos = EXCLUDED.is_visible_in_pos,
@@ -155,6 +160,7 @@ pub async fn upsert_product(
             purchase_price,
             selling_price,
             stock,
+            min_stock,
             sku,
             product_type,
             is_visible_in_pos,
@@ -174,6 +180,7 @@ pub async fn upsert_product(
     .bind(input.purchase_price)
     .bind(input.selling_price)
     .bind(input.stock)
+    .bind(input.min_stock)
     .bind(input.sku)
     .bind(input.product_type)
     .bind(input.is_visible_in_pos)
@@ -213,6 +220,7 @@ pub async fn delete_product(pool: &PgPool, id: String) -> Result<Option<ProductD
             purchase_price,
             selling_price,
             stock,
+            min_stock,
             sku,
             product_type,
             is_visible_in_pos,

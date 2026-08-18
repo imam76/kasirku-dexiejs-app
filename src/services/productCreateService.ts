@@ -4,6 +4,7 @@ import type { StockFormData } from '@/lib/validations/stock';
 import { enqueueProductSync } from '@/services/syncQueueService';
 import type { Product } from '@/types';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
+import { normalizeMinStockInput } from '@/utils/stockStatus';
 
 /**
  * Membuat produk baru langsung ke Dexie, dipakai oleh form Master Produk maupun
@@ -35,6 +36,7 @@ export const createProductRecord = async (data: StockFormData): Promise<Product>
     purchase_price: data.purchase_price ?? 0,
     selling_price: data.selling_price ?? 0,
     stock: 0,
+    min_stock: normalizeMinStockInput(data.min_stock),
     sku: data.sku || undefined,
     product_type: data.product_type ?? 'FINISHED_GOOD',
     is_visible_in_pos: data.is_visible_in_pos ?? true,

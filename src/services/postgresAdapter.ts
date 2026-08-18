@@ -708,6 +708,8 @@ export interface RemoteProductDto {
   purchase_price: number;
   selling_price: number;
   stock: number;
+  /** NULL untuk baris lama yang belum pernah menyetel ambang; konsumen jatuh ke DEFAULT_MIN_STOCK. */
+  min_stock?: number | null;
   sku?: string | null;
   product_type: ProductType;
   is_visible_in_pos: boolean;

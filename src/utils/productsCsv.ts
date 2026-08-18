@@ -27,6 +27,7 @@ export type ProductCsvImportItem = {
   unit_mappings?: Product['unit_mappings'];
   product_type?: Product['product_type'];
   is_visible_in_pos?: boolean;
+  min_stock?: number;
 };
 
 /**
@@ -339,6 +340,7 @@ export const buildProductCsvImportItemsFromRows = (
   };
   const idxProductType = pickIndex(['product_type', 'tipe_produk']);
   const idxVisibleInPos = pickIndex(['is_visible_in_pos', 'tampil_di_pos']);
+  const idxMinStock = pickIndex(['min_stock', 'batas_stok_menipis', 'stok_minimum']);
 
   const unitNameColumns = collectIndexedColumns(headerRow, UNIT_NAME_COLUMN_PREFIXES);
   const unitRatioColumns = collectIndexedColumns(headerRow, UNIT_RATIO_COLUMN_PREFIXES);
@@ -536,6 +538,13 @@ export const buildProductCsvImportItemsFromRows = (
       messages.push(`Baris ${rowNumber}: product_type/tipe_produk harus FINISHED_GOOD atau RAW_MATERIAL.`);
     }
 
+    const min_stock = parseOptionalNonNegativeNumber(
+      idxMinStock !== undefined ? row[idxMinStock] : undefined,
+      'min_stock/batas_stok_menipis',
+      rowNumber,
+      messages,
+    );
+
     const rawVisibleInPos = idxVisibleInPos !== undefined ? row[idxVisibleInPos] : undefined;
     const is_visible_in_pos = parseBoolean(rawVisibleInPos);
     if ((rawVisibleInPos ?? '').trim() && is_visible_in_pos === undefined) {
@@ -564,6 +573,7 @@ export const buildProductCsvImportItemsFromRows = (
       unit_mappings,
       product_type,
       is_visible_in_pos,
+      min_stock,
     });
   }
 
@@ -758,6 +768,7 @@ const TRAILING_EXPORT_HEADERS = [
   'sellable_units',
   'product_type',
   'is_visible_in_pos',
+  'min_stock',
   'created_at',
   'updated_at',
 ] as const;
@@ -891,6 +902,9 @@ export const createProductCsvExportRows = (products: Product[]) => {
         product.sellable_units && product.sellable_units.length > 0 ? JSON.stringify(product.sellable_units) : '',
         product.product_type ?? 'FINISHED_GOOD',
         product.is_visible_in_pos !== false,
+        // Dikosongkan, bukan ditulis 10, supaya ekspor-lalu-impor-ulang tidak
+        // diam-diam mengunci produk ke ambang bawaan yang sedang berlaku.
+        product.min_stock ?? '',
         product.created_at,
         product.updated_at,
       ];
@@ -923,24 +937,25 @@ export const createProductCsvTemplateRows = () => [
     'grosir_tipe_1',
     'product_type',
     'is_visible_in_pos',
+    'min_stock',
   ],
   [
     'BRG-001', 'Air Mineral 600ml', 'minuman', 'pcs', 'pcs', 3000, 4000,
-    '', '', '', '', '', '', '', '', '', 'FINISHED_GOOD', 'true',
+    '', '', '', '', '', '', '', '', '', 'FINISHED_GOOD', 'true', 12,
   ],
   [
     'BRG-002', 'Kopi Sachet', 'minuman', 'pcs', 'pcs', 1500, 2000,
-    'renteng', 1, 10, 'dus', 1, 120, '', '', '', 'FINISHED_GOOD', 'true',
+    'renteng', 1, 10, 'dus', 1, 120, '', '', '', 'FINISHED_GOOD', 'true', '',
   ],
   // Satuan jualnya lebih kecil dari satuan utama, jadi ditulis di sisi kiri:
   // 1000 gram = 1 kg, bukan 1 gram = 0.001 kg.
   [
     'BRG-003', 'Beras Curah', 'sembako', 'kg', 'gram', 13000, 15,
-    'gram', 1000, 1, '', '', '', '', '', '', 'FINISHED_GOOD', 'true',
+    'gram', 1000, 1, '', '', '', '', '', '', 'FINISHED_GOOD', 'true', 5,
   ],
   [
     'BRG-004', 'Gula Pasir 1kg', 'sembako', 'pcs', 'pcs', 13000, 15000,
-    '', '', '', '', '', '', 12, 14000, 'unit', 'FINISHED_GOOD', 'true',
+    '', '', '', '', '', '', 12, 14000, 'unit', 'FINISHED_GOOD', 'true', '',
   ],
 ];
 

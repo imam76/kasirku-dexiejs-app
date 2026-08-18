@@ -2,6 +2,7 @@ import { Minus, Package, Plus } from 'lucide-react';
 import { CartItem, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getProductDisplayPricing } from '@/utils/pricing';
+import { getStockStatusPillClass } from '@/utils/stockStatus';
 import { useI18n } from '@/hooks/useI18n';
 import { Pagination } from 'antd';
 
@@ -116,9 +117,7 @@ export default function ProductList({
                       <Package size={19} strokeWidth={1.8} />
                     </span>
                     <span className="flex min-w-0 items-center justify-end gap-1">
-                      <span className={`inline-flex max-w-full truncate whitespace-nowrap rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wide ${product.stock < 10
-                        ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
-                        : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'}`}
+                      <span className={`inline-flex max-w-full truncate whitespace-nowrap rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wide ${getStockStatusPillClass(product)}`}
                       >
                         {t('product.stock')} {product.stock}
                       </span>

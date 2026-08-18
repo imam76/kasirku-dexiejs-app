@@ -95,6 +95,12 @@ export interface Product {
   purchase_price: number; // Harga per purchase_unit
   selling_price: number;  // Harga per selling_unit (bisa disimpan per kg tapi nanti dikonversi)
   stock: number;          // Stok selalu disimpan dalam base unit (biasanya purchase_unit)
+  /**
+   * Ambang peringatan stok menipis, dalam satuan yang sama dengan `stock`
+   * (base unit). Kosong = pakai DEFAULT_MIN_STOCK, sehingga produk lama yang
+   * belum pernah disetel tetap memakai ambang statis yang berlaku selama ini.
+   */
+  min_stock?: number;
   product_type: ProductType;
   is_visible_in_pos: boolean;
   sku?: string;
@@ -404,6 +410,7 @@ export type DashboardWidgetId =
   | 'net-income'
   | 'revenue'
   | 'expense'
+  | 'cash-out'
   | 'sales-chart'
   | 'top-products';
 

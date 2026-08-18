@@ -35,12 +35,6 @@ export const parseCurrencyInput = (value?: string): number => {
   return Number(normalized || 0);
 };
 
-export const getStockStatusClass = (stock: number): string => {
-  return stock < 10
-    ? 'bg-red-100 text-red-800'
-    : 'bg-green-100 text-green-800';
-};
-
 export const formatCategory = (category: string): string => {
   const normalized = category.toLowerCase();
   const aliasMap: Record<string, string> = {

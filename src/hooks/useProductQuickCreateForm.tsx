@@ -17,6 +17,7 @@ export const buildQuickCreateDefaultValues = (
   purchase_price: undefined,
   selling_price: undefined,
   stock: undefined,
+  min_stock: undefined,
   sku: '',
   product_type: 'FINISHED_GOOD',
   is_visible_in_pos: true,

@@ -30,6 +30,9 @@ export const createStockSchema = (
   purchase_price: z.number({ message: t('stock.validation.purchasePriceRequired') }).min(0, t('stock.validation.purchasePriceMin')).optional(),
   selling_price: z.number({ message: t('stock.validation.sellingPriceRequired') }).min(0, t('stock.validation.sellingPriceMin')).optional(),
   stock: z.number().min(0, t('stock.validation.stockMin')).optional(),
+  // Dibiarkan opsional supaya produk yang tidak diisi tetap jatuh ke ambang
+  // bawaan, bukan tiba-tiba dianggap berambang 0 dan tidak pernah menipis.
+  min_stock: z.number().min(0, t('stock.validation.minStockMin')).optional(),
   sku: z.string().optional().or(z.literal('')),
   product_type: z.enum(['FINISHED_GOOD', 'RAW_MATERIAL']),
   is_visible_in_pos: z.boolean(),

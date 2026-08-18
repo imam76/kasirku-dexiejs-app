@@ -2,6 +2,7 @@ import type { StockFormData } from '@/hooks/useStockManagement';
 import { useI18n } from '@/hooks/useI18n';
 import { getProductCategoryOptions } from '@/i18n/stock';
 import { formatCurrencyInput, parseCurrencyInput } from '@/utils/formatters';
+import { DEFAULT_MIN_STOCK } from '@/utils/stockStatus';
 import { Button, Input, InputNumber, Select, Switch } from 'antd';
 import type { InputRef } from 'antd';
 import { ScanLine } from 'lucide-react';
@@ -184,6 +185,33 @@ export default function StockProductGeneralTab({
                 formatter={formatCurrencyInput}
                 parser={parseCurrencyInput}
                 step={0.01}
+                min={0}
+              />
+            )}
+          />
+        </StockProductFieldContainer>
+
+        <StockProductFieldContainer
+          label={t('stock.form.minStock')}
+          error={errors.min_stock}
+          help={t('stock.form.minStockHelp', { unit: purchaseUnit, default: DEFAULT_MIN_STOCK })}
+        >
+          <Controller
+            name="min_stock"
+            control={control}
+            render={({ field }) => (
+              <InputNumber
+                data-testid="stock-product-min-stock"
+                inputMode="decimal"
+                value={field.value}
+                onBlur={field.onBlur}
+                onChange={(value) => field.onChange(value ?? undefined)}
+                className="w-full"
+                placeholder={t('stock.form.minStockPlaceholder', {
+                  default: DEFAULT_MIN_STOCK,
+                  unit: purchaseUnit,
+                })}
+                addonAfter={purchaseUnit}
                 min={0}
               />
             )}

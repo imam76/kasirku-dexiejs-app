@@ -133,7 +133,13 @@ const getTransactionsInRange = async (filters: CashFlowReportFilters) => {
 export const getCashFlowReport = async (
   filters: CashFlowReportFilters = {},
 ): Promise<CashFlowReportData> => {
-  await requireUserPermission(await getCurrentSessionUser(), 'REPORT_CASH_FLOW_VIEW');
+  // Read-only session lookup: laporan ini juga dibaca dari liveQuery (widget dashboard),
+  // dan Dexie melarang transaksi readwrite (touchSession/cleanup) di dalam konteks liveQuery.
+  const currentUser = await getCurrentSessionUser({
+    touchSession: false,
+    cleanupInvalidSession: false,
+  });
+  await requireUserPermission(currentUser, 'REPORT_CASH_FLOW_VIEW');
 
   const [rangeTransactions, cashBankAccounts] = await Promise.all([
     getTransactionsInRange(filters),

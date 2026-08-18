@@ -1118,6 +1118,7 @@ const mapProductToRemoteDto = (
   purchase_price: normalizeRemoteNumber(product.purchase_price),
   selling_price: normalizeRemoteNumber(product.selling_price),
   stock: normalizeRemoteNumber(product.stock),
+  min_stock: product.min_stock ?? null,
   sku: product.sku,
   product_type: product.product_type ?? 'FINISHED_GOOD',
   is_visible_in_pos: product.is_visible_in_pos ?? true,

@@ -4,6 +4,7 @@ import type { StockFormData } from '@/lib/validations/stock';
 import { buildProductSyncQueueItem, enqueueProductSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import type { Product } from '@/types';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
+import { normalizeMinStockInput } from '@/utils/stockStatus';
 
 const withPendingSync = (product: Product): Product => ({
   ...product,
@@ -45,6 +46,7 @@ export const updateProductRecord = async (productId: string, data: StockFormData
     purchase_price: data.purchase_price ?? 0,
     selling_price: data.selling_price ?? 0,
     sku: data.sku || '',
+    min_stock: normalizeMinStockInput(data.min_stock),
     product_type: data.product_type ?? 'FINISHED_GOOD',
     is_visible_in_pos: data.is_visible_in_pos ?? true,
     wholesale_prices: (data.wholesale_prices || []).map((price) => ({

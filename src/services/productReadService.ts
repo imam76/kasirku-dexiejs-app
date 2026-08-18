@@ -100,6 +100,7 @@ const mapRemoteProductToLocal = (
     purchase_price: remoteProduct.purchase_price,
     selling_price: remoteProduct.selling_price,
     stock: remoteProduct.stock,
+    min_stock: remoteProduct.min_stock ?? undefined,
     sku: remoteProduct.sku ?? undefined,
     product_type: remoteProduct.product_type ?? 'FINISHED_GOOD',
     is_visible_in_pos: remoteProduct.is_visible_in_pos ?? true,

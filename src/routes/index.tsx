@@ -26,7 +26,11 @@ import { App, Button, Checkbox, DatePicker, Empty, Select, Skeleton, Tooltip, th
 import type { Dayjs } from 'dayjs';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useDashboardPreference } from '@/hooks/useDashboardPreference';
-import { useDashboardPosSalesReport, useDashboardProfitLossReport } from '@/hooks/useDashboardReports';
+import {
+  useDashboardCashFlowReport,
+  useDashboardPosSalesReport,
+  useDashboardProfitLossReport,
+} from '@/hooks/useDashboardReports';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useMobileHomeData } from '@/hooks/useMobileHomeData';
 import {
@@ -275,6 +279,8 @@ const getWidgetLabelKey = (widgetId: DashboardWidgetId) => {
       return 'dashboard.widget.revenue';
     case 'expense':
       return 'dashboard.widget.expense';
+    case 'cash-out':
+      return 'dashboard.widget.cashOut';
     case 'sales-chart':
       return 'dashboard.widget.salesChart';
     case 'top-products':
@@ -347,7 +353,7 @@ function MetricWidget({
   amount: number;
   loading: boolean;
   isEditing: boolean;
-  tone: 'primary' | 'success' | 'error';
+  tone: 'primary' | 'success' | 'error' | 'warning';
 }) {
   const { token } = antdTheme.useToken();
   const toneToken = {
@@ -365,6 +371,11 @@ function MetricWidget({
       border: token.colorErrorBorder,
       color: token.colorError,
       iconColor: token.colorErrorTextHover,
+    },
+    warning: {
+      border: token.colorWarningBorder,
+      color: token.colorWarning,
+      iconColor: token.colorWarningTextHover,
     },
   }[tone];
 
@@ -683,12 +694,19 @@ function Index() {
   const visibleWidgetSet = useMemo(() => new Set(visibleWidgetIds), [visibleWidgetIds]);
   const hasProfitLossWidget = visibleWidgetIds.some((widgetId) => PROFIT_LOSS_WIDGET_IDS.has(widgetId));
   const canViewProfitLoss = allowedWidgetIds.some((widgetId) => PROFIT_LOSS_WIDGET_IDS.has(widgetId));
+  const isCashOutVisible = visibleWidgetSet.has('cash-out');
   const isSalesChartVisible = visibleWidgetSet.has('sales-chart');
   const isTopProductsVisible = visibleWidgetSet.has('top-products');
   const profitLossReport = useDashboardProfitLossReport({
     startDate: profitRange.startDate,
     endDate: profitRange.endDate,
     enabled: !isMobileViewport && hasProfitLossWidget && canViewProfitLoss,
+    refreshKey,
+  });
+  const cashFlowReport = useDashboardCashFlowReport({
+    startDate: profitRange.startDate,
+    endDate: profitRange.endDate,
+    enabled: !isMobileViewport && isCashOutVisible && can('REPORT_CASH_FLOW_VIEW'),
     refreshKey,
   });
   const salesChartReport = useDashboardPosSalesReport({
@@ -843,6 +861,19 @@ function Index() {
           loading={profitLossReport.isLoading}
           isEditing={isEditing}
           tone="error"
+        />
+      );
+    }
+
+    if (widgetId === 'cash-out') {
+      return (
+        <MetricWidget
+          title={t('dashboard.widget.cashOut')}
+          subtitle={periodSubtitle}
+          amount={cashFlowReport.data?.totals.cashOut ?? 0}
+          loading={cashFlowReport.isLoading}
+          isEditing={isEditing}
+          tone="warning"
         />
       );
     }
