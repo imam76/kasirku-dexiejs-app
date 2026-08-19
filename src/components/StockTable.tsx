@@ -9,7 +9,7 @@ import type { Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getStockStatus, getStockStatusClass, resolveProductMinStock } from '@/utils/stockStatus';
 import { getProductDisplayPricing } from '@/utils/pricing';
-import { BadgeCheck, CheckSquare, Edit2, EyeOff, Package, PackagePlus, Plus, ShoppingCart, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { BadgeCheck, CheckSquare, Edit2, EyeOff, Package, Plus, ShoppingCart, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import ManagementTable from './ManagementTable';
 import {
@@ -29,7 +29,6 @@ interface StockTableProps {
   products: Product[];
   onEdit: (product: Product) => void;
   onDelete: (id: string) => void;
-  onOpeningStock: (product: Product) => void;
   onVerify?: (product: Product) => void;
   onAdd?: () => void;
   loading?: boolean;
@@ -46,7 +45,6 @@ export default function StockTable({
   products,
   onEdit,
   onDelete,
-  onOpeningStock,
   onVerify,
   onAdd,
   loading = false,
@@ -427,14 +425,6 @@ export default function StockTable({
               />
             </Tooltip>
           )}
-          <Tooltip title={t('stock.openingStockAction')}>
-            <Button
-              type="text"
-              className="text-emerald-600"
-              icon={<PackagePlus size={16} />}
-              onClick={() => onOpeningStock(product)}
-            />
-          </Tooltip>
           <Tooltip title={t('stock.editTitle')}>
             <Button
               type="text"
@@ -726,12 +716,9 @@ export default function StockTable({
                 <Button
                   size="large"
                   className="h-auto min-h-12 whitespace-normal py-2 text-center leading-tight"
-                  onClick={() => {
-                    closeDetailSheet();
-                    onOpeningStock(selectedProduct);
-                  }}
+                  onClick={closeDetailSheet}
                 >
-                  {t('stock.openingStockAction')}
+                  {t('stock.form.cancel')}
                 </Button>
                 <Button
                   type="primary"
@@ -817,13 +804,6 @@ export default function StockTable({
               icon: <BadgeCheck aria-hidden size={19} />,
               hidden: !onVerify || !isProductUnverified(product),
               onSelect: (item) => onVerify?.(item),
-            },
-            {
-              key: 'opening-stock',
-              label: t('stock.openingStockAction'),
-              description: t('stock.openingStockDescription'),
-              icon: <PackagePlus aria-hidden size={19} />,
-              onSelect: onOpeningStock,
             },
             {
               key: 'delete',

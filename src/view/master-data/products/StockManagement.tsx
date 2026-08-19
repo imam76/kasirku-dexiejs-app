@@ -1,6 +1,5 @@
 import { Alert, App, Button, Card, Dropdown, Segmented } from 'antd';
 import type { MenuProps } from 'antd';
-import { useNavigate } from '@tanstack/react-router';
 import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
@@ -65,7 +64,6 @@ export default function StockManagement() {
     importProductsFromCsv,
     isImporting,
   } = useStockManagement();
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -88,10 +86,6 @@ export default function StockManagement() {
   const handleEditProduct = (product: Product) => {
     handleEdit(product);
     setIsModalOpen(true);
-  };
-
-  const handleOpeningStockClick = () => {
-    void navigate({ to: '/finance/opening-balances/inventory' });
   };
 
   const handleVerifyProduct = async (product: Product) => {
@@ -588,7 +582,6 @@ export default function StockManagement() {
         products={products}
         onEdit={handleEditProduct}
         onDelete={handleDelete}
-        onOpeningStock={handleOpeningStockClick}
         onVerify={handleVerifyProduct}
         onAdd={handleAddProduct}
         loading={isLoading}

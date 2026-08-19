@@ -66,7 +66,6 @@ test.describe('mobile product CRUD standard', () => {
     await expect(actionDrawer).toBeVisible();
     await expect(actionDrawer.getByRole('button', { name: /Edit produk/ })).toBeVisible();
     await expect(actionDrawer.getByRole('button', { name: /Tandai Terverifikasi/ })).toBeVisible();
-    await expect(actionDrawer.getByRole('button', { name: /Kelola Saldo Awal Persediaan/ })).toBeVisible();
 
     await actionDrawer.getByRole('button', { name: /Hapus produk/ }).click();
     const deleteDialog = page.getByRole('dialog').filter({ hasText: 'Hapus Produk' });
@@ -77,6 +76,7 @@ test.describe('mobile product CRUD standard', () => {
     const detailSheet = page.getByTestId('stock-detail-sheet');
     await expect(detailSheet).toBeVisible();
     await expect(detailSheet.getByText('Kopi Arabika Mobile')).toBeVisible();
+    await expect(detailSheet.getByRole('button', { name: 'Batal' })).toBeVisible();
     await detailSheet.getByRole('button', { name: 'Edit Produk' }).click();
 
     const editor = page.getByRole('dialog').filter({ has: page.getByTestId('stock-product-name') });
