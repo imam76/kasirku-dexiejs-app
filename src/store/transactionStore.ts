@@ -3,6 +3,7 @@ import { Product, CartItem } from '@/types';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { getProductDefaultUnit, getProductSellableUnits } from '@/utils/productUnits';
 import { isProductVisibleInPos } from '@/utils/productAvailability';
+import { evaluateStockAvailability } from '@/utils/inventory/evaluateStockAvailability';
 
 export type TransactionError =
   | { code: 'PRODUCT_HIDDEN_IN_POS' }
@@ -43,14 +44,27 @@ interface TransactionState {
   deleteHeldDraft: (draftId: string) => void;
 
   // Logical State Actions (Non-DB)
-  addToCart: (product: Product) => { success: boolean; error?: TransactionError };
-  updateQuantity: (productId: string, newQuantity: number) => { success: boolean; error?: TransactionError };
-  updateUnit: (productId: string, newUnit: string) => { success: boolean; error?: TransactionError };
+  addToCart: (product: Product, options?: PhysicalStockConfirmationOptions) => { success: boolean; error?: TransactionError };
+  updateQuantity: (productId: string, newQuantity: number, options?: PhysicalStockConfirmationOptions) => { success: boolean; error?: TransactionError };
+  updateUnit: (productId: string, newUnit: string, options?: PhysicalStockConfirmationOptions) => { success: boolean; error?: TransactionError };
+  confirmPhysicalStockForCart: (productIds?: ReadonlySet<string>, note?: string) => void;
   /** Menyegarkan data produk (harga, dsb.) di baris keranjang yang sudah ada, mis. sesudah quick-edit. */
   updateCartProduct: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   reset: () => void;
 }
+
+export interface PhysicalStockConfirmationOptions {
+  confirmPhysicalStock?: boolean;
+  cashierNote?: string;
+}
+
+const getPhysicalStockObservation = (
+  shortageQuantity: number,
+  options?: PhysicalStockConfirmationOptions,
+) => shortageQuantity > 0 && options?.confirmPhysicalStock
+  ? { confirmed: true as const, note: options.cashierNote?.trim() || undefined }
+  : undefined;
 
 export interface PosPaymentDraft {
   clientId: string;
@@ -269,20 +283,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({ heldDrafts });
   },
 
-  addToCart: (product) => {
+  addToCart: (product, options) => {
     const { cart } = get();
     if (!isProductVisibleInPos(product)) {
       return { success: false, error: { code: 'PRODUCT_HIDDEN_IN_POS' } };
     }
-    // Untuk produk curah (gram/ons), stok mungkin kecil tapi bisa dijual. 
-    // Kita cek stok dalam base unit.
-    if (product.stock <= 0) {
-      return { 
-        success: false, 
-        error: { code: 'OUT_OF_STOCK' } 
-      };
-    }
-
     const existingItem = cart.find((item) => item.product.id === product.id);
 
     if (existingItem) {
@@ -295,7 +300,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         existingItem.unit,
         product.purchase_unit,
       );
-      if (nextQuantityInStockUnit > product.stock) {
+      const availability = evaluateStockAvailability({
+        availableQuantity: product.stock,
+        requestedQuantity: nextQuantityInStockUnit,
+      });
+      if (!availability.isSufficient && !options?.confirmPhysicalStock) {
         return { 
           success: false, 
           error: { code: 'INSUFFICIENT_STOCK', stock: product.stock, unit: product.purchase_unit } 
@@ -304,23 +313,42 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({
         cart: cart.map((item) =>
           item.product.id === product.id
-            ? { ...item, quantity: item.quantity + increment }
+            ? {
+                ...item,
+                quantity: item.quantity + increment,
+                physical_stock_observation: getPhysicalStockObservation(availability.shortageQuantity, options),
+              }
             : item
         )
       });
     } else {
+      const defaultUnit = getProductDefaultUnit(product);
+      const requestedQuantity = konversiSatuanProduk(1, product, defaultUnit, product.purchase_unit);
+      const availability = evaluateStockAvailability({
+        availableQuantity: product.stock,
+        requestedQuantity,
+      });
+      if (!availability.isSufficient && !options?.confirmPhysicalStock) {
+        return {
+          success: false,
+          error: product.stock <= 0
+            ? { code: 'OUT_OF_STOCK' }
+            : { code: 'INSUFFICIENT_STOCK', stock: product.stock, unit: product.purchase_unit },
+        };
+      }
       set({ 
         cart: [...cart, {
           product,
           quantity: 1,
-          unit: getProductDefaultUnit(product)
+          unit: defaultUnit,
+          physical_stock_observation: getPhysicalStockObservation(availability.shortageQuantity, options),
         }]
       });
     }
     return { success: true };
   },
 
-  updateQuantity: (productId, newQuantity) => {
+  updateQuantity: (productId, newQuantity, options) => {
     const { cart } = get();
     const item = cart.find((i) => i.product.id === productId);
     if (!item) return { success: false };
@@ -328,7 +356,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     // Konversi quantity dari unit jual ke unit stok (base unit)
     const quantityInStokUnit = konversiSatuanProduk(newQuantity, item.product, item.unit, item.product.purchase_unit);
 
-    if (quantityInStokUnit > item.product.stock) {
+    const availability = evaluateStockAvailability({
+      availableQuantity: item.product.stock,
+      requestedQuantity: quantityInStokUnit,
+    });
+    if (!availability.isSufficient && !options?.confirmPhysicalStock) {
       return { 
         success: false, 
         error: {
@@ -346,13 +378,19 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     set({
       cart: cart.map((item) =>
-        item.product.id === productId ? { ...item, quantity: newQuantity } : item
+        item.product.id === productId
+          ? {
+              ...item,
+              quantity: newQuantity,
+              physical_stock_observation: getPhysicalStockObservation(availability.shortageQuantity, options),
+            }
+          : item
       )
     });
     return { success: true };
   },
 
-  updateUnit: (productId, newUnit) => {
+  updateUnit: (productId, newUnit, options) => {
     const { cart } = get();
     const item = cart.find((i) => i.product.id === productId);
     if (!item) return { success: false };
@@ -375,7 +413,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       newUnit,
       item.product.purchase_unit,
     );
-    if (quantityInStockUnit > item.product.stock) {
+    const availability = evaluateStockAvailability({
+      availableQuantity: item.product.stock,
+      requestedQuantity: quantityInStockUnit,
+    });
+    if (!availability.isSufficient && !options?.confirmPhysicalStock) {
       return {
         success: false,
         error: {
@@ -394,10 +436,27 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           product: cartItem.product,
           quantity: cartItem.quantity,
           unit: newUnit,
+          physical_stock_observation: getPhysicalStockObservation(availability.shortageQuantity, options),
         };
       })
     });
     return { success: true };
+  },
+
+  confirmPhysicalStockForCart: (productIds, note) => {
+    set((state) => ({
+      cart: state.cart.map((item) => (
+        !productIds || productIds.has(item.product.id)
+          ? {
+              ...item,
+              physical_stock_observation: {
+                confirmed: true,
+                note: note?.trim() || item.physical_stock_observation?.note,
+              },
+            }
+          : item
+      )),
+    }));
   },
 
   updateCartProduct: (product) => {

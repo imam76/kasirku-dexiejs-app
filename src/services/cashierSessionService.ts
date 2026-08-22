@@ -4,6 +4,7 @@ import { enqueueCashierSessionSync } from '@/services/syncQueueService';
 import type { CashierSession, CashierSessionBalanceStatus, PaymentMethodCategory, PosTransactionPayment, Transaction } from '@/types';
 import { isTransactionActive, isTransactionSale, isTransactionVoided } from '@/utils/transactions';
 import { getTransactionPaymentsOrLegacyFallback, groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
+import { getCashierSessionDiscrepancySummary } from '@/services/posStockDiscrepancyService';
 
 export interface OpenCashierSessionInput {
   opening_cash_amount: number;
@@ -29,6 +30,10 @@ export interface CashierSessionReconciliation {
   cash_difference_amount: number;
   balance_status: CashierSessionBalanceStatus;
   payment_method_breakdown: CashierSessionPaymentBreakdown[];
+  stock_discrepancy_case_count: number;
+  stock_discrepancy_pending_review_count: number;
+  stock_discrepancy_shortage_quantity: number;
+  stock_discrepancy_products: string[];
 }
 
 export interface CashierSessionPaymentBreakdown {
@@ -179,6 +184,7 @@ export const calculateCashierSessionReconciliation = async (
     ? await db.posTransactionPayments.where('transaction_id').anyOf(transactionIds).toArray()
     : [];
   const summary = summarizeSessionTransactions(transactions, payments);
+  const discrepancySummary = await getCashierSessionDiscrepancySummary(session.id);
   const expectedCashAmount = Number(session.opening_cash_amount || 0) + summary.cashSalesAmount;
   const cashDifferenceAmount = normalizedClosingCashAmount - expectedCashAmount;
 
@@ -195,6 +201,10 @@ export const calculateCashierSessionReconciliation = async (
     cash_difference_amount: cashDifferenceAmount,
     balance_status: cashDifferenceAmount === 0 ? 'BALANCED' : 'NON_BALANCED',
     payment_method_breakdown: summary.paymentMethodBreakdown,
+    stock_discrepancy_case_count: discrepancySummary.case_count,
+    stock_discrepancy_pending_review_count: discrepancySummary.pending_review_count,
+    stock_discrepancy_shortage_quantity: discrepancySummary.shortage_quantity,
+    stock_discrepancy_products: discrepancySummary.products,
   };
 };
 

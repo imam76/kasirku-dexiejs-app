@@ -39,6 +39,7 @@ import type {
   PayrollRunStatus,
   Permission,
   PosPaymentMode,
+  PosStockDiscrepancyStatus,
   ProductCategory,
   ProductUnit,
   ProductType,
@@ -853,6 +854,37 @@ export interface RemoteStockMutationDto {
   actor_user_name?: string | null;
   occurred_at: string;
   created_at: string;
+}
+
+export interface RemotePosStockDiscrepancyDto {
+  id: string;
+  transaction_id: string;
+  transaction_number: string;
+  transaction_item_id: string;
+  cashier_session_id?: string | null;
+  restaurant_session_id?: string | null;
+  product_id: string;
+  product_name: string;
+  sku?: string | null;
+  system_quantity_snapshot: number;
+  requested_quantity: number;
+  shortage_quantity: number;
+  stock_unit: ProductUnit;
+  observation: 'PHYSICAL_ITEM_PRESENT';
+  cashier_note?: string | null;
+  cashier_user_id?: string | null;
+  cashier_user_name?: string | null;
+  device_id?: string | null;
+  device_name?: string | null;
+  status: PosStockDiscrepancyStatus;
+  reviewed_by?: string | null;
+  reviewed_by_name?: string | null;
+  reviewed_at?: string | null;
+  investigation_cause?: string | null;
+  investigation_note?: string | null;
+  stock_opname_id?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RemoteInventoryLotDto {
@@ -2830,6 +2862,26 @@ export const stockMutationPostgresAdapter = {
   async upsert(input: RemoteStockMutationDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteStockMutationDto>('postgres_upsert_stock_mutation', { input });
+  },
+};
+
+export const posStockDiscrepancyPostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemotePosStockDiscrepancyDto[]>('postgres_list_pos_stock_discrepancies', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePosStockDiscrepancyDto | null>('postgres_get_pos_stock_discrepancy', { id });
+  },
+
+  async upsert(input: RemotePosStockDiscrepancyDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePosStockDiscrepancyDto>('postgres_upsert_pos_stock_discrepancy', { input });
   },
 };
 

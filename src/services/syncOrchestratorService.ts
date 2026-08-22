@@ -48,6 +48,7 @@ import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadS
 import { refreshTransactionsFromPostgres } from '@/services/transactionReadService';
 import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
+import { refreshPosStockDiscrepanciesFromPostgres } from '@/services/posStockDiscrepancyReadService';
 import {
   enqueuePendingAccountingSettingsForSync,
   enqueuePendingAuthUsersForSync,
@@ -75,6 +76,7 @@ import {
   enqueuePendingRolesForSync,
   enqueuePendingSalesDocumentsForSync,
   enqueuePendingStockOpnamesForSync,
+  enqueuePendingPosStockDiscrepanciesForSync,
   enqueuePendingFixedAssetsForSync,
   enqueuePendingFixedAssetRunsForSync,
   enqueuePendingInventoryLotsForSync,
@@ -127,6 +129,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingTransactionsForSync();
   await enqueuePendingPromosForSync();
   await enqueuePendingStockOpnamesForSync();
+  await enqueuePendingPosStockDiscrepanciesForSync();
   await enqueuePendingFixedAssetsForSync();
   await enqueuePendingFixedAssetRunsForSync();
   await enqueuePendingInventoryLotsForSync();
@@ -194,6 +197,7 @@ export const refreshAllDataFromPostgres = async () => {
     transactions: await refreshTransactionsFromPostgres(),
     promos: await refreshPromosFromPostgres(),
     stockOpnames: await refreshStockOpnamesFromPostgres(),
+    posStockDiscrepancies: await refreshPosStockDiscrepanciesFromPostgres(),
     stockMutations: await refreshStockMutationsFromPostgres(),
     inventoryLots: await refreshInventoryLotsFromPostgres(),
     inventoryLotConsumptions: await refreshInventoryLotConsumptionsFromPostgres(),

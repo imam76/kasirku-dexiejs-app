@@ -57,6 +57,7 @@ import { mergeRemoteStockOpnameBundlesIntoDexie } from '@/services/stockOpnameRe
 import { mergeRemoteTaxesIntoDexie } from '@/services/taxReadService';
 import { mergeRemoteWarehousesIntoDexie } from '@/services/warehouseReadService';
 import { mergeRemotePaymentMethodsIntoDexie } from '@/services/paymentMethodReadService';
+import { mergeRemotePosStockDiscrepanciesIntoDexie } from '@/services/posStockDiscrepancyReadService';
 import {
   activityLogPostgresAdapter,
   accountingFiscalYearPostgresAdapter,
@@ -99,6 +100,7 @@ import {
   journalEntryPostgresAdapter,
   openingBalancePostgresAdapter,
   paymentMethodPostgresAdapter,
+  posStockDiscrepancyPostgresAdapter,
   payrollRunPostgresAdapter,
   postgresAdapter,
   productPostgresAdapter,
@@ -165,6 +167,7 @@ import {
   type RemoteOpeningBalanceBundleDto,
   type RemoteOpeningBalanceLineDto,
   type RemotePaymentMethodDto,
+  type RemotePosStockDiscrepancyDto,
   type RemotePayrollRunBundleDto,
   type RemotePayrollRunDto,
   type RemotePayrollRunItemDto,
@@ -208,7 +211,7 @@ import {
   mergeRemoteAccountingFiscalYearsIntoDexie,
   mergeRemoteFiscalYearClosingRunsIntoDexie,
 } from '@/services/fiscalYearReadService';
-import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
+import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, PosStockDiscrepancy, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
 import type { InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem } from '@/types';
 import type { LeaveRequest } from '@/types';
@@ -275,6 +278,7 @@ const ROLE_PERMISSION_ENTITY = 'rolePermissions';
 const SALES_DOCUMENT_ENTITY = 'salesDocuments';
 const STOCK_OPNAME_ENTITY = 'stockOpnames';
 const STOCK_MUTATION_ENTITY = 'stockMutations';
+const POS_STOCK_DISCREPANCY_ENTITY = 'posStockDiscrepancies';
 const TAX_ENTITY = 'taxes';
 const WAREHOUSE_ENTITY = 'warehouses';
 const PAYMENT_METHOD_ENTITY = 'paymentMethods';
@@ -2849,6 +2853,25 @@ const isRemoteStockMutationDto = (payload: unknown): payload is RemoteStockMutat
   );
 };
 
+const isRemotePosStockDiscrepancyDto = (
+  payload: unknown,
+): payload is RemotePosStockDiscrepancyDto => {
+  if (!payload || typeof payload !== 'object') return false;
+  const candidate = payload as Partial<RemotePosStockDiscrepancyDto>;
+  return (
+    typeof candidate.id === 'string'
+    && typeof candidate.transaction_id === 'string'
+    && typeof candidate.transaction_item_id === 'string'
+    && typeof candidate.product_id === 'string'
+    && typeof candidate.shortage_quantity === 'number'
+    && candidate.shortage_quantity > 0
+    && candidate.observation === 'PHYSICAL_ITEM_PRESENT'
+    && typeof candidate.status === 'string'
+    && typeof candidate.created_at === 'string'
+    && typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteInventoryLotDto = (payload: unknown): payload is RemoteInventoryLotDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -4564,6 +4587,19 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
       sync_error: errorMessage,
     });
   }
+
+  if (
+    queueItem.entity === POS_STOCK_DISCREPANCY_ENTITY
+    && isRemotePosStockDiscrepancyDto(queueItem.payload)
+  ) {
+    const local = await db.posStockDiscrepancies.get(queueItem.entity_id);
+    if (local?.updated_at === queueItem.payload.updated_at) {
+      await db.posStockDiscrepancies.update(local.id, {
+        sync_status: 'failed',
+        sync_error: errorMessage,
+      });
+    }
+  }
 };
 
 const processActivityLogQueueItem = async (queueItem: SyncQueueItem) => {
@@ -5120,6 +5156,16 @@ const processStockMutationQueueItem = async (queueItem: SyncQueueItem) => {
   return stockMutationPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processPosStockDiscrepancyQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Kasus selisih stok POS tidak mendukung operasi delete.');
+  }
+  if (!isRemotePosStockDiscrepancyDto(queueItem.payload)) {
+    throw new Error('Payload kasus selisih stok POS tidak valid.');
+  }
+  return posStockDiscrepancyPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processInventoryLotQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Inventory lot sync queue tidak mendukung operasi delete.');
@@ -5323,6 +5369,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteTransactionBundle: RemoteTransactionBundleDto | null = null;
     let remoteStockOpnameBundle: RemoteStockOpnameBundleDto | null = null;
     let remoteStockMutation: RemoteStockMutationDto | null = null;
+    let remotePosStockDiscrepancy: RemotePosStockDiscrepancyDto | null = null;
     let remoteTax: RemoteTaxDto | null = null;
     let remoteWarehouse: RemoteWarehouseDto | null = null;
     let remotePaymentMethod: RemotePaymentMethodDto | null = null;
@@ -5435,6 +5482,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteStockOpnameBundle = await processStockOpnameQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === STOCK_MUTATION_ENTITY) {
       remoteStockMutation = await processStockMutationQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === POS_STOCK_DISCREPANCY_ENTITY) {
+      remotePosStockDiscrepancy = await processPosStockDiscrepancyQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === INVENTORY_LOT_ENTITY) {
       remoteInventoryLot = await processInventoryLotQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === INVENTORY_LOT_CONSUMPTION_ENTITY) {
@@ -6349,6 +6398,21 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
 
     if (remoteStockMutation && isRemoteStockMutationDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      return;
+    }
+
+    if (remotePosStockDiscrepancy && isRemotePosStockDiscrepancyDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      const local = await db.posStockDiscrepancies.get(currentQueueItem.entity_id);
+      if (local?.updated_at === currentQueueItem.payload.updated_at) {
+        await db.posStockDiscrepancies.update(local.id, {
+          sync_status: 'synced',
+          sync_error: undefined,
+          last_synced_at: syncedAt,
+          remote_updated_at: remotePosStockDiscrepancy.updated_at,
+        });
+      }
+      await mergeRemotePosStockDiscrepanciesIntoDexie([remotePosStockDiscrepancy], syncedAt);
       return;
     }
 
@@ -8632,7 +8696,20 @@ export const enqueueTransactionBundleSync = async (
   operation: Extract<SyncQueueOperation, 'create' | 'update'>,
 ) => {
   const now = new Date().toISOString();
-  const queueItem: SyncQueueItem = {
+  const queueItem = buildTransactionBundleOutboxItem(transaction, items, operation, now);
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const buildTransactionBundleOutboxItem = (
+  transaction: Transaction,
+  items: TransactionItem[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+  now = new Date().toISOString(),
+): SyncQueueItem => ({
     id: crypto.randomUUID(),
     entity: TRANSACTION_ENTITY,
     entity_id: transaction.id,
@@ -8642,13 +8719,7 @@ export const enqueueTransactionBundleSync = async (
     attempts: 0,
     created_at: now,
     updated_at: now,
-  };
-
-  await db.syncQueue.add(queueItem);
-  void processPendingSyncQueue();
-
-  return queueItem;
-};
+  });
 
 export const enqueueStockOpnameBundleSync = async (
   opname: StockOpname,
@@ -8704,7 +8775,19 @@ export const enqueueInventoryLotSync = async (
   operation: Extract<SyncQueueOperation, 'create' | 'update'> = 'create',
 ) => {
   const now = new Date().toISOString();
-  const queueItem: SyncQueueItem = {
+  const queueItem = buildInventoryLotOutboxItem(lot, operation, now);
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const buildInventoryLotOutboxItem = (
+  lot: InventoryLot,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'> = 'create',
+  now = new Date().toISOString(),
+): SyncQueueItem => ({
     id: crypto.randomUUID(),
     entity: INVENTORY_LOT_ENTITY,
     entity_id: lot.id,
@@ -8714,7 +8797,11 @@ export const enqueueInventoryLotSync = async (
     attempts: 0,
     created_at: now,
     updated_at: now,
-  };
+  });
+
+export const enqueueInventoryLotConsumptionSync = async (consumption: InventoryLotConsumption) => {
+  const now = new Date().toISOString();
+  const queueItem = buildInventoryLotConsumptionOutboxItem(consumption, now);
 
   await db.syncQueue.add(queueItem);
   void processPendingSyncQueue();
@@ -8722,9 +8809,10 @@ export const enqueueInventoryLotSync = async (
   return queueItem;
 };
 
-export const enqueueInventoryLotConsumptionSync = async (consumption: InventoryLotConsumption) => {
-  const now = new Date().toISOString();
-  const queueItem: SyncQueueItem = {
+export const buildInventoryLotConsumptionOutboxItem = (
+  consumption: InventoryLotConsumption,
+  now = new Date().toISOString(),
+): SyncQueueItem => ({
     id: crypto.randomUUID(),
     entity: INVENTORY_LOT_CONSUMPTION_ENTITY,
     entity_id: consumption.id,
@@ -8734,13 +8822,7 @@ export const enqueueInventoryLotConsumptionSync = async (consumption: InventoryL
     attempts: 0,
     created_at: now,
     updated_at: now,
-  };
-
-  await db.syncQueue.add(queueItem);
-  void processPendingSyncQueue();
-
-  return queueItem;
-};
+  });
 
 export const enqueuePendingInventoryLotsForSync = async () => {
   const lots = (await db.inventoryLots.toArray())
@@ -8951,6 +9033,48 @@ export const enqueuePendingStockOpnamesForSync = async () => {
     if (!existingQueueItem) {
       const items = await db.stockOpnameItems.where('opname_id').equals(opname.id).toArray();
       await enqueueStockOpnameBundleSync(opname, items, 'update');
+    }
+  }
+};
+
+export const enqueuePosStockDiscrepancySync = async (
+  discrepancy: PosStockDiscrepancy,
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: POS_STOCK_DISCREPANCY_ENTITY,
+    entity_id: discrepancy.id,
+    operation,
+    payload: discrepancy,
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+  return queueItem;
+};
+
+export const enqueuePendingPosStockDiscrepanciesForSync = async () => {
+  const rows = (await db.posStockDiscrepancies.toArray())
+    .filter((row) => row.sync_status === 'pending' || row.sync_status === 'failed');
+  const queueItems = await db.syncQueue
+    .where('entity')
+    .equals(POS_STOCK_DISCREPANCY_ENTITY)
+    .toArray();
+
+  for (const row of rows) {
+    const exists = queueItems.some((item) => (
+      item.entity_id === row.id
+      && item.status !== 'synced'
+      && isRemotePosStockDiscrepancyDto(item.payload)
+      && item.payload.updated_at === row.updated_at
+    ));
+    if (!exists) {
+      await enqueuePosStockDiscrepancySync(row, row.reviewed_at ? 'update' : 'create');
     }
   }
 };

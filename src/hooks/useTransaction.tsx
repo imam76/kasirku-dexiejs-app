@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useCallback, useLayoutEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { App } from 'antd';
+import { App, Input } from 'antd';
 import { db } from '@/lib/db';
 import { useTransactionStore, type TransactionError } from '@/store/transactionStore';
 import { Contact, MembershipSetting, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getCartItemPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
-import { checkout, recordPosExpense } from '@/services/checkoutService';
+import { checkout, PosStockShortageConfirmationRequiredError, recordPosExpense } from '@/services/checkoutService';
 import { useI18n } from '@/hooks/useI18n';
 import { usePosPaymentMethods } from '@/hooks/usePosPaymentMethods';
 import { allocatePosPayments } from '@/utils/posSplitPayment';
@@ -69,6 +69,7 @@ export const useTransaction = (draftScope?: string) => {
     deleteHeldDraft,
     addToCart: storeAddToCart,
     updateQuantity: storeUpdateQuantity,
+    confirmPhysicalStockForCart,
     updateCartProduct,
     removeFromCart,
     reset,
@@ -308,10 +309,44 @@ export const useTransaction = (draftScope?: string) => {
     modal.error(getTransactionErrorContent(error));
   };
 
+  const offerPhysicalStockConfirmation = (
+    error: TransactionError,
+    onConfirm: (cashierNote?: string) => void,
+  ) => {
+    if (error.code !== 'OUT_OF_STOCK' && error.code !== 'INSUFFICIENT_STOCK') {
+      showTransactionError(error);
+      return;
+    }
+
+    let cashierNote = '';
+    modal.confirm({
+      title: 'Stok sistem tidak cukup',
+      content: (
+        <div className="space-y-2">
+          <p>{getTransactionErrorContent(error).content}</p>
+          <p>
+            Konfirmasikan hanya jika barang fisik memang ada di depan Anda.
+            Selisih akan otomatis masuk antrean review supervisor.
+          </p>
+          <Input.TextArea
+            rows={2}
+            placeholder="Catatan observasi kasir (opsional)"
+            onChange={(event) => { cashierNote = event.target.value; }}
+          />
+        </div>
+      ),
+      okText: 'Barang fisik ada di depan saya',
+      cancelText: t('common.cancel'),
+      onOk: () => onConfirm(cashierNote),
+    });
+  };
+
   const addToCart = (product: Product) => {
     const result = storeAddToCart(product);
     if (!result.success && result.error) {
-      showTransactionError(result.error);
+      offerPhysicalStockConfirmation(result.error, (cashierNote) => {
+        storeAddToCart(product, { confirmPhysicalStock: true, cashierNote });
+      });
       return false;
     }
     return result.success;
@@ -320,7 +355,9 @@ export const useTransaction = (draftScope?: string) => {
   const updateQuantity = (productId: string, newQuantity: number) => {
     const result = storeUpdateQuantity(productId, newQuantity);
     if (!result.success && result.error) {
-      showTransactionError(result.error);
+      offerPhysicalStockConfirmation(result.error, (cashierNote) => {
+        storeUpdateQuantity(productId, newQuantity, { confirmPhysicalStock: true, cashierNote });
+      });
       return false;
     }
     return result.success;
@@ -330,7 +367,9 @@ export const useTransaction = (draftScope?: string) => {
     const storeUpdateUnit = useTransactionStore.getState().updateUnit;
     const result = storeUpdateUnit(productId, newUnit);
     if (!result.success && result.error) {
-      showTransactionError(result.error);
+      offerPhysicalStockConfirmation(result.error, (cashierNote) => {
+        storeUpdateUnit(productId, newUnit, { confirmPhysicalStock: true, cashierNote });
+      });
     }
     return result.success;
   };
@@ -461,6 +500,26 @@ export const useTransaction = (draftScope?: string) => {
       return true;
     } catch (error) {
       console.error('Checkout failed:', error);
+      if (error instanceof PosStockShortageConfirmationRequiredError) {
+        const affectedIds = new Set(error.details.map((detail) => detail.productId));
+        modal.confirm({
+          title: 'Stok berubah dan sekarang tidak cukup',
+          content: (
+            <div className="space-y-2">
+              {error.details.map((detail) => (
+                <p key={detail.productId}>
+                  {detail.productName}: kurang {detail.shortageQuantity} {detail.stockUnit}.
+                </p>
+              ))}
+              <p>Konfirmasi barang fisik, lalu tekan Bayar sekali lagi.</p>
+            </div>
+          ),
+          okText: 'Barang fisik ada di depan saya',
+          cancelText: t('common.cancel'),
+          onOk: () => confirmPhysicalStockForCart(affectedIds),
+        });
+        return false;
+      }
       if (error instanceof Error && error.name === 'NotFoundError') {
         void indexedDB.databases?.().then((databases) => {
           console.error('IndexedDB databases:', databases);

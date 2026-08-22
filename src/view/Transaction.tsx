@@ -1,5 +1,5 @@
 import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
-import { App, Button, Card, Descriptions, Dropdown, Form, Input, InputNumber, Modal, Spin } from 'antd';
+import { Alert, App, Button, Card, Descriptions, Dropdown, Form, Input, InputNumber, Modal, Spin } from 'antd';
 import type { InputRef } from 'antd';
 import { useState, useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
@@ -1483,6 +1483,24 @@ export default function Transaction() {
           </Form.Item>
 
           {reconciliation && <ReconciliationSummary reconciliation={reconciliation} />}
+
+          {reconciliation && reconciliation.stock_discrepancy_case_count > 0 && (
+            <Alert
+              className="mt-4"
+              type={reconciliation.stock_discrepancy_pending_review_count > 0 ? 'warning' : 'info'}
+              showIcon
+              message={`${reconciliation.stock_discrepancy_case_count} kasus selisih stok pada shift ini`}
+              description={(
+                <div>
+                  <div>
+                    {reconciliation.stock_discrepancy_pending_review_count} belum direview;
+                    {' '}{reconciliation.stock_discrepancy_shortage_quantity} unit stok disesuaikan.
+                  </div>
+                  <div>{reconciliation.stock_discrepancy_products.join(', ')}</div>
+                </div>
+              )}
+            />
+          )}
 
           <Form.Item
             className="mt-4"

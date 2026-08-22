@@ -39,6 +39,7 @@ export const backupDatabase = async () => {
       stockPurchases: await db.stockPurchases.toArray(),
       stockOpnames: await db.stockOpnames.toArray(),
       stockOpnameItems: await db.stockOpnameItems.toArray(),
+      posStockDiscrepancies: await db.posStockDiscrepancies.toArray(),
       financeTransactions: await db.financeTransactions.toArray(),
       cashBankReconciliations: await db.cashBankReconciliations.toArray(),
       financeBalance: await db.financeBalance.toArray(),
@@ -101,7 +102,7 @@ export const backupDatabase = async () => {
       fixedAssets: await db.fixedAssets.toArray(),
       fixedAssetDepreciationRuns: await db.fixedAssetDepreciationRuns.toArray(),
       fixedAssetDepreciationRunLines: await db.fixedAssetDepreciationRunLines.toArray(),
-      version: 28,
+      version: 29,
       timestamp: new Date().toISOString(),
     };
 
@@ -127,7 +128,7 @@ export const restoreDatabase = async (file: File) => {
 
         // Basic validation - check if at least one expected key exists or it's an empty backup
         const expectedKeys = ['products', 'transactions', 'transactionItems', 'cashierSessions', 'cooperativeFieldCashSessions', 'stockPurchases', 'stockOpnames', 'stockOpnameItems', 'financeTransactions', 'cashBankReconciliations', 'financeBalance', 'payrollRuns', 'payrollRunItems', 'employeeCashAdvances', 'employeeCashAdvanceRepayments', 'profitLogs', 'profitBalance', 'promos', 'contacts', 'departments', 'projects', 'taxes', 'warehouses', 'paymentMethods', 'currencies', 'currencyRates', 'salesDocuments', 'salesDocumentItems', 'salesInvoicePayments', 'salesOverpaymentSettlements', 'salesOverpaymentSettlementAllocations', 'salesReturns', 'salesReturnItems', 'purchaseDocuments', 'purchaseDocumentItems', 'purchaseInvoicePayments', 'inventoryLots', 'inventoryLotConsumptions', 'purchaseCostReconciliations', 'purchaseCostReconciliationItems', 'chartOfAccounts', 'financeAccountMappings', 'accountingProfileSetting', 'accountingInitialSetupSetting', 'accountingPeriods', 'accountingFiscalYears', 'closingRuns', 'fiscalYearClosingRuns', 'enabledModules', 'generalLedgerSetting', 'openingBalanceBatches', 'openingBalanceLines', 'journalEntries', 'journalEntryLines', 'cooperativeMembers', 'cooperativeSavingTransactions', 'cooperativeMemberSavingBalances', 'cooperativeLoans', 'cooperativeLoanInstallments', 'cooperativeLoanPayments', 'cooperativeLoanCollectionEvents', 'cooperativeSettings', 'companyProfileSetting', 'membershipPointTransactions', 'membershipSettings', 'authUsers', 'activityLogs'];
-        expectedKeys.push('posTransactionPayments', 'fixedAssets', 'fixedAssetDepreciationRuns', 'fixedAssetDepreciationRunLines');
+        expectedKeys.push('posTransactionPayments', 'posStockDiscrepancies', 'fixedAssets', 'fixedAssetDepreciationRuns', 'fixedAssetDepreciationRunLines');
         const hasValidKey = expectedKeys.some(key => Array.isArray(data[key]));
 
         if (!hasValidKey && !data.timestamp) {
@@ -159,6 +160,7 @@ export const restoreDatabase = async (file: File) => {
           db.stockPurchases,
           db.stockOpnames,
           db.stockOpnameItems,
+          db.posStockDiscrepancies,
           db.financeTransactions,
           db.cashBankReconciliations,
           db.financeBalance,
@@ -235,6 +237,7 @@ export const restoreDatabase = async (file: File) => {
           await db.stockPurchases.clear();
           await db.stockOpnames.clear();
           await db.stockOpnameItems.clear();
+          await db.posStockDiscrepancies.clear();
           await db.financeTransactions.clear();
           await db.cashBankReconciliations.clear();
           await db.financeBalance.clear();
@@ -317,6 +320,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.stockPurchases?.length) await db.stockPurchases.bulkAdd(data.stockPurchases);
           if (data.stockOpnames?.length) await db.stockOpnames.bulkAdd(data.stockOpnames);
           if (data.stockOpnameItems?.length) await db.stockOpnameItems.bulkAdd(data.stockOpnameItems);
+          if (data.posStockDiscrepancies?.length) await db.posStockDiscrepancies.bulkAdd(data.posStockDiscrepancies);
           if (data.financeTransactions?.length) await db.financeTransactions.bulkAdd(data.financeTransactions);
           if (data.cashBankReconciliations?.length) await db.cashBankReconciliations.bulkAdd(data.cashBankReconciliations);
           if (data.financeBalance?.length) await db.financeBalance.bulkAdd(data.financeBalance);

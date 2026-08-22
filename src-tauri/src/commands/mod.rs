@@ -24,6 +24,7 @@ pub mod marketplace_commands;
 pub mod opening_balance_commands;
 pub mod payment_method_commands;
 pub mod payroll_commands;
+pub mod pos_stock_discrepancy_commands;
 pub mod postgres_health;
 pub mod product_commands;
 pub mod production_order_commands;

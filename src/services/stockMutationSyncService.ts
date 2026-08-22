@@ -1,4 +1,4 @@
-import type { Product, StockMutation, StockMutationSourceType, UserRole } from '@/types';
+import type { Product, StockMutation, StockMutationSourceType, SyncQueueItem, UserRole } from '@/types';
 import { enqueueStockMutationSync } from '@/services/syncQueueService';
 
 interface StockMutationActor {
@@ -74,3 +74,18 @@ export const enqueueStockMutations = async (mutations: StockMutation[]) => {
     await enqueueStockMutationSync(mutation);
   }
 };
+
+export const buildStockMutationOutboxItem = (
+  mutation: StockMutation,
+  createdAt = new Date().toISOString(),
+): SyncQueueItem => ({
+  id: crypto.randomUUID(),
+  entity: 'stockMutations',
+  entity_id: mutation.id,
+  operation: 'create',
+  payload: mutation,
+  status: 'pending',
+  attempts: 0,
+  created_at: createdAt,
+  updated_at: createdAt,
+});

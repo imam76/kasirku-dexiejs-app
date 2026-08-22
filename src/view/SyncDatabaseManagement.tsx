@@ -72,6 +72,7 @@ const entityLabelByName: Record<string, string> = {
   purchaseDocuments: 'Dokumen Pembelian',
   salesDocuments: 'Dokumen Sales',
   stockMutations: 'Mutasi Stok',
+  posStockDiscrepancies: 'Selisih Stok POS',
   taxes: 'Tax',
   warehouses: 'Gudang',
   paymentMethods: 'Metode Pembayaran',

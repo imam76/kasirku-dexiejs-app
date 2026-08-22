@@ -82,6 +82,14 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'POS_STOCK_DISCREPANCY_REVIEW',
+    label: 'Review Selisih Stok POS',
+    description: 'Meninjau kasus barang fisik yang ditemukan saat stok sistem tidak cukup.',
+    group: 'POS',
+    moduleCodes: POS_MODULES,
+    isSensitive: true,
+  },
+  {
     code: 'PROMO_MANAGE',
     label: 'Kelola Diskon dan Promo',
     group: 'Data Master',

@@ -1,6 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, CashierSession, Contact, FinanceTransaction, PosTransactionPayment, RestaurantSession, StockMutation, Transaction, TransactionItem, AuthUser } from '@/types';
+import type { CartItem, CashierSession, Contact, FinanceTransaction, PosStockDiscrepancy, PosTransactionPayment, Product, RestaurantSession, StockMutation, Transaction, TransactionItem, AuthUser, SyncQueueItem } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
@@ -15,9 +15,11 @@ import {
   resolveCheckoutPayments,
   type CheckoutPaymentInput,
 } from '@/services/posTransactionPaymentService';
-import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
+import { buildStockMutationOutboxItem, createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
+import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
+import { evaluateStockAvailability } from '@/utils/inventory/evaluateStockAvailability';
 import { getOpenCashierSessionForCurrentUser } from '@/services/cashierSessionService';
 import { getOpenRestaurantSessionForCurrentUser } from '@/services/restaurantSessionService';
 import {
@@ -26,7 +28,9 @@ import {
   isActiveRetailMember,
   recordMembershipPointTransaction,
 } from '@/services/membershipService';
-import { enqueueContactSync, enqueuePendingProductsForSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
+import { buildInventoryLotConsumptionOutboxItem, buildInventoryLotOutboxItem, buildTransactionBundleOutboxItem, enqueueContactSync, enqueuePendingInventoryLotConsumptionsForSync, enqueuePendingInventoryLotsForSync, enqueuePendingProductsForSync, enqueueTransactionBundleSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { getStoredHostIdentity } from '@/services/hostIdentityService';
+import { getProductSellableUnits } from '@/utils/productUnits';
 
 export type PosCheckoutSessionContext =
   | { kind: 'CASHIER' }
@@ -47,6 +51,26 @@ export interface CheckoutResult {
   items: TransactionItem[];
   payments: PosTransactionPayment[];
   warnings?: string[];
+  stockDiscrepancies?: PosStockDiscrepancy[];
+}
+
+export interface PosStockShortageDetail {
+  productId: string;
+  productName: string;
+  availableQuantity: number;
+  requestedQuantity: number;
+  shortageQuantity: number;
+  stockUnit: string;
+}
+
+export class PosStockShortageConfirmationRequiredError extends Error {
+  readonly details: PosStockShortageDetail[];
+
+  constructor(details: PosStockShortageDetail[]) {
+    super(`Konfirmasi barang fisik diperlukan untuk ${details.map((item) => item.productName).join(', ')}.`);
+    this.name = 'PosStockShortageConfirmationRequiredError';
+    this.details = details;
+  }
 }
 
 export interface RecordPosExpenseInput {
@@ -84,12 +108,15 @@ const createTransactionItems = async (
   createdAt: string,
   promoEvaluation: PromoEvaluationResult,
   lineRedeemDiscounts: number[] = [],
+  transactionItemIds: string[] = [],
+  stockProducts: Product[] = [],
 ): Promise<CreateTransactionItemsResult> => {
   const items: TransactionItem[] = [];
   const warnings: string[] = [];
 
   for (const [index, item] of cart.entries()) {
-    const transactionItemId = crypto.randomUUID();
+    const transactionItemId = transactionItemIds[index] ?? crypto.randomUUID();
+    const stockProduct = stockProducts[index] ?? item.product;
     const promoLine = promoEvaluation.lines[index];
 
     const priceBeforeDiscount =
@@ -111,14 +138,14 @@ const createTransactionItems = async (
       ? Math.round((finalSubtotal / item.quantity + Number.EPSILON) * 100) / 100
       : 0;
 
-    const unitSnapshot = createSalesUnitSnapshot(item.unit, item.product);
+    const unitSnapshot = createSalesUnitSnapshot(item.unit, stockProduct);
 
     // Quantity dikonversi ke purchase_unit / stock unit
     const quantityInStockUnit = konversiSatuanProduk(
       item.quantity,
-      item.product,
+      stockProduct,
       item.unit,
-      item.product.purchase_unit,
+      stockProduct.purchase_unit,
     );
 
     // Ambil HPP aktual berdasarkan FIFO lot
@@ -151,8 +178,8 @@ const createTransactionItems = async (
     // lalu dinormalisasi ke unit jual item
     const normalizedPurchasePrice = normalisasiHargaProduk(
       fifoResult.weightedAvgCostPerUnit,
-      item.product,
-      item.product.purchase_unit,
+      stockProduct,
+      stockProduct.purchase_unit,
       item.unit,
     );
 
@@ -328,6 +355,165 @@ const recordFinanceIncome = async (
   return financeTransactions;
 };
 
+const buildDiscrepancyOutboxItem = (
+  discrepancy: PosStockDiscrepancy,
+  createdAt: string,
+): SyncQueueItem => ({
+  id: crypto.randomUUID(),
+  entity: 'posStockDiscrepancies',
+  entity_id: discrepancy.id,
+  operation: 'create',
+  payload: discrepancy,
+  status: 'pending',
+  attempts: 0,
+  created_at: createdAt,
+  updated_at: createdAt,
+});
+
+const preparePhysicalStockDiscrepancies = async (
+  cart: CartItem[],
+  transaction: Transaction,
+  transactionItemIds: string[],
+  actor: AuthUser | null,
+  occurredAt: string,
+) => {
+  const shortageDetails: PosStockShortageDetail[] = [];
+  const plannedRows: Array<{
+    cartItem: CartItem;
+    product: Product;
+    transactionItemId: string;
+    availableQuantity: number;
+    requestedQuantity: number;
+    shortageQuantity: number;
+  }> = [];
+
+  for (const [index, cartItem] of cart.entries()) {
+    const product = await db.products.get(cartItem.product.id);
+    if (!product) throw new Error(`Produk ${cartItem.product.name} tidak ditemukan.`);
+    if (!getProductSellableUnits(product).includes(cartItem.unit)) {
+      throw new Error(`Satuan ${cartItem.unit} untuk ${product.name} sudah tidak tersedia.`);
+    }
+
+    const requestedQuantity = konversiSatuanProduk(
+      cartItem.quantity,
+      product,
+      cartItem.unit,
+      product.purchase_unit,
+    );
+    const availability = evaluateStockAvailability({
+      availableQuantity: product.stock,
+      requestedQuantity,
+    });
+
+    if (!availability.isSufficient && !cartItem.physical_stock_observation?.confirmed) {
+      shortageDetails.push({
+        productId: product.id,
+        productName: product.name,
+        availableQuantity: availability.availableQuantity,
+        requestedQuantity: availability.requestedQuantity,
+        shortageQuantity: availability.shortageQuantity,
+        stockUnit: product.purchase_unit,
+      });
+    }
+
+    plannedRows.push({
+      cartItem,
+      product,
+      transactionItemId: transactionItemIds[index]!,
+      availableQuantity: availability.availableQuantity,
+      requestedQuantity: availability.requestedQuantity,
+      shortageQuantity: availability.shortageQuantity,
+    });
+  }
+
+  if (shortageDetails.length > 0) {
+    throw new PosStockShortageConfirmationRequiredError(shortageDetails);
+  }
+
+  const discrepancies: PosStockDiscrepancy[] = [];
+  const stockMutations: StockMutation[] = [];
+  const touchedProductIds = new Set<string>();
+  const deviceId = typeof localStorage === 'undefined' ? undefined : getStoredHostIdentity() ?? undefined;
+  const deviceName = typeof navigator === 'undefined' ? undefined : navigator.userAgent;
+
+  for (const row of plannedRows) {
+    if (row.shortageQuantity <= 0) continue;
+
+    const discrepancyId = crypto.randomUUID();
+    const estimatedCost = Math.max(0, Number(row.product.purchase_price || 0));
+    const estimateSource = estimatedCost > 0 ? 'PRODUCT_PURCHASE_PRICE' as const : 'UNKNOWN' as const;
+
+    await addInventoryLot({
+      productId: row.product.id,
+      productName: row.product.name,
+      sku: row.product.sku,
+      sourceType: 'POS_PHYSICAL_STOCK_FOUND',
+      sourceId: discrepancyId,
+      sourceLineId: row.transactionItemId,
+      quantityReceived: row.shortageQuantity,
+      costPerUnit: estimatedCost,
+      costStatus: 'ESTIMATED',
+      estimateSource,
+      receivedAt: occurredAt,
+    });
+
+    await db.products.update(row.product.id, {
+      stock: row.availableQuantity + row.shortageQuantity,
+      updated_at: occurredAt,
+      sync_status: 'pending',
+      sync_error: undefined,
+    });
+    touchedProductIds.add(row.product.id);
+
+    const discrepancy: PosStockDiscrepancy = {
+      id: discrepancyId,
+      transaction_id: transaction.id,
+      transaction_number: transaction.transaction_number,
+      transaction_item_id: row.transactionItemId,
+      cashier_session_id: transaction.cashier_session_id,
+      restaurant_session_id: transaction.restaurant_session_id,
+      product_id: row.product.id,
+      product_name: row.product.name,
+      sku: row.product.sku,
+      system_quantity_snapshot: row.availableQuantity,
+      requested_quantity: row.requestedQuantity,
+      shortage_quantity: row.shortageQuantity,
+      stock_unit: row.product.purchase_unit,
+      observation: 'PHYSICAL_ITEM_PRESENT',
+      cashier_note: row.cartItem.physical_stock_observation?.note,
+      cashier_user_id: actor?.id,
+      cashier_user_name: actor?.name,
+      device_id: deviceId,
+      device_name: deviceName,
+      status: 'PENDING_REVIEW',
+      created_at: occurredAt,
+      updated_at: occurredAt,
+      sync_status: 'pending',
+    };
+    discrepancies.push(discrepancy);
+    stockMutations.push(createStockMutation({
+      product: row.product,
+      sourceType: 'POS_PHYSICAL_STOCK_FOUND',
+      sourceId: discrepancy.id,
+      sourceNumber: transaction.transaction_number,
+      sourceLineId: row.transactionItemId,
+      quantityDelta: row.shortageQuantity,
+      sourceQuantity: row.shortageQuantity,
+      sourceUnit: row.product.purchase_unit,
+      reason: 'Barang fisik dikonfirmasi tersedia di depan kasir',
+      actor,
+      occurredAt,
+    }));
+  }
+
+  return {
+    discrepancies,
+    stockMutations,
+    touchedProductIds,
+    currentProducts: plannedRows.map((row) => row.product),
+  };
+};
+
 const reduceProductStock = async (
   cart: CartItem[],
   transaction: Transaction,
@@ -352,6 +538,7 @@ const reduceProductStock = async (
 
     await db.products.update(item.product.id, {
       stock: product.stock - quantityInStockUnit,
+      updated_at: occurredAt,
       sync_status: 'pending',
       sync_error: undefined,
     });
@@ -417,6 +604,7 @@ export const checkout = async ({
   let touchedProductIds = new Set<string>();
   let financeTransactions: FinanceTransaction[] = [];
   let updatedMemberForSync: Contact | undefined;
+  let checkoutDiscrepancies: PosStockDiscrepancy[] = [];
 
   const result = await db.transaction(
     'rw',
@@ -443,6 +631,9 @@ export const checkout = async ({
       db.contacts,
       db.membershipPointTransactions,
       db.membershipSettings,
+      db.posStockDiscrepancies,
+      db.stockMutations,
+      db.syncQueue,
     ],
     async () => {
       const member = memberContactId ? await db.contacts.get(memberContactId) : undefined;
@@ -524,12 +715,24 @@ export const checkout = async ({
         sync_status: 'pending',
       };
 
+      const transactionItemIds = cart.map(() => crypto.randomUUID());
+      const discrepancyStock = await preparePhysicalStockDiscrepancies(
+        cart,
+        transaction,
+        transactionItemIds,
+        currentUser,
+        createdAt,
+      );
+      checkoutDiscrepancies = discrepancyStock.discrepancies;
+
       const { items, warnings } = await createTransactionItems(
         cart,
         transactionId,
         createdAt,
         promoEvaluation,
         membershipEvaluation.line_redeem_discounts,
+        transactionItemIds,
+        discrepancyStock.currentProducts,
       );
 
       await db.transactions.add(transaction);
@@ -585,23 +788,64 @@ export const checkout = async ({
       financeTransactions = await recordFinanceIncome(transaction, createdAt, paymentRecords, currentUser);
       await db.posTransactionPayments.bulkAdd(paymentRecords);
       await postPosSaleJournal(transaction, items, currentUser, paymentRecords);
-      ({ stockMutations, touchedProductIds } = await reduceProductStock(cart, transaction, items, currentUser, createdAt));
+      const saleStock = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
+      stockMutations = [...discrepancyStock.stockMutations, ...saleStock.stockMutations];
+      touchedProductIds = new Set([
+        ...discrepancyStock.touchedProductIds,
+        ...saleStock.touchedProductIds,
+      ]);
 
-      return { transaction, items, payments: paymentRecords, warnings };
+      if (checkoutDiscrepancies.length > 0) {
+        await db.posStockDiscrepancies.bulkAdd(checkoutDiscrepancies);
+      }
+      if (stockMutations.length > 0) {
+        await db.stockMutations.bulkPut(stockMutations);
+      }
+      const discrepancyIds = checkoutDiscrepancies.map((row) => row.id);
+      const discrepancyLots = discrepancyIds.length > 0
+        ? await db.inventoryLots.where('source_id').anyOf(discrepancyIds).toArray()
+        : [];
+      const consumptions = await db.inventoryLotConsumptions
+        .where('source_id')
+        .equals(transaction.id)
+        .toArray();
+      await db.syncQueue.bulkAdd([
+        buildTransactionBundleOutboxItem(transaction, items, 'create', createdAt),
+        ...stockMutations.map((mutation) => buildStockMutationOutboxItem(mutation, createdAt)),
+        ...checkoutDiscrepancies.map((discrepancy) => buildDiscrepancyOutboxItem(discrepancy, createdAt)),
+        ...discrepancyLots.map((lot) => buildInventoryLotOutboxItem({
+          ...lot,
+          // The remote lot starts at its received balance; the immutable
+          // consumption outbox below applies the sale exactly once.
+          quantity_remaining: lot.quantity_received,
+        }, 'create', createdAt)),
+        ...consumptions.map((consumption) => buildInventoryLotConsumptionOutboxItem(consumption, createdAt)),
+      ]);
+
+      return {
+        transaction,
+        items,
+        payments: paymentRecords,
+        warnings,
+        stockDiscrepancies: checkoutDiscrepancies,
+      };
     },
   );
 
-  await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueuePendingProductsForSync(touchedProductIds, { preserveStock: true });
   }
+  await Promise.all([
+    enqueuePendingInventoryLotsForSync(),
+    enqueuePendingInventoryLotConsumptionsForSync(),
+  ]);
   if (financeTransactions.length > 0) {
     await enqueueFinanceTransactionsSync(financeTransactions, 'create');
   }
   if (updatedMemberForSync) {
     await enqueueContactSync(updatedMemberForSync, 'update');
   }
-  await enqueueTransactionBundleSync(result.transaction, result.items, 'create');
+  void processPendingSyncQueue();
 
   return result;
 };

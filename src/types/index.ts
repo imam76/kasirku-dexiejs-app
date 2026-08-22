@@ -236,6 +236,7 @@ export type Permission =
   | 'PRODUCT_MANAGE'
   | 'PRODUCTION_MANAGE'
   | 'STOCK_OPNAME_MANAGE'
+  | 'POS_STOCK_DISCREPANCY_REVIEW'
   | 'PROMO_MANAGE'
   | 'CONTACT_MANAGE'
   | 'WAREHOUSE_MANAGE'
@@ -2495,6 +2496,7 @@ export interface ProductionOrderCost {
 
 export type StockMutationSourceType =
   | 'POS_TRANSACTION'
+  | 'POS_PHYSICAL_STOCK_FOUND'
   | 'POS_TRANSACTION_VOID'
   | 'SALES_DELIVERY'
   | 'SALES_DELIVERY_VOID'
@@ -2537,10 +2539,54 @@ export interface StockMutation {
   created_at: string;
 }
 
+export type PosStockDiscrepancyStatus =
+  | 'PENDING_REVIEW'
+  | 'REVIEWED'
+  | 'NEEDS_INVESTIGATION';
+
+export interface PosStockDiscrepancy {
+  id: string;
+  transaction_id: string;
+  transaction_number: string;
+  transaction_item_id: string;
+  cashier_session_id?: string;
+  restaurant_session_id?: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  system_quantity_snapshot: number;
+  requested_quantity: number;
+  shortage_quantity: number;
+  stock_unit: ProductUnit;
+  observation: 'PHYSICAL_ITEM_PRESENT';
+  cashier_note?: string;
+  cashier_user_id?: string;
+  cashier_user_name?: string;
+  device_id?: string;
+  device_name?: string;
+  status: PosStockDiscrepancyStatus;
+  reviewed_by?: string;
+  reviewed_by_name?: string;
+  reviewed_at?: string;
+  investigation_cause?: string;
+  investigation_note?: string;
+  stock_opname_id?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: EntitySyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
 export interface CartItem {
   product: Product;
   quantity: number;
   unit: ProductUnit; // Satuan yang dipilih (default product.selling_unit)
+  physical_stock_observation?: {
+    confirmed: true;
+    note?: string;
+  };
 }
 
 export interface BluetoothPrinterDevice {
@@ -3826,6 +3872,7 @@ export type InventoryLotSourceType =
   | 'STOCK_OPNAME'
   | 'PRODUCTION_OUTPUT'
   | 'PRODUCTION_VOID'
+  | 'POS_PHYSICAL_STOCK_FOUND'
   | 'OPENING';
 
 export type InventoryLotConsumptionSourceType =

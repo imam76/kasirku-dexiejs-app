@@ -104,6 +104,9 @@ const MasterDataProductsLazyRouteImport = createFileRoute(
 const MasterDataProductionLazyRouteImport = createFileRoute(
   '/master-data/production',
 )()
+const MasterDataPosStockDiscrepanciesLazyRouteImport = createFileRoute(
+  '/master-data/pos-stock-discrepancies',
+)()
 const MasterDataPaymentMethodsLazyRouteImport = createFileRoute(
   '/master-data/payment-methods',
 )()
@@ -593,6 +596,16 @@ const MasterDataProductionLazyRoute =
     getParentRoute: () => rootRouteImport,
   } as any).lazy(() =>
     import('./routes/master-data/production.lazy').then((d) => d.Route),
+  )
+const MasterDataPosStockDiscrepanciesLazyRoute =
+  MasterDataPosStockDiscrepanciesLazyRouteImport.update({
+    id: '/master-data/pos-stock-discrepancies',
+    path: '/master-data/pos-stock-discrepancies',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/master-data/pos-stock-discrepancies.lazy').then(
+      (d) => d.Route,
+    ),
   )
 const MasterDataPaymentMethodsLazyRoute =
   MasterDataPaymentMethodsLazyRouteImport.update({
@@ -1375,6 +1388,7 @@ export interface FileRoutesByFullPath {
   '/master-data/employees': typeof MasterDataEmployeesLazyRoute
   '/master-data/fixed-assets': typeof MasterDataFixedAssetsLazyRoute
   '/master-data/payment-methods': typeof MasterDataPaymentMethodsLazyRoute
+  '/master-data/pos-stock-discrepancies': typeof MasterDataPosStockDiscrepanciesLazyRoute
   '/master-data/production': typeof MasterDataProductionLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
@@ -1511,6 +1525,7 @@ export interface FileRoutesByTo {
   '/master-data/employees': typeof MasterDataEmployeesLazyRoute
   '/master-data/fixed-assets': typeof MasterDataFixedAssetsLazyRoute
   '/master-data/payment-methods': typeof MasterDataPaymentMethodsLazyRoute
+  '/master-data/pos-stock-discrepancies': typeof MasterDataPosStockDiscrepanciesLazyRoute
   '/master-data/production': typeof MasterDataProductionLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
@@ -1648,6 +1663,7 @@ export interface FileRoutesById {
   '/master-data/employees': typeof MasterDataEmployeesLazyRoute
   '/master-data/fixed-assets': typeof MasterDataFixedAssetsLazyRoute
   '/master-data/payment-methods': typeof MasterDataPaymentMethodsLazyRoute
+  '/master-data/pos-stock-discrepancies': typeof MasterDataPosStockDiscrepanciesLazyRoute
   '/master-data/production': typeof MasterDataProductionLazyRoute
   '/master-data/products': typeof MasterDataProductsLazyRoute
   '/master-data/projects': typeof MasterDataProjectsLazyRoute
@@ -1786,6 +1802,7 @@ export interface FileRouteTypes {
     | '/master-data/employees'
     | '/master-data/fixed-assets'
     | '/master-data/payment-methods'
+    | '/master-data/pos-stock-discrepancies'
     | '/master-data/production'
     | '/master-data/products'
     | '/master-data/projects'
@@ -1922,6 +1939,7 @@ export interface FileRouteTypes {
     | '/master-data/employees'
     | '/master-data/fixed-assets'
     | '/master-data/payment-methods'
+    | '/master-data/pos-stock-discrepancies'
     | '/master-data/production'
     | '/master-data/products'
     | '/master-data/projects'
@@ -2058,6 +2076,7 @@ export interface FileRouteTypes {
     | '/master-data/employees'
     | '/master-data/fixed-assets'
     | '/master-data/payment-methods'
+    | '/master-data/pos-stock-discrepancies'
     | '/master-data/production'
     | '/master-data/products'
     | '/master-data/projects'
@@ -2195,6 +2214,7 @@ export interface RootRouteChildren {
   MasterDataEmployeesLazyRoute: typeof MasterDataEmployeesLazyRoute
   MasterDataFixedAssetsLazyRoute: typeof MasterDataFixedAssetsLazyRoute
   MasterDataPaymentMethodsLazyRoute: typeof MasterDataPaymentMethodsLazyRoute
+  MasterDataPosStockDiscrepanciesLazyRoute: typeof MasterDataPosStockDiscrepanciesLazyRoute
   MasterDataProductionLazyRoute: typeof MasterDataProductionLazyRoute
   MasterDataProductsLazyRoute: typeof MasterDataProductsLazyRoute
   MasterDataProjectsLazyRoute: typeof MasterDataProjectsLazyRoute
@@ -2576,6 +2596,13 @@ declare module '@tanstack/react-router' {
       path: '/master-data/production'
       fullPath: '/master-data/production'
       preLoaderRoute: typeof MasterDataProductionLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/master-data/pos-stock-discrepancies': {
+      id: '/master-data/pos-stock-discrepancies'
+      path: '/master-data/pos-stock-discrepancies'
+      fullPath: '/master-data/pos-stock-discrepancies'
+      preLoaderRoute: typeof MasterDataPosStockDiscrepanciesLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/master-data/payment-methods': {
@@ -3355,6 +3382,8 @@ const rootRouteChildren: RootRouteChildren = {
   MasterDataEmployeesLazyRoute: MasterDataEmployeesLazyRoute,
   MasterDataFixedAssetsLazyRoute: MasterDataFixedAssetsLazyRoute,
   MasterDataPaymentMethodsLazyRoute: MasterDataPaymentMethodsLazyRoute,
+  MasterDataPosStockDiscrepanciesLazyRoute:
+    MasterDataPosStockDiscrepanciesLazyRoute,
   MasterDataProductionLazyRoute: MasterDataProductionLazyRoute,
   MasterDataProductsLazyRoute: MasterDataProductsLazyRoute,
   MasterDataProjectsLazyRoute: MasterDataProjectsLazyRoute,

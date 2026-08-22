@@ -43,6 +43,7 @@ function MasterData() {
     { to: '/master-data/products', label: t('nav.product'), icon: ProductOutlined, color: 'text-green-600', desc: t('home.menu.stockDesc'), tour: 'dashboard-stock' },
     { to: '/master-data/production', label: t('nav.production'), icon: ExperimentOutlined, color: 'text-purple-600', desc: t('home.productionDesc') },
     { to: '/master-data/stock-opname', label: t('nav.stockOpname'), icon: ProductOutlined, color: 'text-blue-600', desc: t('home.stockOpnameDesc') },
+    { to: '/master-data/pos-stock-discrepancies', label: 'Review Selisih Stok POS', icon: ProductOutlined, color: 'text-amber-600', desc: 'Tinjau barang fisik yang ditemukan saat stok sistem tidak cukup.' },
     { to: '/master-data/promos', label: t('nav.promos'), icon: DollarOutlined, color: 'text-rose-600', desc: t('home.promosDesc') },
     { to: '/master-data/contacts', label: t('nav.contacts'), icon: ContactsOutlined, color: 'text-amber-600', desc: t('home.contactsDesc') },
     { to: '/master-data/warehouses', label: t('nav.warehouses'), icon: ShopOutlined, color: 'text-teal-600', desc: t('home.warehousesDesc') },

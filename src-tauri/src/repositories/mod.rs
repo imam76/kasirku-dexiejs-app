@@ -26,6 +26,7 @@ pub mod marketplace_repository;
 pub mod opening_balance_repository;
 pub mod payment_method_repository;
 pub mod payroll_repository;
+pub mod pos_stock_discrepancy_repository;
 pub mod product_repository;
 pub mod production_order_repository;
 pub mod project_repository;

@@ -43,6 +43,7 @@ import {
 import { refreshJournalEntriesFromPostgres } from '@/services/journalEntryReadService';
 import { refreshOpeningBalancesFromPostgres } from '@/services/openingBalanceReadService';
 import { refreshPaymentMethodsFromPostgres } from '@/services/paymentMethodReadService';
+import { refreshPosStockDiscrepanciesFromPostgres } from '@/services/posStockDiscrepancyReadService';
 import { refreshEmployeeCashAdvancesFromPostgres, refreshPayrollRunsFromPostgres } from '@/services/payrollReadService';
 import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
@@ -218,6 +219,10 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
   cashier_sessions: { refreshFns: [refreshCashierSessionsFromPostgres], queryKeys: CASHIER_QUERY_KEYS },
   pos_transactions: { refreshFns: [refreshTransactionsFromPostgres], queryKeys: TRANSACTION_QUERY_KEYS },
   pos_transaction_items: { refreshFns: [refreshTransactionsFromPostgres], queryKeys: TRANSACTION_QUERY_KEYS },
+  pos_stock_discrepancies: {
+    refreshFns: [refreshPosStockDiscrepanciesFromPostgres],
+    queryKeys: [...CASHIER_QUERY_KEYS, 'posStockDiscrepancies'],
+  },
 
   // Cooperative
   cooperative_areas: { refreshFns: [refreshCooperativeAreasFromPostgres], queryKeys: COOPERATIVE_QUERY_KEYS },

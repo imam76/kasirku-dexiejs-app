@@ -23,6 +23,7 @@ pub mod marketplace;
 pub mod opening_balance;
 pub mod payment_method;
 pub mod payroll;
+pub mod pos_stock_discrepancy;
 pub mod product;
 pub mod production_order;
 pub mod project;

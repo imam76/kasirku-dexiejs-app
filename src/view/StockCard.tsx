@@ -18,6 +18,7 @@ const sourceTypeLabels: Record<string, string> = {
   STOCK_PURCHASE: 'Pembelian Stok',
   POS_SALE: 'Penjualan (POS)',
   POS_VOID: 'Batal Penjualan (POS)',
+  POS_PHYSICAL_STOCK_FOUND: 'Barang Fisik Ditemukan di POS',
   PURCHASE_RECEIPT: 'Penerimaan Pembelian',
   PURCHASE_RECEIPT_VOID: 'Batal Penerimaan',
   PURCHASE_INVOICE: 'Invoice Pembelian Langsung',

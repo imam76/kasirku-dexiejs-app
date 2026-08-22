@@ -109,6 +109,25 @@ export const getStockCard = async (productId: string, startDate: Date, endDate: 
     });
   }
 
+  // 2b. Physical stock observed by a cashier. This is a real stock-in event,
+  // separate from the sale below, so the running balance remains auditable.
+  const posDiscrepancies = await db.posStockDiscrepancies
+    .where('product_id')
+    .equals(productId)
+    .toArray();
+  for (const discrepancy of posDiscrepancies) {
+    if (discrepancy.shortage_quantity <= 0) continue;
+    allMutations.push({
+      id: `pos_physical_stock_found_${discrepancy.id}`,
+      date: discrepancy.created_at,
+      sourceType: 'POS_PHYSICAL_STOCK_FOUND',
+      sourceNumber: discrepancy.transaction_number,
+      qtyIn: discrepancy.shortage_quantity,
+      qtyOut: 0,
+      unit: discrepancy.stock_unit,
+    });
+  }
+
   // 3. POS Transactions
   const transactionItems = await db.transactionItems.where('product_id').equals(productId).toArray();
   const transactionMap = toEntityMap(await db.transactions.bulkGet(uniqueIds(transactionItems.map((item) => item.transaction_id))));

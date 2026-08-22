@@ -38,6 +38,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/products': 'PRODUCT_MANAGE',
   '/master-data/production': 'PRODUCTION_MANAGE',
   '/master-data/stock-opname': 'STOCK_OPNAME_MANAGE',
+  '/master-data/pos-stock-discrepancies': 'POS_STOCK_DISCREPANCY_REVIEW',
   '/master-data/units': 'UNIT_MANAGE',
   '/master-data/promos': 'PROMO_MANAGE',
   '/master-data/contacts': 'CONTACT_MANAGE',

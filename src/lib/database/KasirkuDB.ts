@@ -110,6 +110,7 @@ import type {
   CollectionCoverageException,
   ImplementationReviewItem,
   StockMutation,
+  PosStockDiscrepancy,
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
@@ -225,6 +226,7 @@ export class KasirkuDB extends Dexie {
   collectionCoverageExceptions!: Table<CollectionCoverageException>;
   implementationReviewQueue!: Table<ImplementationReviewItem>;
   stockMutations!: Table<StockMutation>;
+  posStockDiscrepancies!: Table<PosStockDiscrepancy>;
 
   constructor() {
     super('KasirkuDB');
