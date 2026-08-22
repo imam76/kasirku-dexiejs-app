@@ -66,6 +66,10 @@ export const restaurantPosMessages = {
     'restaurantPos.cancelOrderTitle': 'Batalkan pesanan?',
     'restaurantPos.cancelOrderConfirm': 'Pesanan {order} akan dibatalkan dan meja akan tersedia kembali.',
     'restaurantPos.cancelOrderSuccess': 'Pesanan dibatalkan dan meja tersedia kembali.',
+    'restaurantPos.holdAndNew': 'Tahan & Antrian Baru',
+    'restaurantPos.counterDrafts': 'Draft Counter',
+    'restaurantPos.noCounterDrafts': 'Belum ada draft counter.',
+    'restaurantPos.draftHeld': '{order} ditahan. Silakan input antrian berikutnya.',
 
     'restaurantSession.openTitle': 'Buka Resto',
     'restaurantSession.openDescription': 'Buka sesi Resto sebelum mulai menerima pesanan.',
@@ -157,6 +161,10 @@ export const restaurantPosMessages = {
     'restaurantPos.cancelOrderTitle': 'Cancel order?',
     'restaurantPos.cancelOrderConfirm': 'Order {order} will be cancelled and the table will become available.',
     'restaurantPos.cancelOrderSuccess': 'Order cancelled and table released.',
+    'restaurantPos.holdAndNew': 'Hold & New Queue',
+    'restaurantPos.counterDrafts': 'Counter Drafts',
+    'restaurantPos.noCounterDrafts': 'There are no counter drafts.',
+    'restaurantPos.draftHeld': '{order} was held. You can enter the next queue.',
 
     'restaurantSession.openTitle': 'Open Restaurant',
     'restaurantSession.openDescription': 'Open a restaurant session before accepting orders.',

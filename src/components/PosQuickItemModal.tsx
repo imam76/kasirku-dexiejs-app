@@ -177,6 +177,7 @@ const QuickItemEditForm = ({
       setIsModalOpen={() => {}}
       onCancel={onCancel}
       onSave={handleSave}
+      autoFocusField="sellingPrice"
     />
   );
 };

@@ -7,6 +7,7 @@ import {
   ReceiptPrintStatus,
   TransactionReceiptInput,
 } from '@/types';
+import { enqueueTransactionBundleSync } from '@/services/syncQueueService';
 import {
   getStoredBluetoothPrinter,
   normalizePrinterError,
@@ -34,11 +35,21 @@ const updateReceiptStatus = async (
   error?: string
 ) => {
   try {
+    const now = new Date().toISOString();
     await db.transactions.update(transactionId, {
       receipt_status: status,
-      receipt_printed_at: status === 'printed' ? new Date().toISOString() : undefined,
+      receipt_printed_at: status === 'printed' ? now : undefined,
       receipt_print_error: error || '',
+      updated_at: now,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
+
+    const transaction = await db.transactions.get(transactionId);
+    if (transaction) {
+      const items = await db.transactionItems.where('transaction_id').equals(transactionId).toArray();
+      await enqueueTransactionBundleSync(transaction, items, 'update');
+    }
   } catch (dbError) {
     console.error('Failed to update receipt print status:', dbError);
   }

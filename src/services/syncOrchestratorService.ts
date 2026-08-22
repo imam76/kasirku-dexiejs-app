@@ -42,8 +42,10 @@ import {
   refreshInventoryLotConsumptionsFromPostgres,
   refreshInventoryLotsFromPostgres,
 } from '@/services/inventoryLotReadService';
+import { refreshPromosFromPostgres } from '@/services/promoReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
 import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadService';
+import { refreshTransactionsFromPostgres } from '@/services/transactionReadService';
 import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import {
@@ -78,7 +80,9 @@ import {
   enqueuePendingInventoryLotsForSync,
   enqueuePendingInventoryLotConsumptionsForSync,
   enqueuePendingProductsForSync,
+  enqueuePendingPromosForSync,
   enqueuePendingTaxesForSync,
+  enqueuePendingTransactionsForSync,
   processPendingSyncQueue,
   recoverStaleProcessingSyncQueueItems,
   retryFailedSyncQueueItems,
@@ -120,6 +124,8 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingPurchaseDocumentsForSync();
   await enqueuePendingPurchaseCostReconciliationsForSync();
   await enqueuePendingSalesDocumentsForSync();
+  await enqueuePendingTransactionsForSync();
+  await enqueuePendingPromosForSync();
   await enqueuePendingStockOpnamesForSync();
   await enqueuePendingFixedAssetsForSync();
   await enqueuePendingFixedAssetRunsForSync();
@@ -185,6 +191,8 @@ export const refreshAllDataFromPostgres = async () => {
     purchaseDocuments: await refreshPurchaseDocumentsFromPostgres(),
     purchaseCostReconciliations: await refreshPurchaseCostReconciliationsFromPostgres(),
     salesDocuments: await refreshSalesDocumentsFromPostgres(),
+    transactions: await refreshTransactionsFromPostgres(),
+    promos: await refreshPromosFromPostgres(),
     stockOpnames: await refreshStockOpnamesFromPostgres(),
     stockMutations: await refreshStockMutationsFromPostgres(),
     inventoryLots: await refreshInventoryLotsFromPostgres(),

@@ -153,12 +153,18 @@ test('POS regular supports the one-hand numpad item flow', async ({ page }) => {
   await expect(paymentAmount).toBeFocused();
 
   await page.getByRole('button', { name: 'Batal', exact: true }).click();
+  // Menutup sesi kasir diblokir selama keranjang masih berisi item, jadi
+  // menekan "Tutup Kasir" di sini membuka dialog peringatan "Masih ada
+  // transaksi belum selesai" (bukan dialog Tutup Kasir yang sesungguhnya).
+  // Dialog ini tetap dirender lewat antd Modal (.ant-modal-wrap), jadi tetap
+  // sah untuk memverifikasi shortcut numpad diam saat ada modal blocker aktif
+  // sekaligus menjaga item keranjang agar unitSelect masih bisa diperiksa.
   await page.getByRole('button', { name: 'Tutup Kasir', exact: true }).click();
-  const closeCashierDialog = page.getByRole('dialog', { name: 'Tutup Kasir' });
-  await expect(closeCashierDialog).toBeVisible();
+  const closeBlockedDialog = page.getByRole('dialog', { name: 'Masih ada transaksi belum selesai' });
+  await expect(closeBlockedDialog).toBeVisible();
   await dispatchNumpadKey(page, 'NumpadAdd', '+');
   await expect(unitSelect).toContainText('pcs');
-  await closeCashierDialog.getByRole('button', { name: 'Batal', exact: true }).click();
+  await closeBlockedDialog.getByRole('button', { name: 'OK', exact: true }).click();
 });
 
 test('USB keyboard-wedge scans increment qty without adding another cart line', async ({ page }) => {
@@ -189,4 +195,29 @@ test('USB keyboard-wedge scans increment qty without adding another cart line', 
   await expect(search).toHaveValue('');
   await expect(cartItems).toHaveCount(1);
   await expect(quantityInput).toHaveValue('2');
+});
+
+test('F6 holds the active transaction and Shift+F6 opens the draft list', async ({ page }) => {
+  await preparePosKeyboardFixture(page);
+
+  const search = page.getByPlaceholder('Cari produk (nama atau SKU)...');
+  await search.fill('POS-BOX');
+  await search.press('Enter');
+  await expect(page.locator(`[data-pos-cart-item-id="${PRODUCT_WITH_UNITS_ID}"]:visible`)).toBeVisible();
+
+  await page.keyboard.press('F6');
+  const holdDialog = page.getByRole('dialog', { name: 'Tahan transaksi ini?' });
+  await expect(holdDialog).toBeVisible();
+  const labelInput = holdDialog.getByPlaceholder('Contoh: Queue XXX / Budi');
+  await labelInput.fill('Queue Shortcut');
+  await labelInput.press('Enter');
+
+  await expect(holdDialog).toBeHidden();
+  await expect(page.locator(`[data-pos-cart-item-id="${PRODUCT_WITH_UNITS_ID}"]:visible`)).toHaveCount(0);
+  await page.keyboard.press('Shift+F6');
+
+  const draftDialog = page.getByRole('dialog', { name: 'Draft (1)' });
+  await expect(draftDialog.getByText('Queue Shortcut')).toBeVisible();
+  await draftDialog.getByRole('button', { name: 'Buka', exact: true }).click();
+  await expect(page.locator(`[data-pos-cart-item-id="${PRODUCT_WITH_UNITS_ID}"]:visible`)).toBeVisible();
 });

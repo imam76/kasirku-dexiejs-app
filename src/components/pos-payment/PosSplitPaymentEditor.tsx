@@ -106,6 +106,34 @@ export default function PosSplitPaymentEditor({
     preventDefault: true,
   }, [canAdd, isDialog, onAdd]);
 
+  const validPaymentMethods = methods.filter((item) => item.isValid);
+
+  // Sengaja TANPA enableOnFormTags: begitu fokus pindah ke kolom nominal
+  // (InputNumber), react-hotkeys-hook otomatis diam supaya mengetik angka
+  // nominal tidak malah memilih ulang metode pembayaran. Baris yang dipilih
+  // shortcut ini selalu baris TERAKHIR (paling relevan sesudah F9 menambah
+  // baris split baru).
+  useHotkeys(['1', '2', '3', '4', '5', '6', '7', '8', '9'], (event) => {
+    const targetDraft = drafts[drafts.length - 1];
+    if (!targetDraft) return;
+
+    const method = validPaymentMethods[Number(event.key) - 1]?.method;
+    if (!method) return;
+
+    const usedByAnotherDraft = drafts.some((draft) => (
+      draft.clientId !== targetDraft.clientId && draft.paymentMethodId === method.id
+    ));
+    if (usedByAnotherDraft) return;
+
+    onUpdate(targetDraft.clientId, {
+      paymentMethodId: method.id,
+      reference: method.requires_reference ? targetDraft.reference : '',
+    });
+  }, {
+    enabled: isDialog,
+    preventDefault: true,
+  }, [drafts, isDialog, onUpdate, validPaymentMethods]);
+
   const handleRecordExpense = async () => {
     if (!onRecordExpense || isRecordingExpense) return;
     setIsRecordingExpense(true);
@@ -179,11 +207,12 @@ export default function PosSplitPaymentEditor({
             </div>
             {isDialog ? (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {methods.filter((item) => item.isValid).map((item) => {
+                {validPaymentMethods.map((item, methodIndex) => {
                   const paymentMethod = item.method;
                   const Icon = getMethodIcon(paymentMethod.category);
                   const active = paymentMethod.id === draft.paymentMethodId;
                   const usedByAnotherPayment = selectedIds.has(paymentMethod.id) && !active;
+                  const isLastDraft = index === drafts.length - 1;
                   return (
                     <button
                       key={paymentMethod.id}
@@ -200,7 +229,12 @@ export default function PosSplitPaymentEditor({
                       <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
                         <Icon size={14} />
                       </span>
-                      <span className="min-w-0 truncate text-xs font-black text-slate-900">{paymentMethod.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs font-black text-slate-900">{paymentMethod.name}</span>
+                      {isLastDraft && methodIndex < 9 && (
+                        <kbd className="ml-auto hidden shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-slate-500 sm:inline-block">
+                          {methodIndex + 1}
+                        </kbd>
+                      )}
                     </button>
                   );
                 })}
@@ -244,6 +278,7 @@ export default function PosSplitPaymentEditor({
               <div className="mt-3 space-y-1.5">
                 <label className="block text-sm font-bold text-slate-700">{t('payment.amountPlaceholder')}</label>
                 <InputNumber<number>
+                  data-testid={`pos-payment-amount-${index}`}
                   min={0}
                   value={draft.amount === '' ? null : Number(draft.amount)}
                   prefix="Rp"

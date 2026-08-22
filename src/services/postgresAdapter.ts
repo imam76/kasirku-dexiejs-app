@@ -33,14 +33,20 @@ import type {
   OpeningBalanceBatchStatus,
   OpeningBalanceLineSettlementStatus,
   OpeningBalanceModule,
+  AppliedPromoSnapshot,
   PaymentMethod,
   PaymentMethodCategory,
   PayrollRunStatus,
   Permission,
+  PosPaymentMode,
+  ProductCategory,
   ProductUnit,
   ProductType,
   ProductUnitMappingInput,
+  PromoAppliesTo,
   PromoType,
+  ReceiptPrintStatus,
+  TransactionStatus,
   ProductionOrderStatus,
   CurrencyRateBasis,
   CurrencyRateSource,
@@ -629,6 +635,109 @@ export interface RemoteContactDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+}
+
+export interface RemotePromoDto {
+  id: string;
+  name: string;
+  type: PromoType;
+  value: number;
+  applies_to: PromoAppliesTo;
+  product_ids?: string[] | null;
+  categories?: ProductCategory[] | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  min_qty?: number | null;
+  min_total?: number | null;
+  voucher_code?: string | null;
+  active: boolean;
+  priority: number;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteTransactionDto {
+  id: string;
+  transaction_number: string;
+  business_type?: string | null;
+  cashier_session_id?: string | null;
+  cashier_session_number?: string | null;
+  restaurant_session_id?: string | null;
+  restaurant_session_number?: string | null;
+  restaurant_order_id?: string | null;
+  cashier_user_id?: string | null;
+  cashier_user_name?: string | null;
+  member_contact_id?: string | null;
+  member_number?: string | null;
+  member_name?: string | null;
+  member_phone?: string | null;
+  membership_points_earned?: number | null;
+  membership_points_redeemed?: number | null;
+  membership_point_discount_amount?: number | null;
+  membership_points_balance_after?: number | null;
+  subtotal_amount?: number | null;
+  discount_amount?: number | null;
+  discount_breakdown?: Array<{ label: string; amount: number }> | null;
+  applied_promos_snapshot?: AppliedPromoSnapshot[] | null;
+  total_amount: number;
+  payment_amount: number;
+  change_amount: number;
+  payment_mode?: PosPaymentMode | null;
+  payment_method: PaymentMethod;
+  payment_method_id?: string | null;
+  payment_method_code?: string | null;
+  payment_method_name?: string | null;
+  payment_method_category?: PaymentMethodCategory | null;
+  payment_reference?: string | null;
+  payment_posting_account_id?: string | null;
+  payment_posting_account_code?: string | null;
+  payment_posting_account_name?: string | null;
+  status?: TransactionStatus | null;
+  voided_at?: string | null;
+  void_reason?: string | null;
+  receipt_status?: ReceiptPrintStatus | null;
+  receipt_printed_at?: string | null;
+  receipt_print_error?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteTransactionItemDto {
+  id: string;
+  transaction_id: string;
+  product_id: string;
+  product_name: string;
+  price: number;
+  selling_price?: number | null;
+  original_price?: number | null;
+  is_price_edited?: boolean | null;
+  price_edited_by?: string | null;
+  price_edited_at?: string | null;
+  purchase_price: number;
+  quantity: number;
+  unit: ProductUnit;
+  unit_id?: ProductUnit | null;
+  unit_label?: string | null;
+  unit_category?: string | null;
+  conversion_value?: number | null;
+  base_unit?: ProductUnit | null;
+  price_before_discount?: number | null;
+  subtotal_before_discount?: number | null;
+  discount_amount?: number | null;
+  subtotal: number;
+  profit: number;
+  hpp_status?: PurchaseCostStatus | null;
+  hpp_reconciled_at?: string | null;
+  hpp_variance_amount?: number | null;
+  profit_status?: string | null;
+  created_at: string;
+}
+
+export interface RemoteTransactionBundleDto {
+  transaction: RemoteTransactionDto;
+  items: RemoteTransactionItemDto[];
 }
 
 export interface RemoteWarehouseDto {
@@ -2557,6 +2666,31 @@ export const contactPostgresAdapter = {
   },
 };
 
+export const promoPostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemotePromoDto[]>('postgres_list_promos', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePromoDto | null>('postgres_get_promo', { id });
+  },
+
+  async upsert(input: RemotePromoDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePromoDto>('postgres_upsert_promo', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemotePromoDto | null>('postgres_delete_promo', { id });
+  },
+};
+
 export const warehousePostgresAdapter = {
   async list() {
     if (!isTauriRuntime()) return [];
@@ -2786,6 +2920,26 @@ export const salesDocumentPostgresAdapter = {
   async upsert(input: RemoteSalesDocumentBundleDto) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteSalesDocumentBundleDto>('postgres_upsert_sales_document_bundle', { input });
+  },
+};
+
+export const transactionPostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteTransactionBundleDto[]>('postgres_list_transaction_bundles', {
+      updatedAfter: options.updatedAfter,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteTransactionBundleDto | null>('postgres_get_transaction_bundle', { id });
+  },
+
+  async upsert(input: RemoteTransactionBundleDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteTransactionBundleDto>('postgres_upsert_transaction_bundle', { input });
   },
 };
 

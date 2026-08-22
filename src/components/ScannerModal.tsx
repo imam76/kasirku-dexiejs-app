@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { useScanner } from '@/hooks/useScanner';
 import { useI18n } from '@/hooks/useI18n';
 
@@ -22,6 +23,11 @@ export default function ScannerModal({ onClose, onScan }: ScannerModalProps) {
     setScannerOpen(true);
     return () => setScannerOpen(false);
   }, [setScannerOpen]);
+
+  // F7 membuka modal ini dari keyboard, tapi sebelumnya menutupnya wajib klik
+  // mouse (tombol X/Tutup atau backdrop) karena listener Escape global di
+  // Transaction.tsx sengaja diam selagi scannerOpen. Tambal di sini saja.
+  useHotkeys('escape', onClose, { enableOnFormTags: true, preventDefault: true }, [onClose]);
 
   return (
     <div className="fixed inset-0 z-[60]">

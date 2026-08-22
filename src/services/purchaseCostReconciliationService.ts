@@ -1,7 +1,7 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import { postPurchaseCostReconciliationJournal } from '@/services/generalLedgerService';
-import { enqueuePurchaseCostReconciliationBundleSync, enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
+import { enqueuePurchaseCostReconciliationBundleSync, enqueuePurchaseDocumentBundleSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
 import type {
   InventoryLot,
   InventoryLotConsumption,
@@ -162,6 +162,7 @@ const rebuildTransactionItemCosts = async (
 ) => {
   let totalProfitDelta = 0;
   const affectedExpenseTransactionIds = new Set<string>();
+  const affectedTransactionIds = new Set<string>();
 
   for (const transactionItemId of transactionItemIds) {
     const item = await db.transactionItems.get(transactionItemId);
@@ -227,6 +228,7 @@ const rebuildTransactionItemCosts = async (
       hpp_variance_amount: roundCurrency(finalTotalCostRounded - oldTotalCost),
       hpp_reconciled_at: reconciledAt,
     } satisfies Partial<TransactionItem>);
+    affectedTransactionIds.add(item.transaction_id);
     if (isExpense) affectedExpenseTransactionIds.add(item.transaction_id);
   }
 
@@ -236,10 +238,22 @@ const rebuildTransactionItemCosts = async (
     await db.transactions.update(transactionId, {
       subtotal_amount: totalExpense,
       total_amount: totalExpense,
+      updated_at: reconciledAt,
+      sync_status: 'pending',
+      sync_error: undefined,
     });
   }
 
-  return roundCurrency(totalProfitDelta);
+  for (const transactionId of affectedTransactionIds) {
+    if (affectedExpenseTransactionIds.has(transactionId)) continue;
+    await db.transactions.update(transactionId, {
+      updated_at: reconciledAt,
+      sync_status: 'pending',
+      sync_error: undefined,
+    });
+  }
+
+  return { totalProfitDelta: roundCurrency(totalProfitDelta), affectedTransactionIds };
 };
 
 export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseReceiptCostInput) => {
@@ -257,6 +271,7 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
   const supplierTaxAmount = Number(input.supplierTaxAmount || 0);
   let updatedDocument: PurchaseDocument | undefined;
   let updatedItems: PurchaseDocumentItem[] = [];
+  let reconciledTransactionIds: Set<string> = new Set();
 
   const result = await db.transaction(
     'rw',
@@ -460,7 +475,8 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
         });
       }
 
-      const totalProfitDelta = await rebuildTransactionItemCosts(impactedTransactionItemIds, finalCostByLotId, now);
+      const { totalProfitDelta, affectedTransactionIds } = await rebuildTransactionItemCosts(impactedTransactionItemIds, finalCostByLotId, now);
+      reconciledTransactionIds = affectedTransactionIds;
       if (totalProfitDelta !== 0) {
         const currentProfitBalance = await db.profitBalance.get('current');
         const nextProfitBalance = roundCurrency((currentProfitBalance?.amount || 0) + totalProfitDelta);
@@ -564,6 +580,13 @@ export const reconcilePurchaseReceiptCost = async (input: ReconcilePurchaseRecei
   }
 
   await enqueuePurchaseCostReconciliationBundleSync(result.reconciliation, result.items);
+
+  for (const transactionId of reconciledTransactionIds) {
+    const transaction = await db.transactions.get(transactionId);
+    if (!transaction) continue;
+    const items = await db.transactionItems.where('transaction_id').equals(transactionId).toArray();
+    await enqueueTransactionBundleSync(transaction, items, 'update');
+  }
 
   return result;
 };

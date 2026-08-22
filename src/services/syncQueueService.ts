@@ -5,6 +5,8 @@ import {
   mergeRemoteRolesIntoDexie,
 } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
+import { mergeRemotePromosIntoDexie } from '@/services/promoReadService';
+import { mergeRemoteTransactionBundlesIntoDexie } from '@/services/transactionReadService';
 import {
   mergeRemoteCooperativeAreasIntoDexie,
 } from '@/services/cooperativeAreaReadService';
@@ -101,6 +103,7 @@ import {
   postgresAdapter,
   productPostgresAdapter,
   productionOrderPostgresAdapter,
+  promoPostgresAdapter,
   purchaseDocumentPostgresAdapter,
   purchaseCostReconciliationPostgresAdapter,
   projectPostgresAdapter,
@@ -113,6 +116,7 @@ import {
   stockOpnamePostgresAdapter,
   stockMutationPostgresAdapter,
   taxPostgresAdapter,
+  transactionPostgresAdapter,
   warehousePostgresAdapter,
   workforcePostgresAdapter,
   type RemoteAccountingFiscalYearDto,
@@ -176,6 +180,7 @@ import {
   type RemotePurchaseCostReconciliationDto,
   type RemotePurchaseCostReconciliationItemDto,
   type RemoteProjectDto,
+  type RemotePromoDto,
   type RemoteFixedAssetDto,
   type RemoteFixedAssetDepreciationRunBundleDto,
   type RemoteRoleDto,
@@ -191,6 +196,9 @@ import {
   type RemoteStockOpnameItemDto,
   type RemoteStockMutationDto,
   type RemoteTaxDto,
+  type RemoteTransactionBundleDto,
+  type RemoteTransactionDto,
+  type RemoteTransactionItemDto,
   type RemoteWarehouseDto,
 } from '@/services/postgresAdapter';
 import { mergeRemoteCashBankReconciliationsIntoDexie } from '@/services/cashBankReconciliationReadService';
@@ -200,7 +208,7 @@ import {
   mergeRemoteAccountingFiscalYearsIntoDexie,
   mergeRemoteFiscalYearClosingRunsIntoDexie,
 } from '@/services/fiscalYearReadService';
-import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
+import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
 import type { InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem } from '@/types';
 import type { LeaveRequest } from '@/types';
@@ -254,6 +262,8 @@ const PAYROLL_RUN_ENTITY = 'payrollRuns';
 const PRODUCT_ENTITY = 'products';
 const PRODUCTION_ORDER_ENTITY = 'productionOrders';
 const PROJECT_ENTITY = 'projects';
+const PROMO_ENTITY = 'promos';
+const TRANSACTION_ENTITY = 'transactions';
 const FIXED_ASSET_ENTITY = 'fixedAssets';
 const FIXED_ASSET_DEPRECIATION_RUN_ENTITY = 'fixedAssetDepreciationRuns';
 const INVENTORY_LOT_ENTITY = 'inventoryLots';
@@ -413,6 +423,26 @@ const mapContactToRemoteDto = (contact: Contact): RemoteContactDto => ({
   membership_points_balance: normalizeRemoteNumber(contact.membership_points_balance),
   created_at: contact.created_at,
   updated_at: contact.updated_at,
+});
+
+const mapPromoToRemoteDto = (promo: Promo): RemotePromoDto => ({
+  id: promo.id,
+  name: promo.name,
+  type: promo.type,
+  value: promo.value,
+  applies_to: promo.applies_to,
+  product_ids: promo.product_ids,
+  categories: promo.categories,
+  start_at: promo.start_at,
+  end_at: promo.end_at,
+  min_qty: promo.min_qty,
+  min_total: promo.min_total,
+  voucher_code: promo.voucher_code,
+  active: promo.active,
+  priority: promo.priority,
+  created_by: promo.created_by,
+  created_at: promo.created_at,
+  updated_at: promo.updated_at,
 });
 
 const mapCooperativeAreaToRemoteDto = (area: CooperativeArea): RemoteCooperativeAreaDto => ({
@@ -1791,6 +1821,91 @@ const mapSalesDocumentItemToRemoteDto = (item: SalesDocumentItem): RemoteSalesDo
   created_at: item.created_at,
 });
 
+const mapTransactionToRemoteDto = (transaction: Transaction): RemoteTransactionDto => ({
+  id: transaction.id,
+  transaction_number: transaction.transaction_number,
+  business_type: transaction.business_type,
+  cashier_session_id: transaction.cashier_session_id,
+  cashier_session_number: transaction.cashier_session_number,
+  restaurant_session_id: transaction.restaurant_session_id,
+  restaurant_session_number: transaction.restaurant_session_number,
+  restaurant_order_id: transaction.restaurant_order_id,
+  cashier_user_id: transaction.cashier_user_id,
+  cashier_user_name: transaction.cashier_user_name,
+  member_contact_id: transaction.member_contact_id,
+  member_number: transaction.member_number,
+  member_name: transaction.member_name,
+  member_phone: transaction.member_phone,
+  membership_points_earned: transaction.membership_points_earned,
+  membership_points_redeemed: transaction.membership_points_redeemed,
+  membership_point_discount_amount: transaction.membership_point_discount_amount,
+  membership_points_balance_after: transaction.membership_points_balance_after,
+  subtotal_amount: transaction.subtotal_amount,
+  discount_amount: transaction.discount_amount,
+  discount_breakdown: transaction.discount_breakdown,
+  applied_promos_snapshot: transaction.applied_promos_snapshot,
+  total_amount: transaction.total_amount,
+  payment_amount: transaction.payment_amount,
+  change_amount: transaction.change_amount,
+  payment_mode: transaction.payment_mode,
+  payment_method: transaction.payment_method,
+  payment_method_id: transaction.payment_method_id,
+  payment_method_code: transaction.payment_method_code,
+  payment_method_name: transaction.payment_method_name,
+  payment_method_category: transaction.payment_method_category,
+  payment_reference: transaction.payment_reference,
+  payment_posting_account_id: transaction.payment_posting_account_id,
+  payment_posting_account_code: transaction.payment_posting_account_code,
+  payment_posting_account_name: transaction.payment_posting_account_name,
+  status: transaction.status,
+  voided_at: transaction.voided_at,
+  void_reason: transaction.void_reason,
+  receipt_status: transaction.receipt_status,
+  receipt_printed_at: transaction.receipt_printed_at,
+  receipt_print_error: transaction.receipt_print_error,
+  created_at: transaction.created_at,
+  updated_at: transaction.updated_at,
+});
+
+const mapTransactionItemToRemoteDto = (item: TransactionItem): RemoteTransactionItemDto => ({
+  id: item.id,
+  transaction_id: item.transaction_id,
+  product_id: item.product_id,
+  product_name: item.product_name,
+  price: item.price,
+  selling_price: item.selling_price,
+  original_price: item.original_price,
+  is_price_edited: item.is_price_edited,
+  price_edited_by: item.price_edited_by,
+  price_edited_at: item.price_edited_at,
+  purchase_price: item.purchase_price,
+  quantity: item.quantity,
+  unit: item.unit,
+  unit_id: item.unit_id,
+  unit_label: item.unit_label,
+  unit_category: item.unit_category,
+  conversion_value: item.conversion_value,
+  base_unit: item.base_unit,
+  price_before_discount: item.price_before_discount,
+  subtotal_before_discount: item.subtotal_before_discount,
+  discount_amount: item.discount_amount,
+  subtotal: item.subtotal,
+  profit: item.profit,
+  hpp_status: item.hpp_status,
+  hpp_reconciled_at: item.hpp_reconciled_at,
+  hpp_variance_amount: item.hpp_variance_amount,
+  profit_status: item.profit_status,
+  created_at: item.created_at,
+});
+
+const mapTransactionBundleToRemoteDto = (
+  transaction: Transaction,
+  items: TransactionItem[],
+): RemoteTransactionBundleDto => ({
+  transaction: mapTransactionToRemoteDto(transaction),
+  items: items.map(mapTransactionItemToRemoteDto),
+});
+
 const mapSalesDocumentBundleToRemoteDto = (
   document: SalesDocument,
   items: SalesDocumentItem[],
@@ -2099,6 +2214,21 @@ const isRemoteContactDto = (payload: unknown): payload is RemoteContactDto => {
     typeof candidate.name === 'string' &&
     typeof candidate.contact_type === 'string' &&
     typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemotePromoDto = (payload: unknown): payload is RemotePromoDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemotePromoDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.type === 'string' &&
+    typeof candidate.applies_to === 'string' &&
+    typeof candidate.active === 'boolean' &&
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'
   );
@@ -3148,6 +3278,50 @@ const isRemoteSalesDocumentBundleDto = (
   );
 };
 
+const isRemoteTransactionDto = (payload: unknown): payload is RemoteTransactionDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteTransactionDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.transaction_number === 'string' &&
+    typeof candidate.total_amount === 'number' &&
+    typeof candidate.payment_amount === 'number' &&
+    typeof candidate.change_amount === 'number' &&
+    typeof candidate.payment_method === 'string' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
+const isRemoteTransactionItemDto = (payload: unknown): payload is RemoteTransactionItemDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteTransactionItemDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.transaction_id === 'string' &&
+    typeof candidate.product_id === 'string' &&
+    typeof candidate.product_name === 'string' &&
+    typeof candidate.quantity === 'number' &&
+    typeof candidate.subtotal === 'number' &&
+    typeof candidate.created_at === 'string'
+  );
+};
+
+const isRemoteTransactionBundleDto = (
+  payload: unknown,
+): payload is RemoteTransactionBundleDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteTransactionBundleDto>;
+  return (
+    isRemoteTransactionDto(candidate.transaction) &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every(isRemoteTransactionItemDto)
+  );
+};
+
 const isRemotePurchaseDocumentDto = (payload: unknown): payload is RemotePurchaseDocumentDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3343,6 +3517,17 @@ const updateContactSyncMetadata = async (
   if (!currentContact || currentContact.updated_at !== sourceUpdatedAt) return;
 
   await db.contacts.update(contactId, syncMetadata);
+};
+
+const updatePromoSyncMetadata = async (
+  promoId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Promo, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentPromo = await db.promos.get(promoId);
+  if (!currentPromo || currentPromo.updated_at !== sourceUpdatedAt) return;
+
+  await db.promos.update(promoId, syncMetadata);
 };
 
 const updateCooperativeMemberSyncMetadata = async (
@@ -3781,6 +3966,17 @@ const updateSalesDocumentSyncMetadata = async (
   await db.salesDocuments.update(documentId, syncMetadata);
 };
 
+const updateTransactionSyncMetadata = async (
+  transactionId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Transaction, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentTransaction = await db.transactions.get(transactionId);
+  if (!currentTransaction || currentTransaction.updated_at !== sourceUpdatedAt) return;
+
+  await db.transactions.update(transactionId, syncMetadata);
+};
+
 const updateStockOpnameSyncMetadata = async (
   opnameId: string,
   sourceUpdatedAt: string,
@@ -3945,6 +4141,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === CONTACT_ENTITY && isRemoteContactDto(queueItem.payload)) {
     await updateContactSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === PROMO_ENTITY && isRemotePromoDto(queueItem.payload)) {
+    await updatePromoSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -4320,6 +4523,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === TRANSACTION_ENTITY && isRemoteTransactionBundleDto(queueItem.payload)) {
+    await updateTransactionSyncMetadata(queueItem.entity_id, queueItem.payload.transaction.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === STOCK_OPNAME_ENTITY && isRemoteStockOpnameBundleDto(queueItem.payload)) {
     await updateStockOpnameSyncMetadata(queueItem.entity_id, queueItem.payload.opname.updated_at, {
       sync_status: 'failed',
@@ -4414,6 +4624,18 @@ const processContactQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return contactPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processPromoQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return promoPostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemotePromoDto(queueItem.payload)) {
+    throw new Error('Payload promo sync queue tidak valid.');
+  }
+
+  return promoPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processCooperativeAreaQueueItem = async (queueItem: SyncQueueItem) => {
@@ -4874,6 +5096,18 @@ const processSalesDocumentQueueItem = async (queueItem: SyncQueueItem) => {
   return salesDocumentPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processTransactionQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Transaction sync queue tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteTransactionBundleDto(queueItem.payload)) {
+    throw new Error('Payload transaction sync queue tidak valid.');
+  }
+
+  return transactionPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processStockMutationQueueItem = async (queueItem: SyncQueueItem) => {
   if (queueItem.operation === 'delete') {
     throw new Error('Stock mutation sync queue tidak mendukung operasi delete.');
@@ -5076,6 +5310,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProductionOrderBundle: RemoteProductionOrderBundleDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
+    let remotePromo: RemotePromoDto | null = null;
     let remoteFixedAsset: RemoteFixedAssetDto | null = null;
     let remoteFixedAssetRunBundle: RemoteFixedAssetDepreciationRunBundleDto | null = null;
     let remoteInventoryLot: RemoteInventoryLotDto | null = null;
@@ -5085,6 +5320,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteRole: RemoteRoleDto | null = null;
     let remoteRolePermission: RemoteRolePermissionDto | null = null;
     let remoteSalesDocumentBundle: RemoteSalesDocumentBundleDto | null = null;
+    let remoteTransactionBundle: RemoteTransactionBundleDto | null = null;
     let remoteStockOpnameBundle: RemoteStockOpnameBundleDto | null = null;
     let remoteStockMutation: RemoteStockMutationDto | null = null;
     let remoteTax: RemoteTaxDto | null = null;
@@ -5177,6 +5413,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteProductionOrderBundle = await processProductionOrderQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
       remoteProject = await processProjectQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === PROMO_ENTITY) {
+      remotePromo = await processPromoQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FIXED_ASSET_ENTITY) {
       remoteFixedAsset = await processFixedAssetQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FIXED_ASSET_DEPRECIATION_RUN_ENTITY) {
@@ -5191,6 +5429,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteRolePermission = await processRolePermissionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === SALES_DOCUMENT_ENTITY) {
       remoteSalesDocumentBundle = await processSalesDocumentQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === TRANSACTION_ENTITY) {
+      remoteTransactionBundle = await processTransactionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === STOCK_OPNAME_ENTITY) {
       remoteStockOpnameBundle = await processStockOpnameQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === STOCK_MUTATION_ENTITY) {
@@ -5274,6 +5514,19 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         sync_error: undefined,
         last_synced_at: syncedAt,
       });
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === PROMO_ENTITY &&
+      currentQueueItem.operation === 'delete' &&
+      isRemotePromoDto(currentQueueItem.payload)
+    ) {
+      // Local promo delete is a hard delete (no local deleted_at/soft-delete row), so unlike
+      // contacts, do not merge the returned (soft-deleted) remote DTO back into Dexie here - that
+      // would resurrect the row this device just removed. Just mark the queue item synced.
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
       return;
     }
 
@@ -5464,6 +5717,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteContact.updated_at,
       });
       await mergeRemoteContactsIntoDexie([remoteContact], syncedAt);
+      return;
+    }
+
+    if (remotePromo && isRemotePromoDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updatePromoSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remotePromo.updated_at,
+      });
+      await mergeRemotePromosIntoDexie([remotePromo], syncedAt);
       return;
     }
 
@@ -6046,6 +6311,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       return;
     }
 
+    if (remoteTransactionBundle && isRemoteTransactionBundleDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateTransactionSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.transaction.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteTransactionBundle.transaction.updated_at,
+      });
+      await mergeRemoteTransactionBundlesIntoDexie([remoteTransactionBundle], syncedAt);
+      return;
+    }
+
     if (remoteStockOpnameBundle && isRemoteStockOpnameBundleDto(currentQueueItem.payload)) {
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       await updateStockOpnameSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.opname.updated_at, {
@@ -6401,6 +6678,52 @@ export const enqueuePendingContactsForSync = async () => {
 
     if (!existingQueueItem) {
       await enqueueContactSync(contact, 'update');
+    }
+  }
+};
+
+export const enqueuePromoSync = async (
+  promo: Promo,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: PROMO_ENTITY,
+    entity_id: promo.id,
+    operation,
+    payload: mapPromoToRemoteDto(promo),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingPromosForSync = async () => {
+  const promos = (await db.promos.toArray())
+    .filter((promo) => promo.sync_status === 'pending' || promo.sync_status === 'failed');
+
+  const promoQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(PROMO_ENTITY)
+    .toArray();
+
+  for (const promo of promos) {
+    const existingQueueItem = promoQueueItems.find((queueItem) => (
+      queueItem.entity_id === promo.id &&
+      queueItem.status !== 'synced' &&
+      isRemotePromoDto(queueItem.payload) &&
+      queueItem.payload.updated_at === promo.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueuePromoSync(promo, 'update');
     }
   }
 };
@@ -8303,6 +8626,30 @@ export const enqueueSalesDocumentBundleSync = async (
   return queueItem;
 };
 
+export const enqueueTransactionBundleSync = async (
+  transaction: Transaction,
+  items: TransactionItem[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: TRANSACTION_ENTITY,
+    entity_id: transaction.id,
+    operation,
+    payload: mapTransactionBundleToRemoteDto(transaction, items),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
 export const enqueueStockOpnameBundleSync = async (
   opname: StockOpname,
   items: StockOpnameItem[],
@@ -8556,6 +8903,30 @@ export const enqueuePendingSalesDocumentsForSync = async () => {
     if (!existingQueueItem) {
       const items = await db.salesDocumentItems.where('document_id').equals(document.id).toArray();
       await enqueueSalesDocumentBundleSync(document, items, 'update');
+    }
+  }
+};
+
+export const enqueuePendingTransactionsForSync = async () => {
+  const transactions = (await db.transactions.toArray())
+    .filter((transaction) => transaction.sync_status === 'pending' || transaction.sync_status === 'failed');
+
+  const transactionQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(TRANSACTION_ENTITY)
+    .toArray();
+
+  for (const transaction of transactions) {
+    const existingQueueItem = transactionQueueItems.find((queueItem) => (
+      queueItem.entity_id === transaction.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteTransactionBundleDto(queueItem.payload) &&
+      queueItem.payload.transaction.updated_at === transaction.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      const items = await db.transactionItems.where('transaction_id').equals(transaction.id).toArray();
+      await enqueueTransactionBundleSync(transaction, items, 'update');
     }
   }
 };

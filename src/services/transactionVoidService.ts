@@ -10,7 +10,7 @@ import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } fro
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { normalisasiHargaProduk } from '@/utils/pricing';
 import { recordMembershipPointTransaction } from '@/services/membershipService';
-import { enqueueContactSync, enqueuePendingProductsForSync } from '@/services/syncQueueService';
+import { enqueueContactSync, enqueuePendingProductsForSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -141,6 +141,9 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         status: 'VOIDED',
         voided_at: now,
         void_reason: normalizedReason,
+        updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
       });
 
       if (member && (
@@ -256,6 +259,12 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   }
   if (updatedMemberForSync) {
     await enqueueContactSync(updatedMemberForSync, 'update');
+  }
+
+  const voidedTransaction = await db.transactions.get(transactionId);
+  if (voidedTransaction) {
+    const voidedItems = await db.transactionItems.where('transaction_id').equals(transactionId).toArray();
+    await enqueueTransactionBundleSync(voidedTransaction, voidedItems, 'update');
   }
 
   await writeActivityLog({

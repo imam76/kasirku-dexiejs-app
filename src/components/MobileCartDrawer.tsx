@@ -135,6 +135,7 @@ export default function MobileCartDrawer({
               <CartItem
                 key={item.product.id}
                 item={item}
+                variant="mobile"
                 updateQuantity={updateQuantity}
                 updateUnit={updateUnit}
                 removeFromCart={removeFromCart}

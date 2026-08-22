@@ -10,6 +10,7 @@ import type {
   PromoType,
 } from '@/types';
 import { getCartItemPrice } from '@/utils/pricing';
+import { enqueuePromoSync } from '@/services/syncQueueService';
 
 export interface EvaluatePromoInput {
   cart: CartItem[];
@@ -362,6 +363,7 @@ export const createPromo = async (input: PromoFormInput): Promise<Promo> => {
     created_by: currentUser?.id,
     created_at: now,
     updated_at: now,
+    sync_status: 'pending',
   };
 
   await db.promos.add(promo);
@@ -372,6 +374,7 @@ export const createPromo = async (input: PromoFormInput): Promise<Promo> => {
     entity_id: promo.id,
     description: `${currentUser?.name ?? 'User'} membuat promo ${promo.name}.`,
   });
+  await enqueuePromoSync(promo, 'create');
 
   return promo;
 };
@@ -389,6 +392,8 @@ export const updatePromo = async (promoId: string, input: PromoFormInput): Promi
     ...existingPromo,
     ...sanitizePromoInput(input),
     updated_at: new Date().toISOString(),
+    sync_status: 'pending',
+    sync_error: undefined,
   };
 
   await db.promos.put(updatedPromo);
@@ -399,6 +404,7 @@ export const updatePromo = async (promoId: string, input: PromoFormInput): Promi
     entity_id: promoId,
     description: `${currentUser?.name ?? 'User'} memperbarui promo ${updatedPromo.name}.`,
   });
+  await enqueuePromoSync(updatedPromo, 'update');
 
   return updatedPromo;
 };
@@ -420,4 +426,5 @@ export const deletePromo = async (promoId: string): Promise<void> => {
     entity_id: promoId,
     description: `${currentUser?.name ?? 'User'} menghapus promo ${promo.name}.`,
   });
+  await enqueuePromoSync(promo, 'delete');
 };

@@ -1,6 +1,7 @@
 import { AutoComplete, Button, Dropdown, Input, InputNumber, Modal } from 'antd';
 import { Armchair, Banknote, CheckCircle2, ChevronDown, CreditCard, Hash, NotebookPen, Plus, QrCode, TicketPercent, Trash2, UserRound, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { useI18n } from '@/hooks/useI18n';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
@@ -142,6 +143,43 @@ export function RestaurantPaymentModal({
     })));
   };
 
+  useHotkeys('mod+enter', () => submitPayment(), {
+    enabled: open,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [isValid, loading, open, submitPayment]);
+
+  useHotkeys('f9', () => addPaymentDraft(), {
+    enabled: open,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [addPaymentDraft, canAddPayment, open]);
+
+  // Sengaja TANPA enableOnFormTags: begitu fokus ada di kolom nominal, angka
+  // harus tetap bisa diketik sebagai nominal, bukan memilih ulang metode.
+  // Baris yang dipilih shortcut ini selalu baris TERAKHIR (mengikuti pola
+  // yang sama di PosSplitPaymentEditor untuk kasir retail).
+  useHotkeys(['1', '2', '3', '4', '5', '6', '7', '8', '9'], (event) => {
+    const targetDraft = effectivePaymentDrafts[effectivePaymentDrafts.length - 1];
+    if (!targetDraft) return;
+
+    const method = validMethods[Number(event.key) - 1]?.method;
+    if (!method) return;
+
+    const usedByAnotherDraft = effectivePaymentDrafts.some((draft) => (
+      draft.clientId !== targetDraft.clientId && draft.paymentMethodId === method.id
+    ));
+    if (usedByAnotherDraft) return;
+
+    updatePaymentDraft(targetDraft.clientId, {
+      paymentMethodId: method.id,
+      reference: method.requires_reference ? targetDraft.reference : '',
+    });
+  }, {
+    enabled: open,
+    preventDefault: true,
+  }, [effectivePaymentDrafts, open, validMethods]);
+
   return (
     <Modal
       open={open}
@@ -249,11 +287,12 @@ export function RestaurantPaymentModal({
                     ) : null}
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {validMethods.map((option) => {
+                    {validMethods.map((option, methodIndex) => {
                       const method = option.method;
                       const Icon = getMethodIcon(method.category);
                       const active = method.id === draft.paymentMethodId;
                       const usedByAnotherPayment = selectedMethodIds.has(method.id) && !active;
+                      const isLastDraft = index === effectivePaymentDrafts.length - 1;
                       return (
                         <button
                           key={method.id}
@@ -267,7 +306,12 @@ export function RestaurantPaymentModal({
                           className={`flex min-h-10 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-35 ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300'}`}
                         >
                           <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}><Icon size={14} /></span>
-                          <p className="min-w-0 truncate text-xs font-black text-slate-900">{method.name}</p>
+                          <p className="min-w-0 flex-1 truncate text-xs font-black text-slate-900">{method.name}</p>
+                          {isLastDraft && methodIndex < 9 && (
+                            <kbd className="ml-auto hidden shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-slate-500 sm:inline-block">
+                              {methodIndex + 1}
+                            </kbd>
+                          )}
                         </button>
                       );
                     })}
@@ -306,6 +350,8 @@ export function RestaurantPaymentModal({
             {canAddPayment ? (
               <Button block icon={<Plus size={16} />} onClick={addPaymentDraft} className="!border-blue-200 !font-bold !text-blue-700">
                 {t('payment.add')}
+                {' '}
+                <kbd className="rounded border border-blue-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-blue-700">F9</kbd>
               </Button>
             ) : null}
           </div>
@@ -358,6 +404,9 @@ export function RestaurantPaymentModal({
                 : '!cursor-not-allowed !border-slate-300 !bg-slate-200 !text-slate-500 !shadow-none'} !min-w-0 !flex-1 !font-bold ${isDesktopViewport ? '!rounded-r-none' : ''}`}
             >
               <span className="truncate">{t('restaurantPos.confirmPayment')}</span>
+              {isDesktopViewport && (
+                <kbd className="hidden shrink-0 rounded border border-white/30 bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-white/90 sm:inline-block">Ctrl+Enter</kbd>
+              )}
             </Button>
             {isDesktopViewport ? (
               <Dropdown

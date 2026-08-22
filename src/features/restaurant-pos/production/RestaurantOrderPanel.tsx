@@ -243,6 +243,7 @@ export function RestaurantOrderPanel({
               disabled={!hasLines || !isOrderInfoComplete}
               loading={isPaying}
               onClick={onPay}
+              title={`${t('restaurantPos.pay')} · F2`}
               className="!bg-blue-600 !font-bold hover:!bg-blue-700"
             >
               {t('restaurantPos.pay')}
@@ -256,6 +257,7 @@ export function RestaurantOrderPanel({
             disabled={!hasLines || !isOrderInfoComplete}
             loading={isPaying}
             onClick={onPay}
+            title={`${t('restaurantPos.payAndSend')} · F2`}
             className="mt-3 !bg-blue-600 !font-bold hover:!bg-blue-700"
           >
             {t('restaurantPos.payAndSend')}

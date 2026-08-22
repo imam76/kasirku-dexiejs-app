@@ -26,7 +26,7 @@ import {
   isActiveRetailMember,
   recordMembershipPointTransaction,
 } from '@/services/membershipService';
-import { enqueueContactSync, enqueuePendingProductsForSync } from '@/services/syncQueueService';
+import { enqueueContactSync, enqueuePendingProductsForSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
 
 export type PosCheckoutSessionContext =
   | { kind: 'CASHIER' }
@@ -520,6 +520,8 @@ export const checkout = async ({
         status: 'COMPLETED',
         receipt_status: 'pending',
         created_at: createdAt,
+        updated_at: createdAt,
+        sync_status: 'pending',
       };
 
       const { items, warnings } = await createTransactionItems(
@@ -599,6 +601,7 @@ export const checkout = async ({
   if (updatedMemberForSync) {
     await enqueueContactSync(updatedMemberForSync, 'update');
   }
+  await enqueueTransactionBundleSync(result.transaction, result.items, 'create');
 
   return result;
 };
@@ -680,6 +683,8 @@ export const recordPosExpense = async ({
         payment_method_category: 'OTHER',
         status: 'COMPLETED',
         created_at: createdAt,
+        updated_at: createdAt,
+        sync_status: 'pending',
       };
 
       await db.transactions.add(transaction);
@@ -696,6 +701,7 @@ export const recordPosExpense = async ({
   if (touchedProductIds.size > 0) {
     await enqueuePendingProductsForSync(touchedProductIds);
   }
+  await enqueueTransactionBundleSync(result.transaction, result.items, 'create');
   await writeActivityLog({
     user: currentUser,
     action: 'POS_EXPENSE_RECORDED',

@@ -21,6 +21,7 @@ interface TransactionState {
   redeemPoints: string;
   showPayment: boolean;
   activeDraftScope?: string;
+  heldDrafts: PosHeldDraft[];
 
   // Actions
   setProducts: (products: Product[]) => void;
@@ -37,6 +38,9 @@ interface TransactionState {
   setShowPayment: (show: boolean) => void;
   switchDraftScope: (scope?: string) => void;
   discardDraftScope: (scope: string) => void;
+  holdCurrentDraft: (label: string) => PosHeldDraft | undefined;
+  resumeHeldDraft: (draftId: string) => boolean;
+  deleteHeldDraft: (draftId: string) => void;
 
   // Logical State Actions (Non-DB)
   addToCart: (product: Product) => { success: boolean; error?: TransactionError };
@@ -56,7 +60,7 @@ export interface PosPaymentDraft {
   isAmountAutoFilled: boolean;
 }
 
-interface PosProcessDraftSnapshot {
+export interface PosProcessDraftSnapshot {
   productPage: number;
   cart: CartItem[];
   searchTerm: string;
@@ -67,13 +71,23 @@ interface PosProcessDraftSnapshot {
   showPayment: boolean;
 }
 
+export interface PosHeldDraft {
+  id: string;
+  label: string;
+  createdAt: string;
+  updatedAt: string;
+  snapshot: PosProcessDraftSnapshot;
+}
+
 const POS_PROCESS_DRAFT_STORAGE_PREFIX = 'frayukti-pos-process-draft';
+const POS_HELD_DRAFT_STORAGE_PREFIX = 'frayukti-pos-held-drafts';
 
 export const getPosProcessDraftScope = (userId: string, cashierSessionId: string) => (
   `${userId}:${cashierSessionId}`
 );
 
 const getDraftStorageKey = (scope: string) => `${POS_PROCESS_DRAFT_STORAGE_PREFIX}:${scope}`;
+const getHeldDraftStorageKey = (scope: string) => `${POS_HELD_DRAFT_STORAGE_PREFIX}:${scope}`;
 
 const emptyProcessDraft = (): PosProcessDraftSnapshot => ({
   productPage: 1,
@@ -137,6 +151,41 @@ const removeProcessDraft = (scope: string) => {
   sessionStorage.removeItem(getDraftStorageKey(scope));
 };
 
+const readHeldDrafts = (scope: string): PosHeldDraft[] => {
+  if (typeof sessionStorage === 'undefined') return [];
+
+  try {
+    const rawDrafts = sessionStorage.getItem(getHeldDraftStorageKey(scope));
+    if (!rawDrafts) return [];
+    const drafts = JSON.parse(rawDrafts) as PosHeldDraft[];
+    if (!Array.isArray(drafts)) return [];
+
+    return drafts.filter((draft) => (
+      typeof draft?.id === 'string'
+      && typeof draft.label === 'string'
+      && Array.isArray(draft.snapshot?.cart)
+    ));
+  } catch (error) {
+    console.warn('Daftar draft POS tidak dapat dimuat.', error);
+    return [];
+  }
+};
+
+const writeHeldDrafts = (scope: string, drafts: PosHeldDraft[]) => {
+  if (typeof sessionStorage === 'undefined') return;
+
+  try {
+    sessionStorage.setItem(getHeldDraftStorageKey(scope), JSON.stringify(drafts));
+  } catch (error) {
+    console.warn('Daftar draft POS tidak dapat disimpan.', error);
+  }
+};
+
+const removeHeldDrafts = (scope: string) => {
+  if (typeof sessionStorage === 'undefined') return;
+  sessionStorage.removeItem(getHeldDraftStorageKey(scope));
+};
+
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   products: [],
   productPage: 1,
@@ -148,6 +197,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   redeemPoints: '',
   showPayment: false,
   activeDraftScope: undefined,
+  heldDrafts: [],
 
   setProducts: (products) => set({ products }),
   setProductPage: (productPage) => set({ productPage }),
@@ -172,14 +222,51 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({
       ...emptyProcessDraft(),
       ...(scope ? readProcessDraft(scope) : {}),
+      heldDrafts: scope ? readHeldDrafts(scope) : [],
       activeDraftScope: scope,
     });
   },
   discardDraftScope: (scope) => {
     removeProcessDraft(scope);
+    removeHeldDrafts(scope);
     if (get().activeDraftScope === scope) {
-      set({ ...emptyProcessDraft(), activeDraftScope: undefined });
+      set({ ...emptyProcessDraft(), heldDrafts: [], activeDraftScope: undefined });
     }
+  },
+  holdCurrentDraft: (label) => {
+    const state = get();
+    if (!state.activeDraftScope || state.cart.length === 0) return undefined;
+
+    const now = new Date().toISOString();
+    const draft: PosHeldDraft = {
+      id: crypto.randomUUID(),
+      label: label.trim(),
+      createdAt: now,
+      updatedAt: now,
+      snapshot: toProcessDraftSnapshot(state),
+    };
+    const heldDrafts = [draft, ...state.heldDrafts];
+    writeHeldDrafts(state.activeDraftScope, heldDrafts);
+    set({ ...emptyProcessDraft(), heldDrafts });
+    return draft;
+  },
+  resumeHeldDraft: (draftId) => {
+    const state = get();
+    if (!state.activeDraftScope || state.cart.length > 0) return false;
+    const draft = state.heldDrafts.find((item) => item.id === draftId);
+    if (!draft) return false;
+
+    const heldDrafts = state.heldDrafts.filter((item) => item.id !== draftId);
+    writeHeldDrafts(state.activeDraftScope, heldDrafts);
+    set({ ...draft.snapshot, heldDrafts });
+    return true;
+  },
+  deleteHeldDraft: (draftId) => {
+    const state = get();
+    if (!state.activeDraftScope) return;
+    const heldDrafts = state.heldDrafts.filter((item) => item.id !== draftId);
+    writeHeldDrafts(state.activeDraftScope, heldDrafts);
+    set({ heldDrafts });
   },
 
   addToCart: (product) => {

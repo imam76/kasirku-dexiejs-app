@@ -3,7 +3,7 @@ import { App, Button, Card, Descriptions, Dropdown, Form, Input, InputNumber, Mo
 import type { InputRef } from 'antd';
 import { useState, useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { Banknote, Clock, LockKeyhole, PlayCircle, RotateCcw, ScanLine, SlidersHorizontal } from 'lucide-react';
+import { Archive, Banknote, Clock, FileClock, LockKeyhole, PlayCircle, RotateCcw, ScanLine, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useTransaction } from '@/hooks/useTransaction';
 import { useCashierSession } from '@/hooks/useCashierSession';
 import { formatCurrency } from '@/utils/formatters';
@@ -22,6 +22,7 @@ import { OPEN_MOBILE_CASHIER_CLOSE_EVENT } from '@/navigation/mobileNavigation';
 import type { CashierSession, Product } from '@/types';
 import type { CashierSessionReconciliation } from '@/services/cashierSessionService';
 import { getPosProcessDraftScope } from '@/store/transactionStore';
+import { getCartItemPrice } from '@/utils/pricing';
 import { getAdjacentProductSellableUnit, getProductSellableUnits } from '@/utils/productUnits';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 import { hasVisiblePosShortcutBlocker, isPosShortcutTypingTarget } from '@/utils/posShortcutGuards';
@@ -158,6 +159,7 @@ export default function Transaction() {
     memberContactId,
     redeemPoints,
     showPayment,
+    heldDrafts,
     isPosProcessReady,
     filteredProducts,
     productPagination,
@@ -192,6 +194,9 @@ export default function Transaction() {
     setRedeemPoints,
     setShowPayment,
     discardDraftScope,
+    holdCurrentDraft,
+    resumeHeldDraft,
+    deleteHeldDraft,
   } = useTransaction(posProcessDraftScope);
   const isMobile = useIsMobile();
 
@@ -216,6 +221,54 @@ export default function Transaction() {
   const [editingCartProduct, setEditingCartProduct] = useState<Product | null>(null);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [reconciliation, setReconciliation] = useState<CashierSessionReconciliation | null>(null);
+  const [holdModalOpen, setHoldModalOpen] = useState(false);
+  const [draftListOpen, setDraftListOpen] = useState(false);
+  const [draftLabel, setDraftLabel] = useState('');
+
+  const openHoldModal = useCallback(() => {
+    if (cart.length === 0) {
+      message.info(t('transaction.draft.emptyCart'));
+      return;
+    }
+    setDraftLabel(`${t('transaction.draft.defaultLabel')} ${heldDrafts.length + 1}`);
+    setHoldModalOpen(true);
+  }, [cart.length, heldDrafts.length, message, t]);
+
+  const handleHoldDraft = useCallback(() => {
+    const normalizedLabel = draftLabel.trim();
+    if (!normalizedLabel) return;
+    const draft = holdCurrentDraft(normalizedLabel);
+    if (!draft) return;
+    setHoldModalOpen(false);
+    setCartOpen(false);
+    setShowPayment(false);
+    message.success(t('transaction.draft.held', { label: draft.label }));
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, [draftLabel, holdCurrentDraft, message, setShowPayment, t]);
+
+  const handleResumeDraft = useCallback((draftId: string) => {
+    if (cart.length > 0) {
+      message.warning(t('transaction.draft.holdCurrentFirst'));
+      return;
+    }
+    const draft = heldDrafts.find((item) => item.id === draftId);
+    if (!resumeHeldDraft(draftId) || !draft) return;
+    setDraftListOpen(false);
+    message.success(t('transaction.draft.resumed', { label: draft.label }));
+  }, [cart.length, heldDrafts, message, resumeHeldDraft, t]);
+
+  const handleDeleteDraft = useCallback((draftId: string) => {
+    const draft = heldDrafts.find((item) => item.id === draftId);
+    if (!draft) return;
+    modal.confirm({
+      title: t('transaction.draft.deleteTitle'),
+      content: t('transaction.draft.deleteConfirm', { label: draft.label }),
+      okText: t('transaction.draft.delete'),
+      okType: 'danger',
+      cancelText: t('common.cancel'),
+      onOk: () => deleteHeldDraft(draftId),
+    });
+  }, [deleteHeldDraft, heldDrafts, modal, t]);
 
   useEffect(() => {
     if (!isMobile) return undefined;
@@ -579,6 +632,26 @@ export default function Transaction() {
       return;
     }
 
+    // Num*/Num+/Num- (dan padanan tanpa numpad fisik '*'/'+'/'-' saat kotak
+    // cari masih kosong) harus lolos ke handler global di bawah, bukan
+    // tertelan jadi teks pencarian di sini. Tanpa pengecualian ini,
+    // stopPropagation di akhir fungsi membungkam shortcut edit qty/ganti
+    // satuan setiap kali fokus masih ada di kotak cari (kondisi paling umum
+    // sesudah menambah produk).
+    const isEditShortcutKey = event.code === 'NumpadMultiply'
+      || event.code === 'NumpadAdd'
+      || event.code === 'NumpadSubtract'
+      || (
+        (event.key === '*' || event.key === '+' || event.key === '-')
+        && !pending
+        && !searchTermRef.current
+      );
+
+    if (isEditShortcutKey) {
+      if (pending) flushPendingSearchInput(false);
+      return;
+    }
+
     if (event.key.length !== 1) {
       if (pending) flushPendingSearchInput(false);
       return;
@@ -688,6 +761,7 @@ export default function Transaction() {
         || event.code === 'NumpadMultiply'
         || event.code === 'NumpadAdd'
         || event.code === 'NumpadSubtract'
+        || ((event.key === '*' || event.key === '+' || event.key === '-') && !searchTerm)
       );
 
       if (isScannerCaptureTarget && event.key.length === 1 && !isShortcutStart) {
@@ -728,17 +802,27 @@ export default function Transaction() {
         return;
       }
 
-      if (event.code === 'NumpadMultiply') {
+      // Banyak laptop/keyboard kasir ringkas tidak punya numpad fisik sama
+      // sekali, jadi '*'/'+'/'-' polos juga diterima sebagai shortcut — tapi
+      // HANYA saat kotak cari kosong, supaya SKU berstrip (mis. "POS-BOX")
+      // tetap bisa diketik apa adanya begitu pencarian sudah berisi teks.
+      const isCharacterEditShortcutSafe = !searchTerm;
+
+      if (event.code === 'NumpadMultiply' || (event.key === '*' && isCharacterEditShortcutSafe)) {
         if (isUnrelatedTypingTarget) return;
         event.preventDefault();
         focusActiveQuantity();
         return;
       }
 
-      if (event.code === 'NumpadAdd' || event.code === 'NumpadSubtract') {
+      if (
+        event.code === 'NumpadAdd'
+        || event.code === 'NumpadSubtract'
+        || ((event.key === '+' || event.key === '-') && isCharacterEditShortcutSafe)
+      ) {
         if (isUnrelatedTypingTarget) return;
         event.preventDefault();
-        cycleActiveUnit(event.code === 'NumpadAdd' ? 1 : -1);
+        cycleActiveUnit((event.code === 'NumpadAdd' || event.key === '+') ? 1 : -1);
         return;
       }
 
@@ -825,6 +909,18 @@ export default function Transaction() {
     ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
   }, [handleClearCartHotkey, isPosHotkeyBlocked, showPayment]);
 
+  useHotkeys('f6', openHoldModal, {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
+  }, [isPosHotkeyBlocked, openHoldModal, showPayment]);
+
+  useHotkeys('shift+f6', () => setDraftListOpen(true), {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
+  }, [isPosHotkeyBlocked, showPayment]);
+
   // PageUp/PageDown, not Arrow Up/Down: the active item's quantity field is an
   // antd InputNumber, which already steps its value on Arrow Up/Down.
   useHotkeys('pagedown', () => activateAdjacentCartItem(1), {
@@ -838,6 +934,42 @@ export default function Transaction() {
     preventDefault: true,
     ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
   }, [activateAdjacentCartItem, isPosHotkeyBlocked, showPayment]);
+
+  const handleRemoveActiveCartItemHotkey = useCallback(() => {
+    if (!activeCartItemId) {
+      message.open({
+        key: 'pos-numpad-shortcut',
+        type: 'info',
+        content: t('transaction.shortcut.emptyCart'),
+        duration: 1,
+      });
+      return;
+    }
+
+    const removedItem = cart.find((item) => item.product.id === activeCartItemId);
+    if (!removedItem) return;
+
+    removeFromCart(activeCartItemId);
+    message.open({
+      key: 'pos-numpad-shortcut',
+      type: 'success',
+      content: t('transaction.shortcut.itemRemoved', { name: removedItem.product.name }),
+      duration: 1,
+    });
+  }, [activeCartItemId, cart, message, removeFromCart, t]);
+
+  // Sengaja TANPA enableOnFormTags: React-hotkeys-hook lalu otomatis diam saat
+  // fokus ada di input/textarea (mis. kolom qty atau kotak cari), sehingga
+  // Delete tetap berfungsi normal untuk menghapus karakter di sana. Shortcut
+  // ini hanya aktif saat baris keranjang aktif dipilih tanpa fokus di field
+  // manapun (lih. PageUp/PageDown yang bisa mengaktifkan baris tanpa masuk ke
+  // input). Untuk menghapus item aktif SAAT fokus ada di kolom qty, kosongkan
+  // nilainya ke 0 lalu Enter — updateQuantity sudah menganggap qty < 1 sebagai
+  // hapus (lihat transactionStore.ts).
+  useHotkeys('delete', handleRemoveActiveCartItemHotkey, {
+    preventDefault: true,
+    ignoreEventWhen: () => showPayment || isPosHotkeyBlocked(),
+  }, [handleRemoveActiveCartItemHotkey, isPosHotkeyBlocked, showPayment]);
 
   const handleOpenSession = async (values: OpenCashierFormValues) => {
     await openSession({
@@ -859,15 +991,30 @@ export default function Transaction() {
   const openCloseModal = useCallback(async () => {
     if (!activeSession) return;
 
+    if (cart.length > 0 || heldDrafts.length > 0) {
+      modal.warning({
+        title: t('transaction.draft.closeBlockedTitle'),
+        content: t('transaction.draft.closeBlocked'),
+      });
+      return;
+    }
+
     closeForm.resetFields();
     closeForm.setFieldsValue({ closing_cash_amount: 0 });
     setCloseModalOpen(true);
     const nextReconciliation = await calculateReconciliation(activeSession.id, 0);
     setReconciliation(nextReconciliation);
-  }, [activeSession, calculateReconciliation, closeForm]);
+  }, [activeSession, calculateReconciliation, cart.length, closeForm, heldDrafts.length, modal, t]);
 
   const handleCloseSession = async (values: CloseCashierFormValues) => {
     if (!activeSession) return;
+    if (cart.length > 0 || heldDrafts.length > 0) {
+      modal.warning({
+        title: t('transaction.draft.closeBlockedTitle'),
+        content: t('transaction.draft.closeBlocked'),
+      });
+      return;
+    }
 
     await closeSession({
       session_id: activeSession.id,
@@ -948,6 +1095,24 @@ export default function Transaction() {
       {!isMobile && (
         <CashierSessionStatusBar session={activeSession} onClose={openCloseModal} isClosing={isClosingSession} />
       )}
+
+      <div className="mb-2 flex shrink-0 items-center justify-end gap-2">
+        <Button
+          icon={<Archive size={15} />}
+          disabled={cart.length === 0}
+          onClick={openHoldModal}
+          title={`${t('transaction.shortcut.holdDraft')} · F6`}
+        >
+          {t('transaction.draft.hold')}
+        </Button>
+        <Button
+          icon={<FileClock size={15} />}
+          onClick={() => setDraftListOpen(true)}
+          title={`${t('transaction.shortcut.openDrafts')} · Shift+F6`}
+        >
+          {t('transaction.draft.list')} ({heldDrafts.length})
+        </Button>
+      </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div id="product-list" className="flex min-h-0 min-w-0 flex-col overflow-hidden">
@@ -1224,6 +1389,66 @@ export default function Transaction() {
         onResolved={handleQuickItemResolved}
         onEditResolved={handleCartProductUpdated}
       />
+
+      <Modal
+        title={t('transaction.draft.holdTitle')}
+        open={holdModalOpen}
+        okText={t('transaction.draft.hold')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ disabled: !draftLabel.trim() }}
+        onOk={handleHoldDraft}
+        onCancel={() => setHoldModalOpen(false)}
+        destroyOnHidden
+      >
+        <p className="mb-3 text-sm text-slate-500">{t('transaction.draft.holdHint')}</p>
+        <Input
+          autoFocus
+          maxLength={80}
+          value={draftLabel}
+          placeholder={t('transaction.draft.labelPlaceholder')}
+          onChange={(event) => setDraftLabel(event.target.value)}
+          onPressEnter={handleHoldDraft}
+        />
+      </Modal>
+
+      <Modal
+        title={`${t('transaction.draft.list')} (${heldDrafts.length})`}
+        open={draftListOpen}
+        footer={null}
+        onCancel={() => setDraftListOpen(false)}
+        destroyOnHidden
+      >
+        {heldDrafts.length === 0 ? (
+          <div className="py-10 text-center text-sm text-slate-400">{t('transaction.draft.empty')}</div>
+        ) : (
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {heldDrafts.map((draft) => {
+              const itemCount = draft.snapshot.cart.reduce((sum, item) => sum + item.quantity, 0);
+              const subtotal = draft.snapshot.cart.reduce(
+                (sum, item) => sum + getCartItemPrice(item) * item.quantity,
+                0,
+              );
+              return (
+                <div key={draft.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => handleResumeDraft(draft.id)}>
+                    <p className="truncate font-bold text-slate-800">{draft.label}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {t('transaction.draft.summary', { count: itemCount, total: formatCurrency(subtotal) })}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(draft.createdAt))}
+                    </p>
+                  </button>
+                  <Button type="primary" size="small" onClick={() => handleResumeDraft(draft.id)}>
+                    {t('transaction.draft.resume')}
+                  </Button>
+                  <Button danger type="text" size="small" aria-label={t('transaction.draft.delete')} icon={<Trash2 size={15} />} onClick={() => handleDeleteDraft(draft.id)} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         title={t('cashierSession.closeTitle')}

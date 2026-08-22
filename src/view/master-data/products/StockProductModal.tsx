@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, Button, Tabs } from 'antd';
 import type { InputRef } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useHotkeys } from 'react-hotkeys-hook';
 import {
   type Control,
   type FieldErrors,
@@ -75,6 +76,12 @@ type Props = {
    * pembelian sudah dicatat di baris dokumen transaksi masing-masing.
    */
   showPurchaseQuantity?: boolean;
+  /**
+   * Cuma dipakai quick-edit dari baris keranjang POS (ganti harga cepat):
+   * langsung fokus ke field harga jual begitu modal terbuka, supaya kasir
+   * tidak perlu pegang mouse untuk mulai mengetik harga baru.
+   */
+  autoFocusField?: 'sellingPrice';
 };
 
 export default function StockProductModal({
@@ -91,6 +98,7 @@ export default function StockProductModal({
   submitLabel,
   topContent,
   showPurchaseQuantity = false,
+  autoFocusField,
 }: Props) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('product');
@@ -382,6 +390,19 @@ export default function StockProductModal({
     }
   }, [errors.sellable_units, errors.selling_unit, errors.unit_mappings, errors.wholesale_prices, open]);
 
+  useEffect(() => {
+    if (!open || autoFocusField !== 'sellingPrice') return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>('[data-testid="stock-product-selling-price"]');
+      const input = element instanceof HTMLInputElement ? element : element?.querySelector('input');
+      input?.focus();
+      input?.select();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [autoFocusField, open]);
+
   const handleSave = async () => {
     if (isSavingRef.current) return;
 
@@ -402,6 +423,12 @@ export default function StockProductModal({
       setIsSaving(false);
     }
   };
+
+  useHotkeys('mod+enter', () => void handleSave(), {
+    enabled: open,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [handleSave, open]);
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -613,7 +640,10 @@ export default function StockProductModal({
               {t('stock.form.cancel')}
             </Button>
             <Button size="large" type="primary" loading={isSaving} onClick={() => void handleSave()}>
-              {submitLabel ?? t('stock.form.save')}
+              <span className="inline-flex items-center gap-2">
+                {submitLabel ?? t('stock.form.save')}
+                <kbd className="hidden rounded border border-white/30 bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-white/90 sm:inline-block">Ctrl+Enter</kbd>
+              </span>
             </Button>
           </div>
         )}

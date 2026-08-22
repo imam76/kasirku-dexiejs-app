@@ -1,8 +1,9 @@
-import { App, Button, Card, Descriptions, Drawer, Form, Input, InputNumber, Modal, Segmented, Spin } from 'antd';
+import { App, Button, Card, Descriptions, Drawer, Dropdown, Form, Input, InputNumber, Modal, Segmented, Spin } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Banknote, ChefHat, Clock3, LayoutGrid, LockKeyhole, MonitorDot, PlayCircle, ShoppingBag } from 'lucide-react';
+import { Archive, Banknote, ChefHat, Clock3, FileClock, LayoutGrid, LockKeyhole, MonitorDot, PlayCircle, ShoppingBag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { useI18n } from '@/hooks/useI18n';
 import { useRestaurantSession } from '@/hooks/useRestaurantSession';
 import { usePosPaymentMethods } from '@/hooks/usePosPaymentMethods';
@@ -25,6 +26,7 @@ import type { RestaurantSessionReconciliation } from '@/services/restaurantSessi
 import type { Product, RestaurantOrderLineFulfillmentType, RestaurantOrderType, RestaurantServiceMode } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
+import { hasVisiblePosShortcutBlocker } from '@/utils/posShortcutGuards';
 import { RestaurantFloorPanel } from './production/RestaurantFloorPanel';
 import { RestaurantKitchenBoard } from './production/RestaurantKitchenBoard';
 import { RestaurantMenuCatalog } from './production/RestaurantMenuCatalog';
@@ -75,6 +77,7 @@ export default function RestaurantPos() {
   const [sendingKitchen, setSendingKitchen] = useState(false);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [reconciliation, setReconciliation] = useState<RestaurantSessionReconciliation | null>(null);
+  const [counterDraftMenuOpen, setCounterDraftMenuOpen] = useState(false);
   const tables = useLiveQuery(
     () => db.restaurantTables.filter((table) => table.is_active).sortBy('name'),
     [],
@@ -111,6 +114,12 @@ export default function RestaurantPos() {
     if (serviceMode === 'TABLE_SERVICE') return orders.find((order) => order.table_id === selectedTableId);
     return undefined;
   }, [orders, selectedOrderId, selectedTableId, serviceMode]);
+  const counterOrders = useMemo(
+    () => orders
+      .filter((order) => order.mode === 'COUNTER_SERVICE')
+      .sort((left, right) => right.updated_at.localeCompare(left.updated_at)),
+    [orders],
+  );
   const selectedTable = useMemo(
     () => tables.find((table) => table.id === selectedTableId),
     [selectedTableId, tables],
@@ -120,6 +129,60 @@ export default function RestaurantPos() {
     [activeOrder, products, promos, voucherCode],
   );
   const totalItems = activeOrder?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0;
+
+  const handleHoldCounterOrder = useCallback(() => {
+    if (workspace !== 'ORDER' || serviceMode !== 'COUNTER_SERVICE' || !activeOrder) return;
+    setSelectedOrderId(undefined);
+    setOrderDrawerOpen(false);
+    message.success(t('restaurantPos.draftHeld', { order: activeOrder.order_number }));
+  }, [activeOrder, message, serviceMode, t, workspace]);
+
+  useHotkeys('f6', handleHoldCounterOrder, {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => (
+      workspace !== 'ORDER'
+      || serviceMode !== 'COUNTER_SERVICE'
+      || !activeOrder
+      || hasVisiblePosShortcutBlocker()
+    ),
+  }, [activeOrder, handleHoldCounterOrder, serviceMode, workspace]);
+
+  useHotkeys('shift+f6', () => setCounterDraftMenuOpen(true), {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => (
+      workspace !== 'ORDER'
+      || serviceMode !== 'COUNTER_SERVICE'
+      || hasVisiblePosShortcutBlocker()
+    ),
+  }, [serviceMode, workspace]);
+
+  const isActiveOrderInfoComplete = Boolean(
+    activeOrder && customerName.trim() && activeOrder.id !== orderRequiringCustomerName,
+  );
+
+  const handleOpenPaymentHotkey = useCallback(() => {
+    if (!activeOrder || activeOrder.lines.length === 0) {
+      message.info(t('restaurantPos.emptyOrderHint'));
+      return;
+    }
+    if (!isActiveOrderInfoComplete) {
+      message.warning('Nama pelanggan wajib diisi.');
+      return;
+    }
+    setPaymentOpen(true);
+  }, [activeOrder, isActiveOrderInfoComplete, message, t]);
+
+  useHotkeys('f2', handleOpenPaymentHotkey, {
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: () => (
+      workspace !== 'ORDER'
+      || paymentOpen
+      || hasVisiblePosShortcutBlocker()
+    ),
+  }, [handleOpenPaymentHotkey, paymentOpen, workspace]);
 
   useEffect(() => {
     setCustomerName(activeOrder?.id === orderRequiringCustomerName ? '' : activeOrder?.customer_name ?? '');
@@ -465,7 +528,7 @@ export default function RestaurantPos() {
       isSending={sendingKitchen}
       isPaying={paymentLoading}
       isUpdatingInfo={updatingOrderInfo}
-      isOrderInfoComplete={Boolean(activeOrder && customerName.trim() && activeOrder.id !== orderRequiringCustomerName)}
+      isOrderInfoComplete={isActiveOrderInfoComplete}
       customerName={customerName}
       guestCount={guestCount}
       orderType={orderType}
@@ -503,7 +566,10 @@ export default function RestaurantPos() {
       <div className="mb-2 flex shrink-0 flex-col gap-2 rounded-2xl border border-blue-100 bg-white p-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <Segmented
           value={workspace}
-          onChange={(value) => setWorkspace(value as Workspace)}
+          onChange={(value) => {
+            setWorkspace(value as Workspace);
+            setCounterDraftMenuOpen(false);
+          }}
           options={[
             { label: t('restaurantPos.orders'), value: 'ORDER', icon: <ShoppingBag size={14} /> },
             { label: t('restaurantPos.kitchen'), value: 'KITCHEN', icon: <ChefHat size={14} /> },
@@ -515,6 +581,7 @@ export default function RestaurantPos() {
             setServiceMode(value as RestaurantServiceMode);
             setSelectedOrderId(undefined);
             setWorkspace('ORDER');
+            setCounterDraftMenuOpen(false);
           }}
           options={[
             { label: t('restaurantPos.tableService'), value: 'TABLE_SERVICE', icon: <LayoutGrid size={14} /> },
@@ -522,6 +589,49 @@ export default function RestaurantPos() {
           ]}
         />
       </div>
+
+      {workspace === 'ORDER' && serviceMode === 'COUNTER_SERVICE' ? (
+        <div className="mb-2 flex shrink-0 items-center justify-end gap-2">
+          <Button
+            icon={<Archive size={15} />}
+            disabled={!activeOrder}
+            onClick={handleHoldCounterOrder}
+            title={`${t('transaction.shortcut.holdDraft')} · F6`}
+          >
+            {t('restaurantPos.holdAndNew')}
+          </Button>
+          <Dropdown
+            trigger={['click']}
+            open={counterDraftMenuOpen}
+            onOpenChange={setCounterDraftMenuOpen}
+            menu={{
+              items: counterOrders.length > 0
+                ? counterOrders.map((order) => ({
+                    key: order.id,
+                    label: (
+                      <div className="min-w-52 py-1">
+                        <p className="font-bold text-slate-800">{order.order_number} · {order.customer_name}</p>
+                        <p className="text-xs text-slate-500">
+                          {t('restaurantPos.itemCount', { count: order.lines.reduce((sum, line) => sum + line.quantity, 0) })}
+                        </p>
+                      </div>
+                    ),
+                  }))
+                : [{ key: 'empty', label: t('restaurantPos.noCounterDrafts'), disabled: true }],
+              onClick: ({ key }) => {
+                if (key === 'empty') return;
+                setSelectedOrderId(key);
+                setOrderDrawerOpen(false);
+                setCounterDraftMenuOpen(false);
+              },
+            }}
+          >
+            <Button icon={<FileClock size={15} />} title={`${t('transaction.shortcut.openDrafts')} · Shift+F6`}>
+              {t('restaurantPos.counterDrafts')} ({counterOrders.length})
+            </Button>
+          </Dropdown>
+        </div>
+      ) : null}
 
       <main className="min-h-0 flex-1 overflow-y-auto min-[1024px]:overflow-hidden">
         {workspace === 'ORDER' ? (

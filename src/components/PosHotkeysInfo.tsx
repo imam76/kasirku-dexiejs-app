@@ -14,6 +14,7 @@ interface HotkeyEntry {
 interface HotkeyGroup {
   title: string;
   items: HotkeyEntry[];
+  hint?: string;
 }
 
 const KBD_CLASS = 'min-w-6 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-center font-mono text-[11px] font-semibold leading-none text-blue-800';
@@ -37,8 +38,8 @@ export default function PosHotkeysInfo() {
   const primaryShortcuts: HotkeyEntry[] = [
     { keys: ['/'], label: t('transaction.shortcut.focusSearch') },
     { keys: ['Enter'], label: t('transaction.shortcut.addProduct') },
-    { keys: ['Num *'], label: t('transaction.shortcut.editQuantity') },
-    { keys: ['Num +', 'Num -'], label: t('transaction.shortcut.changeUnit') },
+    { keys: ['*'], label: t('transaction.shortcut.editQuantity') },
+    { keys: ['+', '-'], label: t('transaction.shortcut.changeUnit') },
     { keys: ['Esc'], label: t('transaction.shortcut.clearSearch') },
   ];
 
@@ -55,10 +56,12 @@ export default function PosHotkeysInfo() {
     {
       title: t('transaction.hotkeys.group.qtyUnit'),
       items: [
-        { keys: ['Num *'], label: t('transaction.shortcut.editQuantity') },
-        { keys: ['Num +', 'Num -'], label: t('transaction.shortcut.changeUnit') },
+        { keys: ['*'], label: t('transaction.shortcut.editQuantity') },
+        { keys: ['+', '-'], label: t('transaction.shortcut.changeUnit') },
         { keys: ['PageUp', 'PageDown'], label: t('transaction.shortcut.navigateCartItem') },
+        { keys: ['Delete'], label: t('transaction.shortcut.removeActiveItem') },
       ],
+      hint: t('transaction.shortcut.quantityZeroHint'),
     },
     {
       title: t('transaction.hotkeys.group.payment'),
@@ -71,6 +74,8 @@ export default function PosHotkeysInfo() {
     {
       title: t('transaction.hotkeys.group.session'),
       items: [
+        { keys: ['F6'], label: t('transaction.shortcut.holdDraft') },
+        { keys: ['Shift', 'F6'], label: t('transaction.shortcut.openDrafts') },
         { keys: ['F4'], label: t('transaction.shortcut.clearCart') },
         { keys: ['F1'], label: t('transaction.shortcut.toggleHelp') },
       ],
@@ -125,6 +130,11 @@ export default function PosHotkeysInfo() {
                   </li>
                 ))}
               </ul>
+              {group.hint && (
+                <p className="mt-1.5 border-t border-blue-50 pt-1.5 text-[10px] font-medium leading-snug text-blue-500">
+                  {group.hint}
+                </p>
+              )}
             </div>
           ))}
         </div>

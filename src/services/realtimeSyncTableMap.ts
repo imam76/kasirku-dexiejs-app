@@ -47,6 +47,7 @@ import { refreshEmployeeCashAdvancesFromPostgres, refreshPayrollRunsFromPostgres
 import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
+import { refreshPromosFromPostgres } from '@/services/promoReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshPurchaseCostReconciliationsFromPostgres } from '@/services/purchaseCostReconciliationReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
@@ -54,6 +55,7 @@ import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
 import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
+import { refreshTransactionsFromPostgres } from '@/services/transactionReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
 
 export type RealtimeRefreshFn = () => Promise<unknown>;
@@ -160,6 +162,12 @@ const SALES_DOCUMENT_QUERY_KEYS = [
   'transactionDetailReport',
 ];
 
+const TRANSACTION_QUERY_KEYS = [
+  'transactions-history',
+  'posSalesReport',
+  'transactionDetailReport',
+];
+
 const PURCHASE_DOCUMENT_QUERY_KEYS = [
   'purchaseDocuments',
   'purchaseReport',
@@ -208,6 +216,8 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
 
   // Cashier
   cashier_sessions: { refreshFns: [refreshCashierSessionsFromPostgres], queryKeys: CASHIER_QUERY_KEYS },
+  pos_transactions: { refreshFns: [refreshTransactionsFromPostgres], queryKeys: TRANSACTION_QUERY_KEYS },
+  pos_transaction_items: { refreshFns: [refreshTransactionsFromPostgres], queryKeys: TRANSACTION_QUERY_KEYS },
 
   // Cooperative
   cooperative_areas: { refreshFns: [refreshCooperativeAreasFromPostgres], queryKeys: COOPERATIVE_QUERY_KEYS },
@@ -301,6 +311,7 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
 
   // Master data
   contacts: { refreshFns: [refreshContactsFromPostgres], queryKeys: ['contacts'] },
+  promos: { refreshFns: [refreshPromosFromPostgres], queryKeys: noQueryKeys },
   currencies: { refreshFns: [refreshCurrenciesFromPostgres], queryKeys: ['currencies'] },
   currency_rates: { refreshFns: [refreshCurrencyRatesFromPostgres], queryKeys: ['currencyRates'] },
   departments: { refreshFns: [refreshDepartmentsFromPostgres], queryKeys: ['departments'] },

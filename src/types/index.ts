@@ -482,6 +482,10 @@ export interface Promo {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  sync_status?: PromoSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface Contact {
@@ -585,6 +589,8 @@ export type OpeningBalanceLineSyncStatus = EntitySyncStatus;
 export type AuthUserSyncStatus = EntitySyncStatus;
 export type CashierSessionSyncStatus = EntitySyncStatus;
 export type RestaurantSessionSyncStatus = EntitySyncStatus;
+export type TransactionSyncStatus = EntitySyncStatus;
+export type PromoSyncStatus = EntitySyncStatus;
 export type ContactSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;
@@ -2105,6 +2111,11 @@ export interface Transaction {
   receipt_printed_at?: string;
   receipt_print_error?: string;
   created_at: string;
+  updated_at: string;
+  sync_status?: TransactionSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface PosTransactionPayment {

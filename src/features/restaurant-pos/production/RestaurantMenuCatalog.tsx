@@ -1,7 +1,9 @@
 import { CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import { Button, Input } from 'antd';
+import type { InputRef } from 'antd';
 import { CupSoda, Plus, Utensils } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { useI18n } from '@/hooks/useI18n';
 import {
   getRestaurantProductKind,
@@ -12,6 +14,7 @@ import { formatCategory, formatCurrency } from '@/utils/formatters';
 import { getProductDisplayPricing } from '@/utils/pricing';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 import { isProductVisibleInPos } from '@/utils/productAvailability';
+import { hasVisiblePosShortcutBlocker, isPosShortcutTypingTarget } from '@/utils/posShortcutGuards';
 
 interface RestaurantMenuCatalogProps {
   products: Product[];
@@ -31,6 +34,7 @@ export function RestaurantMenuCatalog({
   const { t } = useI18n();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('ALL');
+  const searchInputRef = useRef<InputRef>(null);
   const categories = useMemo(
     () => [...new Set(products.filter(isProductVisibleInPos).map((product) => product.category).filter(Boolean) as string[])],
     [products],
@@ -44,6 +48,31 @@ export function RestaurantMenuCatalog({
   const orderQuantityByProduct = useMemo(() => new Map(
     (order?.lines ?? []).map((line) => [line.product_id, line.quantity]),
   ), [order?.lines]);
+  const firstAddableProduct = useMemo(
+    () => (disabled ? undefined : visibleProducts.find((product) => product.stock > 0)),
+    [disabled, visibleProducts],
+  );
+
+  // Satu-tangan: `/` fokus kotak cari (mirip alur kasir retail di
+  // Transaction.tsx), Enter menambah hasil pencarian pertama, Esc
+  // membersihkan. Menu resto biasanya tidak discan barcode, jadi tanpa mesin
+  // buffer scanner keyboard seperti di POS retail — cukup pencarian teks.
+  useHotkeys('/', () => {
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  }, {
+    // react-hotkeys-hook mencocokkan lewat event.code secara default, dan
+    // code untuk '/' adalah "Slash" (bukan string '/'), jadi tanpa useKey
+    // shortcut ini tidak pernah nyala. useKey memaksa perbandingan lewat
+    // event.key supaya juga tetap benar di layout keyboard non-US.
+    useKey: true,
+    enableOnFormTags: true,
+    preventDefault: true,
+    ignoreEventWhen: (event) => (
+      hasVisiblePosShortcutBlocker()
+      || (isPosShortcutTypingTarget(event.target) && event.target !== searchInputRef.current?.input)
+    ),
+  }, []);
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
@@ -54,11 +83,23 @@ export function RestaurantMenuCatalog({
         </div>
         <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
           <Input
+            ref={searchInputRef}
             size="large"
             value={search}
             prefix={<SearchOutlined className="text-slate-400" />}
             placeholder={t('restaurantPos.searchMenu')}
             onChange={(event) => setSearch(event.target.value)}
+            onPressEnter={() => {
+              if (!firstAddableProduct) return;
+              onAdd(firstAddableProduct);
+              setSearch('');
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && search) {
+                event.preventDefault();
+                setSearch('');
+              }
+            }}
           />
           <Button
             size="large"

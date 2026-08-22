@@ -107,6 +107,7 @@ export default function CartSidebar({
             <CartItem
               key={item.product.id}
               item={item}
+              variant="desktop"
               updateQuantity={updateQuantity}
               updateUnit={updateUnit}
               removeFromCart={removeFromCart}

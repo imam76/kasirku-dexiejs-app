@@ -15,6 +15,15 @@ interface CartItemProps {
   isActive?: boolean;
   onActivate?: () => void;
   quantityInputRef?: (element: HTMLInputElement | null) => void;
+  /**
+   * CartSidebar (desktop) dan MobileCartDrawer masing-masing selalu ingin
+   * satu varian saja. Dulu kedua varian dirender sekaligus dan cuma
+   * disembunyikan lewat kelas Tailwind responsif, sehingga callback ref yang
+   * sama terpanggil dua kali per baris dan bisa menunjuk ke input yang
+   * sedang display:none — shortcut keyboard (Num *) jadi gagal fokus diam-
+   * diam. Merender hanya satu varian menghilangkan kelas bug ini sekaligus.
+   */
+  variant?: 'desktop' | 'mobile';
 }
 
 export default function CartItem({
@@ -26,6 +35,7 @@ export default function CartItem({
   isActive = false,
   onActivate,
   quantityInputRef,
+  variant = 'desktop',
 }: CartItemProps) {
   const { t } = useI18n();
   const currentPrice = getCartItemPrice(item);
@@ -50,13 +60,13 @@ export default function CartItem({
     label: unit,
   }));
 
-  return (
-    <>
+  if (variant === 'desktop') {
+    return (
       <article
         data-pos-cart-item-id={item.product.id}
         data-pos-active={isActive ? 'true' : 'false'}
         onClick={onActivate}
-        className={`hidden rounded-xl border bg-blue-50/40 p-2.5 min-[1024px]:block ${
+        className={`rounded-xl border bg-blue-50/40 p-2.5 ${
           isActive
             ? 'border-blue-500 shadow-md shadow-blue-100 ring-2 ring-blue-200'
             : 'border-blue-100'
@@ -92,6 +102,7 @@ export default function CartItem({
           )}
 
           <Select
+            data-testid={`pos-cart-unit-${item.product.id}`}
             value={item.unit}
             onChange={handleUnitChange}
             className="h-8 w-28 shrink-0"
@@ -146,13 +157,16 @@ export default function CartItem({
           </button>
         </div>
       </article>
+    );
+  }
 
+  return (
       <article
         data-testid={`pos-cart-item-${item.product.id}`}
         data-pos-cart-item-id={item.product.id}
         data-pos-active={isActive ? 'true' : 'false'}
         onClick={onActivate}
-        className={`rounded-2xl border bg-blue-50/40 p-3 min-[1024px]:hidden ${
+        className={`rounded-2xl border bg-blue-50/40 p-3 ${
           isActive
             ? 'border-blue-500 shadow-md shadow-blue-100 ring-2 ring-blue-200'
             : 'border-blue-100'
@@ -249,6 +263,5 @@ export default function CartItem({
           </div>
         </div>
       </article>
-    </>
   );
 }
