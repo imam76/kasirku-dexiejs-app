@@ -8608,16 +8608,18 @@ export const enqueuePendingProductsForSync = async (
     preserveStock?: boolean;
   } = {},
 ) => {
-  const products = (await db.products.toArray())
-    .filter((product) => (
-      (product.sync_status === 'pending' || product.sync_status === 'failed')
-      && (!productIds || productIds.has(product.id))
-    ));
+  const candidateProducts = productIds
+    ? (await db.products.bulkGet([...productIds])).filter((product): product is Product => Boolean(product))
+    : await db.products.toArray();
+  const products = candidateProducts.filter((product) => (
+    product.sync_status === 'pending' || product.sync_status === 'failed'
+  ));
   if (products.length === 0) return 0;
 
   const productQueueItems = await db.syncQueue
-    .where('entity')
-    .equals(PRODUCT_ENTITY)
+    .where('status')
+    .anyOf('pending', 'processing', 'failed')
+    .and((queueItem) => queueItem.entity === PRODUCT_ENTITY)
     .toArray();
   let enqueued = 0;
 

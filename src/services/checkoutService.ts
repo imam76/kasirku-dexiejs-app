@@ -28,7 +28,7 @@ import {
   isActiveRetailMember,
   recordMembershipPointTransaction,
 } from '@/services/membershipService';
-import { buildInventoryLotConsumptionOutboxItem, buildInventoryLotOutboxItem, buildTransactionBundleOutboxItem, enqueueContactSync, enqueuePendingInventoryLotConsumptionsForSync, enqueuePendingInventoryLotsForSync, enqueuePendingProductsForSync, enqueueTransactionBundleSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { buildInventoryLotConsumptionOutboxItem, buildInventoryLotOutboxItem, buildTransactionBundleOutboxItem, enqueueContactSync, enqueuePendingProductsForSync, enqueueTransactionBundleSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import { getStoredHostIdentity } from '@/services/hostIdentityService';
 import { getProductSellableUnits } from '@/utils/productUnits';
 
@@ -835,10 +835,6 @@ export const checkout = async ({
   if (touchedProductIds.size > 0) {
     await enqueuePendingProductsForSync(touchedProductIds, { preserveStock: true });
   }
-  await Promise.all([
-    enqueuePendingInventoryLotsForSync(),
-    enqueuePendingInventoryLotConsumptionsForSync(),
-  ]);
   if (financeTransactions.length > 0) {
     await enqueueFinanceTransactionsSync(financeTransactions, 'create');
   }
