@@ -21,22 +21,22 @@ export default function PosPaymentSummary({
   const hasSettlementDetail = showRemaining || changeAmount > 0;
 
   return (
-    <div data-testid="pos-payment-summary" className="space-y-2 px-0.5 py-1 text-sm">
-      <div className="flex items-center justify-between gap-4 text-slate-600">
-        <span>{t('cart.total')}</span>
-        <strong className="shrink-0 tabular-nums text-slate-950">Rp {formatCurrency(total)}</strong>
+    <div data-testid="pos-payment-summary" className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 text-sm">
+      <div className="flex items-center justify-between gap-4 px-1 py-0.5 text-blue-600">
+        <span className="font-bold">{t('cart.total')}</span>
+        <strong className="shrink-0 text-lg font-black tabular-nums">Rp {formatCurrency(total)}</strong>
       </div>
-      <div data-testid="pos-payment-discount" className="flex items-center justify-between gap-4 text-slate-600">
+      <div data-testid="pos-payment-discount" className="flex items-center justify-between gap-4 px-1 text-slate-600">
         <span>{t('cart.discount')}</span>
         <strong className="shrink-0 tabular-nums text-slate-950">-Rp {formatCurrency(discountAmount)}</strong>
       </div>
-      <div className="flex items-center justify-between gap-4 text-slate-600">
+      <div className="flex items-center justify-between gap-4 px-1 text-slate-600">
         <span>{t('payment.totalPaid')}</span>
         <strong className="shrink-0 tabular-nums text-slate-950">Rp {formatCurrency(totalPaid)}</strong>
       </div>
 
       {hasSettlementDetail ? (
-        <div aria-live="polite" className="space-y-2 border-t border-slate-200 pt-2">
+        <div aria-live="polite" className="space-y-2 border-t border-slate-200 px-1 pt-2">
           {showRemaining ? (
             <div className="flex items-center justify-between gap-4 text-amber-700">
               <span>{t('payment.remaining')}</span>

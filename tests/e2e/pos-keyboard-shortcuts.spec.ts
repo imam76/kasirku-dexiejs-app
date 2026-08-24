@@ -147,7 +147,17 @@ test('POS regular supports the one-hand numpad item flow', async ({ page }) => {
 
   await page.getByRole('button', { name: /Bayar Rp/ }).click();
   const paymentAmount = page.getByTestId('pos-payment-amount-0');
-  await paymentAmount.focus();
+  const paymentMethods = page.locator('button[data-testid^="pos-payment-method-0-"]');
+  const firstPaymentMethod = paymentMethods.first();
+  const secondPaymentMethod = paymentMethods.nth(1);
+  await firstPaymentMethod.click();
+  await expect(paymentAmount).toBeFocused();
+  await paymentAmount.fill('123');
+  await expect(paymentAmount).toHaveValue('123');
+  await expect(secondPaymentMethod).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('Alt+2');
+  await expect(secondPaymentMethod).toHaveAttribute('aria-pressed', 'true');
+  await expect(paymentAmount).toBeFocused();
   await dispatchNumpadKey(page, 'NumpadAdd', '+');
   await expect(unitSelect).toContainText('pcs');
   await expect(paymentAmount).toBeFocused();

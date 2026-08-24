@@ -92,7 +92,7 @@ export default function PosPaymentModal({
         },
       }}
     >
-      <div className="flex max-h-[calc(100dvh-160px)] min-h-0 flex-col gap-3 pt-2">
+      <div className="flex max-h-[calc(100dvh-160px)] min-h-0 flex-col gap-5 pt-2">
         <div className="grid gap-3 min-[768px]:grid-cols-2">
           <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <div className="flex min-w-0 items-center gap-3">

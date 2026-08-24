@@ -1,6 +1,6 @@
 import { AutoComplete, Button, Dropdown, Input, InputNumber, Modal } from 'antd';
 import { Armchair, Banknote, CheckCircle2, ChevronDown, CreditCard, Hash, NotebookPen, Plus, QrCode, TicketPercent, Trash2, UserRound, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useI18n } from '@/hooks/useI18n';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -63,6 +63,31 @@ export function RestaurantPaymentModal({
     reference: '',
     isAmountAutoFilled: true,
   }] : []);
+  const [activeClientId, setActiveClientId] = useState<string | null>(null);
+  const [previousPaymentDrafts, setPreviousPaymentDrafts] = useState(paymentDrafts);
+  const amountInputRefs = useRef(new Map<string, HTMLInputElement>());
+
+  const focusAmountInput = useCallback((clientId: string) => {
+    requestAnimationFrame(() => {
+      const input = amountInputRefs.current.get(clientId);
+      input?.focus({ preventScroll: true });
+      input?.select();
+    });
+  }, []);
+
+  // Baris paling baru otomatis jadi "aktif" (target shortcut); begitu user
+  // fokus ke baris lain (klik atau Tab), target ikut pindah lewat onFocus
+  // di kartu baris masing-masing. Sama seperti pola di PosSplitPaymentEditor.
+  // Disesuaikan saat render (bukan useEffect) mengikuti pola React untuk
+  // "adjusting state when a prop changes".
+  if (paymentDrafts !== previousPaymentDrafts) {
+    setPreviousPaymentDrafts(paymentDrafts);
+    if (paymentDrafts.length > previousPaymentDrafts.length) {
+      const newest = paymentDrafts[paymentDrafts.length - 1];
+      if (newest) setActiveClientId(newest.clientId);
+    }
+  }
+
   const voucherValue = voucherCode.trim();
   const hasAppliedVoucher = isAppliedPosVoucher(voucherValue, promo.applied_promos_snapshot);
   const effectivePaymentDrafts = useMemo(() => {
@@ -95,6 +120,7 @@ export function RestaurantPaymentModal({
     })),
     { allowIncomplete: true },
   ), [effectivePaymentDrafts, total, validMethods]);
+  const activeDraft = effectivePaymentDrafts.find((draft) => draft.clientId === activeClientId) ?? effectivePaymentDrafts[effectivePaymentDrafts.length - 1];
   const selectedMethodIds = new Set(effectivePaymentDrafts.map((draft) => draft.paymentMethodId).filter(Boolean));
   const referencesValid = effectivePaymentDrafts.every((draft) => {
     const method = validMethods.find((option) => option.method.id === draft.paymentMethodId)?.method;
@@ -155,15 +181,18 @@ export function RestaurantPaymentModal({
     preventDefault: true,
   }, [addPaymentDraft, canAddPayment, open]);
 
-  // Sengaja TANPA enableOnFormTags: begitu fokus ada di kolom nominal, angka
-  // harus tetap bisa diketik sebagai nominal, bukan memilih ulang metode.
-  // Baris yang dipilih shortcut ini selalu baris TERAKHIR (mengikuti pola
-  // yang sama di PosSplitPaymentEditor untuk kasir retail).
-  useHotkeys(['1', '2', '3', '4', '5', '6', '7', '8', '9'], (event) => {
-    const targetDraft = effectivePaymentDrafts[effectivePaymentDrafts.length - 1];
+  // Modifier Alt membuat angka biasa tetap aman untuk mengetik nominal.
+  // Shortcut tetap dapat dipakai saat fokus ada di InputNumber, dan selalu
+  // memilih metode pada baris AKTIF (default: baris terakhir, atau baris
+  // yang lagi difokus lewat klik/Tab).
+  useHotkeys(['alt+1', 'alt+2', 'alt+3', 'alt+4', 'alt+5', 'alt+6', 'alt+7', 'alt+8', 'alt+9'], (event) => {
+    const targetDraft = activeDraft;
     if (!targetDraft) return;
 
-    const method = validMethods[Number(event.key) - 1]?.method;
+    const digit = event.code.startsWith('Digit') ? event.code.slice('Digit'.length) : null;
+    if (!digit) return;
+
+    const method = validMethods[Number(digit) - 1]?.method;
     if (!method) return;
 
     const usedByAnotherDraft = effectivePaymentDrafts.some((draft) => (
@@ -177,8 +206,35 @@ export function RestaurantPaymentModal({
     });
   }, {
     enabled: open,
+    enableOnFormTags: true,
     preventDefault: true,
-  }, [effectivePaymentDrafts, open, validMethods]);
+  }, [activeDraft, effectivePaymentDrafts, open, validMethods]);
+
+  useHotkeys('alt+backspace', () => {
+    if (!activeDraft || effectivePaymentDrafts.length <= 1) return;
+    removePaymentDraft(activeDraft.clientId);
+  }, {
+    enabled: open,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [activeDraft, effectivePaymentDrafts.length, removePaymentDraft]);
+
+  // Ctrl+Tab tidak dipakai karena direbut browser untuk pindah tab. Alt+Up/
+  // Down memindahkan fokus DOM sungguhan ke baris tujuan (bukan cuma
+  // menandainya "aktif" di state), supaya kursor langsung siap dipakai
+  // ngetik nominal di baris itu.
+  useHotkeys(['alt+up', 'alt+down'], (event) => {
+    if (effectivePaymentDrafts.length <= 1 || !activeDraft) return;
+    const currentIndex = effectivePaymentDrafts.findIndex((draft) => draft.clientId === activeDraft.clientId);
+    if (currentIndex === -1) return;
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    const nextDraft = effectivePaymentDrafts[(currentIndex + delta + effectivePaymentDrafts.length) % effectivePaymentDrafts.length];
+    if (nextDraft) focusAmountInput(nextDraft.clientId);
+  }, {
+    enabled: open,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [activeDraft, effectivePaymentDrafts, focusAmountInput]);
 
   return (
     <Modal
@@ -257,7 +313,15 @@ export function RestaurantPaymentModal({
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-700">{t('restaurantPos.noPaymentMethods')}</div>
         ) : (
           <div className="space-y-3">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('restaurantPos.paymentMethod')}</p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t('restaurantPos.paymentMethod')}</p>
+              {effectivePaymentDrafts.length > 1 && (
+                <span className="hidden items-center gap-1.5 text-[10px] font-semibold normal-case tracking-normal text-slate-400 sm:flex">
+                  {t('payment.switchRowHint')}
+                  <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono text-[9px] font-semibold leading-none text-slate-500">Alt+↑↓</kbd>
+                </span>
+              )}
+            </div>
             <div className={effectivePaymentDrafts.length === 2
               ? 'grid gap-2 min-[768px]:grid-cols-2'
               : effectivePaymentDrafts.length > 2
@@ -268,22 +332,45 @@ export function RestaurantPaymentModal({
               const selectedMethod = validMethods.find((option) => option.method.id === draft.paymentMethodId)?.method;
               const line = paymentPreview.lines[index];
               const visibleError = line?.error?.startsWith('Nominal pembayaran ') ? undefined : line?.error;
+              const isActiveRow = effectivePaymentDrafts.length <= 1 || draft.clientId === activeDraft?.clientId;
               return (
-                <div key={draft.clientId} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm min-[768px]:p-2.5">
+                <div
+                  key={draft.clientId}
+                  onFocus={() => setActiveClientId(draft.clientId)}
+                  className={`rounded-xl border p-3 shadow-sm transition-colors min-[768px]:p-2.5 ${
+                    effectivePaymentDrafts.length > 1
+                      ? isActiveRow
+                        ? 'border-blue-300 bg-white ring-2 ring-blue-100'
+                        : 'border-slate-200 bg-white opacity-90'
+                      : 'border-slate-200 bg-white'
+                  }`}
+                >
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">
                       {t('restaurantPos.paymentAllocation')} {index + 1}
+                      {effectivePaymentDrafts.length > 1 && isActiveRow && (
+                        <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold normal-case tracking-normal text-blue-600">
+                          {t('payment.activeRow')}
+                        </span>
+                      )}
                     </span>
                     {effectivePaymentDrafts.length > 1 ? (
-                      <button
-                        type="button"
-                        onClick={() => removePaymentDraft(draft.clientId)}
-                        className="grid h-7 w-7 place-items-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:border-red-300 hover:bg-red-100"
-                        aria-label={t('payment.remove')}
-                        title={t('payment.remove')}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        {isActiveRow && (
+                          <kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono text-[9px] font-semibold leading-none text-slate-400 sm:inline-block">
+                            Alt+⌫
+                          </kbd>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removePaymentDraft(draft.clientId)}
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:border-red-300 hover:bg-red-100"
+                          aria-label={t('payment.remove')}
+                          title={t('payment.remove')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -292,7 +379,6 @@ export function RestaurantPaymentModal({
                       const Icon = getMethodIcon(method.category);
                       const active = method.id === draft.paymentMethodId;
                       const usedByAnotherPayment = selectedMethodIds.has(method.id) && !active;
-                      const isLastDraft = index === effectivePaymentDrafts.length - 1;
                       return (
                         <button
                           key={method.id}
@@ -303,13 +389,13 @@ export function RestaurantPaymentModal({
                             paymentMethodId: method.id,
                             reference: method.requires_reference ? draft.reference : '',
                           })}
-                          className={`flex min-h-10 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-35 ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300'}`}
+                          className={`relative flex min-h-10 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-35 ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300'}`}
                         >
                           <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}><Icon size={14} /></span>
                           <p className="min-w-0 flex-1 truncate text-xs font-black text-slate-900">{method.name}</p>
-                          {isLastDraft && methodIndex < 9 && (
-                            <kbd className="ml-auto hidden shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-slate-500 sm:inline-block">
-                              {methodIndex + 1}
+                          {methodIndex < 9 && !usedByAnotherPayment && (
+                            <kbd className={`absolute -right-1 -top-1.5 hidden rounded border border-slate-200 bg-white px-1 py-0 font-mono text-[9px] font-semibold leading-tight text-slate-500 shadow-sm sm:inline-block ${isActiveRow ? '' : 'opacity-40'}`}>
+                              Alt+{methodIndex + 1}
                             </kbd>
                           )}
                         </button>
@@ -319,6 +405,10 @@ export function RestaurantPaymentModal({
                   <div className="mt-3 space-y-1.5">
                     <label className="block text-sm font-bold text-slate-700">{t('payment.amountPlaceholder')}</label>
                     <InputNumber<number>
+                      ref={(element) => {
+                        if (element) amountInputRefs.current.set(draft.clientId, element);
+                        else amountInputRefs.current.delete(draft.clientId);
+                      }}
                       min={0}
                       value={draft.amount === '' ? null : Number(draft.amount)}
                       prefix="Rp"

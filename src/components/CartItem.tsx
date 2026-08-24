@@ -110,7 +110,7 @@ export default function CartItem({
             options={unitOptions}
           />
 
-          <div className="flex h-8 w-[74px] shrink-0 items-center overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm">
+          <div className="flex h-8 w-[88px] shrink-0 items-center overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm">
             <button
               type="button"
               onClick={() => updateQuantity(item.product.id, item.quantity - quantityStep)}

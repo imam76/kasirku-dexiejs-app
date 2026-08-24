@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Alert, Dropdown, Input, InputNumber, Select, Switch } from 'antd';
 import { Banknote, CheckCircle2, ChevronDown, CreditCard, DollarSign, NotebookPen, Plus, QrCode, Trash2, X } from 'lucide-react';
@@ -64,6 +64,44 @@ export default function PosSplitPaymentEditor({
     return saved === null ? true : saved === 'true';
   });
   const [isRecordingExpense, setIsRecordingExpense] = useState(false);
+  const [activeClientId, setActiveClientId] = useState<string | null>(null);
+  const [previousDrafts, setPreviousDrafts] = useState(drafts);
+  const amountInputRefs = useRef(new Map<string, HTMLInputElement>());
+
+  const focusAmountInput = useCallback((clientId: string) => {
+    requestAnimationFrame(() => {
+      const input = amountInputRefs.current.get(clientId);
+      input?.focus({ preventScroll: true });
+      input?.select();
+    });
+  }, []);
+
+  // Baris paling baru otomatis jadi "aktif" (target shortcut), sama seperti
+  // perilaku lama yang selalu menyasar baris terakhir. Begitu user fokus ke
+  // baris lain (klik atau Tab), target ikut pindah lewat onFocus di bawah.
+  // Disesuaikan saat render (bukan useEffect) mengikuti pola React untuk
+  // "adjusting state when a prop changes".
+  if (drafts !== previousDrafts) {
+    setPreviousDrafts(drafts);
+    if (drafts.length > previousDrafts.length) {
+      const newest = drafts[drafts.length - 1];
+      if (newest) setActiveClientId(newest.clientId);
+    }
+  }
+
+  const activeDraft = drafts.find((draft) => draft.clientId === activeClientId) ?? drafts[drafts.length - 1];
+
+  const selectPaymentMethod = useCallback((
+    draft: PosPaymentDraft,
+    paymentMethodId: string,
+    requiresReference: boolean,
+  ) => {
+    onUpdate(draft.clientId, {
+      paymentMethodId,
+      reference: requiresReference ? draft.reference : '',
+    });
+    focusAmountInput(draft.clientId);
+  }, [focusAmountInput, onUpdate]);
 
   useEffect(() => {
     localStorage.setItem(PAYMENT_SHORTCUTS_STORAGE_KEY, String(showPaymentShortcuts));
@@ -108,16 +146,18 @@ export default function PosSplitPaymentEditor({
 
   const validPaymentMethods = methods.filter((item) => item.isValid);
 
-  // Sengaja TANPA enableOnFormTags: begitu fokus pindah ke kolom nominal
-  // (InputNumber), react-hotkeys-hook otomatis diam supaya mengetik angka
-  // nominal tidak malah memilih ulang metode pembayaran. Baris yang dipilih
-  // shortcut ini selalu baris TERAKHIR (paling relevan sesudah F9 menambah
-  // baris split baru).
-  useHotkeys(['1', '2', '3', '4', '5', '6', '7', '8', '9'], (event) => {
-    const targetDraft = drafts[drafts.length - 1];
+  // Modifier Alt membuat angka biasa tetap aman untuk mengetik nominal.
+  // Shortcut tetap dapat dipakai saat fokus ada di InputNumber, dan selalu
+  // memilih metode pada baris AKTIF (default: baris terakhir, atau baris
+  // yang lagi difokus lewat klik/Tab).
+  useHotkeys(['alt+1', 'alt+2', 'alt+3', 'alt+4', 'alt+5', 'alt+6', 'alt+7', 'alt+8', 'alt+9'], (event) => {
+    const targetDraft = activeDraft;
     if (!targetDraft) return;
 
-    const method = validPaymentMethods[Number(event.key) - 1]?.method;
+    const digit = event.code.startsWith('Digit') ? event.code.slice('Digit'.length) : null;
+    if (!digit) return;
+
+    const method = validPaymentMethods[Number(digit) - 1]?.method;
     if (!method) return;
 
     const usedByAnotherDraft = drafts.some((draft) => (
@@ -125,14 +165,74 @@ export default function PosSplitPaymentEditor({
     ));
     if (usedByAnotherDraft) return;
 
-    onUpdate(targetDraft.clientId, {
-      paymentMethodId: method.id,
-      reference: method.requires_reference ? targetDraft.reference : '',
-    });
+    selectPaymentMethod(targetDraft, method.id, method.requires_reference);
   }, {
     enabled: isDialog,
+    enableOnFormTags: true,
     preventDefault: true,
-  }, [drafts, isDialog, onUpdate, validPaymentMethods]);
+  }, [activeDraft, drafts, isDialog, selectPaymentMethod, validPaymentMethods]);
+
+  // Nominal cepat pakai keluarga modifier yang sama (Alt = pilih metode,
+  // Alt+Shift = tambah nominal) supaya gampang diingat berpasangan.
+  useHotkeys(['alt+shift+1', 'alt+shift+2', 'alt+shift+3', 'alt+shift+4', 'alt+shift+5', 'alt+shift+0'], (event) => {
+    const targetDraft = activeDraft;
+    if (!targetDraft || !showPaymentShortcuts) return;
+
+    const option = methods.find((item) => item.method.id === targetDraft.paymentMethodId);
+    if (option?.method.category !== 'CASH') return;
+
+    const digit = event.code.startsWith('Digit') ? event.code.slice('Digit'.length) : null;
+    if (!digit) return;
+
+    const targetIndex = drafts.findIndex((draft) => draft.clientId === targetDraft.clientId);
+    const numericAmount = Number(targetDraft.amount);
+    const currentAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+
+    if (digit === '0') {
+      const line = preview.lines[targetIndex];
+      if (!line) return;
+      onUpdate(targetDraft.clientId, { amount: String(preview.remainingAmount + line.appliedAmount), isAmountAutoFilled: true });
+      return;
+    }
+
+    const quickAmount = QUICK_AMOUNTS[Number(digit) - 1];
+    if (quickAmount === undefined) return;
+    onUpdate(targetDraft.clientId, { amount: String(currentAmount + quickAmount), isAmountAutoFilled: false });
+  }, {
+    enabled: isDialog,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [activeDraft, drafts, methods, onUpdate, preview, showPaymentShortcuts]);
+
+  useHotkeys('alt+backspace', () => {
+    if (!activeDraft || drafts.length <= 1) return;
+    onRemove(activeDraft.clientId);
+  }, {
+    enabled: isDialog,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [activeDraft, drafts.length, onRemove]);
+
+  // Ctrl+Tab tidak dipakai karena direbut browser untuk pindah tab. Alt+Up/
+  // Down aman dari bentrok shortcut browser/OS dan memindahkan fokus DOM
+  // sungguhan ke baris tujuan (bukan cuma menandainya "aktif" di state),
+  // supaya kursor langsung siap dipakai ngetik nominal di baris itu.
+  useHotkeys(['alt+up', 'alt+down'], (event) => {
+    if (drafts.length <= 1 || !activeDraft) return;
+    const currentIndex = drafts.findIndex((draft) => draft.clientId === activeDraft.clientId);
+    if (currentIndex === -1) return;
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    const nextDraft = drafts[(currentIndex + delta + drafts.length) % drafts.length];
+    if (nextDraft) focusAmountInput(nextDraft.clientId);
+  }, {
+    enabled: isDialog,
+    enableOnFormTags: true,
+    preventDefault: true,
+  }, [activeDraft, drafts, focusAmountInput]);
+
+  // Esc sengaja tidak ditangani di sini: dialog pembayaran dirender di dalam
+  // antd Modal, yang sudah menutup lewat Escape secara default (termasuk
+  // menutup dropdown Select yang terbuka dulu sebelum menutup modal-nya).
 
   const handleRecordExpense = async () => {
     if (!onRecordExpense || isRecordingExpense) return;
@@ -161,7 +261,15 @@ export default function PosSplitPaymentEditor({
           <Alert type="warning" showIcon message={t('payment.noMethodAvailable')} />
         ) : null}
         {showSectionTitles && (
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('payment.methodInformation')}</p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t('payment.methodInformation')}</p>
+            {isDialog && drafts.length > 1 && (
+              <span className="hidden items-center gap-1.5 text-[10px] font-semibold normal-case tracking-normal text-slate-400 sm:flex">
+                {t('payment.switchRowHint')}
+                <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono text-[9px] font-semibold leading-none text-slate-500">Alt+↑↓</kbd>
+              </span>
+            )}
+          </div>
         )}
         <div
           data-testid="pos-payment-method-grid"
@@ -182,27 +290,47 @@ export default function PosSplitPaymentEditor({
             const visibleLineError = line?.error?.startsWith('Nominal pembayaran ')
               ? undefined
               : line?.error;
+            const isActiveRow = drafts.length <= 1 || draft.clientId === activeDraft?.clientId;
             return (
               <div
                 key={draft.clientId}
                 data-testid={`pos-payment-row-${index}`}
-                className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm min-[768px]:p-2.5"
+                onFocus={() => setActiveClientId(draft.clientId)}
+                className={`rounded-xl border p-3 shadow-sm transition-colors min-[768px]:p-2.5 ${
+                  drafts.length > 1 && isDialog
+                    ? isActiveRow
+                      ? 'border-blue-300 bg-white ring-2 ring-blue-100'
+                      : 'border-slate-200 bg-white opacity-90'
+                    : 'border-slate-200 bg-white'
+                }`}
               >
             <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+              <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500">
                 {isDialog ? t('payment.line', { number: index + 1 }) : `${t('payment.methodInformation')} ${index + 1}`}
+                {isDialog && drafts.length > 1 && isActiveRow && (
+                  <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold normal-case tracking-normal text-blue-600">
+                    {t('payment.activeRow')}
+                  </span>
+                )}
               </span>
               {drafts.length > 1 && (
-                <button
-                  type="button"
-                  data-testid={`pos-payment-remove-${index}`}
-                  onClick={() => onRemove(draft.clientId)}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"
-                  aria-label={t('payment.remove')}
-                  title={t('payment.remove')}
-                >
-                  <Trash2 size={14} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {isDialog && isActiveRow && (
+                    <kbd className="hidden rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono text-[9px] font-semibold leading-none text-slate-400 sm:inline-block">
+                      Alt+⌫
+                    </kbd>
+                  )}
+                  <button
+                    type="button"
+                    data-testid={`pos-payment-remove-${index}`}
+                    onClick={() => onRemove(draft.clientId)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:border-red-300 hover:bg-red-100"
+                    aria-label={t('payment.remove')}
+                    title={t('payment.remove')}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               )}
             </div>
             {isDialog ? (
@@ -212,7 +340,6 @@ export default function PosSplitPaymentEditor({
                   const Icon = getMethodIcon(paymentMethod.category);
                   const active = paymentMethod.id === draft.paymentMethodId;
                   const usedByAnotherPayment = selectedIds.has(paymentMethod.id) && !active;
-                  const isLastDraft = index === drafts.length - 1;
                   return (
                     <button
                       key={paymentMethod.id}
@@ -220,19 +347,20 @@ export default function PosSplitPaymentEditor({
                       data-testid={`pos-payment-method-${index}-${paymentMethod.id}`}
                       aria-pressed={active}
                       disabled={usedByAnotherPayment}
-                      onClick={() => onUpdate(draft.clientId, {
-                        paymentMethodId: paymentMethod.id,
-                        reference: paymentMethod.requires_reference ? draft.reference : '',
-                      })}
-                      className={`flex min-h-10 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-35 ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300'}`}
+                      onClick={() => selectPaymentMethod(
+                        draft,
+                        paymentMethod.id,
+                        paymentMethod.requires_reference,
+                      )}
+                      className={`relative flex min-h-10 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-35 ${active ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 hover:border-blue-300'}`}
                     >
                       <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
                         <Icon size={14} />
                       </span>
                       <span className="min-w-0 flex-1 truncate text-xs font-black text-slate-900">{paymentMethod.name}</span>
-                      {isLastDraft && methodIndex < 9 && (
-                        <kbd className="ml-auto hidden shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-slate-500 sm:inline-block">
-                          {methodIndex + 1}
+                      {methodIndex < 9 && !usedByAnotherPayment && (
+                        <kbd className={`absolute -right-1 -top-1.5 hidden rounded border border-slate-200 bg-white px-1 py-0 font-mono text-[9px] font-semibold leading-tight text-slate-500 shadow-sm sm:inline-block ${isActiveRow ? '' : 'opacity-40'}`}>
+                          Alt+{methodIndex + 1}
                         </kbd>
                       )}
                     </button>
@@ -249,10 +377,7 @@ export default function PosSplitPaymentEditor({
                   placeholder={t('report.paymentMethod')}
                   onChange={(paymentMethodId) => {
                     const next = methods.find((item) => item.method.id === paymentMethodId)?.method;
-                    onUpdate(draft.clientId, {
-                      paymentMethodId,
-                      reference: next?.requires_reference ? draft.reference : '',
-                    });
+                    selectPaymentMethod(draft, paymentMethodId, Boolean(next?.requires_reference));
                   }}
                   options={methods.map((item) => ({
                     value: item.method.id,
@@ -278,6 +403,10 @@ export default function PosSplitPaymentEditor({
               <div className="mt-3 space-y-1.5">
                 <label className="block text-sm font-bold text-slate-700">{t('payment.amountPlaceholder')}</label>
                 <InputNumber<number>
+                  ref={(element) => {
+                    if (element) amountInputRefs.current.set(draft.clientId, element);
+                    else amountInputRefs.current.delete(draft.clientId);
+                  }}
                   data-testid={`pos-payment-amount-${index}`}
                   min={0}
                   value={draft.amount === '' ? null : Number(draft.amount)}
@@ -295,6 +424,10 @@ export default function PosSplitPaymentEditor({
             ) : (
               <div className="mt-2 flex items-stretch gap-2">
                 <input
+                  ref={(element) => {
+                    if (element) amountInputRefs.current.set(draft.clientId, element);
+                    else amountInputRefs.current.delete(draft.clientId);
+                  }}
                   data-testid={`pos-payment-amount-${index}`}
                   type="number"
                   min="0"
@@ -328,7 +461,7 @@ export default function PosSplitPaymentEditor({
                 </div>
                 {showPaymentShortcuts && (
                   <div className="grid grid-cols-3 gap-1.5">
-                    {QUICK_AMOUNTS.map((amount) => (
+                    {QUICK_AMOUNTS.map((amount, amountIndex) => (
                       <button
                         key={amount}
                         type="button"
@@ -336,17 +469,27 @@ export default function PosSplitPaymentEditor({
                           amount: String(currentAmount + amount),
                           isAmountAutoFilled: false,
                         })}
-                        className={PAYMENT_SHORTCUT_CLASS}
+                        className={`${PAYMENT_SHORTCUT_CLASS} relative`}
                       >
                         +Rp {formatCurrency(amount)}
+                        {isDialog && isActiveRow && (
+                          <kbd className="absolute -right-1 -top-1.5 hidden rounded border border-slate-200 bg-white px-1 py-0 font-mono text-[8px] font-semibold leading-tight text-slate-400 shadow-sm sm:inline-block">
+                            ⌥⇧{amountIndex + 1}
+                          </kbd>
+                        )}
                       </button>
                     ))}
                     <button
                       type="button"
                       onClick={() => onUpdate(draft.clientId, { amount: String(preview.remainingAmount + line!.appliedAmount), isAmountAutoFilled: true })}
-                      className={PAYMENT_SHORTCUT_CLASS}
+                      className={`${PAYMENT_SHORTCUT_CLASS} relative`}
                     >
                       <DollarSign size={13} /> {t('payment.exactAmount')}
+                      {isDialog && isActiveRow && (
+                        <kbd className="absolute -right-1 -top-1.5 hidden rounded border border-slate-200 bg-white px-1 py-0 font-mono text-[8px] font-semibold leading-tight text-slate-400 shadow-sm sm:inline-block">
+                          ⌥⇧0
+                        </kbd>
+                      )}
                     </button>
                   </div>
                 )}
