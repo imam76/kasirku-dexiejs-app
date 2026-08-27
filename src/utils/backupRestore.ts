@@ -9,7 +9,13 @@ import { ensureMembershipSetting } from '@/services/membershipService';
 import { ensureDefaultPaymentMethods } from '@/services/paymentMethodService';
 import { backfillLegacyPosPaymentSnapshots } from '@/services/posPaymentMethodService';
 import { backfillMissingPosTransactionPayments } from '@/services/posTransactionPaymentService';
-import type { AuthUser, Lottery, Product } from '@/types';
+import type {
+  AuthUser,
+  InventoryLot,
+  InventoryLotConsumption,
+  Lottery,
+  Product,
+} from '@/types';
 import { ensureFixedAssetAccountDefaults } from '@/services/fixedAssetService';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
@@ -36,6 +42,20 @@ const normalizeStoredLottery = (lottery: Lottery): Lottery => ({
   updated_at: toCanonicalIsoTimestamp(lottery.updated_at),
   last_synced_at: toCanonicalOptionalIsoTimestamp(lottery.last_synced_at),
   remote_updated_at: toCanonicalOptionalIsoTimestamp(lottery.remote_updated_at),
+});
+
+const normalizeStoredInventoryLot = (lot: InventoryLot): InventoryLot => ({
+  ...lot,
+  sync_status: lot.sync_status ?? 'pending',
+  sync_error: lot.sync_status ? lot.sync_error : undefined,
+});
+
+const normalizeStoredInventoryLotConsumption = (
+  consumption: InventoryLotConsumption,
+): InventoryLotConsumption => ({
+  ...consumption,
+  sync_status: consumption.sync_status ?? 'pending',
+  sync_error: consumption.sync_status ? consumption.sync_error : undefined,
 });
 
 export const backupDatabase = async () => {
@@ -368,8 +388,18 @@ export const restoreDatabase = async (file: File) => {
           if (data.purchaseDocuments?.length) await db.purchaseDocuments.bulkAdd(data.purchaseDocuments);
           if (data.purchaseDocumentItems?.length) await db.purchaseDocumentItems.bulkAdd(data.purchaseDocumentItems);
           if (data.purchaseInvoicePayments?.length) await db.purchaseInvoicePayments.bulkAdd(data.purchaseInvoicePayments);
-          if (data.inventoryLots?.length) await db.inventoryLots.bulkAdd(data.inventoryLots);
-          if (data.inventoryLotConsumptions?.length) await db.inventoryLotConsumptions.bulkAdd(data.inventoryLotConsumptions);
+          if (data.inventoryLots?.length) {
+            await db.inventoryLots.bulkAdd(
+              data.inventoryLots.map((lot: InventoryLot) => normalizeStoredInventoryLot(lot)),
+            );
+          }
+          if (data.inventoryLotConsumptions?.length) {
+            await db.inventoryLotConsumptions.bulkAdd(
+              data.inventoryLotConsumptions.map((consumption: InventoryLotConsumption) => (
+                normalizeStoredInventoryLotConsumption(consumption)
+              )),
+            );
+          }
           if (data.purchaseCostReconciliations?.length) await db.purchaseCostReconciliations.bulkAdd(data.purchaseCostReconciliations);
           if (data.purchaseCostReconciliationItems?.length) await db.purchaseCostReconciliationItems.bulkAdd(data.purchaseCostReconciliationItems);
           if (data.chartOfAccounts?.length) await db.chartOfAccounts.bulkAdd(data.chartOfAccounts);

@@ -298,6 +298,11 @@ const restoreInventoryOpeningLots = async (
       received_at: receivedAt,
       created_at: line.created_at || syncedAt,
       updated_at: syncedAt,
+      // The composite opening-balance command stores the accounting and stock
+      // snapshot records, but inventory_lots has its own sync endpoint. Queue
+      // this deterministic lot id so a second device can safely backfill it.
+      sync_status: 'pending',
+      sync_error: undefined,
     };
     lotsToPut.set(lot.id, lot);
   }

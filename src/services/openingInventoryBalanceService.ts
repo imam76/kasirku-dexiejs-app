@@ -776,6 +776,8 @@ export const postInventoryOpeningBalance = async ({
           received_at: cutoffTimestamp,
           created_at: now,
           updated_at: now,
+          sync_status: 'pending',
+          sync_error: undefined,
         });
       }
 

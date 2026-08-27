@@ -1217,7 +1217,11 @@ const mapInventoryLotToRemoteDto = (lot: InventoryLot): RemoteInventoryLotDto =>
   source_id: lot.source_id,
   source_line_id: lot.source_line_id,
   quantity_received: lot.quantity_received,
-  quantity_remaining: lot.quantity_remaining,
+  // The remote balance is materialized from the append-only consumption ledger.
+  // A lot may already have been consumed locally before its first upload, so
+  // seeding it with the local remaining balance would make the subsequent
+  // consumption uploads subtract the same quantity a second time.
+  quantity_remaining: lot.quantity_received,
   cost_per_unit: lot.cost_per_unit,
   cost_status: lot.cost_status,
   estimate_source: lot.estimate_source,
@@ -5253,6 +5257,19 @@ const processInventoryLotConsumptionQueueItem = async (queueItem: SyncQueueItem)
     throw new Error('Payload inventory lot consumption sync queue tidak valid.');
   }
 
+  const localLot = await db.inventoryLots.get(queueItem.payload.lot_id);
+  if (!localLot) {
+    throw new Error(
+      `Lot induk ${queueItem.payload.lot_id} untuk inventory lot consumption tidak ditemukan di database lokal.`,
+    );
+  }
+
+  // Make retries self-healing when a legacy/opening-balance lot never reached
+  // PostgreSQL. The lot upsert is idempotent and never overwrites an existing
+  // remote quantity_remaining, while a missing lot is seeded at its original
+  // received quantity before this consumption is applied.
+  await inventoryLotPostgresAdapter.upsert(mapInventoryLotToRemoteDto(localLot));
+
   return inventoryLotConsumptionPostgresAdapter.upsert(queueItem.payload);
 };
 
@@ -6597,8 +6614,10 @@ export const processPendingSyncQueue = async (limit = SYNC_QUEUE_BATCH_SIZE) => 
       ) {
         return 1;
       }
+      if (queueItem.entity === INVENTORY_LOT_ENTITY) return 1;
       if (queueItem.entity === INVENTORY_OPENING_BALANCE_POSTING_ENTITY) return 2;
       if (queueItem.entity === GENERAL_LEDGER_SETTING_ENTITY) return 3;
+      if (queueItem.entity === INVENTORY_LOT_CONSUMPTION_ENTITY) return 4;
       return 1;
     };
     pendingQueueItems.sort((left, right) => (
