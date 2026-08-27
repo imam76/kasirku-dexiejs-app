@@ -1,5 +1,6 @@
 import { getCurrentSessionUser, hasUserPermission, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
+import { getBusinessDayBoundsIso, toBusinessDatePrefix } from '@/utils/businessDate';
 import {
   recordCashBankTransfer,
   type RecordCashBankTransferResult,
@@ -151,16 +152,13 @@ const assertEmployeeFieldCashAccount = async (
 
 const createFieldCashSessionNumber = async (date = new Date()) => {
   const prefix = 'KSU-KP';
-  const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const datePart = toBusinessDatePrefix(date);
   const sessionNumberPrefixes = [`${prefix}-${datePart}`, `KSP-KP-${datePart}`];
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(23, 59, 59, 999);
+  const { startIso, endIso } = getBusinessDayBoundsIso(date);
 
   const count = await db.cooperativeFieldCashSessions
     .where('opened_at')
-    .between(dayStart.toISOString(), dayEnd.toISOString(), true, true)
+    .between(startIso, endIso, true, true)
     .and((session) => sessionNumberPrefixes.some((prefixCandidate) => (
       session.session_number.startsWith(prefixCandidate)
     )))

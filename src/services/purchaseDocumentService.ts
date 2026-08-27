@@ -25,6 +25,7 @@ import {
 } from '@/services/generalLedgerService';
 import { enqueuePendingProductsForSync, enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
 import { createPurchaseDocumentNumber } from '@/utils/purchaseDocuments/createPurchaseDocumentNumber';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import {
   createPurchaseDepartmentSnapshot,
   createPurchaseProjectSnapshot,
@@ -633,7 +634,7 @@ export const createPurchaseDocument = async ({ document, items, pendingProducts 
     type: document.type,
     status: document.status ?? 'DRAFT',
     supplier_name: snapshot.supplier_name ?? '',
-    document_date: costAwareSnapshot.document_date || createdAt.slice(0, 10),
+    document_date: costAwareSnapshot.document_date || toBusinessDateKey(createdAt),
     created_at: createdAt,
     updated_at: createdAt,
     ...costAwareSnapshot,

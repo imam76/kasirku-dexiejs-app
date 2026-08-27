@@ -5,8 +5,8 @@ import {
   isProfitAffectingFinanceTransaction,
 } from '@/constants/finance';
 import { db } from '@/lib/db';
-import dayjs from '@/lib/dayjs';
 import { cashBankReconciliationSchema } from '@/lib/validations/cashBankReconciliation';
+import { getBusinessDayBoundsIso, toBusinessDateKey, toBusinessDatePrefix } from '@/utils/businessDate';
 import { enqueueCashBankReconciliationSync } from '@/services/syncQueueService';
 import {
   enqueueFinanceTransactionsSync,
@@ -62,7 +62,7 @@ const getTransactionSignedAmount = (transaction: FinanceTransaction) => {
 };
 
 const getStatementCutoffTimestamp = (statementDate: string) => {
-  const cutoff = dayjs(statementDate).endOf('day').valueOf();
+  const cutoff = Date.parse(getBusinessDayBoundsIso(statementDate).endIso);
   if (!Number.isFinite(cutoff)) {
     throw new Error('Tanggal statement tidak valid.');
   }
@@ -72,7 +72,7 @@ const getStatementCutoffTimestamp = (statementDate: string) => {
 
 const isOnOrBeforeStatementDate = (transaction: FinanceTransaction, statementDate: string) => {
   const transactionTime = Date.parse(transaction.created_at);
-  if (Number.isNaN(transactionTime)) return transaction.created_at.slice(0, 10) <= statementDate.slice(0, 10);
+  if (Number.isNaN(transactionTime)) return toBusinessDateKey(transaction.created_at) <= toBusinessDateKey(statementDate);
 
   return transactionTime <= getStatementCutoffTimestamp(statementDate);
 };
@@ -161,7 +161,7 @@ const applyProfitBalanceDelta = async (
 };
 
 const createReconciliationNumber = async (statementDate: string) => {
-  const dateKey = dayjs(statementDate).format('YYYYMMDD');
+  const dateKey = toBusinessDatePrefix(statementDate);
   const prefix = `CBR-${dateKey}-`;
   const count = await db.cashBankReconciliations
     .where('reconciliation_number')

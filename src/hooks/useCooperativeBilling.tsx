@@ -145,7 +145,7 @@ export const useCooperativeBilling = () => {
     dueTodayInstallments,
     dueThisWeekInstallments,
   } = useMemo(() => {
-    const today = dayjs().startOf('day');
+    const today = dayjs().tz().startOf('day');
     const nextWeek = today.add(7, 'day');
 
     const overdue: CooperativeLoanInstallment[] = [];
@@ -153,7 +153,7 @@ export const useCooperativeBilling = () => {
     const thisWeekDue: CooperativeLoanInstallment[] = [];
 
     allUnpaidInstallments.forEach(installment => {
-      const dueDate = dayjs(installment.due_date).startOf('day');
+      const dueDate = dayjs.tz(installment.due_date).startOf('day');
       
       if (dueDate.isBefore(today)) {
         overdue.push(installment);

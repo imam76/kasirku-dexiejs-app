@@ -24,6 +24,7 @@ import {
 } from '@/services/collectionAssignmentService';
 import type { EmployeeArea, EmployeeCollectionSchedule } from '@/types';
 import { getCollectionWeekdayLabel } from '@/utils/koperasi/collectionSchedule';
+import { toBusinessDateKey } from '@/utils/businessDate';
 
 const { Title, Text } = Typography;
 
@@ -142,7 +143,7 @@ export default function CollectionAssignmentManagement() {
                       { title: 'Jenis', render: (_, row) => <Tag color="orange">{row.review_type}</Tag> },
                       { title: 'Ringkasan', dataIndex: 'summary' },
                       { title: 'Entity', render: (_, row) => `${row.entity_type} / ${row.entity_id}` },
-                      { title: 'Dibuat', render: (_, row) => row.created_at.slice(0, 10) },
+                      { title: 'Dibuat', render: (_, row) => toBusinessDateKey(row.created_at) },
                     ]}
                   />
                 </Card>
@@ -188,7 +189,7 @@ export default function CollectionAssignmentManagement() {
                     columns={[
                       { title: 'Karyawan', render: (_, row) => employeeById.get(row.employee_id)?.name ?? row.employee_id },
                       { title: 'Area', render: (_, row) => row.area_code ? `${row.area_code} - ${row.area_name}` : row.area_name },
-                      { title: 'Mulai', render: (_, row) => row.effective_from?.slice(0, 10) ?? row.created_at.slice(0, 10) },
+                      { title: 'Mulai', render: (_, row) => row.effective_from?.slice(0, 10) ?? toBusinessDateKey(row.created_at) },
                       { title: 'Sampai', render: (_, row) => row.effective_until?.slice(0, 10) ?? 'Terbuka' },
                       { title: 'Prioritas', render: (_, row) => row.is_primary ? <Tag color="blue">Utama</Tag> : '-' },
                       {

@@ -22,6 +22,7 @@ import type {
   SalesOverpaymentStatus,
 } from '@/types';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import {
   getSalesInvoicePaymentAllocatedAmount,
   getSalesInvoicePaymentOverpaymentAmount,
@@ -93,10 +94,8 @@ const salesOverpaymentTables = [
   db.activityLogs,
 ];
 
-const toDateKey = (value: string) => value.slice(0, 10);
-
 const getPaymentNumber = (payment: SalesInvoicePayment) => (
-  payment.payment_number || `ARP-${toDateKey(payment.paid_at).replace(/-/g, '')}-${payment.id.slice(0, 8).toUpperCase()}`
+  payment.payment_number || `ARP-${toBusinessDateKey(payment.paid_at).replace(/-/g, '')}-${payment.id.slice(0, 8).toUpperCase()}`
 );
 
 const getPostedSettlementsForSourcePayment = async (sourcePaymentId: string) => (
@@ -191,7 +190,7 @@ const filterRows = (rows: SalesOverpaymentRow[], filters: SalesOverpaymentFilter
     ].some((value) => value.toLowerCase().includes(query));
     const matchesStatus = !filters.status || filters.status === 'ALL' || row.status === filters.status;
     const matchesContact = !filters.contactId || row.contact_id === filters.contactId;
-    const dateKey = toDateKey(row.paid_at);
+    const dateKey = toBusinessDateKey(row.paid_at);
     const matchesDateFrom = !filters.paidDateFrom || dateKey >= filters.paidDateFrom;
     const matchesDateTo = !filters.paidDateTo || dateKey <= filters.paidDateTo;
 

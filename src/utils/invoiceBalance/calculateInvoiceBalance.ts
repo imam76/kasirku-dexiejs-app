@@ -1,4 +1,5 @@
 import type { PurchaseInvoicePaymentStatus, ReceivableAgingBucket, SalesInvoicePaymentStatus } from '@/types';
+import { toBusinessDateKey } from '@/utils/businessDate';
 
 export interface CalculateInvoiceBalanceInput {
   invoiceTotal: number;
@@ -54,7 +55,7 @@ export const calculateInvoiceBalance = ({
       ? 'PARTIAL'
       : 'UNPAID';
   const due = toDateOnly(dueDate);
-  const asOf = toDateOnly(asOfDate) ?? toDateOnly(new Date().toISOString());
+  const asOf = toDateOnly(asOfDate) ?? toDateOnly(toBusinessDateKey(new Date()));
   const overdueDays = due && asOf
     ? Math.max(0, Math.floor((asOf.getTime() - due.getTime()) / MS_PER_DAY))
     : 0;

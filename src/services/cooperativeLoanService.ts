@@ -8,6 +8,7 @@ import {
 } from '@/auth/authService';
 import { db } from '@/lib/db';
 import dayjs from '@/lib/dayjs';
+import { getBusinessDayBoundsIso, toBusinessDateKey, toBusinessDatePrefix } from '@/utils/businessDate';
 import {
   cooperativeLoanApplicationSchema,
   cooperativeLoanApprovalSchema,
@@ -332,16 +333,13 @@ const createCooperativeLoanNumber = async (date: string | Date = new Date()) => 
 
 const createCooperativeLoanPaymentNumber = async (date = new Date(), sequenceOffset = 0) => {
   const prefix = 'KSU-ANG';
-  const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const datePart = toBusinessDatePrefix(date);
   const paymentNumberPrefixes = [`${prefix}-${datePart}`, `KSP-ANG-${datePart}`];
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(23, 59, 59, 999);
+  const { startIso, endIso } = getBusinessDayBoundsIso(date);
 
   const count = await db.cooperativeLoanPayments
     .where('created_at')
-    .between(dayStart.toISOString(), dayEnd.toISOString(), true, true)
+    .between(startIso, endIso, true, true)
     .and((payment) => paymentNumberPrefixes.some((prefixCandidate) => (
       payment.payment_number.startsWith(prefixCandidate)
     )))
@@ -351,13 +349,13 @@ const createCooperativeLoanPaymentNumber = async (date = new Date(), sequenceOff
 };
 
 const createCooperativeLoanPaymentGroupNumber = (date: Date, paymentGroupId: string) => {
-  const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const datePart = toBusinessDatePrefix(date);
   return `KSU-ANG-GRP-${datePart}-${paymentGroupId.slice(0, 8).toUpperCase()}`;
 };
 
 const getMandatorySavingBalanceId = (memberId: string) => `${memberId}:WAJIB`;
 const AUTO_MANDATORY_SAVING_RETURN_TOKEN_PREFIX = 'AUTO_MANDATORY_SAVING_RETURN_PAYMENT';
-const getDateKey = (value: string) => value.slice(0, 10);
+const getDateKey = (value: string) => toBusinessDateKey(value);
 const LOAN_DISBURSEMENT_MANDATORY_SAVING_TOKEN_PREFIX = 'LOAN_DISBURSEMENT_MANDATORY_SAVING';
 
 const getAutoMandatorySavingReturnToken = (paymentId: string) => (

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { contactSchema } from '@/lib/validations/contact';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import { enqueueContactSync } from '@/services/syncQueueService';
+import { toBusinessDatePrefix } from '@/utils/businessDate';
 import type {
   AuthUser,
   CartItem,
@@ -126,7 +127,7 @@ export const saveMembershipSetting = async (input: MembershipSettingInput): Prom
 };
 
 export const generateMembershipNumber = async (now = new Date()) => {
-  const dateKey = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const dateKey = toBusinessDatePrefix(now);
 
   for (let sequence = 1; sequence <= 9999; sequence += 1) {
     const candidate = `MBR-${dateKey}-${String(sequence).padStart(4, '0')}`;

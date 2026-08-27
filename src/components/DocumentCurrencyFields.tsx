@@ -5,6 +5,7 @@ import { Controller, useWatch } from 'react-hook-form';
 import type { Control, FieldValues, Path, UseFormSetValue } from 'react-hook-form';
 import dayjs from '@/lib/dayjs';
 import { BASE_CURRENCY_CODE, DEFAULT_EXCHANGE_RATE } from '@/constants/currencies';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -32,7 +33,7 @@ const fieldContainerClassName = 'mb-4';
 const labelClassName = 'mb-1.5 flex items-center gap-1 text-sm font-medium text-gray-700';
 
 const getDocumentDate = (value: unknown) => {
-  if (!value) return dayjs().format('YYYY-MM-DD');
+  if (!value) return toBusinessDateKey(new Date());
   if (dayjs.isDayjs(value)) return value.format('YYYY-MM-DD');
   return String(value).slice(0, 10);
 };

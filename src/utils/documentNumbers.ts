@@ -1,4 +1,5 @@
 import type { Table } from 'dexie';
+import { getBusinessDayBoundsIso, toBusinessDatePrefix } from '@/utils/businessDate';
 
 export interface DocumentNumberRecord {
   document_number: string;
@@ -10,15 +11,12 @@ export const createDocumentNumber = async <TRecord extends DocumentNumberRecord>
   date: Date,
   tableReader: Table<TRecord, string>,
 ) => {
-  const datePart = date.toISOString().slice(0, 10).replace(/-/g, '');
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(23, 59, 59, 999);
+  const datePart = toBusinessDatePrefix(date);
+  const { startIso, endIso } = getBusinessDayBoundsIso(date);
 
   const count = await tableReader
     .where('created_at')
-    .between(dayStart.toISOString(), dayEnd.toISOString(), true, true)
+    .between(startIso, endIso, true, true)
     .and((document) => document.document_number.startsWith(`${prefix}-${datePart}`))
     .count();
 

@@ -15,6 +15,7 @@ import {
   enqueueEmployeeSync,
 } from '@/services/syncQueueService';
 import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import {
   createOrLinkEmployeeUser,
   getEmployeeAccessSummary,
@@ -243,7 +244,7 @@ const buildEmployeeAreaAssignments = (
   area_id: area.id,
   area_name: area.name,
   area_code: area.code,
-  effective_from: now.slice(0, 10),
+  effective_from: toBusinessDateKey(now),
   is_primary: areas[0]?.id === area.id,
   created_at: now,
   updated_at: now,

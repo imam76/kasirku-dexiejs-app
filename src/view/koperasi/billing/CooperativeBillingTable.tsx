@@ -103,7 +103,7 @@ export default function CooperativeBillingTable({
   };
   const getOverdueDays = (installment: CooperativeLoanInstallment) => {
     if (installment.status === 'PAID') return 0;
-    return Math.max(0, dayjs().startOf('day').diff(dayjs(installment.due_date).startOf('day'), 'day'));
+    return Math.max(0, dayjs().tz().startOf('day').diff(dayjs.tz(installment.due_date).startOf('day'), 'day'));
   };
   const setQuickPaymentAmount = (installmentId: string, amount: number | null) => {
     setQuickPaymentAmounts((current) => ({
@@ -141,7 +141,7 @@ export default function CooperativeBillingTable({
       ),
       defaultSortOrder: 'ascend',
       render: (value: string) => {
-        const isOverdue = dayjs(value).isBefore(dayjs().startOf('day'));
+        const isOverdue = dayjs.tz(value).isBefore(dayjs().tz().startOf('day'));
         return <Text type={isOverdue ? 'danger' : undefined}>{formatDate(value)}</Text>;
       },
     },
@@ -388,7 +388,7 @@ export default function CooperativeBillingTable({
       rowKey="id"
       loading={loading}
       onRow={(installment) => {
-        const isOverdue = dayjs(installment.due_date).isBefore(dayjs().startOf('day')) && installment.status !== 'PAID';
+        const isOverdue = dayjs.tz(installment.due_date).isBefore(dayjs().tz().startOf('day')) && installment.status !== 'PAID';
         return {
           'data-testid': `koperasi-billing-row-${installment.member_number}-${installment.installment_number}`,
           className: isOverdue ? 'billing-overdue-row' : '',

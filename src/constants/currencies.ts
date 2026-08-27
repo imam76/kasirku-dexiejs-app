@@ -1,4 +1,5 @@
 import type { Currency, CurrencyRate } from '@/types';
+import { toBusinessDateKey } from '@/utils/businessDate';
 
 export const BASE_CURRENCY_CODE = 'IDR';
 export const BASE_CURRENCY_NAME = 'Rupiah Indonesia';
@@ -84,10 +85,10 @@ export const buildBaseCurrencyRateForCode = (
   const code = normalizeIsoCurrencyCode(currencyCode);
 
   return {
-    id: `${code}-${now.slice(0, 10)}-SYSTEM`,
+    id: `${code}-${toBusinessDateKey(now)}-SYSTEM`,
     currency_code: code,
     base_currency_code: code,
-    rate_date: now.slice(0, 10),
+    rate_date: toBusinessDateKey(now),
     source: 'SYSTEM',
     unit_amount: 1,
     bi_buy_rate: 1,
@@ -102,6 +103,6 @@ export const buildBaseCurrencyRateForCode = (
 
 export const buildBaseCurrencyRate = (now: string): CurrencyRate => ({
   ...buildBaseCurrencyRateForCode(BASE_CURRENCY_CODE, now),
-  rate_date: now.slice(0, 10),
+  rate_date: toBusinessDateKey(now),
   sync_status: 'synced',
 });

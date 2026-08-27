@@ -16,6 +16,7 @@ import type { AccountsReceivableRow, SalesInvoicePayment } from '@/types';
 import { buildOpeningReceivableRows } from '@/utils/accountsReceivable/buildOpeningReceivableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
 import { getSalesInvoicePaymentAllocatedAmount } from '@/utils/accountsReceivable/paymentAmounts';
+import { isBusinessDateKeyInRange } from '@/utils/businessDate';
 
 export interface AccountsReceivableSummary {
   invoice_count: number;
@@ -37,11 +38,6 @@ const RECEIVABLE_RELATED_QUERY_KEYS = [
   'incomeStatement',
   'balanceSheet',
 ];
-
-const isDateInRange = (value: string, from?: string, to?: string) => {
-  const dateKey = value.slice(0, 10);
-  return (!from || dateKey >= from) && (!to || dateKey <= to);
-};
 
 const filterReceivableRows = (
   rows: AccountsReceivableRow[],
@@ -151,7 +147,7 @@ export const useAccountsReceivable = (filters: AccountsReceivableFilters = {}) =
   const summary = useMemo<AccountsReceivableSummary>(() => {
     const paidInPeriod = receivableData.payments
       .filter((payment) => payment.status === 'ACTIVE')
-      .filter((payment) => isDateInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
+      .filter((payment) => isBusinessDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
       .reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0);
 
     return receivableRows.reduce<AccountsReceivableSummary>((acc, row) => {

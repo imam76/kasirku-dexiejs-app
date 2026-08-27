@@ -29,6 +29,7 @@ import {
 import { calculateSalesReturnLimits } from '@/utils/salesReturns/calculateSalesReturnLimits';
 import { calculateSalesReturnTotal } from '@/utils/salesReturns/calculateSalesReturnTotal';
 import { createSalesReturnNumber } from '@/utils/salesReturns/createSalesReturnNumber';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import { getSalesReturnStockPolicy, type SalesReturnStockPolicy } from '@/utils/salesReturns/getSalesReturnStockPolicy';
 import { mapSalesReturnSourceItem } from '@/utils/salesReturns/mapSalesReturnSourceItem';
 import { validateSalesReturn } from '@/utils/salesReturns/validateSalesReturn';
@@ -298,7 +299,7 @@ const buildSalesReturnDraft = async (
     customer_phone: source.customer_phone,
     customer_email: source.customer_email,
     customer_address: source.customer_address,
-    document_date: input.salesReturn.document_date || updatedAt.slice(0, 10),
+    document_date: input.salesReturn.document_date || toBusinessDateKey(updatedAt),
     resolution,
     reason: input.salesReturn.reason?.trim() || undefined,
     subtotal_amount: total.subtotal_amount,

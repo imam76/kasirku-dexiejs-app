@@ -101,11 +101,6 @@ const createEmptyAgingSummary = (): AccountsAgingReportSummary => ({
   paid_in_period: 0,
 });
 
-const isDateKeyInRange = (value: string, from?: string, to?: string) => {
-  const dateKey = value.slice(0, 10);
-  return (!from || dateKey >= from) && (!to || dateKey <= to);
-};
-
 const getReportDateKey = (value?: string) => {
   if (!value) return '';
   const parsed = value.length <= 10 ? dayjs.tz(value) : dayjs(value).tz();
@@ -356,11 +351,11 @@ export const useAccountsAgingReport = (filters: AccountsAgingReportFilters = {})
         .sort((left, right) => right.paid_at.localeCompare(left.paid_at));
       const receivablePaidInPeriod = filteredSalesPayments
         .filter((payment) => payment.status === 'ACTIVE')
-        .filter((payment) => isDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
+        .filter((payment) => isReportDateInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
         .reduce((sum, payment) => sum + getSalesInvoicePaymentAllocatedAmount(payment), 0);
       const payablePaidInPeriod = filteredPurchasePayments
         .filter((payment) => payment.status === 'ACTIVE')
-        .filter((payment) => isDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
+        .filter((payment) => isReportDateInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
         .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
       const receivableSummary = summarizeAgingRows(receivableRows, receivablePaidInPeriod);
       const payableSummary = summarizeAgingRows(payableRows, payablePaidInPeriod);

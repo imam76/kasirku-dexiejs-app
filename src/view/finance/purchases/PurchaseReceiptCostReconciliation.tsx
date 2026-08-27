@@ -34,7 +34,7 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
   const [document, setDocument] = useState<PurchaseDocument | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
-  const [supplierInvoiceDate, setSupplierInvoiceDate] = useState<string | undefined>(dayjs().format('YYYY-MM-DD'));
+  const [supplierInvoiceDate, setSupplierInvoiceDate] = useState<string | undefined>(dayjs().tz().format('YYYY-MM-DD'));
   const [additionalCostTreatment, setAdditionalCostTreatment] = useState<PurchaseAdditionalCostTreatment>('IGNORE_FOR_MVP');
   const [additionalCostAmount, setAdditionalCostAmount] = useState(0);
   const [supplierDiscountAmount, setSupplierDiscountAmount] = useState(0);
@@ -55,7 +55,7 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
       if (!active) return;
       setDocument(loadedDocument);
       setSupplierInvoiceNumber(loadedDocument?.supplier_invoice_number ?? '');
-      setSupplierInvoiceDate(loadedDocument?.supplier_invoice_date ?? dayjs().format('YYYY-MM-DD'));
+      setSupplierInvoiceDate(loadedDocument?.supplier_invoice_date ?? dayjs().tz().format('YYYY-MM-DD'));
       setAdditionalCostTreatment(loadedDocument?.additional_cost_treatment ?? 'IGNORE_FOR_MVP');
       setAdditionalCostAmount(Number(loadedDocument?.additional_cost_amount || 0));
       setSupplierDiscountAmount(Number(loadedDocument?.supplier_discount_amount || 0));

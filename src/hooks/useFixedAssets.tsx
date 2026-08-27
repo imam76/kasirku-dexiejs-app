@@ -15,6 +15,7 @@ import {
   type FixedAssetUpsertInput,
 } from '@/services/fixedAssetService';
 import { calculateDepreciationForPeriod, calculateFixedAssetPosition, type FixedAssetPostedLine } from '@/utils/fixedAssets/calculateDepreciation';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import type {
   FixedAsset,
   FixedAssetCategory,
@@ -66,7 +67,7 @@ export const useFixedAssets = () => {
 
   const assetRows = useMemo(() => assets.filter((asset) => !asset.deleted_at).map((asset) => ({
     asset,
-    position: calculateFixedAssetPosition(asset, postedLines, new Date().toISOString().slice(0, 10)),
+    position: calculateFixedAssetPosition(asset, postedLines, toBusinessDateKey(new Date())),
   })), [assets, postedLines]);
 
   const filteredAssetRows = useMemo(() => {

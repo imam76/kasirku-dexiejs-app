@@ -75,7 +75,7 @@ export default function CooperativeMemberFormModal({
   const selectedJoinDate = Form.useWatch('join_date', form);
   const selectedScheduleId = Form.useWatch('collection_schedule_id', form);
   const selectedStatus = Form.useWatch('status', form);
-  const joinDateKey = selectedJoinDate?.format('YYYY-MM-DD') ?? dayjs().format('YYYY-MM-DD');
+  const joinDateKey = selectedJoinDate?.format('YYYY-MM-DD') ?? dayjs().tz().format('YYYY-MM-DD');
   const scheduleOptions = useMemo(() => collectionSchedules
     .filter((schedule) => (
       schedule.is_active &&

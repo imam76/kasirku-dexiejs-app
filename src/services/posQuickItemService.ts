@@ -14,6 +14,7 @@ import type {
 import { isProductVisibleInPos } from '@/utils/productAvailability';
 import { buildSellableUnitsFromMappings, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
+import { toBusinessDateKey } from '@/utils/businessDate';
 
 export const QUICK_ITEM_SUPPLIER_NAME = 'Belum diketahui';
 
@@ -162,7 +163,7 @@ const issueQuickItemReceipt = async (
   const { document } = await createPurchaseDocument({
     document: {
       type: 'PURCHASE_RECEIPT',
-      document_date: now.slice(0, 10),
+      document_date: toBusinessDateKey(now),
       supplier_name: QUICK_ITEM_SUPPLIER_NAME,
       cost_status: 'ESTIMATED',
       notes: `Entri barang cepat dari POS oleh ${actorName}. Harga beli masih sementara.`,

@@ -13,6 +13,7 @@ import type {
   EmployeeArea,
   EmployeeCollectionSchedule,
 } from '@/types';
+import { toBusinessDateKey } from '@/utils/businessDate';
 
 export const isEffectiveDateRangeOverlapping = (
   leftStart: string,
@@ -50,7 +51,7 @@ export const assignEmployeeArea = async (input: {
     throw new Error('Tanggal akhir assignment tidak valid.');
   }
   if (existing.some((row) => isEffectiveDateRangeOverlapping(
-    row.effective_from ?? row.created_at.slice(0, 10),
+    row.effective_from ?? toBusinessDateKey(row.created_at),
     row.effective_until,
     input.effective_from,
     input.effective_until,
@@ -95,7 +96,7 @@ export const closeEmployeeAreaAssignment = async (id: string, effectiveUntil: st
   const actor = await requireActor();
   const assignment = await db.employeeAreas.get(id);
   if (!assignment) throw new Error('Assignment area tidak ditemukan.');
-  const start = assignment.effective_from ?? assignment.created_at.slice(0, 10);
+  const start = assignment.effective_from ?? toBusinessDateKey(assignment.created_at);
   if (effectiveUntil < start) throw new Error('Tanggal akhir assignment tidak valid.');
   const activeSchedules = await db.employeeCollectionSchedules
     .where('[employee_id+area_id]')
@@ -149,10 +150,10 @@ export const saveCollectionSchedule = async (input: {
   ]);
   if (!employee?.is_active) throw new Error('Karyawan tidak ditemukan atau tidak aktif.');
   if (!area?.is_active) throw new Error('Area tidak ditemukan atau tidak aktif.');
-  const start = input.effective_from ?? new Date().toISOString().slice(0, 10);
+  const start = input.effective_from ?? toBusinessDateKey(new Date());
   if (input.effective_until && input.effective_until < start) throw new Error('Periode jadwal tidak valid.');
   if (!assignments.some((row) => (
-    (row.effective_from ?? row.created_at.slice(0, 10)) <= start &&
+    (row.effective_from ?? toBusinessDateKey(row.created_at)) <= start &&
     (!row.effective_until || row.effective_until >= (input.effective_until ?? start))
   ))) {
     throw new Error('Periode jadwal harus berada dalam assignment area petugas.');
@@ -161,7 +162,7 @@ export const saveCollectionSchedule = async (input: {
     row.id !== input.id &&
     row.is_active &&
     isEffectiveDateRangeOverlapping(
-      row.effective_from?.slice(0, 10) ?? row.created_at.slice(0, 10),
+      row.effective_from?.slice(0, 10) ?? toBusinessDateKey(row.created_at),
       row.effective_until?.slice(0, 10),
       start,
       input.effective_until,

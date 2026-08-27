@@ -15,6 +15,7 @@ import {
 import type { AccountsPayableRow, PurchaseInvoicePayment } from '@/types';
 import { buildOpeningPayableRows } from '@/utils/accountsPayable/buildOpeningPayableRows';
 import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
+import { isBusinessDateKeyInRange } from '@/utils/businessDate';
 
 export interface AccountsPayableSummary {
   invoice_count: number;
@@ -36,11 +37,6 @@ const PAYABLE_RELATED_QUERY_KEYS = [
   'incomeStatement',
   'balanceSheet',
 ];
-
-const isDateInRange = (value: string, from?: string, to?: string) => {
-  const dateKey = value.slice(0, 10);
-  return (!from || dateKey >= from) && (!to || dateKey <= to);
-};
 
 const filterPayableRows = (
   rows: AccountsPayableRow[],
@@ -143,7 +139,7 @@ export const useAccountsPayable = (filters: AccountsPayableFilters = {}) => {
   const summary = useMemo<AccountsPayableSummary>(() => {
     const paidInPeriod = payableData.payments
       .filter((payment) => payment.status === 'ACTIVE')
-      .filter((payment) => isDateInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
+      .filter((payment) => isBusinessDateKeyInRange(payment.paid_at, filters.invoiceDateFrom, filters.invoiceDateTo))
       .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
 
     return payableRows.reduce<AccountsPayableSummary>((acc, row) => {

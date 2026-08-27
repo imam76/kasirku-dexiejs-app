@@ -54,7 +54,7 @@ export default function CurrencyRateModal({
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-      const rateDate = values.rate_date?.format('YYYY-MM-DD') ?? dayjs().format('YYYY-MM-DD');
+      const rateDate = values.rate_date?.format('YYYY-MM-DD') ?? dayjs().tz().format('YYYY-MM-DD');
       if (!currency) return;
 
       if ((values.mode ?? defaultMode) === 'MANUAL') {

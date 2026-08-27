@@ -79,7 +79,7 @@ const toFormInitialValues = (
 ): DefaultValues<SalesDocumentFormValues> => {
   if (!document) {
     const fallbackBaseCurrency = getCachedBaseCurrency();
-    const fallbackDate = dayjs().format('YYYY-MM-DD');
+    const fallbackDate = dayjs().tz().format('YYYY-MM-DD');
     const fallbackCurrencySnapshot = buildDocumentCurrencySnapshot(
       fallbackBaseCurrency,
       undefined,
@@ -422,7 +422,7 @@ export const SalesDocumentForm = ({
     const snapshot = buildDocumentCurrencySnapshot(
       baseCurrency,
       undefined,
-      dayjs.isDayjs(documentDate) ? documentDate.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+      dayjs.isDayjs(documentDate) ? documentDate.format('YYYY-MM-DD') : dayjs().tz().format('YYYY-MM-DD'),
       baseCurrency,
     );
 

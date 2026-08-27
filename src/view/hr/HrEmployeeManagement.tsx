@@ -46,6 +46,7 @@ import {
   upsertEmployeeSalaryComponent,
 } from '@/services/hrService';
 import { formatCurrencyInput, parseCurrencyInput } from '@/utils/formatters';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import {
   createOrLinkEmployeeUser,
   updateEmployeeAccess,
@@ -1230,7 +1231,7 @@ export default function HrEmployeeManagement() {
                       dataSource={detailAreas}
                       columns={[
                         { title: 'Area', dataIndex: 'area_name' },
-                        { title: 'Mulai', render: (_, row) => row.effective_from ?? row.created_at.slice(0, 10) },
+                        { title: 'Mulai', render: (_, row) => row.effective_from ?? toBusinessDateKey(row.created_at) },
                         { title: 'Sampai', render: (_, row) => row.effective_until ?? 'Terbuka' },
                         { title: 'Utama', render: (_, row) => row.is_primary ? <Tag color="blue">Ya</Tag> : '-' },
                       ]}

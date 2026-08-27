@@ -38,7 +38,7 @@ const sortLatestFirst = (periods: AccountingPeriod[]) => (
 
 const getReferencePeriod = (periods: AccountingPeriod[]) => {
   const sortedPeriods = sortLatestFirst(periods);
-  const today = dayjs().format('YYYY-MM-DD');
+  const today = dayjs().tz().format('YYYY-MM-DD');
 
   return sortedPeriods.find((period) => (
     toDateOnly(period.start_date) <= today && today <= toDateOnly(period.end_date)

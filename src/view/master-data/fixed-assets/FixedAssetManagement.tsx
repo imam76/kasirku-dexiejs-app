@@ -189,7 +189,7 @@ export default function FixedAssetManagement() {
               <Input.Search allowClear className="min-w-0 flex-1" value={data.assetSearch} onChange={(event) => data.setAssetSearch(event.target.value)} placeholder={t('fixedAssets.searchAssets')} />
               <Button icon={<Filter size={15} />} onClick={() => setFilterOpen(true)}>{t('fixedAssets.filter')} {activeFilterCount ? <Badge count={activeFilterCount} /> : null}</Button>
               <Button icon={<RotateCcw size={15} />} onClick={resetAssetFilters}>{t('fixedAssets.reset')}</Button>
-              <ExportActions buttonType="default" disabled={registerExportRows.length <= 1} formats={[{ key: 'csv', label: 'CSV', icon: <FileSpreadsheet size={15} />, onExport: async (target) => { await exportCsv({ filename: `fixed-assets-${dayjs().format('YYYY-MM-DD')}`, target, rows: registerExportRows, successMessage: t('fixedAssets.exportSuccess'), errorMessage: t('fixedAssets.exportFailed') }); } }]} />
+              <ExportActions buttonType="default" disabled={registerExportRows.length <= 1} formats={[{ key: 'csv', label: 'CSV', icon: <FileSpreadsheet size={15} />, onExport: async (target) => { await exportCsv({ filename: `fixed-assets-${dayjs().tz().format('YYYY-MM-DD')}`, target, rows: registerExportRows, successMessage: t('fixedAssets.exportSuccess'), errorMessage: t('fixedAssets.exportFailed') }); } }]} />
             </div>
             <FixedAssetTable rows={data.filteredAssetRows} currency={currency} onDetail={setDetailAsset} onEdit={openEdit} onArchive={archiveAsset} onRestore={restoreAsset} />
           </> },

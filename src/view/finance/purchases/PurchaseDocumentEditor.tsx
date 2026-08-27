@@ -11,6 +11,7 @@ import { clearPurchaseDraftLines, usePurchaseDraftStore } from '@/store/purchase
 import { buildDocumentCurrencySnapshot } from '@/utils/documentCurrency';
 import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import { buildPurchaseDraftItems } from '@/utils/purchaseDocuments/buildPurchaseDraftItems';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import type { PurchaseDocument, PurchaseDocumentItem, PurchaseDocumentType } from '@/types';
 
 const { Title, Text } = Typography;
@@ -47,7 +48,7 @@ export default function PurchaseDocumentEditor({ documentType, documentId }: Pur
     const snapshot = buildDocumentCurrencySnapshot(
       baseCurrency,
       undefined,
-      new Date().toISOString().slice(0, 10),
+      toBusinessDateKey(new Date()),
       baseCurrency,
     );
 

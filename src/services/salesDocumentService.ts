@@ -24,6 +24,7 @@ import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { getDocumentDiscountAccountSnapshot } from '@/utils/chartOfAccounts/getDocumentDiscountAccountSnapshot';
 import { calculateDocumentTotal } from '@/utils/salesDocuments/calculateDocumentTotal';
 import { createSalesDocumentNumber } from '@/utils/salesDocuments/createSalesDocumentNumber';
+import { toBusinessDateKey } from '@/utils/businessDate';
 import {
   createContactSnapshot,
   createDepartmentSnapshot,
@@ -371,7 +372,7 @@ export const createSalesDocument = async ({ document, items }: SalesDocumentUpse
     type: document.type,
     status: document.status ?? 'DRAFT',
     customer_name: snapshot.customer_name ?? '',
-    document_date: snapshot.document_date || createdAt.slice(0, 10),
+    document_date: snapshot.document_date || toBusinessDateKey(createdAt),
     created_at: createdAt,
     updated_at: createdAt,
     ...snapshot,
